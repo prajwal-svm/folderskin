@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import type { Theme } from "../state/theme";
-import { IconGlobe, IconGrid, IconImage, IconSliders, IconSparkles, IconStar } from "./icons";
+import { EarthIcon } from "./icons/earth";
+import { ImageIcon } from "./icons/image";
+import { LayoutGridIcon } from "./icons/layout-grid";
+import { MoonIcon } from "./icons/moon";
+import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
+import { SparklesIcon } from "./icons/sparkles";
+import { StarIcon } from "./icons/star";
 
 export type View = "skins" | "faves" | "community" | "generate";
 
@@ -29,15 +35,15 @@ export function Sidebar({
     {
       title: "Library",
       items: [
-        { id: "skins", label: "Skins", icon: <IconGrid size={18} /> },
-        { id: "faves", label: "Favourites", icon: <IconStar size={17} />, badge: favoritesCount || undefined },
+        { id: "skins", label: "Skins", icon: <LayoutGridIcon size={18} /> },
+        { id: "faves", label: "Favourites", icon: <StarIcon size={17} />, badge: favoritesCount || undefined },
       ],
     },
     {
       title: "Explore",
       items: [
-        { id: "community", label: "Community", icon: <IconGlobe size={18} /> },
-        { id: "generate", label: "Generate with AI", icon: <IconSparkles size={18} /> },
+        { id: "community", label: "Community", icon: <EarthIcon size={18} /> },
+        { id: "generate", label: "Generate with AI", icon: <SparklesIcon size={18} /> },
       ],
     },
   ];
@@ -52,7 +58,7 @@ export function Sidebar({
       </div>
       <button type="button" className="btn btn-primary cta" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
         <span className="btn-badge">
-          <IconImage size={14} />
+          <ImageIcon size={14} />
         </span>
         Your photo
       </button>
@@ -89,9 +95,7 @@ export function Sidebar({
           onClick={onToggleTheme}
         >
           <span className="nav-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
-            </svg>
+            <MoonIcon />
           </span>
           <span className="nav-label">Dark mode</span>
           <span className={dark ? "switch is-on" : "switch"} aria-hidden="true">
@@ -107,7 +111,7 @@ export function Sidebar({
           onClick={onAbout}
         >
           <span className="nav-icon">
-            <IconSliders size={18} />
+            <SlidersHorizontalIcon size={18} />
           </span>
           <span className="nav-label">About</span>
           <span className="nav-version">v{__APP_VERSION__}</span>

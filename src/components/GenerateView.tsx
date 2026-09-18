@@ -3,7 +3,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type AiCatalogue, type AiProvider, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
-import { IconCheck, IconExternal, IconImage, IconSparkles, IconSpinner } from "./icons";
+import { CheckIcon } from "./icons/check";
+import { ExternalLinkIcon } from "./icons/external-link";
+import { ImageIcon } from "./icons/image";
+import { LoaderIcon } from "./icons/loader";
+import { SparklesIcon } from "./icons/sparkles";
 
 type Phase = { kind: "idle" } | { kind: "working" } | { kind: "done"; skin: Skin } | { kind: "error"; message: string };
 
@@ -186,7 +190,7 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
                 <span className="field-label">Reference picture (optional)</span>
                 <div className="row">
                   <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={pickReference}>
-                    <IconImage />
+                    <ImageIcon />
                     {reference ? "Change picture" : "Choose a picture"}
                   </button>
                   {reference && (
@@ -203,7 +207,7 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
 
             <div className="row gen-actions">
               <button type="button" className="btn btn-primary" disabled={!ready} aria-busy={working} onMouseDown={(e) => e.preventDefault()} onClick={generate}>
-                <span className="btn-badge">{working ? <IconSpinner /> : <IconSparkles size={14} />}</span>
+                <span className="btn-badge">{working ? <LoaderIcon /> : <SparklesIcon size={14} />}</span>
                 {working ? "Generating…" : "Generate"}
               </button>
               {model && <span className="muted-note">{model.price_hint} · billed to your own account</span>}
@@ -219,7 +223,7 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
                 <img src={phase.skin.thumbnail} alt="" />
                 <div>
                   <p className="gen-result-title">
-                    <IconCheck /> Added to your skins
+                    <CheckIcon playOnMount /> Added to your skins
                   </p>
                   <p className="view-sub">Pick it in the gallery, then drop a folder and apply.</p>
                 </div>
@@ -263,7 +267,7 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
                   {provider.has_key ? (
                     <div className="row">
                       <span className="chip">
-                        <IconCheck /> Saved in your keychain
+                        <CheckIcon playOnMount /> Saved in your keychain
                       </span>
                       <button type="button" className="link-btn" disabled={keyBusy} onClick={forgetKey}>
                         remove
@@ -281,7 +285,7 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
                         onChange={(e) => setKeyDraft(e.target.value)}
                       />
                       <button type="button" className="btn btn-secondary" disabled={keyBusy || !keyDraft.trim()} onMouseDown={(e) => e.preventDefault()} onClick={saveKey}>
-                        {keyBusy ? <IconSpinner /> : <IconCheck />}
+                        {keyBusy ? <LoaderIcon /> : <CheckIcon />}
                         Save &amp; test
                       </button>
                     </>
@@ -289,10 +293,10 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
                   {keyNote && <span className="field-note">{keyNote}</span>}
                   <div className="row">
                     <button type="button" className="link-btn" onClick={() => void openUrl(provider.keys_url).catch(() => {})}>
-                      Get a key <IconExternal size={12} />
+                      Get a key <ExternalLinkIcon size={12} />
                     </button>
                     <button type="button" className="link-btn" onClick={() => void openUrl(provider.docs_url).catch(() => {})}>
-                      Docs <IconExternal size={12} />
+                      Docs <ExternalLinkIcon size={12} />
                     </button>
                   </div>
                 </div>

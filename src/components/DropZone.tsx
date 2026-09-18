@@ -1,6 +1,10 @@
 import { buttonLabel, hasGlow, type State } from "../state/dropzone";
 import { Handles } from "./FolderThumb";
-import { IconArrowDown, IconCheck, IconFolder, IconSpinner, IconUndo } from "./icons";
+import { ArrowDownIcon } from "./icons/arrow-down";
+import { CheckIcon } from "./icons/check";
+import { FolderOpenIcon } from "./icons/folder-open";
+import { LoaderIcon } from "./icons/loader";
+import { RotateCcwIcon } from "./icons/rotate-ccw";
 
 export function DropZone({
   state,
@@ -46,7 +50,7 @@ export function DropZone({
           aria-label={`drag and drop a folder here, or click to browse ${browseLabel}`}
         >
           <span className="zone-glyph">
-            <IconFolder />
+            <FolderOpenIcon />
           </span>
           <p className="zone-title">Drag &amp; drop a folder here</p>
           <p className="zone-sub">or click to browse {browseLabel}</p>
@@ -61,7 +65,7 @@ export function DropZone({
     );
   }
 
-  const badge = state.phase === "applied" ? <IconCheck /> : busy ? <IconSpinner /> : <IconArrowDown />;
+  const badge = state.phase === "applied" ? <CheckIcon playOnMount /> : busy ? <LoaderIcon /> : <ArrowDownIcon />;
 
   return (
     <section className={cls} aria-live="polite">
@@ -97,7 +101,7 @@ export function DropZone({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={onRevert}
               >
-                <IconUndo />
+                <RotateCcwIcon />
                 Revert
               </button>
             )}

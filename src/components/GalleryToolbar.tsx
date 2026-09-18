@@ -1,4 +1,4 @@
-import { IconSearch } from "./icons";
+import { SearchIcon } from "./icons/search";
 
 export type TabCount = { id: string; label: string; count: number };
 
@@ -34,7 +34,7 @@ export function GalleryToolbar({
         ))}
       </div>
       <label className="search">
-        <IconSearch />
+        <SearchIcon />
         <input
           type="search"
           value={query}

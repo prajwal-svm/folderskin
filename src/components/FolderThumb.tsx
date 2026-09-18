@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Skin } from "../lib/tauri";
-import { IconStar } from "./icons";
+import { StarIcon } from "./icons/star";
 
 export function Handles() {
   return (
@@ -53,7 +53,7 @@ export function FolderThumb({
           onToggleFavorite();
         }}
       >
-        <IconStar filled={favorite} />
+        <StarIcon filled={favorite} />
       </button>
       {selected && <Handles />}
     </div>

@@ -1,5 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { IconDownload, IconExternal, IconImage } from "./icons";
+import { DownloadIcon } from "./icons/download";
+import { ExternalLinkIcon } from "./icons/external-link";
+import { ImageIcon } from "./icons/image";
 
 export const COMMUNITY_URL = "https://github.com/prajwal-svm/folderskin/discussions/categories/skins";
 
@@ -15,20 +17,20 @@ export function CommunityView({ onImport }: { onImport: () => void }) {
       <div className="cards">
         <article className="card">
           <span className="card-glyph">
-            <IconImage size={20} />
+            <ImageIcon size={20} />
           </span>
           <h3 className="card-title">Load a skin from a file</h3>
           <p className="card-text">Any PNG, JPEG or WebP works. It is cropped to the folder and shows up in your gallery right away.</p>
           <button type="button" className="btn btn-primary" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
             <span className="btn-badge">
-              <IconDownload size={14} />
+              <DownloadIcon size={14} />
             </span>
             Choose a file
           </button>
         </article>
         <article className="card">
           <span className="card-glyph">
-            <IconExternal size={20} />
+            <ExternalLinkIcon size={20} />
           </span>
           <h3 className="card-title">Browse shared skins</h3>
           <p className="card-text">Community skins live in the project's discussions. Download one, then load it here.</p>
@@ -38,7 +40,7 @@ export function CommunityView({ onImport }: { onImport: () => void }) {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => void openUrl(COMMUNITY_URL).catch(() => {})}
           >
-            <IconExternal />
+            <ExternalLinkIcon />
             Open community skins
           </button>
         </article>
