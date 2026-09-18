@@ -9,7 +9,7 @@ import { FolderGhost } from "./FolderGhost";
 import { StudioSettings } from "./StudioSettings";
 import { ChatHelper } from "./ChatHelper";
 import { ArrowUpIcon } from "./icons/arrow-up";
-import { CheckIcon } from "./icons/check";
+import { OkBadge } from "./OkBadge";
 import { PaperclipIcon } from "./icons/paperclip";
 import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
@@ -307,9 +307,7 @@ export function Studio({
             <span className="composer-spacer" />
             <button type="button" className="model-pill" onClick={() => setSettingsOpen(true)} title="Provider, model and key">
               {provider?.has_key ? (
-                <span className="model-ok" title="Key saved" aria-label="key saved" key="ok">
-                  <CheckIcon size={13} playOnMount />
-                </span>
+                <OkBadge size={15} playOnMount label="Key saved" key="ok" />
               ) : (
                 <span className="model-dot" aria-hidden="true" />
               )}

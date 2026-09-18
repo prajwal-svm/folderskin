@@ -118,6 +118,21 @@
 
 /* ---------- chips and counts ---------- */
 
+/* white tick in a filled green circle (OkBadge) */
+.ok-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ok-solid);
+  color: #ffffff;
+}
+
+.ok-badge svg {
+  stroke-width: 3;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

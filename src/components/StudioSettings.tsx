@@ -4,7 +4,7 @@ import { api, errorMessage, type AiCatalogue } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import type { ToastTone } from "../hooks/useToasts";
 import { Modal } from "./Modal";
-import { CheckIcon } from "./icons/check";
+import { OkBadge } from "./OkBadge";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
 
@@ -96,9 +96,7 @@ export function StudioSettings({
           >
             <span className="provider-name">{p.label}</span>
             {p.has_key ? (
-              <span className="provider-state is-ready" title="Key saved" aria-label="key saved">
-                <CheckIcon size={15} playOnMount />
-              </span>
+              <OkBadge size={17} playOnMount label="Key saved" />
             ) : (
               <span className="provider-state">No key</span>
             )}
@@ -127,7 +125,7 @@ export function StudioSettings({
         {provider.has_key ? (
           <div className="key-row">
             <span className="chip chip-ok">
-              <CheckIcon size={13} playOnMount /> Saved {where}
+              <OkBadge size={15} playOnMount /> Saved {where}
             </span>
             <button type="button" className="link-btn" disabled={busy} onClick={forget}>
               Remove key

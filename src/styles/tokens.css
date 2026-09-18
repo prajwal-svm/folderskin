@@ -42,6 +42,7 @@
   /* status */
   --ok: #12b981;
   --ok-soft: #dcf7ec;
+  --ok-solid: #12b981;
   --danger: #e5484d;
   --danger-soft: #fde8e8;
   --fave: #ffb020;
@@ -100,6 +101,7 @@
 
   --ok: #34d399;
   --ok-soft: #0f2e24;
+  --ok-solid: #10a877;
   --danger: #ff6b6b;
   --danger-soft: #3a1717;
 

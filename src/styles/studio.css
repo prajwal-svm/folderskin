@@ -205,12 +205,7 @@
   background: var(--hint);
 }
 
-/* a saved key reads as a green check wherever it shows */
-.model-ok {
-  display: inline-flex;
-  flex: none;
-  color: var(--ok);
-}
+
 
 .send-btn {
   flex: none;
@@ -475,10 +470,7 @@
   color: var(--hint);
 }
 
-.provider-state.is-ready {
-  display: inline-flex;
-  color: var(--ok);
-}
+
 
 .key-row {
   display: flex;
