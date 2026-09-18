@@ -244,10 +244,18 @@ fn fit_into_canvas(img: &image::RgbaImage, size: u32) -> image::RgbaImage {
         return image::RgbaImage::new(size, size);
     }
     let scale = (size as f32 / w as f32).min(size as f32 / h as f32);
-    let (nw, nh) = (((w as f32 * scale).round() as u32).max(1), ((h as f32 * scale).round() as u32).max(1));
+    let (nw, nh) = (
+        ((w as f32 * scale).round() as u32).max(1),
+        ((h as f32 * scale).round() as u32).max(1),
+    );
     let scaled = image::imageops::resize(img, nw, nh, image::imageops::FilterType::Lanczos3);
     let mut canvas = image::RgbaImage::new(size, size);
-    image::imageops::overlay(&mut canvas, &scaled, ((size - nw) / 2) as i64, ((size - nh) / 2) as i64);
+    image::imageops::overlay(
+        &mut canvas,
+        &scaled,
+        ((size - nw) / 2) as i64,
+        ((size - nh) / 2) as i64,
+    );
     canvas
 }
 
@@ -299,8 +307,16 @@ mod tests {
         let set = icon_set_from_image(&src, &[512]);
         let img = &set.sizes[0].1;
         assert_eq!(img.dimensions(), (512, 512));
-        assert_eq!(img.get_pixel(256, 256).0[3], 255, "the picture sits in the middle");
-        assert_eq!(img.get_pixel(256, 4).0[3], 0, "the band above it stays transparent");
+        assert_eq!(
+            img.get_pixel(256, 256).0[3],
+            255,
+            "the picture sits in the middle"
+        );
+        assert_eq!(
+            img.get_pixel(256, 4).0[3],
+            0,
+            "the band above it stays transparent"
+        );
         assert_eq!(img.get_pixel(4, 256).0[3], 255, "it reaches the left edge");
     }
 

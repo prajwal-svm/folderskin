@@ -1,0 +1,16 @@
+[package]
+name = "folderskin-ai"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bring-your-own-key image generation for FolderSkin"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+base64 = "0.22"
+# keyring 4's default "v1" feature wires the macOS keychain, the Windows credential
+# manager and the Linux secret service, each with the right backend sub-feature.
+keyring = "4"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "multipart", "charset", "http2"] }

@@ -12,7 +12,7 @@
 //!    what makes a naive chroma key look like it has a coloured halo.
 //! 3. [`autocrop`] trims the transparent margin so the subject fills the frame.
 
-use image::{Rgba, RgbaImage};
+use image::RgbaImage;
 
 /// The key colour FolderSkin asks models for: pure magenta.
 pub const MAGENTA: [u8; 3] = [255, 0, 255];
@@ -29,7 +29,10 @@ pub struct KeyOptions {
 
 impl Default for KeyOptions {
     fn default() -> Self {
-        Self { tolerance: 0.18, feather: 0.14 }
+        Self {
+            tolerance: 0.18,
+            feather: 0.14,
+        }
     }
 }
 
@@ -50,7 +53,9 @@ fn distance(px: &[u8; 3], key: &[u8; 3]) -> f32 {
     } else {
         (0.7, 0.7, 0.7)
     };
-    ((dr * dr * weights.0 + dg * dg * weights.1 + db * db * weights.2) / (weights.0 + weights.1 + weights.2)).sqrt()
+    ((dr * dr * weights.0 + dg * dg * weights.1 + db * db * weights.2)
+        / (weights.0 + weights.1 + weights.2))
+        .sqrt()
 }
 
 /// Fraction of the image's border pixels that sit on the key colour.
@@ -165,14 +170,33 @@ pub fn cutout(img: &RgbaImage, key: [u8; 3], opts: KeyOptions) -> RgbaImage {
 
 /// Fits an opaque generated image to the skin format by cropping to the target aspect around a
 /// focus point. Used when the model returned artwork rather than a cut-out folder.
-pub fn crop_to_aspect(img: &RgbaImage, target_w: u32, target_h: u32, focus: (f32, f32)) -> RgbaImage {
+pub fn crop_to_aspect(
+    img: &RgbaImage,
+    target_w: u32,
+    target_h: u32,
+    focus: (f32, f32),
+) -> RgbaImage {
     let (w, h) = (img.width() as f32, img.height() as f32);
     let target = target_w as f32 / target_h as f32;
-    let (cw, ch) = if w / h > target { (h * target, h) } else { (w, w / target) };
-    let x0 = ((w - cw) * focus.0.clamp(0.0, 1.0)).round().clamp(0.0, w - cw) as u32;
-    let y0 = ((h - ch) * focus.1.clamp(0.0, 1.0)).round().clamp(0.0, h - ch) as u32;
-    let cropped = image::imageops::crop_imm(img, x0, y0, cw.round() as u32, ch.round() as u32).to_image();
-    image::imageops::resize(&cropped, target_w, target_h, image::imageops::FilterType::Lanczos3)
+    let (cw, ch) = if w / h > target {
+        (h * target, h)
+    } else {
+        (w, w / target)
+    };
+    let x0 = ((w - cw) * focus.0.clamp(0.0, 1.0))
+        .round()
+        .clamp(0.0, w - cw) as u32;
+    let y0 = ((h - ch) * focus.1.clamp(0.0, 1.0))
+        .round()
+        .clamp(0.0, h - ch) as u32;
+    let cropped =
+        image::imageops::crop_imm(img, x0, y0, cw.round() as u32, ch.round() as u32).to_image();
+    image::imageops::resize(
+        &cropped,
+        target_w,
+        target_h,
+        image::imageops::FilterType::Lanczos3,
+    )
 }
 
 /// Flattens any transparency onto `bg`, for models that need an opaque reference image.
@@ -180,8 +204,8 @@ pub fn flatten(img: &RgbaImage, bg: [u8; 3]) -> RgbaImage {
     let mut out = img.clone();
     for px in out.pixels_mut() {
         let a = px.0[3] as f32 / 255.0;
-        for c in 0..3 {
-            px.0[c] = (px.0[c] as f32 * a + bg[c] as f32 * (1.0 - a)).round() as u8;
+        for (channel, &under) in px.0.iter_mut().zip(bg.iter()) {
+            *channel = (*channel as f32 * a + under as f32 * (1.0 - a)).round() as u8;
         }
         px.0[3] = 255;
     }
@@ -191,6 +215,7 @@ pub fn flatten(img: &RgbaImage, bg: [u8; 3]) -> RgbaImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use image::Rgba;
 
     /// A magenta field with an opaque green square in the middle.
     fn plate(size: u32, subject: Rgba<u8>) -> RgbaImage {
@@ -208,7 +233,11 @@ mod tests {
         let img = plate(40, Rgba([20, 160, 70, 255]));
         let out = key_out(&img, MAGENTA, KeyOptions::default());
         assert_eq!(out.get_pixel(0, 0).0[3], 0, "corner should be transparent");
-        assert_eq!(out.get_pixel(20, 20).0[3], 255, "subject should stay opaque");
+        assert_eq!(
+            out.get_pixel(20, 20).0[3],
+            255,
+            "subject should stay opaque"
+        );
     }
 
     #[test]
@@ -234,7 +263,10 @@ mod tests {
         let mut img = RgbaImage::from_pixel(1, 1, Rgba([230, 90, 210, 128]));
         despill(&mut img, MAGENTA);
         let px = img.get_pixel(0, 0).0;
-        assert!(px[0] < 230 && px[2] < 210, "red and blue should come down: {px:?}");
+        assert!(
+            px[0] < 230 && px[2] < 210,
+            "red and blue should come down: {px:?}"
+        );
         assert_eq!(px[1], 90, "green is the reference and must not move");
     }
 
@@ -250,8 +282,16 @@ mod tests {
         let img = plate(40, Rgba([20, 160, 70, 255]));
         let cut = cutout(&img, MAGENTA, KeyOptions::default());
         // The subject is the middle half, 20x20, give or take the feathered edge.
-        assert!((cut.width() as i32 - 20).abs() <= 2, "width {}", cut.width());
-        assert!((cut.height() as i32 - 20).abs() <= 2, "height {}", cut.height());
+        assert!(
+            (cut.width() as i32 - 20).abs() <= 2,
+            "width {}",
+            cut.width()
+        );
+        assert!(
+            (cut.height() as i32 - 20).abs() <= 2,
+            "height {}",
+            cut.height()
+        );
     }
 
     #[test]
@@ -277,8 +317,16 @@ mod tests {
         let right = crop_to_aspect(&src, 64, 60, (1.0, 0.5));
         assert_eq!(left.dimensions(), (64, 60));
         // Focus 0 keeps the black left end of the source; focus 1 keeps the red right end.
-        assert!(red_share(&left) < 0.01, "left crop should hold no red: {}", red_share(&left));
-        assert!(red_share(&right) > 0.4, "right crop should be mostly red: {}", red_share(&right));
+        assert!(
+            red_share(&left) < 0.01,
+            "left crop should hold no red: {}",
+            red_share(&left)
+        );
+        assert!(
+            red_share(&right) > 0.4,
+            "right crop should be mostly red: {}",
+            red_share(&right)
+        );
     }
 
     #[test]

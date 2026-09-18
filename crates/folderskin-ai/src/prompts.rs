@@ -46,14 +46,46 @@ pub struct Preset {
 
 /// Starting points offered in the Generate view, one per built-in collection plus a few extras.
 pub const PRESETS: &[Preset] = &[
-    Preset { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains, faint stars" },
-    Preset { id: "dunes", label: "Dunes", idea: "warm desert dunes at golden hour, long soft shadows, fine sand grain" },
-    Preset { id: "risograph", label: "Risograph", idea: "two-colour risograph print, coarse grain, misregistered fluorescent pink and blue" },
-    Preset { id: "terrazzo", label: "Terrazzo", idea: "pale terrazzo with scattered chips of teal, ochre and charcoal" },
-    Preset { id: "wave", label: "Wave", idea: "a woodblock ocean wave with deep indigo troughs and white foam" },
-    Preset { id: "circuit", label: "Circuit", idea: "an emerald circuit board macro, gold traces, soft bokeh highlights" },
-    Preset { id: "linen", label: "Linen", idea: "undyed linen weave in raking light, visible slubs and thread texture" },
-    Preset { id: "nebula", label: "Nebula", idea: "a magenta and cyan nebula with dust lanes and scattered stars" },
+    Preset {
+        id: "aurora",
+        label: "Aurora",
+        idea: "a night sky with green and violet aurora ribbons over dark mountains, faint stars",
+    },
+    Preset {
+        id: "dunes",
+        label: "Dunes",
+        idea: "warm desert dunes at golden hour, long soft shadows, fine sand grain",
+    },
+    Preset {
+        id: "risograph",
+        label: "Risograph",
+        idea: "two-colour risograph print, coarse grain, misregistered fluorescent pink and blue",
+    },
+    Preset {
+        id: "terrazzo",
+        label: "Terrazzo",
+        idea: "pale terrazzo with scattered chips of teal, ochre and charcoal",
+    },
+    Preset {
+        id: "wave",
+        label: "Wave",
+        idea: "a woodblock ocean wave with deep indigo troughs and white foam",
+    },
+    Preset {
+        id: "circuit",
+        label: "Circuit",
+        idea: "an emerald circuit board macro, gold traces, soft bokeh highlights",
+    },
+    Preset {
+        id: "linen",
+        label: "Linen",
+        idea: "undyed linen weave in raking light, visible slubs and thread texture",
+    },
+    Preset {
+        id: "nebula",
+        label: "Nebula",
+        idea: "a magenta and cyan nebula with dust lanes and scattered stars",
+    },
 ];
 
 /// Style notes appended to a `Skin` prompt so a generated skin sits beside the built-in ten.
@@ -122,14 +154,24 @@ pub fn compose(shape: Shape, idea: &str, width: u32, height: u32, key_hex: Optio
 }
 
 /// Extra instructions for a run that also sends a reference picture.
-pub fn compose_with_reference(shape: Shape, idea: &str, width: u32, height: u32, key_hex: Option<&str>) -> String {
+pub fn compose_with_reference(
+    shape: Shape,
+    idea: &str,
+    width: u32,
+    height: u32,
+    key_hex: Option<&str>,
+) -> String {
     let base = compose(shape, idea, width, height, key_hex);
     let lead = match shape {
-        Shape::Skin => "Use the supplied picture as the source of the artwork: keep its subject, \
-                        palette and mood, and restyle it to fill the frame as described below.",
-        Shape::Folder => "Use the supplied picture as the artwork that goes onto the folder: keep \
+        Shape::Skin => {
+            "Use the supplied picture as the source of the artwork: keep its subject, \
+                        palette and mood, and restyle it to fill the frame as described below."
+        }
+        Shape::Folder => {
+            "Use the supplied picture as the artwork that goes onto the folder: keep \
                           its subject, palette and mood, and wrap it across the panels as \
-                          described below.",
+                          described below."
+        }
     };
     format!("{lead}\n\n{base}")
 }
@@ -142,15 +184,32 @@ mod tests {
     fn skin_prompts_forbid_drawing_a_folder() {
         let p = compose(Shape::Skin, "a copper patina", 1024, 958, None);
         assert!(p.contains("a copper patina"));
-        assert!(p.contains("No folder"), "a skin prompt must rule out drawing the folder itself");
+        assert!(
+            p.contains("No folder"),
+            "a skin prompt must rule out drawing the folder itself"
+        );
         assert!(p.contains("1024 by 958"));
-        assert!(!p.contains("tab"), "skin prompts never mention folder construction: {p}");
+        assert!(
+            !p.contains("tab"),
+            "skin prompts never mention folder construction: {p}"
+        );
     }
 
     #[test]
     fn folder_prompts_pin_the_construction_and_the_key_colour() {
-        let p = compose(Shape::Folder, "a copper patina", 1166, 1091, Some("#FF00FF"));
-        for needle in ["exactly three parts", "only tab", "pure #FF00FF", "1166 by 1091"] {
+        let p = compose(
+            Shape::Folder,
+            "a copper patina",
+            1166,
+            1091,
+            Some("#FF00FF"),
+        );
+        for needle in [
+            "exactly three parts",
+            "only tab",
+            "pure #FF00FF",
+            "1166 by 1091",
+        ] {
             assert!(p.contains(needle), "missing {needle:?} in: {p}");
         }
     }
@@ -179,6 +238,8 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), PRESETS.len());
-        assert!(PRESETS.iter().all(|p| !p.idea.is_empty() && !p.label.is_empty()));
+        assert!(PRESETS
+            .iter()
+            .all(|p| !p.idea.is_empty() && !p.label.is_empty()));
     }
 }
