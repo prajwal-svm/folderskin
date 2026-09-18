@@ -14,7 +14,6 @@ import { DropZone } from "./components/DropZone";
 import { AboutMenu } from "./components/AboutMenu";
 import { CommunityView } from "./components/CommunityView";
 import { GenerateView } from "./components/GenerateView";
-import { IconImage } from "./components/icons";
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "heic", "heif"];
 const ALL = "all";
@@ -194,19 +193,6 @@ export default function App() {
         : "No skins match that search."
       : null);
 
-  const photoButton = (
-    <button
-      type="button"
-      className="btn btn-secondary"
-      title="use your own picture as a skin"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={pickPhoto}
-    >
-      <IconImage />
-      Your photo
-    </button>
-  );
-
   return (
     <main className={`app os-${platform.os}`}>
       <div className="blobs" aria-hidden="true">
@@ -220,6 +206,7 @@ export default function App() {
           if (v === "skins") setTab(ALL);
         }}
         favoritesCount={favorites.length}
+        onImport={pickPhoto}
         theme={theme}
         onToggleTheme={toggleThemePref}
         onAbout={() => setAboutOpen((v) => !v)}
@@ -237,7 +224,6 @@ export default function App() {
                   onChange={setTab}
                   query={query}
                   onQuery={setQuery}
-                  actions={photoButton}
                 />
                 <div className="gallery-scroll">
                   <Gallery
@@ -252,22 +238,8 @@ export default function App() {
                 </div>
               </>
             )}
-            {view === "community" && (
-              <>
-                <div className="toolbar toolbar-plain" data-tauri-drag-region>
-                  <div className="toolbar-actions">{photoButton}</div>
-                </div>
-                <CommunityView onImport={pickPhoto} />
-              </>
-            )}
-            {view === "generate" && (
-              <>
-                <div className="toolbar toolbar-plain" data-tauri-drag-region>
-                  <div className="toolbar-actions">{photoButton}</div>
-                </div>
-                <GenerateView />
-              </>
-            )}
+            {view === "community" && <CommunityView onImport={pickPhoto} />}
+            {view === "generate" && <GenerateView />}
           </section>
           <aside className="panel">
             <div className="panel-head">

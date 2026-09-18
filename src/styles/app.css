@@ -133,6 +133,7 @@ img {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   animation: fade-up 260ms ease-out both;
 }
 
@@ -174,6 +175,14 @@ img {
 .os-macos .sidebar-top {
   height: 84px;
   padding-top: 26px; /* below the traffic lights */
+}
+
+.cta {
+  width: 100%;
+  margin: 2px 0 6px;
+  justify-content: center;
+  padding-right: 16px;
+  flex: none;
 }
 
 .sidebar-scroll {
@@ -372,28 +381,24 @@ img {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 18px 10px 20px;
+  padding: 14px 20px 12px;
   flex-wrap: nowrap;
+  min-width: 0;
   border-bottom: 1px solid var(--line);
 }
 
-.toolbar-plain {
-  min-height: 66px;
-  justify-content: flex-end;
-}
-
-.toolbar-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.toolbar .btn,
 .seg {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.seg::-webkit-scrollbar {
+  display: none;
+}
+
+.seg-btn {
   flex: none;
-  white-space: nowrap;
 }
 
 .seg {
@@ -454,7 +459,7 @@ img {
 
 .search {
   flex: 1 1 120px;
-  min-width: 96px;
+  min-width: 0;
   max-width: 300px;
   height: 42px;
   display: flex;
@@ -612,8 +617,8 @@ img {
 
 .gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 124px);
-  gap: 22px 22px;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 18px 16px;
   justify-content: start;
 }
 
@@ -626,8 +631,8 @@ img {
 
 .thumb-wrap {
   position: relative;
-  width: 124px;
-  height: 124px;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: var(--radius-card);
   transition: transform 180ms ease;
   animation: rise 360ms ease-out both;
@@ -662,8 +667,9 @@ img {
 }
 
 .thumb img {
-  width: 112px;
-  height: 112px;
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
   filter: drop-shadow(var(--thumb-shadow));
   transition: filter 180ms ease, transform 180ms ease;
 }
@@ -830,19 +836,17 @@ img {
   width: 100%;
   min-height: 312px;
   border-radius: inherit;
-  transition: background-color 150ms ease;
-}
-
-.zone-hit:focus-visible {
-  background: var(--sky-soft);
-}
-
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
   padding: 24px;
+  transition: background-color 150ms ease;
+}
+
+.zone-hit:focus-visible {
+  background: var(--sky-soft);
 }
 
 .zone-glyph {

@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { IconSearch } from "./icons";
 
 export type TabCount = { id: string; label: string; count: number };
@@ -9,15 +8,12 @@ export function GalleryToolbar({
   onChange,
   query,
   onQuery,
-  actions,
 }: {
   tabs: TabCount[];
   active: string;
   onChange: (id: string) => void;
   query: string;
   onQuery: (q: string) => void;
-  /** Right-aligned controls (for example the "Your photo" button). */
-  actions?: ReactNode;
 }) {
   return (
     <div className="toolbar" data-tauri-drag-region>
@@ -48,7 +44,6 @@ export function GalleryToolbar({
           onChange={(e) => onQuery(e.target.value)}
         />
       </label>
-      {actions && <div className="toolbar-actions">{actions}</div>}
     </div>
   );
 }

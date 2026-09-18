@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Theme } from "../state/theme";
-import { IconGlobe, IconGrid, IconSliders, IconSparkles, IconStar } from "./icons";
+import { IconGlobe, IconGrid, IconImage, IconSliders, IconSparkles, IconStar } from "./icons";
 
 export type View = "skins" | "faves" | "community" | "generate";
 
@@ -10,6 +10,7 @@ export function Sidebar({
   view,
   onView,
   favoritesCount,
+  onImport,
   theme,
   onToggleTheme,
   onAbout,
@@ -18,6 +19,7 @@ export function Sidebar({
   view: View;
   onView: (v: View) => void;
   favoritesCount: number;
+  onImport: () => void;
   theme: Theme;
   onToggleTheme: () => void;
   onAbout: () => void;
@@ -48,6 +50,12 @@ export function Sidebar({
           <span className="brand-name">FolderSkin</span>
         </div>
       </div>
+      <button type="button" className="btn btn-primary cta" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
+        <span className="btn-badge">
+          <IconImage size={14} />
+        </span>
+        Your photo
+      </button>
       <div className="sidebar-scroll">
         {groups.map((g) => (
           <div className="nav-group" key={g.title}>

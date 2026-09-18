@@ -4,6 +4,12 @@ folders, but prettier.
 
 ![FolderSkin window](docs/images/app.png)
 
+<details><summary>Dark mode</summary>
+
+![FolderSkin in dark mode](docs/images/app-dark.png)
+
+</details>
+
 FolderSkin gives a folder a custom icon: drop a folder on the window, pick one of ten
 built-in skins or your own photo, and press apply. The icon changes immediately in Finder,
 Explorer or your file manager, and a revert button puts the operating system's default icon
