@@ -214,6 +214,17 @@
   transform: scale(1.03) translateY(-2px);
 }
 
+/* Pointing at the empty folder invites a click: the lines wake up and the halo warms. */
+.stage-art:hover .stage-ghost path,
+.stage-art:focus-visible .stage-ghost path {
+  stroke: color-mix(in srgb, var(--sky) 70%, var(--dash));
+  animation-duration: 1.2s;
+}
+
+.stage-art:hover .stage-halo {
+  opacity: 0.9;
+}
+
 .is-drop-target .stage-ghost path {
   stroke: var(--sky);
   animation-duration: 0.7s;
