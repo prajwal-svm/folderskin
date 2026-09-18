@@ -144,6 +144,18 @@ The Windows writer is compile-checked from macOS with `cargo check --target
 x86_64-pc-windows-msvc -p folderskin-core`. CI runs the whole set on ubuntu-22.04,
 windows-latest and macos-latest.
 
+## The AI assistant
+
+`crates/folderskin-ai` is the only crate that talks to the network, and only when the user
+presses Generate. It holds the provider catalogue, the per-provider request bodies and response
+readers (pure functions, unit-tested without a network), the prompt templates, and the keychain
+wrapper. `crates/folderskin-core/src/matte.rs` turns a keyed render into a clean cutout for the
+providers that cannot return an alpha channel. [AI.md](AI.md) covers the feature itself.
+
+A generated whole-folder image is applied without going through the compositor:
+`compositor::icon_set_from_image` fits it into the icon canvas instead. That is the one path
+where the icon's geometry is not ours.
+
 ## Size budget
 
 Under 15 MB installed: a stripped release binary of roughly 6–9 MB, about 2 MB of skins, a

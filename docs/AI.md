@@ -74,6 +74,14 @@ Every request is billed to your own account by your provider. The Generate view 
 model's rough price before you press the button. FolderSkin makes exactly one request per
 press; it never retries on its own.
 
+## Building and cross-compiling
+
+The provider layer uses `rustls` for TLS, whose crypto backend (`aws-lc-sys`) compiles C. That
+builds cleanly on each platform's own CI runner, which is how FolderSkin's releases are made.
+Cross-compiling it from one desktop to another (for example `cargo check --target
+x86_64-pc-windows-msvc` on a Mac) needs a C cross-toolchain for the target and will otherwise
+fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks without one.
+
 ## Failure messages you may see
 
 | Message | What happened |
