@@ -26,6 +26,8 @@ function useTheme(): [Theme, () => void] {
     const t = resolveTheme(pref);
     setTheme(t);
     applyTheme(t);
+    // The window's material follows the native appearance, so it has to match the app's choice.
+    api.setWindowTheme(pref === "system" ? null : pref).catch(() => {});
     if (pref !== "system" || typeof matchMedia !== "function") return;
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {

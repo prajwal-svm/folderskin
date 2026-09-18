@@ -5,6 +5,7 @@ pub mod commands;
 pub mod folder_icon;
 pub mod skins;
 pub mod state;
+pub mod window;
 
 pub fn run() {
     tauri::Builder::default()
@@ -25,9 +26,9 @@ pub fn run() {
             ai::ai_test_key,
             ai::ai_generate,
         ])
-        .setup(|_app| {
+        .setup(|app| {
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));
-            Ok(())
+            window::create_main(app)
         })
         .run(tauri::generate_context!())
         .expect("error while running FolderSkin");

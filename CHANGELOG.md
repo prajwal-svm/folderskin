@@ -26,6 +26,10 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   operating system's keychain. See [docs/AI.md](docs/AI.md).
 - Revert, which restores the operating system's default folder icon and removes the
   files FolderSkin wrote.
+- Animated icons, adapted from lucide-animated, that play when their button is hovered or
+  focused.
+- A translucent sidebar on macOS: the window sits on the system sidebar material, which
+  follows the light/dark switch.
 - Gallery tabs (`all`, the three collections, and `faves`) with favourites stored
   locally.
 - `folderskin-tools`, a workspace binary that generates and imports skins, renders

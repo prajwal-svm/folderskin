@@ -52,8 +52,13 @@ inside the folder and Finder picks it up immediately. Setting an icon needs writ
 to the folder, so folders on read-only volumes and inside some sandboxed locations are
 refused with the reason the OS gave.
 
-The `setIcon` call must run on the main thread; the app marshals it there and awaits the
-result, which is why apply can take a moment on a slow disk.
+`NSWorkspace.setIcon` is thread-safe, so the app calls it off the main thread and the window
+keeps animating while a slow disk finishes the write.
+
+The window is transparent over the system's sidebar material (`NSVisualEffectView`), which is
+what makes the sidebar translucent; the light/dark switch sets the window's appearance so the
+material follows it. Transparent windows need Tauri's `macOSPrivateApi`, which rules out the
+Mac App Store; FolderSkin ships as a DMG. Windows and Linux keep an opaque window.
 
 ### Windows
 

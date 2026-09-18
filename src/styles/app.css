@@ -99,6 +99,19 @@ img {
   }
 }
 
+/* ---------- glass (macOS) ---------- */
+
+/* src-tauri/src/window.rs puts the window over the system sidebar material and sets data-glass.
+   Clearing the canvas lets the material through behind the sidebar and around the card, which
+   stays opaque as the content layer. The blobs would only muddy the material. */
+html[data-glass] body {
+  background: transparent;
+}
+
+html[data-glass] .blobs {
+  display: none;
+}
+
 /* ---------- layout ---------- */
 
 .app {

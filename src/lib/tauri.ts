@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
 
 /** A skin the gallery can show: built-in or imported from the user's picture. */
@@ -63,6 +64,8 @@ const tauriApi = {
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
   /** The folder's current icon (data URL): the real OS icon where available. */
   folderIcon: (folder: string) => invoke<string>("folder_icon", { folder }),
+  /** Native window appearance; `null` follows the system. Keeps the macOS sidebar material in step with the app theme. */
+  setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
 
   // ---- AI assistant (bring your own key) ----
   aiCatalogue: () => invoke<AiCatalogue>("ai_catalogue"),

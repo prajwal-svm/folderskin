@@ -34,6 +34,7 @@ export const mockApi = {
   revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
   folderIcon: async (): Promise<string> => "/assets/previews/mesh.png",
+  setWindowTheme: async () => {},
   aiCatalogue: async (): Promise<AiCatalogue> => ({
     providers: [
       {
