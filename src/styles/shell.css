@@ -38,7 +38,7 @@
   height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 10px; /* the mark lines up with the nav icons, the name with the nav labels */
   flex: none;
 }
 
@@ -50,13 +50,16 @@
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
   pointer-events: none; /* the whole strip stays a window drag handle */
 }
 
-.brand-icon {
-  width: 30px;
-  height: 30px;
+/* The app icon cropped to its artwork (public/brand-mark.png), so its visible edge, not
+   transparent padding, sets the gap and the vertical centre. */
+.brand-mark {
+  height: 26px;
+  width: auto;
+  flex: none;
 }
 
 .brand-name {
@@ -64,6 +67,19 @@
   font-size: 19px;
   line-height: 1;
   letter-spacing: -0.035em;
+}
+
+.brand-version {
+  margin-left: 2px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--nav-hover);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  line-height: 18px;
+  letter-spacing: 0.01em;
 }
 
 .cta {
@@ -171,12 +187,6 @@
 .nav-btn.is-active .nav-badge {
   background: var(--accent-soft);
   color: var(--ink);
-}
-
-.nav-version {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--hint);
 }
 
 .sidebar-bottom {

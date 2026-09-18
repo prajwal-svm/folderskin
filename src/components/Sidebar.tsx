@@ -55,9 +55,10 @@ export function Sidebar({
   return (
     <nav className="sidebar" aria-label="sections">
       <div className="sidebar-top" data-tauri-drag-region>
-        <div className="brand-lockup" aria-label="FolderSkin">
-          <img className="brand-icon" src="/app-icon.png" alt="" draggable={false} />
+        <div className="brand-lockup" aria-label={`FolderSkin version ${__APP_VERSION__}`}>
+          <img className="brand-mark" src="/brand-mark.png" alt="" draggable={false} />
           <span className="brand-name">FolderSkin</span>
+          <span className="brand-version">v{__APP_VERSION__}</span>
         </div>
       </div>
       <button type="button" className="btn btn-primary cta" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
@@ -115,7 +116,6 @@ export function Sidebar({
             <SlidersHorizontalIcon size={18} />
           </span>
           <span className="nav-label">About</span>
-          <span className="nav-version">v{__APP_VERSION__}</span>
         </button>
       </div>
     </nav>
