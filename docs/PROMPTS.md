@@ -64,18 +64,31 @@ Pick one, or mix two:
 - constructivist poster with bold diagonals
 - early-90s computer desktop, pixel icons and dithering
 
-## Scenes to start from
+## Ideas to start from
 
-- An astronaut watering a tiny garden on the moon
-- A koi fish swimming through a rainy neon street
-- A red phone booth standing alone on a glacier
-- A whale drifting over a sleepy seaside village at dawn
-- A cat in sunglasses running a tiny coffee cart
-- A vinyl record rising like the sun over a desert
-- A lighthouse throwing a rainbow into a thunderstorm
-- A retro computer on a beach, its screen showing a sunset
-- A tiger surfing an enormous wave
-- A tiny office inside a teacup, people typing at their desks
+Each line is a whole brief, subject and style together. Paste it after `Scene:` and delete the
+`Style:` line. These are the ideas the app's style buttons fill in, two per style.
+
+- **Travel poster.** A tiny red seaplane landing on a turquoise lagoon at sunset, palm silhouettes and a low orange sun, as a vintage travel poster in flat colours with grainy print texture and the word ESCAPE in bold retro letters.
+- **Travel poster.** A cable car climbing past snowy peaks toward a little alpine hotel, as a 1950s travel poster: flat blues and whites, one red accent, soft print grain.
+- **Woodblock.** A giant koi leaping over a great wave under a pale moon, as a ukiyo-e woodblock print with bold black outlines, indigo and vermilion on washi paper.
+- **Woodblock.** A fox in a straw hat crossing a lantern-lit bridge in the rain, as an Edo-period woodblock print with flat colour blocks and fine rain lines.
+- **70s airbrush.** A chrome cassette tape floating over a neon desert highway at dusk, as a 1970s airbrushed poster with glossy highlights and a purple-to-tangerine sky.
+- **70s airbrush.** A shiny roller skate orbiting a ringed planet, as a 70s airbrush illustration with chrome reflections, lens flares and a deep violet starfield.
+- **Collage.** A vintage astronaut floating between cut-paper clouds, holding a steaming coffee cup, as a surreal photo collage with halftone dots and torn-paper edges.
+- **Collage.** A giant hand watering a tiny city skyline like a houseplant, as a retro magazine collage with halftone print, paper grain and a mustard-yellow sky.
+- **Art nouveau.** A woman whose hair turns into ocean waves, framed by lilies and ornate gold lines, as an art nouveau poster in muted teal, cream and coral.
+- **Art nouveau.** A peacock perched on a crescent moon among swirling vines, as an art nouveau poster with thin gold outlines and jewel greens and blues.
+- **Oil painting.** A cat in a velvet cloak holding a tiny laptop, as a Renaissance oil painting with dramatic candlelight, deep reds and golds, and cracked varnish.
+- **Oil painting.** A whale drifting over a sleepy harbour at dawn, as a romantic oil painting with soft clouds, visible brushwork and warm morning light.
+- **Film still.** A lone red phone booth on a snowy mountain ridge at golden hour, as a cinematic 35 mm film still with soft grain and long shadows.
+- **Film still.** A vintage convertible parked under a neon diner sign on a rainy night, as a moody film still with wet reflections and teal-orange colour.
+- **Tiny diorama.** A busy little post office built inside a wooden drawer, tiny workers sorting letters under warm lamps, as a tilt-shift miniature diorama.
+- **Tiny diorama.** A tiny campsite on top of a giant open book, with a tent, a campfire and paper pine trees, as a tilt-shift miniature photo with soft evening light.
+- **Risograph.** A vinyl record rising like the sun over desert dunes, as a three-colour risograph print in teal, yellow and orange, with visible grain and slight misregistration.
+- **Risograph.** A paper boat sailing through a city of stacked books, as a two-colour risograph in blue and orange with a grainy, slightly offset print.
+- **Clay.** A tiny lighthouse on a rocky island throwing a rainbow beam through puffy clouds, as a soft clay stop-motion scene in pastel colours with fingerprints in the clay.
+- **Clay.** A snail carrying a little house with glowing windows through a mossy forest, as a cosy claymation set in soft light.
 
 Or let the folder's name pick the scene: *"Scene: a witty poster about a folder called
 'Taxes 2025'"*.

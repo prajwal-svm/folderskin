@@ -22,7 +22,7 @@ export function ChatHelper({
   onClose: () => void;
   toast: (text: string, opts?: { tone?: ToastTone }) => void;
 }) {
-  const [style, setStyle] = useState<string | null>(styleId ?? STYLES[0].id);
+  const [style, setStyle] = useState<string | null>(styleId);
   const [copied, setCopied] = useState(false);
   const prompt = useMemo(() => chatPrompt(scene, style), [scene, style]);
 
@@ -71,7 +71,8 @@ export function ChatHelper({
                   key={s.id}
                   type="button"
                   className={style === s.id ? "style-chip is-active" : "style-chip"}
-                  onClick={() => setStyle(s.id)}
+                  aria-pressed={style === s.id}
+                  onClick={() => setStyle((cur) => (cur === s.id ? null : s.id))}
                 >
                   {s.label}
                 </button>

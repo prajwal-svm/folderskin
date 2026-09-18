@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type AiCatalogue, type AiModel, type AiProvider, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { baseName, IMAGE_EXTENSIONS } from "../lib/files";
-import { SCENES, STYLES, withStyle } from "../lib/prompts";
+import { STYLES, suggestion, surprise as surprisePick } from "../lib/prompts";
 import type { ToastTone } from "../hooks/useToasts";
 import { FolderGhost } from "./FolderGhost";
 import { StudioSettings } from "./StudioSettings";
@@ -18,7 +18,6 @@ type Shape = "folder" | "skin";
 type Turn = {
   id: number;
   idea: string;
-  styleId: string | null;
   shape: Shape;
   where: string;
   status: "working" | "done" | "error";
@@ -59,13 +58,15 @@ export function Studio({
   const [providerId, setProviderId] = useState("");
   const [modelId, setModelId] = useState("");
   const [idea, setIdea] = useState("");
-  const [styleId, setStyleId] = useState<string | null>(null);
+  /** The style chip whose brief is in the box, and which of its briefs (clicking again cycles). */
+  const [pick, setPick] = useState<{ styleId: string; index: number } | null>(null);
   const [shape, setShape] = useState<Shape>("folder");
   const [reference, setReference] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helperOpen, setHelperOpen] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
+  const composer = useRef<HTMLFormElement>(null);
   const thread = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
 
@@ -102,7 +103,7 @@ export function Studio({
   }, [turns.length]);
 
   const run = useCallback(
-    async (text: string, style: string | null, as: Shape) => {
+    async (text: string, as: Shape) => {
       if (!provider || !model) return;
       if (!provider.has_key) {
         setSettingsOpen(true);
@@ -111,13 +112,13 @@ export function Studio({
       const id = ++seq.current;
       setTurns((ts) => [
         ...ts,
-        { id, idea: text, styleId: style, shape: as, where: `${provider.label} · ${model.label}`, status: "working", started: Date.now() },
+        { id, idea: text, shape: as, where: `${provider.label} · ${model.label}`, status: "working", started: Date.now() },
       ]);
       try {
         const skin = await api.aiGenerate({
           provider: provider.id,
           model: model.id,
-          idea: withStyle(text, style),
+          idea: text,
           shape: as,
           size: model.sizes[0] ?? null,
           reference_path: model.accepts_reference ? reference : null,
@@ -141,7 +142,8 @@ export function Studio({
     }
     const text = idea.trim();
     setIdea("");
-    void run(text, styleId, shape);
+    setPick(null);
+    void run(text, shape);
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -151,12 +153,41 @@ export function Studio({
     }
   };
 
-  const surprise = () => {
-    const pick = SCENES[Math.floor(Math.random() * SCENES.length)];
-    setIdea(pick);
-    setStyleId(STYLES[Math.floor(Math.random() * STYLES.length)].id);
-    input.current?.focus();
+  /** Puts a brief in the box, flashes the box so the change is seen, and parks the caret at the end. */
+  const fill = (text: string) => {
+    setIdea(text);
+    requestAnimationFrame(() => {
+      const box = input.current;
+      if (box) {
+        box.focus();
+        box.setSelectionRange(text.length, text.length);
+        box.scrollTop = box.scrollHeight;
+      }
+      const root = getComputedStyle(document.documentElement);
+      composer.current?.animate(
+        [
+          { backgroundColor: root.getPropertyValue("--accent-wash").trim(), borderColor: root.getPropertyValue("--accent").trim() },
+          { backgroundColor: root.getPropertyValue("--island").trim(), borderColor: root.getPropertyValue("--line").trim() },
+        ],
+        { duration: 700, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+      );
+    });
   };
+
+  const choose = (styleId: string) => {
+    const index = pick?.styleId === styleId ? pick.index + 1 : 0;
+    setPick({ styleId, index });
+    fill(suggestion(styleId, index));
+  };
+
+  const surprise = () => {
+    const next = surprisePick();
+    setPick({ styleId: next.styleId, index: next.index });
+    fill(next.text);
+  };
+
+  /** A chip reads as chosen while its brief is still in the box, untouched. */
+  const chosen = pick && idea === suggestion(pick.styleId, pick.index) ? pick.styleId : null;
 
   const pickReference = useCallback(async () => {
     if (!isTauri()) return setReference("/Users/you/Pictures/reference.jpg");
@@ -200,7 +231,7 @@ export function Studio({
               onTryOn(id);
               toast(folderName ? `Trying it on ${folderName}` : "Picked. Now drop a folder on the right", { tone: "info" });
             }}
-            onAgain={() => void run(t.idea, t.styleId, t.shape)}
+            onAgain={() => void run(t.idea, t.shape)}
             onSettings={() => setSettingsOpen(true)}
             disabled={working}
           />
@@ -215,13 +246,13 @@ export function Studio({
             </span>
             <h2 className="studio-title">What should your folder look like?</h2>
             <p className="studio-sub">
-              Describe a scene and pick a style. It goes straight from your Mac to {provider?.label ?? "the provider"} with
-              your own key, and comes back as a folder.
+              Describe a scene, or tap a style below for an idea to start from. It goes from your Mac to{" "}
+              {provider?.label ?? "the provider"} with your own key, and comes back as a folder.
             </p>
           </div>
         )}
 
-        <form className="composer" onSubmit={send}>
+        <form className="composer" onSubmit={send} ref={composer}>
           <textarea
             ref={input}
             className="composer-input"
@@ -286,16 +317,16 @@ export function Studio({
 
         {!hasThread && (
           <>
-            <div className="style-chips" role="radiogroup" aria-label="style">
+            <div className="style-chips" aria-label="ideas to start from">
               {STYLES.map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  role="radio"
-                  aria-checked={styleId === s.id}
-                  className={styleId === s.id ? "style-chip is-active" : "style-chip"}
+                  aria-pressed={chosen === s.id}
+                  className={chosen === s.id ? "style-chip is-active" : "style-chip"}
+                  title={chosen === s.id ? "Click again for another idea in this style" : `Fill in a ${s.label.toLowerCase()} idea`}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setStyleId((cur) => (cur === s.id ? null : s.id))}
+                  onClick={() => choose(s.id)}
                 >
                   {s.label}
                 </button>
@@ -311,14 +342,6 @@ export function Studio({
               </button>
             </p>
           </>
-        )}
-        {hasThread && styleId && (
-          <p className="studio-foot">
-            Style: {STYLES.find((s) => s.id === styleId)?.label}
-            <button type="button" className="link-btn" onClick={() => setStyleId(null)}>
-              Clear
-            </button>
-          </p>
         )}
       </div>
 
@@ -337,7 +360,7 @@ export function Studio({
       {helperOpen && (
         <ChatHelper
           scene={idea}
-          styleId={styleId}
+          styleId={null}
           onImport={() => {
             setHelperOpen(false);
             onImport();
@@ -367,13 +390,9 @@ function TurnCard({
   onSettings: () => void;
   disabled: boolean;
 }) {
-  const style = STYLES.find((s) => s.id === turn.styleId)?.label;
   return (
     <article className="turn">
-      <p className="turn-ask">
-        {turn.idea}
-        {style && <span className="turn-style">{style}</span>}
-      </p>
+      <p className="turn-ask">{turn.idea}</p>
       {turn.status === "working" && <Developing shape={turn.shape} started={turn.started} where={turn.where} />}
       {turn.status === "done" && turn.skin && (
         <div className="turn-result">
