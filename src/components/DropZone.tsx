@@ -1,5 +1,4 @@
-import { buttonLabel, hasGlow, type State } from "../state/dropzone";
-import { Handles } from "./FolderThumb";
+import { buttonLabel, type State } from "../state/dropzone";
 import { ArrowDownIcon } from "./icons/arrow-down";
 import { CheckIcon } from "./icons/check";
 import { FolderOpenIcon } from "./icons/folder-open";
@@ -25,12 +24,10 @@ export function DropZone({
   const idle = state.phase === "idle";
   const busy = state.phase === "applying" || state.phase === "reverting";
   const label = buttonLabel(state);
-  const selected = hasGlow(state);
   const cls = [
     "zone",
     idle ? "is-idle" : "has-folder",
     state.hover ? "is-hover" : "",
-    selected ? "sel" : "",
     busy ? "is-busy" : "",
     state.phase === "applied" ? "is-done" : "",
   ]
@@ -69,7 +66,6 @@ export function DropZone({
 
   return (
     <section className={cls} aria-live="polite">
-      {selected && <Handles />}
       <div className="zone-card" key={state.folder?.path}>
         {thumbnail && <img className="zone-preview" src={thumbnail} alt="" draggable={false} key={thumbnail} />}
         <p className="zone-name" title={state.folder?.path}>

@@ -2,17 +2,6 @@ import type { CSSProperties } from "react";
 import type { Skin } from "../lib/tauri";
 import { StarIcon } from "./icons/star";
 
-export function Handles() {
-  return (
-    <>
-      <span className="handle tl" />
-      <span className="handle tr" />
-      <span className="handle bl" />
-      <span className="handle br" />
-    </>
-  );
-}
-
 export function FolderThumb({
   skin,
   index,
@@ -28,7 +17,7 @@ export function FolderThumb({
   onSelect: () => void;
   onToggleFavorite: () => void;
 }) {
-  const cls = ["thumb-wrap", selected ? "is-selected sel" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
+  const cls = ["thumb-wrap", selected ? "is-selected" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
   return (
     <div className={cls} style={{ "--i": index } as CSSProperties}>
       <button
@@ -55,7 +44,6 @@ export function FolderThumb({
       >
         <StarIcon filled={favorite} />
       </button>
-      {selected && <Handles />}
     </div>
   );
 }

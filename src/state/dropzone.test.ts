@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buttonLabel, hasGlow, initialState, reduce, type Action, type State } from "./dropzone";
+import { buttonLabel, initialState, reduce, type Action, type State } from "./dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite, type KeyValueStore } from "./favorites";
 import { browseLabel } from "../lib/platform";
 
@@ -13,7 +13,6 @@ describe("drop zone state machine", () => {
   it("starts idle with no folder and no button", () => {
     expect(initialState.phase).toBe("idle");
     expect(buttonLabel(initialState)).toBeNull();
-    expect(hasGlow(initialState)).toBe(false);
   });
 
   it("dropping a folder shows the folder state until a skin is picked", () => {
@@ -29,7 +28,6 @@ describe("drop zone state machine", () => {
     expect(a.phase).toBe("ready");
     expect(b.phase).toBe("ready");
     expect(buttonLabel(a)).toBe("Apply skin");
-    expect(hasGlow(a)).toBe(true);
   });
 
   it("selecting a skin without a folder stays idle but remembers the choice", () => {
@@ -47,7 +45,6 @@ describe("drop zone state machine", () => {
     expect(applied.phase).toBe("applied");
     expect(applied.appliedSkinId).toBe("aurora");
     expect(buttonLabel(applied)).toBe("Applied");
-    expect(hasGlow(applied)).toBe(true);
   });
 
   it("cannot start applying without both a folder and a skin", () => {

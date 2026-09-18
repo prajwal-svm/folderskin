@@ -483,12 +483,11 @@ html[data-glass] .blobs {
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--hint);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition: border-color 160ms ease;
 }
 
 .search:focus-within {
   border-color: var(--sky);
-  box-shadow: 0 0 0 4px var(--sky-ring);
   color: var(--ink);
 }
 
@@ -537,13 +536,13 @@ html[data-glass] .blobs {
 .btn-primary {
   background: var(--sky);
   color: var(--on-sky);
-  box-shadow: 0 0 0 0 var(--sky-ring), 0 6px 18px rgba(56, 182, 255, 0.28);
+  box-shadow: 0 6px 18px rgba(56, 182, 255, 0.28);
 }
 
 .btn-primary:hover:not(:disabled),
 .btn-primary:focus-visible:not(:disabled) {
   background: var(--sky-deep);
-  box-shadow: 0 0 0 5px var(--sky-ring), 0 8px 22px rgba(56, 182, 255, 0.34);
+  box-shadow: 0 8px 22px rgba(56, 182, 255, 0.34);
 }
 
 .btn-primary.is-done {
@@ -594,38 +593,6 @@ html[data-glass] .blobs {
   width: fit-content;
 }
 
-/* ---------- selection frame (the signature) ---------- */
-
-.sel {
-  position: relative;
-}
-
-.sel::before {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border: 1.5px solid var(--sky);
-  border-radius: inherit;
-  pointer-events: none;
-  animation: frame-in 220ms ease-out;
-}
-
-.sel .handle {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  background: var(--sky);
-  border: 1.5px solid var(--surface);
-  box-shadow: 0 0 0 1px var(--sky);
-  pointer-events: none;
-  animation: pop 260ms cubic-bezier(0.2, 1.4, 0.4, 1);
-}
-
-.sel .handle.tl { top: -6px; left: -6px; }
-.sel .handle.tr { top: -6px; right: -6px; }
-.sel .handle.bl { bottom: -6px; left: -6px; }
-.sel .handle.br { bottom: -6px; right: -6px; }
-
 /* ---------- gallery ---------- */
 
 .gallery {
@@ -656,15 +623,6 @@ html[data-glass] .blobs {
   transform: translateY(-3px);
 }
 
-.thumb-wrap.is-selected::before {
-  inset: 0;
-}
-
-.thumb-wrap.is-selected .handle.tl { top: -3px; left: -3px; }
-.thumb-wrap.is-selected .handle.tr { top: -3px; right: -3px; }
-.thumb-wrap.is-selected .handle.bl { bottom: -3px; left: -3px; }
-.thumb-wrap.is-selected .handle.br { bottom: -3px; right: -3px; }
-
 .thumb {
   display: flex;
   align-items: center;
@@ -675,7 +633,8 @@ html[data-glass] .blobs {
   transition: background-color 150ms ease;
 }
 
-.thumb:focus-visible {
+.thumb:focus-visible,
+.thumb-wrap.is-selected .thumb {
   background: var(--sky-soft);
 }
 
@@ -810,10 +769,6 @@ html[data-glass] .blobs {
   display: none;
 }
 
-.zone.has-folder.sel::before {
-  inset: -4px;
-}
-
 .zone.has-folder.is-hover {
   border-color: var(--sky);
   background-color: color-mix(in srgb, var(--sky-soft) 45%, var(--surface));
@@ -835,10 +790,6 @@ html[data-glass] .blobs {
   animation: spin-ring 1.1s linear infinite;
   pointer-events: none;
   z-index: 2;
-}
-
-.zone.is-busy.sel::before {
-  border-color: color-mix(in srgb, var(--sky) 45%, transparent);
 }
 
 .zone.is-done {
@@ -1143,17 +1094,6 @@ html[data-glass] .blobs {
   }
 }
 
-@keyframes frame-in {
-  from {
-    opacity: 0;
-    transform: scale(1.03);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes pop {
   from {
     transform: scale(0.4);
@@ -1290,13 +1230,12 @@ html[data-glass] .blobs {
   font-size: 13.5px;
   user-select: text;
   -webkit-user-select: text;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition: border-color 160ms ease;
 }
 
 .input:focus,
 .input:focus-visible {
   border-color: var(--sky);
-  box-shadow: 0 0 0 4px var(--sky-ring);
 }
 
 .input::placeholder {
@@ -1384,7 +1323,6 @@ select.input {
 
 .choice-btn.is-active {
   border-color: var(--sky);
-  box-shadow: 0 0 0 4px var(--sky-ring);
 }
 
 .row {

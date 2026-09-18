@@ -121,8 +121,3 @@ export function buttonLabel(state: State): ButtonLabel | null {
       return null;
   }
 }
-
-/** The zone shows the glowing gradient border once a skin is chosen for a folder. */
-export function hasGlow(state: State): boolean {
-  return state.phase === "ready" || state.phase === "applying" || state.phase === "applied" || state.phase === "reverting";
-}
