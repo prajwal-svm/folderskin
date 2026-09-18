@@ -13,8 +13,8 @@ folders, but prettier.
 FolderSkin gives a folder a custom icon: drop a folder on the window, pick one of ten
 built-in skins or your own photo, and press apply. The icon changes immediately in Finder,
 Explorer or your file manager, and a revert button puts the operating system's default icon
-back. No accounts, no paywall, no network, no telemetry; it is an app under 15 MB that
-writes an icon and then gets out of the way.
+back. No accounts, no paywall and no telemetry. The only network access is the optional AI
+assistant, which uses your own API key. The app installs at about 12 MB.
 
 ## Download
 

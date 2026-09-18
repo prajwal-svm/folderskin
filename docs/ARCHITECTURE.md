@@ -158,8 +158,9 @@ where the icon's geometry is not ours.
 
 ## Size budget
 
-Under 15 MB installed: a stripped release binary of roughly 6–9 MB, about 2 MB of skins, a
-165 KB variable font (Manrope), and a frontend bundle under 300 KB. `image` is built with
+Under 15 MB installed: 12 MB for the macOS app bundle as of 0.1.0, made up of a stripped
+release binary of about 9.5 MB (2 MB of that is the TLS stack the AI assistant needs), 2.3 MB
+of skins, a 165 KB variable font (Manrope), and a frontend bundle under 300 KB. `image` is built with
 `default-features = false` and only `png`, `jpeg` and `webp`, and the release profile uses
 `opt-level = "s"`, LTO and one codegen unit. Any dependency that would move this budget needs
 a reason in the pull request.
