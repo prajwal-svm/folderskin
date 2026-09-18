@@ -3,7 +3,7 @@
  * real layout with the generated previews (served from assets/previews via public/previews).
  * Never used inside the app: `isTauri()` is true there.
  */
-import type { PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
+import type { AiCatalogue, AiGenerateRequest, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
 
 const IDS: [string, string, string][] = [
   ["aurora", "Aurora", "glow"],
@@ -33,4 +33,40 @@ export const mockApi = {
   revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
   folderIcon: async (): Promise<string> => "/previews/mesh.png",
+  aiCatalogue: async (): Promise<AiCatalogue> => ({
+    providers: [
+      {
+        id: "openai",
+        label: "OpenAI",
+        models: [
+          { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.04 / image" },
+          { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.19 / image" },
+        ],
+        keys_url: "https://platform.openai.com/api-keys",
+        docs_url: "https://platform.openai.com/docs/guides/image-generation",
+        key_hint: "starts with sk-",
+        has_key: false,
+      },
+      {
+        id: "xai",
+        label: "xAI Grok",
+        models: [{ id: "grok-imagine-image", label: "Grok Imagine", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.02 / image" }],
+        keys_url: "https://console.x.ai",
+        docs_url: "https://docs.x.ai",
+        key_hint: "starts with xai-",
+        has_key: false,
+      },
+    ],
+    presets: [
+      { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains" },
+      { id: "dunes", label: "Dunes", idea: "warm desert dunes at golden hour, long soft shadows" },
+    ],
+  }),
+  aiSetKey: async () => {},
+  aiClearKey: async () => {},
+  aiTestKey: async () => {},
+  aiGenerate: async (_req: AiGenerateRequest): Promise<Skin> => {
+    await new Promise((r) => setTimeout(r, 1200));
+    return { id: "custom:demo", name: "Generated", collection: "yours", thumbnail: "/previews/aurora.png", custom: true };
+  },
 };

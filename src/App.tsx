@@ -239,7 +239,11 @@ export default function App() {
               </>
             )}
             {view === "community" && <CommunityView onImport={pickPhoto} />}
-            {view === "generate" && <GenerateView />}
+            {view === "generate" && (
+              <GenerateView
+                onGenerated={(skin) => setCustomSkins((prev) => [skin, ...prev.filter((s) => s.id !== skin.id)])}
+              />
+            )}
           </section>
           <aside className="panel">
             <div className="panel-head">

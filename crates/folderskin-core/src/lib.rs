@@ -9,4 +9,5 @@ pub mod fit;
 pub mod geometry;
 pub mod ico;
 pub mod manifest;
+pub mod matte;
 pub mod raster;
