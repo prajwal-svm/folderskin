@@ -37,7 +37,7 @@ export function Sidebar({
       title: "Explore",
       items: [
         { id: "community", label: "Community", icon: <IconGlobe size={18} /> },
-        { id: "generate", label: "Generate with AI", icon: <IconSparkles size={18} />, soon: true },
+        { id: "generate", label: "Generate with AI", icon: <IconSparkles size={18} /> },
       ],
     },
   ];
