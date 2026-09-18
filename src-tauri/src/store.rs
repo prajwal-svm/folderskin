@@ -21,6 +21,7 @@
 
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
+use folderskin_core::pack;
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use serde::{Deserialize, Serialize};
@@ -60,6 +61,8 @@ pub enum SkinSource {
     Import,
     /// A result from the AI assistant.
     Ai,
+    /// A skin from a community pack.
+    Community,
 }
 
 /// One saved skin, as the index records it.
@@ -84,6 +87,20 @@ pub struct SavedSkin {
     /// AI results only: the user's own words.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idea: Option<String>,
+    /// What the gallery can filter it by, cleaned by [`pack::clean_tags`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    /// Community skins only: the id of the pack it came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack: Option<String>,
+    /// Community skins only: the pack's name, its author's GitHub name and its licence, kept so
+    /// the skin can always be credited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
 }
 
 /// What the caller knows about a skin it wants saved. The store adds the kind and focus (from
@@ -96,6 +113,11 @@ pub struct NewSkin {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub idea: Option<String>,
+    pub tags: Vec<String>,
+    pub pack: Option<String>,
+    pub pack_name: Option<String>,
+    pub author: Option<String>,
+    pub license: Option<String>,
 }
 
 impl NewSkin {
@@ -111,6 +133,11 @@ impl NewSkin {
             provider: self.provider,
             model: self.model,
             idea: self.idea,
+            tags: pack::clean_tags(&self.tags, pack::MAX_TAGS),
+            pack: self.pack,
+            pack_name: self.pack_name,
+            author: self.author,
+            license: self.license,
         }
     }
 }
@@ -423,19 +450,28 @@ impl Store {
         Ok(())
     }
 
-    /// Gives a saved skin a new name, cleaned by [`clean_name`], and returns its entry. Only the
-    /// index changes: the picture and thumbnails are named after the id, not the name.
-    pub fn rename(&self, id: &str, name: &str) -> Result<SavedSkin, String> {
+    /// The folder the skins are saved in.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// Gives a saved skin a new name and tags, cleaned by [`clean_name`] and
+    /// [`pack::clean_tags`], and returns its entry. Only the index changes: the picture and
+    /// thumbnails are named after the id, not the name.
+    pub fn edit(&self, id: &str, name: &str, tags: &[String]) -> Result<SavedSkin, String> {
         let name = clean_name(name).ok_or_else(|| "a skin needs a name".to_string())?;
+        let tags = pack::clean_tags(tags, pack::MAX_TAGS);
         let mut index = self.lock();
         let pos = index
             .iter()
             .position(|s| s.id == id)
             .ok_or_else(|| "that skin isn't saved any more".to_string())?;
-        let before = std::mem::replace(&mut index[pos].name, name);
+        let before = index[pos].clone();
+        index[pos].name = name;
+        index[pos].tags = tags;
         if let Err(e) = self.write_index(&index) {
-            index[pos].name = before;
-            return Err(format!("couldn't rename that skin: {e}"));
+            index[pos] = before;
+            return Err(format!("couldn't save that skin's changes: {e}"));
         }
         Ok(index[pos].clone())
     }
@@ -587,6 +623,11 @@ mod tests {
             provider: None,
             model: None,
             idea: None,
+            tags: Vec::new(),
+            pack: None,
+            pack_name: None,
+            author: None,
+            license: None,
         }
     }
 
@@ -668,31 +709,39 @@ mod tests {
     }
 
     #[test]
-    fn renaming_changes_only_the_name_and_survives_a_restart() {
-        let dir = temp_dir("rename");
+    fn editing_changes_the_name_and_tags_and_survives_a_restart() {
+        let dir = temp_dir("edit");
         let store = Store::open(dir.clone());
-        let id = skin_id(b"rename");
-        store
-            .add(
-                new_skin(&id, "A night sky", SkinSource::Ai),
-                &artwork([9, 9, 9], (0.5, 0.5)),
-            )
-            .unwrap();
+        let id = skin_id(b"edit");
+        let mut new = new_skin(&id, "A night sky", SkinSource::Community);
+        new.tags = vec!["Airbrush".into(), "airbrush".into()];
+        new.pack = Some("night-skies".into());
+        let (entry, _) = store.add(new, &artwork([9, 9, 9], (0.5, 0.5))).unwrap();
+        assert_eq!(entry.tags, ["airbrush"], "tags are cleaned on the way in");
 
-        let renamed = store.rename(&id, "  Beach   trip\n2026 ").unwrap();
-        assert_eq!(renamed.name, "Beach trip 2026");
-        assert_eq!(renamed.source, SkinSource::Ai, "nothing else changes");
+        let tags = vec!["Beach".into(), " summer  2026 ".into(), "beach".into()];
+        let edited = store.edit(&id, "  Beach   trip\n2026 ", &tags).unwrap();
+        assert_eq!(edited.name, "Beach trip 2026");
+        assert_eq!(edited.tags, ["beach", "summer 2026"]);
+        assert_eq!(
+            edited.pack.as_deref(),
+            Some("night-skies"),
+            "nothing else changes"
+        );
         assert!(
-            store.rename(&id, " \t ").is_err(),
+            store.edit(&id, " \t ", &[]).is_err(),
             "a blank name is refused"
         );
         assert!(
-            store.rename(&skin_id(b"unknown"), "x").is_err(),
+            store.edit(&skin_id(b"unknown"), "x", &[]).is_err(),
             "so is a skin that isn't saved"
         );
 
         let reopened = Store::open(dir.clone());
-        assert_eq!(reopened.get(&id).unwrap().name, "Beach trip 2026");
+        let saved = reopened.get(&id).unwrap();
+        assert_eq!(saved.name, "Beach trip 2026");
+        assert_eq!(saved.tags, ["beach", "summer 2026"]);
+        assert_eq!(saved.source, SkinSource::Community);
         assert!(
             reopened.load(&id).unwrap().is_some(),
             "the picture is untouched"

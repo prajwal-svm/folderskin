@@ -25,7 +25,7 @@ const IMAGE_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
 ];
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct SkinDto {
     pub id: String,
     pub name: String,
@@ -38,6 +38,18 @@ pub struct SkinDto {
     pub source: SkinSource,
     /// When a saved skin was added, in Unix milliseconds; `null` for the built-in skins.
     pub created_at: Option<u64>,
+    /// What the gallery filters it by.
+    pub tags: Vec<String>,
+    /// For a community skin, the pack it came from.
+    pub pack: Option<String>,
+    /// AI results: the provider and model that made it, as people call them.
+    pub made_with: Option<String>,
+    /// AI results: the description it was made from.
+    pub idea: Option<String>,
+    /// Community skins: the pack's name, its author's GitHub name and its licence.
+    pub pack_name: Option<String>,
+    pub author: Option<String>,
+    pub license: Option<String>,
 }
 
 impl SkinDto {
@@ -52,8 +64,25 @@ impl SkinDto {
             kind: entry.kind,
             source: entry.source,
             created_at: Some(entry.created_at),
+            tags: entry.tags.clone(),
+            pack: entry.pack.clone(),
+            made_with: made_with(entry),
+            idea: entry.idea.clone(),
+            pack_name: entry.pack_name.clone(),
+            author: entry.author.clone(),
+            license: entry.license.clone(),
         }
     }
+}
+
+/// "OpenAI · GPT Image 2.5 Flare" for an AI result: the names the studio shows, or the ids when
+/// the catalogue no longer lists them.
+fn made_with(entry: &SavedSkin) -> Option<String> {
+    let provider = entry.provider.as_deref()?;
+    let model = entry.model.as_deref()?;
+    let provider_label = folderskin_ai::catalogue::provider(provider).map_or(provider, |p| p.label);
+    let model_label = folderskin_ai::model(provider, model).map_or(model, |m| m.label);
+    Some(format!("{provider_label} · {model_label}"))
 }
 
 #[derive(Serialize)]
@@ -264,6 +293,13 @@ pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<Sk
                     kind: SkinKind::Artwork,
                     source: SkinSource::Builtin,
                     created_at: None,
+                    tags: s.tags.clone(),
+                    pack: None,
+                    made_with: None,
+                    idea: None,
+                    pack_name: None,
+                    author: None,
+                    license: None,
                 }
             })
             .collect();
@@ -322,6 +358,11 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
             provider: None,
             model: None,
             idea: None,
+            tags: Vec::new(),
+            pack: None,
+            pack_name: None,
+            author: None,
+            license: None,
         };
         let (entry, thumb) = state.save(new, image)?;
         Ok(SkinDto::saved(&entry, &thumb))
@@ -356,6 +397,15 @@ pub async fn apply_skin(
     .map_err(|e| e.to_string())?
 }
 
+/// Where the skins are saved, for Settings to show.
+#[tauri::command]
+pub fn skins_folder(state: State<'_, AppState>) -> Result<String, String> {
+    state
+        .store()
+        .map(|store| store.dir().display().to_string())
+        .ok_or_else(|| "skins are only kept until you quit, since there is no data folder".into())
+}
+
 /// Removes a saved skin: its index entry, its files and anything cached for it. The built-in
 /// skins cannot be deleted; a saved skin that is already gone is not an error.
 #[tauri::command]
@@ -369,21 +419,35 @@ pub async fn delete_skin(state: State<'_, AppState>, skin_id: String) -> Result<
         .map_err(|e| e.to_string())?
 }
 
-/// Gives one of the user's skins a new name and returns the name as saved: trimmed, on one line
-/// and at most `MAX_NAME_CHARS` long. The built-in skins keep their names.
+/// A skin's name and tags as saved.
+#[derive(Serialize)]
+pub struct SkinEditDto {
+    pub name: String,
+    pub tags: Vec<String>,
+}
+
+/// Gives one of the user's skins a new name and tags and returns them as saved: the name on one
+/// line and at most `MAX_NAME_CHARS` long, the tags cleaned and at most eight. The built-in skins
+/// keep theirs.
 #[tauri::command]
-pub async fn rename_skin(
+pub async fn edit_skin(
     state: State<'_, AppState>,
     skin_id: String,
     name: String,
-) -> Result<String, String> {
+    tags: Vec<String>,
+) -> Result<SkinEditDto, String> {
     if is_builtin_id(&skin_id) {
-        return Err("the built-in skins can't be renamed".into());
+        return Err("the built-in skins can't be changed".into());
     }
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.rename(&skin_id, &name).map(|e| e.name))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        state.edit(&skin_id, &name, &tags).map(|e| SkinEditDto {
+            name: e.name,
+            tags: e.tags,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -529,6 +593,11 @@ mod tests {
             provider: Some("xai".into()),
             model: Some("grok-imagine-image".into()),
             idea: Some("a fox".into()),
+            tags: vec!["woodblock".into()],
+            pack: None,
+            pack_name: None,
+            author: None,
+            license: None,
         };
         let json = serde_json::to_value(SkinDto::saved(&entry, b"png")).unwrap();
         assert_eq!(json["collection"], "yours");
@@ -536,14 +605,15 @@ mod tests {
         assert_eq!(json["kind"], "folder");
         assert_eq!(json["source"], "ai");
         assert_eq!(json["created_at"], 1_790_000_000_000u64);
+        assert_eq!(json["tags"], serde_json::json!(["woodblock"]));
+        assert!(json["pack"].is_null());
         assert!(json["thumbnail"]
             .as_str()
             .unwrap()
             .starts_with("data:image/png;base64,"));
-        assert!(
-            json.get("provider").is_none(),
-            "the DTO carries no AI details"
-        );
+        assert_eq!(json["made_with"], "xAI Grok · Grok Imagine");
+        assert_eq!(json["idea"], "a fox");
+        assert!(json["author"].is_null());
 
         let builtin = SkinDto {
             id: "aurora".into(),
@@ -554,6 +624,13 @@ mod tests {
             kind: SkinKind::Artwork,
             source: SkinSource::Builtin,
             created_at: None,
+            tags: vec!["glow".into()],
+            pack: None,
+            made_with: None,
+            idea: None,
+            pack_name: None,
+            author: None,
+            license: None,
         };
         let json = serde_json::to_value(builtin).unwrap();
         assert_eq!(json["kind"], "artwork");

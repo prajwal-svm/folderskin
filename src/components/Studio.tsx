@@ -3,15 +3,13 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type AiCatalogue, type AiModel, type AiProvider, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { baseName, IMAGE_EXTENSIONS } from "../lib/files";
-import { STYLES, suggestion, surprise as surprisePick } from "../lib/prompts";
+import { STYLES, styleTags, suggestion, surprise as surprisePick } from "../lib/prompts";
 import type { ToastTone } from "../hooks/useToasts";
 import { FolderGhost } from "./FolderGhost";
 import { StudioSettings } from "./StudioSettings";
 import { ChatHelper } from "./ChatHelper";
-import { NameField } from "./NameField";
 import { ArrowUpIcon } from "./icons/arrow-up";
 import { PaperclipIcon } from "./icons/paperclip";
-import { PencilIcon } from "./icons/pencil";
 import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
 
@@ -46,8 +44,9 @@ export function Studio({
   onGenerated,
   onTryOn,
   onImport,
-  nameOf,
-  onRename,
+  skinOf,
+  onMenu,
+  keysVersion,
   toast,
 }: {
   folderName: string | null;
@@ -55,9 +54,12 @@ export function Studio({
   onGenerated: (skin: Skin) => void;
   onTryOn: (skinId: string) => void;
   onImport: () => void;
-  /** A skin's name as the library has it now, or undefined once it has been deleted. */
-  nameOf: (skinId: string) => string | undefined;
-  onRename: (skin: Skin, name: string) => void;
+  /** A skin as the library has it now (renamed, retagged), or undefined once deleted. */
+  skinOf: (skinId: string) => Skin | undefined;
+  /** Opens a skin's menu (name, tags, details) beside `anchor`. */
+  onMenu: (skin: Skin, anchor: HTMLElement) => void;
+  /** Changes when a key is saved or removed in Settings, so the providers are read again. */
+  keysVersion: number;
   toast: (text: string, opts?: { tone?: ToastTone }) => void;
 }) {
   const [catalogue, setCatalogue] = useState<AiCatalogue | null>(null);
@@ -87,7 +89,7 @@ export function Studio({
       })
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
-  useEffect(load, [load]);
+  useEffect(() => load(), [load, keysVersion]);
 
   const provider: AiProvider | undefined = useMemo(
     () => catalogue?.providers.find((p) => p.id === providerId),
@@ -129,6 +131,7 @@ export function Studio({
           shape: as,
           size: model.sizes[0] ?? null,
           reference_path: model.accepts_reference ? reference : null,
+          tags: styleTags(text),
         });
         setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, status: "done", skin } : t)));
         onGenerated(skin);
@@ -241,8 +244,8 @@ export function Studio({
             onAgain={() => void run(t.idea, t.shape)}
             onSettings={() => setSettingsOpen(true)}
             disabled={working}
-            name={t.skin ? nameOf(t.skin.id) : undefined}
-            onRename={(name) => t.skin && onRename(t.skin, name)}
+            live={t.skin ? skinOf(t.skin.id) : undefined}
+            onMenu={onMenu}
           />
         ))}
       </div>
@@ -394,8 +397,8 @@ function TurnCard({
   onAgain,
   onSettings,
   disabled,
-  name,
-  onRename,
+  live,
+  onMenu,
 }: {
   turn: Turn;
   folderName: string | null;
@@ -404,11 +407,10 @@ function TurnCard({
   onAgain: () => void;
   onSettings: () => void;
   disabled: boolean;
-  /** The result's name in the library; undefined once it has been deleted there. */
-  name: string | undefined;
-  onRename: (name: string) => void;
+  /** The result as the library has it now; undefined once it has been deleted there. */
+  live: Skin | undefined;
+  onMenu: (skin: Skin, anchor: HTMLElement) => void;
 }) {
-  const [renaming, setRenaming] = useState(false);
   return (
     <article className="turn">
       <p className="turn-ask">{turn.idea}</p>
@@ -417,15 +419,34 @@ function TurnCard({
         <div className="turn-result">
           <img className="turn-img" src={turn.skin.thumbnail} alt="" draggable={false} />
           <div className="turn-meta">
-            {name === undefined ? (
-              <p className="turn-name">{turn.skin.name}</p>
-            ) : renaming ? (
-              <NameField value={name} label="name for this skin" className="turn-name-field" onRename={onRename} onClose={() => setRenaming(false)} />
-            ) : (
-              <button type="button" className="turn-name name-btn" title="Rename" onMouseDown={(e) => e.preventDefault()} onClick={() => setRenaming(true)}>
-                <span className="name-btn-text">{name}</span>
-                <PencilIcon size={14} />
-              </button>
+            <div className="turn-title">
+              <p className="turn-name">{(live ?? turn.skin).name}</p>
+              {live && (
+                <button
+                  type="button"
+                  className="icon-btn turn-more"
+                  aria-label={`options for ${live.name}`}
+                  aria-haspopup="dialog"
+                  title="Name, tags and details"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => onMenu(live, e.currentTarget)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {live && live.tags.length > 0 && (
+              <div className="turn-tags">
+                {live.tags.map((tag) => (
+                  <span className="tag-chip" key={tag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
             )}
             <p className="turn-where">
               {turn.where} · saved to Yours

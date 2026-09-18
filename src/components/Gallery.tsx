@@ -14,7 +14,8 @@ export function Gallery({
   onSelect,
   onToggleFavorite,
   onRemove,
-  onRename,
+  onMenu,
+  menuFor,
 }: {
   skins: Skin[];
   selectedId: string | null;
@@ -27,9 +28,12 @@ export function Gallery({
   onAdd?: () => void;
   onSelect: (id: string) => void;
   onToggleFavorite: (id: string) => void;
-  /** Asks to delete one of the user's skins. */
+  /** Asks to delete a skin that isn't built in. */
   onRemove: (skin: Skin) => void;
-  onRename: (skin: Skin, name: string) => void;
+  /** Opens the menu of a skin that isn't built in, beside `anchor`. */
+  onMenu: (skin: Skin, anchor: HTMLElement, fromKeyboard: boolean) => void;
+  /** The skin whose menu is open. */
+  menuFor: string | null;
 }) {
   if (empty && !onAdd) {
     return (
@@ -68,7 +72,8 @@ export function Gallery({
             onSelect={() => onSelect(skin.id)}
             onToggleFavorite={() => onToggleFavorite(skin.id)}
             onRemove={skin.custom ? () => onRemove(skin) : undefined}
-            onRename={skin.custom ? (name) => onRename(skin, name) : undefined}
+            onMenu={skin.custom ? (anchor, kb) => onMenu(skin, anchor, kb) : undefined}
+            menuOpen={menuFor === skin.id}
           />
         </div>
       ))}

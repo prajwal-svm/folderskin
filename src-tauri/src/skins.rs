@@ -5,6 +5,8 @@ pub struct BuiltinSkin {
     pub id: &'static str,
     pub name: &'static str,
     pub collection: &'static str,
+    /// What the gallery filters it by: the manifest's tags, or its collection.
+    pub tags: &'static [&'static str],
     pub focus: [f32; 2],
     pub bytes: &'static [u8],
 }

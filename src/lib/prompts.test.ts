@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatPrompt, STYLES, SUGGESTIONS, suggestion, surprise } from "./prompts";
+import { chatPrompt, STYLES, styleTags, SUGGESTIONS, suggestion, surprise } from "./prompts";
 
 describe("style briefs", () => {
   it("gives every style at least two briefs that name a subject and a style", () => {
@@ -33,6 +33,17 @@ describe("style briefs", () => {
     const pick = surprise(() => 0.99);
     expect(SUGGESTIONS[pick.styleId]).toContain(pick.text);
     expect(pick.text).toBe(suggestion(pick.styleId, pick.index));
+  });
+});
+
+describe("style tags", () => {
+  it("tag every brief with its own style", () => {
+    for (const s of STYLES) for (const text of SUGGESTIONS[s.id]) expect(styleTags(text), text).toContain(s.tag);
+  });
+
+  it("find styles in the user's own words, and nothing when there is none", () => {
+    expect(styleTags("a fox, as an Ukiyo-e print")).toEqual(["woodblock"]);
+    expect(styleTags("a fox in the snow")).toEqual([]);
   });
 });
 

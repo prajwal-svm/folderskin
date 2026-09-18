@@ -21,8 +21,10 @@ export function Sidebar({
   onImport,
   theme,
   onToggleTheme,
-  onAbout,
+  onAboutHover,
   aboutOpen,
+  onSettings,
+  settingsOpen,
 }: {
   view: View;
   onView: (v: View) => void;
@@ -31,8 +33,11 @@ export function Sidebar({
   onImport: () => void;
   theme: Theme;
   onToggleTheme: () => void;
-  onAbout: () => void;
+  /** The pointer or focus came to the version badge (true) or left it (false). */
+  onAboutHover: (open: boolean) => void;
   aboutOpen: boolean;
+  onSettings: () => void;
+  settingsOpen: boolean;
 }) {
   const groups: { title: string; items: Item[] }[] = [
     {
@@ -58,7 +63,20 @@ export function Sidebar({
         <div className="brand-lockup" aria-label={`FolderSkin version ${__APP_VERSION__}`}>
           <img className="brand-mark" src="/brand-mark.png" alt="" draggable={false} />
           <span className="brand-name">FolderSkin</span>
-          <span className="brand-version">v{__APP_VERSION__}</span>
+          <button
+            type="button"
+            className="brand-version"
+            aria-label="about FolderSkin"
+            aria-expanded={aboutOpen}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseEnter={() => onAboutHover(true)}
+            onMouseLeave={() => onAboutHover(false)}
+            onFocus={() => onAboutHover(true)}
+            onBlur={() => onAboutHover(false)}
+            onClick={() => onAboutHover(true)}
+          >
+            v{__APP_VERSION__}
+          </button>
         </div>
       </div>
       <button type="button" className="btn btn-primary cta" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
@@ -106,16 +124,15 @@ export function Sidebar({
         </button>
         <button
           type="button"
-          className={aboutOpen ? "nav-btn is-active" : "nav-btn"}
-          aria-label="about FolderSkin"
-          aria-expanded={aboutOpen}
+          className={settingsOpen ? "nav-btn is-active" : "nav-btn"}
+          aria-haspopup="dialog"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={onAbout}
+          onClick={onSettings}
         >
           <span className="nav-icon">
             <SlidersHorizontalIcon size={18} />
           </span>
-          <span className="nav-label">About</span>
+          <span className="nav-label">Settings</span>
         </button>
       </div>
     </nav>

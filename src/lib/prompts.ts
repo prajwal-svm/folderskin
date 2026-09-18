@@ -3,19 +3,28 @@
  * in docs/PROMPTS.md; keep them in step.
  */
 
-/** Styles that hold up at folder size: strong shapes, clear light, a recognisable technique. */
-export const STYLES: { id: string; label: string; text: string }[] = [
-  { id: "travel", label: "Travel poster", text: "vintage travel poster, flat colour, grainy print texture" },
-  { id: "ukiyoe", label: "Woodblock", text: "ukiyo-e woodblock print with bold outlines" },
-  { id: "airbrush", label: "70s airbrush", text: "1970s airbrushed poster with glossy chrome" },
-  { id: "collage", label: "Collage", text: "surreal photo collage with cut-paper edges and halftone dots" },
-  { id: "nouveau", label: "Art nouveau", text: "art nouveau poster with ornate borders and thin gold lines" },
-  { id: "oil", label: "Oil painting", text: "Renaissance oil painting with dramatic light" },
-  { id: "film", label: "Film still", text: "cinematic photograph at golden hour, 35 mm film grain" },
-  { id: "diorama", label: "Tiny diorama", text: "miniature diorama shot with a tilt-shift lens" },
-  { id: "riso", label: "Risograph", text: "risograph print in three inks" },
-  { id: "clay", label: "Clay", text: "soft clay render, like a stop-motion set" },
+/**
+ * Styles that hold up at folder size: strong shapes, clear light, a recognisable technique.
+ * `tag` is what an AI result in that style is tagged with, and `words` is how a description
+ * gives the style away.
+ */
+export const STYLES: { id: string; label: string; text: string; tag: string; words: RegExp }[] = [
+  { id: "travel", label: "Travel poster", text: "vintage travel poster, flat colour, grainy print texture", tag: "travel poster", words: /travel poster/i },
+  { id: "ukiyoe", label: "Woodblock", text: "ukiyo-e woodblock print with bold outlines", tag: "woodblock", words: /ukiyo|woodblock/i },
+  { id: "airbrush", label: "70s airbrush", text: "1970s airbrushed poster with glossy chrome", tag: "airbrush", words: /airbrush/i },
+  { id: "collage", label: "Collage", text: "surreal photo collage with cut-paper edges and halftone dots", tag: "collage", words: /collage/i },
+  { id: "nouveau", label: "Art nouveau", text: "art nouveau poster with ornate borders and thin gold lines", tag: "art nouveau", words: /art nouveau/i },
+  { id: "oil", label: "Oil painting", text: "Renaissance oil painting with dramatic light", tag: "oil painting", words: /oil painting/i },
+  { id: "film", label: "Film still", text: "cinematic photograph at golden hour, 35 mm film grain", tag: "film still", words: /film still|35 ?mm|cinematic/i },
+  { id: "diorama", label: "Tiny diorama", text: "miniature diorama shot with a tilt-shift lens", tag: "diorama", words: /diorama|tilt-shift|miniature/i },
+  { id: "riso", label: "Risograph", text: "risograph print in three inks", tag: "risograph", words: /risograph/i },
+  { id: "clay", label: "Clay", text: "soft clay render, like a stop-motion set", tag: "clay", words: /\bclay|claymation|stop-motion/i },
 ];
+
+/** Tags for an AI result: the styles its description asks for, such as "airbrush". */
+export function styleTags(idea: string): string[] {
+  return STYLES.filter((s) => s.words.test(idea)).map((s) => s.tag);
+}
 
 /**
  * Ready-to-send briefs, two per style. Each is one concept with a twist, one clear subject for

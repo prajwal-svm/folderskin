@@ -193,6 +193,133 @@
   transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
+/* ---------- tags ---------- */
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.tag-chip.is-link {
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.tag-chip.is-link:hover,
+.tag-chip.is-link:focus-visible {
+  background: var(--well-2);
+  color: var(--ink);
+}
+
+.tag-chip.is-link.is-active {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.tag-chip-x {
+  width: 16px;
+  height: 16px;
+  margin-right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.tag-chip-x:hover,
+.tag-chip-x:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tags-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the chips and the field that adds more share one box, which behaves like .input */
+.tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: var(--r-control);
+  background: var(--well);
+  border: 1px solid transparent;
+  cursor: text;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.tag-input:hover {
+  background: var(--well-2);
+}
+
+.tag-input:focus-within {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.tag-input .tag-chip {
+  background: var(--island);
+  border: 1px solid var(--line);
+}
+
+.tag-input-field {
+  flex: 1;
+  min-width: 90px;
+  height: 26px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tag-input-field::placeholder {
+  color: var(--hint);
+}
+
+.tag-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-suggest-btn {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  border: 1px dashed var(--dash);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 11.5px;
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.tag-suggest-btn:hover,
+.tag-suggest-btn:focus-visible {
+  border-color: var(--accent);
+  border-style: solid;
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+}
+
 /* ---------- segmented control (sliding pill) ---------- */
 
 .seg {
@@ -446,6 +573,299 @@ select.input {
   width: min(400px, 100%);
 }
 
+/* ---------- a skin's ⋯ menu: name, tags, what is known about it, share and delete ---------- */
+
+.skin-menu {
+  position: fixed;
+  z-index: 45;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in var(--t-base) var(--ease-spring) both;
+  transform-origin: left top;
+}
+
+.skin-menu.is-above {
+  transform-origin: left bottom;
+}
+
+/* the name reads as the menu's title and turns into a field when pointed at */
+.skin-menu-name {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.skin-menu-name:hover {
+  background: var(--well);
+}
+
+.skin-menu-name:focus {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.skin-menu-label {
+  margin: 0 2px 6px;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.skin-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--well);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.skin-fact {
+  display: contents;
+}
+
+.skin-fact dt {
+  color: var(--muted);
+}
+
+.skin-fact dd {
+  min-width: 0;
+  color: var(--ink-2);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+
+.skin-menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.menu-item svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--nav-hover);
+}
+
+.menu-item.is-danger,
+.menu-item.is-danger svg {
+  color: var(--danger);
+}
+
+.menu-item.is-danger:hover,
+.menu-item.is-danger:focus-visible {
+  background: var(--danger-soft);
+}
+
+/* ---------- settings ---------- */
+
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.settings-tab {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.settings-tab:hover,
+.settings-tab:focus-visible {
+  color: var(--ink);
+}
+
+.settings-tab.is-active {
+  background: var(--island);
+  color: var(--ink);
+}
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 300px;
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.choice-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-control);
+  background: var(--well);
+  border: 1px solid transparent;
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 13px;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.choice-btn:hover,
+.choice-btn:focus-visible {
+  background: var(--well-2);
+}
+
+.choice-btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.settings-line {
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.settings-path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.settings-btn,
+.settings-link {
+  align-self: flex-start;
+}
+
+.settings-about {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-mark {
+  height: 44px;
+  width: auto;
+}
+
+.settings-page .about-links {
+  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+/* sharing one skin: the skin itself instead of the picker */
+.share-one {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
+  border-radius: var(--r-card);
+  background: var(--well);
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.share-one img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+/* sharing a pack: the skins going in, then the steps on GitHub */
+.share-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.share-thumbs img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.share-more {
+  padding-left: 4px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.share-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 20px;
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.share-steps li::marker {
+  color: var(--accent-ink);
+  font-weight: 800;
+}
+
+.field-note.is-error {
+  color: var(--danger);
+}
+
 /* "are you sure?": the thing in question beside what will happen to it */
 .confirm {
   display: flex;
@@ -465,21 +885,6 @@ select.input {
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink-2);
-}
-
-/* a name being renamed in place: the border turns the accent, never an outline */
-.name-field {
-  min-width: 0;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: 6px;
-  border: 1px solid var(--accent);
-  background: var(--island);
-  color: var(--ink);
-  font: inherit;
-  cursor: text;
-  user-select: text;
-  -webkit-user-select: text;
 }
 
 .modal-head {

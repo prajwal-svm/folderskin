@@ -69,6 +69,9 @@ pub struct AiGenerateRequest {
     pub shape: String,
     pub size: Option<String>,
     pub reference_path: Option<String>,
+    /// Tags for the result, such as the style the idea asks for. Cleaned before saving.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Providers, their models, whether a key is already saved, and the prompt presets.
@@ -216,6 +219,11 @@ pub async fn ai_generate(
         provider: Some(req.provider.clone()),
         model: Some(model.id.to_string()),
         idea: Some(req.idea.trim().to_string()),
+        tags: req.tags.clone(),
+        pack: None,
+        pack_name: None,
+        author: None,
+        license: None,
     };
 
     tauri::async_runtime::spawn_blocking(move || {

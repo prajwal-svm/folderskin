@@ -77,7 +77,14 @@ frontend names them.
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
 | `delete_skin` | `skinId` | `{}`, or an error string for a built-in skin |
-| `rename_skin` | `skinId`, `name` | the name as saved (one line, trimmed, at most 60 characters), or an error string for a built-in skin |
+| `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line, at most 60 characters; the tags cleaned, at most 8), or an error string for a built-in skin |
+| `skins_folder` | – | the folder the saved skins live in |
+| `community_packs` | – | the packs in `community/index.json` on GitHub, each with `added` |
+| `community_preview` | `packId` | the pack's preview strip as a PNG data URL |
+| `community_add` | `packId` | the pack's skins, saved; every picture is checked before any is saved |
+| `community_remove` | `packId` | the ids of the skins it deleted |
+| `import_pack` | `path` | a pack folder on disk, added the same way as one from GitHub |
+| `export_pack` | `folder`, `name`, `author`, `license`, `tags`, `skinIds` | the pack folder it wrote, already passing the checks |
 | `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
 | `platform_info` | – | `{os, browse_label, note}` |
 
@@ -86,11 +93,16 @@ frontend names them.
 ```ts
 { id, name, collection, thumbnail, custom,
   kind: "artwork" | "folder",           // wrapped onto our template, or a finished folder image
-  source: "builtin" | "import" | "ai",
-  created_at: number | null }           // Unix ms when it was saved; null for built-ins
+  source: "builtin" | "import" | "ai" | "community",
+  created_at: number | null,            // Unix ms when it was saved; null for built-ins
+  tags: string[],                       // the library's filters; a built-in's are its collection
+  pack, pack_name, author, license,     // community skins: where it came from, for credit
+  made_with, idea }                     // AI results: "OpenAI · GPT Image 2.5 Flare", the prompt
 ```
 
-Saved skins have `collection: "yours"` and `custom: true`.
+Saved skins have `collection: "yours"` and `custom: true`. The pack contract is
+`folderskin_core::pack`, shared by the app and `folderskin-tools packs check`; see
+[PACKS.md](PACKS.md).
 
 Errors cross the boundary as plain strings already written for a person ("couldn't read that
 picture", or the reason the OS gave), because the drop zone shows them verbatim. There is no

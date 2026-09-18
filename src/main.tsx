@@ -9,6 +9,7 @@ import "./styles/shell.css";
 import "./styles/gallery.css";
 import "./styles/stage.css";
 import "./styles/studio.css";
+import "./styles/community.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

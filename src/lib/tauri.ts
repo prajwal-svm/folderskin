@@ -13,9 +13,44 @@ export type Skin = {
   custom: boolean;
   /** "artwork" is wrapped onto FolderSkin's folder; "folder" is a finished folder used as-is. */
   kind?: "artwork" | "folder";
-  source?: "builtin" | "import" | "ai";
+  source?: "builtin" | "import" | "ai" | "community";
   /** Unix ms when the user added it; null for built-ins. */
   created_at?: number | null;
+  /** What the gallery filters it by, cleaned the way `cleanTag` does. */
+  tags: string[];
+  /** For a community skin, the id of the pack it came from. */
+  pack?: string | null;
+  /** AI results: the provider and model that made it, e.g. "OpenAI · GPT Image 2.5 Flare". */
+  made_with?: string | null;
+  /** AI results: the description it was made from. */
+  idea?: string | null;
+  /** Community skins: the pack's name, its author's GitHub name and its licence. */
+  pack_name?: string | null;
+  author?: string | null;
+  license?: string | null;
+};
+
+/** One pack in the Community list. */
+export type CommunityPack = {
+  id: string;
+  name: string;
+  /** The author's GitHub user name. */
+  author: string;
+  license: string;
+  tags: string[];
+  count: number;
+  /** True when its skins are in the library. */
+  added: boolean;
+};
+
+/** What "Save as a pack" writes: some of the user's own skins, as a folder ready for GitHub. */
+export type ExportPackRequest = {
+  folder: string;
+  name: string;
+  author: string;
+  license: string;
+  tags: string[];
+  skinIds: string[];
 };
 
 export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path: string };
@@ -59,6 +94,8 @@ export type AiGenerateRequest = {
   size: string | null;
   /** Optional reference picture already on disk. */
   reference_path: string | null;
+  /** Tags for the result, such as the style the idea asks for. */
+  tags: string[];
 };
 
 const tauriApi = {
@@ -70,10 +107,26 @@ const tauriApi = {
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
   /** The folder's current icon (data URL): the real OS icon where available. */
   folderIcon: (folder: string) => invoke<string>("folder_icon", { folder }),
+  /** The folder the skins are saved in. */
+  skinsFolder: () => invoke<string>("skins_folder"),
   /** Deletes one of the user's saved skins from disk. Built-ins refuse. */
   deleteSkin: (skinId: string) => invoke<void>("delete_skin", { skinId }),
-  /** Renames one of the user's saved skins; resolves to the name as saved. Built-ins refuse. */
-  renameSkin: (skinId: string, name: string) => invoke<string>("rename_skin", { skinId, name }),
+  /** Renames and retags one of the user's saved skins; resolves to both as saved. Built-ins refuse. */
+  editSkin: (skinId: string, name: string, tags: string[]) =>
+    invoke<{ name: string; tags: string[] }>("edit_skin", { skinId, name, tags }),
+
+  // ---- community packs (from the repository on GitHub) ----
+  communityPacks: () => invoke<CommunityPack[]>("community_packs"),
+  /** A pack's preview strip as a data URL. */
+  communityPreview: (packId: string) => invoke<string>("community_preview", { packId }),
+  /** Downloads a pack and saves its skins; resolves to them. */
+  addPack: (packId: string) => invoke<Skin[]>("community_add", { packId }),
+  /** Deletes a pack's skins; resolves to their ids. */
+  removePack: (packId: string) => invoke<string[]>("community_remove", { packId }),
+  /** Adds a pack from a folder on this computer. */
+  importPack: (path: string) => invoke<Skin[]>("import_pack", { path }),
+  /** Writes skins as a pack folder inside `folder`; resolves to the folder it made. */
+  exportPack: (req: ExportPackRequest) => invoke<string>("export_pack", { ...req }),
   /** Native window appearance; `null` follows the system. Keeps the macOS sidebar material in step with the app theme. */
   setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
 

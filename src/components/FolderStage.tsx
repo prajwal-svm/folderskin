@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
+import { fileBrowser } from "../lib/platform";
 import type { State } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
 import { ArrowDownIcon } from "./icons/arrow-down";
@@ -14,13 +15,6 @@ const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 
 /** How long the buttons that replace Apply ignore clicks: the second half of a double click. */
 const SETTLE_MS = 450;
-
-/** "Finder", "Explorer" or "Files": what people call the file browser on their OS. */
-function fileBrowser(os: string): string {
-  if (os === "macos") return "Finder";
-  if (os === "windows") return "Explorer";
-  return "Files";
-}
 
 /** CSS url() for a data URL or path, for masks that follow a folder's own shape. */
 const maskOf = (src: string): CSSProperties => ({ maskImage: `url("${src}")`, WebkitMaskImage: `url("${src}")` });
@@ -98,10 +92,13 @@ export function FolderStage({
           <span className="stage-halo" aria-hidden="true" />
           {src ? (
             <StageImage key={folder?.path ?? "none"} src={src} />
+          ) : skin && !drag ? (
+            // A skin picked before any folder: shown as the folder it will make, with no outline.
+            <img className="stage-ghost-skin" src={skin.thumbnail} alt="" key={skin.id} draggable={false} />
           ) : (
+            // Nothing picked yet, or something dragged over: the empty folder with its outline.
             <>
               <FolderGhost className="stage-ghost" tone="mac" layer="fill" />
-              {skin && !drag && <img className="stage-ghost-skin" src={skin.thumbnail} alt="" key={skin.id} />}
               <FolderGhost className="stage-ghost" tone="mac" layer="line" />
             </>
           )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -24,6 +24,12 @@ export function Modal({
   narrow?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  // The latest onClose, so a parent that passes a new function each render doesn't re-run the
+  // focus handling below and pull the focus back to the first field.
+  const close = useRef(onClose);
+  useLayoutEffect(() => {
+    close.current = onClose;
+  });
 
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
@@ -32,7 +38,7 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        close.current();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -40,7 +46,7 @@ export function Modal({
       window.removeEventListener("keydown", onKey);
       before?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return createPortal(
     <div

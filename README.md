@@ -40,15 +40,31 @@ source — it is three commands.
 
 1. Drag a folder onto the folder panel on the right, or click the empty folder to pick one.
 2. Click a skin in the library to try it on; the folder panel shows the result straight away.
-   The tabs narrow it down (**All**, **Glow**, **Grain**, **Pop**, **Yours**, **Faves**) and
-   ⌘F / Ctrl+F searches.
+   The sidebar picks **All skins**, **Yours** or **Favourites**, the tags along the top narrow
+   that down, and ⌘F / Ctrl+F searches.
 3. Press **Apply skin**. The folder is marked **Applied**, and **Show in Finder** opens it.
 4. Press **Revert** to put the operating system's default icon back.
 
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
-**Yours** and stays there until you delete it, which asks first. To rename one of yours, select
-it and click its name (or press Return). A finished folder on a flat magenta background, like the ones the chat prompt below produces, is
-cut out and used as it is; any other picture is wrapped onto FolderSkin's folder.
+**Yours** and stays there until you delete it, which asks first. A finished folder on a flat
+magenta background, like the ones the chat prompt below produces, is cut out and used as it is;
+any other picture is wrapped onto FolderSkin's folder.
+
+Every skin you add has a ⋯ menu: rename it, give it tags (they become filters along the top),
+see how it was made (the AI model and prompt, or the pack and who shared it), share it or delete
+it. AI results are tagged with their style, such as `airbrush`, as they arrive.
+
+**Settings**, at the bottom of the sidebar, holds the theme, your AI keys, what sharing fills in
+and where your skins are saved. Hover the version badge beside the logo for About.
+
+## Community skins
+
+People share skins and packs of skins on GitHub, free for everyone. Open **Community** to add
+one: its skins join your library with their tags. To share yours, open a skin's ⋯ menu and
+choose **Share with community**, or use **Community → Share your skins** for several. FolderSkin
+saves a pack folder that passes the checks, and you drop it on GitHub as a pull request.
+[docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 24 skins a pack, pictures up
+to 1024 px and 2 MB, licensed CC0, CC BY 4.0 or MIT.
 
 ## The ten built-in skins
 
@@ -154,7 +170,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Contributing
 
-Bug reports and skins are both welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the
+Bug reports and skins are both welcome; skins go in through [community packs](docs/PACKS.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the
 workflow and the few house rules; [SECURITY.md](SECURITY.md) is how to report a
 vulnerability privately. Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 

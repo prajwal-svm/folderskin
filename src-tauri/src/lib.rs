@@ -2,6 +2,7 @@
 
 pub mod ai;
 pub mod commands;
+pub mod community;
 pub mod folder_icon;
 pub mod keys;
 pub mod skins;
@@ -24,7 +25,14 @@ pub fn run() {
             commands::apply_skin,
             commands::revert_skin,
             commands::delete_skin,
-            commands::rename_skin,
+            commands::edit_skin,
+            commands::skins_folder,
+            community::community_packs,
+            community::community_preview,
+            community::community_add,
+            community::community_remove,
+            community::import_pack,
+            community::export_pack,
             commands::folder_icon,
             commands::platform_info,
             ai::ai_catalogue,

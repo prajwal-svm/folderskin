@@ -69,6 +69,8 @@
   letter-spacing: -0.035em;
 }
 
+/* The version badge opens About while it is hovered or focused. It is the one part of the
+   lockup that takes the pointer; the rest stays a window drag handle. */
 .brand-version {
   margin-left: 2px;
   height: 18px;
@@ -80,6 +82,15 @@
   font-weight: 750;
   line-height: 18px;
   letter-spacing: 0.01em;
+  pointer-events: auto;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.brand-version:hover,
+.brand-version:focus-visible,
+.brand-version[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 .cta {
@@ -208,10 +219,11 @@
 
 /* ---------- about popover ---------- */
 
+/* under the version badge beside the logo */
 .about-pop {
   position: fixed;
-  left: 236px;
-  bottom: 18px;
+  left: 18px;
+  top: 58px;
   width: 268px;
   padding: 16px;
   border-radius: 16px;
@@ -219,7 +231,11 @@
   box-shadow: var(--shadow-pop);
   z-index: 40;
   animation: pop-in var(--t-base) var(--ease-spring) both;
-  transform-origin: left bottom;
+  transform-origin: left top;
+}
+
+.os-macos .about-pop {
+  top: 76px;
 }
 
 .about-title {
@@ -282,19 +298,7 @@
   }
 }
 
-/* ---------- views inside the library island (community) ---------- */
-
-.view {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 26px 28px 40px;
-  animation: fade-up var(--t-base) var(--ease-out) both;
-}
-
-.view-head {
-  margin-bottom: 20px;
-}
+/* ---------- titles of views inside the library island (community) ---------- */
 
 .view-title {
   font-weight: 800;
@@ -309,65 +313,4 @@
   line-height: 1.5;
   color: var(--muted);
   max-width: 540px;
-}
-
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
-}
-
-.card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px;
-  border-radius: var(--r-card);
-  background: var(--well);
-  animation: rise var(--t-slow) var(--ease-out) both;
-}
-
-.card:nth-child(2) {
-  animation-delay: 50ms;
-}
-
-.card:nth-child(3) {
-  animation-delay: 100ms;
-}
-
-.card-soon {
-  background: transparent;
-  border: 1.5px dashed var(--line);
-}
-
-.card-glyph {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  background: var(--island);
-  color: var(--accent-ink);
-  border: 1px solid var(--line);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.card-title {
-  margin-top: 4px;
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-}
-
-.card-text {
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.card .btn {
-  align-self: flex-start;
-  margin-top: 4px;
 }

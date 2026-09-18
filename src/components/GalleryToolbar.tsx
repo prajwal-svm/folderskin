@@ -4,8 +4,8 @@ import { SearchIcon } from "./icons/search";
 export type TabCount = { id: string; label: string; count: number };
 
 /**
- * Collection tabs and search. The active tab is a raised pill that slides between tabs, and
- * Cmd/Ctrl+F jumps to the search field.
+ * Tag filters and search. "All" comes first, then one filter per tag, most used first. The
+ * active filter is a raised pill that slides between them, and Cmd/Ctrl+F jumps to the search.
  */
 export function GalleryToolbar({
   tabs,
@@ -13,12 +13,16 @@ export function GalleryToolbar({
   onChange,
   query,
   onQuery,
+  label = "filter skins by tag",
+  placeholder = "Search skins",
 }: {
   tabs: TabCount[];
   active: string;
   onChange: (id: string) => void;
   query: string;
   onQuery: (q: string) => void;
+  label?: string;
+  placeholder?: string;
 }) {
   const seg = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -58,7 +62,7 @@ export function GalleryToolbar({
 
   return (
     <div className="toolbar" data-tauri-drag-region>
-      <div className="seg" role="tablist" aria-label="skin collections" ref={seg}>
+      <div className="seg" role="tablist" aria-label={label} ref={seg}>
         {pill && (
           <span
             className="seg-pill"
@@ -86,14 +90,14 @@ export function GalleryToolbar({
           </button>
         ))}
       </div>
-      <label className={query ? "search has-query" : "search"} title="Search skins">
+      <label className={query ? "search has-query" : "search"} title={placeholder}>
         <SearchIcon size={15} />
         <input
           ref={search}
           type="search"
           value={query}
-          placeholder="Search skins"
-          aria-label="search skins"
+          placeholder={placeholder}
+          aria-label={placeholder.toLowerCase()}
           spellCheck={false}
           onChange={(e) => onQuery(e.target.value)}
           onKeyDown={(e) => {

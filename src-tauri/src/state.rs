@@ -12,6 +12,7 @@ pub struct LoadedSkin {
     pub id: String,
     pub name: String,
     pub collection: String,
+    pub tags: Vec<String>,
     pub art: Arc<Artwork>,
 }
 
@@ -98,6 +99,7 @@ impl AppState {
                         id: s.id.to_string(),
                         name: s.name.to_string(),
                         collection: s.collection.to_string(),
+                        tags: s.tags.iter().map(|t| t.to_string()).collect(),
                         art: Arc::new(Artwork {
                             rgba,
                             focus: (s.focus[0], s.focus[1]),
@@ -209,17 +211,45 @@ impl AppState {
         skins
     }
 
-    /// Renames a saved or session-only skin and returns its entry.
-    pub fn rename(&self, skin_id: &str, name: &str) -> Result<SavedSkin, String> {
+    /// Gives a saved or session-only skin a new name and tags and returns its entry.
+    pub fn edit(&self, skin_id: &str, name: &str, tags: &[String]) -> Result<SavedSkin, String> {
         if let Some(unsaved) = lock(&self.0.unsaved).get_mut(skin_id) {
             unsaved.entry.name =
                 crate::store::clean_name(name).ok_or_else(|| "a skin needs a name".to_string())?;
+            unsaved.entry.tags =
+                folderskin_core::pack::clean_tags(tags, folderskin_core::pack::MAX_TAGS);
             return Ok(unsaved.entry.clone());
         }
         match self.store() {
-            Some(store) => store.rename(skin_id, name),
+            Some(store) => store.edit(skin_id, name, tags),
             None => Err("FolderSkin doesn't know that skin".into()),
         }
+    }
+
+    /// Deletes every saved skin that came from the community pack `pack_id` and returns their ids.
+    pub fn remove_pack(&self, pack_id: &str) -> Result<Vec<String>, String> {
+        let ids: Vec<String> = self
+            .saved_skins()
+            .into_iter()
+            .filter(|(entry, _)| entry.pack.as_deref() == Some(pack_id))
+            .map(|(entry, _)| entry.id)
+            .collect();
+        for id in &ids {
+            self.delete(id)?;
+        }
+        Ok(ids)
+    }
+
+    /// The ids of the community packs that have at least one skin saved.
+    pub fn added_packs(&self) -> std::collections::HashSet<String> {
+        let mut packs: std::collections::HashSet<String> = lock(&self.0.unsaved)
+            .values()
+            .filter_map(|u| u.entry.pack.clone())
+            .collect();
+        if let Some(store) = self.store() {
+            packs.extend(store.list().into_iter().filter_map(|e| e.pack));
+        }
+        packs
     }
 
     /// Removes a saved or session-only skin from disk and from memory.
@@ -283,6 +313,11 @@ mod tests {
             provider: None,
             model: None,
             idea: None,
+            tags: Vec::new(),
+            pack: None,
+            pack_name: None,
+            author: None,
+            license: None,
         };
         let (entry, thumb) = state.save(new, folder(10)).unwrap();
         assert_eq!(entry.id, id);
@@ -310,6 +345,11 @@ mod tests {
                 provider: None,
                 model: None,
                 idea: None,
+                tags: Vec::new(),
+                pack: None,
+                pack_name: None,
+                author: None,
+                license: None,
             };
             state.save(new, folder(20)).unwrap();
         }

@@ -263,7 +263,8 @@
   animation-duration: 0.7s;
 }
 
-/* A skin chosen before any folder waits inside it, under the marching outline. */
+/* A skin chosen before any folder, shown as the folder it will make. Pointing at it invites a
+   click, the same lift the empty folder gives. */
 .stage-ghost-skin {
   position: absolute;
   inset: 0;
@@ -271,6 +272,11 @@
   height: 100%;
   object-fit: contain;
   animation: swap 520ms var(--ease-spring) both;
+  transition: transform var(--t-slow) var(--ease-spring);
+}
+
+.stage-art:hover .stage-ghost-skin {
+  transform: scale(1.03) translateY(-2px);
 }
 
 @keyframes march {

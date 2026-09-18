@@ -3,8 +3,22 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 const REPO_URL = "https://github.com/prajwal-svm/folderskin";
 
-/** Popover anchored to the rail's About button; the rail owns the open state. */
-export function AboutMenu({ note, open, onClose }: { note: string; open: boolean; onClose: () => void }) {
+/**
+ * About FolderSkin, under the version badge beside the logo. It opens while the badge is hovered
+ * or focused and stays open while the pointer is over it, so its links can be reached.
+ */
+export function AboutMenu({
+  note,
+  open,
+  onHover,
+  onClose,
+}: {
+  note: string;
+  open: boolean;
+  /** The pointer or focus came into the popover (true) or left it (false). */
+  onHover: (inside: boolean) => void;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,7 +43,16 @@ export function AboutMenu({ note, open, onClose }: { note: string; open: boolean
     </button>
   );
   return (
-    <div className="about-pop" role="dialog" aria-label="about FolderSkin" ref={ref}>
+    <div
+      className="about-pop"
+      role="dialog"
+      aria-label="about FolderSkin"
+      ref={ref}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      onFocus={() => onHover(true)}
+      onBlur={() => onHover(false)}
+    >
       <p className="about-title">
         FolderSkin <span className="about-version">v{__APP_VERSION__}</span>
       </p>

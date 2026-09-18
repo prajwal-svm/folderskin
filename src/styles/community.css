@@ -1,0 +1,179 @@
+/* The Community view: packs shared on GitHub, filtered by tag the way the library is. */
+
+.community {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.community-head {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 20px;
+  padding: 22px 22px 6px;
+}
+
+.community-intro {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.community-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.community-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 16px 28px;
+  container-type: inline-size;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.community-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 24px 6px;
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.community-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 18px 6px 0;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--hint);
+}
+
+.packs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* one pack: a strip of its folders, who made it and its tags, and Add */
+.pack {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--well);
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+.pack-preview {
+  width: 224px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+.pack-preview img {
+  height: 64px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
+  animation: fade-in var(--t-base) ease both;
+}
+
+.pack-preview-blank {
+  width: 100%;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--well-2), var(--island), var(--well-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.pack-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pack-name,
+.pack-by {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pack-name {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.pack-by {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.pack-author {
+  border-radius: 4px;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+
+.pack-author:hover,
+.pack-author:focus-visible {
+  text-decoration: underline;
+}
+
+.pack-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.pack-tags .tag-chip {
+  background: var(--island);
+}
+
+.pack-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* a narrow library: the strip gets its own row above the words */
+@container (max-width: 560px) {
+  .pack {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 10px;
+  }
+
+  .pack-preview {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

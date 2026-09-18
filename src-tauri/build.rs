@@ -33,11 +33,20 @@ fn main() {
                 ]
             })
             .unwrap_or([0.5, 0.5]);
+        let collection = s["collection"].as_str().expect("skin.collection");
+        // A built-in skin's tags are its manifest "tags", or else its collection.
+        let tags: Vec<&str> = s
+            .get("tags")
+            .and_then(|t| t.as_array())
+            .map(|t| t.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(|| vec![collection]);
         out += &format!(
-            "    BuiltinSkin {{ id: {:?}, name: {:?}, collection: {:?}, focus: [{:?}, {:?}], bytes: include_bytes!({:?}) }},\n",
+            "    BuiltinSkin {{ id: {:?}, name: {:?}, collection: {:?}, tags: &{:?}, focus: [{:?}, {:?}], bytes: include_bytes!({:?}) }},\n",
             s["id"].as_str().expect("skin.id"),
             s["name"].as_str().expect("skin.name"),
-            s["collection"].as_str().expect("skin.collection"),
+            collection,
+            tags,
             focus[0],
             focus[1],
             file.to_str().expect("utf-8 path")

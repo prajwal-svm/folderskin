@@ -4,8 +4,9 @@
  * so they never reach a build (the app renders its own thumbnails).
  * Never used inside the app: `isTauri()` is true there.
  */
-import type { AiCatalogue, AiGenerateRequest, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
+import type { AiCatalogue, AiGenerateRequest, CommunityPack, ExportPackRequest, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
 import { cleanName } from "./names";
+import { cleanTags } from "./tags";
 
 const IDS: [string, string, string][] = [
   ["aurora", "Aurora", "glow"],
@@ -23,6 +24,35 @@ const IDS: [string, string, string][] = [
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
 const mockKeys = new Set<string>();
 
+/** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
+const MOCK_PACKS: Omit<CommunityPack, "added">[] = [
+  { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
+  { id: "night-prints", name: "Night prints", author: "example", license: "CC-BY-4.0", tags: ["woodblock", "night", "animals"], count: 12 },
+  { id: "chrome-dreams", name: "Chrome dreams", author: "example", license: "CC-BY-4.0", tags: ["airbrush", "retro"], count: 6 },
+];
+const PREVIEW_OF: Record<string, string> = { colours: "sunset", "night-prints": "slate", "chrome-dreams": "aurora" };
+/** The skins each added sample pack put in the library. */
+const mockAdded = new Map<string, string[]>();
+
+function mockPackSkins(pack: Omit<CommunityPack, "added">): Skin[] {
+  const pictures = ["aurora", "sunset", "mesh", "ember", "paper", "denim", "slate", "halftone"];
+  return Array.from({ length: Math.min(pack.count, 4) }, (_, i) => ({
+    id: `user:${pack.id}${i}`,
+    name: `${pack.name} ${i + 1}`,
+    collection: "community",
+    thumbnail: `/assets/previews/${pictures[i % pictures.length]}.png`,
+    custom: true,
+    kind: "artwork" as const,
+    source: "community" as const,
+    created_at: Date.now() + i,
+    tags: pack.tags,
+    pack: pack.id,
+    pack_name: pack.name,
+    author: pack.author,
+    license: pack.license,
+  }));
+}
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -39,6 +69,7 @@ export const mockApi = {
         kind: "artwork" as const,
         source: "builtin" as const,
         created_at: null,
+        tags: [collection],
       })),
     ],
     default_thumbnail: "/assets/previews/mesh.png",
@@ -47,14 +78,43 @@ export const mockApi = {
   importImage: async (path: string): Promise<Skin> => {
     await new Promise((r) => setTimeout(r, 500));
     const name = (path.split(/[\\/]/).pop() || "Your picture").replace(/\.[^.]+$/, "");
-    return { id: `user:${Date.now()}`, name, collection: "yours", thumbnail: "/assets/previews/ember.png", custom: true, kind: "artwork", source: "import", created_at: Date.now() };
+    return { id: `user:${Date.now()}`, name, collection: "yours", thumbnail: "/assets/previews/ember.png", custom: true, kind: "artwork", source: "import", created_at: Date.now(), tags: [] };
   },
   applySkin: async () => new Promise<void>((r) => setTimeout(r, 600)),
   revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
   folderIcon: async (): Promise<string> => "/assets/previews/mesh.png",
+  skinsFolder: async () => "/Users/you/Library/Application Support/app.folderskin/skins",
   deleteSkin: async () => {},
-  renameSkin: async (_skinId: string, name: string) => cleanName(name),
+  editSkin: async (_skinId: string, name: string, tags: string[]) => ({ name: cleanName(name), tags: cleanTags(tags) }),
+  communityPacks: async (): Promise<CommunityPack[]> => {
+    await new Promise((r) => setTimeout(r, 500));
+    return MOCK_PACKS.map((p) => ({ ...p, added: mockAdded.has(p.id) }));
+  },
+  communityPreview: async (packId: string) => `/assets/previews/${PREVIEW_OF[packId] ?? "mesh"}.png`,
+  addPack: async (packId: string): Promise<Skin[]> => {
+    await new Promise((r) => setTimeout(r, 1200));
+    const pack = MOCK_PACKS.find((p) => p.id === packId);
+    if (!pack) throw "that isn't a pack";
+    const skins = mockPackSkins(pack);
+    mockAdded.set(packId, skins.map((s) => s.id));
+    return skins;
+  },
+  removePack: async (packId: string): Promise<string[]> => {
+    const ids = mockAdded.get(packId) ?? [];
+    mockAdded.delete(packId);
+    return ids;
+  },
+  importPack: async (path: string): Promise<Skin[]> => {
+    const id = (path.split(/[\\/]/).pop() || "my-pack").toLowerCase();
+    const skins = mockPackSkins({ id, name: "Folder pack", author: "you", license: "CC0-1.0", tags: ["test"], count: 2 });
+    mockAdded.set(id, skins.map((s) => s.id));
+    return skins;
+  },
+  exportPack: async (req: ExportPackRequest): Promise<string> => {
+    await new Promise((r) => setTimeout(r, 600));
+    return `${req.folder}/${req.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+  },
   setWindowTheme: async () => {},
   aiCatalogue: async (): Promise<AiCatalogue> => ({
     providers: [
@@ -95,6 +155,6 @@ export const mockApi = {
   aiGenerate: async (_req: AiGenerateRequest): Promise<Skin> => {
     await new Promise((r) => setTimeout(r, 4200));
     const name = _req.idea.split(/\s+/).slice(0, 4).join(" ");
-    return { id: `user:ai${Date.now()}`, name: name.charAt(0).toUpperCase() + name.slice(1), collection: "yours", thumbnail: "/assets/previews/bubbles.png", custom: true, kind: _req.shape === "folder" ? "folder" : "artwork", source: "ai", created_at: Date.now() };
+    return { id: `user:ai${Date.now()}`, name: name.charAt(0).toUpperCase() + name.slice(1), collection: "yours", thumbnail: "/assets/previews/bubbles.png", custom: true, kind: _req.shape === "folder" ? "folder" : "artwork", source: "ai", created_at: Date.now(), tags: cleanTags(_req.tags), made_with: "OpenAI · GPT Image 2.5 Flare", idea: _req.idea };
   },
 };

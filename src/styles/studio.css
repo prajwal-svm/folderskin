@@ -368,51 +368,32 @@
   letter-spacing: -0.02em;
 }
 
-/* the result's name: click it to rename; the pencil shows on hover */
-.name-btn {
-  display: inline-flex;
+/* the result's name with its ⋯ button, which opens the same menu as a tile's */
+.turn-title {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: calc(100% + 8px);
-  margin-left: -8px;
-  padding: 2px 8px;
-  border-radius: 8px;
-  text-align: left;
-  transition: background-color var(--t-fast) ease;
+  gap: 4px;
+  min-width: 0;
 }
 
-.name-btn:hover,
-.name-btn:focus-visible {
-  background: var(--well);
-}
-
-.name-btn-text {
+.turn-title .turn-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.name-btn svg {
+.turn-more {
   flex: none;
-  color: var(--muted);
-  opacity: 0;
-  transition: opacity var(--t-fast) ease;
+  width: 28px;
+  height: 28px;
 }
 
-.name-btn:hover svg,
-.name-btn:focus-visible svg {
-  opacity: 1;
-}
-
-.turn-name-field {
-  width: calc(100% + 8px);
-  height: 30px;
-  margin-left: -8px;
-  padding: 0 7px;
-  font-weight: 800;
-  font-size: 16px;
-  letter-spacing: -0.02em;
+.turn-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 2px 0 2px;
 }
 
 .turn-where {
