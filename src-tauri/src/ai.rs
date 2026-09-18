@@ -4,21 +4,23 @@
 //! Nothing here runs unless the user presses Generate, and no key is ever returned to the
 //! webview, written to a file, or included in an error message.
 
-use crate::commands::{data_url, SkinDto};
+use crate::commands::SkinDto;
 use crate::state::AppState;
+use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_ai::prompts::{self, Shape};
-use folderskin_core::compositor::{self, Artwork};
+use folderskin_core::compositor::Artwork;
 use folderskin_core::manifest::{SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_core::matte::{self, KeyOptions, MAGENTA};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::State;
 
 /// Size the folder shape is rendered at before it is cut out (the folder's own aspect).
 const FOLDER_W: u32 = 1166;
 const FOLDER_H: u32 = 1091;
-const THUMB_SIZE: u32 = 512;
+/// The key colour as the prompts name it; [`MAGENTA`] is the same colour as pixels.
+const KEY_HEX: &str = "#FF00FF";
 /// Reference pictures are downscaled before upload; models do not need more and it keeps the
 /// request small.
 const REFERENCE_MAX_SIDE: u32 = 1024;
@@ -129,10 +131,9 @@ pub async fn ai_test_key(provider: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Generates one image and adds it to the session's skins.
+/// Generates one image and saves it as a skin, like an imported picture.
 #[tauri::command]
 pub async fn ai_generate(
-    app: AppHandle,
     state: State<'_, AppState>,
     req: AiGenerateRequest,
 ) -> Result<SkinDto, String> {
@@ -150,28 +151,30 @@ pub async fn ai_generate(
     }
     let key = stored_key(&req.provider)?;
 
+    let user_reference = req
+        .reference_path
+        .clone()
+        .filter(|p| !p.trim().is_empty() && model.accepts_reference);
+
     // A folder render needs transparency. Use the model's own alpha when it has one, otherwise
     // ask for a magenta backdrop and cut it out ourselves.
     let wants_cutout = shape == Shape::Folder;
     let want_alpha = wants_cutout && model.native_alpha;
-    let key_hex = (wants_cutout && !model.native_alpha).then_some("#FF00FF");
+    let key_hex = (wants_cutout && !want_alpha).then_some(KEY_HEX);
     let (width, height) = match shape {
         Shape::Skin => (SKIN_WIDTH, SKIN_HEIGHT),
         Shape::Folder => (FOLDER_W, FOLDER_H),
     };
 
-    let reference_png = match req
-        .reference_path
-        .as_deref()
-        .filter(|_| model.accepts_reference)
-    {
-        Some(path) => Some(load_reference(PathBuf::from(path))?),
-        None => None,
-    };
-    let prompt = if reference_png.is_some() {
-        prompts::compose_with_reference(shape, &req.idea, width, height, key_hex)
+    let (reference_png, prompt) = if let Some(path) = user_reference {
+        let png = tauri::async_runtime::spawn_blocking(move || load_reference(PathBuf::from(path)))
+            .await
+            .map_err(|e| e.to_string())??;
+        let prompt = prompts::compose_with_reference(shape, &req.idea, width, height, key_hex);
+        (Some(png), prompt)
     } else {
-        prompts::compose(shape, &req.idea, width, height, key_hex)
+        let prompt = prompts::compose(shape, &req.idea, width, height, key_hex);
+        (None, prompt)
     };
 
     let result = folderskin_ai::generate(
@@ -188,45 +191,53 @@ pub async fn ai_generate(
     .await
     .map_err(|e| e.to_string())?;
 
-    let name = short_name(&req.idea);
-    let id = format!("ai:{}", &hash12(&result.image));
+    let new = NewSkin {
+        id: store::skin_id(&result.image),
+        name: short_name(&req.idea),
+        source: SkinSource::Ai,
+        provider: Some(req.provider.clone()),
+        model: Some(model.id.to_string()),
+        idea: Some(req.idea.trim().to_string()),
+    };
 
     tauri::async_runtime::spawn_blocking(move || {
         let img = image::load_from_memory(&result.image)
             .map_err(|_| "the provider returned something that is not an image".to_string())?
             .to_rgba8();
 
-        let (thumbnail, skin_id) = if wants_cutout {
+        let image = if wants_cutout {
             let cut = if result.native_alpha {
                 matte::autocrop(&img, 0)
             } else {
                 if !matte::has_key_background(&img, MAGENTA, KeyOptions::default()) {
-                    return Err(
-                        "the model drew a scene instead of a folder on a plain backdrop. Try again, or \
-                         switch to Artwork, which does not need one."
-                            .to_string(),
-                    );
+                    return Err(NO_BACKDROP.to_string());
                 }
                 matte::cutout(&img, MAGENTA, KeyOptions::default())
             };
-            let png = compositor::preview_png_from_image(&cut, THUMB_SIZE);
-            state.remember_prerendered(id.clone(), Arc::new(cut));
-            (data_url(&png), id)
+            SkinImage::Folder(Arc::new(cut))
         } else {
-            let art = Arc::new(Artwork { rgba: matte::crop_to_aspect(&img, SKIN_WIDTH, SKIN_HEIGHT, (0.5, 0.5)), focus: (0.5, 0.5) });
-            let png = compositor::render_preview_png(&art, THUMB_SIZE);
-            state.remember_custom(id.clone(), art);
-            (data_url(&png), id)
+            SkinImage::Artwork(Arc::new(Artwork {
+                rgba: matte::crop_to_aspect(&img, SKIN_WIDTH, SKIN_HEIGHT, (0.5, 0.5)),
+                focus: (0.5, 0.5),
+            }))
         };
-        state.remember_thumb(skin_id.clone(), thumbnail.clone());
-        let _ = &app;
-        Ok(SkinDto { id: skin_id, name, collection: "yours".into(), thumbnail, custom: true })
+        // The user has paid for this image, so a failed write keeps it for the session instead
+        // of throwing it away.
+        let (entry, thumb) = state.save(new.clone(), image.clone()).unwrap_or_else(|e| {
+            eprintln!("folderskin: keeping {} for this session only: {e}", new.id);
+            state.keep_unsaved(new, image)
+        });
+        Ok(SkinDto::saved(&entry, &thumb))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
 // ---------- helpers ----------
+
+/// Shown when a keyed whole-folder render came back without its flat backdrop.
+const NO_BACKDROP: &str = "the model drew a scene instead of a folder on a plain backdrop. Try \
+                           again, or switch to Artwork, which does not need one.";
 
 fn stored_key(provider: &str) -> Result<String, String> {
     folderskin_ai::keys::get(provider)
@@ -239,30 +250,28 @@ fn load_reference(path: PathBuf) -> Result<Vec<u8>, String> {
     let img = image::open(&path)
         .map_err(|_| "couldn't read that reference picture".to_string())?
         .to_rgba8();
-    let (w, h) = img.dimensions();
-    let longest = w.max(h);
-    let img = if longest > REFERENCE_MAX_SIDE {
-        let s = REFERENCE_MAX_SIDE as f32 / longest as f32;
-        image::imageops::resize(
-            &img,
-            ((w as f32 * s).round() as u32).max(1),
-            ((h as f32 * s).round() as u32).max(1),
-            image::imageops::FilterType::Lanczos3,
-        )
-    } else {
-        img
-    };
-    Ok(folderskin_core::raster::encode_png(&img))
+    Ok(folderskin_core::raster::encode_png(&store::shrink_to(
+        img,
+        REFERENCE_MAX_SIDE,
+    )))
 }
 
 /// A short, human label for a generated skin, taken from the first few words of the idea.
 pub fn short_name(idea: &str) -> String {
+    const MAX_BYTES: usize = 28;
     let words: Vec<&str> = idea.split_whitespace().take(3).collect();
     let mut name = words.join(" ");
     if name.is_empty() {
         return "Generated".into();
     }
-    name.truncate(28);
+    // Cut on a character boundary: `truncate` panics inside a multi-byte character.
+    if name.len() > MAX_BYTES {
+        let cut = (0..=MAX_BYTES)
+            .rev()
+            .find(|&i| name.is_char_boundary(i))
+            .unwrap_or(0);
+        name.truncate(cut);
+    }
     let mut chars = name.chars();
     match chars.next() {
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
@@ -286,6 +295,14 @@ mod tests {
         assert_eq!(short_name(""), "Generated");
         assert_eq!(short_name("   "), "Generated");
         assert!(short_name(&"verylongword".repeat(10)).len() <= 28);
+    }
+
+    #[test]
+    fn short_name_never_cuts_a_character_in_half() {
+        // Ten three-byte characters: byte 28 falls inside the tenth.
+        let name = short_name("桜桜桜桜桜桜桜桜桜桜 at night");
+        assert_eq!(name, "桜".repeat(9));
+        assert_eq!(short_name("🦊🦊🦊🦊🦊🦊🦊🦊"), "🦊".repeat(7));
     }
 
     #[test]

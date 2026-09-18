@@ -1,21 +1,26 @@
-//! The six commands the webview calls. Heavy work runs off the async runtime's threads;
-//! errors are plain sentences the drop zone shows as-is.
+//! The gallery, import, apply and delete commands the webview calls (the AI assistant's are in
+//! `ai.rs`). Heavy work runs off the async runtime's threads; errors are plain sentences the
+//! drop zone shows as-is.
 
 use crate::state::AppState;
+use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinKind, SkinSource, MAX_STORED_SIDE};
 use base64::Engine;
 use folderskin_core::apply::{apply_icon, revert_icon, validate_folder};
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
+use folderskin_core::matte;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
-/// Bump when the compositor's output changes so cached thumbnails are re-rendered.
-const THUMB_CACHE_VERSION: u32 = 1;
+/// Bump when the compositor's output changes so cached thumbnails, the built-in ones and the
+/// saved skins' alike, are re-rendered.
+pub const THUMB_CACHE_VERSION: u32 = 1;
 const THUMB_SIZE: u32 = 512;
 const DEFAULT_ID: &str = "__default__";
-const MAX_IMPORT_SIDE: u32 = 2048;
 const IMAGE_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
 ];
@@ -27,6 +32,28 @@ pub struct SkinDto {
     pub collection: String,
     pub thumbnail: String,
     pub custom: bool,
+    /// "artwork" (wrapped onto the folder template) or "folder" (a finished folder image).
+    pub kind: SkinKind,
+    /// "builtin", "import" or "ai".
+    pub source: SkinSource,
+    /// When a saved skin was added, in Unix milliseconds; `null` for the built-in skins.
+    pub created_at: Option<u64>,
+}
+
+impl SkinDto {
+    /// A saved skin, as the gallery's "yours" collection shows it.
+    pub fn saved(entry: &SavedSkin, thumbnail_png: &[u8]) -> SkinDto {
+        SkinDto {
+            id: entry.id.clone(),
+            name: entry.name.clone(),
+            collection: "yours".into(),
+            thumbnail: data_url(thumbnail_png),
+            custom: true,
+            kind: entry.kind,
+            source: entry.source,
+            created_at: Some(entry.created_at),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -69,10 +96,26 @@ pub fn has_image_extension(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Stable id for an imported picture: the same bytes always map to the same id.
-pub fn custom_id(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    format!("custom:{:x}", digest)[..19].to_string()
+/// True for the shipped skins and the plain default folder, which cannot be deleted.
+pub fn is_builtin_id(id: &str) -> bool {
+    id == DEFAULT_ID || crate::skins::SKINS.iter().any(|s| s.id == id)
+}
+
+/// Decides what an imported picture is: a finished folder image, used as the icon as it is
+/// (trimmed, with a magenta backdrop keyed out), or artwork for the folder template.
+///
+/// See [`matte::surround`] for how the two are told apart.
+pub fn prepare_import(rgba: image::RgbaImage) -> Result<SkinImage, String> {
+    if matte::alpha_bounds(&rgba, 8).is_none() {
+        return Err("that picture is completely transparent".into());
+    }
+    Ok(match matte::finished_cutout(&rgba, matte::MAGENTA) {
+        Some(cut) => SkinImage::Folder(Arc::new(cut)),
+        None => SkinImage::Artwork(Arc::new(Artwork {
+            rgba,
+            focus: (0.5, 0.5),
+        })),
+    })
 }
 
 /// Display name for a path: the file stem, or the last component for folders.
@@ -147,37 +190,35 @@ fn thumbnail(
     url
 }
 
-fn decode_picture(path: &Path) -> Result<image::RgbaImage, String> {
+/// Decodes a picture the user picked, `bytes` being the file as read, downscaled so its longer
+/// side is at most [`MAX_STORED_SIDE`]. HEIC is converted by the OS first.
+fn decode_picture(path: &Path, bytes: &[u8]) -> Result<image::RgbaImage, String> {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_ascii_lowercase())
         .unwrap_or_default();
+    let converted;
     let bytes = if ext == "heic" || ext == "heif" {
-        heic_to_png(path)?
+        converted = heic_to_png(path)?;
+        &converted[..]
     } else {
-        std::fs::read(path).map_err(|_| "couldn't read that picture".to_string())?
+        bytes
     };
     let img =
-        image::load_from_memory(&bytes).map_err(|_| "couldn't read that picture".to_string())?;
-    let mut rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let longest = w.max(h);
-    if longest > MAX_IMPORT_SIDE {
-        let s = MAX_IMPORT_SIDE as f32 / longest as f32;
-        rgba = image::imageops::resize(
-            &rgba,
-            ((w as f32 * s).round() as u32).max(1),
-            ((h as f32 * s).round() as u32).max(1),
-            image::imageops::FilterType::Lanczos3,
-        );
-    }
-    Ok(rgba)
+        image::load_from_memory(bytes).map_err(|_| "couldn't read that picture".to_string())?;
+    Ok(store::shrink_to(img.to_rgba8(), MAX_STORED_SIDE))
 }
 
 #[cfg(target_os = "macos")]
 fn heic_to_png(path: &Path) -> Result<Vec<u8>, String> {
-    let out = std::env::temp_dir().join(format!("folderskin-{}.png", std::process::id()));
+    // One file per conversion, so two pictures dropped together do not overwrite each other.
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let out = std::env::temp_dir().join(format!(
+        "folderskin-{}-{}.png",
+        std::process::id(),
+        SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
     let status = std::process::Command::new("sips")
         .args(["-s", "format", "png"])
         .arg(path)
@@ -201,11 +242,12 @@ fn heic_to_png(_path: &Path) -> Result<Vec<u8>, String> {
 
 // ---------- commands ----------
 
+/// The built-in skins first, then the user's saved skins, newest first.
 #[tauri::command]
 pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<SkinListDto, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let skins = state
+        let mut skins: Vec<SkinDto> = state
             .builtin()
             .iter()
             .map(|s| {
@@ -219,9 +261,18 @@ pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<Sk
                     collection: s.collection.clone(),
                     thumbnail: thumbnail(&app, &state, &s.id, &s.art, bytes),
                     custom: false,
+                    kind: SkinKind::Artwork,
+                    source: SkinSource::Builtin,
+                    created_at: None,
                 }
             })
             .collect();
+        skins.extend(
+            state
+                .saved_skins()
+                .iter()
+                .map(|(entry, png)| SkinDto::saved(entry, png)),
+        );
         let default_art = compositor::default_folder_artwork();
         let default_thumbnail = thumbnail(&app, &state, DEFAULT_ID, &default_art, Some(b"default"));
         SkinListDto {
@@ -250,30 +301,30 @@ pub async fn inspect_path(path: String) -> Result<PathInfo, String> {
     .map_err(|e| e.to_string())?
 }
 
+/// Imports a picture and saves it as a skin. A finished folder image (on real transparency or
+/// on the magenta key) becomes a `folder` skin used as the icon as it is; anything else becomes
+/// `artwork` for the folder template. The same picture imported twice is the same skin.
 #[tauri::command]
-pub async fn import_image(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<SkinDto, String> {
+pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<SkinDto, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let p = PathBuf::from(&path);
         let bytes = std::fs::read(&p).map_err(|_| "couldn't read that picture".to_string())?;
-        let id = custom_id(&bytes);
-        let art = Arc::new(Artwork {
-            rgba: decode_picture(&p)?,
-            focus: (0.5, 0.5),
-        });
-        state.remember_custom(id.clone(), art.clone());
-        let thumb = thumbnail(&app, &state, &id, &art, None);
-        Ok(SkinDto {
+        let id = store::skin_id(&bytes);
+        if let Some((entry, thumb)) = state.find_saved(&id) {
+            return Ok(SkinDto::saved(&entry, &thumb));
+        }
+        let image = prepare_import(decode_picture(&p, &bytes)?)?;
+        let new = NewSkin {
             id,
             name: display_name(&p),
-            collection: "yours".into(),
-            thumbnail: thumb,
-            custom: true,
-        })
+            source: SkinSource::Import,
+            provider: None,
+            model: None,
+            idea: None,
+        };
+        let (entry, thumb) = state.save(new, image)?;
+        Ok(SkinDto::saved(&entry, &thumb))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -287,24 +338,15 @@ pub async fn apply_skin(
 ) -> Result<(), String> {
     let state = state.inner().clone();
     let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-    // A whole-folder render from the AI assistant is already the icon; everything else is
-    // artwork that goes through the compositor.
-    let prerendered = state.prerendered(&skin_id);
-    let art = match &prerendered {
-        Some(_) => None,
-        None => Some(
-            state
-                .artwork(&skin_id)
-                .ok_or_else(|| "that skin isn't available any more".to_string())?,
-        ),
-    };
-    let icons = tauri::async_runtime::spawn_blocking(move || match (prerendered, art) {
-        (Some(img), _) => compositor::icon_set_from_image(&img, &ICON_SIZES),
-        (None, Some(art)) => compositor::render_icon_set(&art, &ICON_SIZES),
-        (None, None) => unreachable!("one of the two is always set"),
+    // A finished folder image is already the icon; artwork goes through the compositor. A saved
+    // skin that is not in memory is read back from disk here, off the async threads.
+    let icons = tauri::async_runtime::spawn_blocking(move || {
+        state
+            .resolve(&skin_id)
+            .map(|skin| skin.icon_set(&ICON_SIZES))
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())??;
     // NSWorkspace.setIcon is thread-safe and the PNG encodes are slow, so this stays off the
     // main thread; the window keeps painting the "Applying…" state.
     tauri::async_runtime::spawn_blocking(move || {
@@ -312,6 +354,19 @@ pub async fn apply_skin(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Removes a saved skin: its index entry, its files and anything cached for it. The built-in
+/// skins cannot be deleted; a saved skin that is already gone is not an error.
+#[tauri::command]
+pub async fn delete_skin(state: State<'_, AppState>, skin_id: String) -> Result<(), String> {
+    if is_builtin_id(&skin_id) {
+        return Err("the built-in skins can't be deleted".into());
+    }
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.delete(&skin_id))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -382,13 +437,111 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// A folder-ish block: an opaque rectangle with a tab, `fill` inside, `around` outside.
+    fn picture(around: [u8; 4]) -> image::RgbaImage {
+        image::RgbaImage::from_fn(120, 100, |x, y| {
+            let body = (10..110).contains(&x) && (22..92).contains(&y);
+            let tab = (16..50).contains(&x) && (10..22).contains(&y);
+            if body || tab {
+                image::Rgba([40, 120, 200, 255])
+            } else {
+                image::Rgba(around)
+            }
+        })
+    }
+
     #[test]
-    fn custom_ids_are_stable_short_and_prefixed() {
-        let a = custom_id(b"hello");
-        assert_eq!(a, custom_id(b"hello"));
-        assert_ne!(a, custom_id(b"hello!"));
-        assert!(a.starts_with("custom:"));
-        assert_eq!(a.len(), 19);
+    fn an_ordinary_picture_imports_as_artwork() {
+        let photo = image::RgbaImage::from_fn(120, 90, |x, y| {
+            image::Rgba([(x * 2) as u8, 120, (y * 2) as u8, 255])
+        });
+        match prepare_import(photo.clone()).unwrap() {
+            SkinImage::Artwork(art) => {
+                assert_eq!(art.rgba, photo, "artwork is kept whole");
+                assert_eq!(art.focus, (0.5, 0.5));
+            }
+            SkinImage::Folder(_) => panic!("a photo must not be used as a finished folder"),
+        }
+    }
+
+    #[test]
+    fn a_finished_folder_with_transparency_imports_trimmed() {
+        match prepare_import(picture([0, 0, 0, 0])).unwrap() {
+            SkinImage::Folder(img) => assert_eq!(img.dimensions(), (100, 82)),
+            SkinImage::Artwork(_) => panic!("a cut-out folder must be used as it is"),
+        }
+    }
+
+    #[test]
+    fn a_finished_folder_on_magenta_imports_keyed_out() {
+        match prepare_import(picture([255, 0, 255, 255])).unwrap() {
+            SkinImage::Folder(img) => {
+                assert_eq!(img.dimensions(), (100, 82));
+                let (w, _) = img.dimensions();
+                assert_eq!(img.get_pixel(w - 1, 0).0[3], 0, "the magenta is gone");
+                assert_eq!(img.get_pixel(50, 50).0[3], 255, "the folder stays");
+            }
+            SkinImage::Artwork(_) => panic!("a keyed folder must be used as it is"),
+        }
+    }
+
+    #[test]
+    fn a_blank_picture_is_refused() {
+        let blank = image::RgbaImage::from_pixel(32, 32, image::Rgba([0, 0, 0, 0]));
+        assert!(prepare_import(blank).is_err());
+    }
+
+    #[test]
+    fn only_shipped_skins_count_as_built_in() {
+        assert!(is_builtin_id(DEFAULT_ID));
+        let first = crate::skins::SKINS.first().expect("the app ships skins");
+        assert!(is_builtin_id(first.id));
+        assert!(!is_builtin_id(&store::skin_id(b"mine")));
+        assert!(!is_builtin_id(""));
+    }
+
+    #[test]
+    fn skin_dtos_serialise_the_shape_the_webview_expects() {
+        let entry = SavedSkin {
+            id: store::skin_id(b"x"),
+            name: "Mine".into(),
+            kind: SkinKind::Folder,
+            source: SkinSource::Ai,
+            created_at: 1_790_000_000_000,
+            focus: None,
+            provider: Some("xai".into()),
+            model: Some("grok-imagine-image".into()),
+            idea: Some("a fox".into()),
+        };
+        let json = serde_json::to_value(SkinDto::saved(&entry, b"png")).unwrap();
+        assert_eq!(json["collection"], "yours");
+        assert_eq!(json["custom"], true);
+        assert_eq!(json["kind"], "folder");
+        assert_eq!(json["source"], "ai");
+        assert_eq!(json["created_at"], 1_790_000_000_000u64);
+        assert!(json["thumbnail"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        assert!(
+            json.get("provider").is_none(),
+            "the DTO carries no AI details"
+        );
+
+        let builtin = SkinDto {
+            id: "aurora".into(),
+            name: "Aurora".into(),
+            collection: "glow".into(),
+            thumbnail: String::new(),
+            custom: false,
+            kind: SkinKind::Artwork,
+            source: SkinSource::Builtin,
+            created_at: None,
+        };
+        let json = serde_json::to_value(builtin).unwrap();
+        assert_eq!(json["kind"], "artwork");
+        assert_eq!(json["source"], "builtin");
+        assert!(json["created_at"].is_null());
     }
 
     #[test]

@@ -5,7 +5,10 @@ pub mod commands;
 pub mod folder_icon;
 pub mod skins;
 pub mod state;
+pub mod store;
 pub mod window;
+
+use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
@@ -18,6 +21,7 @@ pub fn run() {
             commands::import_image,
             commands::apply_skin,
             commands::revert_skin,
+            commands::delete_skin,
             commands::folder_icon,
             commands::platform_info,
             ai::ai_catalogue,
@@ -27,6 +31,13 @@ pub fn run() {
             ai::ai_generate,
         ])
         .setup(|app| {
+            // Open the saved skins before the window exists, so the first list_skins sees them.
+            match app.path().app_data_dir() {
+                Ok(dir) => app.state::<state::AppState>().open_store(dir.join("skins")),
+                Err(e) => eprintln!(
+                    "folderskin: no app data folder ({e}); skins added now last until you quit"
+                ),
+            }
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));
             window::create_main(app)
         })
