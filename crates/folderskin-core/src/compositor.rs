@@ -214,6 +214,43 @@ pub fn render_icon_set(art: &Artwork, sizes: &[u32]) -> IconSet {
     IconSet { sizes }
 }
 
+/// Builds an icon set from a picture that is already a finished folder image.
+///
+/// Used for whole-folder renders from an image model: the artwork is not composited onto our
+/// template, it *is* the icon. The picture is fitted into the square icon canvas, centred, with
+/// its aspect preserved, then downsampled through the same Lanczos path as a composited icon so
+/// the small sizes look identical in kind.
+pub fn icon_set_from_image(img: &image::RgbaImage, sizes: &[u32]) -> IconSet {
+    let master = fit_into_canvas(img, RENDER_SIZE);
+    let premul = raster::straight_to_premul(&master);
+    let sizes = sizes
+        .iter()
+        .map(|&size| {
+            let out = if size == RENDER_SIZE {
+                master.clone()
+            } else {
+                raster::to_straight_rgba(&raster::downsample(&premul, size))
+            };
+            (size, out)
+        })
+        .collect();
+    IconSet { sizes }
+}
+
+/// Centres `img` in a transparent `size` x `size` canvas, scaled to fit without cropping.
+fn fit_into_canvas(img: &image::RgbaImage, size: u32) -> image::RgbaImage {
+    let (w, h) = img.dimensions();
+    if w == 0 || h == 0 {
+        return image::RgbaImage::new(size, size);
+    }
+    let scale = (size as f32 / w as f32).min(size as f32 / h as f32);
+    let (nw, nh) = (((w as f32 * scale).round() as u32).max(1), ((h as f32 * scale).round() as u32).max(1));
+    let scaled = image::imageops::resize(img, nw, nh, image::imageops::FilterType::Lanczos3);
+    let mut canvas = image::RgbaImage::new(size, size);
+    image::imageops::overlay(&mut canvas, &scaled, ((size - nw) / 2) as i64, ((size - nh) / 2) as i64);
+    canvas
+}
+
 /// Renders one size straight to PNG bytes, for previews.
 pub fn render_preview_png(art: &Artwork, size: u32) -> Vec<u8> {
     render_icon_set(art, &[size])
@@ -244,9 +281,28 @@ pub fn default_folder_artwork() -> Artwork {
     }
 }
 
+/// PNG preview of a finished folder image, at `size` px.
+pub fn preview_png_from_image(img: &image::RgbaImage, size: u32) -> Vec<u8> {
+    icon_set_from_image(img, &[size])
+        .png(size)
+        .expect("the size that was just rendered")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_prerendered_image_is_centred_and_scaled_into_the_canvas() {
+        // A wide, fully opaque picture must end up letterboxed with transparent bands.
+        let src = image::RgbaImage::from_pixel(400, 200, image::Rgba([10, 120, 200, 255]));
+        let set = icon_set_from_image(&src, &[512]);
+        let img = &set.sizes[0].1;
+        assert_eq!(img.dimensions(), (512, 512));
+        assert_eq!(img.get_pixel(256, 256).0[3], 255, "the picture sits in the middle");
+        assert_eq!(img.get_pixel(256, 4).0[3], 0, "the band above it stays transparent");
+        assert_eq!(img.get_pixel(4, 256).0[3], 255, "it reaches the left edge");
+    }
 
     fn solid(w: u32, h: u32, c: [u8; 4]) -> Artwork {
         Artwork {

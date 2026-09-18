@@ -1,5 +1,6 @@
 //! FolderSkin desktop app (Tauri v2).
 
+pub mod ai;
 pub mod commands;
 pub mod folder_icon;
 pub mod skins;
@@ -18,6 +19,11 @@ pub fn run() {
             commands::revert_skin,
             commands::folder_icon,
             commands::platform_info,
+            ai::ai_catalogue,
+            ai::ai_set_key,
+            ai::ai_clear_key,
+            ai::ai_test_key,
+            ai::ai_generate,
         ])
         .setup(|_app| {
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));

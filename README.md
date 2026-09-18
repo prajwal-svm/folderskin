@@ -76,6 +76,17 @@ folder's tab, the front panel keeps the middle ~85% of the height — and
 Claude Code to run the whole loop for you, so "make a skin from this photo" is a reasonable
 thing to ask.
 
+## Generate a skin with AI
+
+FolderSkin can also make a skin from a description, using **your own API key** from a provider
+you already use. The key is stored by your operating system's keychain, FolderSkin has no
+server of its own, and nothing is sent anywhere until you press Generate. Pick a provider and
+model in the Generate view, describe the look, and choose whether the model should draw flat
+artwork for FolderSkin's folder template or the whole folder itself.
+
+[docs/AI.md](docs/AI.md) covers the providers, where the key is stored, how transparency is
+handled for models that cannot return an alpha channel, and what each error message means.
+
 ## How it works
 
 The Rust core (`crates/folderskin-core`) holds the folder template as vector paths,

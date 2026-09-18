@@ -86,7 +86,7 @@ pub fn display_name(path: &Path) -> String {
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
 }
 
-fn data_url(png: &[u8]) -> String {
+pub fn data_url(png: &[u8]) -> String {
     format!(
         "data:image/png;base64,{}",
         base64::engine::general_purpose::STANDARD.encode(png)
@@ -287,11 +287,21 @@ pub async fn apply_skin(
 ) -> Result<(), String> {
     let state = state.inner().clone();
     let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-    let art = state
-        .artwork(&skin_id)
-        .ok_or_else(|| "that skin isn't available any more".to_string())?;
-    let icons = tauri::async_runtime::spawn_blocking(move || {
-        compositor::render_icon_set(&art, &ICON_SIZES)
+    // A whole-folder render from the AI assistant is already the icon; everything else is
+    // artwork that goes through the compositor.
+    let prerendered = state.prerendered(&skin_id);
+    let art = match &prerendered {
+        Some(_) => None,
+        None => Some(
+            state
+                .artwork(&skin_id)
+                .ok_or_else(|| "that skin isn't available any more".to_string())?,
+        ),
+    };
+    let icons = tauri::async_runtime::spawn_blocking(move || match (prerendered, art) {
+        (Some(img), _) => compositor::icon_set_from_image(&img, &ICON_SIZES),
+        (None, Some(art)) => compositor::render_icon_set(&art, &ICON_SIZES),
+        (None, None) => unreachable!("one of the two is always set"),
     })
     .await
     .map_err(|e| e.to_string())?;

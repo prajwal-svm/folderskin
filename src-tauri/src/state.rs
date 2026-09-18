@@ -2,6 +2,7 @@
 //! and the thumbnail cache.
 
 use folderskin_core::compositor::Artwork;
+use image::RgbaImage;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -18,6 +19,8 @@ pub struct Inner {
     pub builtin: OnceLock<Vec<LoadedSkin>>,
     /// Pictures the user dropped or picked, keyed by `custom:<hash>`.
     pub custom: Mutex<HashMap<String, Arc<Artwork>>>,
+    /// Finished folder images from the AI assistant, used as the icon without compositing.
+    pub prerendered: Mutex<HashMap<String, Arc<RgbaImage>>>,
     /// Rendered thumbnails as PNG data URLs, keyed by skin id.
     pub thumbs: Mutex<HashMap<String, String>>,
 }
@@ -77,6 +80,27 @@ impl AppState {
                 }
             }
             m.insert(id, art);
+        }
+    }
+
+    /// A finished folder image, when this id names one.
+    pub fn prerendered(&self, skin_id: &str) -> Option<Arc<RgbaImage>> {
+        self.0.prerendered.lock().ok().and_then(|m| m.get(skin_id).cloned())
+    }
+
+    /// Keeps at most `MAX_PRERENDERED` whole-folder renders in memory.
+    pub fn remember_prerendered(&self, id: String, img: Arc<RgbaImage>) {
+        const MAX_PRERENDERED: usize = 12;
+        if let Ok(mut m) = self.0.prerendered.lock() {
+            if m.len() >= MAX_PRERENDERED && !m.contains_key(&id) {
+                if let Some(oldest) = m.keys().next().cloned() {
+                    m.remove(&oldest);
+                    if let Ok(mut t) = self.0.thumbs.lock() {
+                        t.remove(&oldest);
+                    }
+                }
+            }
+            m.insert(id, img);
         }
     }
 
