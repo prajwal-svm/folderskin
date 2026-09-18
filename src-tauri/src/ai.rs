@@ -8,7 +8,7 @@ use crate::commands::SkinDto;
 use crate::state::AppState;
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_ai::prompts::{self, Shape};
-use folderskin_core::compositor::Artwork;
+use folderskin_core::compositor::{self, Artwork};
 use folderskin_core::manifest::{SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_core::matte::{self, KeyOptions, MAGENTA};
 use serde::{Deserialize, Serialize};
@@ -155,11 +155,16 @@ pub async fn ai_generate(
         .reference_path
         .clone()
         .filter(|p| !p.trim().is_empty() && model.accepts_reference);
+    // A whole folder from a model that can work from a picture, with none attached: send our own
+    // blank template, so the model repaints FolderSkin's folder instead of inventing one.
+    let use_template =
+        shape == Shape::Folder && model.accepts_reference && user_reference.is_none();
 
     // A folder render needs transparency. Use the model's own alpha when it has one, otherwise
-    // ask for a magenta backdrop and cut it out ourselves.
+    // ask for a magenta backdrop and cut it out ourselves. The template sits on magenta and the
+    // prompt says to keep it, so a template run is always keyed.
     let wants_cutout = shape == Shape::Folder;
-    let want_alpha = wants_cutout && model.native_alpha;
+    let want_alpha = wants_cutout && model.native_alpha && !use_template;
     let key_hex = (wants_cutout && !want_alpha).then_some(KEY_HEX);
     let (width, height) = match shape {
         Shape::Skin => (SKIN_WIDTH, SKIN_HEIGHT),
@@ -171,6 +176,12 @@ pub async fn ai_generate(
             .await
             .map_err(|e| e.to_string())??;
         let prompt = prompts::compose_with_reference(shape, &req.idea, width, height, key_hex);
+        (Some(png), prompt)
+    } else if use_template {
+        let png = tauri::async_runtime::spawn_blocking(|| template_reference(FOLDER_W, FOLDER_H))
+            .await
+            .map_err(|e| e.to_string())?;
+        let prompt = prompts::compose_on_template(&req.idea, width, height, KEY_HEX);
         (Some(png), prompt)
     } else {
         let prompt = prompts::compose(shape, &req.idea, width, height, key_hex);
@@ -256,6 +267,11 @@ fn load_reference(path: PathBuf) -> Result<Vec<u8>, String> {
     )))
 }
 
+/// Our blank folder template, centred on flat magenta, as the PNG a model is asked to repaint.
+fn template_reference(width: u32, height: u32) -> Vec<u8> {
+    folderskin_core::raster::encode_png(&compositor::blank_template(width, height, MAGENTA))
+}
+
 /// A short, human label for a generated skin, taken from the first few words of the idea.
 pub fn short_name(idea: &str) -> String {
     const MAX_BYTES: usize = 28;
@@ -303,6 +319,22 @@ mod tests {
         let name = short_name("桜桜桜桜桜桜桜桜桜桜 at night");
         assert_eq!(name, "桜".repeat(9));
         assert_eq!(short_name("🦊🦊🦊🦊🦊🦊🦊🦊"), "🦊".repeat(7));
+    }
+
+    #[test]
+    fn the_template_reference_is_a_png_at_the_folder_request_size() {
+        let png = template_reference(FOLDER_W, FOLDER_H);
+        let img = image::load_from_memory(&png).unwrap().to_rgba8();
+        assert_eq!(img.dimensions(), (FOLDER_W, FOLDER_H));
+        assert_eq!(
+            img.get_pixel(0, 0).0,
+            [255, 0, 255, 255],
+            "on the key colour"
+        );
+        assert!(
+            matte::has_key_background(&img, MAGENTA, KeyOptions::default()),
+            "so a model that keeps it gives a keyable result"
+        );
     }
 
     #[test]
