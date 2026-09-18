@@ -18,7 +18,9 @@ folderskin/
 │   └── components/          TabBar, Gallery, FolderThumb, DropZone, Wordmark, AboutMenu
 ├── src-tauri/               the app crate: commands, state, window config
 │   ├── build.rs             embeds assets/skins into the binary
-│   └── src/commands.rs      the six commands the frontend can call
+│   ├── src/commands.rs      the gallery, import, apply and delete commands
+│   ├── src/ai.rs            the AI assistant's commands
+│   └── src/store.rs         saved skins on disk
 ├── crates/
 │   ├── folderskin-core/     geometry · fit · raster · compositor · ico · manifest · apply
 │   └── folderskin-tools/    CLI: generate and import skins, render, check, apply, revert
@@ -63,18 +65,31 @@ tests run without a webview.
 
 ## Frontend to backend
 
-Seven commands, all in `src-tauri/src/commands.rs`, all async with the heavy work on a blocking
-thread. `src/lib/tauri.ts` is the only place the frontend names them.
+Eight commands in `src-tauri/src/commands.rs`, plus the AI assistant's in `src-tauri/src/ai.rs`,
+all async with the heavy work on a blocking thread. `src/lib/tauri.ts` is the only place the
+frontend names them.
 
 | command | input | output |
 |---|---|---|
-| `list_skins` | – | the ten skins with PNG data-URL thumbnails, plus the plain default folder |
+| `list_skins` | – | the ten skins, then the user's saved skins newest first, each with a PNG data-URL thumbnail; plus the plain default folder |
 | `inspect_path` | `path` | `{kind: "folder" \| "image" \| "other", name, path}` |
-| `import_image` | `path` | a skin with id `custom:<hash>` and a thumbnail |
+| `import_image` | `path` | the picture saved as a skin, id `user:<hash>` (the saved one if it was imported before) |
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
+| `delete_skin` | `skinId` | `{}`, or an error string for a built-in skin |
 | `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
 | `platform_info` | – | `{os, browse_label, note}` |
+
+`ai_generate` returns the same skin shape as `import_image`. A skin is:
+
+```ts
+{ id, name, collection, thumbnail, custom,
+  kind: "artwork" | "folder",           // wrapped onto our template, or a finished folder image
+  source: "builtin" | "import" | "ai",
+  created_at: number | null }           // Unix ms when it was saved; null for built-ins
+```
+
+Saved skins have `collection: "yours"` and `custom: true`.
 
 Errors cross the boundary as plain strings already written for a person ("couldn't read that
 picture", or the reason the OS gave), because the drop zone shows them verbatim. There is no
@@ -85,18 +100,74 @@ drop in a webview cannot expose a filesystem path. Browsing uses the dialog plug
 
 ## State and caching
 
-`AppState` (in `src-tauri/src/state.rs`) is an `Arc` over three things:
+`AppState` (in `src-tauri/src/state.rs`) is an `Arc` over:
 
 - `builtin: OnceLock<Vec<LoadedSkin>>` — the embedded skins decoded to RGBA on first use and
   kept for the process lifetime, so applying a skin never re-decodes a JPEG.
-- `custom: Mutex<HashMap<String, Arc<Artwork>>>` — pictures the user dropped this session,
-  keyed `custom:<sha256[..12]>`, downscaled so the longer side is at most 2048 px.
-- `thumbs: Mutex<HashMap<String, String>>` — rendered thumbnails as data URLs. Built-in skins
-  and the default folder are also written to the app cache directory so later launches skip the
-  render; imported pictures stay in memory, and the map holds the twelve most recent.
+- `store: OnceLock<Store>` — the saved skins on disk (below), opened in `setup` before the
+  window exists.
+- `recent` — the twelve most recently used saved skins, decoded, least recently used out first.
+  It is only a cache: `apply_skin` reads a saved skin back from the store on a miss, so
+  evicting one loses nothing.
+- `unsaved` — skins that could not be written (no app data folder, or a failed write of an AI
+  result, which is never thrown away). They last until the app quits.
+- `thumbs: Mutex<HashMap<String, String>>` — rendered thumbnails of the built-in skins and the
+  default folder as data URLs, also written to the app cache directory so later launches skip
+  the render.
 
-Nothing is persisted apart from that cache and the favourites list, which lives in the
-webview's `localStorage`. There is no database, no config file and no network access.
+What persists: the saved skins, that thumbnail cache, and the favourites list in the webview's
+`localStorage`. There is no database and no config file, and no network access outside the AI
+assistant.
+
+## Saved skins
+
+Every picture the user imports and every AI result is saved as soon as it arrives, by
+`src-tauri/src/store.rs`, in a `skins` folder in the app data directory:
+
+| | |
+|---|---|
+| macOS | `~/Library/Application Support/app.folderskin.desktop/skins/` |
+| Windows | `%APPDATA%\app.folderskin.desktop\skins\` |
+| Linux | `~/.local/share/app.folderskin.desktop/skins/` (or under `$XDG_DATA_HOME`) |
+
+```
+skins/
+├── skins.json                 index: {"version": 1, "skins": [...]}
+├── 3f2a9c0b1d4e.png           the skin, longest side at most 2048 px
+└── 3f2a9c0b1d4e.thumb-v1.png  its 256 px gallery thumbnail
+```
+
+Each index entry records the id, name, kind (`artwork` or `folder`), source (`import` or `ai`),
+`created_at` in Unix milliseconds, the focus point for artwork, and for AI results the
+provider, model and the user's own words. The id is `user:` plus the first 12 hex digits of the
+SHA-256 of what came in (the picture file, or the provider's image), so importing the same
+picture twice finds the skin already saved. Ids from the webview are checked against that exact
+shape before they name a file.
+
+Pictures and thumbnails are written before the index entry that names them, and every file is
+written atomically (temp file, then rename), so a crash leaves at worst an unreferenced picture.
+An index that cannot be read is renamed `skins-unreadable-<ms>.json` and the store starts
+empty; a damaged entry, or one whose picture has gone, is dropped with a log line. The
+thumbnail file name carries `THUMB_CACHE_VERSION`, so bumping it redraws saved thumbnails too.
+
+### Artwork or a finished folder
+
+An imported picture becomes one of two kinds (`matte::surround` and `matte::finished_cutout` in
+the core):
+
+- **folder, with real transparency**: at least half of an outer band (1% of the shorter side)
+  has alpha at or below 16, or all four corners do and at least a fifth of the band does (a
+  cut-out trimmed tight to its outline). The picture is trimmed to its visible pixels.
+- **folder, on the magenta key**: `has_key_background` holds at a strict tolerance of 0.12
+  (60% of the outermost ring within 0.12 of #FF00FF), or all four corners and a fifth of the
+  band are on the key. The keyer's own tolerance, 0.18, is too loose to decide this: a product
+  shot on magenta paper or a vivid sunset sky sits around 0.14 to 0.17 and must stay a picture.
+  The backdrop is keyed out, despilled and trimmed like an AI render; if less than 2% of the
+  picture is left, it was not a folder and becomes artwork.
+- **artwork** otherwise, with the focus in the middle.
+
+A finished folder image is used as the icon as it is, through `compositor::icon_set_from_image`,
+and is never wrapped in the template a second time.
 
 ## Skins are embedded at build time
 
@@ -138,6 +209,8 @@ anywhere; focus and selection are shown with a background tint or a border colou
 | `ico` | round-trip of the multi-size container |
 | `apply` | `desktop.ini` and `.directory` generation and revert parsing as pure functions; path validation |
 | `manifest` | parsing with defaults, and validation of ids, sizes, dimensions and byte budgets |
+| `matte` | keying, despill and trim; telling a finished folder (transparent, keyed, keyed then JPEG-compressed, trimmed tight) from an ordinary photo, a pink sunset and a product shot on magenta paper |
+| `store` | round trip across a restart, one entry per picture, delete, a corrupt or missing index, damaged entries, thumbnail repair, the size bound, id checks |
 | frontend | the drop-zone reducer, favourites, platform copy (vitest) |
 
 The Windows writer is compile-checked from macOS with `cargo check --target
@@ -152,9 +225,11 @@ readers (pure functions, unit-tested without a network), the prompt templates, a
 wrapper. `crates/folderskin-core/src/matte.rs` turns a keyed render into a clean cutout for the
 providers that cannot return an alpha channel. [AI.md](AI.md) covers the feature itself.
 
-A generated whole-folder image is applied without going through the compositor:
-`compositor::icon_set_from_image` fits it into the icon canvas instead. That is the one path
-where the icon's geometry is not ours.
+A finished folder image, generated whole or imported, is applied without going through the
+compositor: `compositor::icon_set_from_image` fits it into the icon canvas instead. That is the
+one path where the icon's geometry is not ours, which is why a whole-folder generation sends
+the model our own blank template to repaint whenever the model accepts a picture
+(`compositor::blank_template`).
 
 ## Size budget
 

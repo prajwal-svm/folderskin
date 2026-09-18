@@ -6,7 +6,8 @@ operating system's keychain, and FolderSkin talks to that provider directly from
 
 There is no FolderSkin server, no proxy, no bundled key and no free tier to subsidise. Nothing
 is sent anywhere until you press **Generate**, and what is sent is your prompt, your chosen
-size, and the reference picture if you picked one.
+size, and the reference picture if you picked one (for a whole folder without one, FolderSkin's
+own blank folder template).
 
 ## Where the key lives
 
@@ -36,6 +37,15 @@ transparency support. This is the default and the right answer most of the time.
 and that image becomes the icon directly, bypassing the compositor. You give up pixel-exact
 geometry and gain artwork that can sit in real relief and break over the folder's top edge.
 
+When the model can work from a picture (OpenAI, Grok, Gemini) and you have not attached one,
+FolderSkin sends its own blank folder template as that picture: our folder, painted flat light
+grey, centred on solid magenta at the requested size (`compositor::blank_template`). The prompt
+tells the model to repaint that exact folder, keeping its outline, tab, paper strip, size and
+position, and to leave the magenta flat. The result keeps FolderSkin's silhouette instead of
+whatever folder the model would have invented. Because the template sits on magenta, such a
+run always takes the keyed route below, even on a model that could return transparency. A
+reference picture you attach yourself is used as the artwork instead, as before.
+
 ## How transparency is handled
 
 Models split into two groups, and FolderSkin picks the right route for the model you chose:
@@ -62,8 +72,11 @@ parts that do the work are structural rather than stylistic:
 - **Whole-folder prompts** pin the construction: exactly three parts, one tab, one visible paper
   edge, one front panel, and an explicit instruction not to add layers. Without that sentence
   models reliably produce stacked folders and double tabs.
-- **Both** end with a hard output contract naming the pixel size, the isolation of the subject,
-  and either the key colour or the transparent background.
+- **Template prompts** (`compose_on_template`) go with the blank template: the attached image
+  is the exact folder to repaint, its shape and framing stay as they are, the idea is painted
+  across the back and front panels, and the magenta stays flat.
+- **All of them** end with a hard output contract naming the pixel size, the isolation of the
+  subject, and either the key colour or the transparent background.
 
 You can edit these templates; they are ordinary Rust string constants with tests that assert
 the load-bearing phrases are present.
@@ -92,12 +105,25 @@ fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks with
 | "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background; try again or switch to Artwork |
 | "the provider returned something that is not an image" | A malformed or non-image response |
 
+## Folders made in a chat assistant
+
+You can also paint a whole folder in ChatGPT, Grok or any other chat assistant and bring it in
+with **Your photo**. Ask for the folder on a solid #FF00FF background, or on a transparent one.
+FolderSkin recognises either and uses the picture as the icon as it is, cut out and trimmed,
+instead of wrapping it in its own folder a second time. Any other picture is treated as
+artwork for the template. [ARCHITECTURE.md](ARCHITECTURE.md#artwork-or-a-finished-folder) has
+the exact rules, including why a photo of something on magenta paper stays a picture.
+
 ## Keeping a generated skin
 
-A generated skin lives in the session: it appears in the gallery, you can apply it to as many
-folders as you like, and it is gone when you quit. To keep one in the repository's built-in set,
-save the image and import it with the maintainer CLI, which crops it and writes the manifest
-entry:
+Every generated skin is saved the moment it arrives, like an imported picture, together with
+the provider, the model and your prompt. It is in the gallery under Yours after a restart, and
+deleting it there removes it from disk. [ARCHITECTURE.md](ARCHITECTURE.md#saved-skins) says
+where the files live. If the write fails (a full disk, say), the skin stays for the rest of the
+session rather than being lost.
+
+To add one to the repository's built-in set, save the image and import it with the maintainer
+CLI, which crops it and writes the manifest entry:
 
 ```sh
 cargo run -p folderskin-tools -- skin add ~/Downloads/aurora.png \
