@@ -5,6 +5,7 @@
  * Never used inside the app: `isTauri()` is true there.
  */
 import type { AiCatalogue, AiGenerateRequest, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
+import { cleanName } from "./names";
 
 const IDS: [string, string, string][] = [
   ["aurora", "Aurora", "glow"],
@@ -53,6 +54,7 @@ export const mockApi = {
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
   folderIcon: async (): Promise<string> => "/assets/previews/mesh.png",
   deleteSkin: async () => {},
+  renameSkin: async (_skinId: string, name: string) => cleanName(name),
   setWindowTheme: async () => {},
   aiCatalogue: async (): Promise<AiCatalogue> => ({
     providers: [

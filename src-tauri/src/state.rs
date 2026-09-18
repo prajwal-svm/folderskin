@@ -209,6 +209,19 @@ impl AppState {
         skins
     }
 
+    /// Renames a saved or session-only skin and returns its entry.
+    pub fn rename(&self, skin_id: &str, name: &str) -> Result<SavedSkin, String> {
+        if let Some(unsaved) = lock(&self.0.unsaved).get_mut(skin_id) {
+            unsaved.entry.name =
+                crate::store::clean_name(name).ok_or_else(|| "a skin needs a name".to_string())?;
+            return Ok(unsaved.entry.clone());
+        }
+        match self.store() {
+            Some(store) => store.rename(skin_id, name),
+            None => Err("FolderSkin doesn't know that skin".into()),
+        }
+    }
+
     /// Removes a saved or session-only skin from disk and from memory.
     pub fn delete(&self, skin_id: &str) -> Result<(), String> {
         lock(&self.0.recent).remove(skin_id);

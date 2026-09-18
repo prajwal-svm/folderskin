@@ -72,6 +72,8 @@ const tauriApi = {
   folderIcon: (folder: string) => invoke<string>("folder_icon", { folder }),
   /** Deletes one of the user's saved skins from disk. Built-ins refuse. */
   deleteSkin: (skinId: string) => invoke<void>("delete_skin", { skinId }),
+  /** Renames one of the user's saved skins; resolves to the name as saved. Built-ins refuse. */
+  renameSkin: (skinId: string, name: string) => invoke<string>("rename_skin", { skinId, name }),
   /** Native window appearance; `null` follows the system. Keeps the macOS sidebar material in step with the app theme. */
   setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
 

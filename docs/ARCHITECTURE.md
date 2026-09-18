@@ -77,6 +77,7 @@ frontend names them.
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
 | `delete_skin` | `skinId` | `{}`, or an error string for a built-in skin |
+| `rename_skin` | `skinId`, `name` | the name as saved (one line, trimmed, at most 60 characters), or an error string for a built-in skin |
 | `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
 | `platform_info` | – | `{os, browse_label, note}` |
 

@@ -136,10 +136,11 @@
 
 .tile-name {
   grid-area: 2 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
   padding: 1px 7px;
   border-radius: 6px;
   font-weight: 650;
@@ -156,6 +157,52 @@
   background: var(--accent);
   color: var(--on-accent);
   font-weight: 700;
+}
+
+.tile-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the selected skin's pencil: its name can be clicked to rename it */
+.tile-name-pencil {
+  flex: none;
+  opacity: 0.85;
+}
+
+/* renaming: the field sits over the name, which steps out of the way */
+.tile-name-field {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  z-index: 3;
+  font-weight: 650;
+  font-size: 12px;
+  text-align: center;
+  animation: pop var(--t-base) var(--ease-spring) both;
+}
+
+.tile.is-renaming .tile-name {
+  visibility: hidden;
+}
+
+.tile.is-renamed .tile-name {
+  animation: name-saved 520ms var(--ease-spring);
+}
+
+@keyframes name-saved {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
 }
 
 /* ---------- AI badge: springs in on hover for skins the assistant made ---------- */

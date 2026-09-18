@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
@@ -17,6 +17,7 @@ import { FolderStage } from "./components/FolderStage";
 import { AboutMenu } from "./components/AboutMenu";
 import { CommunityView } from "./components/CommunityView";
 import { Studio } from "./components/Studio";
+import { ConfirmDelete } from "./components/ConfirmDelete";
 import { Toaster } from "./components/Toaster";
 import { SearchIcon } from "./components/icons/search";
 import { StarIcon } from "./components/icons/star";
@@ -25,8 +26,6 @@ import { FolderOpenIcon } from "./components/icons/folder-open";
 const ALL = "all";
 const YOURS = "yours";
 const FAVES = "faves";
-/** How long a removed skin can still be brought back with Undo before it is deleted. */
-const UNDO_MS = 5200;
 
 function useTheme(): [Theme, () => void] {
   const [pref, setPref] = useState<ThemePref>(() => loadThemePref());
@@ -75,11 +74,10 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
-  /** Skins removed but still inside their Undo window. */
-  const [pendingRemoval, setPendingRemoval] = useState<string[]>([]);
+  /** The skin whose Delete was pressed, while "are you sure?" is open. */
+  const [confirmingDelete, setConfirmingDelete] = useState<Skin | null>(null);
   const [theme, toggleThemePref] = useTheme();
   const { items: toastItems, push: toast, dismiss: dismissToast } = useToasts();
-  const undoTimers = useRef(new Map<string, number>());
 
   useEffect(() => {
     api.platformInfo().then(setPlatform).catch(() => {});
@@ -96,21 +94,20 @@ export default function App() {
     setSkins((prev) => withUserFirst([skin, ...prev.filter((s) => s.id !== skin.id)]));
   }, []);
 
-  const live = useMemo(() => skins.filter((s) => !pendingRemoval.includes(s.id)), [skins, pendingRemoval]);
-  const yoursCount = useMemo(() => live.filter((s) => s.custom).length, [live]);
+  const yoursCount = useMemo(() => skins.filter((s) => s.custom).length, [skins]);
 
   const effectiveTab = view === "yours" ? YOURS : view === "faves" ? FAVES : tab;
   const tabs = useMemo<TabCount[]>(() => {
     const collections: string[] = [];
-    for (const s of live) if (!s.custom && !collections.includes(s.collection)) collections.push(s.collection);
-    const list: TabCount[] = [{ id: ALL, label: "All", count: live.length }];
+    for (const s of skins) if (!s.custom && !collections.includes(s.collection)) collections.push(s.collection);
+    const list: TabCount[] = [{ id: ALL, label: "All", count: skins.length }];
     for (const c of collections)
-      list.push({ id: c, label: c.charAt(0).toUpperCase() + c.slice(1), count: live.filter((s) => s.collection === c).length });
+      list.push({ id: c, label: c.charAt(0).toUpperCase() + c.slice(1), count: skins.filter((s) => s.collection === c).length });
     list.push({ id: YOURS, label: "Yours", count: yoursCount });
-    const faves = favorites.filter((id) => live.some((s) => s.id === id)).length;
+    const faves = favorites.filter((id) => skins.some((s) => s.id === id)).length;
     if (faves > 0 || view === "faves") list.push({ id: FAVES, label: "Faves", count: faves });
     return list;
-  }, [live, yoursCount, favorites, view]);
+  }, [skins, yoursCount, favorites, view]);
 
   const openTab = useCallback((id: string) => {
     if (id === YOURS) setView("yours");
@@ -123,13 +120,13 @@ export default function App() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return live.filter((s) => {
+    return skins.filter((s) => {
       if (effectiveTab === FAVES && !favorites.includes(s.id)) return false;
       if (effectiveTab === YOURS && !s.custom) return false;
       if (effectiveTab !== ALL && effectiveTab !== FAVES && effectiveTab !== YOURS && s.collection !== effectiveTab) return false;
       return !q || s.name.toLowerCase().includes(q) || s.collection.toLowerCase().includes(q);
     });
-  }, [live, effectiveTab, favorites, query]);
+  }, [skins, effectiveTab, favorites, query]);
 
   const refreshFolderIcon = useCallback((path: string) => {
     api
@@ -227,41 +224,53 @@ export default function App() {
     });
   }, []);
 
-  const removeSkin = useCallback(
+  const askDelete = useCallback((skin: Skin) => setConfirmingDelete(skin), []);
+  const cancelDelete = useCallback(() => setConfirmingDelete(null), []);
+
+  /** Deletes a skin once "are you sure?" is answered. It leaves the grid at once and comes back if the delete fails. */
+  const deleteSkin = useCallback(
     (skin: Skin) => {
+      setConfirmingDelete(null);
       if (state.skinId === skin.id) dispatch({ type: "skinCleared" });
-      setPendingRemoval((p) => [...p, skin.id]);
-      const timer = window.setTimeout(() => {
-        undoTimers.current.delete(skin.id);
-        api
-          .deleteSkin(skin.id)
-          .then(() => {
-            setSkins((prev) => prev.filter((s) => s.id !== skin.id));
-            setFavorites((prev) => {
-              const next = prev.filter((id) => id !== skin.id);
-              saveFavorites(next);
-              return next;
-            });
-          })
-          .catch((e) => toast(`Couldn't remove ${skin.name}: ${errorMessage(e)}`, { tone: "danger" }))
-          .finally(() => setPendingRemoval((p) => p.filter((id) => id !== skin.id)));
-      }, UNDO_MS);
-      undoTimers.current.set(skin.id, timer);
-      toast(`Removed ${skin.name}`, {
-        action: {
-          label: "Undo",
-          run: () => {
-            window.clearTimeout(undoTimers.current.get(skin.id));
-            undoTimers.current.delete(skin.id);
-            setPendingRemoval((p) => p.filter((id) => id !== skin.id));
-          },
-        },
-      });
+      setSkins((prev) => prev.filter((s) => s.id !== skin.id));
+      api
+        .deleteSkin(skin.id)
+        .then(() => {
+          setFavorites((prev) => {
+            const next = prev.filter((id) => id !== skin.id);
+            saveFavorites(next);
+            return next;
+          });
+          toast(`Deleted ${skin.name}`, { tone: "ok" });
+        })
+        .catch((e) => {
+          setSkins((prev) => withUserFirst([skin, ...prev.filter((s) => s.id !== skin.id)]));
+          toast(`Couldn't delete ${skin.name}: ${errorMessage(e)}`, { tone: "danger" });
+        });
     },
     [state.skinId, toast],
   );
 
-  const selected = live.find((s) => s.id === state.skinId) ?? null;
+  /** Shows the new name straight away, then the name as saved; the old one comes back if saving fails. */
+  const renameSkin = useCallback(
+    (skin: Skin, name: string) => {
+      const show = (to: string) => setSkins((prev) => prev.map((s) => (s.id === skin.id ? { ...s, name: to } : s)));
+      show(name);
+      api
+        .renameSkin(skin.id, name)
+        .then(show)
+        .catch((e) => {
+          show(skin.name);
+          toast(`Couldn't rename ${skin.name}: ${errorMessage(e)}`, { tone: "danger" });
+        });
+    },
+    [toast],
+  );
+
+  /** A skin's current name, for cards that keep their own copy of it (the studio's results). */
+  const nameOf = useCallback((id: string) => skins.find((s) => s.id === id)?.name, [skins]);
+
+  const selected = skins.find((s) => s.id === state.skinId) ?? null;
   const q = query.trim();
   const empty: Empty | null = loadError
     ? { icon: <FolderOpenIcon size={22} />, title: "The skins didn't load", text: loadError }
@@ -292,7 +301,7 @@ export default function App() {
           setView(v);
           if (v === "skins") setTab(ALL);
         }}
-        favoritesCount={favorites.filter((id) => live.some((s) => s.id === id)).length}
+        favoritesCount={favorites.filter((id) => skins.some((s) => s.id === id)).length}
         yoursCount={yoursCount}
         onImport={pickPhoto}
         theme={theme}
@@ -320,7 +329,8 @@ export default function App() {
                 onAdd={effectiveTab === YOURS && !q ? pickPhoto : undefined}
                 onSelect={(id) => dispatch({ type: "skinSelected", skinId: id })}
                 onToggleFavorite={onToggleFavorite}
-                onRemove={removeSkin}
+                onRemove={askDelete}
+                onRename={renameSkin}
               />
             </div>
           </>
@@ -333,6 +343,8 @@ export default function App() {
             onGenerated={addSkin}
             onTryOn={(id) => dispatch({ type: "skinSelected", skinId: id })}
             onImport={pickPhoto}
+            nameOf={nameOf}
+            onRename={renameSkin}
             toast={toast}
           />
         )}
@@ -351,6 +363,7 @@ export default function App() {
         onReveal={reveal}
       />
 
+      {confirmingDelete && <ConfirmDelete skin={confirmingDelete} onCancel={cancelDelete} onDelete={() => deleteSkin(confirmingDelete)} />}
       <Toaster items={toastItems} onDismiss={dismissToast} />
     </main>
   );

@@ -14,6 +14,7 @@ export function Gallery({
   onSelect,
   onToggleFavorite,
   onRemove,
+  onRename,
 }: {
   skins: Skin[];
   selectedId: string | null;
@@ -26,7 +27,9 @@ export function Gallery({
   onAdd?: () => void;
   onSelect: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  /** Asks to delete one of the user's skins. */
   onRemove: (skin: Skin) => void;
+  onRename: (skin: Skin, name: string) => void;
 }) {
   if (empty && !onAdd) {
     return (
@@ -49,7 +52,9 @@ export function Gallery({
               </span>
               <span className="tile-add-label">Add a picture</span>
             </span>
-            <span className="tile-name">PNG, JPEG, WebP, HEIC</span>
+            <span className="tile-name">
+              <span className="tile-name-text">PNG, JPEG, WebP, HEIC</span>
+            </span>
           </button>
         </div>
       )}
@@ -63,6 +68,7 @@ export function Gallery({
             onSelect={() => onSelect(skin.id)}
             onToggleFavorite={() => onToggleFavorite(skin.id)}
             onRemove={skin.custom ? () => onRemove(skin) : undefined}
+            onRename={skin.custom ? (name) => onRename(skin, name) : undefined}
           />
         </div>
       ))}

@@ -10,14 +10,14 @@ export type Toast = {
   leaving?: boolean;
 };
 
-/** How long a toast stays; ones with an action (Undo) stay longer so there's time to use it. */
+/** How long a toast stays; ones with an action stay longer so there's time to use it. */
 const PLAIN_MS = 2800;
 const ACTION_MS = 5200;
 const LEAVE_MS = 220;
 
 /**
  * Short confirmations for things that happen away from where the user is looking: a picture
- * saved to Yours, a skin removed (with Undo), an icon put back. At most three at a time.
+ * saved to Yours, a skin deleted, an icon put back. At most three at a time.
  */
 export function useToasts() {
   const [items, setItems] = useState<Toast[]>([]);

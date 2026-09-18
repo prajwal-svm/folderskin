@@ -68,6 +68,17 @@
   color: var(--ink);
 }
 
+/* the one button that deletes something, only ever inside "are you sure?" */
+.btn-danger {
+  background: var(--danger-solid);
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled),
+.btn-danger:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--danger-solid) 86%, #000000);
+}
+
 .btn-lg {
   height: 44px;
   padding: 0 22px;
@@ -429,6 +440,46 @@ select.input {
 
 .modal-wide {
   width: min(640px, 100%);
+}
+
+.modal-narrow {
+  width: min(400px, 100%);
+}
+
+/* "are you sure?": the thing in question beside what will happen to it */
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.confirm-thumb {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  object-fit: contain;
+}
+
+.confirm-text {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* a name being renamed in place: the border turns the accent, never an outline */
+.name-field {
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--island);
+  color: var(--ink);
+  font: inherit;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .modal-head {

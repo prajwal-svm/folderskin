@@ -368,6 +368,53 @@
   letter-spacing: -0.02em;
 }
 
+/* the result's name: click it to rename; the pencil shows on hover */
+.name-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% + 8px);
+  margin-left: -8px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.name-btn:hover,
+.name-btn:focus-visible {
+  background: var(--well);
+}
+
+.name-btn-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name-btn svg {
+  flex: none;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease;
+}
+
+.name-btn:hover svg,
+.name-btn:focus-visible svg {
+  opacity: 1;
+}
+
+.turn-name-field {
+  width: calc(100% + 8px);
+  height: 30px;
+  margin-left: -8px;
+  padding: 0 7px;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
 .turn-where {
   font-weight: 600;
   font-size: 12px;

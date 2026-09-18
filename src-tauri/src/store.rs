@@ -195,6 +195,23 @@ pub fn shrink_to(img: RgbaImage, max_side: u32) -> RgbaImage {
     )
 }
 
+/// Longest name a skin can have, in characters. The webview's name field stops at the same length.
+pub const MAX_NAME_CHARS: usize = 60;
+
+/// A name as the user typed it, made fit to show: runs of white space become one space,
+/// control characters go, and it is trimmed and cut to [`MAX_NAME_CHARS`]. `None` when nothing
+/// is left.
+pub fn clean_name(name: &str) -> Option<String> {
+    let one_line = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let cut: String = one_line
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_NAME_CHARS)
+        .collect();
+    let cut = cut.trim_end();
+    (!cut.is_empty()).then(|| cut.to_string())
+}
+
 /// The id of a skin made from `content`: the same bytes always give the same id.
 pub fn skin_id(content: &[u8]) -> String {
     format!("{ID_PREFIX}{}", crate::ai::hash12(content))
@@ -404,6 +421,23 @@ impl Store {
         drop(index);
         self.remove_files(stem);
         Ok(())
+    }
+
+    /// Gives a saved skin a new name, cleaned by [`clean_name`], and returns its entry. Only the
+    /// index changes: the picture and thumbnails are named after the id, not the name.
+    pub fn rename(&self, id: &str, name: &str) -> Result<SavedSkin, String> {
+        let name = clean_name(name).ok_or_else(|| "a skin needs a name".to_string())?;
+        let mut index = self.lock();
+        let pos = index
+            .iter()
+            .position(|s| s.id == id)
+            .ok_or_else(|| "that skin isn't saved any more".to_string())?;
+        let before = std::mem::replace(&mut index[pos].name, name);
+        if let Err(e) = self.write_index(&index) {
+            index[pos].name = before;
+            return Err(format!("couldn't rename that skin: {e}"));
+        }
+        Ok(index[pos].clone())
     }
 
     /// Deletes a skin's picture and every thumbnail it has had. Leftovers are only logged: the
@@ -631,6 +665,53 @@ mod tests {
         assert_eq!(again, first, "the saved entry comes back unchanged");
         assert_eq!(Store::open(dir.clone()).list().len(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn renaming_changes_only_the_name_and_survives_a_restart() {
+        let dir = temp_dir("rename");
+        let store = Store::open(dir.clone());
+        let id = skin_id(b"rename");
+        store
+            .add(
+                new_skin(&id, "A night sky", SkinSource::Ai),
+                &artwork([9, 9, 9], (0.5, 0.5)),
+            )
+            .unwrap();
+
+        let renamed = store.rename(&id, "  Beach   trip\n2026 ").unwrap();
+        assert_eq!(renamed.name, "Beach trip 2026");
+        assert_eq!(renamed.source, SkinSource::Ai, "nothing else changes");
+        assert!(
+            store.rename(&id, " \t ").is_err(),
+            "a blank name is refused"
+        );
+        assert!(
+            store.rename(&skin_id(b"unknown"), "x").is_err(),
+            "so is a skin that isn't saved"
+        );
+
+        let reopened = Store::open(dir.clone());
+        assert_eq!(reopened.get(&id).unwrap().name, "Beach trip 2026");
+        assert!(
+            reopened.load(&id).unwrap().is_some(),
+            "the picture is untouched"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn names_are_cleaned_and_cut_between_characters() {
+        assert_eq!(clean_name("  a \n b\t c "), Some("a b c".into()));
+        assert_eq!(clean_name("x\u{7}y"), Some("xy".into()));
+        assert_eq!(clean_name("   "), None);
+        let long = clean_name(&"🦊".repeat(80)).unwrap();
+        assert_eq!(long.chars().count(), MAX_NAME_CHARS);
+        assert_eq!(
+            clean_name(&format!("{} tail", "a".repeat(59))),
+            Some("a".repeat(59)),
+            "no trailing space where the cut lands"
+        );
     }
 
     #[test]

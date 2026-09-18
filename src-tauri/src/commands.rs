@@ -369,6 +369,23 @@ pub async fn delete_skin(state: State<'_, AppState>, skin_id: String) -> Result<
         .map_err(|e| e.to_string())?
 }
 
+/// Gives one of the user's skins a new name and returns the name as saved: trimmed, on one line
+/// and at most `MAX_NAME_CHARS` long. The built-in skins keep their names.
+#[tauri::command]
+pub async fn rename_skin(
+    state: State<'_, AppState>,
+    skin_id: String,
+    name: String,
+) -> Result<String, String> {
+    if is_builtin_id(&skin_id) {
+        return Err("the built-in skins can't be renamed".into());
+    }
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.rename(&skin_id, &name).map(|e| e.name))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn revert_skin(folder: String) -> Result<(), String> {
     let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
+import { NameField } from "./NameField";
+import { PencilIcon } from "./icons/pencil";
 import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 
@@ -20,6 +22,9 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
  * (no CSS transition to fight), and settles flat again when the pointer leaves. The star
  * springs in on hover and stays while the skin is a favourite; skins the AI assistant made show
  * an "AI" badge on hover.
+ *
+ * The user's own skins can be renamed the way Finder does it: click the name of the selected
+ * skin, or press Return or F2. Delete or Backspace asks to delete it.
  */
 export function FolderThumb({
   skin,
@@ -29,6 +34,7 @@ export function FolderThumb({
   onSelect,
   onToggleFavorite,
   onRemove,
+  onRename,
 }: {
   skin: Skin;
   index: number;
@@ -36,10 +42,16 @@ export function FolderThumb({
   favorite: boolean;
   onSelect: () => void;
   onToggleFavorite: () => void;
-  /** Present for the user's own skins. */
+  /** Asks to delete the skin. Present for the user's own skins. */
   onRemove?: () => void;
+  /** Saves a new name. Present for the user's own skins. */
+  onRename?: (name: string) => void;
 }) {
   const art = useRef<HTMLSpanElement>(null);
+  const hit = useRef<HTMLButtonElement>(null);
+  const [renaming, setRenaming] = useState(false);
+  /** Set for a moment after a rename, so the new name bumps in. */
+  const [renamed, setRenamed] = useState(false);
   // x and y run from -1 (left, top) to 1 (right, bottom); t* are where the pointer wants them.
   const m = useRef({ x: 0, y: 0, s: 1, tx: 0, ty: 0, ts: 1, frame: 0 });
 
@@ -92,20 +104,57 @@ export function FolderThumb({
 
   const release = useCallback(() => aim(0, 0, 1), [aim]);
 
+  useEffect(() => {
+    if (!renamed) return;
+    const t = window.setTimeout(() => setRenamed(false), 600);
+    return () => window.clearTimeout(t);
+  }, [renamed]);
+
   const ai = skin.source === "ai";
-  const cls = ["tile", selected ? "is-selected" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
+  const canRename = Boolean(onRename) && selected;
+
+  // A click on the selected skin's name renames it (a double click on any name does the same:
+  // the first click selects). Anywhere else, a click selects.
+  const click = (e: MouseEvent<HTMLButtonElement>) => {
+    if (canRename && e.detail > 0 && e.target instanceof Element && e.target.closest(".tile-name")) setRenaming(true);
+    else onSelect();
+  };
+
+  const keys = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (onRename && (e.key === "F2" || (e.key === "Enter" && selected))) {
+      e.preventDefault();
+      if (!selected) onSelect();
+      setRenaming(true);
+    } else if (onRemove && (e.key === "Delete" || e.key === "Backspace")) {
+      e.preventDefault();
+      onRemove();
+    }
+  };
+
+  const cls = [
+    "tile",
+    selected ? "is-selected" : "",
+    favorite ? "is-favorite" : "",
+    renaming ? "is-renaming" : "",
+    renamed ? "is-renamed" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className={cls} style={{ "--i": Math.min(index, 24) } as CSSProperties}>
       <button
         type="button"
         className="tile-hit"
+        ref={hit}
         aria-pressed={selected}
         aria-label={ai ? `${skin.name} (made with AI)` : skin.custom ? `${skin.name} (yours)` : skin.name}
+        aria-keyshortcuts={onRename ? "F2" : undefined}
         onMouseDown={(e) => e.preventDefault()}
         onPointerMove={track}
         onPointerLeave={release}
-        onClick={onSelect}
+        onClick={click}
+        onKeyDown={keys}
       >
         <span className="tile-art" ref={art}>
           <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} />
@@ -116,8 +165,27 @@ export function FolderThumb({
             AI
           </span>
         )}
-        <span className="tile-name">{skin.name}</span>
+        <span className="tile-name" title={canRename ? "Rename" : undefined}>
+          <span className="tile-name-text">{skin.name}</span>
+          {canRename && <PencilIcon size={11} className="tile-name-pencil" />}
+        </span>
       </button>
+      {renaming && onRename && (
+        <NameField
+          value={skin.name}
+          label={`new name for ${skin.name}`}
+          className="tile-name-field"
+          onRename={(name) => {
+            onRename(name);
+            setRenamed(true);
+          }}
+          onClose={(how) => {
+            setRenaming(false);
+            // Back to the tile after the keyboard ends it; a click elsewhere keeps its own focus.
+            if (how !== "away") hit.current?.focus({ preventScroll: true });
+          }}
+        />
+      )}
       <button
         type="button"
         className="tile-star"
@@ -136,8 +204,8 @@ export function FolderThumb({
         <button
           type="button"
           className="tile-remove"
-          aria-label={`remove ${skin.name}`}
-          title="Remove"
+          aria-label={`delete ${skin.name}`}
+          title="Delete…"
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();

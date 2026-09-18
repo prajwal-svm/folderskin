@@ -24,6 +24,7 @@ pub fn run() {
             commands::apply_skin,
             commands::revert_skin,
             commands::delete_skin,
+            commands::rename_skin,
             commands::folder_icon,
             commands::platform_info,
             ai::ai_catalogue,

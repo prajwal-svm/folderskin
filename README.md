@@ -46,8 +46,8 @@ source — it is three commands.
 4. Press **Revert** to put the operating system's default icon back.
 
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
-**Yours** and stays there until you remove it (removing offers Undo for a few seconds). A
-finished folder on a flat magenta background, like the ones the chat prompt below produces, is
+**Yours** and stays there until you delete it, which asks first. To rename one of yours, select
+it and click its name (or press Return). A finished folder on a flat magenta background, like the ones the chat prompt below produces, is
 cut out and used as it is; any other picture is wrapped onto FolderSkin's folder.
 
 ## The ten built-in skins

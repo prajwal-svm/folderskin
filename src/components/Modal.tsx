@@ -12,6 +12,7 @@ export function Modal({
   children,
   footer,
   wide,
+  narrow,
 }: {
   title: string;
   sub?: ReactNode;
@@ -19,6 +20,8 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** For short questions, like "are you sure?". */
+  narrow?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
 
@@ -46,7 +49,7 @@ export function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={wide ? "modal modal-wide" : "modal"} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+      <div className={wide ? "modal modal-wide" : narrow ? "modal modal-narrow" : "modal"} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
         <header className="modal-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 className="modal-title">{title}</h2>

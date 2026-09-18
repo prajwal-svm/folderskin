@@ -8,8 +8,10 @@ import type { ToastTone } from "../hooks/useToasts";
 import { FolderGhost } from "./FolderGhost";
 import { StudioSettings } from "./StudioSettings";
 import { ChatHelper } from "./ChatHelper";
+import { NameField } from "./NameField";
 import { ArrowUpIcon } from "./icons/arrow-up";
 import { PaperclipIcon } from "./icons/paperclip";
+import { PencilIcon } from "./icons/pencil";
 import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
 
@@ -44,6 +46,8 @@ export function Studio({
   onGenerated,
   onTryOn,
   onImport,
+  nameOf,
+  onRename,
   toast,
 }: {
   folderName: string | null;
@@ -51,6 +55,9 @@ export function Studio({
   onGenerated: (skin: Skin) => void;
   onTryOn: (skinId: string) => void;
   onImport: () => void;
+  /** A skin's name as the library has it now, or undefined once it has been deleted. */
+  nameOf: (skinId: string) => string | undefined;
+  onRename: (skin: Skin, name: string) => void;
   toast: (text: string, opts?: { tone?: ToastTone }) => void;
 }) {
   const [catalogue, setCatalogue] = useState<AiCatalogue | null>(null);
@@ -234,6 +241,8 @@ export function Studio({
             onAgain={() => void run(t.idea, t.shape)}
             onSettings={() => setSettingsOpen(true)}
             disabled={working}
+            name={t.skin ? nameOf(t.skin.id) : undefined}
+            onRename={(name) => t.skin && onRename(t.skin, name)}
           />
         ))}
       </div>
@@ -385,6 +394,8 @@ function TurnCard({
   onAgain,
   onSettings,
   disabled,
+  name,
+  onRename,
 }: {
   turn: Turn;
   folderName: string | null;
@@ -393,7 +404,11 @@ function TurnCard({
   onAgain: () => void;
   onSettings: () => void;
   disabled: boolean;
+  /** The result's name in the library; undefined once it has been deleted there. */
+  name: string | undefined;
+  onRename: (name: string) => void;
 }) {
+  const [renaming, setRenaming] = useState(false);
   return (
     <article className="turn">
       <p className="turn-ask">{turn.idea}</p>
@@ -402,7 +417,16 @@ function TurnCard({
         <div className="turn-result">
           <img className="turn-img" src={turn.skin.thumbnail} alt="" draggable={false} />
           <div className="turn-meta">
-            <p className="turn-name">{turn.skin.name}</p>
+            {name === undefined ? (
+              <p className="turn-name">{turn.skin.name}</p>
+            ) : renaming ? (
+              <NameField value={name} label="name for this skin" className="turn-name-field" onRename={onRename} onClose={() => setRenaming(false)} />
+            ) : (
+              <button type="button" className="turn-name name-btn" title="Rename" onMouseDown={(e) => e.preventDefault()} onClick={() => setRenaming(true)}>
+                <span className="name-btn-text">{name}</span>
+                <PencilIcon size={14} />
+              </button>
+            )}
             <p className="turn-where">
               {turn.where} · saved to Yours
             </p>

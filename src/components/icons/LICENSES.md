@@ -6,8 +6,8 @@ The animated icons in this folder are adapted from
 `moon`, `rotate-ccw`, `search`, `sliders-horizontal` and `sparkles`. The changes are described at the
 top of `trigger.ts`.
 
-`star`, `image` and `loader` use the shapes of the [Lucide](https://lucide.dev) icons of the same
-names (`loader` is Lucide's `loader-circle`); their animations are FolderSkin's own.
+`star`, `image`, `loader` and `pencil` use the shapes of the [Lucide](https://lucide.dev) icons
+of the same names (`loader` is Lucide's `loader-circle`); their animations are FolderSkin's own.
 
 Both projects' licences follow, as their terms require.
 

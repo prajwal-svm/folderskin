@@ -30,7 +30,7 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - Animated icons, adapted from lucide-animated, that play when their button is hovered or
   focused.
 - Everything you add is saved: pictures you import and every AI result come back after a
-  restart under **Yours**, and removing one offers Undo.
+  restart under **Yours**. You can rename them, and deleting one asks first.
 - Finished folder pictures on a flat magenta background, such as ones painted in Grok's or
   ChatGPT's chat from [docs/PROMPTS.md](docs/PROMPTS.md), are cut out and used as they are.
 - A layout built around the folder: the library and the folder each sit on their own island,

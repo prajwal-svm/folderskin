@@ -47,6 +47,8 @@
   --ok-ink: #047857;
   --danger: #e5484d;
   --danger-soft: #fde8e8;
+  /* behind white words, like a Delete button: dark enough in both themes */
+  --danger-solid: #d93a40;
   --fave: #ffb020;
 
   /* navigation on the glass */
