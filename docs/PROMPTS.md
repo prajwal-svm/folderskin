@@ -2,12 +2,13 @@
 
 You don't need an API key to make your own skins. Any chat app that can edit a picture
 (Grok, ChatGPT) can paint a folder for you if you give it our template and the prompt below.
-FolderSkin then cuts the folder out of the magenta background and adds it to **Yours**.
+The prompt asks for a flat magenta background, which FolderSkin cuts away before adding the
+folder to **Yours**.
 
 ## 1. Attach the template
 
 Download [`prompts/folder-template.png`](prompts/folder-template.png) and attach it to your
-message. It is a blank FolderSkin folder on a flat magenta background. The model repaints it,
+message. It is a blank FolderSkin folder on a transparent background. The model repaints it,
 so every result keeps the same shape: tab on the top left, a cream paper sheet between the
 panels, and the front panel carrying the picture.
 
@@ -29,7 +30,7 @@ panel and the tab; the main subject sits in the middle of the front panel, fully
 Keep the paper sheet as a clean cream strip. Rich colour, strong light, fine texture, like a
 collectible poster.
 
-Everything outside the folder stays pure flat magenta #FF00FF: no shadow, no glow, no
+Paint everything outside the folder pure flat magenta #FF00FF: no shadow, no glow, no
 gradient, no border, no other objects. Do not use magenta or hot pink inside the folder.
 Square image.
 ```
@@ -81,6 +82,9 @@ Or let the folder's name pick the scene: *"Scene: a witty poster about a folder 
 
 ## Why magenta
 
-Chat apps return pictures without transparency. A flat #FF00FF background almost never occurs
-in real artwork, so FolderSkin can find it, remove it and soften the edge cleanly. The same
-trick is used when the in-app assistant asks a model for a whole folder.
+Most chat apps return pictures without transparency. A flat #FF00FF background almost never
+occurs in real artwork, so FolderSkin can find it, remove it and soften the edge cleanly. The
+same trick is used when the in-app assistant asks a model for a whole folder.
+
+If a chat app hands back a picture that really is transparent around the folder, that works
+too: FolderSkin uses the transparency as it is.

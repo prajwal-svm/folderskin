@@ -60,7 +60,7 @@ export function ChatHelper({
             <p className="helper-step-title">Attach this template to your message</p>
             <p className="field-note">Drag it into the chat window. It keeps every folder the same shape.</p>
           </div>
-          <img className="helper-template" src="/folder-template.png" alt="blank folder on a magenta background" draggable />
+          <img className="helper-template" src="/folder-template.png" alt="blank FolderSkin folder template" draggable />
         </li>
         <li>
           <div className="helper-step-text">
