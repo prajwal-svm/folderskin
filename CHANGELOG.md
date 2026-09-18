@@ -1,0 +1,37 @@
+# Changelog
+
+All notable changes to FolderSkin are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
+[semantic versioning](https://semver.org/spec/v2.0.0.html).
+
+## Unreleased
+
+Nothing yet.
+
+## 0.1.0 — unreleased
+
+First release. The date lands here when the `v0.1.0` tag is pushed.
+
+### Added
+
+- Apply a folder icon on macOS, Windows and Linux from one rendering path in
+  `folderskin-core`, so the gallery preview and the icon written to disk are the same
+  pixels.
+- Ten built-in skins in three collections: `aurora`, `sunset`, `mesh`, `ember` (glow),
+  `paper`, `denim`, `slate` (grain), `halftone`, `stripes`, `bubbles` (pop).
+- Use your own photo as a skin: drop a picture on the window, or pick one with the
+  "your photo" button.
+- Revert, which restores the operating system's default folder icon and removes the
+  files FolderSkin wrote.
+- Gallery tabs (`all`, the three collections, and `faves`) with favourites stored
+  locally.
+- `folderskin-tools`, a workspace binary that generates and imports skins, renders
+  previews, checks the manifest, and applies or reverts an icon from a terminal. See
+  [docs/SKINS.md](docs/SKINS.md).
+- A Claude Code skill for authoring skins at
+  [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md).
+
+### Notes
+
+- No accounts, no paywall, no network access, no telemetry.
+- The installed app stays under 15 MB on every platform.

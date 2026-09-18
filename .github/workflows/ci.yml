@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # Tauri v2 on Linux needs webkit2gtk 4.1 and friends. Install before the Rust build.
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      # pnpm 11: pnpm-workspace.yaml uses the `allowBuilds` setting, which pnpm 10 does not know.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck the frontend
+        run: pnpm typecheck
+
+      - name: Test the frontend
+        run: pnpm test
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Lint Rust
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test Rust
+        run: cargo test --workspace
+
+      - name: Build the app bundles
+        run: pnpm tauri build --ci
+
+      # `src-tauri` is a workspace member, so the bundle lands in the workspace-root target
+      # directory. The src-tauri path is kept for a run with its own CARGO_TARGET_DIR.
+      - name: Upload the bundles
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folderskin-${{ matrix.os }}
+          path: |
+            target/release/bundle/**
+            src-tauri/target/release/bundle/**
+          if-no-files-found: warn
+          retention-days: 14

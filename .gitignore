@@ -6,3 +6,4 @@ assets/previews/
 .DS_Store
 *.log
 .superpowers/
+!.claude/
