@@ -22,13 +22,23 @@ export function DropZone({
   const busy = state.phase === "applying" || state.phase === "reverting";
   const label = buttonLabel(state);
   const selected = hasGlow(state);
-  const cls = ["zone", idle ? "is-idle" : "has-folder", state.hover ? "is-hover" : "", selected ? "sel" : ""]
+  const cls = [
+    "zone",
+    idle ? "is-idle" : "has-folder",
+    state.hover ? "is-hover" : "",
+    selected ? "sel" : "",
+    busy ? "is-busy" : "",
+    state.phase === "applied" ? "is-done" : "",
+  ]
     .filter(Boolean)
     .join(" ");
 
   if (idle) {
     return (
       <section className={cls}>
+        <svg className="ants" aria-hidden="true">
+          <rect x="1" y="1" rx="19" ry="19" />
+        </svg>
         <button
           type="button"
           className="zone-hit"
@@ -51,14 +61,13 @@ export function DropZone({
     );
   }
 
-  const badge =
-    state.phase === "applied" ? <IconCheck /> : busy ? <IconSpinner /> : <IconArrowDown />;
+  const badge = state.phase === "applied" ? <IconCheck /> : busy ? <IconSpinner /> : <IconArrowDown />;
 
   return (
     <section className={cls} aria-live="polite">
       {selected && <Handles />}
-      <div className="zone-card">
-        {thumbnail && <img className="zone-preview" src={thumbnail} alt="" draggable={false} />}
+      <div className="zone-card" key={state.folder?.path}>
+        {thumbnail && <img className="zone-preview" src={thumbnail} alt="" draggable={false} key={thumbnail} />}
         <p className="zone-name" title={state.folder?.path}>
           {state.folder?.name}
         </p>
@@ -75,7 +84,9 @@ export function DropZone({
               onMouseDown={(e) => e.preventDefault()}
               onClick={state.phase === "ready" ? onApply : undefined}
             >
-              <span className="btn-badge">{badge}</span>
+              <span className="btn-badge" key={state.phase}>
+                {badge}
+              </span>
               {label}
             </button>
             {state.phase === "applied" && (

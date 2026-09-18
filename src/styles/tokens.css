@@ -1,10 +1,14 @@
 :root {
+  color-scheme: light;
+
   /* canvas */
   --bg: #f6f6f6;
   --surface: #ffffff;
   --surface-2: #efefef;
+  --surface-3: #e6e6e6;
   --line: #e3e3e3;
   --dash: #c9c9c9;
+  --glow-top: rgba(255, 255, 255, 1);
 
   /* ink */
   --ink: #111111;
@@ -18,6 +22,8 @@
   --green-deep: #17c224;
   --green-soft: #ddf8de;
   --green-ring: rgba(47, 226, 58, 0.22);
+  --blob-a: rgba(47, 226, 58, 0.28);
+  --blob-b: rgba(90, 200, 255, 0.22);
   --danger: #d94a3d;
 
   --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
@@ -25,6 +31,40 @@
   --radius-zone: 20px;
   --radius-pill: 999px;
   --shadow-card: 0 1px 2px rgba(17, 17, 17, 0.05), 0 8px 24px rgba(17, 17, 17, 0.06);
+  --shadow-pop: 0 12px 34px rgba(17, 17, 17, 0.16), 0 1px 2px rgba(17, 17, 17, 0.08);
+  --thumb-shadow: 0 3px 5px rgba(17, 17, 17, 0.18);
+  --thumb-shadow-hover: 0 10px 16px rgba(17, 17, 17, 0.22);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0e0f0f;
+  --surface: #171818;
+  --surface-2: #202121;
+  --surface-3: #2a2b2b;
+  --line: #2a2b2b;
+  --dash: #454646;
+  --glow-top: rgba(255, 255, 255, 0.06);
+
+  --ink: #f2f2f2;
+  --ink-2: #d9d9d9;
+  --muted: #9a9a9a;
+  --hint: #6b6b6b;
+  --on-ink: #0e0f0f;
+
+  --green: #34ea40;
+  --green-deep: #22c92e;
+  --green-soft: #143a1c;
+  --green-ring: rgba(52, 234, 64, 0.26);
+  --blob-a: rgba(47, 226, 58, 0.16);
+  --blob-b: rgba(90, 200, 255, 0.12);
+  --danger: #ff6b5e;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 14px 38px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --thumb-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+  --thumb-shadow-hover: 0 12px 20px rgba(0, 0, 0, 0.6);
 }
 
 @font-face {
@@ -32,4 +72,10 @@
   src: url("/fonts/Manrope-variable.ttf") format("truetype");
   font-weight: 200 800;
   font-display: swap;
+}
+
+@property --spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Skin } from "../lib/tauri";
 import { IconStar } from "./icons";
 
@@ -14,12 +15,14 @@ export function Handles() {
 
 export function FolderThumb({
   skin,
+  index,
   selected,
   favorite,
   onSelect,
   onToggleFavorite,
 }: {
   skin: Skin;
+  index: number;
   selected: boolean;
   favorite: boolean;
   onSelect: () => void;
@@ -27,7 +30,7 @@ export function FolderThumb({
 }) {
   const cls = ["thumb-wrap", selected ? "is-selected sel" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
   return (
-    <div className={cls}>
+    <div className={cls} style={{ "--i": index } as CSSProperties}>
       <button
         type="button"
         className="thumb"

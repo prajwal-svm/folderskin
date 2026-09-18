@@ -66,3 +66,58 @@ export const IconSpinner = ({ size = 14 }: P) => (
     <path d="M12 4a8 8 0 1 1-8 8" />
   </svg>
 );
+
+export const IconGrid = ({ size = 20 }: P) => (
+  <svg {...base(size)}>
+    <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
+    <rect x="13.5" y="3.5" width="7" height="7" rx="2" />
+    <rect x="3.5" y="13.5" width="7" height="7" rx="2" />
+    <rect x="13.5" y="13.5" width="7" height="7" rx="2" />
+  </svg>
+);
+
+export const IconGlobe = ({ size = 20 }: P) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" />
+  </svg>
+);
+
+export const IconSparkles = ({ size = 20 }: P) => (
+  <svg {...base(size)}>
+    <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z" />
+    <path d="M19 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
+  </svg>
+);
+
+export const IconSun = ({ size = 19 }: P) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" />
+  </svg>
+);
+
+export const IconMoon = ({ size = 19 }: P) => (
+  <svg {...base(size)}>
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+  </svg>
+);
+
+export const IconSearch = ({ size = 16 }: P) => (
+  <svg {...base(size)}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M16 16l4.5 4.5" />
+  </svg>
+);
+
+export const IconDownload = ({ size = 18 }: P) => (
+  <svg {...base(size)}>
+    <path d="M12 4v11M7 10.5l5 5 5-5M4.5 19.5h15" />
+  </svg>
+);
+
+export const IconExternal = ({ size = 15 }: P) => (
+  <svg {...base(size)}>
+    <path d="M14 4.5h5.5V10M19.5 4.5L11 13M9 6H6.5a2 2 0 0 0-2 2v9.5a2 2 0 0 0 2 2H16a2 2 0 0 0 2-2V15" />
+  </svg>
+);
