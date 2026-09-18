@@ -1,0 +1,5 @@
+//! Library half of folderskin-tools: the procedural skins and the CLI definition.
+//! The binary (`main.rs`) wires them to the compositor and the file system.
+
+pub mod cli;
+pub mod gen;

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
-import { browseLabel, tabBarInset } from "./lib/platform";
+import { isTauri } from "./lib/devMock";
+import { browseLabel } from "./lib/platform";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { useDragDrop } from "./hooks/useDragDrop";
@@ -10,6 +11,7 @@ import { Gallery } from "./components/Gallery";
 import { DropZone } from "./components/DropZone";
 import { Wordmark } from "./components/Wordmark";
 import { AboutMenu } from "./components/AboutMenu";
+import { IconImage } from "./components/icons";
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic"];
 const ALL = "all";
@@ -20,6 +22,7 @@ export default function App() {
   const [builtin, setBuiltin] = useState<Skin[]>([]);
   const [customSkins, setCustomSkins] = useState<Skin[]>([]);
   const [defaultThumb, setDefaultThumb] = useState<string | null>(null);
+  const [folderIcon, setFolderIcon] = useState<string | null>(null);
   const [platform, setPlatform] = useState<PlatformInfo>({ os: "macos", browse_label: "your Mac", note: "" });
   const [tab, setTab] = useState<string>(ALL);
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites());
@@ -52,11 +55,20 @@ export default function App() {
     if (!tabs.includes(tab)) setTab(ALL);
   }, [tabs, tab]);
 
+  const refreshFolderIcon = useCallback((path: string) => {
+    api
+      .folderIcon(path)
+      .then((url) => setFolderIcon(url))
+      .catch(() => setFolderIcon(null));
+  }, []);
+
   const takePath = useCallback(async (path: string) => {
     try {
       const info = await api.inspectPath(path);
       if (info.kind === "folder") {
+        setFolderIcon(null);
         dispatch({ type: "folderDropped", folder: { path: info.path, name: info.name } });
+        refreshFolderIcon(info.path);
       } else if (info.kind === "image") {
         const skin = await api.importImage(info.path);
         setCustomSkins((prev) => [skin, ...prev.filter((s) => s.id !== skin.id)]);
@@ -68,7 +80,7 @@ export default function App() {
     } catch (e) {
       dispatch({ type: "invalidDrop", message: errorMessage(e) });
     }
-  }, []);
+  }, [refreshFolderIcon]);
 
   useDragDrop(
     useCallback((paths: string[]) => void (paths[0] && takePath(paths[0])), [takePath]),
@@ -76,6 +88,7 @@ export default function App() {
   );
 
   const browseFolder = useCallback(async () => {
+    if (!isTauri()) return takePath("/Users/you/Desktop/readme");
     const picked = await open({ directory: true, multiple: false, title: "Choose a folder" }).catch(() => null);
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
@@ -95,10 +108,11 @@ export default function App() {
     try {
       await api.applySkin(state.folder.path, state.skinId);
       dispatch({ type: "applySucceeded" });
+      refreshFolderIcon(state.folder.path);
     } catch (e) {
       dispatch({ type: "applyFailed", message: `couldn't apply the skin: ${errorMessage(e)}` });
     }
-  }, [state.folder, state.skinId]);
+  }, [state.folder, state.skinId, refreshFolderIcon]);
 
   const revert = useCallback(async () => {
     if (!state.folder) return;
@@ -106,10 +120,11 @@ export default function App() {
     try {
       await api.revertSkin(state.folder.path);
       dispatch({ type: "revertSucceeded" });
+      refreshFolderIcon(state.folder.path);
     } catch (e) {
       dispatch({ type: "revertFailed", message: `couldn't put the default icon back: ${errorMessage(e)}` });
     }
-  }, [state.folder]);
+  }, [state.folder, refreshFolderIcon]);
 
   const onToggleFavorite = useCallback((id: string) => {
     setFavorites((prev) => {
@@ -120,32 +135,36 @@ export default function App() {
   }, []);
 
   const selected = skins.find((s) => s.id === state.skinId) ?? null;
-  const preview = state.phase === "folder" ? defaultThumb : (selected?.thumbnail ?? defaultThumb);
+  // folder / applied: what the folder really looks like right now; ready / applying: what it will look like.
+  const preview =
+    state.phase === "folder" || state.phase === "applied" || state.phase === "reverting"
+      ? (folderIcon ?? defaultThumb)
+      : (selected?.thumbnail ?? folderIcon ?? defaultThumb);
   const emptyMessage = loadError ?? (tab === FAVES && visible.length === 0 ? "no favourites yet — tap the star on a skin" : null);
 
   return (
     <main className={`app os-${platform.os}`}>
-      <section className="left">
-        <header className="topbar" data-tauri-drag-region>
-          <div className="topbar-left" style={{ marginLeft: tabBarInset(platform.os) }}>
-            <TabBar tabs={tabs} active={tab} onChange={setTab} />
-            <button
-              type="button"
-              className="pill-btn icon-btn"
-              title="use your own picture"
-              aria-label="use your own picture"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={pickPhoto}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" strokeWidth="2.2" />
-                <circle cx="8.5" cy="10" r="1.7" fill="currentColor" />
-                <path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-        </header>
-        <div className="gallery-scroll">
+      <header className="header" data-tauri-drag-region>
+        <div className="header-left">
+          <Wordmark />
+        </div>
+        <TabBar tabs={tabs} active={tab} onChange={setTab} />
+        <div className="header-right">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            title="use your own picture as a skin"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={pickPhoto}
+          >
+            <IconImage />
+            Your photo
+          </button>
+          <AboutMenu note={platform.note} />
+        </div>
+      </header>
+      <div className="body">
+        <section className="gallery-scroll">
           <Gallery
             skins={visible}
             selectedId={state.skinId}
@@ -154,22 +173,24 @@ export default function App() {
             onSelect={(id) => dispatch({ type: "skinSelected", skinId: id })}
             onToggleFavorite={onToggleFavorite}
           />
-        </div>
-      </section>
-      <section className="right">
-        <div className="right-top" data-tauri-drag-region>
-          <AboutMenu note={platform.note} />
-        </div>
-        <Wordmark />
-        <DropZone
-          state={state}
-          browseLabel={browseLabel(platform.os)}
-          thumbnail={preview}
-          onBrowse={browseFolder}
-          onApply={apply}
-          onRevert={revert}
-        />
-      </section>
+        </section>
+        <section className="panel">
+          <div>
+            <h1 className="headline">
+              Give any folder <span className="mark">a skin.</span>
+            </h1>
+            <p className="subline">Drop a folder, pick a skin, press apply.</p>
+          </div>
+          <DropZone
+            state={state}
+            browseLabel={browseLabel(platform.os)}
+            thumbnail={preview}
+            onBrowse={browseFolder}
+            onApply={apply}
+            onRevert={revert}
+          />
+        </section>
+      </div>
     </main>
   );
 }

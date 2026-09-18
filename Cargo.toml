@@ -22,3 +22,10 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
+
+# Rendering at 2048 px in an unoptimised build takes seconds per icon; keep the pixel crates fast in dev.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.folderskin-core]
+opt-level = 3

@@ -1,30 +1,36 @@
 :root {
-  --bg-top: #e9dcc2;
-  --bg-bottom: #ddcbab;
-  --ink: #2e2518;
-  --ink-soft: #3e3425;
-  --muted: #786d5c;
-  --hint: #b4a793;
-  --brand-red: #d43f2a;
-  --brand-orange: #ca6c2f;
-  --pill: #f4eddd;
-  --zone: #ece3cf;
-  --zone-card: #f0eadc;
-  --dash: #b3a58a;
-  --dot: #c6b99e;
-  --card: #efe3cc;
-  --badge: #352c1d;
-  --glow-a: #f2c94c;
-  --glow-b: #e5412e;
-  --glow-c: #f3a64a;
-  --font: "Bricolage Grotesque", system-ui, -apple-system, sans-serif;
-  --radius-zone: 24px;
+  /* canvas */
+  --bg: #f6f6f6;
+  --bg-grid: rgba(17, 17, 17, 0.045);
+  --surface: #ffffff;
+  --surface-2: #efefef;
+  --line: #e3e3e3;
+  --dash: #c9c9c9;
+
+  /* ink */
+  --ink: #111111;
+  --ink-2: #2a2a2a;
+  --muted: #6e6e6e;
+  --hint: #9c9c9c;
+  --on-ink: #ffffff;
+
+  /* accent */
+  --green: #2fe23a;
+  --green-deep: #17c224;
+  --green-soft: #ddf8de;
+  --green-ring: rgba(47, 226, 58, 0.22);
+  --danger: #d94a3d;
+
+  --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
+  --radius-card: 16px;
+  --radius-zone: 20px;
   --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(17, 17, 17, 0.05), 0 8px 24px rgba(17, 17, 17, 0.06);
 }
 
 @font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("/fonts/BricolageGrotesque-variable.ttf") format("truetype");
+  font-family: "Manrope";
+  src: url("/fonts/Manrope-variable.ttf") format("truetype");
   font-weight: 200 800;
   font-display: swap;
 }

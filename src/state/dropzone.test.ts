@@ -28,7 +28,7 @@ describe("drop zone state machine", () => {
     const b = run([{ type: "skinSelected", skinId: "aurora" }, { type: "folderDropped", folder: readme }]);
     expect(a.phase).toBe("ready");
     expect(b.phase).toBe("ready");
-    expect(buttonLabel(a)).toBe("apply skin");
+    expect(buttonLabel(a)).toBe("Apply skin");
     expect(hasGlow(a)).toBe(true);
   });
 
@@ -42,11 +42,11 @@ describe("drop zone state machine", () => {
     const ready = run([{ type: "folderDropped", folder: readme }, { type: "skinSelected", skinId: "aurora" }]);
     const applying = reduce(ready, { type: "applyStarted" });
     expect(applying.phase).toBe("applying");
-    expect(buttonLabel(applying)).toBe("applying…");
+    expect(buttonLabel(applying)).toBe("Applying…");
     const applied = reduce(applying, { type: "applySucceeded" });
     expect(applied.phase).toBe("applied");
     expect(applied.appliedSkinId).toBe("aurora");
-    expect(buttonLabel(applied)).toBe("applied ✓");
+    expect(buttonLabel(applied)).toBe("Applied");
     expect(hasGlow(applied)).toBe(true);
   });
 
@@ -89,7 +89,7 @@ describe("drop zone state machine", () => {
     ]);
     const reverting = reduce(applied, { type: "revertStarted" });
     expect(reverting.phase).toBe("reverting");
-    expect(buttonLabel(reverting)).toBe("reverting…");
+    expect(buttonLabel(reverting)).toBe("Reverting…");
     const done = reduce(reverting, { type: "revertSucceeded" });
     expect(done.phase).toBe("ready");
     expect(done.appliedSkinId).toBeNull();

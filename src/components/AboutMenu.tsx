@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { IconSliders } from "./icons";
 
 const REPO_URL = "https://github.com/YOUR-USER/folderskin";
 
@@ -31,29 +32,24 @@ export function AboutMenu({ note }: { note: string }) {
     <div className="about" ref={ref}>
       <button
         type="button"
-        className="pill-btn icon-btn"
+        className="icon-btn"
         aria-label="about FolderSkin"
         aria-expanded={open}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((v) => !v)}
       >
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm8.4-3.5l1.6-1.3-2-3.4-2 .7a7.6 7.6 0 0 0-1.6-.9L16 5h-4l-.4 2.1a7.6 7.6 0 0 0-1.6.9l-2-.7-2 3.4L7.6 12 6 13.3l2 3.4 2-.7c.5.4 1 .7 1.6.9L12 19h4l.4-2.1c.6-.2 1.1-.5 1.6-.9l2 .7 2-3.4-1.6-1.3z"
-            fill="currentColor"
-          />
-        </svg>
+        <IconSliders />
       </button>
       {open && (
         <div className="about-pop" role="dialog" aria-label="about FolderSkin">
           <p className="about-title">
-            <span className="brand-a">folder</span>skin <span className="about-version">{__APP_VERSION__}</span>
+            FolderSkin <span className="about-version">v{__APP_VERSION__}</span>
           </p>
-          <p className="about-line">free and open source · MIT</p>
+          <p className="about-line">Free and open source · MIT</p>
           {note && <p className="about-note">{note}</p>}
           <div className="about-links">
-            {link(REPO_URL, "source code")}
-            {link(`${REPO_URL}/issues`, "report a problem")}
+            {link(REPO_URL, "Source code")}
+            {link(`${REPO_URL}/issues`, "Report a problem")}
           </div>
         </div>
       )}

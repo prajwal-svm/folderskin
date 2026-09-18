@@ -1,4 +1,16 @@
 import type { Skin } from "../lib/tauri";
+import { IconStar } from "./icons";
+
+export function Handles() {
+  return (
+    <>
+      <span className="handle tl" />
+      <span className="handle tr" />
+      <span className="handle bl" />
+      <span className="handle br" />
+    </>
+  );
+}
 
 export function FolderThumb({
   skin,
@@ -13,7 +25,7 @@ export function FolderThumb({
   onSelect: () => void;
   onToggleFavorite: () => void;
 }) {
-  const cls = ["thumb-wrap", selected ? "is-selected" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
+  const cls = ["thumb-wrap", selected ? "is-selected sel" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
   return (
     <div className={cls}>
       <button
@@ -27,6 +39,7 @@ export function FolderThumb({
       >
         <img src={skin.thumbnail} alt="" draggable={false} />
       </button>
+      <span className="thumb-name">{skin.name}</span>
       <button
         type="button"
         className="star"
@@ -38,16 +51,9 @@ export function FolderThumb({
           onToggleFavorite();
         }}
       >
-        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
-          <path
-            d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"
-            fill={favorite ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <IconStar filled={favorite} />
       </button>
+      {selected && <Handles />}
     </div>
   );
 }

@@ -9,8 +9,3 @@ export function browseLabel(os: string): string {
       return "your computer";
   }
 }
-
-/** Left inset for the tab bar so it clears the macOS traffic lights. */
-export function tabBarInset(os: string): number {
-  return os === "macos" ? 136 : 24;
-}

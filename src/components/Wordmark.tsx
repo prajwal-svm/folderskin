@@ -1,12 +1,13 @@
+/** Header lockup: the app icon beside the stacked product name. */
 export function Wordmark() {
   return (
-    <header className="wordmark-block">
-      <h1 className="wordmark">
-        <span className="brand-a">folder</span>skin
-      </h1>
-      <p className="tagline">
-        folders, <span className="tagline-accent">but prettier.</span>
+    <div className="brand-lockup" aria-label="FolderSkin">
+      <img className="brand-icon" src="/app-icon.png" alt="" draggable={false} />
+      <p className="brand-name">
+        Folder
+        <br />
+        Skin
       </p>
-    </header>
+    </div>
   );
 }

@@ -1,8 +1,4 @@
-/** The two-tone product name used inline in copy: "folder" in red, "skin" in ink. */
+/** The product name inline in copy. */
 export function Brand() {
-  return (
-    <span className="brand">
-      <span className="brand-a">folder</span>skin
-    </span>
-  );
+  return <span className="brand">FolderSkin</span>;
 }

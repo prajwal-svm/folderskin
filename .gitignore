@@ -7,3 +7,4 @@ assets/previews/
 *.log
 .superpowers/
 !.claude/
+public/previews
