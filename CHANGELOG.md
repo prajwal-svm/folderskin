@@ -28,6 +28,15 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   files FolderSkin wrote.
 - Animated icons, adapted from lucide-animated, that play when their button is hovered or
   focused.
+- Everything you add is saved: pictures you import and every AI result come back after a
+  restart under **Yours**, and removing one offers Undo.
+- Finished folder pictures on a flat magenta background, such as ones painted in Grok's or
+  ChatGPT's chat from [docs/PROMPTS.md](docs/PROMPTS.md), are cut out and used as they are.
+- A layout built around the folder: the library and the folder each sit on their own island,
+  the folder tries skins on before anything is written, and every step (drag, drop, preview,
+  apply, revert) has its own feedback.
+- The AI assistant is a composer that moves out of the way once used; results develop in
+  place and can be tried on straight away, and provider settings live in a dialog.
 - A translucent sidebar on macOS: the window sits on the system sidebar material, which
   follows the light/dark switch.
 - Gallery tabs (`all`, the three collections, and `faves`) with favourites stored

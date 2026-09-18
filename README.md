@@ -1,6 +1,6 @@
-# folderskin
+# FolderSkin
 
-folders, but prettier.
+Give any folder a skin.
 
 ![FolderSkin window](docs/images/app.png)
 
@@ -10,11 +10,15 @@ folders, but prettier.
 
 </details>
 
-FolderSkin gives a folder a custom icon: drop a folder on the window, pick one of ten
-built-in skins or your own photo, and press apply. The icon changes immediately in Finder,
-Explorer or your file manager, and a revert button puts the operating system's default icon
-back. No accounts, no paywall and no telemetry. The only network access is the optional AI
-assistant, which uses your own API key. The macOS app is about 10 MB installed.
+FolderSkin turns a picture into a folder icon. Drop a folder on the window, try skins on it
+and press apply: one of the ten built-in skins, a photo of your own, or a poster-style folder
+an AI paints for you, with your own key or straight from Grok's or ChatGPT's chat. The icon
+changes right away in Finder, Explorer or your file manager, and Revert puts the system icon
+back. Everything you add is kept under **Yours**.
+
+It's free and MIT-licensed, with no accounts, no paywall and no telemetry. The only network
+access is the AI assistant, and only when you ask it for something. The macOS app is about
+10 MB installed.
 
 ## Download
 
@@ -34,15 +38,17 @@ source — it is three commands.
 
 ## How to use it
 
-1. Drag a folder onto the drop zone, or click it to browse.
-2. Pick a skin from the gallery. The toolbar narrows it down — **All**, **Glow**, **Grain**,
-   **Pop** — and there is a search box; the sidebar has **Favourites** for anything you star.
-3. Press **Apply skin**. The button becomes **Applied** with a check.
-4. Press **Revert** beside it to put the operating system's default icon back.
+1. Drag a folder onto the folder panel on the right, or click the empty folder to pick one.
+2. Click a skin in the library to try it on; the folder panel shows the result straight away.
+   The tabs narrow it down (**All**, **Glow**, **Grain**, **Pop**, **Yours**, **Faves**) and
+   ⌘F / Ctrl+F searches.
+3. Press **Apply skin**. It turns green and says **Applied**; **Show in Finder** opens the folder.
+4. Press **Revert** to put the operating system's default icon back.
 
-To use your own picture, drop it on the window or press **Your photo** in the toolbar. The
-picture is cropped to the folder's shape and applied like any other skin; it stays on your
-machine and is not copied into the app.
+To use your own picture, drop it on the window or press **Add your photo**. It is saved under
+**Yours** and stays there until you remove it (removing offers Undo for a few seconds). A
+finished folder on a flat magenta background, like the ones the chat prompt below produces, is
+cut out and used as it is; any other picture is wrapped onto FolderSkin's folder.
 
 ## The ten built-in skins
 
@@ -80,9 +86,13 @@ thing to ask.
 
 FolderSkin can also make a skin from a description, using **your own API key** from a provider
 you already use. The key is stored by your operating system's keychain, FolderSkin has no
-server of its own, and nothing is sent anywhere until you press Generate. Pick a provider and
-model in the Generate view, describe the look, and choose whether the model should draw flat
-artwork for FolderSkin's folder template or the whole folder itself.
+server of its own, and nothing is sent anywhere until you press Enter. Open **Generate with
+AI**, describe a scene, pick a style, and choose **Whole folder** (the model paints the whole
+folder from FolderSkin's template, like a poster) or **Just the art** (flat art wrapped onto
+FolderSkin's folder). Every result is saved to **Yours** and can be tried on at once.
+
+No key? [docs/PROMPTS.md](docs/PROMPTS.md) has a template and a prompt for Grok's or
+ChatGPT's own chat; the app shows the same prompt, filled in, under **No API key?**.
 
 [docs/AI.md](docs/AI.md) covers the providers, where the key is stored, how transparency is
 handled for models that cannot return an alpha channel, and what each error message means.
