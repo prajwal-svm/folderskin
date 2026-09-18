@@ -1,0 +1,54 @@
+name: community
+
+# Rebuilds community/index.json and the preview strips whenever a pack changes on main, and
+# commits them if they differ. `packs index` is deterministic, so unchanged packs commit nothing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "community/packs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One run at a time. A merge that lands mid-run queues the next run, which indexes it.
+concurrency:
+  group: community-index
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # The branch rather than the commit that triggered the run, so a queued run indexes the
+      # newest packs.
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build the index and the previews
+        run: cargo run -p folderskin-tools --release -- packs index
+
+      # A push made with the workflow's own token starts no other workflow, so this commit
+      # cannot trigger another run. The rebase covers commits that landed while it was building.
+      - name: Commit them if they changed
+        run: |
+          if [ -z "$(git status --porcelain -- community/index.json community/previews)" ]; then
+            echo "The community index is up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- community/index.json community/previews
+          git commit -m "Update the community pack index"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

@@ -77,6 +77,12 @@ jobs:
       - name: Test Rust
         run: cargo test --workspace
 
+      # Every pack under community/ passes the checks the app runs before it saves one. The
+      # packs are the same on every system, so one runner is enough.
+      - name: Check the community packs
+        if: matrix.os == 'ubuntu-22.04'
+        run: cargo run -p folderskin-tools --quiet -- packs check
+
       - name: Build the app bundles
         run: pnpm tauri build --ci
 

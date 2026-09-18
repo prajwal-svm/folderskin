@@ -4,8 +4,8 @@ use clap::Parser;
 use folderskin_core::apply::{apply_icon, revert_icon};
 use folderskin_core::compositor::{render_icon_set, render_preview_png, Artwork, ICON_SIZES};
 use folderskin_core::manifest::{Manifest, SkinEntry, MAX_SKIN_BYTES, SKIN_HEIGHT, SKIN_WIDTH};
-use folderskin_tools::cli::{Cli, Command, SkinCommand};
-use folderskin_tools::gen;
+use folderskin_tools::cli::{Cli, Command, PacksCommand, SkinCommand};
+use folderskin_tools::{gen, packs};
 use image::{ImageEncoder, RgbaImage};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -134,6 +134,10 @@ fn run(cli: Cli) -> Result<(), String> {
             println!("reverted {}", folder.display());
             Ok(())
         }
+        Command::Packs { command } => match command {
+            PacksCommand::Check { dir } => packs_check(&dir),
+            PacksCommand::Index { dir } => packs_index(&dir),
+        },
     }
 }
 
@@ -338,6 +342,41 @@ fn skin_check(dir: &Path) -> Result<(), String> {
         }
         Err(format!("{} problem(s)", problems.len()))
     }
+}
+
+/// Checks every community pack, printing each problem on its own line.
+fn packs_check(dir: &Path) -> Result<(), String> {
+    let report = packs::check(dir)?;
+    for problem in &report.problems {
+        println!("{problem}");
+    }
+    if !report.problems.is_empty() {
+        return Err(report.summary());
+    }
+    println!("{}", report.summary());
+    Ok(())
+}
+
+/// Checks every community pack and, when all pass, brings the index and the previews up to date.
+fn packs_index(dir: &Path) -> Result<(), String> {
+    let report = packs::check(dir)?;
+    for problem in &report.problems {
+        println!("{problem}");
+    }
+    let changes = packs::write_index(dir, &report)?;
+    for path in &changes.removed {
+        println!("removed {}", path.display());
+    }
+    for path in &changes.written {
+        println!("wrote {}", path.display());
+    }
+    let unchanged = if changes.is_empty() {
+        ", nothing changed"
+    } else {
+        ""
+    };
+    println!("{} indexed{unchanged}", report.totals());
+    Ok(())
 }
 
 /// A template showing which parts of a 1024×958 skin land in the tab, the back strip and the front panel.

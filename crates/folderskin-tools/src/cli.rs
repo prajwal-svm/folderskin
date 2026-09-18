@@ -60,6 +60,27 @@ pub enum Command {
     },
     /// Put the default icon back
     Revert { folder: PathBuf },
+    /// Check the community skin packs, and write their index and previews
+    Packs {
+        #[command(subcommand)]
+        command: PacksCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PacksCommand {
+    /// Check every pack in <dir>/packs the way the app will; exit 1 on problems
+    Check {
+        /// The community folder, holding packs/
+        #[arg(long, default_value = "community")]
+        dir: PathBuf,
+    },
+    /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic)
+    Index {
+        /// The community folder, holding packs/
+        #[arg(long, default_value = "community")]
+        dir: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -171,6 +192,22 @@ mod tests {
                 assert_eq!(id, "x");
                 assert_eq!(focus, Some((0.3, 0.6)));
             }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_packs_commands_with_community_as_the_default_folder() {
+        match Cli::parse_from(["folderskin-tools", "packs", "check"]).command {
+            Command::Packs {
+                command: PacksCommand::Check { dir },
+            } => assert_eq!(dir, PathBuf::from("community")),
+            other => panic!("{other:?}"),
+        }
+        match Cli::parse_from(["folderskin-tools", "packs", "index", "--dir", "/tmp/c"]).command {
+            Command::Packs {
+                command: PacksCommand::Index { dir },
+            } => assert_eq!(dir, PathBuf::from("/tmp/c")),
             other => panic!("{other:?}"),
         }
     }

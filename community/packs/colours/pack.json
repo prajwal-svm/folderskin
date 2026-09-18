@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "Colours",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": ["colour"],
+  "skins": [
+    { "file": "red.png", "name": "Red" },
+    { "file": "orange.png", "name": "Orange" },
+    { "file": "yellow.png", "name": "Yellow" },
+    { "file": "green.png", "name": "Green" },
+    { "file": "teal.png", "name": "Teal" },
+    { "file": "blue.png", "name": "Blue" },
+    { "file": "purple.png", "name": "Purple" },
+    { "file": "graphite.png", "name": "Graphite" }
+  ]
+}
