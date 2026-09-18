@@ -18,12 +18,13 @@
   --on-ink: #ffffff;
 
   /* accent */
-  --green: #2fe23a;
-  --green-deep: #17c224;
-  --green-soft: #ddf8de;
-  --green-ring: rgba(47, 226, 58, 0.22);
-  --blob-a: rgba(47, 226, 58, 0.28);
-  --blob-b: rgba(90, 200, 255, 0.22);
+  --sky: #38b6ff;
+  --sky-deep: #1d97e0;
+  --sky-soft: #dcf0ff;
+  --sky-ring: rgba(56, 182, 255, 0.24);
+  --on-sky: #062033;
+  --blob-a: rgba(56, 182, 255, 0.30);
+  --blob-b: rgba(120, 220, 255, 0.22);
   --danger: #d94a3d;
 
   --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
@@ -53,12 +54,13 @@
   --hint: #6b6b6b;
   --on-ink: #0e0f0f;
 
-  --green: #34ea40;
-  --green-deep: #22c92e;
-  --green-soft: #143a1c;
-  --green-ring: rgba(52, 234, 64, 0.26);
-  --blob-a: rgba(47, 226, 58, 0.16);
-  --blob-b: rgba(90, 200, 255, 0.12);
+  --sky: #4cc2ff;
+  --sky-deep: #2aa3e8;
+  --sky-soft: #10293b;
+  --sky-ring: rgba(76, 194, 255, 0.26);
+  --on-sky: #05192b;
+  --blob-a: rgba(56, 182, 255, 0.18);
+  --blob-b: rgba(120, 220, 255, 0.12);
   --danger: #ff6b5e;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);

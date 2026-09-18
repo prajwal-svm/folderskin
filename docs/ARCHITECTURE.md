@@ -4,8 +4,8 @@ FolderSkin is a Tauri v2 app: a Rust core that renders and writes folder icons, 
 webview that is only a user interface. The design decision everything else follows from is
 that **there is exactly one rendering path**.
 
-The full design document, with the measured geometry constants, is
-[superpowers/specs/2026-09-18-folderskin-design.md](superpowers/specs/2026-09-18-folderskin-design.md).
+The geometry constants that define the folder template live in
+`crates/folderskin-core/src/geometry.rs`, documented in place and covered by silhouette tests.
 
 ## Layout
 
@@ -63,7 +63,7 @@ tests run without a webview.
 
 ## Frontend to backend
 
-Six commands, all in `src-tauri/src/commands.rs`, all async with the heavy work on a blocking
+Seven commands, all in `src-tauri/src/commands.rs`, all async with the heavy work on a blocking
 thread. `src/lib/tauri.ts` is the only place the frontend names them.
 
 | command | input | output |
@@ -73,6 +73,7 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `import_image` | `path` | a skin with id `custom:<hash>` and a thumbnail |
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
+| `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
 | `platform_info` | – | `{os, browse_label, note}` |
 
 Errors cross the boundary as plain strings already written for a person ("couldn't read that
@@ -90,8 +91,9 @@ drop in a webview cannot expose a filesystem path. Browsing uses the dialog plug
   kept for the process lifetime, so applying a skin never re-decodes a JPEG.
 - `custom: Mutex<HashMap<String, Arc<Artwork>>>` — pictures the user dropped this session,
   keyed `custom:<sha256[..12]>`, downscaled so the longer side is at most 2048 px.
-- `thumbs: Mutex<HashMap<String, String>>` — rendered thumbnails as data URLs, also written to
-  the app cache directory so later launches skip the render.
+- `thumbs: Mutex<HashMap<String, String>>` — rendered thumbnails as data URLs. Built-in skins
+  and the default folder are also written to the app cache directory so later launches skip the
+  render; imported pictures stay in memory, and the map holds the twelve most recent.
 
 Nothing is persisted apart from that cache and the favourites list, which lives in the
 webview's `localStorage`. There is no database, no config file and no network access.
@@ -115,8 +117,10 @@ in [PLATFORMS.md](PLATFORMS.md).
 
 ## Frontend state
 
-The drop zone is a reducer in `src/state/dropzone.ts` with six states — `idle`, `folder`,
-`ready`, `applying`, `applied`, `error` — and it is unit-tested in isolation from React.
+The drop zone is a reducer in `src/state/dropzone.ts` with six phases — `idle`, `folder`,
+`ready`, `applying`, `applied`, `reverting` — and it is unit-tested in isolation from React.
+An error is a field on the state, not a phase, so a failed apply returns to `ready` with the
+message shown beneath the button.
 Components read the state and render; they do not decide transitions. Dropping a picture
 selects a custom skin without changing which folder is chosen, which is why picking a folder
 and picking a skin are separate axes in the machine.
@@ -134,7 +138,7 @@ anywhere; focus and selection are shown with a background tint or a border colou
 | `ico` | round-trip of the multi-size container |
 | `apply` | `desktop.ini` and `.directory` generation and revert parsing as pure functions; path validation |
 | `manifest` | parsing with defaults, and validation of ids, sizes, dimensions and byte budgets |
-| frontend | the drop-zone reducer, tab filtering, favourites (vitest) |
+| frontend | the drop-zone reducer, favourites, platform copy (vitest) |
 
 The Windows writer is compile-checked from macOS with `cargo check --target
 x86_64-pc-windows-msvc -p folderskin-core`. CI runs the whole set on ubuntu-22.04,
@@ -143,7 +147,7 @@ windows-latest and macos-latest.
 ## Size budget
 
 Under 15 MB installed: a stripped release binary of roughly 6–9 MB, about 2 MB of skins, a
-300 KB variable font, and a frontend bundle under 300 KB. `image` is built with
+165 KB variable font (Manrope), and a frontend bundle under 300 KB. `image` is built with
 `default-features = false` and only `png`, `jpeg` and `webp`, and the release profile uses
 `opt-level = "s"`, LTO and one codegen unit. Any dependency that would move this budget needs
 a reason in the pull request.

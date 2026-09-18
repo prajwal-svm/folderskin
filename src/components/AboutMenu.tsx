@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-const REPO_URL = "https://github.com/YOUR-USER/folderskin";
+const REPO_URL = "https://github.com/prajwal-svm/folderskin";
 
 /** Popover anchored to the rail's About button; the rail owns the open state. */
 export function AboutMenu({ note, open, onClose }: { note: string; open: boolean; onClose: () => void }) {

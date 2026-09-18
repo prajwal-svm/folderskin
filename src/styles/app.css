@@ -268,7 +268,7 @@ img {
   height: 18px;
   padding: 0 7px;
   border-radius: var(--radius-pill);
-  background: var(--green-soft);
+  background: var(--sky-soft);
   color: var(--ink);
   font-size: 10.5px;
   font-weight: 800;
@@ -277,8 +277,8 @@ img {
 }
 
 .nav-btn.is-active .nav-soon {
-  background: var(--green);
-  color: #0e0f0f;
+  background: var(--sky);
+  color: var(--on-sky);
 }
 
 .nav-version {
@@ -315,12 +315,12 @@ img {
 }
 
 .switch.is-on {
-  background: var(--green);
+  background: var(--sky);
 }
 
 .switch.is-on .knob {
   transform: translateX(16px);
-  background: #0e0f0f;
+  background: var(--on-sky);
 }
 
 /* ---------- brand ---------- */
@@ -354,7 +354,7 @@ img {
 }
 
 .mark {
-  background: linear-gradient(transparent 40%, var(--green-soft) 40%);
+  background: linear-gradient(transparent 40%, var(--sky-soft) 40%);
   padding: 0 2px;
   border-radius: 3px;
 }
@@ -469,8 +469,8 @@ img {
 }
 
 .search:focus-within {
-  border-color: var(--green);
-  box-shadow: 0 0 0 4px var(--green-ring);
+  border-color: var(--sky);
+  box-shadow: 0 0 0 4px var(--sky-ring);
   color: var(--ink);
 }
 
@@ -517,15 +517,15 @@ img {
 }
 
 .btn-primary {
-  background: var(--green);
-  color: #0e0f0f;
-  box-shadow: 0 0 0 0 var(--green-ring), 0 6px 18px rgba(47, 226, 58, 0.25);
+  background: var(--sky);
+  color: var(--on-sky);
+  box-shadow: 0 0 0 0 var(--sky-ring), 0 6px 18px rgba(56, 182, 255, 0.28);
 }
 
 .btn-primary:hover:not(:disabled),
 .btn-primary:focus-visible:not(:disabled) {
-  background: var(--green-deep);
-  box-shadow: 0 0 0 5px var(--green-ring), 0 8px 22px rgba(47, 226, 58, 0.3);
+  background: var(--sky-deep);
+  box-shadow: 0 0 0 5px var(--sky-ring), 0 8px 22px rgba(56, 182, 255, 0.34);
 }
 
 .btn-primary.is-done {
@@ -553,8 +553,8 @@ img {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: rgba(14, 15, 15, 0.16);
-  color: #0e0f0f;
+  background: rgba(6, 32, 51, 0.16);
+  color: var(--on-sky);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -569,7 +569,7 @@ img {
   height: 26px;
   padding: 0 10px;
   border-radius: var(--radius-pill);
-  background: var(--green-soft);
+  background: var(--sky-soft);
   color: var(--ink);
   font-weight: 700;
   font-size: 12.5px;
@@ -586,7 +586,7 @@ img {
   content: "";
   position: absolute;
   inset: -3px;
-  border: 1.5px solid var(--green);
+  border: 1.5px solid var(--sky);
   border-radius: inherit;
   pointer-events: none;
   animation: frame-in 220ms ease-out;
@@ -596,9 +596,9 @@ img {
   position: absolute;
   width: 7px;
   height: 7px;
-  background: var(--green);
+  background: var(--sky);
   border: 1.5px solid var(--surface);
-  box-shadow: 0 0 0 1px var(--green);
+  box-shadow: 0 0 0 1px var(--sky);
   pointer-events: none;
   animation: pop 260ms cubic-bezier(0.2, 1.4, 0.4, 1);
 }
@@ -654,6 +654,11 @@ img {
   width: 100%;
   height: 100%;
   border-radius: inherit;
+  transition: background-color 150ms ease;
+}
+
+.thumb:focus-visible {
+  background: var(--sky-soft);
 }
 
 .thumb img {
@@ -696,15 +701,15 @@ img {
 
 .star:hover,
 .star:focus-visible {
-  background: var(--green-soft);
+  background: var(--sky-soft);
   color: var(--ink);
-  border-color: var(--green);
+  border-color: var(--sky);
 }
 
 .thumb-wrap.is-favorite .star {
-  color: var(--green-deep);
-  border-color: var(--green);
-  background: var(--green-soft);
+  color: var(--sky-deep);
+  border-color: var(--sky);
+  background: var(--sky-soft);
 }
 
 /* ---------- drop zone ---------- */
@@ -763,17 +768,17 @@ img {
 }
 
 .zone.is-hover .ants rect {
-  stroke: var(--green);
+  stroke: var(--sky);
   animation: ants 600ms linear infinite;
 }
 
 .zone.is-hover {
-  background-color: var(--green-soft);
+  background-color: var(--sky-soft);
   transform: scale(1.01);
 }
 
 .zone.is-hover::after {
-  background: radial-gradient(closest-side, var(--green-soft) 40%, transparent 82%);
+  background: radial-gradient(closest-side, var(--sky-soft) 40%, transparent 82%);
 }
 
 .zone.has-folder {
@@ -791,8 +796,8 @@ img {
 }
 
 .zone.has-folder.is-hover {
-  border-color: var(--green);
-  background-color: color-mix(in srgb, var(--green-soft) 45%, var(--surface));
+  border-color: var(--sky);
+  background-color: color-mix(in srgb, var(--sky-soft) 45%, var(--surface));
 }
 
 /* rotating conic ring while applying / reverting */
@@ -803,7 +808,7 @@ img {
   inset: -4px;
   border-radius: calc(var(--radius-zone) + 4px);
   padding: 2px;
-  background: conic-gradient(from var(--spin), transparent 0 55%, var(--green) 85%, transparent 100%);
+  background: conic-gradient(from var(--spin), transparent 0 55%, var(--sky) 85%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -814,7 +819,7 @@ img {
 }
 
 .zone.is-busy.sel::before {
-  border-color: color-mix(in srgb, var(--green) 45%, transparent);
+  border-color: color-mix(in srgb, var(--sky) 45%, transparent);
 }
 
 .zone.is-done {
@@ -825,6 +830,13 @@ img {
   width: 100%;
   min-height: 312px;
   border-radius: inherit;
+  transition: background-color 150ms ease;
+}
+
+.zone-hit:focus-visible {
+  background: var(--sky-soft);
+}
+
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -838,7 +850,7 @@ img {
   height: 44px;
   border-radius: 12px;
   background: var(--ink);
-  color: var(--green);
+  color: var(--sky);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -906,7 +918,6 @@ img {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
   font-weight: 600;
   font-size: 12px;
   color: var(--hint);
@@ -992,7 +1003,7 @@ img {
   height: 40px;
   border-radius: 12px;
   background: var(--ink);
-  color: var(--green);
+  color: var(--sky);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1098,7 +1109,7 @@ img {
 
 .about-link:hover,
 .about-link:focus-visible {
-  background: var(--green-soft);
+  background: var(--sky-soft);
 }
 
 /* ---------- keyframes ---------- */
@@ -1172,13 +1183,13 @@ img {
 
 @keyframes done-pulse {
   0% {
-    box-shadow: 0 0 0 0 var(--green-ring);
+    box-shadow: 0 0 0 0 var(--sky-ring);
   }
   60% {
-    box-shadow: 0 0 0 14px rgba(47, 226, 58, 0);
+    box-shadow: 0 0 0 14px rgba(56, 182, 255, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(47, 226, 58, 0);
+    box-shadow: 0 0 0 0 rgba(56, 182, 255, 0);
   }
 }
 

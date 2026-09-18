@@ -23,16 +23,20 @@ On Windows and Linux the icon lives in a text file that the user may also own, s
 FolderSkin marks its own work and never deletes anything else:
 
 ```ini
-; managed by FolderSkin
 [.ShellClassInfo]
+; managed by FolderSkin
 IconResource=folderskin.ico,0
 ```
 
 ```ini
-# managed by FolderSkin
 [Desktop Entry]
 Icon=/home/you/Pictures/.folderskin.png
+# managed by FolderSkin
 ```
+
+On Windows the legacy `IconFile` and `IconIndex` keys are dropped from `[.ShellClassInfo]`
+when FolderSkin writes its own icon, because Explorer prefers that pair over `IconResource`
+and the folder would otherwise keep its old icon.
 
 Revert parses the file, drops FolderSkin's marker and the `IconResource` or `Icon` line it
 owns, and keeps every other key. If nothing else is left and FolderSkin created the file,
@@ -99,8 +103,10 @@ icon. Apply again after moving it.
 - **Network and read-only volumes.** SMB, NFS and read-only mounts often refuse the
   attribute or the hidden flag; the failure surfaces in the drop zone with the reason from
   the OS.
-- **Folders inside an app bundle or a system directory.** Refused before anything is
-  written.
+- **Folders inside an app bundle or a system directory.** Refused before anything is written:
+  `/System`, `/Library`, `/usr`, `/bin`, `/sbin`, `/etc`, `/var`, anything inside a `.app`
+  bundle, and on Windows the `Windows`, `Program Files` and `ProgramData` trees. Drive roots
+  and your home folder itself are refused too.
 
 ## Reverting by hand
 

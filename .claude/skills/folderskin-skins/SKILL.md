@@ -150,8 +150,9 @@ out of the repository; the files to commit are `assets/skins/<id>.<ext>` and
 - 400 KB maximum per skin; keep the whole set under 2.5 MB.
 - The shipped set is exactly ten skins — replace one rather than adding an eleventh — unless
   the maintainer says otherwise.
-- Collections are only `glow`, `grain` and `pop`; these are the gallery's tabs and adding a
-  fourth means changing the UI.
+- Collections are `glow`, `grain` and `pop`. The gallery derives its tabs from the manifest,
+  so a fourth collection appears on its own — keep to the three unless a maintainer asks for
+  another, so the toolbar stays on one row.
 - HEIC and HEIF inputs must be converted with `sips -s format png in.heic --out /tmp/in.png`
   first, and that only works on macOS.
 - Always rebuild after changing a skin, because the binary embeds them.

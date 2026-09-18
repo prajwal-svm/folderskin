@@ -134,9 +134,9 @@ impl Manifest {
                 }
             }
         }
-        if self.skins.len() > SHIPPED_SKIN_COUNT {
+        if self.skins.len() != SHIPPED_SKIN_COUNT {
             problems.push(format!(
-                "manifest lists {} skins; the shipped set is exactly {} (replace one instead of adding)",
+                "manifest lists {} skins; the shipped set is exactly {} (replace one instead of adding or removing)",
                 self.skins.len(),
                 SHIPPED_SKIN_COUNT
             ));

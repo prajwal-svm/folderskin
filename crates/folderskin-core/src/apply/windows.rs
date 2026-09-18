@@ -68,7 +68,15 @@ pub fn desktop_ini_contents(existing: Option<&str>) -> String {
         if trimmed == MARKER {
             continue;
         }
-        if in_section && key_of(trimmed).is_some_and(|k| k.eq_ignore_ascii_case(ICON_RESOURCE)) {
+        if in_section
+            && key_of(trimmed).is_some_and(|k| {
+                k.eq_ignore_ascii_case(ICON_RESOURCE)
+                    || k.eq_ignore_ascii_case("IconFile")
+                    || k.eq_ignore_ascii_case("IconIndex")
+            })
+        {
+            // Explorer prefers the legacy IconFile/IconIndex pair over IconResource, so an old
+            // pair would silently win over ours.
             continue;
         }
         out.push(line.to_string());
@@ -233,7 +241,7 @@ mod imp {
 
     /// Removes our ini lines and icon file, leaving anything else in the folder alone.
     pub fn revert(folder: &Path) -> Result<(), ApplyError> {
-        set_readonly(folder, false)?;
+        let mut touched = false;
 
         let ini = folder.join(INI_NAME);
         if let Some(existing) = read_text_if_present(&ini)? {
@@ -241,11 +249,13 @@ mod imp {
                 None => {
                     clear_attributes(&ini);
                     std::fs::remove_file(&ini)?;
+                    touched = true;
                 }
                 Some(left) if left != existing => {
                     clear_attributes(&ini);
                     write_atomic(&ini, left.as_bytes())?;
                     hide(&ini)?;
+                    touched = true;
                 }
                 // Nothing of ours in it; leave the file and its attributes untouched.
                 Some(_) => {}
@@ -256,8 +266,14 @@ mod imp {
         if ico.exists() {
             clear_attributes(&ico);
             std::fs::remove_file(&ico)?;
+            touched = true;
         }
 
+        if !touched {
+            // Never skinned by us: change nothing, not even the read-only attribute.
+            return Ok(());
+        }
+        set_readonly(folder, false)?;
         notify(folder);
         Ok(())
     }

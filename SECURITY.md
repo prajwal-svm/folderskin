@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Report security problems privately through GitHub's advisory form:
-<https://github.com/YOUR-USER/folderskin/security/advisories/new>. Please do not open a
+<https://github.com/prajwal-svm/folderskin/security/advisories/new>. Please do not open a
 public issue for a vulnerability.
 
 Include the platform and app version, what FolderSkin did, and the smallest set of steps

@@ -16,7 +16,7 @@ import { CommunityView } from "./components/CommunityView";
 import { GenerateView } from "./components/GenerateView";
 import { IconImage } from "./components/icons";
 
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic"];
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "heic", "heif"];
 const ALL = "all";
 const FAVES = "faves";
 

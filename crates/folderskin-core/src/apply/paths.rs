@@ -41,7 +41,65 @@ pub fn validate_folder(path: &Path) -> Result<PathBuf, ApplyError> {
             "this is your home folder; pick a folder inside it instead".into(),
         ));
     }
+    if is_system_location(&canonical) {
+        return Err(ApplyError::Refused(
+            "that folder belongs to the operating system or an app; pick one of your own folders"
+                .into(),
+        ));
+    }
     Ok(canonical)
+}
+
+/// True for folders the OS or an installed app owns: `/System`, `/Library`, `/usr`, `/bin`,
+/// `/sbin`, `/private/etc`, `/private/var`, anything inside a macOS `.app` bundle, and on
+/// Windows the `Windows` and `Program Files` trees.
+pub fn is_system_location(path: &Path) -> bool {
+    // The OS temp directory sits under one of these roots on macOS (/private/var/folders/…),
+    // and a folder there is scratch space, not the system's.
+    if let Ok(tmp) = std::env::temp_dir().canonicalize() {
+        if path.starts_with(&tmp) {
+            return false;
+        }
+    }
+
+    let lower = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    let unix_roots = [
+        "/system/",
+        "/library/",
+        "/usr/",
+        "/bin/",
+        "/sbin/",
+        "/private/etc/",
+        "/private/var/",
+        "/etc/",
+        "/var/",
+        "/proc/",
+        "/dev/",
+    ];
+    let with_slash = format!("{lower}/");
+    if unix_roots.iter().any(|r| with_slash.starts_with(r)) {
+        return true;
+    }
+    if with_slash.contains(".app/") {
+        return true;
+    }
+    if let Some(rest) = lower.get(2..) {
+        if lower.chars().nth(1) == Some(':') {
+            let rest = format!("{rest}/");
+            if [
+                "/windows/",
+                "/program files/",
+                "/program files (x86)/",
+                "/programdata/",
+            ]
+            .iter()
+            .any(|r| rest.starts_with(r))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// True when `path` is a filesystem root: `/`, a Windows drive root, or a UNC share root.

@@ -64,8 +64,18 @@ impl AppState {
             .map(|s| s.art.clone())
     }
 
+    /// Keeps at most `MAX_CUSTOM` imported pictures (about 16 MB each) in memory.
     pub fn remember_custom(&self, id: String, art: Arc<Artwork>) {
+        const MAX_CUSTOM: usize = 12;
         if let Ok(mut m) = self.0.custom.lock() {
+            if m.len() >= MAX_CUSTOM && !m.contains_key(&id) {
+                if let Some(oldest) = m.keys().next().cloned() {
+                    m.remove(&oldest);
+                    if let Ok(mut t) = self.0.thumbs.lock() {
+                        t.remove(&oldest);
+                    }
+                }
+            }
             m.insert(id, art);
         }
     }

@@ -272,6 +272,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_folder_refuses_system_locations() {
+        use super::paths::is_system_location;
+        for p in [
+            "/System/Library/Fonts",
+            "/usr/local/bin",
+            "/Applications/Safari.app/Contents/Resources",
+            "/Library/Preferences",
+            "C:/Windows/System32",
+            "c:/Program Files/Whatever",
+        ] {
+            assert!(is_system_location(std::path::Path::new(p)), "{p} should be refused");
+        }
+        for p in ["/Users/me/Desktop/readme", "/home/me/pictures", "C:/Users/me/Documents"] {
+            assert!(!is_system_location(std::path::Path::new(p)), "{p} should be allowed");
+        }
+        // A scratch folder in the OS temp directory is not a system location.
+        let tmp = tempfile_dir();
+        assert!(!is_system_location(&tmp.canonicalize().unwrap()));
+        assert!(validate_folder(&tmp).is_ok());
+    }
+
+    #[test]
     fn validate_folder_returns_a_canonical_path() {
         let tmp = tempfile_dir();
         let nested = tmp.join("a");

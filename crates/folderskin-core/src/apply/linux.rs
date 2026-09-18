@@ -248,6 +248,22 @@ mod imp {
         Ok(())
     }
 
+    /// `file://` URI for a local path, percent-encoding everything GIO would misread
+    /// (spaces, `#`, `%`, `?` and non-ASCII bytes).
+    pub fn file_uri(path: &Path) -> String {
+        use std::os::unix::ffi::OsStrExt;
+        let mut out = String::from("file://");
+        for &b in path.as_os_str().as_bytes() {
+            let keep = b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.' | b'~');
+            if keep {
+                out.push(b as char);
+            } else {
+                out.push_str(&format!("%{b:02X}"));
+            }
+        }
+        out
+    }
+
     /// `gio set <folder> metadata::custom-icon file://<png>`; ignored when it fails.
     ///
     /// The `.directory` file already covers Dolphin, and a GNOME-less box has no `gio` at all,
@@ -256,7 +272,7 @@ mod imp {
         let Some(gio) = gio_on_path() else {
             return;
         };
-        let uri = format!("file://{}", png.display());
+        let uri = file_uri(png);
         let _ = quiet(&mut Command::new(gio))
             .arg("set")
             .arg(folder)

@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconDownload, IconExternal, IconImage } from "./icons";
 
-export const COMMUNITY_URL = "https://github.com/YOUR-USER/folderskin/discussions/categories/skins";
+export const COMMUNITY_URL = "https://github.com/prajwal-svm/folderskin/discussions/categories/skins";
 
 export function CommunityView({ onImport }: { onImport: () => void }) {
   return (

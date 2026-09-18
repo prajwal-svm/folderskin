@@ -6,7 +6,7 @@ members = ["crates/folderskin-core", "crates/folderskin-tools", "src-tauri"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/YOUR-USER/folderskin"
+repository = "https://github.com/prajwal-svm/folderskin"
 
 [workspace.dependencies]
 folderskin-core = { path = "crates/folderskin-core" }

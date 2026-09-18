@@ -281,7 +281,6 @@ pub async fn import_image(
 
 #[tauri::command]
 pub async fn apply_skin(
-    app: AppHandle,
     state: State<'_, AppState>,
     folder: String,
     skin_id: String,
@@ -296,19 +295,21 @@ pub async fn apply_skin(
     })
     .await
     .map_err(|e| e.to_string())?;
-    run_on_main(&app, move || {
+    // NSWorkspace.setIcon is thread-safe and the PNG encodes are slow, so this stays off the
+    // main thread; the window keeps painting the "Applying…" state.
+    tauri::async_runtime::spawn_blocking(move || {
         apply_icon(&folder, &icons).map_err(|e| e.to_string())
     })
     .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn revert_skin(app: AppHandle, folder: String) -> Result<(), String> {
+pub async fn revert_skin(folder: String) -> Result<(), String> {
     let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-    run_on_main(&app, move || {
-        revert_icon(&folder).map_err(|e| e.to_string())
-    })
-    .await
+    tauri::async_runtime::spawn_blocking(move || revert_icon(&folder).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// The folder's current icon as a data URL: the real OS icon on macOS, the plain rendered
@@ -350,30 +351,6 @@ pub fn platform_info() -> PlatformInfo {
         os,
         browse_label: browse_label.into(),
         note: note.into(),
-    }
-}
-
-/// AppKit's icon call is happiest on the main thread; elsewhere a blocking thread is fine.
-async fn run_on_main<F>(app: &AppHandle, work: F) -> Result<(), String>
-where
-    F: FnOnce() -> Result<(), String> + Send + 'static,
-{
-    if cfg!(target_os = "macos") {
-        let (tx, rx) = std::sync::mpsc::channel();
-        app.run_on_main_thread(move || {
-            let _ = tx.send(work());
-        })
-        .map_err(|e| e.to_string())?;
-        tauri::async_runtime::spawn_blocking(move || {
-            rx.recv()
-                .unwrap_or_else(|_| Err("the icon call never finished".into()))
-        })
-        .await
-        .map_err(|e| e.to_string())?
-    } else {
-        tauri::async_runtime::spawn_blocking(work)
-            .await
-            .map_err(|e| e.to_string())?
     }
 }
 

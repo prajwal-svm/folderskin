@@ -5,7 +5,7 @@ reports with a platform and a folder path, fixes for the per-OS icon writers, an
 
 ## Getting set up
 
-You need [Rust](https://rustup.rs) stable (edition 2021), Node 20 or newer, and pnpm 10 or
+You need [Rust](https://rustup.rs) stable (edition 2021), Node 20 or newer, and pnpm 11 or
 newer. Platform prerequisites are listed in the README's [building from
 source](README.md#building-from-source) section; on Debian or Ubuntu that is:
 
@@ -63,8 +63,8 @@ get a request for changes, not a silent merge.
 2. **No CSS outlines.** No `outline`, no focus ring, no selection outline anywhere in the UI.
    Show focus and selection with a background tint or a border colour change.
 3. **Geometry constants are the source of truth.** The numbers in
-   `crates/folderskin-core/src/geometry.rs` were measured from a real applied icon and are
-   covered by silhouette tests. Change them only with a reason and updated tests.
+   `crates/folderskin-core/src/geometry.rs` define the folder template and are covered by
+   silhouette tests. Change them only with a reason and updated tests.
 4. **Errors are sentences.** Commands return plain strings that the drop zone shows verbatim,
    in the app's voice ("couldn't apply the skin: permission denied"). No error codes, no Rust
    `Debug` output reaching the user.

@@ -13,7 +13,7 @@ writes an icon and then gets out of the way.
 ## Download
 
 Grab the installer for your platform from
-[Releases](https://github.com/YOUR-USER/folderskin/releases):
+[Releases](https://github.com/prajwal-svm/folderskin/releases):
 
 | platform | file to download |
 |---|---|
@@ -29,12 +29,12 @@ source — it is three commands.
 ## How to use it
 
 1. Drag a folder onto the drop zone, or click it to browse.
-2. Pick a skin from the gallery on the left. Tabs narrow it down: `all`, `glow`, `grain`,
-   `pop`, and `faves` once you have starred something.
-3. Press **apply skin**. The button becomes **applied ✓**.
-4. Press the **↺** button beside it to revert to the default folder icon.
+2. Pick a skin from the gallery. The toolbar narrows it down — **All**, **Glow**, **Grain**,
+   **Pop** — and there is a search box; the sidebar has **Favourites** for anything you star.
+3. Press **Apply skin**. The button becomes **Applied** with a check.
+4. Press **Revert** beside it to put the operating system's default icon back.
 
-To use your own picture, drop it on the window or press **your photo** next to the tabs. The
+To use your own picture, drop it on the window or press **Your photo** in the toolbar. The
 picture is cropped to the folder's shape and applied like any other skin; it stays on your
 machine and is not copied into the app.
 
@@ -72,8 +72,8 @@ thing to ask.
 
 ## How it works
 
-The Rust core (`crates/folderskin-core`) holds the folder template as vector paths measured
-from a real applied icon, cover-fits your image into the back panel and the front panel,
+The Rust core (`crates/folderskin-core`) holds the folder template as vector paths,
+cover-fits your image into the back panel and the front panel,
 renders the whole thing once at 2048 px with `tiny-skia`, and downsamples to every icon size
 with Lanczos3. The webview never draws folder geometry — it shows PNGs the core rendered — so
 the gallery thumbnail, the preview and the icon on disk are the same pixels on every
@@ -94,7 +94,7 @@ picture, including reverting by hand, is in [docs/PLATFORMS.md](docs/PLATFORMS.m
 ## Building from source
 
 Prerequisites on every platform: [Rust](https://rustup.rs) stable, Node 20 or newer, and
-pnpm 10 or newer (the repository is developed with pnpm 11).
+pnpm 11 or newer (`pnpm-workspace.yaml` uses the `allowBuilds` setting, which pnpm 10 ignores).
 
 - **macOS:** Xcode command line tools (`xcode-select --install`).
 - **Windows:** Visual Studio Build Tools with the C++ workload, and the WebView2 runtime
@@ -133,5 +133,4 @@ vulnerability privately. Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 ## License
 
 MIT — see [LICENSE](LICENSE). Copyright 2026 FolderSkin contributors. The bundled font is
-Bricolage Grotesque under the SIL Open Font License (`assets/fonts/OFL.txt`); the built-in
-skins are CC0.
+Manrope under the SIL Open Font License (`assets/fonts/OFL.txt`); the built-in skins are CC0.
