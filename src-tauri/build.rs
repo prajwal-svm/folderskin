@@ -11,9 +11,13 @@ fn main() {
     println!("cargo:rerun-if-changed={}", manifest_path.display());
     let text = std::fs::read_to_string(&manifest_path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", manifest_path.display()));
-    let manifest: serde_json::Value = serde_json::from_str(&text).expect("manifest.json is valid JSON");
+    let manifest: serde_json::Value =
+        serde_json::from_str(&text).expect("manifest.json is valid JSON");
     let mut out = String::from("pub static SKINS: &[BuiltinSkin] = &[\n");
-    for s in manifest["skins"].as_array().expect("manifest.skins is an array") {
+    for s in manifest["skins"]
+        .as_array()
+        .expect("manifest.skins is an array")
+    {
         let file = root.join(s["file"].as_str().expect("skin.file"));
         let file = file
             .canonicalize()
@@ -22,7 +26,12 @@ fn main() {
         let focus = s
             .get("focus")
             .and_then(|f| f.as_array())
-            .map(|f| [f[0].as_f64().unwrap_or(0.5) as f32, f[1].as_f64().unwrap_or(0.5) as f32])
+            .map(|f| {
+                [
+                    f[0].as_f64().unwrap_or(0.5) as f32,
+                    f[1].as_f64().unwrap_or(0.5) as f32,
+                ]
+            })
             .unwrap_or([0.5, 0.5]);
         out += &format!(
             "    BuiltinSkin {{ id: {:?}, name: {:?}, collection: {:?}, focus: [{:?}, {:?}], bytes: include_bytes!({:?}) }},\n",
