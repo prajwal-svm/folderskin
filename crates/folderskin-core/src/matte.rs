@@ -11,11 +11,31 @@
 //! 2. [`despill`] removes the key colour that bled into the subject's own edge pixels, which is
 //!    what makes a naive chroma key look like it has a coloured halo.
 //! 3. [`autocrop`] trims the transparent margin so the subject fills the frame.
+//!
+//! [`finished_cutout`] makes the same decision for a picture the user brings in: a folder a chat
+//! assistant painted on magenta (or on real transparency) is already the icon, while an ordinary
+//! picture belongs on FolderSkin's template.
 
 use image::RgbaImage;
 
 /// The key colour FolderSkin asks models for: pure magenta.
 pub const MAGENTA: [u8; 3] = [255, 0, 255];
+
+/// Alpha at or below which a pixel counts as see-through when judging what surrounds a picture.
+pub const CLEAR_ALPHA: u8 = 16;
+
+/// Key tolerance for deciding whether a picture the user brought in sits on the key colour.
+///
+/// Stricter than [`KeyOptions::default`], which keys a render the app already knows was asked for
+/// the key colour. This one has to tell such a render apart from a photo of something on a pink or
+/// purple backdrop. #FF00FF from an image model lands within about 0.05, and a slightly lighter,
+/// darker or bluer magenta within 0.11; magenta paper photographed in a studio sits at 0.14 and
+/// beyond, and a vivid sunset sky around 0.14 too.
+pub const DETECT_TOLERANCE: f32 = 0.12;
+
+/// Share of the picture the keyed-out subject must cover, so an all-magenta picture is not "cut
+/// out" to nothing.
+const MIN_SUBJECT_SHARE: f32 = 0.02;
 
 /// How close a pixel must be to the key colour to count as background, and how wide the soft
 /// edge between background and subject is. Both are distances in 0..=1 chroma space.
@@ -212,6 +232,102 @@ pub fn flatten(img: &RgbaImage, bg: [u8; 3]) -> RgbaImage {
     out
 }
 
+/// What surrounds the subject of a picture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Surround {
+    /// Real transparency: the picture is already a cut-out.
+    Transparent,
+    /// A flat backdrop of the key colour, ready to be keyed out.
+    Keyed,
+    /// Ordinary picture content reaches the edges.
+    Opaque,
+}
+
+/// How much of a picture's edge satisfies `pred`.
+///
+/// Returns the share of an outer band one percent of the shorter side deep (at least one pixel),
+/// and whether each of the four corner squares of that size satisfies it almost everywhere (90%).
+/// The corners matter for a cut-out trimmed to its own outline: its edges are mostly subject, but
+/// a folder's rounded corners and the gap beside its tab never reach the corners of the frame.
+fn edge_share(img: &RgbaImage, pred: impl Fn(&[u8; 4]) -> bool) -> (f32, bool) {
+    let (w, h) = img.dimensions();
+    if w == 0 || h == 0 {
+        return (0.0, false);
+    }
+    let band = (w.min(h) / 100).max(1);
+    let (mut hits, mut total) = (0u64, 0u64);
+    let mut count = |x: u32, y: u32| {
+        total += 1;
+        if pred(&img.get_pixel(x, y).0) {
+            hits += 1;
+        }
+    };
+    for y in 0..h {
+        if y < band || y >= h - band || w <= 2 * band {
+            (0..w).for_each(|x| count(x, y));
+        } else {
+            (0..band).chain(w - band..w).for_each(|x| count(x, y));
+        }
+    }
+    let corner = |x0: u32, y0: u32| {
+        let inside = (y0..y0 + band)
+            .flat_map(|y| (x0..x0 + band).map(move |x| (x, y)))
+            .filter(|&(x, y)| pred(&img.get_pixel(x, y).0))
+            .count();
+        inside as f32 >= 0.9 * (band * band) as f32
+    };
+    let corners =
+        corner(0, 0) && corner(w - band, 0) && corner(0, h - band) && corner(w - band, h - band);
+    (hits as f32 / total as f32, corners)
+}
+
+/// Reads what surrounds a picture: real transparency, the flat `key` colour, or neither.
+///
+/// * **Transparent** when at least half of the outer band has alpha at or below
+///   [`CLEAR_ALPHA`], or when all four corners do and at least a fifth of the band does (a
+///   cut-out trimmed tight to its outline).
+/// * **Keyed** when [`has_key_background`] holds at the strict [`DETECT_TOLERANCE`] (60% of the
+///   border on the key colour), or when all four corners and a fifth of the band are on it.
+/// * **Opaque** otherwise: a photo, a painting, a screenshot.
+pub fn surround(img: &RgbaImage, key: [u8; 3]) -> Surround {
+    let (clear, clear_corners) = edge_share(img, |p| p[3] <= CLEAR_ALPHA);
+    if clear >= 0.5 || (clear >= 0.2 && clear_corners) {
+        return Surround::Transparent;
+    }
+    let strict = KeyOptions {
+        tolerance: DETECT_TOLERANCE,
+        ..KeyOptions::default()
+    };
+    let (keyed, key_corners) = edge_share(img, |p| {
+        p[3] > CLEAR_ALPHA && distance(&[p[0], p[1], p[2]], &key) <= DETECT_TOLERANCE
+    });
+    if has_key_background(img, key, strict) || (keyed >= 0.2 && key_corners) {
+        Surround::Keyed
+    } else {
+        Surround::Opaque
+    }
+}
+
+/// The picture as a finished folder image, trimmed to its subject, or `None` when it is an
+/// ordinary picture that belongs on the template.
+///
+/// A picture with real transparency around it is trimmed as it is. A picture on the flat `key`
+/// colour is keyed out, despilled and trimmed exactly like a keyed render from the assistant, as
+/// long as something substantial is left ([`MIN_SUBJECT_SHARE`] of the frame). A picture with no
+/// visible pixel at all has no subject and returns `None`.
+pub fn finished_cutout(img: &RgbaImage, key: [u8; 3]) -> Option<RgbaImage> {
+    match surround(img, key) {
+        Surround::Transparent => alpha_bounds(img, 8).map(|_| autocrop(img, 0)),
+        Surround::Keyed => {
+            let cut = cutout(img, key, KeyOptions::default());
+            let solid = cut.pixels().filter(|p| p.0[3] >= 128).count() as f32;
+            let frame = img.width() as f32 * img.height() as f32;
+            (solid >= MIN_SUBJECT_SHARE * frame).then_some(cut)
+        }
+        Surround::Opaque => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,5 +450,196 @@ mod tests {
         let img = RgbaImage::from_pixel(1, 1, Rgba([255, 255, 255, 0]));
         let out = flatten(&img, [10, 20, 30]);
         assert_eq!(out.get_pixel(0, 0).0, [10, 20, 30, 255]);
+    }
+
+    // ---------- telling finished folder images from pictures ----------
+
+    /// Deterministic noise in `-amplitude..=amplitude`, so the synthetic photos never flake.
+    fn noise(x: u32, y: u32, amplitude: i32) -> i32 {
+        let mut n = x.wrapping_mul(374_761_393) ^ y.wrapping_mul(668_265_263);
+        n = (n ^ (n >> 13)).wrapping_mul(1_274_126_177);
+        ((n >> 16) % (2 * amplitude as u32 + 1)) as i32 - amplitude
+    }
+
+    fn jitter(c: [u8; 3], x: u32, y: u32, amplitude: i32) -> Rgba<u8> {
+        let j = |v: u8, salt: u32| {
+            (v as i32 + noise(x + salt, y + 7 * salt, amplitude)).clamp(0, 255) as u8
+        };
+        Rgba([j(c[0], 0), j(c[1], 101), j(c[2], 211), 255])
+    }
+
+    fn mix(a: [u8; 3], b: [u8; 3], t: f32) -> [u8; 3] {
+        let m = |p: u8, q: u8| (p as f32 + (q as f32 - p as f32) * t).round() as u8;
+        [m(a[0], b[0]), m(a[1], b[1]), m(a[2], b[2])]
+    }
+
+    /// Inside a rectangle with rounded corners of radius `r`.
+    fn in_rounded(x: u32, y: u32, (x0, y0, x1, y1): (u32, u32, u32, u32), r: u32) -> bool {
+        if x < x0 || x >= x1 || y < y0 || y >= y1 {
+            return false;
+        }
+        let (fx, fy, r) = (x as f32 + 0.5, y as f32 + 0.5, r as f32);
+        let cx = fx.clamp(x0 as f32 + r, x1 as f32 - r);
+        let cy = fy.clamp(y0 as f32 + r, y1 as f32 - r);
+        (fx - cx).powi(2) + (fy - cy).powi(2) <= r * r
+    }
+
+    /// Inside a folder-like silhouette filling `rect`: a rounded body with one rounded tab on its
+    /// top left, so the frame's top right beside the tab is empty, as on a real folder.
+    fn in_folder(x: u32, y: u32, (x0, y0, x1, y1): (u32, u32, u32, u32)) -> bool {
+        let (w, h) = (x1 - x0, y1 - y0);
+        let r = w / 12;
+        let body = (x0, y0 + h / 8, x1, y1);
+        let tab = (x0 + w / 20, y0, x0 + w * 2 / 5, y0 + h / 4);
+        in_rounded(x, y, body, r) || in_rounded(x, y, tab, r / 2)
+    }
+
+    /// A folder painted `fill` on `background`, the folder filling `rect`.
+    fn folder_on(size: (u32, u32), rect: (u32, u32, u32, u32), background: Rgba<u8>) -> RgbaImage {
+        RgbaImage::from_fn(size.0, size.1, |x, y| {
+            if in_folder(x, y, rect) {
+                jitter([40, 120, 200], x, y, 6)
+            } else {
+                background
+            }
+        })
+    }
+
+    #[test]
+    fn a_cutout_with_transparent_margins_reads_as_transparent() {
+        let img = folder_on((240, 220), (20, 24, 220, 200), Rgba([0, 0, 0, 0]));
+        assert_eq!(surround(&img, MAGENTA), Surround::Transparent);
+        let cut = finished_cutout(&img, MAGENTA).expect("a folder with alpha is finished");
+        assert_eq!(cut.dimensions(), (200, 176), "trimmed to the folder");
+    }
+
+    #[test]
+    fn a_cutout_trimmed_to_its_outline_still_reads_as_transparent() {
+        // The folder touches all four edges; only its corners and the gap beside the tab are clear.
+        let img = folder_on((200, 180), (0, 0, 200, 180), Rgba([0, 0, 0, 0]));
+        let (share, corners) = edge_share(&img, |p| p[3] <= CLEAR_ALPHA);
+        assert!(share < 0.5 && corners, "share {share}, corners {corners}");
+        assert_eq!(surround(&img, MAGENTA), Surround::Transparent);
+        assert!(finished_cutout(&img, MAGENTA).is_some());
+    }
+
+    #[test]
+    fn a_folder_on_magenta_reads_as_keyed_and_is_cut_out() {
+        let backdrop = |x, y| jitter(MAGENTA, x, y, 3);
+        let img = RgbaImage::from_fn(240, 220, |x, y| {
+            if in_folder(x, y, (30, 30, 210, 196)) {
+                jitter([40, 120, 200], x, y, 6)
+            } else {
+                backdrop(x, y)
+            }
+        });
+        assert_eq!(surround(&img, MAGENTA), Surround::Keyed);
+        let cut = finished_cutout(&img, MAGENTA).expect("a keyed folder is finished");
+        let (w, h) = cut.dimensions();
+        assert!(
+            (w as i32 - 180).abs() <= 2 && (h as i32 - 166).abs() <= 2,
+            "{w}x{h}"
+        );
+        assert_eq!(
+            cut.get_pixel(w - 1, 0).0[3],
+            0,
+            "beside the tab is keyed out"
+        );
+    }
+
+    #[test]
+    fn a_keyed_folder_survives_a_jpeg_round_trip() {
+        // Grok hands its images back as JPEG; compression noise must not break detection.
+        let img = folder_on((240, 220), (30, 30, 210, 196), Rgba([255, 0, 255, 255]));
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80)
+            .encode_image(&image::DynamicImage::ImageRgba8(img).to_rgb8())
+            .unwrap();
+        let back = image::load_from_memory(&jpeg).unwrap().to_rgba8();
+        assert_eq!(surround(&back, MAGENTA), Surround::Keyed);
+        let cut = finished_cutout(&back, MAGENTA).unwrap();
+        let (w, h) = cut.dimensions();
+        assert!(
+            (w as i32 - 180).abs() <= 3 && (h as i32 - 166).abs() <= 3,
+            "{w}x{h}"
+        );
+    }
+
+    #[test]
+    fn a_slightly_off_magenta_backdrop_still_counts_as_the_key() {
+        let img = folder_on((240, 220), (30, 30, 210, 196), Rgba([244, 14, 236, 255]));
+        assert_eq!(surround(&img, MAGENTA), Surround::Keyed);
+    }
+
+    #[test]
+    fn an_ordinary_photo_is_a_picture() {
+        let img = RgbaImage::from_fn(240, 180, |x, y| {
+            if y < 100 {
+                jitter(
+                    mix([110, 170, 230], [190, 215, 240], y as f32 / 100.0),
+                    x,
+                    y,
+                    5,
+                )
+            } else {
+                jitter([70, 110, 50], x, y, 12)
+            }
+        });
+        assert_eq!(surround(&img, MAGENTA), Surround::Opaque);
+        assert!(finished_cutout(&img, MAGENTA).is_none());
+    }
+
+    #[test]
+    fn a_photo_with_a_pink_sky_is_a_picture() {
+        // A vivid sunset: magenta at the top of the sky, close enough for the keyer's own
+        // tolerance, fading to pink at the horizon, over dark land.
+        let img = RgbaImage::from_fn(240, 180, |x, y| {
+            if y < 125 {
+                jitter(
+                    mix([240, 40, 215], [252, 160, 185], y as f32 / 125.0),
+                    x,
+                    y,
+                    5,
+                )
+            } else {
+                jitter([45, 32, 58], x, y, 8)
+            }
+        });
+        assert_eq!(surround(&img, MAGENTA), Surround::Opaque);
+        assert!(finished_cutout(&img, MAGENTA).is_none());
+    }
+
+    #[test]
+    fn a_product_shot_on_a_magenta_backdrop_is_a_picture() {
+        // A box photographed on magenta paper: the paper is near enough the key for the keyer's
+        // own tolerance, which is why import detection uses a stricter one.
+        let img = RgbaImage::from_fn(240, 200, |x, y| {
+            let paper = mix([234, 50, 208], [222, 38, 192], y as f32 / 200.0);
+            if (80..160).contains(&x) && (50..150).contains(&y) {
+                jitter([128, 128, 134], x, y, 6)
+            } else {
+                jitter(paper, x, y, 3)
+            }
+        });
+        assert!(has_key_background(&img, MAGENTA, KeyOptions::default()));
+        assert_eq!(surround(&img, MAGENTA), Surround::Opaque);
+        assert!(finished_cutout(&img, MAGENTA).is_none());
+    }
+
+    #[test]
+    fn a_picture_with_nothing_on_the_backdrop_has_no_subject() {
+        let magenta = RgbaImage::from_pixel(64, 64, Rgba([255, 0, 255, 255]));
+        assert_eq!(surround(&magenta, MAGENTA), Surround::Keyed);
+        assert!(finished_cutout(&magenta, MAGENTA).is_none());
+        let clear = RgbaImage::from_pixel(64, 64, Rgba([0, 0, 0, 0]));
+        assert!(finished_cutout(&clear, MAGENTA).is_none());
+    }
+
+    #[test]
+    fn tiny_pictures_do_not_trip_the_edge_scan() {
+        for (w, h) in [(0, 0), (1, 1), (2, 1), (3, 3)] {
+            let img = RgbaImage::from_pixel(w, h, Rgba([10, 20, 30, 255]));
+            assert_eq!(surround(&img, MAGENTA), Surround::Opaque, "{w}x{h}");
+        }
     }
 }
