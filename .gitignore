@@ -8,3 +8,4 @@ assets/previews/
 .superpowers/
 !.claude/
 public/previews
+.playwright-mcp/

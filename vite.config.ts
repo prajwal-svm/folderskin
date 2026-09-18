@@ -11,7 +11,7 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   clearScreen: false,
   server: {
-    port: 1420,
+    port: 14200,
     strictPort: true,
     host: host || false,
     watch: { ignored: ["**/src-tauri/**", "**/crates/**", "**/target/**"] },
