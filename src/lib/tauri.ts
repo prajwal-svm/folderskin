@@ -41,7 +41,7 @@ export type AiProvider = {
   keys_url: string;
   docs_url: string;
   key_hint: string;
-  /** True when a key for this provider is already in the OS keychain. */
+  /** True when a key for this provider is already saved (keys never come back to the webview). */
   has_key: boolean;
 };
 

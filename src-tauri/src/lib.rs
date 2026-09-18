@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod commands;
 pub mod folder_icon;
+pub mod keys;
 pub mod skins;
 pub mod state;
 pub mod store;
@@ -15,6 +16,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(state::AppState::default())
+        .manage(keys::Keys::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -37,6 +39,13 @@ pub fn run() {
                 Err(e) => eprintln!(
                     "folderskin: no app data folder ({e}); skins added now last until you quit"
                 ),
+            }
+            // API keys live in a private file here, not in the keychain (see keys.rs).
+            match app.path().app_config_dir() {
+                Ok(dir) => app.state::<keys::Keys>().open(&dir),
+                Err(e) => {
+                    eprintln!("folderskin: no app config folder ({e}); keys last until you quit")
+                }
             }
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));
             window::create_main(app)

@@ -1,9 +1,8 @@
 //! Bring-your-own-key image generation for FolderSkin.
 //!
-//! The user pastes a key from a provider they already have an account with; it is stored in the
-//! operating system's keychain by [`keys`], read at the moment of a request, and never written
-//! anywhere else. There is no FolderSkin server: every call goes straight from the user's
-//! machine to the provider they chose.
+//! The user pastes a key from a provider they already have an account with; the app keeps it
+//! and hands it to [`generate`] for each request. There is no FolderSkin server: every call goes
+//! straight from the user's machine to the provider they chose.
 //!
 //! [`catalogue`] lists what is on offer, [`request`] builds each provider's body and reads its
 //! reply (pure, so it is all unit-tested), [`prompts`] composes the prompt, and [`generate`]
@@ -11,7 +10,6 @@
 
 pub mod catalogue;
 pub mod error;
-pub mod keys;
 pub mod prompts;
 pub mod request;
 

@@ -1,8 +1,8 @@
 # The AI assistant
 
 FolderSkin can generate a skin from a description. The feature is **bring your own key**: you
-paste an API key from a provider you already have an account with, the key is stored by your
-operating system's keychain, and FolderSkin talks to that provider directly from your machine.
+paste an API key from a provider you already have an account with, the key is saved in a private
+file on your computer, and FolderSkin talks to that provider directly from your machine.
 
 There is no FolderSkin server, no proxy, no bundled key and no free tier to subsidise. Nothing
 is sent anywhere until you press **Generate**, and what is sent is your prompt, your chosen
@@ -11,18 +11,27 @@ own blank folder template).
 
 ## Where the key lives
 
+In one file in FolderSkin's own folder, readable only by your user account:
+
 | | |
 |---|---|
-| macOS | Keychain, service `app.folderskin.desktop`, account = the provider id |
-| Windows | Credential Manager, same service and account |
-| Linux | Secret Service (GNOME Keyring, KWallet) |
+| macOS | `~/Library/Application Support/app.folderskin.desktop/keys.json` |
+| Windows | `%APPDATA%\app.folderskin.desktop\keys.json` |
+| Linux | `~/.config/app.folderskin.desktop/keys.json` |
 
-The key is read at the moment of a request and is never written to a FolderSkin file, never
-included in an error message, and never returned to the app's window. **Remove** in the
-Generate view deletes it from the keychain.
+The file is created with owner-only permissions (0600) and written atomically. It is the same
+approach `gh`, the AWS CLI and npm take with their tokens, and it has the same trade-off: other
+programs running as you could read it.
 
-If your desktop has no Secret Service running, saving a key fails with a message saying so;
-install `gnome-keyring` or `kwalletmanager`, or use the built-in skins.
+Why not the system keychain: macOS ties a saved keychain item to the exact signature of the app
+that saved it. Open-source builds are usually unsigned or ad-hoc signed, so every rebuild or
+update would read as a different app and ask for your login password again. A password prompt
+from an app you just downloaded looks like exactly the thing it isn't, so FolderSkin doesn't
+use the keychain at all.
+
+The key is read at the moment of a request, never included in an error message, and never
+returned to the app's window. **Remove key** in the provider dialog deletes it from the file;
+deleting `keys.json` removes them all.
 
 ## The two shapes
 

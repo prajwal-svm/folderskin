@@ -35,9 +35,6 @@ pub enum AiError {
     #[error("{0}")]
     Decode(String),
 
-    #[error("couldn't use your system keychain: {0}")]
-    Keyring(String),
-
     #[error("{0}")]
     Unsupported(String),
 

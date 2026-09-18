@@ -1,10 +1,11 @@
 //! The AI assistant's commands: provider catalogue, key storage and one generation.
 //!
-//! Every request uses the user's own key, read from the OS keychain at the moment of the call.
-//! Nothing here runs unless the user presses Generate, and no key is ever returned to the
-//! webview, written to a file, or included in an error message.
+//! Every request uses the user's own key, read from FolderSkin's private key file (keys.rs) at the
+//! moment of the call. Nothing here runs unless the user presses Generate, and no key is ever
+//! returned to the webview or included in an error message.
 
 use crate::commands::SkinDto;
+use crate::keys::Keys;
 use crate::state::AppState;
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_ai::prompts::{self, Shape};
@@ -72,7 +73,7 @@ pub struct AiGenerateRequest {
 
 /// Providers, their models, whether a key is already saved, and the prompt presets.
 #[tauri::command]
-pub fn ai_catalogue() -> AiCatalogueDto {
+pub fn ai_catalogue(keys: State<'_, Keys>) -> AiCatalogueDto {
     let providers = folderskin_ai::providers()
         .iter()
         .map(|p| AiProviderDto {
@@ -93,7 +94,7 @@ pub fn ai_catalogue() -> AiCatalogueDto {
             keys_url: p.keys_url.to_string(),
             docs_url: p.docs_url.to_string(),
             key_hint: p.key_hint.to_string(),
-            has_key: folderskin_ai::keys::has(p.id),
+            has_key: keys.has(p.id),
         })
         .collect();
     let presets = prompts::PRESETS
@@ -107,25 +108,30 @@ pub fn ai_catalogue() -> AiCatalogueDto {
     AiCatalogueDto { providers, presets }
 }
 
-/// Stores a key in the OS keychain. The key never comes back out to the webview.
+/// Saves a key to the private key file. The key never comes back out to the webview.
 #[tauri::command]
-pub fn ai_set_key(provider: String, key: String) -> Result<(), String> {
+pub fn ai_set_key(keys: State<'_, Keys>, provider: String, key: String) -> Result<(), String> {
     let key = key.trim();
     if key.is_empty() {
         return Err("that key is empty".into());
     }
-    folderskin_ai::keys::set(&provider, key).map_err(|e| e.to_string())
+    if folderskin_ai::catalogue::provider(&provider).is_none() {
+        return Err(format!(
+            "FolderSkin doesn't know a provider called {provider:?}"
+        ));
+    }
+    keys.set(&provider, key)
 }
 
 #[tauri::command]
-pub fn ai_clear_key(provider: String) -> Result<(), String> {
-    folderskin_ai::keys::clear(&provider).map_err(|e| e.to_string())
+pub fn ai_clear_key(keys: State<'_, Keys>, provider: String) -> Result<(), String> {
+    keys.clear(&provider)
 }
 
 /// Confirms the stored key is accepted by the provider.
 #[tauri::command]
-pub async fn ai_test_key(provider: String) -> Result<(), String> {
-    let key = stored_key(&provider)?;
+pub async fn ai_test_key(keys: State<'_, Keys>, provider: String) -> Result<(), String> {
+    let key = stored_key(&keys, &provider)?;
     folderskin_ai::test_key(&provider, &key)
         .await
         .map_err(|e| e.to_string())
@@ -135,6 +141,7 @@ pub async fn ai_test_key(provider: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn ai_generate(
     state: State<'_, AppState>,
+    keys: State<'_, Keys>,
     req: AiGenerateRequest,
 ) -> Result<SkinDto, String> {
     let state = state.inner().clone();
@@ -149,7 +156,7 @@ pub async fn ai_generate(
     if req.idea.trim().is_empty() {
         return Err("describe what the skin should look like first".into());
     }
-    let key = stored_key(&req.provider)?;
+    let key = stored_key(&keys, &req.provider)?;
 
     let user_reference = req
         .reference_path
@@ -250,9 +257,8 @@ pub async fn ai_generate(
 const NO_BACKDROP: &str = "the model drew a scene instead of a folder on a plain backdrop. Try \
                            again, or switch to Artwork, which does not need one.";
 
-fn stored_key(provider: &str) -> Result<String, String> {
-    folderskin_ai::keys::get(provider)
-        .map_err(|e| e.to_string())?
+fn stored_key(keys: &Keys, provider: &str) -> Result<String, String> {
+    keys.get(provider)
         .ok_or_else(|| format!("add your {provider} API key first"))
 }
 

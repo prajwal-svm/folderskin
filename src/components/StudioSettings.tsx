@@ -57,7 +57,7 @@ export function StudioSettings({
     setBusy(true);
     try {
       await api.aiClearKey(provider.id);
-      setNote({ text: `The ${provider.label} key is gone from your keychain.`, bad: false });
+      setNote({ text: `Removed the ${provider.label} key from this computer.`, bad: false });
       onChanged();
     } catch (e) {
       setNote({ text: errorMessage(e), bad: true });
@@ -67,7 +67,7 @@ export function StudioSettings({
   }, [provider, onChanged]);
 
   if (!provider) return null;
-  const where = isTauri() ? "your system keychain" : "this browser preview";
+  const where = isTauri() ? "on this computer" : "in this browser preview";
 
   return (
     <Modal
@@ -121,7 +121,7 @@ export function StudioSettings({
         {provider.has_key ? (
           <div className="key-row">
             <span className="chip chip-ok">
-              <CheckIcon size={13} playOnMount /> Saved in {where}
+              <CheckIcon size={13} playOnMount /> Saved {where}
             </span>
             <button type="button" className="link-btn" disabled={busy} onClick={forget}>
               Remove key
@@ -157,7 +157,8 @@ export function StudioSettings({
       </div>
 
       <p className="field-note">
-        Keys live in {where}, never in a FolderSkin file, and leave your computer only inside the requests you start.
+        Your key is saved {where} in a file only your account can read, with no keychain prompts. It leaves your computer
+        only inside the requests you start.
       </p>
     </Modal>
   );

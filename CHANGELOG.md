@@ -22,8 +22,9 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - Use your own photo as a skin: drop a picture on the window, or pick one with the
   "your photo" button.
 - An optional AI assistant that makes skins with your own API key for OpenAI, xAI,
-  Recraft, Google, Black Forest Labs, Stability AI or Ideogram. Keys are kept in the
-  operating system's keychain. See [docs/AI.md](docs/AI.md).
+  Recraft, Google, Black Forest Labs, Stability AI or Ideogram. Keys are saved in a
+  private file only your account can read, so there are no keychain password prompts. See
+  [docs/AI.md](docs/AI.md).
 - Revert, which restores the operating system's default folder icon and removes the
   files FolderSkin wrote.
 - Animated icons, adapted from lucide-animated, that play when their button is hovered or
