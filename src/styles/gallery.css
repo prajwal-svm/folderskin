@@ -15,12 +15,22 @@
 @container (max-width: 600px) {
   .search {
     flex: 0 0 38px;
-    padding: 0 11px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
     transition: flex-basis var(--t-slow) var(--ease-out), border-color var(--t-fast) ease, background-color var(--t-fast) ease;
   }
 
-  .search input,
+  .search svg {
+    flex: none;
+  }
+
   .search kbd {
+    display: none;
+  }
+
+  .search input {
+    flex: 0 0 0;
     width: 0;
     opacity: 0;
   }
@@ -28,10 +38,14 @@
   .search:focus-within,
   .search.has-query {
     flex-basis: 200px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 12px;
   }
 
   .search:focus-within input,
   .search.has-query input {
+    flex: 1;
     width: auto;
     opacity: 1;
   }

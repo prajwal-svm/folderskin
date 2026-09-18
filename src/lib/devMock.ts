@@ -39,8 +39,6 @@ export const mockApi = {
         source: "builtin" as const,
         created_at: null,
       })),
-      { id: "user:demo1", name: "Holiday photo", collection: "yours", thumbnail: "/assets/previews/sunset.png", custom: true, kind: "artwork", source: "import", created_at: Date.now() - 86_400_000 },
-      { id: "user:demo2", name: "Koi in neon rain", collection: "yours", thumbnail: "/assets/previews/aurora.png", custom: true, kind: "folder", source: "ai", created_at: Date.now() - 3_600_000 },
     ],
     default_thumbnail: "/assets/previews/mesh.png",
   }),
