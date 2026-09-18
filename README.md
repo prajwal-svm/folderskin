@@ -42,7 +42,7 @@ source — it is three commands.
 2. Click a skin in the library to try it on; the folder panel shows the result straight away.
    The tabs narrow it down (**All**, **Glow**, **Grain**, **Pop**, **Yours**, **Faves**) and
    ⌘F / Ctrl+F searches.
-3. Press **Apply skin**. It turns green and says **Applied**; **Show in Finder** opens the folder.
+3. Press **Apply skin**. The folder is marked **Applied**, and **Show in Finder** opens it.
 4. Press **Revert** to put the operating system's default icon back.
 
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under

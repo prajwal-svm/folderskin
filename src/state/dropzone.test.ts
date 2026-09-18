@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buttonLabel, initialState, reduce, type Action, type State } from "./dropzone";
+import { initialState, reduce, type Action, type State } from "./dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite, type KeyValueStore } from "./favorites";
 import { browseLabel } from "../lib/platform";
 
@@ -10,16 +10,15 @@ function run(actions: Action[], from: State = initialState): State {
 }
 
 describe("drop zone state machine", () => {
-  it("starts idle with no folder and no button", () => {
+  it("starts idle with no folder", () => {
     expect(initialState.phase).toBe("idle");
-    expect(buttonLabel(initialState)).toBeNull();
+    expect(initialState.folder).toBeNull();
   });
 
   it("dropping a folder shows the folder state until a skin is picked", () => {
     const s = run([{ type: "folderDropped", folder: readme }]);
     expect(s.phase).toBe("folder");
     expect(s.folder).toEqual(readme);
-    expect(buttonLabel(s)).toBeNull();
   });
 
   it("folder + skin is ready to apply, in either order", () => {
@@ -27,7 +26,6 @@ describe("drop zone state machine", () => {
     const b = run([{ type: "skinSelected", skinId: "aurora" }, { type: "folderDropped", folder: readme }]);
     expect(a.phase).toBe("ready");
     expect(b.phase).toBe("ready");
-    expect(buttonLabel(a)).toBe("Apply skin");
   });
 
   it("selecting a skin without a folder stays idle but remembers the choice", () => {
@@ -40,11 +38,9 @@ describe("drop zone state machine", () => {
     const ready = run([{ type: "folderDropped", folder: readme }, { type: "skinSelected", skinId: "aurora" }]);
     const applying = reduce(ready, { type: "applyStarted" });
     expect(applying.phase).toBe("applying");
-    expect(buttonLabel(applying)).toBe("Applying…");
     const applied = reduce(applying, { type: "applySucceeded" });
     expect(applied.phase).toBe("applied");
     expect(applied.appliedSkinId).toBe("aurora");
-    expect(buttonLabel(applied)).toBe("Applied");
   });
 
   it("putting the skin down leaves the folder showing its own icon", () => {
@@ -95,7 +91,6 @@ describe("drop zone state machine", () => {
     ]);
     const reverting = reduce(applied, { type: "revertStarted" });
     expect(reverting.phase).toBe("reverting");
-    expect(buttonLabel(reverting)).toBe("Reverting…");
     const done = reduce(reverting, { type: "revertSucceeded" });
     expect(done.phase).toBe("folder");
     expect(done.appliedSkinId).toBeNull();

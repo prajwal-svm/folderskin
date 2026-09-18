@@ -5,12 +5,15 @@ import type { State } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
 import { ArrowDownIcon } from "./icons/arrow-down";
 import { ArrowLeftIcon } from "./icons/arrow-left";
-import { CheckIcon } from "./icons/check";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { LoaderIcon } from "./icons/loader";
 import { RotateCcwIcon } from "./icons/rotate-ccw";
+import { OkBadge } from "./OkBadge";
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
+
+/** How long the buttons that replace Apply ignore clicks: the second half of a double click. */
+const SETTLE_MS = 450;
 
 /** "Finder", "Explorer" or "Files": what people call the file browser on their OS. */
 function fileBrowser(os: string): string {
@@ -181,10 +184,11 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
     );
   }
 
+  // The one place that says the skin is on the folder; the buttons below only offer what's next.
   const eyebrow =
-    phase === "applied" ? (
+    phase === "applied" || phase === "reverting" ? (
       <span className="chip chip-ok stage-eyebrow" key="applied">
-        <CheckIcon size={12} playOnMount /> Applied
+        <OkBadge size={16} playOnMount /> Applied
       </span>
     ) : phase === "ready" || phase === "applying" ? (
       <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`}>
@@ -241,24 +245,7 @@ function StageActions({
   const noFocusSteal = (e: MouseEvent) => e.preventDefault();
 
   if (phase === "applied" || phase === "reverting") {
-    return (
-      <div className="stage-actions">
-        <button type="button" className="btn btn-primary btn-lg is-done" disabled onMouseDown={noFocusSteal}>
-          {phase === "reverting" ? <LoaderIcon /> : <CheckIcon playOnMount />}
-          {phase === "reverting" ? "Reverting…" : "Applied"}
-        </button>
-        <div className="row">
-          <button type="button" className="btn btn-secondary" disabled={phase === "reverting"} onMouseDown={noFocusSteal} onClick={onReveal}>
-            <FolderOpenIcon size={15} />
-            Show in {fileBrowser}
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={phase === "reverting"} onMouseDown={noFocusSteal} onClick={onRevert}>
-            <RotateCcwIcon />
-            Revert
-          </button>
-        </div>
-      </div>
-    );
+    return <DoneActions reverting={phase === "reverting"} fileBrowser={fileBrowser} onReveal={onReveal} onRevert={onRevert} />;
   }
 
   const applying = phase === "applying";
@@ -282,6 +269,47 @@ function StageActions({
   );
 }
 
+/**
+ * After an apply: what to do next, in the same two places as Apply and "Choose a different
+ * folder", so nothing jumps. Show in Finder sits where Apply was, so it waits out a double click.
+ */
+function DoneActions({
+  reverting,
+  fileBrowser,
+  onReveal,
+  onRevert,
+}: {
+  reverting: boolean;
+  fileBrowser: string;
+  onReveal: () => void;
+  onRevert: () => void;
+}) {
+  const shownAt = useRef(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    shownAt.current = performance.now();
+  }, []);
+  const noFocusSteal = (e: MouseEvent) => e.preventDefault();
+
+  return (
+    <div className="stage-actions">
+      <button
+        type="button"
+        className="btn btn-secondary btn-lg"
+        disabled={reverting}
+        onMouseDown={noFocusSteal}
+        onClick={() => performance.now() - shownAt.current > SETTLE_MS && onReveal()}
+      >
+        <FolderOpenIcon size={16} />
+        Show in {fileBrowser}
+      </button>
+      <button type="button" className="btn btn-ghost" disabled={reverting} aria-busy={reverting} onMouseDown={noFocusSteal} onClick={onRevert}>
+        {reverting ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
+        {reverting ? "Reverting…" : "Revert"}
+      </button>
+    </div>
+  );
+}
+
 /** One quiet line under the buttons: what just happened or what happens next. */
 function statusLine(state: State, skin: Skin | null, fileBrowser: string): string {
   switch (state.phase) {
@@ -292,7 +320,7 @@ function statusLine(state: State, skin: Skin | null, fileBrowser: string): strin
     case "applying":
       return `Writing ${skin?.name ?? "the skin"} into ${state.folder?.name}…`;
     case "applied":
-      return `Done. ${fileBrowser} can take a second to catch up.`;
+      return `${fileBrowser} can take a second to catch up.`;
     case "reverting":
       return "Putting the default icon back…";
     default:

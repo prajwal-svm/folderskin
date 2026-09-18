@@ -44,7 +44,7 @@
 .btn-primary.is-done:disabled {
   opacity: 1;
   background: var(--ok-soft);
-  color: var(--ok);
+  color: var(--ok-ink);
 }
 
 .btn-secondary {
@@ -154,7 +154,12 @@
 
 .chip-ok {
   background: var(--ok-soft);
-  color: var(--ok);
+  color: var(--ok-ink);
+}
+
+/* a chip that leads with the round green tick sits the tick close to its edge */
+.chip .ok-badge {
+  margin-left: -5px;
 }
 
 .chip-danger {

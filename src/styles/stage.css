@@ -6,7 +6,7 @@
  *   arrived  -> the folder drops in on a spring
  *   preview  -> the skin lands with a sweep of light across the folder
  *   applying -> a ring turns around the folder
- *   applied  -> a small burst, and the button turns green
+ *   applied  -> a small burst, the Applied badge pops in, and the buttons become what's next
  */
 
 .stage-island {
@@ -403,21 +403,14 @@
   animation: fade-up var(--t-base) var(--ease-out) 40ms both;
 }
 
+/* Rises in whenever the choice changes: the first skin on a folder, and again after an apply. */
 .stage-actions {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
   width: min(260px, 100%);
-}
-
-.stage-actions .row {
-  display: flex;
-  gap: 8px;
-}
-
-.stage-actions .row > .btn {
-  flex: 1;
+  animation: fade-up var(--t-base) var(--ease-out) both;
 }
 
 .stage-status {

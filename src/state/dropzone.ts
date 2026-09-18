@@ -115,21 +115,3 @@ export function reduce(state: State, action: Action): State {
       return { ...state, error: null };
   }
 }
-
-export type ButtonLabel = "Apply skin" | "Applying…" | "Applied" | "Reverting…";
-
-/** What the action button says, or null when there is nothing to press yet. */
-export function buttonLabel(state: State): ButtonLabel | null {
-  switch (state.phase) {
-    case "ready":
-      return "Apply skin";
-    case "applying":
-      return "Applying…";
-    case "applied":
-      return "Applied";
-    case "reverting":
-      return "Reverting…";
-    default:
-      return null;
-  }
-}

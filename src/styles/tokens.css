@@ -43,6 +43,8 @@
   --ok: #12b981;
   --ok-soft: #dcf7ec;
   --ok-solid: #12b981;
+  /* green words on --ok-soft, dark enough to read at 12px */
+  --ok-ink: #047857;
   --danger: #e5484d;
   --danger-soft: #fde8e8;
   --fave: #ffb020;
@@ -102,6 +104,7 @@
   --ok: #34d399;
   --ok-soft: #0f2e24;
   --ok-solid: #10a877;
+  --ok-ink: #34d399;
   --danger: #ff6b6b;
   --danger-soft: #3a1717;
 
