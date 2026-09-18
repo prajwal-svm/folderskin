@@ -85,7 +85,11 @@ impl AppState {
 
     /// A finished folder image, when this id names one.
     pub fn prerendered(&self, skin_id: &str) -> Option<Arc<RgbaImage>> {
-        self.0.prerendered.lock().ok().and_then(|m| m.get(skin_id).cloned())
+        self.0
+            .prerendered
+            .lock()
+            .ok()
+            .and_then(|m| m.get(skin_id).cloned())
     }
 
     /// Keeps at most `MAX_PRERENDERED` whole-folder renders in memory.

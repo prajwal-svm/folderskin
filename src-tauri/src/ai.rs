@@ -96,7 +96,11 @@ pub fn ai_catalogue() -> AiCatalogueDto {
         .collect();
     let presets = prompts::PRESETS
         .iter()
-        .map(|p| AiPresetDto { id: p.id.to_string(), label: p.label.to_string(), idea: p.idea.to_string() })
+        .map(|p| AiPresetDto {
+            id: p.id.to_string(),
+            label: p.label.to_string(),
+            idea: p.idea.to_string(),
+        })
         .collect();
     AiCatalogueDto { providers, presets }
 }
@@ -120,7 +124,9 @@ pub fn ai_clear_key(provider: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn ai_test_key(provider: String) -> Result<(), String> {
     let key = stored_key(&provider)?;
-    folderskin_ai::test_key(&provider, &key).await.map_err(|e| e.to_string())
+    folderskin_ai::test_key(&provider, &key)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Generates one image and adds it to the session's skins.
@@ -131,9 +137,14 @@ pub async fn ai_generate(
     req: AiGenerateRequest,
 ) -> Result<SkinDto, String> {
     let state = state.inner().clone();
-    let shape = Shape::from_id(&req.shape).ok_or_else(|| format!("unknown shape {:?}", req.shape))?;
-    let model = folderskin_ai::model(&req.provider, &req.model)
-        .ok_or_else(|| format!("{} does not offer a model called {}", req.provider, req.model))?;
+    let shape =
+        Shape::from_id(&req.shape).ok_or_else(|| format!("unknown shape {:?}", req.shape))?;
+    let model = folderskin_ai::model(&req.provider, &req.model).ok_or_else(|| {
+        format!(
+            "{} does not offer a model called {}",
+            req.provider, req.model
+        )
+    })?;
     if req.idea.trim().is_empty() {
         return Err("describe what the skin should look like first".into());
     }
@@ -149,7 +160,11 @@ pub async fn ai_generate(
         Shape::Folder => (FOLDER_W, FOLDER_H),
     };
 
-    let reference_png = match req.reference_path.as_deref().filter(|_| model.accepts_reference) {
+    let reference_png = match req
+        .reference_path
+        .as_deref()
+        .filter(|_| model.accepts_reference)
+    {
         Some(path) => Some(load_reference(PathBuf::from(path))?),
         None => None,
     };
@@ -221,7 +236,9 @@ fn stored_key(provider: &str) -> Result<String, String> {
 
 /// Reads a reference picture and re-encodes it as a modest PNG for upload.
 fn load_reference(path: PathBuf) -> Result<Vec<u8>, String> {
-    let img = image::open(&path).map_err(|_| "couldn't read that reference picture".to_string())?.to_rgba8();
+    let img = image::open(&path)
+        .map_err(|_| "couldn't read that reference picture".to_string())?
+        .to_rgba8();
     let (w, h) = img.dimensions();
     let longest = w.max(h);
     let img = if longest > REFERENCE_MAX_SIDE {
