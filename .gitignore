@@ -1,0 +1,8 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/schemas/
+assets/previews/
+.DS_Store
+*.log
+.superpowers/

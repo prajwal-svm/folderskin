@@ -1,0 +1,30 @@
+:root {
+  --bg-top: #e9dcc2;
+  --bg-bottom: #ddcbab;
+  --ink: #2e2518;
+  --ink-soft: #3e3425;
+  --muted: #786d5c;
+  --hint: #b4a793;
+  --brand-red: #d43f2a;
+  --brand-orange: #ca6c2f;
+  --pill: #f4eddd;
+  --zone: #ece3cf;
+  --zone-card: #f0eadc;
+  --dash: #b3a58a;
+  --dot: #c6b99e;
+  --card: #efe3cc;
+  --badge: #352c1d;
+  --glow-a: #f2c94c;
+  --glow-b: #e5412e;
+  --glow-c: #f3a64a;
+  --font: "Bricolage Grotesque", system-ui, -apple-system, sans-serif;
+  --radius-zone: 24px;
+  --radius-pill: 999px;
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/fonts/BricolageGrotesque-variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-display: swap;
+}
