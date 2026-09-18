@@ -42,7 +42,10 @@ pub enum ManifestError {
 
 impl Default for Manifest {
     fn default() -> Self {
-        Self { version: 1, skins: Vec::new() }
+        Self {
+            version: 1,
+            skins: Vec::new(),
+        }
     }
 }
 
@@ -73,7 +76,10 @@ impl Manifest {
     }
 
     pub fn is_valid_id(id: &str) -> bool {
-        !id.is_empty() && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        !id.is_empty()
+            && id
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
     }
 
     /// Returns human-readable problems; an empty list means the manifest and files are good.
@@ -82,7 +88,10 @@ impl Manifest {
         let mut seen = std::collections::HashSet::new();
         for s in &self.skins {
             if !Self::is_valid_id(&s.id) {
-                problems.push(format!("skin id {:?} must be lowercase letters, digits and dashes", s.id));
+                problems.push(format!(
+                    "skin id {:?} must be lowercase letters, digits and dashes",
+                    s.id
+                ));
             }
             if !seen.insert(s.id.clone()) {
                 problems.push(format!("duplicate skin id {:?}", s.id));
@@ -108,14 +117,19 @@ impl Manifest {
                     }
                     match image::ImageReader::open(&file).and_then(|r| r.with_guessed_format()) {
                         Ok(reader) => match reader.into_dimensions() {
-                            Ok((w, h)) if (w, h) != (SKIN_WIDTH, SKIN_HEIGHT) => problems.push(format!(
-                                "skin {:?}: {} is {}×{}, expected {}×{}",
-                                s.id, s.file, w, h, SKIN_WIDTH, SKIN_HEIGHT
-                            )),
+                            Ok((w, h)) if (w, h) != (SKIN_WIDTH, SKIN_HEIGHT) => {
+                                problems.push(format!(
+                                    "skin {:?}: {} is {}×{}, expected {}×{}",
+                                    s.id, s.file, w, h, SKIN_WIDTH, SKIN_HEIGHT
+                                ))
+                            }
                             Ok(_) => {}
-                            Err(e) => problems.push(format!("skin {:?}: cannot read {}: {}", s.id, s.file, e)),
+                            Err(e) => problems
+                                .push(format!("skin {:?}: cannot read {}: {}", s.id, s.file, e)),
                         },
-                        Err(e) => problems.push(format!("skin {:?}: cannot open {}: {}", s.id, s.file, e)),
+                        Err(e) => {
+                            problems.push(format!("skin {:?}: cannot open {}: {}", s.id, s.file, e))
+                        }
                     }
                 }
             }
@@ -132,7 +146,10 @@ impl Manifest {
 
     /// Total bytes of all skin files that exist.
     pub fn total_bytes(&self, dir: &Path) -> u64 {
-        self.skins.iter().filter_map(|s| std::fs::metadata(dir.join(&s.file)).ok().map(|m| m.len())).sum()
+        self.skins
+            .iter()
+            .filter_map(|s| std::fs::metadata(dir.join(&s.file)).ok().map(|m| m.len()))
+            .sum()
     }
 }
 
@@ -141,14 +158,20 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("folderskin-manifest-{}-{}", name, std::process::id()));
+        let d = std::env::temp_dir().join(format!(
+            "folderskin-manifest-{}-{}",
+            name,
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
     }
 
     fn write_png(path: &Path, w: u32, h: u32) {
-        image::RgbaImage::from_pixel(w, h, image::Rgba([10, 20, 30, 255])).save(path).unwrap();
+        image::RgbaImage::from_pixel(w, h, image::Rgba([10, 20, 30, 255]))
+            .save(path)
+            .unwrap();
     }
 
     #[test]
@@ -167,7 +190,12 @@ mod tests {
         write_png(&dir.join("good.png"), SKIN_WIDTH, SKIN_HEIGHT);
         write_png(&dir.join("small.png"), 100, 100);
         let mut m = Manifest::default();
-        for (id, file) in [("good", "good.png"), ("small", "small.png"), ("Bad Id", "good.png"), ("gone", "gone.png")] {
+        for (id, file) in [
+            ("good", "good.png"),
+            ("small", "small.png"),
+            ("Bad Id", "good.png"),
+            ("gone", "gone.png"),
+        ] {
             m.skins.push(SkinEntry {
                 id: id.into(),
                 name: id.into(),
@@ -179,10 +207,24 @@ mod tests {
             });
         }
         let problems = m.validate(&dir);
-        assert!(problems.iter().any(|p| p.contains("small.png is 100×100")), "{problems:?}");
-        assert!(problems.iter().any(|p| p.contains("\"Bad Id\" must be lowercase")), "{problems:?}");
-        assert!(problems.iter().any(|p| p.contains("gone.png is missing")), "{problems:?}");
-        assert!(!problems.iter().any(|p| p.contains("\"good\"")), "{problems:?}");
+        assert!(
+            problems.iter().any(|p| p.contains("small.png is 100×100")),
+            "{problems:?}"
+        );
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.contains("\"Bad Id\" must be lowercase")),
+            "{problems:?}"
+        );
+        assert!(
+            problems.iter().any(|p| p.contains("gone.png is missing")),
+            "{problems:?}"
+        );
+        assert!(
+            !problems.iter().any(|p| p.contains("\"good\"")),
+            "{problems:?}"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
