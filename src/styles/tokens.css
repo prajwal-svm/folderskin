@@ -52,6 +52,8 @@
   /* navigation on the glass */
   --nav-hover: rgba(16, 24, 40, 0.06);
   --nav-active: #ffffff;
+  /* behind a selected folder in the library, as Finder does it */
+  --tile-selected: rgba(16, 24, 40, 0.07);
 
   /* type */
   --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
@@ -110,6 +112,7 @@
 
   --nav-hover: rgba(255, 255, 255, 0.07);
   --nav-active: #232830;
+  --tile-selected: rgba(255, 255, 255, 0.08);
 
   --shadow-pop: 0 0 0 1px var(--island-line), 0 24px 60px -14px rgba(0, 0, 0, 0.8);
 }

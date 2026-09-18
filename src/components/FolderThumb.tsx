@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
+import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 
 /** Degrees the folder turns when the pointer is at the tile's edge. */
@@ -17,7 +18,8 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
  * One folder in the library. While hovered it lifts slightly and turns toward the pointer: the
  * side under the pointer dips away, as if pressed. The motion eases after the pointer each frame
  * (no CSS transition to fight), and settles flat again when the pointer leaves. The star
- * springs in on hover and stays while the skin is a favourite.
+ * springs in on hover and stays while the skin is a favourite; skins the AI assistant made show
+ * an "AI" badge on hover.
  */
 export function FolderThumb({
   skin,
@@ -90,6 +92,7 @@ export function FolderThumb({
 
   const release = useCallback(() => aim(0, 0, 1), [aim]);
 
+  const ai = skin.source === "ai";
   const cls = ["tile", selected ? "is-selected" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
 
   return (
@@ -98,7 +101,7 @@ export function FolderThumb({
         type="button"
         className="tile-hit"
         aria-pressed={selected}
-        aria-label={skin.custom ? `${skin.name} (yours)` : skin.name}
+        aria-label={ai ? `${skin.name} (made with AI)` : skin.custom ? `${skin.name} (yours)` : skin.name}
         onMouseDown={(e) => e.preventDefault()}
         onPointerMove={track}
         onPointerLeave={release}
@@ -107,6 +110,12 @@ export function FolderThumb({
         <span className="tile-art" ref={art}>
           <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} />
         </span>
+        {ai && (
+          <span className="tile-badge" title="Made with AI">
+            <SparklesIcon size={12} />
+            AI
+          </span>
+        )}
         <span className="tile-name">{skin.name}</span>
       </button>
       <button
