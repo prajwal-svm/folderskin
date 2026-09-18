@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { isTauri } from "../lib/devMock";
 
 /**
  * Subscribes to Tauri's native drag-and-drop events (the only way to learn a dropped
@@ -11,6 +12,7 @@ export function useDragDrop(onDrop: (paths: string[]) => void, onHover: (hover: 
   latest.current = { onDrop, onHover };
 
   useEffect(() => {
+    if (!isTauri()) return; // plain browser preview: no native drag-and-drop
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     const setHover = (value: boolean) => {
