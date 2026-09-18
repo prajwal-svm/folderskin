@@ -14,9 +14,12 @@ export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path:
 
 export type PlatformInfo = { os: string; browse_label: string; note: string };
 
+/** Built-in skins plus the plain default folder rendered through the same compositor. */
+export type SkinList = { skins: Skin[]; default_thumbnail: string };
+
 /** Typed wrappers over the Tauri commands exposed by `src-tauri/src/commands.rs`. */
 export const api = {
-  listSkins: () => invoke<Skin[]>("list_skins"),
+  listSkins: () => invoke<SkinList>("list_skins"),
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
   importImage: (path: string) => invoke<Skin>("import_image", { path }),
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),
