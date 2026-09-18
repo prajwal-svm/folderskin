@@ -296,6 +296,38 @@ pub fn preview_png_from_image(img: &image::RgbaImage, size: u32) -> Vec<u8> {
         .expect("the size that was just rendered")
 }
 
+/// The neutral light grey the blank template is painted with.
+const TEMPLATE_GREY: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xFF];
+/// Share of the frame left empty on each side of the blank template.
+const TEMPLATE_MARGIN: f32 = 0.03;
+
+/// The folder template itself, painted a flat neutral light grey and centred on an opaque
+/// `backdrop`, `width` x `height` px.
+///
+/// Image models that can work from a picture are shown this as the exact folder to repaint, so a
+/// whole-folder generation keeps FolderSkin's silhouette, tab and paper strip rather than a folder
+/// the model makes up. It is the normal render with grey artwork, scaled so the folder fills the
+/// frame less a 3% margin, and centred.
+pub fn blank_template(width: u32, height: u32, backdrop: [u8; 3]) -> image::RgbaImage {
+    let art = Artwork {
+        rgba: image::RgbaImage::from_pixel(8, 8, image::Rgba(TEMPLATE_GREY)),
+        focus: (0.5, 0.5),
+    };
+    // The folder's extent in canvas units: the front panel is its widest part, the tab its top.
+    let (x0, x1, y0, y1) = (g::FRONT.x0, g::FRONT.x1, g::TAB_TOP, g::FRONT.y1);
+    let usable = 1.0 - 2.0 * TEMPLATE_MARGIN;
+    let px_per_unit = (width as f32 * usable / (x1 - x0)).min(height as f32 * usable / (y1 - y0));
+    let size = ((g::CANVAS * px_per_unit).round() as u32).max(1);
+    let icon = render_icon_set(&art, &[size]).sizes.remove(0).1;
+
+    let s = size as f32 / g::CANVAS;
+    let left = (width as f32 / 2.0 - (x0 + x1) / 2.0 * s).round() as i64;
+    let top = (height as f32 / 2.0 - (y0 + y1) / 2.0 * s).round() as i64;
+    let mut frame = image::RgbaImage::new(width, height);
+    image::imageops::replace(&mut frame, &icon, left, top);
+    crate::matte::flatten(&frame, backdrop)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,6 +569,61 @@ mod tests {
         let mid = art.rgba.get_pixel(0, 479).0;
         assert_eq!(mid, art.rgba.get_pixel(1023, 479).0);
         assert!(mid[0] < 0x7C && mid[0] > 0x4E);
+    }
+
+    #[test]
+    fn the_blank_template_is_our_folder_centred_on_the_backdrop() {
+        let (w, h) = (1166, 1091);
+        let img = blank_template(w, h, [255, 0, 255]);
+        assert_eq!(img.dimensions(), (w, h));
+        let magenta = [255, 0, 255, 255];
+        for (x, y) in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)] {
+            assert_eq!(img.get_pixel(x, y).0, magenta, "corner ({x},{y})");
+        }
+        assert!(img.pixels().all(|p| p.0[3] == 255), "the frame is opaque");
+
+        // The folder's own extent. Magenta has no green and every part of the folder has plenty,
+        // so this skips the faint Lanczos ringing just outside the outline.
+        let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+        for (x, y, p) in img.enumerate_pixels() {
+            if p.0[1] > 24 {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x), y1.max(y));
+            }
+        }
+        // Height-bound: 94% of the frame, centred, at the template's own aspect (994 x 937).
+        let (fw, fh) = (x1 - x0 + 1, y1 - y0 + 1);
+        assert!((fh as f32 - 0.94 * h as f32).abs() <= 3.0, "height {fh}");
+        assert!(
+            (fw as f32 / fh as f32 - 994.0 / 937.0).abs() < 0.01,
+            "{fw}x{fh}"
+        );
+        assert!(
+            (x0 as i32 - (w - x1 - 1) as i32).abs() <= 2,
+            "centred: {x0}..{x1}"
+        );
+        assert!(
+            (y0 as i32 - (h - y1 - 1) as i32).abs() <= 2,
+            "centred: {y0}..{y1}"
+        );
+
+        // Grey front panel, cream paper strip, backdrop beside the tab. Canvas points map to the
+        // frame through the folder's box.
+        let at = |cx: f32, cy: f32| {
+            let x = x0 as f32 + (cx - 15.0) / 994.0 * fw as f32;
+            let y = y0 as f32 + (cy - 36.5) / 937.0 * fh as f32;
+            img.get_pixel(x.round() as u32, y.round() as u32).0
+        };
+        let front = at(512.0, 600.0);
+        assert!(
+            front[..3].iter().all(|&c| (c as i32 - 0xCC).abs() <= 4),
+            "{front:?}"
+        );
+        let paper = at(512.0, 146.0);
+        assert!(
+            paper[0] > 225 && paper[1] > 220 && paper[2] > 210,
+            "{paper:?}"
+        );
+        assert_eq!(at(700.0, 60.0), magenta, "beside the tab");
     }
 
     #[test]

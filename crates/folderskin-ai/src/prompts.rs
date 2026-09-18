@@ -6,7 +6,9 @@
 //!   folder. This is the normal path: the geometry stays ours, so every skin lines up.
 //! * [`Shape::Folder`] asks the model to draw the whole folder as one object on a key colour.
 //!   It gives up pixel-exact geometry in exchange for artwork that can sit in real relief and
-//!   break over the folder's top edge. The caller cuts the key colour out.
+//!   break over the folder's top edge. The caller cuts the key colour out. When the model can
+//!   take a picture and the user attached none, the app sends its own blank template instead and
+//!   asks for that exact folder to be repainted ([`compose_on_template`]).
 //!
 //! The wording below is FolderSkin's own. What makes it work is structural, not stylistic:
 //! state the subject, forbid the failure modes by name, and end with a hard output contract.
@@ -176,6 +178,32 @@ pub fn compose_with_reference(
     format!("{lead}\n\n{base}")
 }
 
+/// The prompt for a whole-folder run whose reference picture is FolderSkin's own blank template:
+/// a plain light-grey folder centred on the flat `key_hex` colour, at `width` x `height`.
+///
+/// The model repaints that exact folder instead of inventing one, so the result keeps our
+/// silhouette, tab, paper strip and framing, and the key colour around it stays flat for the
+/// cutout.
+pub fn compose_on_template(idea: &str, width: u32, height: u32, key_hex: &str) -> String {
+    let idea = idea.trim();
+    format!(
+        "The attached image is the exact folder template to repaint: a blank light-grey folder, \
+         seen straight on, centred on a flat {key_hex} background. Keep its shape exactly as it \
+         is: the outline, the only tab (rounded, at the top left), the pale paper strip showing \
+         between the back and front panels, and the folder's size and position in the frame. Do \
+         not move, resize, tilt, redraw or restyle the folder's shape, and do not add tabs, \
+         sheets, flaps, stacked folders or any other layers.\n\n\
+         Paint this onto the folder: {idea}. Wrap the artwork across the back panel, tab \
+         included, and the front panel so the two read as one continuous surface that follows the \
+         folder's own edges and rounded corners. Keep the paper strip plain or give it only a \
+         faint tint. Soft light and shading that follow the folder's form are welcome. No text, \
+         letters, numbers, logos or watermarks.\n\n\
+         Output: one image, {width} by {height} pixels, framed exactly like the template. Keep \
+         the background a completely flat {key_hex} with no gradient, texture, shadow, \
+         reflection or noise anywhere in it, and keep that colour out of the folder itself."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,6 +254,26 @@ mod tests {
         let p = compose_with_reference(Shape::Skin, "keep it moody", 1024, 958, None);
         assert!(p.starts_with("Use the supplied picture"));
         assert!(p.contains("keep it moody"));
+    }
+
+    #[test]
+    fn template_runs_repaint_the_attached_folder_on_the_key_colour() {
+        let p = compose_on_template("  a copper patina ", 1166, 1091, "#FF00FF");
+        assert!(p.starts_with("The attached image is the exact folder template"));
+        for needle in [
+            "Paint this onto the folder: a copper patina.",
+            "only tab",
+            "paper strip",
+            "size and position in the frame",
+            "flat #FF00FF",
+            "1166 by 1091",
+        ] {
+            assert!(p.contains(needle), "missing {needle:?} in: {p}");
+        }
+        assert!(
+            !p.contains("transparent"),
+            "a template run keeps the key colour: {p}"
+        );
     }
 
     #[test]
