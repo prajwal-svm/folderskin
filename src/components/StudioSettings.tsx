@@ -95,7 +95,13 @@ export function StudioSettings({
             }}
           >
             <span className="provider-name">{p.label}</span>
-            <span className={p.has_key ? "provider-state is-ready" : "provider-state"}>{p.has_key ? "Key saved" : "No key"}</span>
+            {p.has_key ? (
+              <span className="provider-state is-ready" title="Key saved" aria-label="key saved">
+                <CheckIcon size={15} playOnMount />
+              </span>
+            ) : (
+              <span className="provider-state">No key</span>
+            )}
           </button>
         ))}
       </div>

@@ -205,8 +205,11 @@
   background: var(--hint);
 }
 
-.model-dot.is-ready {
-  background: var(--ok);
+/* a saved key reads as a green check wherever it shows */
+.model-ok {
+  display: inline-flex;
+  flex: none;
+  color: var(--ok);
 }
 
 .send-btn {
@@ -473,6 +476,7 @@
 }
 
 .provider-state.is-ready {
+  display: inline-flex;
   color: var(--ok);
 }
 
