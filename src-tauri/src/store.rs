@@ -7,7 +7,7 @@
 //! skins/
 //! ├── skins.json                 the index: {"version": 1, "skins": [...]}
 //! ├── 3f2a9c0b1d4e.png           a skin's picture, longest side at most 2048 px
-//! └── 3f2a9c0b1d4e.thumb-v1.png  its gallery thumbnail, 256 px, so a launch renders nothing
+//! └── 3f2a9c0b1d4e.thumb-v2.png  its gallery thumbnail, 512 px, so a launch renders nothing
 //! ```
 //!
 //! A skin's id is `user:` plus the first 12 hex digits of the SHA-256 of what the user brought in
@@ -38,7 +38,7 @@ const ID_PREFIX: &str = "user:";
 pub const MAX_STORED_SIDE: u32 = 2048;
 /// Edge of a saved skin's gallery thumbnail. Changing it needs a
 /// [`THUMB_CACHE_VERSION`](crate::commands::THUMB_CACHE_VERSION) bump so old ones are redrawn.
-pub const THUMB_SIZE: u32 = 256;
+pub const THUMB_SIZE: u32 = 512;
 
 /// How a skin becomes an icon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

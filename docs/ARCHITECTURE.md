@@ -134,7 +134,7 @@ Every picture the user imports and every AI result is saved as soon as it arrive
 skins/
 ├── skins.json                 index: {"version": 1, "skins": [...]}
 ├── 3f2a9c0b1d4e.png           the skin, longest side at most 2048 px
-└── 3f2a9c0b1d4e.thumb-v1.png  its 256 px gallery thumbnail
+└── 3f2a9c0b1d4e.thumb-v2.png  its 512 px gallery thumbnail
 ```
 
 Each index entry records the id, name, kind (`artwork` or `folder`), source (`import` or `ai`),

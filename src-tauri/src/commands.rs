@@ -18,7 +18,7 @@ use tauri::{AppHandle, Manager, State};
 
 /// Bump when the compositor's output changes so cached thumbnails, the built-in ones and the
 /// saved skins' alike, are re-rendered.
-pub const THUMB_CACHE_VERSION: u32 = 1;
+pub const THUMB_CACHE_VERSION: u32 = 2;
 const THUMB_SIZE: u32 = 512;
 const DEFAULT_ID: &str = "__default__";
 const IMAGE_EXTENSIONS: &[&str] = &[
