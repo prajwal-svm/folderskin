@@ -158,9 +158,15 @@ where the icon's geometry is not ours.
 
 ## Size budget
 
-Under 15 MB installed: 12 MB for the macOS app bundle as of 0.1.0, made up of a stripped
-release binary of about 9.5 MB (2 MB of that is the TLS stack the AI assistant needs), 2.3 MB
-of skins, a 165 KB variable font (Manrope), and a frontend bundle under 300 KB. `image` is built with
-`default-features = false` and only `png`, `jpeg` and `webp`, and the release profile uses
-`opt-level = "s"`, LTO and one codegen unit. Any dependency that would move this budget needs
-a reason in the pull request.
+Under 15 MB installed. As of 0.1.0 the macOS app bundle (Apple Silicon) is 10.2 MB and its
+DMG is 8.5 MB. The bundle is an 8.7 MB stripped release binary, the 1.4 MB app icon and a
+1 KB `Info.plist`. The binary carries the Rust code and everything embedded at build time: the
+2.3 MB of built-in skins (`src-tauri/build.rs`) and the frontend, 540 KB before compression
+including a 165 KB variable font (Manrope). `image` is built with `default-features = false`
+and only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one
+codegen unit. Any dependency that would move this budget needs a reason in the pull request.
+
+Vite copies everything in `public/` into every build, and Tauri embeds the build in the binary,
+so dev-only files stay out of `public/`. The browser mock reads its skin previews from
+`assets/previews`, which Vite serves in dev only; while they sat in `public/` they added 2.3 MB
+to the binary without showing up as files in the bundle.

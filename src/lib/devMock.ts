@@ -1,6 +1,7 @@
 /**
  * Browser-only stand-in for the Tauri commands so `pnpm dev` in a plain browser shows the
- * real layout with the generated previews (served from assets/previews via public/previews).
+ * real layout with the generated previews. Vite serves them from assets/previews in dev only,
+ * so they never reach a build (the app renders its own thumbnails).
  * Never used inside the app: `isTauri()` is true there.
  */
 import type { AiCatalogue, AiGenerateRequest, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
@@ -24,15 +25,15 @@ export function isTauri(): boolean {
 
 export const mockApi = {
   listSkins: async (): Promise<SkinList> => ({
-    skins: IDS.map(([id, name, collection]) => ({ id, name, collection, thumbnail: `/previews/${id}.png`, custom: false })),
-    default_thumbnail: "/previews/mesh.png",
+    skins: IDS.map(([id, name, collection]) => ({ id, name, collection, thumbnail: `/assets/previews/${id}.png`, custom: false })),
+    default_thumbnail: "/assets/previews/mesh.png",
   }),
   inspectPath: async (path: string): Promise<PathInfo> => ({ kind: "folder", name: path.split(/[\\/]/).pop() || path, path }),
-  importImage: async (path: string): Promise<Skin> => ({ id: `custom:${path}`, name: "your picture", collection: "yours", thumbnail: "/previews/sunset.png", custom: true }),
+  importImage: async (path: string): Promise<Skin> => ({ id: `custom:${path}`, name: "your picture", collection: "yours", thumbnail: "/assets/previews/sunset.png", custom: true }),
   applySkin: async () => new Promise<void>((r) => setTimeout(r, 600)),
   revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
-  folderIcon: async (): Promise<string> => "/previews/mesh.png",
+  folderIcon: async (): Promise<string> => "/assets/previews/mesh.png",
   aiCatalogue: async (): Promise<AiCatalogue> => ({
     providers: [
       {
@@ -67,6 +68,6 @@ export const mockApi = {
   aiTestKey: async () => {},
   aiGenerate: async (_req: AiGenerateRequest): Promise<Skin> => {
     await new Promise((r) => setTimeout(r, 1200));
-    return { id: "custom:demo", name: "Generated", collection: "yours", thumbnail: "/previews/aurora.png", custom: true };
+    return { id: "custom:demo", name: "Generated", collection: "yours", thumbnail: "/assets/previews/aurora.png", custom: true };
   },
 };

@@ -21,6 +21,9 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   `paper`, `denim`, `slate` (grain), `halftone`, `stripes`, `bubbles` (pop).
 - Use your own photo as a skin: drop a picture on the window, or pick one with the
   "your photo" button.
+- An optional AI assistant that makes skins with your own API key for OpenAI, xAI,
+  Recraft, Google, Black Forest Labs, Stability AI or Ideogram. Keys are kept in the
+  operating system's keychain. See [docs/AI.md](docs/AI.md).
 - Revert, which restores the operating system's default folder icon and removes the
   files FolderSkin wrote.
 - Gallery tabs (`all`, the three collections, and `faves`) with favourites stored
@@ -33,5 +36,7 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 
 ### Notes
 
-- No accounts, no paywall, no network access, no telemetry.
-- The installed app stays under 15 MB on every platform.
+- No accounts, no paywall, no telemetry. The only network access is the optional AI
+  assistant, which calls the provider you pick directly.
+- The macOS app is 10.2 MB installed, from an 8.5 MB DMG. The Windows and Linux packages
+  have not been measured yet.
