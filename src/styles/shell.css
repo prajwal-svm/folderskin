@@ -15,9 +15,9 @@
   min-height: 0;
   border-radius: var(--r-island);
   background: var(--island);
-  box-shadow: var(--shadow-island);
+  border: 1px solid var(--island-line);
   overflow: hidden;
-  transition: box-shadow var(--t-base) ease, background-color var(--t-base) ease;
+  transition: background-color var(--t-base) ease;
 }
 
 .island-main {
@@ -105,7 +105,6 @@
   transition:
     background-color var(--t-fast) ease,
     color var(--t-fast) ease,
-    box-shadow var(--t-base) ease,
     transform var(--t-fast) var(--ease-out);
 }
 
@@ -127,7 +126,6 @@
   background: var(--nav-active);
   color: var(--ink);
   font-weight: 750;
-  box-shadow: var(--shadow-raised);
 }
 
 .nav-icon {
@@ -339,7 +337,7 @@
   border-radius: 11px;
   background: var(--island);
   color: var(--sky-deep);
-  box-shadow: var(--shadow-raised);
+  border: 1px solid var(--line);
   display: inline-flex;
   align-items: center;
   justify-content: center;

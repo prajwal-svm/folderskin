@@ -19,7 +19,6 @@
     background-color var(--t-fast) ease,
     color var(--t-fast) ease,
     transform var(--t-fast) var(--ease-out),
-    box-shadow var(--t-base) ease,
     opacity var(--t-fast) ease;
 }
 
@@ -34,13 +33,11 @@
 .btn-primary {
   background: var(--sky);
   color: var(--on-sky);
-  box-shadow: 0 8px 20px -8px var(--sky-glow);
 }
 
 .btn-primary:hover:not(:disabled),
 .btn-primary:focus-visible:not(:disabled) {
   background: var(--sky-deep);
-  box-shadow: 0 10px 24px -8px var(--sky-glow);
 }
 
 .btn-primary.is-done,
@@ -48,7 +45,6 @@
   opacity: 1;
   background: var(--ok-soft);
   color: var(--ok);
-  box-shadow: none;
 }
 
 .btn-secondary {
@@ -193,7 +189,7 @@
   left: 0;
   border-radius: var(--r-pill);
   background: var(--island);
-  box-shadow: var(--shadow-raised);
+  border: 1px solid var(--island-line);
   z-index: -1;
   transition: transform var(--t-slow) var(--ease-spring), width var(--t-slow) var(--ease-spring);
 }
@@ -297,6 +293,7 @@ select.input {
 .search {
   flex: 0 1 240px;
   min-width: 0;
+  cursor: text;
   height: 38px;
   display: flex;
   align-items: center;
@@ -372,7 +369,6 @@ select.input {
   height: 16px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform var(--t-slow) var(--ease-spring);
 }
 

@@ -43,7 +43,33 @@ button {
   background: none;
   padding: 0;
   margin: 0;
+}
+
+/* Anything that reacts to a click shows the hand; text fields show the text cursor. */
+button,
+[role="button"],
+[role="tab"],
+[role="radio"],
+[role="switch"],
+a[href],
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
   cursor: default;
+}
+
+[aria-busy="true"],
+button[aria-busy="true"] {
+  cursor: progress;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+textarea {
+  cursor: text;
 }
 
 input,

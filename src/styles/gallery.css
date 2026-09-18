@@ -84,7 +84,6 @@
   gap: 4px;
   width: 100%;
   padding: 4px 4px 6px;
-  perspective: 560px;
 }
 
 .tile-art {
@@ -93,19 +92,9 @@
   width: 100%;
   aspect-ratio: 1;
   border-radius: var(--r-card);
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translate3d(var(--tx, 0px), var(--ty, 0px), 0);
-  transform-style: preserve-3d;
-  transition:
-    transform 560ms var(--ease-spring),
-    scale var(--t-fast) var(--ease-out);
+  /* FolderThumb eases the tilt toward the pointer each frame; only the press is a transition. */
+  transition: scale var(--t-fast) var(--ease-out);
   will-change: transform;
-}
-
-/* While the pointer moves the art follows it closely; on leave it springs back. */
-.tile.is-tracking .tile-art {
-  transition:
-    transform 110ms linear,
-    scale var(--t-fast) var(--ease-out);
 }
 
 .tile-hit:active .tile-art {
@@ -134,36 +123,12 @@
   transform: none;
 }
 
-.tile-img,
-.tile-glare {
+.tile-img {
   position: absolute;
   inset: 7%;
   width: 86%;
   height: 86%;
-}
-
-.tile-img {
   object-fit: contain;
-  filter: var(--folder-shadow);
-}
-
-/* light that follows the pointer across the folder only (masked by its own picture) */
-.tile-glare {
-  background: radial-gradient(circle at var(--gx, 50%) var(--gy, 30%), rgba(255, 255, 255, 0.5), transparent 58%);
-  mix-blend-mode: soft-light;
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  opacity: 0;
-  transition: opacity var(--t-base) ease;
-  pointer-events: none;
-}
-
-.tile.is-tracking .tile-glare {
-  opacity: 1;
 }
 
 .tile-name {
@@ -200,7 +165,7 @@
   justify-content: center;
   background: var(--island);
   color: var(--muted);
-  box-shadow: var(--shadow-raised);
+  border: 1px solid var(--line);
   opacity: 0;
   transform: scale(0.4) rotate(-30deg);
   transition:

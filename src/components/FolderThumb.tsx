@@ -1,18 +1,23 @@
-import { useCallback, useRef, type CSSProperties, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { StarIcon } from "./icons/star";
 
-/** Degrees the folder turns at the edge of the tile, and pixels it drifts toward the pointer. */
-const TILT_Y = 16;
-const TILT_X = 14;
-const DRIFT = 6;
+/** Degrees the folder turns when the pointer is at the tile's edge. */
+const TURN_Y = 12;
+const TURN_X = 10;
+/** Pixels the folder drifts toward the pointer, and how much it lifts while hovered. */
+const DRIFT = 5;
+const LIFT = 1.04;
+/** Share of the remaining distance covered each frame: the folder eases after the pointer. */
+const FOLLOW = 0.16;
 
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
- * One folder in the library. It turns to face the pointer and a soft light follows the
- * pointer across the folder (and only the folder: the light is masked by the picture itself).
- * The star springs in on hover and stays while the skin is a favourite.
+ * One folder in the library. While hovered it lifts slightly and turns toward the pointer: the
+ * side under the pointer dips away, as if pressed. The motion eases after the pointer each frame
+ * (no CSS transition to fight), and settles flat again when the pointer leaves. The star
+ * springs in on hover and stays while the skin is a favourite.
  */
 export function FolderThumb({
   skin,
@@ -32,40 +37,63 @@ export function FolderThumb({
   /** Present for the user's own skins. */
   onRemove?: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const frame = useRef(0);
+  const art = useRef<HTMLSpanElement>(null);
+  // x and y run from -1 (left, top) to 1 (right, bottom); t* are where the pointer wants them.
+  const m = useRef({ x: 0, y: 0, s: 1, tx: 0, ty: 0, ts: 1, frame: 0 });
 
-  const track = useCallback((e: PointerEvent<HTMLButtonElement>) => {
-    const el = ref.current;
-    if (!el || reducedMotion()) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
-    cancelAnimationFrame(frame.current);
-    frame.current = requestAnimationFrame(() => {
-      el.classList.add("is-tracking");
-      el.style.setProperty("--ry", `${((x - 0.5) * TILT_Y).toFixed(2)}deg`);
-      el.style.setProperty("--rx", `${((0.5 - y) * TILT_X).toFixed(2)}deg`);
-      el.style.setProperty("--tx", `${((x - 0.5) * DRIFT).toFixed(2)}px`);
-      el.style.setProperty("--ty", `${((y - 0.5) * DRIFT).toFixed(2)}px`);
-      el.style.setProperty("--gx", `${(x * 100).toFixed(1)}%`);
-      el.style.setProperty("--gy", `${(y * 100).toFixed(1)}%`);
-    });
-  }, []);
-
-  const release = useCallback(() => {
-    const el = ref.current;
+  const step = useCallback(() => {
+    const v = m.current;
+    v.x += (v.tx - v.x) * FOLLOW;
+    v.y += (v.ty - v.y) * FOLLOW;
+    v.s += (v.ts - v.s) * FOLLOW;
+    const rest = Math.abs(v.tx - v.x) < 0.002 && Math.abs(v.ty - v.y) < 0.002 && Math.abs(v.ts - v.s) < 0.0005;
+    const el = art.current;
+    if (rest) {
+      v.frame = 0;
+      v.x = v.tx;
+      v.y = v.ty;
+      v.s = v.ts;
+    } else {
+      v.frame = requestAnimationFrame(step);
+    }
     if (!el) return;
-    cancelAnimationFrame(frame.current);
-    el.classList.remove("is-tracking");
-    for (const v of ["--rx", "--ry", "--tx", "--ty"]) el.style.removeProperty(v);
+    el.style.transform =
+      rest && v.x === 0 && v.y === 0 && v.s === 1
+        ? ""
+        : `perspective(640px) rotateX(${(-v.y * TURN_X).toFixed(2)}deg) rotateY(${(v.x * TURN_Y).toFixed(2)}deg) ` +
+          `translate3d(${(v.x * DRIFT).toFixed(2)}px, ${(v.y * DRIFT).toFixed(2)}px, 0) scale(${v.s.toFixed(4)})`;
   }, []);
+
+  const aim = useCallback(
+    (tx: number, ty: number, ts: number) => {
+      const v = m.current;
+      v.tx = tx;
+      v.ty = ty;
+      v.ts = ts;
+      if (!v.frame) v.frame = requestAnimationFrame(step);
+    },
+    [step],
+  );
+
+  useEffect(() => () => cancelAnimationFrame(m.current.frame), []);
+
+  const track = useCallback(
+    (e: PointerEvent<HTMLButtonElement>) => {
+      if (reducedMotion()) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const x = Math.min(1, Math.max(-1, ((e.clientX - r.left) / r.width) * 2 - 1));
+      const y = Math.min(1, Math.max(-1, ((e.clientY - r.top) / r.height) * 2 - 1));
+      aim(x, y, LIFT);
+    },
+    [aim],
+  );
+
+  const release = useCallback(() => aim(0, 0, 1), [aim]);
 
   const cls = ["tile", selected ? "is-selected" : "", favorite ? "is-favorite" : ""].filter(Boolean).join(" ");
-  const mask = { maskImage: `url("${skin.thumbnail}")`, WebkitMaskImage: `url("${skin.thumbnail}")` };
 
   return (
-    <div className={cls} style={{ "--i": Math.min(index, 24) } as CSSProperties} ref={ref}>
+    <div className={cls} style={{ "--i": Math.min(index, 24) } as CSSProperties}>
       <button
         type="button"
         className="tile-hit"
@@ -76,9 +104,8 @@ export function FolderThumb({
         onPointerLeave={release}
         onClick={onSelect}
       >
-        <span className="tile-art">
+        <span className="tile-art" ref={art}>
           <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} />
-          <span className="tile-glare" style={mask} aria-hidden="true" />
         </span>
         <span className="tile-name">{skin.name}</span>
       </button>

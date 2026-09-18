@@ -59,19 +59,21 @@
   opacity: 1;
 }
 
-.is-drop-target {
-  box-shadow: var(--shadow-island), 0 0 38px -8px var(--sky-glow);
-}
-
 /* ---------- the folder ---------- */
 
 .stage-art {
   position: relative;
+  cursor: pointer;
   width: min(232px, 78%);
   aspect-ratio: 1;
   flex: none;
   border-radius: 28px;
   transition: transform var(--t-slow) var(--ease-spring);
+}
+
+.is-applying .stage-art,
+.is-reverting .stage-art {
+  cursor: progress;
 }
 
 .stage-art:focus-visible .stage-halo {
@@ -105,7 +107,6 @@
 
 .stage-img {
   object-fit: contain;
-  filter: var(--stage-shadow);
   animation: arrive 640ms var(--ease-spring) both;
 }
 
@@ -139,16 +140,16 @@
   0% {
     opacity: 0;
     transform: translateY(-22px) scale(0.84) rotate(-4deg);
-    filter: blur(6px) var(--stage-shadow);
+    filter: blur(6px);
   }
   60% {
     opacity: 1;
-    filter: blur(0) var(--stage-shadow);
+    filter: blur(0);
   }
   100% {
     opacity: 1;
     transform: none;
-    filter: var(--stage-shadow);
+    filter: none;
   }
 }
 
@@ -178,35 +179,62 @@
   }
 }
 
-/* ---------- the empty folder: a blueprint that marches while it waits ---------- */
+/* ---------- the empty folder: the macOS folder, its outline marching while it waits ---------- */
 
-.stage-ghost {
+/* Shared by every FolderGhost (the studio's placeholder too). The mac tone's panels are filled by
+   gradients on the SVG itself, so nothing here may set their fill. */
+.ghost {
   overflow: visible;
-  transition: transform var(--t-slow) var(--ease-spring);
 }
 
-.stage-ghost path {
-  stroke: var(--dash);
-  stroke-width: 7;
-  stroke-dasharray: 22 16;
+.ghost path {
   stroke-linejoin: round;
-  animation: march 2.4s linear infinite;
-  transition: stroke var(--t-base) ease, fill var(--t-base) ease;
 }
 
-.stage-ghost .ghost-back {
+.ghost-neutral.ghost-fill .ghost-back {
   fill: var(--well);
 }
 
-.stage-ghost .ghost-paper {
+.ghost-neutral.ghost-fill .ghost-paper {
   fill: var(--island);
-  stroke-dasharray: none;
-  stroke-width: 5;
-  opacity: 0.9;
 }
 
-.stage-ghost .ghost-front {
+.ghost-neutral.ghost-fill .ghost-front {
   fill: color-mix(in srgb, var(--well) 55%, var(--island));
+}
+
+.ghost-mac.ghost-fill .ghost-paper {
+  fill: #ffffff;
+}
+
+:root[data-theme="dark"] .ghost-mac.ghost-fill .ghost-paper {
+  fill: #e9f0f6;
+}
+
+.ghost-line:not(.ghost-fill) path {
+  fill: none;
+}
+
+.ghost-line .ghost-back,
+.ghost-line .ghost-front {
+  stroke: var(--dash);
+  stroke-width: 7;
+  stroke-dasharray: 22 16;
+  animation: march 2.4s linear infinite;
+  transition: stroke var(--t-base) ease;
+}
+
+.ghost-line .ghost-paper {
+  stroke: none;
+}
+
+.ghost-mac.ghost-line .ghost-back,
+.ghost-mac.ghost-line .ghost-front {
+  stroke: #2f8fd4;
+}
+
+.stage-ghost {
+  transition: transform var(--t-slow) var(--ease-spring), filter var(--t-base) ease;
 }
 
 .stage-art:hover .stage-ghost,
@@ -214,10 +242,10 @@
   transform: scale(1.03) translateY(-2px);
 }
 
-/* Pointing at the empty folder invites a click: the lines wake up and the halo warms. */
-.stage-art:hover .stage-ghost path,
-.stage-art:focus-visible .stage-ghost path {
-  stroke: color-mix(in srgb, var(--sky) 70%, var(--dash));
+/* Pointing at the empty folder invites a click: the outline hurries and the halo warms. */
+.stage-art:hover .ghost-line path,
+.stage-art:focus-visible .ghost-line path {
+  stroke: var(--sky-deep);
   animation-duration: 1.2s;
 }
 
@@ -225,24 +253,24 @@
   opacity: 0.9;
 }
 
-.is-drop-target .stage-ghost path {
+/* Something is being dragged over the window: brighter folder, fast bright outline. */
+.is-drop-target .stage-ghost.ghost-fill {
+  filter: brightness(1.07) saturate(1.1);
+}
+
+.is-drop-target .ghost-line path {
   stroke: var(--sky);
   animation-duration: 0.7s;
 }
 
-.is-drop-target .stage-ghost .ghost-front {
-  fill: var(--sky-wash);
-}
-
-/* A skin chosen before any folder: it waits inside the blueprint. */
+/* A skin chosen before any folder waits inside it, under the marching outline. */
 .stage-ghost-skin {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  opacity: 0.5;
-  animation: fade-in var(--t-slow) ease both;
+  animation: swap 520ms var(--ease-spring) both;
 }
 
 @keyframes march {

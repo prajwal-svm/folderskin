@@ -66,7 +66,7 @@
   justify-content: center;
   color: var(--sky-deep);
   background: radial-gradient(circle at 30% 20%, var(--island), var(--sky-soft));
-  box-shadow: var(--shadow-raised);
+  border: 1px solid var(--line);
   margin-bottom: 6px;
 }
 
@@ -94,13 +94,11 @@
   border-radius: 20px;
   background: var(--island);
   border: 1px solid var(--line);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 30px -16px rgba(16, 24, 40, 0.25);
-  transition: border-color var(--t-fast) ease, box-shadow var(--t-base) ease;
+  transition: border-color var(--t-fast) ease;
 }
 
 .composer:focus-within {
   border-color: var(--sky);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 14px 34px -14px var(--sky-glow);
 }
 
 .composer-input {
@@ -165,7 +163,6 @@
 
 .seg-sm .seg-btn.is-active {
   background: var(--island);
-  box-shadow: var(--shadow-raised);
 }
 
 .model-pill {
@@ -210,7 +207,6 @@
 
 .model-dot.is-ready {
   background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-soft);
 }
 
 .send-btn {
@@ -348,14 +344,13 @@
 
 .turn-img {
   object-fit: contain;
-  filter: var(--stage-shadow);
   animation: develop-in 900ms var(--ease-out) both;
 }
 
 @keyframes develop-in {
   0% {
     opacity: 0;
-    filter: blur(10px) saturate(0.2) var(--stage-shadow);
+    filter: blur(10px) saturate(0.2);
     transform: scale(0.94);
   }
   60% {
@@ -363,7 +358,7 @@
   }
   100% {
     opacity: 1;
-    filter: blur(0) saturate(1) var(--stage-shadow);
+    filter: none;
     transform: none;
   }
 }
@@ -419,24 +414,9 @@
   overflow: visible;
 }
 
-.develop-ghost path {
-  stroke: var(--dash);
-  stroke-width: 7;
-  stroke-dasharray: 22 16;
-  animation: march 1.6s linear infinite;
-}
-
-.develop-ghost .ghost-back {
-  fill: var(--well);
-}
-
-.develop-ghost .ghost-paper {
-  fill: var(--island);
-  stroke-dasharray: none;
-}
-
+.develop-ghost .ghost-back,
 .develop-ghost .ghost-front {
-  fill: color-mix(in srgb, var(--well) 55%, var(--island));
+  animation-duration: 1.6s;
 }
 
 .develop-light {
@@ -575,7 +555,7 @@
   height: 96px;
   flex: none;
   border-radius: 14px;
-  box-shadow: var(--shadow-raised);
+  border: 1px solid var(--line);
   -webkit-user-drag: element;
   cursor: grab;
 }

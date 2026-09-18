@@ -97,8 +97,9 @@ export function FolderStage({
             <StageImage key={folder?.path ?? "none"} src={src} />
           ) : (
             <>
-              <FolderGhost className="stage-ghost" />
+              <FolderGhost className="stage-ghost" tone="mac" layer="fill" />
               {skin && !drag && <img className="stage-ghost-skin" src={skin.thumbnail} alt="" key={skin.id} />}
+              <FolderGhost className="stage-ghost" tone="mac" layer="line" />
             </>
           )}
           {busy && <span className="stage-ring" aria-hidden="true" />}

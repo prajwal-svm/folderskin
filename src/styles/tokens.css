@@ -5,6 +5,9 @@
  * Surfaces: the window is glass on macOS (transparent over the system material) and --canvas
  * elsewhere. Content sits on "islands" (--island). Inside an island, recessed controls sit in
  * "wells" (--well). Selection is always a tint or a raised pill, never an outline.
+ *
+ * Depth: no shadows, except on things that float above the window (modals, popovers, toasts:
+ * --shadow-pop). Everything else is separated by hairline borders and tints.
  */
 
 :root {
@@ -57,13 +60,7 @@
   --gap: 10px;
 
   /* depth */
-  --shadow-island: 0 0 0 1px var(--island-line), 0 1px 2px rgba(16, 24, 40, 0.04),
-    0 18px 44px -20px rgba(16, 24, 40, 0.24);
-  --shadow-raised: 0 0 0 1px var(--island-line), 0 1px 2px rgba(16, 24, 40, 0.08),
-    0 3px 10px -4px rgba(16, 24, 40, 0.12);
   --shadow-pop: 0 0 0 1px var(--island-line), 0 22px 56px -14px rgba(16, 24, 40, 0.34);
-  --folder-shadow: drop-shadow(0 2px 3px rgba(16, 24, 40, 0.16));
-  --stage-shadow: drop-shadow(0 14px 22px rgba(16, 24, 40, 0.2));
 
   /* motion */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -106,11 +103,7 @@
   --nav-hover: rgba(255, 255, 255, 0.07);
   --nav-active: #232830;
 
-  --shadow-island: 0 0 0 1px var(--island-line), 0 20px 48px -22px rgba(0, 0, 0, 0.75);
-  --shadow-raised: 0 0 0 1px var(--island-line), 0 2px 8px -2px rgba(0, 0, 0, 0.5);
   --shadow-pop: 0 0 0 1px var(--island-line), 0 24px 60px -14px rgba(0, 0, 0, 0.8);
-  --folder-shadow: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
-  --stage-shadow: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.55));
 }
 
 @font-face {
