@@ -61,9 +61,7 @@ export function Sidebar({
         </div>
       </div>
       <button type="button" className="btn btn-primary cta" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
-        <span className="cta-badge">
-          <ImageIcon size={14} />
-        </span>
+        <ImageIcon size={16} />
         Add your photo
       </button>
       <div className="sidebar-scroll">
