@@ -39,7 +39,6 @@ export function FolderThumb({
       >
         <img src={skin.thumbnail} alt="" draggable={false} />
       </button>
-      <span className="thumb-name">{skin.name}</span>
       <button
         type="button"
         className="star"

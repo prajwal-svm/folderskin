@@ -361,21 +361,6 @@ img {
   filter: drop-shadow(0 2px 3px rgba(17, 17, 17, 0.16));
 }
 
-.thumb-name {
-  position: absolute;
-  left: 8px;
-  bottom: 6px;
-  font-weight: 700;
-  font-size: 11px;
-  color: var(--muted);
-  opacity: 0;
-  transition: opacity 150ms ease;
-}
-
-.thumb-wrap:hover .thumb-name,
-.thumb-wrap.is-selected .thumb-name {
-  opacity: 1;
-}
 
 .star {
   position: absolute;
