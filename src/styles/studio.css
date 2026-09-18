@@ -203,6 +203,11 @@
   flex: none;
   border-radius: 50%;
   background: var(--hint);
+  transition: background-color var(--t-base) ease;
+}
+
+.model-dot.is-ready {
+  background: var(--ok);
 }
 
 
