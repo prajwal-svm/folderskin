@@ -20,15 +20,17 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyNote, setKeyNote] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    setLoadError(null);
     api
       .aiCatalogue()
       .then((c) => {
         setCatalogue(c);
         setProviderId((p) => p || c.providers.find((x) => x.has_key)?.id || c.providers[0]?.id || "");
       })
-      .catch((e) => setPhase({ kind: "error", message: errorMessage(e) }));
+      .catch((e) => setLoadError(errorMessage(e)));
   }, []);
   useEffect(load, [load]);
 
@@ -118,7 +120,20 @@ export function GenerateView({ onGenerated }: { onGenerated: (skin: Skin) => voi
         </p>
       </header>
 
-      {!catalogue ? (
+      {loadError ? (
+        <div className="cards">
+          <article className="card">
+            <h3 className="card-title">The AI assistant is not available in this build</h3>
+            <p className="card-text">
+              FolderSkin could not reach its own provider list: {loadError}. This happens when the app is running a
+              build made before the assistant existed. Rebuild the app, then open this view again.
+            </p>
+            <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={load}>
+              Try again
+            </button>
+          </article>
+        </div>
+      ) : !catalogue ? (
         <p className="view-sub">Loading providers…</p>
       ) : (
         <div className="gen-grid">
