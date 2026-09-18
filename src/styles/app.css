@@ -21,12 +21,7 @@ body {
   font-family: var(--font);
   color: var(--ink);
   background-color: var(--bg);
-  background-image:
-    radial-gradient(60% 40% at 50% -10%, #ffffff 0%, rgba(255, 255, 255, 0) 100%),
-    linear-gradient(var(--bg-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
-  background-size: 100% 100%, 28px 28px, 28px 28px;
-  background-position: 0 0, 14px 14px, 14px 14px;
+  background-image: radial-gradient(70% 45% at 50% -10%, #ffffff 0%, rgba(255, 255, 255, 0) 100%);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
@@ -331,20 +326,21 @@ img {
   width: 124px;
   height: 124px;
   border-radius: var(--radius-card);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  transition: transform 150ms ease;
 }
 
 .thumb-wrap:hover {
-  border-color: var(--hint);
-  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
 }
 
-.thumb-wrap.is-selected {
-  border-color: var(--green);
-  box-shadow: 0 0 0 4px var(--green-ring), var(--shadow-card);
+.thumb-wrap.is-selected::before {
+  inset: 0;
 }
+
+.thumb-wrap.is-selected .handle.tl { top: -3px; left: -3px; }
+.thumb-wrap.is-selected .handle.tr { top: -3px; right: -3px; }
+.thumb-wrap.is-selected .handle.bl { bottom: -3px; left: -3px; }
+.thumb-wrap.is-selected .handle.br { bottom: -3px; right: -3px; }
 
 .thumb {
   display: flex;
@@ -356,9 +352,15 @@ img {
 }
 
 .thumb img {
-  width: 104px;
-  height: 104px;
-  filter: drop-shadow(0 2px 3px rgba(17, 17, 17, 0.16));
+  width: 112px;
+  height: 112px;
+  filter: drop-shadow(0 3px 5px rgba(17, 17, 17, 0.18));
+  transition: filter 150ms ease;
+}
+
+.thumb-wrap:hover .thumb img,
+.thumb-wrap.is-selected .thumb img {
+  filter: drop-shadow(0 8px 14px rgba(17, 17, 17, 0.22));
 }
 
 
