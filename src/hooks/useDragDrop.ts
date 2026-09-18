@@ -1,32 +1,36 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { isTauri } from "../lib/devMock";
+import { dragInfoFor } from "../lib/files";
+import type { DragInfo } from "../state/dropzone";
 
 /**
- * Subscribes to Tauri's native drag-and-drop events (the only way to learn a dropped
- * file's path from a webview). `onHover` fires only when the hover state changes.
+ * Subscribes to Tauri's native drag-and-drop events (the only way to learn a dropped file's
+ * path from a webview). `onDrag` reports what is being carried as soon as it enters the
+ * window, so the UI can say "let go to pick Projects" before anything lands, and null when
+ * it leaves or drops.
  */
-export function useDragDrop(onDrop: (paths: string[]) => void, onHover: (hover: boolean) => void) {
-  const hovering = useRef(false);
-  const latest = useRef({ onDrop, onHover });
-  latest.current = { onDrop, onHover };
+export function useDragDrop(onDrop: (paths: string[]) => void, onDrag: (info: DragInfo | null) => void) {
+  const current = useRef<DragInfo | null>(null);
+  const latest = useRef({ onDrop, onDrag });
+  latest.current = { onDrop, onDrag };
 
   useEffect(() => {
     if (!isTauri()) return; // plain browser preview: no native drag-and-drop
     let cancelled = false;
     let unlisten: (() => void) | undefined;
-    const setHover = (value: boolean) => {
-      if (hovering.current === value) return;
-      hovering.current = value;
-      latest.current.onHover(value);
+    const report = (info: DragInfo | null) => {
+      if (current.current?.kind === info?.kind && current.current?.name === info?.name) return;
+      current.current = info;
+      latest.current.onDrag(info);
     };
     getCurrentWebview()
       .onDragDropEvent((event) => {
         const payload = event.payload;
-        if (payload.type === "enter" || payload.type === "over") setHover(true);
-        else if (payload.type === "leave") setHover(false);
+        if (payload.type === "enter") report(dragInfoFor(payload.paths) ?? { kind: "folder", name: "" });
+        else if (payload.type === "leave") report(null);
         else if (payload.type === "drop") {
-          setHover(false);
+          report(null);
           latest.current.onDrop(payload.paths);
         }
       })

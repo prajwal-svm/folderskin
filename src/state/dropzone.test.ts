@@ -47,6 +47,15 @@ describe("drop zone state machine", () => {
     expect(buttonLabel(applied)).toBe("Applied");
   });
 
+  it("putting the skin down leaves the folder showing its own icon", () => {
+    const ready = run([{ type: "folderDropped", folder: readme }, { type: "skinSelected", skinId: "aurora" }]);
+    const s = reduce(ready, { type: "skinCleared" });
+    expect(s.phase).toBe("folder");
+    expect(s.skinId).toBeNull();
+    const applying = reduce(ready, { type: "applyStarted" });
+    expect(reduce(applying, { type: "skinCleared" })).toBe(applying);
+  });
+
   it("cannot start applying without both a folder and a skin", () => {
     expect(reduce(initialState, { type: "applyStarted" })).toBe(initialState);
     const folderOnly = run([{ type: "folderDropped", folder: readme }]);
@@ -77,7 +86,7 @@ describe("drop zone state machine", () => {
     expect(reduce(s, { type: "clearError" }).error).toBeNull();
   });
 
-  it("revert goes back to ready with folder and skin kept", () => {
+  it("revert shows the folder with its default icon, skin put down", () => {
     const applied = run([
       { type: "folderDropped", folder: readme },
       { type: "skinSelected", skinId: "aurora" },
@@ -88,9 +97,9 @@ describe("drop zone state machine", () => {
     expect(reverting.phase).toBe("reverting");
     expect(buttonLabel(reverting)).toBe("Reverting…");
     const done = reduce(reverting, { type: "revertSucceeded" });
-    expect(done.phase).toBe("ready");
+    expect(done.phase).toBe("folder");
     expect(done.appliedSkinId).toBeNull();
-    expect(done.skinId).toBe("aurora");
+    expect(done.skinId).toBeNull();
     expect(done.folder).toEqual(readme);
   });
 
@@ -119,12 +128,12 @@ describe("drop zone state machine", () => {
     expect(s.appliedSkinId).toBeNull();
   });
 
-  it("an invalid drop only sets the error and clears hover", () => {
-    const hovering = reduce(initialState, { type: "drag", hover: true });
-    expect(hovering.hover).toBe(true);
+  it("an invalid drop only sets the error and clears the drag", () => {
+    const hovering = reduce(initialState, { type: "drag", info: { kind: "folder", name: "readme" } });
+    expect(hovering.drag).toEqual({ kind: "folder", name: "readme" });
     const s = reduce(hovering, { type: "invalidDrop", message: "that's not a folder or a picture" });
     expect(s.phase).toBe("idle");
-    expect(s.hover).toBe(false);
+    expect(s.drag).toBeNull();
     expect(s.error).toBe("that's not a folder or a picture");
   });
 });

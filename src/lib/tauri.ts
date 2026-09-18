@@ -2,14 +2,20 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
 
-/** A skin the gallery can show: built-in or imported from the user's picture. */
+/** A skin the gallery can show: built-in, or one of the user's own (saved on disk). */
 export type Skin = {
   id: string;
   name: string;
+  /** "glow", "grain", "pop" for built-ins; "yours" for everything the user added. */
   collection: string;
   /** PNG data URL rendered by the Rust compositor (same pixels the app applies). */
   thumbnail: string;
   custom: boolean;
+  /** "artwork" is wrapped onto FolderSkin's folder; "folder" is a finished folder used as-is. */
+  kind?: "artwork" | "folder";
+  source?: "builtin" | "import" | "ai";
+  /** Unix ms when the user added it; null for built-ins. */
+  created_at?: number | null;
 };
 
 export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path: string };
@@ -64,6 +70,8 @@ const tauriApi = {
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
   /** The folder's current icon (data URL): the real OS icon where available. */
   folderIcon: (folder: string) => invoke<string>("folder_icon", { folder }),
+  /** Deletes one of the user's saved skins from disk. Built-ins refuse. */
+  deleteSkin: (skinId: string) => invoke<void>("delete_skin", { skinId }),
   /** Native window appearance; `null` follows the system. Keeps the macOS sidebar material in step with the app theme. */
   setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
 

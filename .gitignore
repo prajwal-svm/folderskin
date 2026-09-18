@@ -9,3 +9,4 @@ assets/previews/
 !.claude/
 .playwright-mcp/
 docs/superpowers/
+.claude/worktrees/

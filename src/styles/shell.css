@@ -1,0 +1,376 @@
+/* The window: a sidebar straight on the glass, then two islands (library, folder). */
+
+.app {
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr) clamp(320px, 29vw, 372px);
+  gap: var(--gap);
+  padding: var(--gap) var(--gap) var(--gap) 0;
+}
+
+.island {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--r-island);
+  background: var(--island);
+  box-shadow: var(--shadow-island);
+  overflow: hidden;
+  transition: box-shadow var(--t-base) ease, background-color var(--t-base) ease;
+}
+
+.island-main {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 2px 0 12px;
+}
+
+.sidebar-top {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  flex: none;
+}
+
+.os-macos .sidebar-top {
+  height: 86px;
+  padding-top: 28px; /* clears the traffic lights */
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  pointer-events: none; /* the whole strip stays a window drag handle */
+}
+
+.brand-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.brand-name {
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.cta {
+  flex: none;
+  margin: 0 0 10px;
+}
+
+.cta-badge {
+  width: 22px;
+  height: 22px;
+  margin-left: -6px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--on-sky) 14%, transparent);
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 14px;
+}
+
+.nav-title {
+  margin: 4px 0 6px 10px;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--hint);
+}
+
+.nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: 10px;
+  color: var(--ink-2);
+  font-weight: 650;
+  font-size: 13.5px;
+  text-align: left;
+  transition:
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease,
+    box-shadow var(--t-base) ease,
+    transform var(--t-fast) var(--ease-out);
+}
+
+.nav-btn + .nav-btn {
+  margin-top: 2px;
+}
+
+.nav-btn:hover,
+.nav-btn:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.nav-btn:active {
+  transform: scale(0.985);
+}
+
+.nav-btn.is-active {
+  background: var(--nav-active);
+  color: var(--ink);
+  font-weight: 750;
+  box-shadow: var(--shadow-raised);
+}
+
+.nav-icon {
+  width: 20px;
+  display: inline-flex;
+  justify-content: center;
+  flex: none;
+  color: var(--muted);
+  transition: color var(--t-fast) ease;
+}
+
+.nav-btn:hover .nav-icon,
+.nav-btn.is-active .nav-icon {
+  color: var(--sky-deep);
+}
+
+.nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--nav-hover);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-badge.is-bumped {
+  animation: bump var(--t-slow) var(--ease-spring);
+}
+
+.nav-btn.is-active .nav-badge {
+  background: var(--sky-soft);
+  color: var(--ink);
+}
+
+.nav-version {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hint);
+}
+
+.sidebar-bottom {
+  flex: none;
+  padding: 8px 0 2px;
+}
+
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ---------- about popover ---------- */
+
+.about-pop {
+  position: fixed;
+  left: 236px;
+  bottom: 18px;
+  width: 268px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  z-index: 40;
+  animation: pop-in var(--t-base) var(--ease-spring) both;
+  transform-origin: left bottom;
+}
+
+.about-title {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.about-version {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.about-line {
+  margin-top: 3px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.about-note {
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.about-links {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.about-link {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  font-weight: 700;
+  font-size: 12.5px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.about-link:hover,
+.about-link:focus-visible {
+  background: var(--sky-soft);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- views inside the library island (community) ---------- */
+
+.view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px 28px 40px;
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.view-head {
+  margin-bottom: 20px;
+}
+
+.view-title {
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.035em;
+}
+
+.view-sub {
+  margin-top: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 540px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--r-card);
+  background: var(--well);
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+.card:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.card:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.card-soon {
+  background: transparent;
+  border: 1.5px dashed var(--line);
+}
+
+.card-glyph {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--island);
+  color: var(--sky-deep);
+  box-shadow: var(--shadow-raised);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-title {
+  margin-top: 4px;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.card-text {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.card .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}

@@ -10,7 +10,7 @@ export function CommunityView({ onImport }: { onImport: () => void }) {
     <section className="view">
       <header className="view-head">
         <h2 className="view-title">
-          Community <span className="mark">skins</span>
+          Community skins
         </h2>
         <p className="view-sub">Skins other people made, and a place to share yours.</p>
       </header>
@@ -20,12 +20,10 @@ export function CommunityView({ onImport }: { onImport: () => void }) {
             <ImageIcon size={20} />
           </span>
           <h3 className="card-title">Load a skin from a file</h3>
-          <p className="card-text">Any PNG, JPEG or WebP works. It is cropped to the folder and shows up in your gallery right away.</p>
+          <p className="card-text">PNG, JPEG, WebP or HEIC. It lands in Yours and stays there. Finished folders on a magenta background are cut out automatically.</p>
           <button type="button" className="btn btn-primary" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
-            <span className="btn-badge">
-              <DownloadIcon size={14} />
-            </span>
-            Choose a file
+            <DownloadIcon size={15} />
+            Choose a picture
           </button>
         </article>
         <article className="card">

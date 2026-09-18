@@ -5,6 +5,9 @@
 
 export type Folder = { path: string; name: string };
 
+/** What is being dragged over the window, guessed from its path before it lands. */
+export type DragInfo = { kind: "folder" | "image"; name: string };
+
 export type Phase = "idle" | "folder" | "ready" | "applying" | "applied" | "reverting";
 
 export type State = {
@@ -17,14 +20,15 @@ export type State = {
   /** The skin an in-flight apply is writing. */
   inFlightSkinId: string | null;
   error: string | null;
-  /** True while something is being dragged over the window. */
-  hover: boolean;
+  /** What is being dragged over the window right now, if anything. */
+  drag: DragInfo | null;
 };
 
 export type Action =
-  | { type: "drag"; hover: boolean }
+  | { type: "drag"; info: DragInfo | null }
   | { type: "folderDropped"; folder: Folder }
   | { type: "skinSelected"; skinId: string }
+  | { type: "skinCleared" }
   | { type: "applyStarted" }
   | { type: "applySucceeded" }
   | { type: "applyFailed"; message: string }
@@ -41,7 +45,7 @@ export const initialState: State = {
   appliedSkinId: null,
   inFlightSkinId: null,
   error: null,
-  hover: false,
+  drag: null,
 };
 
 function actionablePhase(state: State): Phase {
@@ -53,16 +57,22 @@ function actionablePhase(state: State): Phase {
 export function reduce(state: State, action: Action): State {
   switch (action.type) {
     case "drag":
-      return { ...state, hover: action.hover };
+      return { ...state, drag: action.info };
 
     case "folderDropped": {
-      const next = { ...state, folder: action.folder, appliedSkinId: null, inFlightSkinId: null, error: null, hover: false };
+      const next = { ...state, folder: action.folder, appliedSkinId: null, inFlightSkinId: null, error: null, drag: null };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "skinSelected": {
       const next = { ...state, skinId: action.skinId, error: null };
       if (state.phase === "applying" || state.phase === "reverting") return next;
+      return { ...next, phase: actionablePhase(next) };
+    }
+
+    case "skinCleared": {
+      if (state.phase === "applying" || state.phase === "reverting") return state;
+      const next = { ...state, skinId: null, error: null };
       return { ...next, phase: actionablePhase(next) };
     }
 
@@ -87,8 +97,10 @@ export function reduce(state: State, action: Action): State {
       return { ...state, phase: "reverting", error: null };
 
     case "revertSucceeded": {
+      // The skin is put down too, so the folder is seen wearing its default icon again
+      // instead of jumping straight back into a preview of the skin just removed.
       if (state.phase !== "reverting") return state;
-      const next = { ...state, appliedSkinId: null };
+      const next = { ...state, appliedSkinId: null, skinId: null };
       return { ...next, phase: actionablePhase(next) };
     }
 
@@ -97,7 +109,7 @@ export function reduce(state: State, action: Action): State {
       return { ...state, phase: "applied", error: action.message };
 
     case "invalidDrop":
-      return { ...state, hover: false, error: action.message };
+      return { ...state, drag: null, error: action.message };
 
     case "clearError":
       return { ...state, error: null };

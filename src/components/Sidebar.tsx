@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Theme } from "../state/theme";
 import { EarthIcon } from "./icons/earth";
+import { FolderOpenIcon } from "./icons/folder-open";
 import { ImageIcon } from "./icons/image";
 import { LayoutGridIcon } from "./icons/layout-grid";
 import { MoonIcon } from "./icons/moon";
@@ -8,14 +9,15 @@ import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 
-export type View = "skins" | "faves" | "community" | "generate";
+export type View = "skins" | "yours" | "faves" | "community" | "generate";
 
-type Item = { id: View; label: string; icon: ReactNode; badge?: string | number; soon?: boolean };
+type Item = { id: View; label: string; icon: ReactNode; badge?: string | number };
 
 export function Sidebar({
   view,
   onView,
   favoritesCount,
+  yoursCount,
   onImport,
   theme,
   onToggleTheme,
@@ -25,6 +27,7 @@ export function Sidebar({
   view: View;
   onView: (v: View) => void;
   favoritesCount: number;
+  yoursCount: number;
   onImport: () => void;
   theme: Theme;
   onToggleTheme: () => void;
@@ -35,7 +38,8 @@ export function Sidebar({
     {
       title: "Library",
       items: [
-        { id: "skins", label: "Skins", icon: <LayoutGridIcon size={18} /> },
+        { id: "skins", label: "All skins", icon: <LayoutGridIcon size={18} /> },
+        { id: "yours", label: "Yours", icon: <FolderOpenIcon size={18} />, badge: yoursCount || undefined },
         { id: "faves", label: "Favourites", icon: <StarIcon size={17} />, badge: favoritesCount || undefined },
       ],
     },
@@ -57,10 +61,10 @@ export function Sidebar({
         </div>
       </div>
       <button type="button" className="btn btn-primary cta" onMouseDown={(e) => e.preventDefault()} onClick={onImport}>
-        <span className="btn-badge">
+        <span className="cta-badge">
           <ImageIcon size={14} />
         </span>
-        Your photo
+        Add your photo
       </button>
       <div className="sidebar-scroll">
         {groups.map((g) => (
@@ -77,8 +81,7 @@ export function Sidebar({
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
-                {item.badge !== undefined && <span className="nav-badge">{item.badge}</span>}
-                {item.soon && <span className="nav-soon">soon</span>}
+                {item.badge !== undefined && <Badge value={item.badge} />}
               </button>
             ))}
           </div>
@@ -118,5 +121,23 @@ export function Sidebar({
         </button>
       </div>
     </nav>
+  );
+}
+
+/** A count that gives a little bump whenever it changes, so adding a favourite is felt. */
+function Badge({ value }: { value: string | number }) {
+  const first = useRef(true);
+  const [bump, setBump] = useState(0);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setBump((n) => n + 1);
+  }, [value]);
+  return (
+    <span className={bump ? "nav-badge is-bumped" : "nav-badge"} key={bump}>
+      {value}
+    </span>
   );
 }

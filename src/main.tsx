@@ -3,7 +3,12 @@ import ReactDOM from "react-dom/client";
 import { LazyMotion, MotionConfig, domMin } from "motion/react";
 import App from "./App";
 import "./styles/tokens.css";
-import "./styles/app.css";
+import "./styles/base.css";
+import "./styles/components.css";
+import "./styles/shell.css";
+import "./styles/gallery.css";
+import "./styles/stage.css";
+import "./styles/studio.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

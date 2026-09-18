@@ -1,0 +1,551 @@
+/* Shared controls: buttons, chips, segmented control, fields, switch, modal, toasts. */
+
+/* ---------- buttons ---------- */
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  font-size: 13.5px;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease,
+    transform var(--t-fast) var(--ease-out),
+    box-shadow var(--t-base) ease,
+    opacity var(--t-fast) ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+}
+
+.btn-primary {
+  background: var(--sky);
+  color: var(--on-sky);
+  box-shadow: 0 8px 20px -8px var(--sky-glow);
+}
+
+.btn-primary:hover:not(:disabled),
+.btn-primary:focus-visible:not(:disabled) {
+  background: var(--sky-deep);
+  box-shadow: 0 10px 24px -8px var(--sky-glow);
+}
+
+.btn-primary.is-done,
+.btn-primary.is-done:disabled {
+  opacity: 1;
+  background: var(--ok-soft);
+  color: var(--ok);
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: var(--well);
+  color: var(--ink);
+}
+
+.btn-secondary:hover:not(:disabled),
+.btn-secondary:focus-visible:not(:disabled) {
+  background: var(--well-2);
+}
+
+.btn-ghost {
+  color: var(--muted);
+  padding: 0 12px;
+}
+
+.btn-ghost:hover:not(:disabled),
+.btn-ghost:focus-visible:not(:disabled) {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.btn-lg {
+  height: 44px;
+  padding: 0 22px;
+  font-size: 14.5px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.icon-btn:hover:not(:disabled),
+.icon-btn:focus-visible:not(:disabled) {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--sky-deep);
+  transition: background-color var(--t-fast) ease;
+}
+
+.link-btn:hover:not(:disabled),
+.link-btn:focus-visible:not(:disabled) {
+  background: var(--sky-wash);
+}
+
+/* ---------- chips and counts ---------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chip-sky {
+  background: var(--sky-soft);
+  color: var(--ink);
+}
+
+.chip-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--well-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+/* ---------- segmented control (sliding pill) ---------- */
+
+.seg {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  isolation: isolate;
+}
+
+.seg::-webkit-scrollbar {
+  display: none;
+}
+
+.seg-pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  border-radius: var(--r-pill);
+  background: var(--island);
+  box-shadow: var(--shadow-raised);
+  z-index: -1;
+  transition: transform var(--t-slow) var(--ease-spring), width var(--t-slow) var(--ease-spring);
+}
+
+.seg-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px 0 13px;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  transition: color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.seg-btn:hover {
+  color: var(--ink);
+}
+
+.seg-btn:focus-visible {
+  background: var(--sky-wash);
+  color: var(--ink);
+}
+
+.seg-btn.is-active {
+  color: var(--ink);
+}
+
+.seg-btn.is-active .count {
+  background: var(--sky-soft);
+  color: var(--ink);
+}
+
+/* ---------- fields ---------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.field-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field-note {
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-control);
+  background: var(--well);
+  border: 1px solid transparent;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13.5px;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.input:hover {
+  background: var(--well-2);
+}
+
+.input:focus,
+.input:focus-visible {
+  border-color: var(--sky);
+  background: var(--island);
+}
+
+.input::placeholder {
+  color: var(--hint);
+  font-weight: 600;
+}
+
+select.input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 18px, calc(100% - 11px) 18px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+
+.search {
+  flex: 0 1 240px;
+  min-width: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  border: 1px solid transparent;
+  color: var(--hint);
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.search:hover {
+  background: var(--well-2);
+}
+
+.search:focus-within {
+  background: var(--island);
+  border-color: var(--sky);
+  color: var(--ink);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-weight: 600;
+  font-size: 13px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.search input::placeholder {
+  color: var(--hint);
+}
+
+.search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.search kbd {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--hint);
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--well-2);
+  transition: opacity var(--t-fast) ease;
+}
+
+.search:focus-within kbd {
+  opacity: 0;
+}
+
+/* ---------- switch ---------- */
+
+.switch {
+  width: 36px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--well-2);
+  position: relative;
+  flex: none;
+  transition: background-color var(--t-base) ease;
+}
+
+.switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform var(--t-slow) var(--ease-spring);
+}
+
+.switch.is-on {
+  background: var(--sky);
+}
+
+.switch.is-on .knob {
+  transform: translateX(14px);
+}
+
+/* ---------- modal ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--canvas) 45%, transparent);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  animation: fade-in var(--t-base) ease both;
+}
+
+.modal {
+  width: min(520px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  animation: modal-in var(--t-slow) var(--ease-spring) both;
+}
+
+.modal-wide {
+  width: min(640px, 100%);
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 20px 4px 22px;
+}
+
+.modal-title {
+  flex: 1;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.modal-sub {
+  margin-top: 4px;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.modal-body {
+  padding: 14px 22px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- toasts ---------- */
+
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  animation: toast-in var(--t-slow) var(--ease-spring) both;
+}
+
+.toast.is-leaving {
+  animation: toast-out var(--t-base) var(--ease-in) both;
+}
+
+.toast-icon {
+  display: inline-flex;
+  color: var(--sky);
+}
+
+.toast-icon.is-ok {
+  color: var(--ok);
+}
+
+.toast-icon.is-danger {
+  color: var(--danger);
+}
+
+.toast-text {
+  padding-right: 6px;
+}
+
+.toast-action {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--on-ink) 14%, transparent);
+  font-weight: 800;
+  font-size: 12.5px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: color-mix(in srgb, var(--on-ink) 24%, transparent);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}

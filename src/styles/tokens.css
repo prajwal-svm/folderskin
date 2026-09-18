@@ -1,72 +1,116 @@
+/*
+ * Design tokens. Everything the stylesheets use comes from here: colours, type, radii, depth
+ * and motion. Components never hard-code a colour.
+ *
+ * Surfaces: the window is glass on macOS (transparent over the system material) and --canvas
+ * elsewhere. Content sits on "islands" (--island). Inside an island, recessed controls sit in
+ * "wells" (--well). Selection is always a tint or a raised pill, never an outline.
+ */
+
 :root {
   color-scheme: light;
 
-  /* canvas */
-  --bg: #f6f6f6;
-  --surface: #ffffff;
-  --surface-2: #efefef;
-  --surface-3: #e6e6e6;
-  --line: #e3e3e3;
-  --dash: #c9c9c9;
-  --glow-top: rgba(255, 255, 255, 1);
+  /* surfaces */
+  --canvas: #e9edf2;
+  --island: #ffffff;
+  --island-line: rgba(16, 24, 40, 0.08);
+  --well: #f2f4f7;
+  --well-2: #e7ebf0;
+  --line: #e4e8ee;
+  --dash: #b9c2ce;
 
   /* ink */
-  --ink: #111111;
-  --ink-2: #2a2a2a;
-  --muted: #6e6e6e;
-  --hint: #9c9c9c;
+  --ink: #10151d;
+  --ink-2: #344054;
+  --muted: #667085;
+  --hint: #98a2b3;
   --on-ink: #ffffff;
 
   /* accent */
   --sky: #38b6ff;
-  --sky-deep: #1d97e0;
-  --sky-soft: #dcf0ff;
-  --sky-ring: rgba(56, 182, 255, 0.24);
-  --on-sky: #062033;
-  --blob-a: rgba(56, 182, 255, 0.30);
-  --blob-b: rgba(120, 220, 255, 0.22);
-  --danger: #d94a3d;
+  --sky-deep: #1693e0;
+  --sky-soft: #e1f2ff;
+  --sky-wash: rgba(56, 182, 255, 0.1);
+  --sky-glow: rgba(56, 182, 255, 0.55);
+  --on-sky: #04223a;
 
+  /* status */
+  --ok: #12b981;
+  --ok-soft: #dcf7ec;
+  --danger: #e5484d;
+  --danger-soft: #fde8e8;
+  --fave: #ffb020;
+
+  /* navigation on the glass */
+  --nav-hover: rgba(16, 24, 40, 0.06);
+  --nav-active: #ffffff;
+
+  /* type */
   --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
-  --radius-card: 16px;
-  --radius-zone: 20px;
-  --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(17, 17, 17, 0.05), 0 8px 24px rgba(17, 17, 17, 0.06);
-  --shadow-pop: 0 12px 34px rgba(17, 17, 17, 0.16), 0 1px 2px rgba(17, 17, 17, 0.08);
-  --thumb-shadow: 0 3px 5px rgba(17, 17, 17, 0.18);
-  --thumb-shadow-hover: 0 10px 16px rgba(17, 17, 17, 0.22);
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  /* shape */
+  --r-island: 18px;
+  --r-card: 14px;
+  --r-control: 10px;
+  --r-pill: 999px;
+  --gap: 10px;
+
+  /* depth */
+  --shadow-island: 0 0 0 1px var(--island-line), 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 18px 44px -20px rgba(16, 24, 40, 0.24);
+  --shadow-raised: 0 0 0 1px var(--island-line), 0 1px 2px rgba(16, 24, 40, 0.08),
+    0 3px 10px -4px rgba(16, 24, 40, 0.12);
+  --shadow-pop: 0 0 0 1px var(--island-line), 0 22px 56px -14px rgba(16, 24, 40, 0.34);
+  --folder-shadow: drop-shadow(0 2px 3px rgba(16, 24, 40, 0.16));
+  --stage-shadow: drop-shadow(0 14px 22px rgba(16, 24, 40, 0.2));
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 140ms;
+  --t-base: 220ms;
+  --t-slow: 420ms;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0e0f0f;
-  --surface: #171818;
-  --surface-2: #202121;
-  --surface-3: #2a2b2b;
-  --line: #2a2b2b;
-  --dash: #454646;
-  --glow-top: rgba(255, 255, 255, 0.06);
+  --canvas: #0b0d10;
+  --island: #15181d;
+  --island-line: rgba(255, 255, 255, 0.07);
+  --well: #1c2027;
+  --well-2: #252a33;
+  --line: #262b33;
+  --dash: #4a5361;
 
-  --ink: #f2f2f2;
-  --ink-2: #d9d9d9;
-  --muted: #9a9a9a;
-  --hint: #6b6b6b;
-  --on-ink: #0e0f0f;
+  --ink: #eef2f7;
+  --ink-2: #c9d1dc;
+  --muted: #98a2b3;
+  --hint: #667085;
+  --on-ink: #0b0d10;
 
   --sky: #4cc2ff;
-  --sky-deep: #2aa3e8;
-  --sky-soft: #10293b;
-  --sky-ring: rgba(76, 194, 255, 0.26);
-  --on-sky: #05192b;
-  --blob-a: rgba(56, 182, 255, 0.18);
-  --blob-b: rgba(120, 220, 255, 0.12);
-  --danger: #ff6b5e;
+  --sky-deep: #2aa7ee;
+  --sky-soft: #0f2b40;
+  --sky-wash: rgba(76, 194, 255, 0.12);
+  --sky-glow: rgba(76, 194, 255, 0.6);
+  --on-sky: #04223a;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);
-  --shadow-pop: 0 14px 38px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.5);
-  --thumb-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
-  --thumb-shadow-hover: 0 12px 20px rgba(0, 0, 0, 0.6);
+  --ok: #34d399;
+  --ok-soft: #0f2e24;
+  --danger: #ff6b6b;
+  --danger-soft: #3a1717;
+
+  --nav-hover: rgba(255, 255, 255, 0.07);
+  --nav-active: #232830;
+
+  --shadow-island: 0 0 0 1px var(--island-line), 0 20px 48px -22px rgba(0, 0, 0, 0.75);
+  --shadow-raised: 0 0 0 1px var(--island-line), 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 0 0 1px var(--island-line), 0 24px 60px -14px rgba(0, 0, 0, 0.8);
+  --folder-shadow: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+  --stage-shadow: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.55));
 }
 
 @font-face {
@@ -76,6 +120,7 @@
   font-display: swap;
 }
 
+/* Animatable angle for the rotating borders (drop glow, busy ring). */
 @property --spin {
   syntax: "<angle>";
   inherits: false;

@@ -1,0 +1,432 @@
+/*
+ * The folder island ("stage"): where a folder arrives, tries skins on and gets its icon.
+ * Every state has its own motion so the user always knows what just happened:
+ *   waiting  -> the blueprint outline marches slowly
+ *   dragging -> the island's border glows and turns, the outline hurries and turns sky blue
+ *   arrived  -> the folder drops in on a spring
+ *   preview  -> the skin lands with a sweep of light across the folder
+ *   applying -> a ring turns around the folder
+ *   applied  -> a small burst, and the button turns green
+ */
+
+.stage-island {
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 30px 26px 26px;
+  text-align: center;
+}
+
+/* ---------- the rotating glow while something is dragged over the window ---------- */
+
+.drop-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--spin),
+    var(--sky) 0deg,
+    transparent 70deg,
+    transparent 150deg,
+    var(--sky) 180deg,
+    transparent 250deg,
+    transparent 330deg,
+    var(--sky) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity var(--t-base) ease;
+  animation: spin-angle 2.6s linear infinite;
+}
+
+.is-drop-target > .drop-glow {
+  opacity: 1;
+}
+
+.is-drop-target {
+  box-shadow: var(--shadow-island), 0 0 38px -8px var(--sky-glow);
+}
+
+/* ---------- the folder ---------- */
+
+.stage-art {
+  position: relative;
+  width: min(232px, 78%);
+  aspect-ratio: 1;
+  flex: none;
+  border-radius: 28px;
+  transition: transform var(--t-slow) var(--ease-spring);
+}
+
+.stage-art:focus-visible .stage-halo {
+  opacity: 1;
+}
+
+.stage-halo {
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--sky-wash), transparent 72%);
+  opacity: 0.6;
+  transition: opacity var(--t-slow) ease, transform var(--t-slow) var(--ease-spring);
+  pointer-events: none;
+}
+
+.is-drop-target .stage-halo,
+.is-applied .stage-halo {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.stage-img,
+.stage-sweep,
+.stage-ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-img {
+  object-fit: contain;
+  filter: var(--stage-shadow);
+  animation: arrive 640ms var(--ease-spring) both;
+}
+
+/* a new skin on the same folder: a little squash and a sweep of light */
+.stage-img.is-swap {
+  animation: swap 520ms var(--ease-spring) both;
+}
+
+.stage-sweep {
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.85) 48%,
+    rgba(255, 255, 255, 0.2) 56%,
+    transparent 68%
+  );
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  animation: sweep 900ms var(--ease-out) 80ms both;
+}
+
+@keyframes arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.84) rotate(-4deg);
+    filter: blur(6px) var(--stage-shadow);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0) var(--stage-shadow);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: var(--stage-shadow);
+  }
+}
+
+@keyframes swap {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sweep {
+  from {
+    background-position: 130% 0;
+    opacity: 1;
+  }
+  to {
+    background-position: -40% 0;
+    opacity: 1;
+  }
+}
+
+/* ---------- the empty folder: a blueprint that marches while it waits ---------- */
+
+.stage-ghost {
+  overflow: visible;
+  transition: transform var(--t-slow) var(--ease-spring);
+}
+
+.stage-ghost path {
+  stroke: var(--dash);
+  stroke-width: 7;
+  stroke-dasharray: 22 16;
+  stroke-linejoin: round;
+  animation: march 2.4s linear infinite;
+  transition: stroke var(--t-base) ease, fill var(--t-base) ease;
+}
+
+.stage-ghost .ghost-back {
+  fill: var(--well);
+}
+
+.stage-ghost .ghost-paper {
+  fill: var(--island);
+  stroke-dasharray: none;
+  stroke-width: 5;
+  opacity: 0.9;
+}
+
+.stage-ghost .ghost-front {
+  fill: color-mix(in srgb, var(--well) 55%, var(--island));
+}
+
+.stage-art:hover .stage-ghost,
+.is-drop-target .stage-ghost {
+  transform: scale(1.03) translateY(-2px);
+}
+
+.is-drop-target .stage-ghost path {
+  stroke: var(--sky);
+  animation-duration: 0.7s;
+}
+
+.is-drop-target .stage-ghost .ghost-front {
+  fill: var(--sky-wash);
+}
+
+/* A skin chosen before any folder: it waits inside the blueprint. */
+.stage-ghost-skin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.5;
+  animation: fade-in var(--t-slow) ease both;
+}
+
+@keyframes march {
+  to {
+    stroke-dashoffset: -76;
+  }
+}
+
+/* ---------- busy ring and the burst when it lands ---------- */
+
+.stage-ring {
+  position: absolute;
+  inset: -9%;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from var(--spin), transparent 0 58%, var(--sky) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: spin-angle 1s linear infinite, fade-in var(--t-base) ease both;
+  pointer-events: none;
+}
+
+.stage-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-sparks i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px;
+  border-radius: 50%;
+  background: var(--sky);
+  opacity: 0;
+  animation: spark 820ms var(--ease-out) both;
+  animation-delay: calc(var(--k) * 18ms);
+}
+
+.stage-sparks i:nth-child(even) {
+  background: var(--ok);
+  width: 5px;
+  height: 5px;
+  margin: -2.5px;
+}
+
+@keyframes spark {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-40%);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-150px) scale(0.4);
+  }
+}
+
+.is-applied .stage-img {
+  animation: stamp 560ms var(--ease-spring) both;
+}
+
+@keyframes stamp {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.07);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.stage-art.is-shaking {
+  animation: shake 420ms var(--ease-out);
+}
+
+/* ---------- words ---------- */
+
+.stage-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 78px;
+}
+
+.stage-eyebrow {
+  animation: pop var(--t-slow) var(--ease-spring) both;
+}
+
+.stage-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.stage-sub {
+  max-width: 290px;
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  animation: fade-up var(--t-base) var(--ease-out) 40ms both;
+}
+
+.stage-path {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--hint);
+  animation: fade-up var(--t-base) var(--ease-out) 40ms both;
+}
+
+.stage-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(260px, 100%);
+}
+
+.stage-actions .row {
+  display: flex;
+  gap: 8px;
+}
+
+.stage-actions .row > .btn {
+  flex: 1;
+}
+
+.stage-status {
+  min-height: 20px;
+  max-width: 290px;
+  font-weight: 650;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.stage-status.is-error {
+  color: var(--danger);
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+/* "pick a skin on the left" — the arrow keeps nudging toward the library */
+.nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  animation: fade-up var(--t-base) var(--ease-out) 80ms both;
+}
+
+.nudge-arrow {
+  display: inline-flex;
+  color: var(--sky-deep);
+  animation: nudge 1.6s var(--ease-out) infinite;
+}
+
+@keyframes nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  40% {
+    transform: translateX(-5px);
+  }
+}
+
+.stage-hint {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--hint);
+}

@@ -1,7 +1,12 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SearchIcon } from "./icons/search";
 
 export type TabCount = { id: string; label: string; count: number };
 
+/**
+ * Collection tabs and search. The active tab is a raised pill that slides between tabs, and
+ * Cmd/Ctrl+F jumps to the search field.
+ */
 export function GalleryToolbar({
   tabs,
   active,
@@ -15,12 +20,60 @@ export function GalleryToolbar({
   query: string;
   onQuery: (q: string) => void;
 }) {
+  const seg = useRef<HTMLDivElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
+  const [animate, setAnimate] = useState(false);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = seg.current?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(active)}"]`);
+      setPill(el ? { x: el.offsetLeft, w: el.offsetWidth } : null);
+      el?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (seg.current) ro.observe(seg.current);
+    return () => ro.disconnect();
+  }, [active, tabs]);
+
+  // Slide only after the first placement, so the pill doesn't fly in from the left on load.
+  useEffect(() => {
+    if (pill && !animate) requestAnimationFrame(() => setAnimate(true));
+  }, [pill, animate]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        search.current?.focus();
+        search.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const mac = navigator.platform.toLowerCase().includes("mac");
+
   return (
     <div className="toolbar" data-tauri-drag-region>
-      <div className="seg" role="tablist" aria-label="skin collections">
+      <div className="seg" role="tablist" aria-label="skin collections" ref={seg}>
+        {pill && (
+          <span
+            className="seg-pill"
+            aria-hidden="true"
+            style={{
+              width: pill.w,
+              transform: `translateX(${pill.x}px)`,
+              transition: animate ? undefined : "none",
+            }}
+          />
+        )}
         {tabs.map((t) => (
           <button
             key={t.id}
+            data-tab={t.id}
             type="button"
             role="tab"
             aria-selected={t.id === active}
@@ -33,16 +86,24 @@ export function GalleryToolbar({
           </button>
         ))}
       </div>
-      <label className="search">
-        <SearchIcon />
+      <label className={query ? "search has-query" : "search"} title="Search skins">
+        <SearchIcon size={15} />
         <input
+          ref={search}
           type="search"
           value={query}
-          placeholder="Search skins…"
+          placeholder="Search skins"
           aria-label="search skins"
           spellCheck={false}
           onChange={(e) => onQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              onQuery("");
+              e.currentTarget.blur();
+            }
+          }}
         />
+        {!query && <kbd>{mac ? "⌘F" : "Ctrl F"}</kbd>}
       </label>
     </div>
   );
