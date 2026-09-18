@@ -282,10 +282,20 @@ mod tests {
             "C:/Windows/System32",
             "c:/Program Files/Whatever",
         ] {
-            assert!(is_system_location(std::path::Path::new(p)), "{p} should be refused");
+            assert!(
+                is_system_location(std::path::Path::new(p)),
+                "{p} should be refused"
+            );
         }
-        for p in ["/Users/me/Desktop/readme", "/home/me/pictures", "C:/Users/me/Documents"] {
-            assert!(!is_system_location(std::path::Path::new(p)), "{p} should be allowed");
+        for p in [
+            "/Users/me/Desktop/readme",
+            "/home/me/pictures",
+            "C:/Users/me/Documents",
+        ] {
+            assert!(
+                !is_system_location(std::path::Path::new(p)),
+                "{p} should be allowed"
+            );
         }
         // A scratch folder in the OS temp directory is not a system location.
         let tmp = tempfile_dir();
