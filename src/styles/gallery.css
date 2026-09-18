@@ -107,7 +107,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--sky-soft);
+  background: var(--accent-soft);
   opacity: 0;
   transform: scale(0.86);
   transition: opacity var(--t-base) ease, transform var(--t-slow) var(--ease-spring);
@@ -232,9 +232,9 @@
 
 .tile-add:hover .tile-art,
 .tile-add .tile-hit:focus-visible .tile-art {
-  border-color: var(--sky);
-  color: var(--sky-deep);
-  background: var(--sky-wash);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent-wash);
 }
 
 .tile-add-plus {
@@ -282,7 +282,7 @@
   align-items: center;
   justify-content: center;
   background: var(--well);
-  color: var(--sky-deep);
+  color: var(--accent-ink);
   margin-bottom: 6px;
 }
 

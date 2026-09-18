@@ -29,13 +29,15 @@
   --hint: #98a2b3;
   --on-ink: #ffffff;
 
-  /* accent */
-  --sky: #38b6ff;
-  --sky-deep: #1693e0;
-  --sky-soft: #e1f2ff;
-  --sky-wash: rgba(56, 182, 255, 0.1);
-  --sky-glow: rgba(56, 182, 255, 0.55);
-  --on-sky: #04223a;
+  /* accent: #3A86FF. --accent-hover is a background under white text; --accent-ink is the
+     accent as text, icon or stroke on an island (dark enough on white, lighter on dark). */
+  --accent: #3a86ff;
+  --accent-hover: #2470eb;
+  --accent-ink: #2470eb;
+  --accent-soft: #e3edff;
+  --accent-wash: rgba(58, 134, 255, 0.1);
+  --accent-glow: rgba(58, 134, 255, 0.5);
+  --on-accent: #ffffff;
 
   /* status */
   --ok: #12b981;
@@ -88,12 +90,13 @@
   --hint: #667085;
   --on-ink: #0b0d10;
 
-  --sky: #4cc2ff;
-  --sky-deep: #2aa7ee;
-  --sky-soft: #0f2b40;
-  --sky-wash: rgba(76, 194, 255, 0.12);
-  --sky-glow: rgba(76, 194, 255, 0.6);
-  --on-sky: #04223a;
+  --accent: #3a86ff;
+  --accent-hover: #2a74ee;
+  --accent-ink: #6fa7ff;
+  --accent-soft: #172a48;
+  --accent-wash: rgba(58, 134, 255, 0.14);
+  --accent-glow: rgba(58, 134, 255, 0.55);
+  --on-accent: #ffffff;
 
   --ok: #34d399;
   --ok-soft: #0f2e24;

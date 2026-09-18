@@ -187,7 +187,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
         <CheckIcon size={12} playOnMount /> Applied
       </span>
     ) : phase === "ready" || phase === "applying" ? (
-      <span className="chip chip-sky stage-eyebrow" key={`try:${skin?.id}`}>
+      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`}>
         Trying on {skin?.name}
       </span>
     ) : (

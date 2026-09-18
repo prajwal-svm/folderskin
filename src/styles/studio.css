@@ -64,8 +64,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--sky-deep);
-  background: radial-gradient(circle at 30% 20%, var(--island), var(--sky-soft));
+  color: var(--accent-ink);
+  background: radial-gradient(circle at 30% 20%, var(--island), var(--accent-soft));
   border: 1px solid var(--line);
   margin-bottom: 6px;
 }
@@ -98,7 +98,7 @@
 }
 
 .composer:focus-within {
-  border-color: var(--sky);
+  border-color: var(--accent);
 }
 
 .composer-input {
@@ -217,14 +217,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--sky);
-  color: var(--on-sky);
+  background: var(--accent);
+  color: var(--on-accent);
   transition: background-color var(--t-fast) ease, transform var(--t-base) var(--ease-spring), opacity var(--t-fast) ease;
 }
 
 .send-btn:hover:not(:disabled),
 .send-btn:focus-visible:not(:disabled) {
-  background: var(--sky-deep);
+  background: var(--accent-hover);
   transform: translateY(-1px);
 }
 
@@ -278,12 +278,12 @@
 }
 
 .style-chip.is-active {
-  background: var(--sky-soft);
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
 .style-chip.is-surprise {
-  color: var(--sky-deep);
+  color: var(--accent-ink);
 }
 
 .studio-foot {
@@ -422,7 +422,7 @@
 .develop-light {
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 30%, var(--sky-wash) 45%, color-mix(in srgb, var(--sky) 30%, transparent) 50%, var(--sky-wash) 55%, transparent 70%);
+  background: linear-gradient(105deg, transparent 30%, var(--accent-wash) 45%, color-mix(in srgb, var(--accent) 30%, transparent) 50%, var(--accent-wash) 55%, transparent 70%);
   background-size: 300% 100%;
   mask: url("/folder-mask.svg") center / contain no-repeat;
   -webkit-mask: url("/folder-mask.svg") center / contain no-repeat;
@@ -469,7 +469,7 @@
 }
 
 .provider.is-active {
-  background: var(--sky-soft);
+  background: var(--accent-soft);
 }
 
 .provider-name {
@@ -531,7 +531,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--sky-soft);
+  background: var(--accent-soft);
   font-weight: 800;
   font-size: 12.5px;
 }

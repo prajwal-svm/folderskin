@@ -31,13 +31,13 @@
 }
 
 .btn-primary {
-  background: var(--sky);
-  color: var(--on-sky);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .btn-primary:hover:not(:disabled),
 .btn-primary:focus-visible:not(:disabled) {
-  background: var(--sky-deep);
+  background: var(--accent-hover);
 }
 
 .btn-primary.is-done,
@@ -107,13 +107,13 @@
   border-radius: 7px;
   font-weight: 700;
   font-size: 12.5px;
-  color: var(--sky-deep);
+  color: var(--accent-ink);
   transition: background-color var(--t-fast) ease;
 }
 
 .link-btn:hover:not(:disabled),
 .link-btn:focus-visible:not(:disabled) {
-  background: var(--sky-wash);
+  background: var(--accent-wash);
 }
 
 /* ---------- chips and counts ---------- */
@@ -132,8 +132,8 @@
   white-space: nowrap;
 }
 
-.chip-sky {
-  background: var(--sky-soft);
+.chip-accent {
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -214,7 +214,7 @@
 }
 
 .seg-btn:focus-visible {
-  background: var(--sky-wash);
+  background: var(--accent-wash);
   color: var(--ink);
 }
 
@@ -223,7 +223,7 @@
 }
 
 .seg-btn.is-active .count {
-  background: var(--sky-soft);
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -271,7 +271,7 @@
 
 .input:focus,
 .input:focus-visible {
-  border-color: var(--sky);
+  border-color: var(--accent);
   background: var(--island);
 }
 
@@ -312,7 +312,7 @@ select.input {
 
 .search:focus-within {
   background: var(--island);
-  border-color: var(--sky);
+  border-color: var(--accent);
   color: var(--ink);
 }
 
@@ -373,7 +373,7 @@ select.input {
 }
 
 .switch.is-on {
-  background: var(--sky);
+  background: var(--accent);
 }
 
 .switch.is-on .knob {
@@ -498,7 +498,7 @@ select.input {
 
 .toast-icon {
   display: inline-flex;
-  color: var(--sky);
+  color: var(--accent);
 }
 
 .toast-icon.is-ok {

@@ -2,7 +2,7 @@
  * The folder island ("stage"): where a folder arrives, tries skins on and gets its icon.
  * Every state has its own motion so the user always knows what just happened:
  *   waiting  -> the blueprint outline marches slowly
- *   dragging -> the island's border glows and turns, the outline hurries and turns sky blue
+ *   dragging -> the island's border glows and turns, the outline hurries and turns the accent blue
  *   arrived  -> the folder drops in on a spring
  *   preview  -> the skin lands with a sweep of light across the folder
  *   applying -> a ring turns around the folder
@@ -36,13 +36,13 @@
   padding: 2px;
   background: conic-gradient(
     from var(--spin),
-    var(--sky) 0deg,
+    var(--accent) 0deg,
     transparent 70deg,
     transparent 150deg,
-    var(--sky) 180deg,
+    var(--accent) 180deg,
     transparent 250deg,
     transparent 330deg,
-    var(--sky) 360deg
+    var(--accent) 360deg
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -84,7 +84,7 @@
   position: absolute;
   inset: -14%;
   border-radius: 50%;
-  background: radial-gradient(closest-side, var(--sky-wash), transparent 72%);
+  background: radial-gradient(closest-side, var(--accent-wash), transparent 72%);
   opacity: 0.6;
   transition: opacity var(--t-slow) ease, transform var(--t-slow) var(--ease-spring);
   pointer-events: none;
@@ -245,7 +245,7 @@
 /* Pointing at the empty folder invites a click: the outline hurries and the halo warms. */
 .stage-art:hover .ghost-line path,
 .stage-art:focus-visible .ghost-line path {
-  stroke: var(--sky-deep);
+  stroke: var(--accent-ink);
   animation-duration: 1.2s;
 }
 
@@ -259,7 +259,7 @@
 }
 
 .is-drop-target .ghost-line path {
-  stroke: var(--sky);
+  stroke: var(--accent);
   animation-duration: 0.7s;
 }
 
@@ -286,7 +286,7 @@
   inset: -9%;
   border-radius: 50%;
   padding: 3px;
-  background: conic-gradient(from var(--spin), transparent 0 58%, var(--sky) 88%, transparent 100%);
+  background: conic-gradient(from var(--spin), transparent 0 58%, var(--accent) 88%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -309,7 +309,7 @@
   height: 7px;
   margin: -3.5px;
   border-radius: 50%;
-  background: var(--sky);
+  background: var(--accent);
   opacity: 0;
   animation: spark 820ms var(--ease-out) both;
   animation-delay: calc(var(--k) * 18ms);
@@ -450,7 +450,7 @@
 
 .nudge-arrow {
   display: inline-flex;
-  color: var(--sky-deep);
+  color: var(--accent-ink);
   animation: nudge 1.6s var(--ease-out) infinite;
 }
 

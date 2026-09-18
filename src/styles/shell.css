@@ -139,7 +139,7 @@
 
 .nav-btn:hover .nav-icon,
 .nav-btn.is-active .nav-icon {
-  color: var(--sky-deep);
+  color: var(--accent-ink);
 }
 
 .nav-label {
@@ -169,7 +169,7 @@
 }
 
 .nav-btn.is-active .nav-badge {
-  background: var(--sky-soft);
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -258,7 +258,7 @@
 
 .about-link:hover,
 .about-link:focus-visible {
-  background: var(--sky-soft);
+  background: var(--accent-soft);
 }
 
 @keyframes pop-in {
@@ -336,7 +336,7 @@
   height: 38px;
   border-radius: 11px;
   background: var(--island);
-  color: var(--sky-deep);
+  color: var(--accent-ink);
   border: 1px solid var(--line);
   display: inline-flex;
   align-items: center;
