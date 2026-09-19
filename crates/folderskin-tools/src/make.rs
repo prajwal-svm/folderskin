@@ -35,6 +35,10 @@ pub struct MakeOptions {
     pub max_bytes: usize,
     /// The `cwebp` program, when there is one. Without it, folders are saved as PNG.
     pub cwebp: Option<PathBuf>,
+    /// Also cut away a flat backdrop of any colour, for renders whose #FF00FF drifted to pink or
+    /// raspberry. Only the backdrop that reaches the edge goes, so the same colour inside the
+    /// folder stays.
+    pub flat_backdrop: bool,
 }
 
 /// One picture as it went into the pack.
@@ -199,7 +203,14 @@ fn prepare(path: &Path, opts: &MakeOptions) -> Result<(Vec<u8>, &'static str, bo
     if matte::alpha_bounds(&rgba, 8).is_none() {
         return Err("is completely transparent".into());
     }
-    match matte::finished_cutout(&rgba, matte::MAGENTA) {
+    let cut = matte::finished_cutout(&rgba, matte::MAGENTA).or_else(|| {
+        let key = matte::flat_backdrop(&rgba).filter(|_| opts.flat_backdrop)?;
+        let cut = matte::cutout_connected(&rgba, key);
+        // Something substantial has to be left, as with a magenta key.
+        let solid = cut.pixels().filter(|p| p.0[3] >= 128).count() as f32;
+        (solid >= 0.02 * rgba.width() as f32 * rgba.height() as f32).then_some(cut)
+    });
+    match cut {
         Some(cut) => {
             let (bytes, ext) = encode_folder(&cut, opts)?;
             Ok((bytes, ext, true))
@@ -407,6 +418,7 @@ mod tests {
                 dir: self.0.clone(),
                 max_bytes: 400 * 1024,
                 cwebp: None,
+                flat_backdrop: false,
             }
         }
     }
@@ -495,6 +507,42 @@ mod tests {
             !scratch.0.join("packs").join("tiny").exists(),
             "nothing is left behind"
         );
+    }
+
+    /// A render whose magenta drifted to raspberry, with a crimson patch in the folder.
+    fn on_raspberry() -> RgbaImage {
+        RgbaImage::from_fn(640, 600, |x, y| {
+            if !(120..520).contains(&x) || !(130..470).contains(&y) {
+                Rgba([189, 0, 103, 255])
+            } else if (300..340).contains(&x) && (280..320).contains(&y) {
+                Rgba([180, 12, 70, 255])
+            } else {
+                Rgba([40 + (x % 60) as u8, 120, 220, 255])
+            }
+        })
+    }
+
+    #[test]
+    fn a_drifted_backdrop_is_cut_away_only_when_asked() {
+        let scratch = Scratch::new("drift");
+        scratch.picture("drifted.png", &on_raspberry());
+        let pictures = [scratch.0.join("in")];
+
+        let (_, made) = make(&pictures, &scratch.options("as-art")).unwrap();
+        assert!(
+            !made[0].folder,
+            "the app's own split: not magenta, so artwork"
+        );
+
+        let opts = MakeOptions {
+            flat_backdrop: true,
+            ..scratch.options("as-folder")
+        };
+        let (folder, made) = make(&pictures, &opts).unwrap();
+        assert!(made[0].folder);
+        let cut = image::open(folder.join("drifted.png")).unwrap().to_rgba8();
+        assert_eq!(cut.dimensions(), (400, 340));
+        assert_eq!(cut.get_pixel(200, 170).0[3], 255, "the crimson patch stays");
     }
 
     #[test]

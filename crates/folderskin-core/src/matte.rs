@@ -188,6 +188,197 @@ pub fn cutout(img: &RgbaImage, key: [u8; 3], opts: KeyOptions) -> RgbaImage {
     autocrop(&keyed, 0)
 }
 
+/// How far a flat backdrop's pixels may stray from its colour: JPEG noise on a flat fill, and no
+/// more.
+pub const FLAT_TOLERANCE: f32 = 0.06;
+
+/// How close to the measured backdrop colour a pixel must be to count as backdrop in
+/// [`cutout_connected`]: tight, because the key comes from the picture itself.
+pub const CONNECTED_TOLERANCE: f32 = 0.08;
+
+/// How many pixels into the subject [`cutout_connected`] looks for colour mixed with the
+/// backdrop. A model's anti-aliased edge is two or three pixels wide.
+const EDGE_RINGS: u8 = 2;
+
+/// The colour of a flat backdrop around a picture, whatever colour it is, or `None`.
+///
+/// Image models asked for #FF00FF often paint a steady raspberry or hot pink instead, so a
+/// maintainer tool can't count on the exact key. This takes the outer band (1% of the shorter
+/// side deep, as [`surround`] does) and returns its median colour when at least 90% of the band
+/// is opaque and within [`FLAT_TOLERANCE`] of it. A photo or painting reaching the edge varies
+/// far more than that.
+pub fn flat_backdrop(img: &RgbaImage) -> Option<[u8; 3]> {
+    let (w, h) = img.dimensions();
+    if w < 4 || h < 4 {
+        return None;
+    }
+    let band = (w.min(h) / 100).max(1);
+    let edge: Vec<[u8; 4]> = img
+        .enumerate_pixels()
+        .filter(|&(x, y, _)| x < band || y < band || x >= w - band || y >= h - band)
+        .map(|(_, _, p)| p.0)
+        .collect();
+    let median = |c: usize| {
+        let mut v: Vec<u8> = edge.iter().map(|p| p[c]).collect();
+        v.sort_unstable();
+        v[v.len() / 2]
+    };
+    let key = [median(0), median(1), median(2)];
+    let flat = edge
+        .iter()
+        .filter(|p| p[3] > CLEAR_ALPHA && distance(&[p[0], p[1], p[2]], &key) <= FLAT_TOLERANCE)
+        .count();
+    (flat as f32 >= 0.9 * edge.len() as f32).then_some(key)
+}
+
+/// True when `px` is the key colour in shade, or lit a little brighter: the key scaled by a
+/// brightness factor, give or take JPEG noise. Models draw a soft shadow under a folder even when
+/// told not to, and on a raspberry backdrop that shadow is a darker raspberry, far from the key
+/// by [`distance`] but on the same line from black.
+fn in_key_shade(px: [u8; 3], key: [u8; 3]) -> bool {
+    let p = px.map(f32::from);
+    let k = key.map(f32::from);
+    let kk = k[0] * k[0] + k[1] * k[1] + k[2] * k[2];
+    if kk == 0.0 {
+        return false;
+    }
+    let s = (p[0] * k[0] + p[1] * k[1] + p[2] * k[2]) / kk;
+    let off = [p[0] - s * k[0], p[1] - s * k[1], p[2] - s * k[2]];
+    let rms = ((off[0] * off[0] + off[1] * off[1] + off[2] * off[2]) / 3.0).sqrt();
+    // Near black everything is close to the line, so very dark pixels don't count.
+    (0.15..=1.3).contains(&s) && off[1].abs() <= 10.0 && rms <= 0.04 * 255.0
+}
+
+/// Cuts a subject out of a flat `key` backdrop, removing only the backdrop that reaches the
+/// picture's edge.
+///
+/// [`cutout`] removes the key colour wherever it appears, which is safe for pure magenta but not
+/// for a key a model drifted to: a raspberry backdrop sits close to the reds of a painting, and
+/// those would come out as holes. Here the backdrop grows inward from the edge through pixels
+/// within [`CONNECTED_TOLERANCE`] of the key or [`in_key_shade`], so a drop shadow goes with it,
+/// and everything it can't reach stays. The pixels along the subject's edge are a blend of subject
+/// and backdrop; each is split back into the two, using the backdrop and the subject colours
+/// nearby, so the edge keeps the subject's colour with a soft alpha instead of a pink rim. Then
+/// the result is trimmed like [`cutout`].
+pub fn cutout_connected(img: &RgbaImage, key: [u8; 3]) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let at = |x: u32, y: u32| (y * w + x) as usize;
+    let rgb = |x: u32, y: u32| {
+        let p = img.get_pixel(x, y).0;
+        [p[0], p[1], p[2]]
+    };
+    let is_backdrop = |x: u32, y: u32| {
+        let p = rgb(x, y);
+        distance(&p, &key) <= CONNECTED_TOLERANCE || in_key_shade(p, key)
+    };
+
+    // 0 for the backdrop; for the rest, how many pixels (8-connected) it is from the backdrop, up
+    // to EDGE_RINGS + 1, and u8::MAX further in.
+    let mut ring = vec![u8::MAX; (w * h) as usize];
+    let mut queue = std::collections::VecDeque::new();
+    for y in 0..h {
+        for x in 0..w {
+            let on_edge = x == 0 || y == 0 || x == w - 1 || y == h - 1;
+            if on_edge && is_backdrop(x, y) {
+                ring[at(x, y)] = 0;
+                queue.push_back((x, y));
+            }
+        }
+    }
+    while let Some((x, y)) = queue.pop_front() {
+        let neighbours = [
+            (x.wrapping_sub(1), y),
+            (x + 1, y),
+            (x, y.wrapping_sub(1)),
+            (x, y + 1),
+        ];
+        for (nx, ny) in neighbours {
+            if nx < w && ny < h && ring[at(nx, ny)] == u8::MAX && is_backdrop(nx, ny) {
+                ring[at(nx, ny)] = 0;
+                queue.push_back((nx, ny));
+            }
+        }
+    }
+    for r in 1..=EDGE_RINGS + 1 {
+        let previous = ring.clone();
+        for y in 0..h {
+            for x in 0..w {
+                if previous[at(x, y)] != u8::MAX {
+                    continue;
+                }
+                let touches = (y.saturating_sub(1)..=(y + 1).min(h - 1)).any(|ny| {
+                    (x.saturating_sub(1)..=(x + 1).min(w - 1))
+                        .any(|nx| previous[at(nx, ny)] == r - 1)
+                });
+                if touches {
+                    ring[at(x, y)] = r;
+                }
+            }
+        }
+    }
+
+    // How far around an edge pixel to look for the backdrop and the solid subject.
+    const REACH: u32 = 4;
+    let mut out = img.clone();
+    for y in 0..h {
+        for x in 0..w {
+            let r = ring[at(x, y)];
+            if r == 0 {
+                out.get_pixel_mut(x, y).0[3] = 0;
+                continue;
+            }
+            if r > EDGE_RINGS {
+                continue;
+            }
+            let (mut back, mut backs) = ([0f32; 3], 0f32);
+            let (mut fore, mut fores) = ([0f32; 3], 0f32);
+            for ny in y.saturating_sub(REACH)..=(y + REACH).min(h - 1) {
+                for nx in x.saturating_sub(REACH)..=(x + REACH).min(w - 1) {
+                    let p = rgb(nx, ny).map(f32::from);
+                    match ring[at(nx, ny)] {
+                        0 => {
+                            (0..3).for_each(|c| back[c] += p[c]);
+                            backs += 1.0;
+                        }
+                        n if n > EDGE_RINGS => {
+                            (0..3).for_each(|c| fore[c] += p[c]);
+                            fores += 1.0;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if backs == 0.0 || fores == 0.0 {
+                continue;
+            }
+            let k = back.map(|v| v / backs);
+            let f = fore.map(|v| v / fores);
+            let v = [f[0] - k[0], f[1] - k[1], f[2] - k[2]];
+            let vv = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+            // A subject too close to the backdrop's colour to tell apart; leave it as it is.
+            if vv < 25.0 * 25.0 {
+                continue;
+            }
+            let c = rgb(x, y).map(f32::from);
+            let a = (((c[0] - k[0]) * v[0] + (c[1] - k[1]) * v[1] + (c[2] - k[2]) * v[2]) / vv)
+                .clamp(0.0, 1.0);
+            // Mostly subject: remove the backdrop's share, which keeps the pixel's detail. Mostly
+            // backdrop: that would magnify noise, so take the nearby subject's colour instead.
+            let colour = if a >= 0.6 {
+                [0, 1, 2].map(|i| (k[i] + (c[i] - k[i]) / a).clamp(0.0, 255.0))
+            } else {
+                f
+            };
+            let px = out.get_pixel_mut(x, y);
+            for (channel, value) in px.0.iter_mut().zip(colour) {
+                *channel = value.round() as u8;
+            }
+            px.0[3] = (f32::from(px.0[3]) * a).round() as u8;
+        }
+    }
+    autocrop(&out, 0)
+}
+
 /// Fits an opaque generated image to the skin format by cropping to the target aspect around a
 /// focus point. Used when the model returned artwork rather than a cut-out folder.
 pub fn crop_to_aspect(
@@ -633,6 +824,104 @@ mod tests {
         assert!(finished_cutout(&magenta, MAGENTA).is_none());
         let clear = RgbaImage::from_pixel(64, 64, Rgba([0, 0, 0, 0]));
         assert!(finished_cutout(&clear, MAGENTA).is_none());
+    }
+
+    /// What a chat model paints when asked for #FF00FF but drifting: a steady raspberry, with a
+    /// crimson patch inside the subject that is nearly the backdrop's colour.
+    fn raspberry_render() -> RgbaImage {
+        RgbaImage::from_fn(200, 200, |x, y| {
+            if !(40..160).contains(&x) || !(40..160).contains(&y) {
+                jitter([189, 0, 103], x, y, 2)
+            } else if (80..120).contains(&x) && (80..120).contains(&y) {
+                Rgba([180, 12, 70, 255])
+            } else {
+                Rgba([40, 90, 180, 255])
+            }
+        })
+    }
+
+    #[test]
+    fn a_drifted_flat_backdrop_is_found_and_a_scene_is_not() {
+        let key = flat_backdrop(&raspberry_render()).expect("the raspberry backdrop");
+        assert!(distance(&key, &[189, 0, 103]) < 0.02, "{key:?}");
+        assert_eq!(
+            surround(&raspberry_render(), MAGENTA),
+            Surround::Opaque,
+            "not magenta"
+        );
+        let scene = RgbaImage::from_fn(200, 150, |x, y| Rgba([(x + y) as u8, 90, 200, 255]));
+        assert_eq!(flat_backdrop(&scene), None);
+        let clear = RgbaImage::from_pixel(64, 64, Rgba([0, 0, 0, 0]));
+        assert_eq!(
+            flat_backdrop(&clear),
+            None,
+            "transparency is not a backdrop colour"
+        );
+    }
+
+    #[test]
+    fn a_connected_cutout_keeps_the_key_colour_inside_the_subject() {
+        let img = raspberry_render();
+        let key = flat_backdrop(&img).unwrap();
+        let cut = cutout_connected(&img, key);
+        assert_eq!(cut.dimensions(), (120, 120), "trimmed to the subject");
+        assert_eq!(cut.get_pixel(60, 60).0[3], 255, "the crimson patch stays");
+        assert_eq!(cut.get_pixel(5, 5).0[3], 255, "the subject stays solid");
+        // Keying the same colour everywhere would have punched the patch out.
+        let global = key_out(&img, key, KeyOptions::default());
+        assert!(global.get_pixel(100, 100).0[3] < 255);
+        assert_eq!(global.get_pixel(0, 0).0[3], 0);
+    }
+
+    #[test]
+    fn a_drop_shadow_on_the_backdrop_goes_with_it() {
+        // A soft shadow under the subject: the backdrop's own colour, darker towards the subject.
+        let key = [203u8, 2, 134];
+        let img = RgbaImage::from_fn(200, 200, |x, y| {
+            let shade = |s: f32| key.map(|c| (f32::from(c) * s).round() as u8);
+            let [r, g, b] = if (40..160).contains(&x) && (40..150).contains(&y) {
+                [150, 140, 120]
+            } else if (40..160).contains(&x) && (150..168).contains(&y) {
+                shade(0.2 + 0.8 * (y - 150) as f32 / 18.0)
+            } else {
+                key
+            };
+            Rgba([r, g, b, 255])
+        });
+        let cut = cutout_connected(&img, flat_backdrop(&img).unwrap());
+        assert_eq!(
+            cut.dimensions(),
+            (120, 110),
+            "the shadow isn't part of the subject"
+        );
+        assert!(
+            cut.pixels().all(|p| p.0[1] > 100 || p.0[3] == 0),
+            "nothing pink is left"
+        );
+    }
+
+    #[test]
+    fn an_edge_blended_with_the_backdrop_keeps_the_subjects_colour() {
+        // A blue square whose outermost column is half blue, half raspberry, as anti-aliasing
+        // leaves it.
+        let key = [189u8, 0, 103];
+        let blue = [40u8, 90, 180];
+        let half = [0, 1, 2].map(|i| ((u16::from(key[i]) + u16::from(blue[i])) / 2) as u8);
+        let img = RgbaImage::from_fn(200, 200, |x, y| {
+            let inside = (40..160).contains(&y);
+            let [r, g, b] = match x {
+                39 if inside => half,
+                40..=159 if inside => blue,
+                _ => key,
+            };
+            Rgba([r, g, b, 255])
+        });
+        let cut = cutout_connected(&img, key);
+        assert_eq!(cut.dimensions(), (121, 120));
+        let rim = cut.get_pixel(0, 60).0;
+        assert!((110..=145).contains(&rim[3]), "half transparent: {rim:?}");
+        let off = [0, 1, 2].map(|i| (i16::from(rim[i]) - i16::from(blue[i])).abs());
+        assert!(off.iter().all(|&d| d <= 6), "blue, not pink: {rim:?}");
     }
 
     #[test]

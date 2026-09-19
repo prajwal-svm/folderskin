@@ -147,6 +147,7 @@ fn run(cli: Cli) -> Result<(), String> {
                 dir,
                 max_kb,
                 preview,
+                flat_backdrop,
             } => {
                 let opts = make::MakeOptions {
                     id,
@@ -157,6 +158,7 @@ fn run(cli: Cli) -> Result<(), String> {
                     dir,
                     max_bytes: max_kb * 1024,
                     cwebp: make::find_cwebp(),
+                    flat_backdrop,
                 };
                 packs_make(&pictures, &opts, preview.as_deref())
             }

@@ -160,12 +160,15 @@ background.
    ```
 
 3. Read the report. Each picture is `folder` (cut out of magenta or transparency and used as
-   the icon) or `artwork` (wrapped onto FolderSkin's folder). A render meant as a whole folder
-   that came out as `artwork` wasn't on a clean enough magenta: say so, and ask for a re-render
-   rather than forcing it. Without `cwebp` folders are PNG and often too big; install it
-   (`brew install webp`) and run again.
+   the icon) or `artwork` (wrapped onto FolderSkin's folder). Renders meant as whole folders
+   that came out as `artwork` usually sit on a drifted pink or raspberry instead of `#FF00FF`
+   (Grok does this): delete the pack folder and run again with `--flat-backdrop`, which cuts
+   away each picture's own flat background. Without `cwebp` folders are PNG and often too big;
+   install it (`brew install webp`) and run again.
 4. Open the preview PNG with the Read tool. Look for magenta fringes, tabs cut off, a subject
-   that doesn't fill the folder, and names that read badly.
+   that doesn't fill the folder, and names that read badly. For a close look at the edges,
+   composite a few of the pictures on light grey and crop their corners at 3×: a one-pixel pink
+   rim or a leftover shadow only shows there.
 5. Fix names in `assets/packs/<id>/pack.json` (1–60 characters) if needed, then run
    `cargo run -p folderskin-tools -- packs check --dir assets --max-kb 400`.
 6. Rebuild. The skins appear in the library under the pack's first tag.

@@ -147,6 +147,13 @@ says which way each picture went. Skins are named after their files, so name the
 fix the names in `pack.json` afterwards, and `--preview` draws every skin as its folder in one
 PNG to look over.
 
+Image models asked for `#FF00FF` often paint a steady raspberry or hot pink instead (Grok did,
+for the Classic Art pack). `--flat-backdrop` cuts away a flat background of any colour: it
+measures each picture's own background, removes only what reaches the edge (so a red cloak
+inside the folder stays), takes a soft drop shadow with it, and gives the edge the painting's
+colours rather than a pink rim. Look at the `--preview` sheet afterwards; a picture with no flat
+background still comes out as artwork.
+
 `--dir community` makes a community pack the same way. CI checks the built-in packs with
 `packs check --dir assets --max-kb 400`.
 

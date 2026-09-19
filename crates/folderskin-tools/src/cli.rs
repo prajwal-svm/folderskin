@@ -109,6 +109,10 @@ pub enum PacksCommand {
         /// Also write a PNG showing every skin as the folder it makes
         #[arg(long, value_name = "PNG")]
         preview: Option<PathBuf>,
+        /// Cut away a flat backdrop of any colour, not only magenta: for renders whose #FF00FF
+        /// drifted to pink or raspberry. Only the backdrop reaching the edge goes
+        #[arg(long)]
+        flat_backdrop: bool,
     },
     /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic)
     Index {

@@ -97,7 +97,8 @@ random number generator and released under CC0. Nothing here is borrowed from an
 ## Community skins
 
 People share skins and packs of skins on GitHub, free for everyone. Open **Community** to add
-one: its skins join your library with their tags. To share yours, open a skin's ⋯ menu and
+one: its skins join your library with their tags. **Classic Art** is a good first pack: sixteen
+public-domain paintings, from the Mona Lisa to The Starry Night, each painted onto a folder. To share yours, open a skin's ⋯ menu and
 choose **Share with community**, or use **Community → Share your skins** for several. FolderSkin
 saves a pack folder that passes the checks, and you drop it on GitHub as a pull request.
 [docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 24 skins a pack, pictures up
