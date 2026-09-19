@@ -11,6 +11,15 @@
   container-type: inline-size;
 }
 
+/* With a control after the search, the tabs stay left and the search and the control go right. */
+.toolbar.has-extra {
+  justify-content: flex-start;
+}
+
+.toolbar.has-extra .search {
+  margin-left: auto;
+}
+
 /* Narrow library: the tabs keep the room and search folds into a round button until used. */
 @container (max-width: 600px) {
   .search {

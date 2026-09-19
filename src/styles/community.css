@@ -63,6 +63,8 @@
 
 .packs {
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -167,13 +169,100 @@
 
 /* a narrow library: the strip gets its own row above the words */
 @container (max-width: 560px) {
-  .pack {
+  .packs:not(.is-gallery) .pack {
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: 10px;
   }
 
-  .pack-preview {
+  .packs:not(.is-gallery) .pack-preview {
     grid-column: 1 / -1;
     width: 100%;
   }
+}
+
+/* list or gallery, beside the search */
+.view-switch {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+}
+
+.view-switch-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.view-switch-btn:hover,
+.view-switch-btn:focus-visible {
+  color: var(--ink);
+}
+
+.view-switch-btn.is-active {
+  background: var(--island);
+  color: var(--ink);
+}
+
+/* the gallery: one card per pack, its first folders two by two above its details */
+.packs.is-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.packs.is-gallery .pack {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px;
+}
+
+.packs.is-gallery .pack-preview {
+  width: 100%;
+  height: auto;
+}
+
+.packs.is-gallery .pack-preview-blank {
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 12px;
+}
+
+.packs.is-gallery .pack-by {
+  white-space: normal;
+}
+
+.packs.is-gallery .pack-action {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.packs.is-gallery .pack-action .btn-primary {
+  flex: 1;
+}
+
+.pack-quad {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--island);
+  animation: fade-in var(--t-base) ease both;
+}
+
+.pack-quad span {
+  background-image: var(--strip);
+  background-repeat: no-repeat;
+  background-position-y: center;
 }

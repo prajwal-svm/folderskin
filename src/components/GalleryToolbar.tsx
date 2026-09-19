@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SearchIcon } from "./icons/search";
 
 export type TabCount = { id: string; label: string; count: number };
@@ -15,6 +15,7 @@ export function GalleryToolbar({
   onQuery,
   label = "filter skins by tag",
   placeholder = "Search skins",
+  extra,
 }: {
   tabs: TabCount[];
   active: string;
@@ -23,6 +24,8 @@ export function GalleryToolbar({
   onQuery: (q: string) => void;
   label?: string;
   placeholder?: string;
+  /** More controls after the search, such as how to show what's listed. */
+  extra?: ReactNode;
 }) {
   const seg = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -61,7 +64,7 @@ export function GalleryToolbar({
   const mac = navigator.platform.toLowerCase().includes("mac");
 
   return (
-    <div className="toolbar" data-tauri-drag-region>
+    <div className={extra ? "toolbar has-extra" : "toolbar"} data-tauri-drag-region>
       <div className="seg" role="tablist" aria-label={label} ref={seg}>
         {pill && (
           <span
@@ -109,6 +112,7 @@ export function GalleryToolbar({
         />
         {!query && <kbd>{mac ? "⌘F" : "Ctrl F"}</kbd>}
       </label>
+      {extra}
     </div>
   );
 }

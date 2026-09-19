@@ -10,8 +10,8 @@ The AI providers' logos in `../ProviderLogo.tsx` come from
 [lobe-icons](https://github.com/lobehub/lobe-icons) (`packages/static-svg`), trimmed to their
 paths. Each logo is its company's trademark and is shown only to name that provider.
 
-`star`, `image` and `loader` use the shapes of the [Lucide](https://lucide.dev) icons of the same
-names (`loader` is Lucide's `loader-circle`); their animations are FolderSkin's own.
+`star`, `image`, `list` and `loader` use the shapes of the [Lucide](https://lucide.dev) icons of
+the same names (`loader` is Lucide's `loader-circle`); their animations are FolderSkin's own.
 
 The three projects' licences follow, as their terms require.
 

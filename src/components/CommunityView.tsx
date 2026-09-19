@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type CommunityPack, type Skin } from "../lib/tauri";
@@ -11,6 +11,8 @@ import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
 import { OkBadge } from "./OkBadge";
 import { DownloadIcon } from "./icons/download";
 import { FolderOpenIcon } from "./icons/folder-open";
+import { LayoutGridIcon } from "./icons/layout-grid";
+import { ListIcon } from "./icons/list";
 import { LoaderIcon } from "./icons/loader";
 import { SparklesIcon } from "./icons/sparkles";
 
@@ -18,6 +20,28 @@ type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string;
 
 /** Previews downloaded this session, so coming back to Community doesn't load them again. */
 const previews = new Map<string, string>();
+
+/** How the packs are shown: rows with their details, or cards with bigger folders. */
+type PackView = "list" | "gallery";
+
+const VIEW_KEY = "folderskin.community.view";
+
+/** The view picked last time, remembered on this computer only. */
+function loadView(): PackView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "gallery" ? "gallery" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+function saveView(view: PackView) {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Not saving it only means the list comes back next time.
+  }
+}
 
 /**
  * Skin packs other people shared on GitHub, filtered by tag like the library. Adding a pack
@@ -44,6 +68,11 @@ export function CommunityView({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [removing, setRemoving] = useState<CommunityPack | null>(null);
+  const [view, setView] = useState<PackView>(loadView);
+  const pickView = (next: PackView) => {
+    setView(next);
+    saveView(next);
+  };
 
   const load = useCallback(() => {
     setError(null);
@@ -143,7 +172,41 @@ export function CommunityView({
         </div>
       </header>
 
-      {packs && packs.length > 0 && <GalleryToolbar tabs={tabs} active={tag} onChange={setTag} query={query} onQuery={setQuery} label="filter packs by tag" />}
+      {packs && packs.length > 0 && (
+        <GalleryToolbar
+          tabs={tabs}
+          active={tag}
+          onChange={setTag}
+          query={query}
+          onQuery={setQuery}
+          label="filter packs by tag"
+          placeholder="Search packs"
+          extra={
+            <div className="view-switch" role="radiogroup" aria-label="show packs as">
+              {(
+                [
+                  ["list", "List", ListIcon],
+                  ["gallery", "Gallery", LayoutGridIcon],
+                ] as const
+              ).map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={view === id}
+                  aria-label={label}
+                  title={label}
+                  className={view === id ? "view-switch-btn is-active" : "view-switch-btn"}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickView(id)}
+                >
+                  <Icon size={16} />
+                </button>
+              ))}
+            </div>
+          }
+        />
+      )}
 
       <div className="community-scroll">
         {packs === null ? (
@@ -167,10 +230,10 @@ export function CommunityView({
             <p className="empty-text">{packs.length ? "Try another word or tag." : "Be the first: share yours."}</p>
           </div>
         ) : (
-          <ul className="packs">
+          <ul className={view === "gallery" ? "packs is-gallery" : "packs"}>
             {shown.map((p, i) => (
               <li key={p.id} className="pack" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-                <PackPreview id={p.id} />
+                <PackPreview id={p.id} count={p.count} grid={view === "gallery"} />
                 <div className="pack-meta">
                   <p className="pack-name">{p.name}</p>
                   <p className="pack-by">
@@ -230,8 +293,11 @@ export function CommunityView({
   );
 }
 
-/** A pack's preview strip: a few of its skins as folders, loaded once per session. */
-function PackPreview({ id }: { id: string }) {
+/**
+ * A pack's preview: its first few skins as folders, loaded once per session. The list shows the
+ * strip as it is; the gallery cuts it into its folders and lays them out two by two.
+ */
+function PackPreview({ id, count, grid }: { id: string; count: number; grid: boolean }) {
   const [src, setSrc] = useState(() => previews.get(id) ?? null);
   useEffect(() => {
     if (src) return;
@@ -247,5 +313,28 @@ function PackPreview({ id }: { id: string }) {
       live = false;
     };
   }, [id, src]);
+  if (grid) {
+    // The strip holds up to four folders side by side, one per cell here.
+    const shown = Math.max(1, Math.min(count, 4));
+    return (
+      <span className="pack-preview">
+        {src ? (
+          <span className="pack-quad" style={{ "--strip": `url("${src}")` } as CSSProperties}>
+            {Array.from({ length: shown }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  backgroundSize: `${shown * 100}% 100%`,
+                  backgroundPositionX: shown === 1 ? "0%" : `${(i / (shown - 1)) * 100}%`,
+                }}
+              />
+            ))}
+          </span>
+        ) : (
+          <span className="pack-preview-blank" />
+        )}
+      </span>
+    );
+  }
   return <span className="pack-preview">{src ? <img src={src} alt="" draggable={false} /> : <span className="pack-preview-blank" />}</span>;
 }

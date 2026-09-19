@@ -26,11 +26,13 @@ const mockKeys = new Set<string>();
 
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
 const MOCK_PACKS: Omit<CommunityPack, "added">[] = [
+  { id: "classic-art", name: "Classic Art", author: "prajwal-svm", license: "CC0-1.0", tags: ["classic art"], count: 16 },
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
   { id: "night-prints", name: "Night prints", author: "example", license: "CC-BY-4.0", tags: ["woodblock", "night", "animals"], count: 12 },
   { id: "chrome-dreams", name: "Chrome dreams", author: "example", license: "CC-BY-4.0", tags: ["airbrush", "retro"], count: 6 },
 ];
-const PREVIEW_OF: Record<string, string> = { colours: "sunset", "night-prints": "slate", "chrome-dreams": "aurora" };
+/** The real preview strips from community/previews; the made-up packs borrow one. */
+const PREVIEW_OF: Record<string, string> = { "classic-art": "classic-art", colours: "colours", "night-prints": "classic-art", "chrome-dreams": "colours" };
 /** The skins each added sample pack put in the library. */
 const mockAdded = new Map<string, string[]>();
 
@@ -91,7 +93,7 @@ export const mockApi = {
     await new Promise((r) => setTimeout(r, 500));
     return MOCK_PACKS.map((p) => ({ ...p, added: mockAdded.has(p.id) }));
   },
-  communityPreview: async (packId: string) => `/assets/previews/${PREVIEW_OF[packId] ?? "mesh"}.png`,
+  communityPreview: async (packId: string) => `/community/previews/${PREVIEW_OF[packId] ?? "colours"}.png`,
   addPack: async (packId: string): Promise<Skin[]> => {
     await new Promise((r) => setTimeout(r, 1200));
     const pack = MOCK_PACKS.find((p) => p.id === packId);
