@@ -12,9 +12,10 @@
 
 **Give any folder a skin.**
 
-FolderSkin turns a picture into a folder icon on macOS, Windows and Linux. Drop a folder on the
-window, try skins on it and press apply: a skin from a free community pack, a photo of your own,
-or a poster-style folder an AI paints for you. Revert puts the system icon back.
+All your folders look the same. FolderSkin gives each one a skin you'll spot at a glance: The
+Starry Night on your photos, Ada Lovelace on your code, a soft pastel for every client. Drop a
+folder on the window, try skins on it, and apply the one you love. Pick a skin from a free
+community pack, make one from your own photo, or describe one and let AI paint it.
 
 <p>
   <a href="https://github.com/prajwal-svm/folderskin/releases/latest"><strong>Download free</strong></a>
@@ -114,6 +115,16 @@ Enter. Open **Generate with AI**, describe a scene, pick a style, and
 choose **Whole folder** (the model paints the whole folder from FolderSkin's template, like a
 poster) or **Just the art** (flat art wrapped onto FolderSkin's folder). Every result is saved to
 **Yours** and can be tried on at once.
+
+| | Provider | Models | Per image | Key |
+| :-: | --- | --- | --- | --- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/openai-dark.svg"><img src="docs/images/providers/openai.svg" width="20" height="20" alt=""></picture> | OpenAI | GPT Image 2.5 Flare, GPT Image 2.5 Sunburst, GPT Image 1 | ~$0.02–0.19 | [Get a key](https://platform.openai.com/api-keys) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/xai-dark.svg"><img src="docs/images/providers/xai.svg" width="20" height="20" alt=""></picture> | xAI Grok | Grok Imagine | ~$0.02 | [Get a key](https://console.x.ai) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/recraft-dark.svg"><img src="docs/images/providers/recraft.svg" width="20" height="20" alt=""></picture> | Recraft | Recraft V3 | ~$0.04 | [Get a key](https://www.recraft.ai/profile/api) |
+| <img src="docs/images/providers/google.svg" width="20" height="20" alt=""> | Google Gemini | Gemini 2.5 Flash Image | ~$0.04 | [Get a key](https://aistudio.google.com/apikey) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/bfl-dark.svg"><img src="docs/images/providers/bfl.svg" width="20" height="20" alt=""></picture> | Black Forest Labs | FLUX 1.1 Pro | ~$0.04 | [Get a key](https://dashboard.bfl.ai) |
+| <img src="docs/images/providers/stability.svg" width="20" height="20" alt=""> | Stability AI | Stable Image Core | ~3 credits | [Get a key](https://platform.stability.ai/account/keys) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/ideogram-dark.svg"><img src="docs/images/providers/ideogram.svg" width="20" height="20" alt=""></picture> | Ideogram | Ideogram v3 | ~$0.03–0.09 | [Get a key](https://ideogram.ai/manage-api) |
 
 No key? [docs/PROMPTS.md](docs/PROMPTS.md) has a template and a prompt for Grok's or
 ChatGPT's own chat; the app shows the same prompt, filled in, under **No API key?**.
@@ -231,14 +242,7 @@ helps other people find it.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Copyright 2026 FolderSkin contributors. The bundled font is
-Manrope under the SIL Open Font License (`assets/fonts/OFL.txt`). Each community pack names its
-own licence; the folders in the first-launch welcome come from the CC0 Classic Art and Colours
-packs.
-The animated icons are adapted from [lucide-animated](https://lucide-animated.com) (MIT) and
-[Lucide](https://lucide.dev) (ISC), and the AI providers' logos come from
-[lobe-icons](https://github.com/lobehub/lobe-icons) (MIT) and remain their companies' trademarks;
-see [src/components/icons/LICENSES.md](src/components/icons/LICENSES.md).
+MIT — see [LICENSE](LICENSE). Copyright 2026 FolderSkin contributors.
 
 [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [MIT](LICENSE)
 
