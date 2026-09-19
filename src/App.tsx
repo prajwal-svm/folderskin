@@ -2,20 +2,23 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
-import { isTauri } from "./lib/devMock";
+import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
 import { browseLabel, fileBrowser } from "./lib/platform";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
+import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
 import { useUpdates } from "./hooks/useUpdates";
+import { usePalettes } from "./hooks/usePalettes";
 import { Sidebar, type View } from "./components/Sidebar";
 import { GalleryToolbar, type TabCount } from "./components/GalleryToolbar";
 import { Gallery, type Empty } from "./components/Gallery";
 import { FolderStage } from "./components/FolderStage";
+import { FilterMenu } from "./components/FilterMenu";
 import { AboutMenu } from "./components/AboutMenu";
 import { CommunityView } from "./components/CommunityView";
 import { Studio } from "./components/Studio";
@@ -28,6 +31,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { SearchIcon } from "./components/icons/search";
 import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
+import { ListFilterIcon } from "./components/icons/list-filter";
 
 
 function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref) => void; toggle: () => void } {
@@ -63,6 +67,9 @@ function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref)
   return { theme, pref, setPref: choose, toggle };
 }
 
+/** How long a folder that replaced another shows its own icon before the selected skin goes on. */
+const ARRIVAL_MS = 900;
+
 /** Newest first. A pack keeps its own order: the app gives its first skin the newest time. */
 function newestFirst(list: Skin[]): Skin[] {
   return [...list].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
@@ -72,12 +79,16 @@ export default function App() {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [skins, setSkins] = useState<Skin[]>([]);
   const [defaultThumb, setDefaultThumb] = useState<string | null>(null);
-  const [folderIcon, setFolderIcon] = useState<string | null>(null);
+  /** A folder's icon as the OS draws it, and which folder it is; null `url` when the OS can't say. */
+  const [folderIcon, setFolderIcon] = useState<{ path: string; url: string | null } | null>(null);
   const [platform, setPlatform] = useState<PlatformInfo>({ os: "macos", browse_label: "your Mac", note: "" });
   const [view, setView] = useState<View>("skins");
   /** The tag the library is filtered by; empty for all of them. */
   const [tag, setTag] = useState("");
   const [query, setQuery] = useState("");
+  /** The filters and order behind the filter button; the order is remembered, the filters aren't. */
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [sort, setSort] = useState<Sort>(() => loadSort());
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -112,39 +123,47 @@ export default function App() {
   const addSkin = useCallback((skin: Skin) => addSkins([skin]), [addSkins]);
 
   const yours = useMemo(() => skins.filter(isYours), [skins]);
+  const { palettes, reading } = usePalettes(skins);
 
-  // The sidebar picks what is in view (everything, yours, favourites); the top bar narrows it to
-  // one tag. Its filters are the tags in view, most used first.
+  // The sidebar picks what is in view (everything, yours, favourites) and the filters narrow it;
+  // the top bar then narrows it to one tag, its tabs being the tags left, most used first.
   const inView = useMemo(
     () => (view === "yours" ? yours : view === "faves" ? skins.filter((s) => favorites.includes(s.id)) : skins),
     [view, yours, skins, favorites],
   );
+  const filterCtx = useMemo(() => ({ favourites: new Set(favorites), palettes, now: Date.now() }), [favorites, palettes]);
+  const filtered = useMemo(() => applyFilters(inView, filters, filterCtx), [inView, filters, filterCtx]);
+  const filtering = activeCount(filters) > 0;
   const tabs = useMemo<TabCount[]>(
-    () => [{ id: "", label: "All", count: inView.length }, ...tagCounts(inView).map((t) => ({ id: t.tag, label: tagLabel(t.tag), count: t.count }))],
-    [inView],
+    () => [{ id: "", label: "All", count: filtered.length }, ...tagCounts(filtered).map((t) => ({ id: t.tag, label: tagLabel(t.tag), count: t.count }))],
+    [filtered],
   );
-  // A tag nothing in view carries any more (edited away, deleted) falls back to All.
+  // A tag nothing in view carries any more (edited away, deleted, filtered out) falls back to All.
   const activeTag = tabs.some((t) => t.id === tag) ? tag : "";
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return inView.filter(
-      (s) => (!activeTag || s.tags.includes(activeTag)) && (!q || s.name.toLowerCase().includes(q) || s.tags.some((t) => t.includes(q))),
-    );
-  }, [inView, activeTag, query]);
+  const visible = useMemo(
+    () => sortSkins(filtered.filter((s) => (!activeTag || s.tags.includes(activeTag)) && matchesQuery(s, query)), sort),
+    [filtered, activeTag, query, sort],
+  );
+
+  const chooseSort = useCallback((next: Sort) => {
+    setSort(next);
+    saveSort(next);
+  }, []);
 
   /** Opens the whole library filtered by one tag, as "Show" after adding a pack does. */
   const showTag = useCallback((t: string) => {
     setView("skins");
     setTag(t);
     setQuery("");
+    setFilters(NO_FILTERS);
   }, []);
 
   const refreshFolderIcon = useCallback((path: string) => {
     api
       .folderIcon(path)
-      .then((url) => setFolderIcon(url))
-      .catch(() => setFolderIcon(null));
+      .then((url) => setFolderIcon({ path, url }))
+      .catch(() => setFolderIcon({ path, url: null }));
   }, []);
 
   const takePath = useCallback(
@@ -182,8 +201,17 @@ export default function App() {
     useCallback((info) => dispatch({ type: "drag", info }), []),
   );
 
+  // A folder that replaced another shows its own icon for a moment, then tries the skin on. The
+  // moment starts once its icon is on screen (or, if the icon is slow, a little later anyway).
+  const iconShown = folderIcon !== null && folderIcon.path === state.folder?.path;
+  useEffect(() => {
+    if (!state.arriving) return;
+    const t = window.setTimeout(() => dispatch({ type: "arrived" }), iconShown ? ARRIVAL_MS : ARRIVAL_MS + 600);
+    return () => window.clearTimeout(t);
+  }, [state.arriving, state.folder?.path, iconShown]);
+
   const browseFolder = useCallback(async () => {
-    if (!isTauri()) return takePath("/Users/you/Documents/Projects");
+    if (!isTauri()) return takePath(mockPickFolder());
     const picked = await open({ directory: true, multiple: false, title: "Choose a folder" }).catch(() => null);
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
@@ -317,41 +345,61 @@ export default function App() {
   }, []);
 
   const selected = skins.find((s) => s.id === state.skinId) ?? null;
+  // The icon of the folder on show, never one that arrived late for a folder picked before it.
+  const stageIcon = folderIcon && folderIcon.path === state.folder?.path ? (folderIcon.url ?? defaultThumb) : undefined;
   const q = query.trim();
   const empty: Empty | null = loadError
     ? { icon: <FolderOpenIcon size={22} />, title: "The skins didn't load", text: loadError }
     : visible.length > 0
       ? null
-      : q
+      : filtering
         ? {
-            icon: <SearchIcon size={20} />,
-            title: `Nothing matches "${q}"`,
-            text: "Try another word, or look in All.",
+            icon: <ListFilterIcon size={20} />,
+            title: q ? `Nothing matches "${q}" with these filters` : "No skins match these filters",
+            text: "Take a filter or two off, or clear them all.",
             action: (
-              <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
-                Clear search
-              </button>
+              <div className="empty-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setFilters(NO_FILTERS)}>
+                  Clear filters
+                </button>
+                {q && (
+                  <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
+                    Clear search
+                  </button>
+                )}
+              </div>
             ),
           }
-        : view === "faves"
-          ? { icon: <StarIcon size={20} />, title: "No favourites yet", text: "Tap the star on any skin and it will wait for you here." }
-          : view === "skins" && skins.length === 0
-            ? {
-                icon: <FolderOpenIcon size={22} />,
-                title: "No skins yet",
-                text: "Add a free pack from Community, bring a picture of your own, or have AI paint one.",
-                action: (
-                  <div className="empty-actions">
-                    <button type="button" className="btn btn-primary" onClick={() => setView("community")}>
-                      Browse packs
-                    </button>
-                    <button type="button" className="btn btn-secondary" onClick={pickPhoto}>
-                      Add your photo
-                    </button>
-                  </div>
-                ),
-              }
-            : null;
+        : q
+          ? {
+              icon: <SearchIcon size={20} />,
+              title: `Nothing matches "${q}"`,
+              text: "Try another word, or look in All.",
+              action: (
+                <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
+                  Clear search
+                </button>
+              ),
+            }
+          : view === "faves"
+            ? { icon: <StarIcon size={20} />, title: "No favourites yet", text: "Tap the star on any skin and it will wait for you here." }
+            : view === "skins" && skins.length === 0
+              ? {
+                  icon: <FolderOpenIcon size={22} />,
+                  title: "No skins yet",
+                  text: "Add a free pack from Community, bring a picture of your own, or have AI paint one.",
+                  action: (
+                    <div className="empty-actions">
+                      <button type="button" className="btn btn-primary" onClick={() => setView("community")}>
+                        Browse packs
+                      </button>
+                      <button type="button" className="btn btn-secondary" onClick={pickPhoto}>
+                        Add your photo
+                      </button>
+                    </div>
+                  ),
+                }
+              : null;
 
   const library = view === "skins" || view === "yours" || view === "faves";
 
@@ -362,6 +410,7 @@ export default function App() {
         onView={(v) => {
           setView(v);
           setTag("");
+          setFilters(NO_FILTERS);
         }}
         skinsCount={skins.length}
         favoritesCount={favorites.filter((id) => skins.some((s) => s.id === id)).length}
@@ -392,15 +441,33 @@ export default function App() {
         <span className="drop-glow" aria-hidden="true" />
         {library && (
           <>
-            <GalleryToolbar tabs={tabs} active={activeTag} onChange={setTag} query={query} onQuery={setQuery} />
+            <GalleryToolbar
+              tabs={tabs}
+              active={activeTag}
+              onChange={setTag}
+              query={query}
+              onQuery={setQuery}
+              extra={
+                <FilterMenu
+                  skins={inView}
+                  filters={filters}
+                  onFilters={setFilters}
+                  sort={sort}
+                  onSort={chooseSort}
+                  ctx={filterCtx}
+                  showFavourites={view !== "faves"}
+                  reading={reading}
+                />
+              }
+            />
             <div className="gallery-scroll scroll-on-hover">
               <Gallery
                 skins={visible}
                 selectedId={state.skinId}
                 favorites={favorites}
                 empty={empty}
-                animationKey={`${view}:${activeTag}:${q}`}
-                onAdd={view === "yours" && !q && !activeTag ? pickPhoto : undefined}
+                animationKey={`${view}:${activeTag}:${q}:${JSON.stringify(filters)}:${sort}`}
+                onAdd={view === "yours" && !q && !activeTag && !filtering ? pickPhoto : undefined}
                 onSelect={(id) => dispatch({ type: "skinSelected", skinId: id })}
                 onToggleFavorite={onToggleFavorite}
                 onRemove={askDelete}
@@ -431,7 +498,7 @@ export default function App() {
       <FolderStage
         state={state}
         skin={selected}
-        folderIcon={folderIcon}
+        folderIcon={stageIcon}
         defaultThumb={defaultThumb}
         os={platform.os}
         browseLabel={browseLabel(platform.os)}

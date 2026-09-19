@@ -4,13 +4,6 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-
-### Added
-
-- A Greek Art community pack: 15 marble statues and temples as folders, from Open Arms and the
-  Parthenon to Poseidon in the Clouds.
-
 ## 0.1.0 — 2026-09-19
 
 The first release.
@@ -19,14 +12,16 @@ The first release.
 
 - Apply a folder icon on macOS, Windows and Linux from one rendering path in
   `folderskin-core`, so the gallery preview and the icon written to disk are the same
-  pixels.
+  pixels. On macOS the Desktop and Finder show the new icon straight away, even when it
+  replaces another.
 - A first-launch welcome: five folders try on 26 skins, none of them twice and no two neighbours
   from one pack (paintings, pop-art portraits and marble statues, with a couple of plain folders),
-  fold into one and land on the logo, whose **Let's go** arrow nudges until it's pressed. Then the community's packs are offered with
-  Classic Art picked for you. Each pack shows
-  its progress, nothing can be skipped or undone while one is being added, and a pack that fails
-  can be tried again or left for later from Community. It shows once; a click or a key skips the
-  animation, and reduced motion shows its last frame straight away.
+  fold into one and land on the logo, whose **Let's go** arrow nudges until it's pressed. Then the
+  community's packs are offered with Classic Art picked for you, going soft and fading out under
+  frosted glass as they scroll down to the buttons. Each pack shows its progress, nothing can be
+  skipped or undone while one is being added, and a pack that fails can be tried again or left for
+  later from Community. It shows once; a click or a key skips the animation, and reduced motion
+  shows its last frame straight away.
 - FolderSkin ships no skins of its own: the library holds community packs, your own pictures
   and AI results, and an empty library points to all three.
 - Use your own photo as a skin: drop a picture on the window, or pick one with the
@@ -44,6 +39,12 @@ The first release.
 - Tags on every skin. The tags in view become the filters along the top of the library, AI
   results are tagged with their style, and a skin's ⋯ menu renames it, edits its tags and shows
   how it was made.
+- Filters and a sort order behind a button beside the search: favourites only, where a skin came
+  from, its pack, its colours and whether it's light or dark (read from the picture itself), when
+  it was added, and the AI model, author or licence behind it. Only the filters that can narrow
+  what's in view are offered, each saying how many skins it would show, and the button counts the
+  ones that are on. The search also finds a skin by its pack, its author or the idea behind an AI
+  result.
 - Community packs: free skins shared on GitHub under `community/packs/`, added from the
   Community view and filtered by tag. Share one skin or a pack of up to 50 from the app, which
   saves a folder ready for a pull request. The contract, its limits and the licences (CC0, CC BY
@@ -56,7 +57,8 @@ The first release.
   ChatGPT's chat from [docs/PROMPTS.md](docs/PROMPTS.md), are cut out and used as they are.
 - A layout built around the folder: the library and the folder each sit on their own island,
   the folder tries skins on before anything is written, and every step (drag, drop, preview,
-  apply, revert) has its own feedback.
+  apply, revert) has its own feedback. A different folder shows up as it is first, wearing its
+  own icon, and then tries the chosen skin on.
 - The AI assistant is a composer that moves out of the way once used; results develop in
   place and can be tried on straight away, and provider settings live in a dialog.
 - A translucent sidebar on macOS: the window sits on the system sidebar material, which
@@ -81,6 +83,8 @@ The first release.
 - A Soft Rainbow community pack: ten pastel folders, from Lemon Chiffon to Celadon.
 - A Scientists - Pop Art community pack: 42 scientists as comic-book folders, from Archimedes to
   Stephen Hawking, in the order they were born.
+- A Greek Art community pack: 15 marble statues and temples as folders, from Open Arms and the
+  Parthenon to Poseidon in the Clouds.
 - Community opens on a gallery of cards with four of each pack's folders, with a list a click
   away, and a pack you've added wears a green tick by its name. **View** opens a pack to look
   through all of its skins before adding it; one looked through in the last week opens straight

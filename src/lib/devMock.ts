@@ -125,6 +125,17 @@ function keep(skins: Skin[]) {
 
 const packAdded = (id: string) => library.some((s) => s.pack === id);
 
+/** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried. */
+const SAMPLE_FOLDERS = ["/Users/you/Documents/Projects", "/Users/you/Pictures/Wedding", "/Users/you/Desktop/Taxes 2026"];
+let nextSample = 0;
+
+/** The next sample folder, for the preview's "choose a folder". */
+export function mockPickFolder(): string {
+  const path = SAMPLE_FOLDERS[nextSample % SAMPLE_FOLDERS.length];
+  nextSample += 1;
+  return path;
+}
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -181,7 +192,12 @@ export const mockApi = {
   applySkin: async () => new Promise<void>((r) => setTimeout(r, 600)),
   revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
-  folderIcon: async (): Promise<string> => COLOUR_FOLDERS[0],
+  // Each sample folder wears its own colour, so a new one looks different as it arrives.
+  folderIcon: async (path: string): Promise<string> => {
+    await sleep(120);
+    const i = SAMPLE_FOLDERS.indexOf(path);
+    return COLOUR_FOLDERS[i < 0 ? 0 : i % COLOUR_FOLDERS.length];
+  },
   skinsFolder: async () => "/Users/you/Library/Application Support/app.folderskin/skins",
   deleteSkin: async (skinId: string) => {
     library = library.filter((s) => s.id !== skinId);

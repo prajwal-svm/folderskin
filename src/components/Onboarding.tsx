@@ -335,6 +335,20 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
   const primary = useRef<HTMLButtonElement>(null);
   const running = current !== null;
 
+  // The list fades out behind the footer, so its stylesheet needs the footer's height, which grows
+  // when the note wraps.
+  const section = useRef<HTMLElement>(null);
+  const foot = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = foot.current;
+    if (!el) return;
+    const measure = () => section.current?.style.setProperty("--foot", `${el.offsetHeight}px`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const list = packs ?? [];
   /** A pack's install state, while it's still wanted: unpicking a pack that failed forgets it. */
   const stateOf = (p: CommunityPack) => (p.added || picked.has(p.id) ? states[p.id] : undefined);
@@ -391,7 +405,7 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
             : "Getting the packs from GitHub…";
 
   return (
-    <section className="packstep" aria-labelledby="packs-title">
+    <section className="packstep" aria-labelledby="packs-title" ref={section}>
       <header className="packstep-head">
         <h1 id="packs-title" className="packstep-title">
           Start with a few skins
@@ -449,7 +463,14 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
         )}
       </div>
 
-      <footer className="packstep-foot">
+      {/* The packs go soft and fade out as they scroll down to the buttons, which sit on the page itself. */}
+      <div className="packstep-frost" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </div>
+
+      <footer className="packstep-foot" ref={foot}>
         <button type="button" className="btn btn-ghost" disabled={running || allSet} onClick={onBack}>
           <ArrowLeftIcon size={15} />
           Back

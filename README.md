@@ -49,7 +49,7 @@ Free · Open source · No account · No tracking
 | Have an AI paint one | **Generate with AI**, with your own API key, or the prompt for Grok's or ChatGPT's chat under **No API key?** |
 | Get skins other people made | **Community**, then add a pack |
 | Share yours | A skin's ⋯ menu → **Share with community** |
-| Find a skin again | The tags along the top, ⌘F / Ctrl+F, or the star for **Favourites** |
+| Find a skin again | The tags along the top, ⌘F / Ctrl+F, the filter button (colour, pack, when you added it and more), or the star for **Favourites** |
 | Undo it | **Revert** puts the operating system's icon back |
 
 ## What stays on your computer

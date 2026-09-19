@@ -123,6 +123,40 @@ describe("drop zone state machine", () => {
     expect(s.appliedSkinId).toBeNull();
   });
 
+  it("a folder that replaces another shows its own icon first, then tries the skin on", () => {
+    const other = { path: "/Users/me/Desktop/photos", name: "photos" };
+    const trying = run([{ type: "folderDropped", folder: readme }, { type: "skinSelected", skinId: "aurora" }]);
+    expect(trying.arriving).toBe(false);
+
+    const arriving = reduce(trying, { type: "folderDropped", folder: other });
+    expect(arriving.arriving).toBe(true);
+    expect(arriving.phase).toBe("ready");
+    expect(arriving.skinId).toBe("aurora");
+
+    const arrived = reduce(arriving, { type: "arrived" });
+    expect(arrived.arriving).toBe(false);
+    expect(arrived.phase).toBe("ready");
+  });
+
+  it("the first folder, or one with no skin to try on, doesn't wait", () => {
+    const first = run([{ type: "skinSelected", skinId: "aurora" }, { type: "folderDropped", folder: readme }]);
+    expect(first.arriving).toBe(false);
+    const noSkin = run([{ type: "folderDropped", folder: readme }, { type: "folderDropped", folder: { path: "/tmp/b", name: "b" } }]);
+    expect(noSkin.arriving).toBe(false);
+  });
+
+  it("picking a skin or applying while a folder arrives shows the skin at once", () => {
+    const arriving = run([
+      { type: "folderDropped", folder: readme },
+      { type: "skinSelected", skinId: "aurora" },
+      { type: "folderDropped", folder: { path: "/tmp/b", name: "b" } },
+    ]);
+    expect(reduce(arriving, { type: "skinSelected", skinId: "sunset" }).arriving).toBe(false);
+    expect(reduce(arriving, { type: "skinSelected", skinId: "aurora" }).arriving).toBe(false);
+    expect(reduce(arriving, { type: "applyStarted" }).arriving).toBe(false);
+    expect(reduce(arriving, { type: "skinCleared" }).arriving).toBe(false);
+  });
+
   it("an invalid drop only sets the error and clears the drag", () => {
     const hovering = reduce(initialState, { type: "drag", info: { kind: "folder", name: "readme" } });
     expect(hovering.drag).toEqual({ kind: "folder", name: "readme" });

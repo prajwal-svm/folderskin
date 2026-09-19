@@ -265,8 +265,9 @@ pack folder from disk.
 ## Applying an icon
 
 `apply_skin` resolves the artwork, renders the icon set, validates the folder path, then calls
-the platform writer. On macOS the `NSWorkspace` call is marshalled to the main thread and
-awaited. Every writer refuses anything that is not an existing directory, refuses filesystem
+the platform writer, off the async runtime's threads (`NSWorkspace.setIcon` is thread-safe, and
+the PNG encodes are slow). On macOS the old icon is cleared before the new one is set, so Finder
+redraws it at once instead of showing the old one until the folder is opened. Every writer refuses anything that is not an existing directory, refuses filesystem
 roots, and writes atomically. What each platform actually writes, and what revert undoes, is
 in [PLATFORMS.md](PLATFORMS.md).
 
@@ -278,7 +279,17 @@ An error is a field on the state, not a phase, so a failed apply returns to `rea
 message shown beneath the button.
 Components read the state and render; they do not decide transitions. Dropping a picture
 selects a custom skin without changing which folder is chosen, which is why picking a folder
-and picking a skin are separate axes in the machine.
+and picking a skin are separate axes in the machine. A folder that replaces another is
+`arriving`: it shows its own icon (fetched for that folder alone, so a late answer for the one
+before can't land on it) until `arrived`, about a second after the icon shows, and only then
+tries the selected skin on, so the switch can be seen. Picking a skin or applying ends it early.
+
+The library's filters are pure functions in `src/lib/filters.ts`: the sidebar's view, then the
+filters (where a skin came from, its pack, colours, brightness, when it was added, the AI model,
+author and licence), then the tag tabs, the search and the sort order. A filter's counts are
+worked out with the other filters as they are, and a filter that can't narrow what's in view
+isn't offered. Colours and brightness come from each skin's own picture (`src/lib/palette.ts`),
+read a few at a time in the background and remembered by skin id.
 
 Per the project style rule there are no CSS outlines, focus rings or selection outlines
 anywhere; focus and selection are shown with a background tint or a border colour change.

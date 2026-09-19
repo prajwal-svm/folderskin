@@ -16,6 +16,9 @@ const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 /** How long the buttons that replace Apply ignore clicks: the second half of a double click. */
 const SETTLE_MS = 450;
 
+/** How long to wait for a folder's own icon before showing the plain folder in its place. */
+const ICON_WAIT_MS = 600;
+
 /** CSS url() for a data URL or path, for masks that follow a folder's own shape. */
 const maskOf = (src: string): CSSProperties => ({ maskImage: `url("${src}")`, WebkitMaskImage: `url("${src}")` });
 
@@ -39,8 +42,8 @@ export function FolderStage({
   state: State;
   /** The skin selected in the library, if any. */
   skin: Skin | null;
-  /** The folder's real icon as the OS draws it now. */
-  folderIcon: string | null;
+  /** The folder's real icon as the OS draws it now; undefined while it's on its way. */
+  folderIcon: string | null | undefined;
   defaultThumb: string | null;
   os: string;
   browseLabel: string;
@@ -52,13 +55,21 @@ export function FolderStage({
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
 
-  // What the folder shows: the icon it has, or the skin it is trying on.
-  const src =
-    phase === "folder" || phase === "reverting"
-      ? (folderIcon ?? defaultThumb)
-      : phase === "idle"
-        ? null
-        : (skin?.thumbnail ?? folderIcon ?? defaultThumb);
+  // The folder's own icon. Nothing shows while it loads, so a stand-in never swaps for it in view,
+  // unless it's slow.
+  const [slowFor, setSlowFor] = useState<string | null>(null);
+  const waiting = folder !== null && folderIcon === undefined;
+  useEffect(() => {
+    if (!waiting || !folder) return;
+    const t = window.setTimeout(() => setSlowFor(folder.path), ICON_WAIT_MS);
+    return () => window.clearTimeout(t);
+  }, [waiting, folder]);
+  const ownIcon = folderIcon ?? (waiting && slowFor !== folder?.path ? null : defaultThumb);
+
+  // What the folder shows: the icon it has, or the skin it is trying on. A folder that has just
+  // replaced another shows its own icon for a moment first.
+  const showsOwn = phase === "folder" || phase === "reverting" || (phase === "ready" && state.arriving);
+  const src = phase === "idle" ? null : showsOwn ? ownIcon : (skin?.thumbnail ?? ownIcon);
 
   const [shaking, setShaking] = useState(false);
   useEffect(() => {
@@ -92,7 +103,7 @@ export function FolderStage({
           <span className="stage-halo" aria-hidden="true" />
           {src ? (
             <StageImage key={folder?.path ?? "none"} src={src} />
-          ) : skin && !drag ? (
+          ) : folder && !drag ? null : skin && !drag ? (
             // A skin picked before any folder: shown as the folder it will make, with no outline.
             <img className="stage-ghost-skin" src={skin.thumbnail} alt="" key={skin.id} draggable={false} />
           ) : (
@@ -187,7 +198,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
       <span className="chip chip-ok stage-eyebrow" key="applied">
         <OkBadge size={16} playOnMount /> Applied
       </span>
-    ) : phase === "ready" || phase === "applying" ? (
+    ) : (phase === "ready" && !state.arriving) || phase === "applying" ? (
       <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`}>
         Trying on {skin?.name}
       </span>

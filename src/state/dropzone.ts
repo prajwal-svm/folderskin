@@ -22,11 +22,17 @@ export type State = {
   error: string | null;
   /** What is being dragged over the window right now, if anything. */
   drag: DragInfo | null;
+  /**
+   * A folder that replaced another is showing its own icon for a moment before the selected skin
+   * goes on, so the switch to it can be seen.
+   */
+  arriving: boolean;
 };
 
 export type Action =
   | { type: "drag"; info: DragInfo | null }
   | { type: "folderDropped"; folder: Folder }
+  | { type: "arrived" }
   | { type: "skinSelected"; skinId: string }
   | { type: "skinCleared" }
   | { type: "applyStarted" }
@@ -46,6 +52,7 @@ export const initialState: State = {
   inFlightSkinId: null,
   error: null,
   drag: null,
+  arriving: false,
 };
 
 function actionablePhase(state: State): Phase {
@@ -60,25 +67,29 @@ export function reduce(state: State, action: Action): State {
       return { ...state, drag: action.info };
 
     case "folderDropped": {
-      const next = { ...state, folder: action.folder, appliedSkinId: null, inFlightSkinId: null, error: null, drag: null };
+      const arriving = state.folder !== null && state.skinId !== null;
+      const next = { ...state, folder: action.folder, appliedSkinId: null, inFlightSkinId: null, error: null, drag: null, arriving };
       return { ...next, phase: actionablePhase(next) };
     }
 
+    case "arrived":
+      return state.arriving ? { ...state, arriving: false } : state;
+
     case "skinSelected": {
-      const next = { ...state, skinId: action.skinId, error: null };
+      const next = { ...state, skinId: action.skinId, error: null, arriving: false };
       if (state.phase === "applying" || state.phase === "reverting") return next;
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "skinCleared": {
       if (state.phase === "applying" || state.phase === "reverting") return state;
-      const next = { ...state, skinId: null, error: null };
+      const next = { ...state, skinId: null, error: null, arriving: false };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "applyStarted":
       if (!state.folder || !state.skinId || state.phase === "applying" || state.phase === "reverting") return state;
-      return { ...state, phase: "applying", inFlightSkinId: state.skinId, error: null };
+      return { ...state, phase: "applying", inFlightSkinId: state.skinId, error: null, arriving: false };
 
     case "applySucceeded": {
       if (state.phase !== "applying") return state;
