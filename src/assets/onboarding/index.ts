@@ -29,8 +29,8 @@ import monaLisa from "./mona-lisa.webp";
 import nikolaTesla from "./nikola-tesla.webp";
 import orange from "./orange.webp";
 import purple from "./purple.webp";
+import theLadyOfShalott from "./the-lady-of-shalott.webp";
 import theNinthWave from "./the-ninth-wave.webp";
-import theStarryNight from "./the-starry-night.webp";
 import wandererAboveTheSeaOfFog from "./wanderer-above-the-sea-of-fog.webp";
 
 /** Every frame of the intro and the pack it comes from, in the intro's order. */
@@ -42,7 +42,7 @@ export const INTRO: { src: string; pack: string }[] = [
   // at the left end of the last wave
   { src: orange, pack: "colours" },
   // the middle folder in the first wave
-  { src: theStarryNight, pack: "classic-art" },
+  { src: theLadyOfShalott, pack: "classic-art" },
   { src: wandererAboveTheSeaOfFog, pack: "classic-art" },
   { src: marieCurie, pack: "scientists-pop-art" },
   // the middle folder in the last wave
