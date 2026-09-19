@@ -24,6 +24,18 @@
       "hash": "8c46dc19991a23f9"
     },
     {
+      "id": "scientists-pop-art",
+      "name": "Scientists - Pop Art",
+      "author": "prajwal-svm",
+      "license": "CC0-1.0",
+      "tags": [
+        "pop art",
+        "scientists"
+      ],
+      "count": 42,
+      "hash": "b797d1cf02827660"
+    },
+    {
       "id": "soft-rainbow",
       "name": "Soft Rainbow",
       "author": "prajwal-svm",

@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "name": "Scientists - Pop Art",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": [
+    "pop art",
+    "scientists"
+  ],
+  "skins": [
+    {
+      "file": "archimedes.webp",
+      "name": "Archimedes"
+    },
+    {
+      "file": "nicolaus-copernicus.webp",
+      "name": "Nicolaus Copernicus"
+    },
+    {
+      "file": "galileo-galilei.webp",
+      "name": "Galileo Galilei"
+    },
+    {
+      "file": "johannes-kepler.webp",
+      "name": "Johannes Kepler"
+    },
+    {
+      "file": "isaac-newton.webp",
+      "name": "Isaac Newton"
+    },
+    {
+      "file": "michael-faraday.webp",
+      "name": "Michael Faraday"
+    },
+    {
+      "file": "charles-darwin.webp",
+      "name": "Charles Darwin"
+    },
+    {
+      "file": "ada-lovelace.webp",
+      "name": "Ada Lovelace"
+    },
+    {
+      "file": "gregor-mendel.webp",
+      "name": "Gregor Mendel"
+    },
+    {
+      "file": "louis-pasteur.webp",
+      "name": "Louis Pasteur"
+    },
+    {
+      "file": "james-clerk-maxwell.webp",
+      "name": "James Clerk Maxwell"
+    },
+    {
+      "file": "dmitri-mendeleev.webp",
+      "name": "Dmitri Mendeleev"
+    },
+    {
+      "file": "thomas-edison.webp",
+      "name": "Thomas Edison"
+    },
+    {
+      "file": "nikola-tesla.webp",
+      "name": "Nikola Tesla"
+    },
+    {
+      "file": "max-planck.webp",
+      "name": "Max Planck"
+    },
+    {
+      "file": "marie-curie.webp",
+      "name": "Marie Curie"
+    },
+    {
+      "file": "lise-meitner.webp",
+      "name": "Lise Meitner"
+    },
+    {
+      "file": "alexander-fleming.webp",
+      "name": "Alexander Fleming"
+    },
+    {
+      "file": "emmy-noether.webp",
+      "name": "Emmy Noether"
+    },
+    {
+      "file": "niels-bohr.webp",
+      "name": "Niels Bohr"
+    },
+    {
+      "file": "erwin-schrodinger.webp",
+      "name": "Erwin Schrödinger"
+    },
+    {
+      "file": "srinivasa-ramanujan.webp",
+      "name": "Srinivasa Ramanujan"
+    },
+    {
+      "file": "edwin-hubble.webp",
+      "name": "Edwin Hubble"
+    },
+    {
+      "file": "georges-lemaitre.webp",
+      "name": "Georges Lemaître"
+    },
+    {
+      "file": "wolfgang-pauli.webp",
+      "name": "Wolfgang Pauli"
+    },
+    {
+      "file": "linus-pauling.webp",
+      "name": "Linus Pauling"
+    },
+    {
+      "file": "enrico-fermi.webp",
+      "name": "Enrico Fermi"
+    },
+    {
+      "file": "werner-heisenberg.webp",
+      "name": "Werner Heisenberg"
+    },
+    {
+      "file": "barbara-mcclintock.webp",
+      "name": "Barbara McClintock"
+    },
+    {
+      "file": "paul-dirac.webp",
+      "name": "Paul Dirac"
+    },
+    {
+      "file": "robert-oppenheimer.webp",
+      "name": "Robert Oppenheimer"
+    },
+    {
+      "file": "grace-hopper.webp",
+      "name": "Grace Hopper"
+    },
+    {
+      "file": "chien-shiung-wu.webp",
+      "name": "Chien-Shiung Wu"
+    },
+    {
+      "file": "alan-turing.webp",
+      "name": "Alan Turing"
+    },
+    {
+      "file": "richard-feynman.webp",
+      "name": "Richard Feynman"
+    },
+    {
+      "file": "katherine-johnson.webp",
+      "name": "Katherine Johnson"
+    },
+    {
+      "file": "rosalind-franklin.webp",
+      "name": "Rosalind Franklin"
+    },
+    {
+      "file": "vera-rubin.webp",
+      "name": "Vera Rubin"
+    },
+    {
+      "file": "vera-rubin-2.webp",
+      "name": "Vera Rubin 2"
+    },
+    {
+      "file": "jane-goodall.webp",
+      "name": "Jane Goodall"
+    },
+    {
+      "file": "carl-sagan.webp",
+      "name": "Carl Sagan"
+    },
+    {
+      "file": "stephen-hawking.webp",
+      "name": "Stephen Hawking"
+    }
+  ]
+}
