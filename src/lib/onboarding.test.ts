@@ -35,7 +35,7 @@ describe("frameAt and spinFrameAt", () => {
 });
 
 describe("the intro's frames", () => {
-  const pictures = ["classic-art", "scientists-pop-art", "statues"];
+  const pictures = ["classic-art", "scientists-pop-art", "greek-art"];
   const middle = Math.floor(INTRO_SLOTS / 2);
 
   it("are one picture for every folder of every wave and every flip", () => {
@@ -67,7 +67,7 @@ describe("the intro's frames", () => {
   });
 
   it("come from every community pack", () => {
-    expect(new Set(INTRO.map((f) => f.pack))).toEqual(new Set(["classic-art", "scientists-pop-art", "statues", "soft-rainbow", "colours"]));
+    expect(new Set(INTRO.map((f) => f.pack))).toEqual(new Set(["classic-art", "scientists-pop-art", "greek-art", "soft-rainbow", "colours"]));
   });
 });
 

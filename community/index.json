@@ -24,6 +24,19 @@
       "hash": "8c46dc19991a23f9"
     },
     {
+      "id": "greek-art",
+      "name": "Greek Art",
+      "author": "prajwal-svm",
+      "license": "CC0-1.0",
+      "tags": [
+        "greek art",
+        "statues",
+        "marble"
+      ],
+      "count": 15,
+      "hash": "06b4ad6f053c21f1"
+    },
+    {
       "id": "scientists-pop-art",
       "name": "Scientists - Pop Art",
       "author": "prajwal-svm",

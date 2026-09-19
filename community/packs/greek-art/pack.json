@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "name": "Greek Art",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": [
+    "greek art",
+    "statues",
+    "marble"
+  ],
+  "skins": [
+    {
+      "file": "open-arms.webp",
+      "name": "Open Arms"
+    },
+    {
+      "file": "upward-gaze.webp",
+      "name": "Upward Gaze"
+    },
+    {
+      "file": "parthenon.webp",
+      "name": "Parthenon"
+    },
+    {
+      "file": "poseidon.webp",
+      "name": "Poseidon"
+    },
+    {
+      "file": "glitch.webp",
+      "name": "Glitch"
+    },
+    {
+      "file": "shattered.webp",
+      "name": "Shattered"
+    },
+    {
+      "file": "winged-guardian.webp",
+      "name": "Winged Guardian"
+    },
+    {
+      "file": "the-muse.webp",
+      "name": "The Muse"
+    },
+    {
+      "file": "the-philosopher.webp",
+      "name": "The Philosopher"
+    },
+    {
+      "file": "deep-in-thought.webp",
+      "name": "Deep in Thought"
+    },
+    {
+      "file": "among-the-ruins.webp",
+      "name": "Among the Ruins"
+    },
+    {
+      "file": "fallen-head.webp",
+      "name": "Fallen Head"
+    },
+    {
+      "file": "marble-youth.webp",
+      "name": "Marble Youth"
+    },
+    {
+      "file": "temple-at-sunset.webp",
+      "name": "Temple at Sunset"
+    },
+    {
+      "file": "poseidon-in-the-clouds.webp",
+      "name": "Poseidon in the Clouds"
+    }
+  ]
+}

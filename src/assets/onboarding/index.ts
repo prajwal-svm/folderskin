@@ -1,7 +1,8 @@
 /**
  * The pictures the first-launch intro shows, and the FolderSkin logo it lands on. The folders come
  * from the community packs, Classic Art paintings and Scientists - Pop Art portraits with one plain
- * folder each from Soft Rainbow and Colours, and three marble statues from a pack on its way.
+ * folder each from Soft Rainbow and Colours, and three marble statues: two from Greek Art, and a
+ * disco-ball head from the same set of renders that isn't in the pack.
  * Each shows once: five for every wave, then one for every flip of the middle folder
  * (INTRO_FRAME_COUNT in src/lib/onboarding.ts). Side by side, folders never come from the same
  * pack, the middle one always wears a picture and every picture pack gets it at least once, and a
@@ -49,8 +50,8 @@ import wandererAboveTheSeaOfFog from "./wanderer-above-the-sea-of-fog.webp";
 
 const CLASSIC = "classic-art";
 const SCIENTISTS = "scientists-pop-art";
-/** The marble statues' pack, not published yet. */
-const STATUES = "statues";
+/** The marble statues' pack. */
+const STATUES = "greek-art";
 
 /** Every frame of the intro and the pack it comes from, in the order they show. */
 export const INTRO: { src: string; pack: string }[] = [

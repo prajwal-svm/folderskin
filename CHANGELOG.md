@@ -6,7 +6,10 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- A Greek Art community pack: 15 marble statues and temples as folders, from Open Arms and the
+  Parthenon to Poseidon in the Clouds.
 
 ## 0.1.0 — 2026-09-19
 
