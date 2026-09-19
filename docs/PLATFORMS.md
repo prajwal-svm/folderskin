@@ -9,7 +9,7 @@ written, what revert undoes, and where each mechanism falls short.
 
 | OS | apply | revert | files touched |
 |---|---|---|---|
-| macOS | `NSWorkspace.setIcon(image, path)` with an `NSImage` carrying the 16–1024 px representations | `setIcon(None)` | the invisible `Icon\r` file that macOS itself keeps inside the folder |
+| macOS | `NSWorkspace.setIcon(None, path)` then `setIcon(image, path)` with an `NSImage` carrying the 16–1024 px representations, then `noteFileSystemChanged` on the folder and the one around it | `setIcon(None)`, and the same notes | the invisible `Icon\r` file that macOS itself keeps inside the folder |
 | Windows | writes `folderskin.ico` and a `desktop.ini` with `[.ShellClassInfo]` / `IconResource=folderskin.ico,0`, marks both hidden + system, sets the folder's read-only attribute, then calls `SHChangeNotify` | removes FolderSkin's lines from `desktop.ini` (and deletes the file if FolderSkin created it), deletes `folderskin.ico`, clears read-only | `desktop.ini`, `folderskin.ico` |
 | Linux | writes `.folderskin.png` (512 px) and a `.directory` with `[Desktop Entry]` / `Icon=/abs/path/.folderskin.png`, and runs `gio set <folder> metadata::custom-icon file://…` when `gio` is installed | deletes both files when they are FolderSkin's, and runs `gio set -t unset` on the metadata | `.directory`, `.folderskin.png` |
 
@@ -48,7 +48,11 @@ succeeds and changes nothing.
 ### macOS
 
 The icon is stored by the system, not by us — macOS writes an invisible `Icon\r` file
-inside the folder and Finder picks it up immediately. Setting an icon needs write access
+inside the folder. Finder is slow to notice a new one when it replaces another: it keeps drawing
+the old icon, on the Desktop and in its windows, until the folder is opened. So the icon is
+cleared first and then set, which Finder does redraw straight away (Apple's workaround,
+developer.apple.com/forums/thread/788252), and Finder is told the folder and the folder around
+it changed. Setting an icon needs write access
 to the folder, so folders on read-only volumes and inside some sandboxed locations are
 refused with the reason the OS gave.
 

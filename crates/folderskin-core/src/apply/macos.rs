@@ -6,6 +6,12 @@
 //! `NSBitmapImageRep` whose `size` is its pixel size — that is what tells AppKit "this rep *is*
 //! the 32 px artwork" rather than a scaled-down 1024. Reverting is the same call with `nil`,
 //! which clears the flag and removes the file.
+//!
+//! Finder is slow to notice. When one custom icon replaces another it keeps drawing the old
+//! one, on the Desktop and in its windows, until the folder is opened. Apple's workaround is to
+//! clear the icon first, so every apply goes from no icon to the new one, which Finder does
+//! redraw (developer.apple.com/forums/thread/788252). After any change Finder is also told the
+//! folder and the folder around it changed.
 
 use super::ApplyError;
 use crate::compositor::IconSet;
@@ -57,19 +63,24 @@ pub fn revert(folder: &Path) -> Result<(), ApplyError> {
 
 /// The one call that changes a folder's icon; `None` reverts it.
 fn set_icon(folder: &Path, image: Option<&NSImage>) -> Result<(), ApplyError> {
+    let workspace = NSWorkspace::sharedWorkspace();
     let path = NSString::from_str(&folder.to_string_lossy());
-    let ok = NSWorkspace::sharedWorkspace().setIcon_forFile_options(
-        image,
-        &path,
-        NSWorkspaceIconCreationOptions::empty(),
-    );
-    if ok {
-        Ok(())
-    } else {
-        Err(ApplyError::Platform(
-            "macOS refused to change this folder's icon (is it writable?)".into(),
-        ))
+    let options = NSWorkspaceIconCreationOptions::empty();
+    if image.is_some() {
+        // Clearing an icon that isn't there is harmless, and if clearing fails, so does the set.
+        workspace.setIcon_forFile_options(None, &path, options);
     }
+    let ok = workspace.setIcon_forFile_options(image, &path, options);
+    if !ok {
+        return Err(ApplyError::Platform(
+            "macOS refused to change this folder's icon (is it writable?)".into(),
+        ));
+    }
+    workspace.noteFileSystemChanged_(&path);
+    if let Some(parent) = folder.parent() {
+        workspace.noteFileSystemChanged_(&NSString::from_str(&parent.to_string_lossy()));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -132,6 +143,18 @@ mod tests {
         assert!(
             after.contains('C'),
             "no custom-icon flag after apply: {after}"
+        );
+
+        // A second skin over the first: the icon is cleared on the way, but never left cleared.
+        apply_icon(&folder, &solid_icons(&[16, 32, 128, 512])).unwrap();
+        let again = attributes(&folder);
+        assert!(
+            again.contains('C'),
+            "no custom-icon flag after a second apply: {again}"
+        );
+        assert!(
+            folder.join("Icon\r").exists(),
+            "the Icon file is missing after a second apply"
         );
 
         revert_icon(&folder).unwrap();
