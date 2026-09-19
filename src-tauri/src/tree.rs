@@ -771,251 +771,259 @@ mod tests {
         );
     }
 
-    // ---------- through the IPC ----------
+    // Not on Windows: with tauri's `test` feature the lib's test binary imports a WebView2 entry
+    // point the runner's loader can't resolve, so it dies with STATUS_ENTRYPOINT_NOT_FOUND before
+    // a single test runs. The commands themselves are checked on macOS and Linux, and the Windows
+    // writer has its own tests in folderskin-core.
+    #[cfg(not(windows))]
+    mod ipc {
+        use super::*;
+        // ---------- through the IPC ----------
 
-    /// Tests that start or stop runs take turns: the stop flag belongs to the whole process.
-    static ONE_RUN_AT_A_TIME: Mutex<()> = Mutex::new(());
+        /// Tests that start or stop runs take turns: the stop flag belongs to the whole process.
+        static ONE_RUN_AT_A_TIME: Mutex<()> = Mutex::new(());
 
-    /// What a mock app's progress channels were sent, and when to press Stop.
-    #[derive(Default)]
-    struct Heard {
-        messages: Mutex<Vec<Value>>,
-        /// Stop the run once the message with this `done` arrives; 0 never does.
-        stop_at: AtomicUsize,
-    }
-
-    impl Heard {
-        fn take(&self) -> Vec<Value> {
-            std::mem::take(&mut *self.messages.lock().unwrap())
+        /// What a mock app's progress channels were sent, and when to press Stop.
+        #[derive(Default)]
+        struct Heard {
+            messages: Mutex<Vec<Value>>,
+            /// Stop the run once the message with this `done` arrives; 0 never does.
+            stop_at: AtomicUsize,
         }
-    }
 
-    /// A mock app with the tree commands, and what its channels hear.
-    fn app() -> (
-        tauri::App<tauri::test::MockRuntime>,
-        tauri::WebviewWindow<tauri::test::MockRuntime>,
-        Arc<Heard>,
-    ) {
-        let heard = Arc::new(Heard::default());
-        let sink = heard.clone();
-        let app = tauri::test::mock_builder()
-            .channel_interceptor(move |_, _, _, body| {
-                if let tauri::ipc::InvokeResponseBody::Json(json) = body {
-                    let message: Value = serde_json::from_str(json).unwrap();
-                    let stop_at = sink.stop_at.load(Ordering::SeqCst);
-                    if stop_at > 0 && message["done"] == stop_at {
-                        // As the user pressing Stop while that folder was being changed.
-                        stop_tree_run();
+        impl Heard {
+            fn take(&self) -> Vec<Value> {
+                std::mem::take(&mut *self.messages.lock().unwrap())
+            }
+        }
+
+        /// A mock app with the tree commands, and what its channels hear.
+        fn app() -> (
+            tauri::App<tauri::test::MockRuntime>,
+            tauri::WebviewWindow<tauri::test::MockRuntime>,
+            Arc<Heard>,
+        ) {
+            let heard = Arc::new(Heard::default());
+            let sink = heard.clone();
+            let app = tauri::test::mock_builder()
+                .channel_interceptor(move |_, _, _, body| {
+                    if let tauri::ipc::InvokeResponseBody::Json(json) = body {
+                        let message: Value = serde_json::from_str(json).unwrap();
+                        let stop_at = sink.stop_at.load(Ordering::SeqCst);
+                        if stop_at > 0 && message["done"] == stop_at {
+                            // As the user pressing Stop while that folder was being changed.
+                            stop_tree_run();
+                        }
+                        sink.messages.lock().unwrap().push(message);
                     }
-                    sink.messages.lock().unwrap().push(message);
-                }
-                true
-            })
-            .manage(AppState::default())
-            .invoke_handler(tauri::generate_handler![
-                subfolder_count,
-                tree_bytes,
-                apply_skin_tree,
-                revert_skin_tree,
-                stop_tree_run
-            ])
-            .build(tauri::test::mock_context(tauri::test::noop_assets()))
-            .unwrap();
-        let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-            .build()
-            .unwrap();
-        (app, webview, heard)
-    }
+                    true
+                })
+                .manage(AppState::default())
+                .invoke_handler(tauri::generate_handler![
+                    subfolder_count,
+                    tree_bytes,
+                    apply_skin_tree,
+                    revert_skin_tree,
+                    stop_tree_run
+                ])
+                .build(tauri::test::mock_context(tauri::test::noop_assets()))
+                .unwrap();
+            let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .unwrap();
+            (app, webview, heard)
+        }
 
-    /// The command as the webview calls it, with its arguments named the webview's way.
-    fn invoke(
-        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
-        cmd: &str,
-        args: Value,
-    ) -> Result<Value, Value> {
-        tauri::test::get_ipc_response(
-            webview,
-            tauri::webview::InvokeRequest {
-                cmd: cmd.into(),
-                callback: tauri::ipc::CallbackFn(0),
-                error: tauri::ipc::CallbackFn(1),
-                url: "tauri://localhost".parse().unwrap(),
-                body: tauri::ipc::InvokeBody::Json(args),
-                headers: Default::default(),
-                invoke_key: tauri::test::INVOKE_KEY.into(),
-            },
-        )
-        .map(|b| b.deserialize::<Value>().unwrap())
-    }
+        /// The command as the webview calls it, with its arguments named the webview's way.
+        fn invoke(
+            webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+            cmd: &str,
+            args: Value,
+        ) -> Result<Value, Value> {
+            tauri::test::get_ipc_response(
+                webview,
+                tauri::webview::InvokeRequest {
+                    cmd: cmd.into(),
+                    callback: tauri::ipc::CallbackFn(0),
+                    error: tauri::ipc::CallbackFn(1),
+                    url: "tauri://localhost".parse().unwrap(),
+                    body: tauri::ipc::InvokeBody::Json(args),
+                    headers: Default::default(),
+                    invoke_key: tauri::test::INVOKE_KEY.into(),
+                },
+            )
+            .map(|b| b.deserialize::<Value>().unwrap())
+        }
 
-    /// A skin kept for the session, as the library has it, and its id.
-    fn keep_skin(app: &tauri::App<tauri::test::MockRuntime>) -> String {
-        use tauri::Manager;
-        let id = store::skin_id(b"tree");
-        let skin = SkinImage::Folder(Arc::new(image::RgbaImage::from_pixel(
-            96,
-            80,
-            image::Rgba([0x2E, 0x7D, 0x5B, 0xFF]),
-        )));
-        let new = NewSkin {
-            id: id.clone(),
-            name: "Tree".into(),
-            source: SkinSource::Import,
-            provider: None,
-            model: None,
-            idea: None,
-            tags: Vec::new(),
-            pack: None,
-            pack_name: None,
-            author: None,
-            license: None,
-            pack_hash: None,
-        };
-        app.state::<AppState>().keep_unsaved(new, skin);
-        id
-    }
+        /// A skin kept for the session, as the library has it, and its id.
+        fn keep_skin(app: &tauri::App<tauri::test::MockRuntime>) -> String {
+            use tauri::Manager;
+            let id = store::skin_id(b"tree");
+            let skin = SkinImage::Folder(Arc::new(image::RgbaImage::from_pixel(
+                96,
+                80,
+                image::Rgba([0x2E, 0x7D, 0x5B, 0xFF]),
+            )));
+            let new = NewSkin {
+                id: id.clone(),
+                name: "Tree".into(),
+                source: SkinSource::Import,
+                provider: None,
+                model: None,
+                idea: None,
+                tags: Vec::new(),
+                pack: None,
+                pack_name: None,
+                author: None,
+                license: None,
+                pack_hash: None,
+            };
+            app.state::<AppState>().keep_unsaved(new, skin);
+            id
+        }
 
-    const CHANNEL: &str = "__CHANNEL__:7";
+        const CHANNEL: &str = "__CHANNEL__:7";
 
-    #[test]
-    fn a_tree_is_counted_planned_reported_and_stopped_through_the_ipc() {
-        let _turn = ONE_RUN_AT_A_TIME
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let scratch = Scratch::with(&["a/a1", "b", ".git/objects"]);
-        std::fs::write(scratch.0.join("notes.txt"), b"x").unwrap();
-        let root = scratch.root();
-        let s = |p: &Path| path_string(p);
-        let (app, webview, heard) = app();
+        #[test]
+        fn a_tree_is_counted_planned_reported_and_stopped_through_the_ipc() {
+            let _turn = ONE_RUN_AT_A_TIME
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let scratch = Scratch::with(&["a/a1", "b", ".git/objects"]);
+            std::fs::write(scratch.0.join("notes.txt"), b"x").unwrap();
+            let root = scratch.root();
+            let s = |p: &Path| path_string(p);
+            let (app, webview, heard) = app();
 
-        let count = invoke(&webview, "subfolder_count", json!({"folder": s(&root)})).unwrap();
-        assert_eq!(count, json!({"count": 3, "more": false}));
-        let refused = invoke(&webview, "subfolder_count", json!({"folder": "/"})).unwrap_err();
-        assert_eq!(
-            refused,
-            "this is the root of a drive, not a folder FolderSkin can skin"
-        );
+            let count = invoke(&webview, "subfolder_count", json!({"folder": s(&root)})).unwrap();
+            assert_eq!(count, json!({"count": 3, "more": false}));
+            let refused = invoke(&webview, "subfolder_count", json!({"folder": "/"})).unwrap_err();
+            assert_eq!(
+                refused,
+                "this is the root of a drive, not a folder FolderSkin can skin"
+            );
 
-        // Nothing in the tree wears an icon, so a whole-tree revert writes nothing anywhere.
-        let args = json!({"folder": s(&root), "onProgress": CHANNEL});
-        let run = invoke(&webview, "revert_skin_tree", args.clone()).unwrap();
-        assert_eq!(
-            run,
-            json!({"total": 4, "changed": [], "failed": [], "skipped": 4, "remaining": [],
+            // Nothing in the tree wears an icon, so a whole-tree revert writes nothing anywhere.
+            let args = json!({"folder": s(&root), "onProgress": CHANNEL});
+            let run = invoke(&webview, "revert_skin_tree", args.clone()).unwrap();
+            assert_eq!(
+                run,
+                json!({"total": 4, "changed": [], "failed": [], "skipped": 4, "remaining": [],
                    "stopped": false})
-        );
-        let root_name = folder_name(&root);
-        assert_eq!(
-            heard.take(),
-            [
-                json!({"done": 0, "total": 4, "name": root_name}),
-                json!({"done": 1, "total": 4, "name": root_name}),
-                json!({"done": 2, "total": 4, "name": "a"}),
-                json!({"done": 3, "total": 4, "name": "b"}),
-                json!({"done": 4, "total": 4, "name": "a1"}),
-            ]
-        );
+            );
+            let root_name = folder_name(&root);
+            assert_eq!(
+                heard.take(),
+                [
+                    json!({"done": 0, "total": 4, "name": root_name}),
+                    json!({"done": 1, "total": 4, "name": root_name}),
+                    json!({"done": 2, "total": 4, "name": "a"}),
+                    json!({"done": 3, "total": 4, "name": "b"}),
+                    json!({"done": 4, "total": 4, "name": "a1"}),
+                ]
+            );
 
-        // Stop pressed during the second folder: the rest are left for later.
-        heard.stop_at.store(2, Ordering::SeqCst);
-        let stopped = invoke(&webview, "revert_skin_tree", args).unwrap();
-        heard.stop_at.store(0, Ordering::SeqCst);
-        assert_eq!(stopped["stopped"], true);
-        assert_eq!(stopped["skipped"], 2);
-        assert_eq!(
-            stopped["remaining"],
-            json!([s(&root.join("b")), s(&root.join("a").join("a1"))])
-        );
-        assert_eq!(heard.take().len(), 3, "done 0, 1 and 2");
+            // Stop pressed during the second folder: the rest are left for later.
+            heard.stop_at.store(2, Ordering::SeqCst);
+            let stopped = invoke(&webview, "revert_skin_tree", args).unwrap();
+            heard.stop_at.store(0, Ordering::SeqCst);
+            assert_eq!(stopped["stopped"], true);
+            assert_eq!(stopped["skipped"], 2);
+            assert_eq!(
+                stopped["remaining"],
+                json!([s(&root.join("b")), s(&root.join("a").join("a1"))])
+            );
+            assert_eq!(heard.take().len(), 3, "done 0, 1 and 2");
 
-        // A stop between runs doesn't carry over into the next one.
-        invoke(&webview, "stop_tree_run", json!({})).unwrap();
-        assert!(STOP.load(Ordering::SeqCst));
-        let none = json!({"folder": s(&root), "only": [], "onProgress": CHANNEL});
-        let run = invoke(&webview, "revert_skin_tree", none).unwrap();
-        assert_eq!(run["total"], 0);
-        assert!(!STOP.load(Ordering::SeqCst));
-        heard.take();
+            // A stop between runs doesn't carry over into the next one.
+            invoke(&webview, "stop_tree_run", json!({})).unwrap();
+            assert!(STOP.load(Ordering::SeqCst));
+            let none = json!({"folder": s(&root), "only": [], "onProgress": CHANNEL});
+            let run = invoke(&webview, "revert_skin_tree", none).unwrap();
+            assert_eq!(run["total"], 0);
+            assert!(!STOP.load(Ordering::SeqCst));
+            heard.take();
 
-        // Applying: the skin must exist, and `only` must stay inside the folder.
-        let skin_id = keep_skin(&app);
-        let unknown = json!({"folder": s(&root), "skinId": "user:000000000000",
+            // Applying: the skin must exist, and `only` must stay inside the folder.
+            let skin_id = keep_skin(&app);
+            let unknown = json!({"folder": s(&root), "skinId": "user:000000000000",
                              "onProgress": CHANNEL});
-        assert_eq!(
-            invoke(&webview, "apply_skin_tree", unknown).unwrap_err(),
-            "that skin isn't available any more"
-        );
-        let elsewhere = Scratch::with(&[]);
-        let outside = json!({"folder": s(&root.join("a")), "skinId": skin_id,
+            assert_eq!(
+                invoke(&webview, "apply_skin_tree", unknown).unwrap_err(),
+                "that skin isn't available any more"
+            );
+            let elsewhere = Scratch::with(&[]);
+            let outside = json!({"folder": s(&root.join("a")), "skinId": skin_id,
                              "only": [s(&root.join("b"))], "onProgress": CHANNEL});
-        assert_eq!(
-            invoke(&webview, "apply_skin_tree", outside).unwrap_err(),
-            "b isn't inside a, so it can't be changed along with it"
-        );
-        let outside = json!({"folder": s(&root), "skinId": skin_id,
+            assert_eq!(
+                invoke(&webview, "apply_skin_tree", outside).unwrap_err(),
+                "b isn't inside a, so it can't be changed along with it"
+            );
+            let outside = json!({"folder": s(&root), "skinId": skin_id,
                              "only": [s(&elsewhere.root())], "onProgress": CHANNEL});
-        assert!(invoke(&webview, "apply_skin_tree", outside).is_err());
-        assert!(
-            heard.take().is_empty(),
-            "refused before anything was planned"
-        );
+            assert!(invoke(&webview, "apply_skin_tree", outside).is_err());
+            assert!(
+                heard.take().is_empty(),
+                "refused before anything was planned"
+            );
 
-        let nothing = json!({"folder": s(&root), "skinId": skin_id, "only": [],
+            let nothing = json!({"folder": s(&root), "skinId": skin_id, "only": [],
                              "onProgress": CHANNEL});
-        let run = invoke(&webview, "apply_skin_tree", nothing).unwrap();
-        assert_eq!(
-            run,
-            json!({"total": 0, "changed": [], "failed": [], "skipped": 0, "remaining": [],
+            let run = invoke(&webview, "apply_skin_tree", nothing).unwrap();
+            assert_eq!(
+                run,
+                json!({"total": 0, "changed": [], "failed": [], "skipped": 0, "remaining": [],
                    "stopped": false})
-        );
-        assert_eq!(
-            heard.take(),
-            [json!({"done": 0, "total": 0, "name": root_name})]
-        );
-    }
+            );
+            assert_eq!(
+                heard.take(),
+                [json!({"done": 0, "total": 0, "name": root_name})]
+            );
+        }
 
-    #[test]
-    #[cfg_attr(
-        target_os = "macos",
-        ignore = "writes real Finder icons: cargo test -p folderskin -- --ignored whole_tree"
-    )]
-    fn a_skin_goes_on_a_whole_tree_and_comes_off_again_through_the_ipc() {
-        let _turn = ONE_RUN_AT_A_TIME
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let scratch = Scratch::with(&["a/a1", "b"]);
-        let root = scratch.root();
-        let s = |p: &Path| path_string(p);
-        let (app, webview, heard) = app();
-        let skin_id = keep_skin(&app);
-        let folders = [
-            root.clone(),
-            root.join("a"),
-            root.join("b"),
-            root.join("a").join("a1"),
-        ];
+        #[test]
+        #[cfg_attr(
+            target_os = "macos",
+            ignore = "writes real Finder icons: cargo test -p folderskin -- --ignored whole_tree"
+        )]
+        fn a_skin_goes_on_a_whole_tree_and_comes_off_again_through_the_ipc() {
+            let _turn = ONE_RUN_AT_A_TIME
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let scratch = Scratch::with(&["a/a1", "b"]);
+            let root = scratch.root();
+            let s = |p: &Path| path_string(p);
+            let (app, webview, heard) = app();
+            let skin_id = keep_skin(&app);
+            let folders = [
+                root.clone(),
+                root.join("a"),
+                root.join("b"),
+                root.join("a").join("a1"),
+            ];
 
-        let bytes = invoke(&webview, "tree_bytes", json!({"skinId": skin_id})).unwrap();
-        assert!(bytes.as_u64().unwrap() > 0, "{bytes}");
+            let bytes = invoke(&webview, "tree_bytes", json!({"skinId": skin_id})).unwrap();
+            assert!(bytes.as_u64().unwrap() > 0, "{bytes}");
 
-        let started = std::time::Instant::now();
-        let args = json!({"folder": s(&root), "skinId": skin_id, "onProgress": CHANNEL});
-        let run = invoke(&webview, "apply_skin_tree", args).unwrap();
-        let took = started.elapsed();
-        let changed: Vec<String> = folders.iter().map(|f| s(f)).collect();
-        assert_eq!(
-            run,
-            json!({"total": 4, "changed": changed, "failed": [], "skipped": 0,
+            let started = std::time::Instant::now();
+            let args = json!({"folder": s(&root), "skinId": skin_id, "onProgress": CHANNEL});
+            let run = invoke(&webview, "apply_skin_tree", args).unwrap();
+            let took = started.elapsed();
+            let changed: Vec<String> = folders.iter().map(|f| s(f)).collect();
+            assert_eq!(
+                run,
+                json!({"total": 4, "changed": changed, "failed": [], "skipped": 0,
                    "remaining": [], "stopped": false})
-        );
-        assert_eq!(heard.take().len(), 5);
-        assert!(folders.iter().all(|f| has_custom_icon(f)));
+            );
+            assert_eq!(heard.take().len(), 5);
+            assert!(folders.iter().all(|f| has_custom_icon(f)));
 
-        // Undo: exactly the folders the run changed.
-        let undo = json!({"folder": s(&root), "only": changed, "onProgress": CHANNEL});
-        let run = invoke(&webview, "revert_skin_tree", undo).unwrap();
-        assert_eq!(run["changed"].as_array().unwrap().len(), 4);
-        assert!(folders.iter().all(|f| !has_custom_icon(f)));
-        println!("4 folders in {took:?}; {bytes} bytes each");
+            // Undo: exactly the folders the run changed.
+            let undo = json!({"folder": s(&root), "only": changed, "onProgress": CHANNEL});
+            let run = invoke(&webview, "revert_skin_tree", undo).unwrap();
+            assert_eq!(run["changed"].as_array().unwrap().len(), 4);
+            assert!(folders.iter().all(|f| !has_custom_icon(f)));
+            println!("4 folders in {took:?}; {bytes} bytes each");
+        }
     }
 }

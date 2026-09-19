@@ -800,61 +800,69 @@ mod tests {
         assert_eq!(template["parts"]["canvas"], 1024.0);
     }
 
-    /// The command as the webview calls it: raw bytes through Tauri's own IPC, into a mock app.
-    fn invoke(
-        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
-        cmd: &str,
-        body: tauri::ipc::InvokeBody,
-    ) -> Result<serde_json::Value, serde_json::Value> {
-        tauri::test::get_ipc_response(
-            webview,
-            tauri::webview::InvokeRequest {
-                cmd: cmd.into(),
-                callback: tauri::ipc::CallbackFn(0),
-                error: tauri::ipc::CallbackFn(1),
-                url: "tauri://localhost".parse().unwrap(),
-                body,
-                headers: Default::default(),
-                invoke_key: tauri::test::INVOKE_KEY.into(),
-            },
-        )
-        .map(|b| b.deserialize::<serde_json::Value>().unwrap())
-    }
+    // Not on Windows: with tauri's `test` feature the lib's test binary imports a WebView2 entry
+    // point the runner's loader can't resolve, so it dies with STATUS_ENTRYPOINT_NOT_FOUND before
+    // a single test runs. The commands themselves are checked on macOS and Linux, and the Windows
+    // writer has its own tests in folderskin-core.
+    #[cfg(not(windows))]
+    mod ipc {
+        use super::*;
+        /// The command as the webview calls it: raw bytes through Tauri's own IPC, into a mock app.
+        fn invoke(
+            webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+            cmd: &str,
+            body: tauri::ipc::InvokeBody,
+        ) -> Result<serde_json::Value, serde_json::Value> {
+            tauri::test::get_ipc_response(
+                webview,
+                tauri::webview::InvokeRequest {
+                    cmd: cmd.into(),
+                    callback: tauri::ipc::CallbackFn(0),
+                    error: tauri::ipc::CallbackFn(1),
+                    url: "tauri://localhost".parse().unwrap(),
+                    body,
+                    headers: Default::default(),
+                    invoke_key: tauri::test::INVOKE_KEY.into(),
+                },
+            )
+            .map(|b| b.deserialize::<serde_json::Value>().unwrap())
+        }
 
-    #[test]
-    fn a_design_sent_as_raw_bytes_through_the_ipc_is_previewed_and_saved() {
-        let app = tauri::test::mock_builder()
-            .manage(AppState::default())
-            .invoke_handler(tauri::generate_handler![composer_preview, composer_save])
-            .build(tauri::test::mock_context(tauri::test::noop_assets()))
-            .unwrap();
-        let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-            .build()
-            .unwrap();
-        let png = png_of(&design(128, 255));
+        #[test]
+        fn a_design_sent_as_raw_bytes_through_the_ipc_is_previewed_and_saved() {
+            let app = tauri::test::mock_builder()
+                .manage(AppState::default())
+                .invoke_handler(tauri::generate_handler![composer_preview, composer_save])
+                .build(tauri::test::mock_context(tauri::test::noop_assets()))
+                .unwrap();
+            let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .unwrap();
+            let png = png_of(&design(128, 255));
 
-        let preview = frame(&json!({"shape": "folder", "sizes": [16, 64]}), &png);
-        let urls = invoke(&webview, "composer_preview", InvokeBody::Raw(preview)).unwrap();
-        let urls = urls.as_array().unwrap();
-        assert_eq!(urls.len(), 2);
-        assert!(urls
-            .iter()
-            .all(|u| u.as_str().unwrap().starts_with("data:image/png;base64,")));
+            let preview = frame(&json!({"shape": "folder", "sizes": [16, 64]}), &png);
+            let urls = invoke(&webview, "composer_preview", InvokeBody::Raw(preview)).unwrap();
+            let urls = urls.as_array().unwrap();
+            assert_eq!(urls.len(), 2);
+            assert!(urls
+                .iter()
+                .all(|u| u.as_str().unwrap().starts_with("data:image/png;base64,")));
 
-        // With no data folder the design lasts for the session, which is enough to see it arrive.
-        let save = frame(&save_header("Taxes 2026", "folder", None), &png);
-        let saved = invoke(&webview, "composer_save", InvokeBody::Raw(save)).unwrap();
-        assert_eq!(saved["skin"]["name"], "Taxes 2026");
-        assert_eq!(saved["skin"]["source"], "composer");
-        assert_eq!(saved["skin"]["kind"], "folder");
-        assert!(saved["replaced"].is_null());
+            // With no data folder the design lasts for the session, which is enough to see it arrive.
+            let save = frame(&save_header("Taxes 2026", "folder", None), &png);
+            let saved = invoke(&webview, "composer_save", InvokeBody::Raw(save)).unwrap();
+            assert_eq!(saved["skin"]["name"], "Taxes 2026");
+            assert_eq!(saved["skin"]["source"], "composer");
+            assert_eq!(saved["skin"]["kind"], "folder");
+            assert!(saved["replaced"].is_null());
 
-        // A body that isn't bytes at all is refused with a sentence, not a crash.
-        let refused = invoke(
-            &webview,
-            "composer_preview",
-            InvokeBody::Json(json!({"shape": "folder"})),
-        );
-        assert!(refused.unwrap_err().is_string());
+            // A body that isn't bytes at all is refused with a sentence, not a crash.
+            let refused = invoke(
+                &webview,
+                "composer_preview",
+                InvokeBody::Json(json!({"shape": "folder"})),
+            );
+            assert!(refused.unwrap_err().is_string());
+        }
     }
 }

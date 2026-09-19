@@ -4,7 +4,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.1 — 2026-09-19
 
 ### Added
 
@@ -41,12 +41,15 @@ All notable changes to FolderSkin are recorded here. The format follows
 - The composer's **Layers** and the settings below them are each opened and closed from their
   heading, and the bar between them is dragged (or nudged with the arrow keys) to share out the
   height; how they were left is remembered. A layer can be deleted from its own row, and
-  **Delete all** clears the design, with **Undo** in the toast.
+  **Delete all** clears the design, with **Undo** in the toast. A heading's buttons, like a row's,
+  show when it is pointed at, and stay reachable from the keyboard.
 - The sidebar's **Create** group holds **Design your own** and **Generate with AI**; **Community**
   is under **Explore**.
 - A pack can be shared from designs made in the composer too.
 - A skin's ⋯ menu shows its name as a labelled field with a pencil, so it's clear it can be
   renamed there. A double click on a name in the gallery opens it ready to type over, as F2 does.
+  Only your own skins can be renamed: a skin from a community pack keeps the name it was shared
+  under, and shows its tags and details as before.
 - Long names are cut short with an ellipsis everywhere they appear, with the full name on hover:
   in the folder panel, gallery, dialogs, toasts, buttons and the composer.
 - Disabled buttons and switches show the not-allowed cursor.
@@ -63,6 +66,12 @@ All notable changes to FolderSkin are recorded here. The format follows
 - On macOS, two icon changes at once (an apply starting while another was still being written)
   could garble each other's icon or fail. Changes now go one at a time.
 - F2 on a skin opened its menu without putting the cursor in the name field.
+- A dropdown lost the chevron drawn on it while the pointer was over it.
+- Typing a number into a box applied a clamped value with every keystroke, so typing 50 into a
+  field that allows 10 to 100 jumped to 10 and moved the design with it. It now applies what is
+  already in range while you type, and clamps when you leave the box.
+- A switched-on row, such as **Include subfolders**, showed nothing when hovered or focused, so
+  there was no sign of where the keyboard was.
 - A button's icon no longer shrinks to a sliver beside a long label.
 
 ## 0.1.0 — 2026-09-19
