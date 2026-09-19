@@ -10,13 +10,23 @@ export const DEFAULT_PACK = "classic-art";
 
 /** How many folders the intro shows side by side; the middle one is the biggest. */
 export const INTRO_SLOTS = 5;
+/** When all of them change to new skins, in ms from when the intro's pictures are ready. */
+export const INTRO_WAVE_TIMES = [0, 950, 1850, 2750];
+/** How many times all of them change to new skins. */
+export const INTRO_WAVES = INTRO_WAVE_TIMES.length;
+/** How many more skins the middle folder flips through on its way to the logo. */
+export const INTRO_SPINS = 6;
+/** Every folder in every wave and every flip wears a picture of its own: none shows twice. */
+export const INTRO_FRAME_COUNT = INTRO_SLOTS * INTRO_WAVES + INTRO_SPINS;
 
-/**
- * The frame folder `slot` wears at `step` of the intro, out of `frames`. The five folders never
- * wear the same frame at once, and each one changes at every step.
- */
-export function frameAt(slot: number, step: number, frames: number): number {
-  return (slot * 2 + step * 5) % frames;
+/** The frame folder `slot` wears in wave `wave`: each wave takes the next five. */
+export function frameAt(slot: number, wave: number): number {
+  return wave * INTRO_SLOTS + slot;
+}
+
+/** The frame of the middle folder's `spin`th flip on its way to the logo, counting from 1. */
+export function spinFrameAt(spin: number): number {
+  return INTRO_SLOTS * INTRO_WAVES + spin - 1;
 }
 
 /** Where one pack is in being installed. */

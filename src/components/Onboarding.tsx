@@ -7,9 +7,12 @@ import {
   frameAt,
   fromProgress,
   INTRO_SLOTS,
+  INTRO_SPINS,
+  INTRO_WAVE_TIMES,
   installFraction,
   installLine,
   type InstallState,
+  spinFrameAt,
   toInstall,
 } from "../lib/onboarding";
 import { licenseLabel } from "../lib/packs";
@@ -26,16 +29,13 @@ import { RefreshCwIcon } from "./icons/refresh-cw";
 
 /** The middle folder of the intro, the one that lands on the logo. */
 const HERO = Math.floor(INTRO_SLOTS / 2);
-const FRAMES = INTRO_FRAMES.length;
 
-/** The intro's timeline, in ms from when its pictures are ready: four waves of new skins... */
-const WAVES = [0, 950, 1850, 2750];
-/** ...then the side folders fold into the middle one while it flips through a few more... */
+// The intro's timeline, in ms from when its pictures are ready: the waves of new skins
+// (INTRO_WAVE_TIMES), then the side folders fold into the middle one while it flips through
+// INTRO_SPINS more, until it lands on the logo, which then makes room for the words.
 const LAND_AT = 3400;
-const SPINS = 6;
 const SPIN_EVERY = 75;
-/** ...until it lands on the logo, which then makes room for the words. */
-const LOGO_AT = LAND_AT + SPINS * SPIN_EVERY + 60;
+const LOGO_AT = LAND_AT + INTRO_SPINS * SPIN_EVERY + 60;
 const WELCOME_AT = LOGO_AT + 650;
 
 /** How long the pictures may take to decode before the intro starts anyway. */
@@ -157,9 +157,9 @@ function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
     void decodeAll([...INTRO_FRAMES, LOGO], DECODE_WAIT).then(() => {
       if (!live || skipped.current) return;
       setReady(true);
-      WAVES.forEach((ms, i) => i > 0 && at(ms, () => setStep(i)));
+      INTRO_WAVE_TIMES.forEach((ms, i) => i > 0 && at(ms, () => setStep(i)));
       at(LAND_AT, () => setPhase("landing"));
-      for (let k = 1; k <= SPINS; k++) at(LAND_AT + (k - 1) * SPIN_EVERY, () => setSpin(k));
+      for (let k = 1; k <= INTRO_SPINS; k++) at(LAND_AT + (k - 1) * SPIN_EVERY, () => setSpin(k));
       at(LOGO_AT, () => setPhase("logo"));
       at(WELCOME_AT, () => setPhase("welcome"));
     });
@@ -190,8 +190,6 @@ function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
     return () => clearTimeout(t);
   }, [phase, instant]);
 
-  const lastWave = WAVES.length - 1;
-  const spinFrame = (k: number) => (frameAt(HERO, lastWave, FRAMES) + k) % FRAMES;
   const landed = phase === "logo" || phase === "welcome";
 
   return (
@@ -211,9 +209,9 @@ function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
                 {slot === HERO && landed ? (
                   <img key="logo" className="welcome-skin is-logo" src={LOGO} alt="" draggable={false} />
                 ) : slot === HERO && spin > 0 ? (
-                  <Flip key={`spin-${spin}`} from={null} to={spinFrame(spin)} fast />
+                  <Flip key={`spin-${spin}`} from={null} to={spinFrameAt(spin)} fast />
                 ) : (
-                  <Flip key={`wave-${step}`} from={step > 0 ? frameAt(slot, step - 1, FRAMES) : null} to={frameAt(slot, step, FRAMES)} first={step === 0} />
+                  <Flip key={`wave-${step}`} from={step > 0 ? frameAt(slot, step - 1) : null} to={frameAt(slot, step)} first={step === 0} />
                 )}
               </span>
               ),

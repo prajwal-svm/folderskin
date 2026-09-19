@@ -4,9 +4,13 @@ import {
   defaultPicks,
   frameAt,
   fromProgress,
+  INTRO_FRAME_COUNT,
   INTRO_SLOTS,
+  INTRO_SPINS,
+  INTRO_WAVES,
   installFraction,
   installLine,
+  spinFrameAt,
   toInstall,
 } from "./onboarding";
 import { INTRO } from "../assets/onboarding";
@@ -15,37 +19,50 @@ const classic = { id: "classic-art", name: "Classic Art", added: false };
 const colours = { id: "colours", name: "Colours", added: false };
 const night = { id: "night-prints", name: "Night prints", added: false };
 
-describe("frameAt", () => {
-  it("never shows one frame on two folders at once", () => {
-    for (let step = 0; step < 12; step++) {
-      const frames = Array.from({ length: INTRO_SLOTS }, (_, slot) => frameAt(slot, step, 12));
-      expect(new Set(frames).size).toBe(INTRO_SLOTS);
-    }
-  });
+/** Every frame the intro shows, in order: each wave's folders left to right, then the flips. */
+function introOrder(): number[] {
+  const waves = Array.from({ length: INTRO_WAVES }, (_, wave) => Array.from({ length: INTRO_SLOTS }, (_, slot) => frameAt(slot, wave)));
+  const spins = Array.from({ length: INTRO_SPINS }, (_, i) => spinFrameAt(i + 1));
+  return [...waves.flat(), ...spins];
+}
 
-  it("changes every folder at every step", () => {
-    for (let slot = 0; slot < INTRO_SLOTS; slot++) {
-      for (let step = 0; step < 12; step++) expect(frameAt(slot, step + 1, 12)).not.toBe(frameAt(slot, step, 12));
-    }
+describe("frameAt and spinFrameAt", () => {
+  it("show every frame exactly once", () => {
+    const order = introOrder();
+    expect(order).toHaveLength(INTRO_FRAME_COUNT);
+    expect([...order].sort((a, b) => a - b)).toEqual(Array.from({ length: INTRO_FRAME_COUNT }, (_, i) => i));
   });
 });
 
 describe("the intro's frames", () => {
-  it("come from every pack, alternate packs side by side, and keep plain folders to the ends", () => {
-    const pictures = ["classic-art", "scientists-pop-art"];
-    expect(new Set(INTRO.map((f) => f.pack)).size).toBe(4);
-    // four waves: WAVES in Onboarding.tsx
-    for (let step = 0; step < 4; step++) {
-      const shown = Array.from({ length: INTRO_SLOTS }, (_, slot) => INTRO[frameAt(slot, step, INTRO.length)].pack);
-      const wave = `wave ${step}: ${shown.join(", ")}`;
-      expect(shown, wave).toContain("classic-art");
-      expect(shown, wave).toContain("scientists-pop-art");
-      expect(pictures, wave).toContain(shown[Math.floor(INTRO_SLOTS / 2)]);
+  const pictures = ["classic-art", "scientists-pop-art", "statues"];
+  const middle = Math.floor(INTRO_SLOTS / 2);
+
+  it("are one picture for every folder of every wave and every flip", () => {
+    expect(INTRO).toHaveLength(INTRO_FRAME_COUNT);
+    expect(new Set(INTRO.map((f) => f.src)).size).toBe(INTRO.length);
+  });
+
+  it("never put two folders from one pack side by side, and keep plain folders to the ends", () => {
+    for (let w = 0; w < INTRO_WAVES; w++) {
+      const shown = Array.from({ length: INTRO_SLOTS }, (_, slot) => INTRO[frameAt(slot, w)].pack);
+      const wave = `wave ${w}: ${shown.join(", ")}`;
       shown.slice(1).forEach((pack, i) => expect(pack, `${wave}, slots ${i} and ${i + 1}`).not.toBe(shown[i]));
+      expect(pictures, wave).toContain(shown[middle]);
       const plain = shown.flatMap((pack, slot) => (pictures.includes(pack) ? [] : [slot]));
       expect(plain.length, wave).toBeLessThanOrEqual(1);
       for (const slot of plain) expect([0, INTRO_SLOTS - 1], wave).toContain(slot);
     }
+  });
+
+  it("flip the middle folder through pictures, never two from one pack in a row", () => {
+    const flips = [frameAt(middle, INTRO_WAVES - 1), ...Array.from({ length: INTRO_SPINS }, (_, i) => spinFrameAt(i + 1))].map((f) => INTRO[f].pack);
+    for (const pack of flips) expect(pictures).toContain(pack);
+    flips.slice(1).forEach((pack, i) => expect(pack, `flips ${i} and ${i + 1}`).not.toBe(flips[i]));
+  });
+
+  it("come from every community pack", () => {
+    expect(new Set(INTRO.map((f) => f.pack))).toEqual(new Set(["classic-art", "scientists-pop-art", "statues", "soft-rainbow", "colours"]));
   });
 });
 
