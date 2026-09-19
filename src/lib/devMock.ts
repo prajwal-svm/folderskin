@@ -4,7 +4,7 @@
  * so they never reach a build (the app renders its own thumbnails).
  * Never used inside the app: `isTauri()` is true there.
  */
-import type { AiCatalogue, AiGenerateRequest, CommunityPack, ExportPackRequest, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
+import type { AiCatalogue, AiGenerateRequest, CommunityPack, ExportPackRequest, PackSkinPreview, PackUpdate, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
 import { cleanName } from "./names";
 import { cleanTags } from "./tags";
 
@@ -25,7 +25,7 @@ const IDS: [string, string, string][] = [
 const mockKeys = new Set<string>();
 
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
-const MOCK_PACKS: Omit<CommunityPack, "added">[] = [
+const MOCK_PACKS: Omit<CommunityPack, "added" | "update">[] = [
   { id: "classic-art", name: "Classic Art", author: "prajwal-svm", license: "CC0-1.0", tags: ["classic art"], count: 16 },
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
   { id: "night-prints", name: "Night prints", author: "example", license: "CC-BY-4.0", tags: ["woodblock", "night", "animals"], count: 12 },
@@ -35,8 +35,10 @@ const MOCK_PACKS: Omit<CommunityPack, "added">[] = [
 const PREVIEW_OF: Record<string, string> = { "classic-art": "classic-art", colours: "colours", "night-prints": "classic-art", "chrome-dreams": "colours" };
 /** The skins each added sample pack put in the library. */
 const mockAdded = new Map<string, string[]>();
+/** Sample packs added before their "new version": Colours gets one the first time it is added. */
+const mockStale = new Set<string>();
 
-function mockPackSkins(pack: Omit<CommunityPack, "added">): Skin[] {
+function mockPackSkins(pack: Omit<CommunityPack, "added" | "update">): Skin[] {
   const pictures = ["aurora", "sunset", "mesh", "ember", "paper", "denim", "slate", "halftone"];
   return Array.from({ length: Math.min(pack.count, 4) }, (_, i) => ({
     id: `user:${pack.id}${i}`,
@@ -89,9 +91,9 @@ export const mockApi = {
   skinsFolder: async () => "/Users/you/Library/Application Support/app.folderskin/skins",
   deleteSkin: async () => {},
   editSkin: async (_skinId: string, name: string, tags: string[]) => ({ name: cleanName(name), tags: cleanTags(tags) }),
-  communityPacks: async (): Promise<CommunityPack[]> => {
+  communityPacks: async (_fresh = false): Promise<CommunityPack[]> => {
     await new Promise((r) => setTimeout(r, 500));
-    return MOCK_PACKS.map((p) => ({ ...p, added: mockAdded.has(p.id) }));
+    return MOCK_PACKS.map((p) => ({ ...p, added: mockAdded.has(p.id), update: mockAdded.has(p.id) && mockStale.has(p.id) }));
   },
   communityPreview: async (packId: string) => `/community/previews/${PREVIEW_OF[packId] ?? "colours"}.png`,
   addPack: async (packId: string): Promise<Skin[]> => {
@@ -100,7 +102,27 @@ export const mockApi = {
     if (!pack) throw "that isn't a pack";
     const skins = mockPackSkins(pack);
     mockAdded.set(packId, skins.map((s) => s.id));
+    if (packId === "colours" && !mockStale.has("colours-updated")) mockStale.add(packId);
     return skins;
+  },
+  packSkins: async (packId: string): Promise<PackSkinPreview[]> => {
+    await new Promise((r) => setTimeout(r, 900));
+    const pack = MOCK_PACKS.find((p) => p.id === packId);
+    if (!pack) throw "that isn't a pack";
+    const pictures = ["aurora", "sunset", "mesh", "ember", "paper", "denim", "slate", "halftone", "stripes", "bubbles"];
+    return Array.from({ length: pack.count }, (_, i) => ({
+      name: `${pack.name} ${i + 1}`,
+      tags: pack.tags,
+      thumbnail: `/assets/previews/${pictures[i % pictures.length]}.png`,
+    }));
+  },
+  updatePack: async (packId: string): Promise<PackUpdate> => {
+    await new Promise((r) => setTimeout(r, 1200));
+    const pack = MOCK_PACKS.find((p) => p.id === packId);
+    if (!pack) throw "that isn't a pack";
+    mockStale.delete(packId);
+    mockStale.add(`${packId}-updated`);
+    return { removed: [], skins: mockPackSkins(pack) };
   },
   removePack: async (packId: string): Promise<string[]> => {
     const ids = mockAdded.get(packId) ?? [];

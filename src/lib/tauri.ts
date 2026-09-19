@@ -41,6 +41,24 @@ export type CommunityPack = {
   count: number;
   /** True when its skins are in the library. */
   added: boolean;
+  /** True when it was added and GitHub has a different version of it now. */
+  update: boolean;
+};
+
+/** One skin of a pack being looked through before it's added. */
+export type PackSkinPreview = {
+  name: string;
+  tags: string[];
+  /** The skin as the folder it makes, as a data URL. */
+  thumbnail: string;
+};
+
+/** What updating a pack changed. */
+export type PackUpdate = {
+  /** Old skins the new version doesn't have. */
+  removed: string[];
+  /** Every skin of the new version. */
+  skins: Skin[];
 };
 
 /** What "Save as a pack" writes: some of the user's own skins, as a folder ready for GitHub. */
@@ -116,11 +134,16 @@ const tauriApi = {
     invoke<{ name: string; tags: string[] }>("edit_skin", { skinId, name, tags }),
 
   // ---- community packs (from the repository on GitHub) ----
-  communityPacks: () => invoke<CommunityPack[]>("community_packs"),
-  /** A pack's preview strip as a data URL. */
-  communityPreview: (packId: string) => invoke<string>("community_preview", { packId }),
+  /** The packs on GitHub; `fresh` skips every cache, for Refresh. */
+  communityPacks: (fresh = false) => invoke<CommunityPack[]>("community_packs", { fresh }),
+  /** A pack's preview strip as a data URL, downloaded again when `fresh`. */
+  communityPreview: (packId: string, fresh = false) => invoke<string>("community_preview", { packId, fresh }),
   /** Downloads a pack and saves its skins; resolves to them. */
   addPack: (packId: string) => invoke<Skin[]>("community_add", { packId }),
+  /** Every skin of a pack drawn as its folder, to look through before adding it. Saves nothing. */
+  packSkins: (packId: string) => invoke<PackSkinPreview[]>("community_pack_skins", { packId }),
+  /** Swaps an added pack's skins for the version on GitHub now. */
+  updatePack: (packId: string) => invoke<PackUpdate>("community_update", { packId }),
   /** Deletes a pack's skins; resolves to their ids. */
   removePack: (packId: string) => invoke<string[]>("community_remove", { packId }),
   /** Adds a pack from a folder on this computer. */

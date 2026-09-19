@@ -224,6 +224,7 @@ pub async fn ai_generate(
         pack_name: None,
         author: None,
         license: None,
+        pack_hash: None,
     };
 
     tauri::async_runtime::spawn_blocking(move || {

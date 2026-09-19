@@ -179,6 +179,10 @@ pub struct IndexEntry {
     pub tags: Vec<String>,
     /// How many skins it has.
     pub count: usize,
+    /// [`pack_hash`] of the pack when the index was written, so the app can tell that a pack it
+    /// added has changed since. Empty in an index written before there was one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub hash: String,
 }
 
 impl Index {
@@ -196,7 +200,8 @@ impl Index {
 }
 
 impl IndexEntry {
-    pub fn new(id: &str, pack: &Pack) -> IndexEntry {
+    /// The entry for `pack`, in folder `id`, whose contents hash to `hash` ([`pack_hash`]).
+    pub fn new(id: &str, pack: &Pack, hash: String) -> IndexEntry {
         let every: Vec<String> = pack.skins.iter().flat_map(|s| pack.tags_for(s)).collect();
         IndexEntry {
             id: id.to_string(),
@@ -205,8 +210,37 @@ impl IndexEntry {
             license: pack.license.clone(),
             tags: clean_tags(&every, usize::MAX),
             count: pack.skins.len(),
+            hash,
         }
     }
+}
+
+/// A short fingerprint of a pack's exact contents: its `pack.json` bytes, then each picture's
+/// file name and bytes in the order the pack lists them. Any change to a name, a tag or a
+/// picture changes it. The index records it and the app keeps it with the skins it added, which
+/// is how an update shows up. Sixteen hex digits of SHA-256.
+pub fn pack_hash<'a>(
+    manifest: &[u8],
+    pictures: impl IntoIterator<Item = (&'a str, &'a [u8])>,
+) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    // Every part is length-prefixed, so moving bytes from one part to the next changes the hash.
+    let mut part = |bytes: &[u8]| {
+        hasher.update((bytes.len() as u64).to_le_bytes());
+        hasher.update(bytes);
+    };
+    part(manifest);
+    for (file, bytes) in pictures {
+        part(file.as_bytes());
+        part(bytes);
+    }
+    hasher
+        .finalize()
+        .iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// A pack's folder name: lower-case letters and digits in words joined by single dashes, at most
@@ -438,9 +472,44 @@ mod tests {
             ["woodblock", "japan", "animals"]
         );
         assert_eq!(pack.tags_for(&pack.skins[1]), ["woodblock", "japan"]);
-        let entry = IndexEntry::new("ukiyo-e-nights", &pack);
+        let entry = IndexEntry::new("ukiyo-e-nights", &pack, "0123456789abcdef".into());
         assert_eq!(entry.tags, ["woodblock", "japan", "animals"]);
         assert_eq!(entry.count, 2);
+        assert_eq!(entry.hash, "0123456789abcdef");
+    }
+
+    #[test]
+    fn a_pack_hash_changes_with_any_part_of_the_pack() {
+        let base = pack_hash(b"{}", [("a.png", &b"one"[..]), ("b.png", &b"two"[..])]);
+        assert_eq!(base.len(), 16);
+        assert!(base.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_eq!(
+            base,
+            pack_hash(b"{}", [("a.png", &b"one"[..]), ("b.png", &b"two"[..])]),
+            "the same pack hashes the same"
+        );
+        for other in [
+            pack_hash(b"{ }", [("a.png", &b"one"[..]), ("b.png", &b"two"[..])]),
+            pack_hash(b"{}", [("a.png", &b"one"[..]), ("b.png", &b"tw0"[..])]),
+            pack_hash(b"{}", [("a.png", &b"one"[..]), ("c.png", &b"two"[..])]),
+            pack_hash(b"{}", [("b.png", &b"two"[..]), ("a.png", &b"one"[..])]),
+            pack_hash(b"{}", [("a.png", &b"onet"[..]), ("b.png", &b"wo"[..])]),
+        ] {
+            assert_ne!(base, other);
+        }
+    }
+
+    #[test]
+    fn an_index_from_before_hashes_still_reads() {
+        let old = r#"{ "version": 1, "packs": [ { "id": "colours", "name": "Colours",
+  "author": "prajwal-svm", "license": "CC0-1.0", "tags": ["colour"], "count": 8 } ] }"#;
+        let index = Index::parse(old.as_bytes()).unwrap();
+        assert_eq!(index.packs[0].hash, "");
+        let json = serde_json::to_string(&index.packs[0]).unwrap();
+        assert!(
+            !json.contains("hash"),
+            "an empty hash isn't written: {json}"
+        );
     }
 
     #[test]

@@ -9,11 +9,14 @@ import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
 import { OkBadge } from "./OkBadge";
+import { PackViewer } from "./PackViewer";
 import { DownloadIcon } from "./icons/download";
+import { EyeIcon } from "./icons/eye";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { LayoutGridIcon } from "./icons/layout-grid";
 import { ListIcon } from "./icons/list";
 import { LoaderIcon } from "./icons/loader";
+import { RefreshCwIcon } from "./icons/refresh-cw";
 import { SparklesIcon } from "./icons/sparkles";
 
 type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string; run: () => void } }) => void;
@@ -73,6 +76,11 @@ export function CommunityView({
     setView(next);
     saveView(next);
   };
+  /** The pack open in the viewer, by id, so it shows its latest state. */
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  /** Goes up with every Refresh, so the previews are downloaded again too. */
+  const [generation, setGeneration] = useState(0);
 
   const load = useCallback(() => {
     setError(null);
@@ -86,6 +94,26 @@ export function CommunityView({
       });
   }, []);
   useEffect(load, [load]);
+
+  /** Reads the list from GitHub again, past any cache, and says whether anything changed. */
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const list = await api.communityPacks(true);
+      previews.clear();
+      setGeneration((g) => g + 1);
+      setPacks(list);
+      setError(null);
+      const updates = list.filter((p) => p.update).length;
+      toast(updates ? `${updates} of your packs ${updates === 1 ? "has" : "have"} an update` : "Community is up to date", {
+        tone: "ok",
+      });
+    } catch (e) {
+      toast(`Couldn't refresh: ${errorMessage(e)}`, { tone: "danger" });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const tabs = useMemo<TabCount[]>(() => {
     const list = packs ?? [];
@@ -101,7 +129,8 @@ export function CommunityView({
     );
   }, [packs, tag, query]);
 
-  const mark = (id: string | undefined, added: boolean) => setPacks((ps) => ps?.map((p) => (p.id === id ? { ...p, added } : p)) ?? ps);
+  const mark = (id: string | undefined, added: boolean) =>
+    setPacks((ps) => ps?.map((p) => (p.id === id ? { ...p, added, update: false } : p)) ?? ps);
 
   const add = async (pack: CommunityPack) => {
     setBusy(pack.id);
@@ -115,6 +144,24 @@ export function CommunityView({
       });
     } catch (e) {
       toast(`Couldn't add ${pack.name}: ${errorMessage(e)}`, { tone: "danger" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const update = async (pack: CommunityPack) => {
+    setBusy(pack.id);
+    try {
+      const { removed, skins } = await api.updatePack(pack.id);
+      if (removed.length) onRemoved(removed);
+      onAdded(skins);
+      mark(pack.id, true);
+      toast(`Updated ${pack.name}`, {
+        tone: "ok",
+        action: pack.tags[0] ? { label: "Show", run: () => onShowTag(pack.tags[0]) } : undefined,
+      });
+    } catch (e) {
+      toast(`Couldn't update ${pack.name}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
       setBusy(null);
     }
@@ -182,6 +229,19 @@ export function CommunityView({
           label="filter packs by tag"
           placeholder="Search packs"
           extra={
+            <>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Check GitHub for new and updated packs"
+              aria-label="refresh packs"
+              aria-busy={refreshing}
+              disabled={refreshing}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => void refresh()}
+            >
+              {refreshing ? <LoaderIcon size={16} /> : <RefreshCwIcon size={16} />}
+            </button>
             <div className="view-switch" role="radiogroup" aria-label="show packs as">
               {(
                 [
@@ -204,6 +264,7 @@ export function CommunityView({
                 </button>
               ))}
             </div>
+            </>
           }
         />
       )}
@@ -233,7 +294,16 @@ export function CommunityView({
           <ul className={view === "gallery" ? "packs is-gallery" : "packs"}>
             {shown.map((p, i) => (
               <li key={p.id} className="pack" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-                <PackPreview id={p.id} count={p.count} grid={view === "gallery"} />
+                <button
+                  type="button"
+                  className="pack-preview-btn"
+                  aria-label={`view ${p.name}`}
+                  title={`View ${p.name}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setViewing(p.id)}
+                >
+                  <PackPreview key={`${p.id}:${generation}`} id={p.id} count={p.count} grid={view === "gallery"} fresh={generation > 0} />
+                </button>
                 <div className="pack-meta">
                   <p className="pack-name">{p.name}</p>
                   <p className="pack-by">
@@ -252,14 +322,35 @@ export function CommunityView({
                   </div>
                 </div>
                 <div className="pack-action">
+                  <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => setViewing(p.id)}>
+                    <EyeIcon size={15} />
+                    View
+                  </button>
                   {p.added ? (
                     <>
-                      <span className="chip chip-ok">
-                        <OkBadge size={16} /> Added
-                      </span>
-                      <button type="button" className="btn btn-ghost" disabled={busy === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => setRemoving(p)}>
-                        Remove
-                      </button>
+                      {p.update ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          title="GitHub has a newer version of this pack"
+                          disabled={busy !== null}
+                          aria-busy={busy === p.id}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => void update(p)}
+                        >
+                          {busy === p.id ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
+                          {busy === p.id ? "Updating…" : "Update"}
+                        </button>
+                      ) : (
+                        <span className="chip chip-ok">
+                          <OkBadge size={16} /> Added
+                        </span>
+                      )}
+                      {view === "list" && (
+                        <button type="button" className="btn btn-ghost" disabled={busy === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => setRemoving(p)}>
+                          Remove
+                        </button>
+                      )}
                     </>
                   ) : (
                     <button type="button" className="btn btn-primary" disabled={busy !== null} aria-busy={busy === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => void add(p)}>
@@ -280,6 +371,22 @@ export function CommunityView({
         </p>
       </div>
 
+      {viewing &&
+        (() => {
+          const pack = packs?.find((p) => p.id === viewing);
+          return pack ? (
+            <PackViewer
+              pack={pack}
+              busy={busy === pack.id}
+              blocked={busy !== null && busy !== pack.id}
+              onAdd={() => void add(pack)}
+              onUpdate={() => void update(pack)}
+              onRemove={() => setRemoving(pack)}
+              onClose={() => setViewing(null)}
+            />
+          ) : null;
+        })()}
+
       {removing && (
         <Confirm
           title={`Remove "${removing.name}"?`}
@@ -297,13 +404,13 @@ export function CommunityView({
  * A pack's preview: its first few skins as folders, loaded once per session. The list shows the
  * strip as it is; the gallery cuts it into its folders and lays them out two by two.
  */
-function PackPreview({ id, count, grid }: { id: string; count: number; grid: boolean }) {
+function PackPreview({ id, count, grid, fresh }: { id: string; count: number; grid: boolean; fresh: boolean }) {
   const [src, setSrc] = useState(() => previews.get(id) ?? null);
   useEffect(() => {
     if (src) return;
     let live = true;
     api
-      .communityPreview(id)
+      .communityPreview(id, fresh)
       .then((url) => {
         previews.set(id, url);
         if (live) setSrc(url);
@@ -312,7 +419,7 @@ function PackPreview({ id, count, grid }: { id: string; count: number; grid: boo
     return () => {
       live = false;
     };
-  }, [id, src]);
+  }, [id, src, fresh]);
   if (grid) {
     // The strip holds up to four folders side by side, one per cell here.
     const shown = Math.max(1, Math.min(count, 4));

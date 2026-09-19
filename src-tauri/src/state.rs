@@ -254,14 +254,24 @@ impl AppState {
         Ok(ids)
     }
 
-    /// The ids of the community packs that have at least one skin saved.
-    pub fn added_packs(&self) -> std::collections::HashSet<String> {
-        let mut packs: std::collections::HashSet<String> = lock(&self.0.unsaved)
-            .values()
-            .filter_map(|u| u.entry.pack.clone())
-            .collect();
+    /// The community packs with at least one skin saved, each with the pack hash recorded when
+    /// it was added (`None` for one added before FolderSkin kept one).
+    pub fn installed_packs(&self) -> HashMap<String, Option<String>> {
+        let mut packs = HashMap::new();
+        let mut note = |entry: &SavedSkin| {
+            if let Some(id) = &entry.pack {
+                packs
+                    .entry(id.clone())
+                    .or_insert_with(|| entry.pack_hash.clone());
+            }
+        };
+        for unsaved in lock(&self.0.unsaved).values() {
+            note(&unsaved.entry);
+        }
         if let Some(store) = self.store() {
-            packs.extend(store.list().into_iter().filter_map(|e| e.pack));
+            for entry in store.list() {
+                note(&entry);
+            }
         }
         packs
     }
@@ -352,7 +362,7 @@ impl Embedded {
 }
 
 /// `f` applied to every item, on up to one thread per core, with the results in item order.
-fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+pub(crate) fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let threads = std::thread::available_parallelism()
         .map_or(1, |n| n.get())
         .clamp(1, items.len().max(1));
@@ -418,6 +428,7 @@ mod tests {
             pack_name: None,
             author: None,
             license: None,
+            pack_hash: None,
         };
         let (entry, thumb) = state.save(new, folder(10)).unwrap();
         assert_eq!(entry.id, id);
@@ -450,6 +461,7 @@ mod tests {
                 pack_name: None,
                 author: None,
                 license: None,
+                pack_hash: None,
             };
             state.save(new, folder(20)).unwrap();
         }

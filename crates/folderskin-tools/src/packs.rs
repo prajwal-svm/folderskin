@@ -207,16 +207,41 @@ pub fn write_index(dir: &Path, report: &Report) -> Result<Changes, String> {
         write_if_changed(&path, &raster::encode_png(&strip), &mut changes)?;
     }
 
+    let entries = packs
+        .iter()
+        .map(|(id, pack)| {
+            let hash =
+                hash_pack(&dir.join(PACKS_DIR).join(id), pack).map_err(|e| format!("{id}: {e}"))?;
+            Ok(IndexEntry::new(id, pack, hash))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     let index = Index {
         version: INDEX_VERSION,
-        packs: packs
-            .iter()
-            .map(|(id, pack)| IndexEntry::new(id, pack))
-            .collect(),
+        packs: entries,
     };
     let json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())? + "\n";
     write_if_changed(&dir.join(INDEX_FILE), json.as_bytes(), &mut changes)?;
     Ok(changes)
+}
+
+/// [`pack::pack_hash`] of the pack in `folder`, from the files as they are on disk: the bytes
+/// the app downloads.
+pub fn hash_pack(folder: &Path, pack: &Pack) -> Result<String, String> {
+    let read = |file: &str| {
+        std::fs::read(folder.join(file)).map_err(|e| format!("{file} couldn't be read: {e}"))
+    };
+    let manifest = read(MANIFEST_FILE)?;
+    let pictures = pack
+        .skins
+        .iter()
+        .map(|s| read(&s.file).map(|bytes| (s.file.as_str(), bytes)))
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(pack::pack_hash(
+        &manifest,
+        pictures
+            .iter()
+            .map(|(file, bytes)| (*file, bytes.as_slice())),
+    ))
 }
 
 /// A pack's preview: its first [`PREVIEW_SKINS`] skins as folders side by side, each

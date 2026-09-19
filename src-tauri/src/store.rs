@@ -101,6 +101,10 @@ pub struct SavedSkin {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+    /// Community skins only: the pack's contents when it was added
+    /// ([`folderskin_core::pack::pack_hash`]), to tell when it has an update.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack_hash: Option<String>,
 }
 
 /// What the caller knows about a skin it wants saved. The store adds the kind and focus (from
@@ -118,6 +122,7 @@ pub struct NewSkin {
     pub pack_name: Option<String>,
     pub author: Option<String>,
     pub license: Option<String>,
+    pub pack_hash: Option<String>,
 }
 
 impl NewSkin {
@@ -138,6 +143,7 @@ impl NewSkin {
             pack_name: self.pack_name,
             author: self.author,
             license: self.license,
+            pack_hash: self.pack_hash,
         }
     }
 }
@@ -628,6 +634,7 @@ mod tests {
             pack_name: None,
             author: None,
             license: None,
+            pack_hash: None,
         }
     }
 

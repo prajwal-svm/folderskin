@@ -40,12 +40,39 @@ pub struct PackDto {
     pub count: usize,
     /// True when the pack's skins are in the library.
     pub added: bool,
+    /// True when it was added and GitHub has a different version of it now.
+    pub update: bool,
 }
 
-/// The packs on GitHub, each marked with whether it has been added.
+/// One skin of a pack being looked through before it's added.
+#[derive(Serialize)]
+pub struct PackSkinDto {
+    pub name: String,
+    pub tags: Vec<String>,
+    /// The skin as the folder it makes, as a PNG data URL.
+    pub thumbnail: String,
+}
+
+/// How big the folders are drawn when looking through a pack.
+const PACK_VIEW_SIZE: u32 = 256;
+
+/// What updating a pack changed: the old skins the new version doesn't have, and the new
+/// version's skins.
+#[derive(Serialize)]
+pub struct PackUpdateDto {
+    pub removed: Vec<String>,
+    pub skins: Vec<SkinDto>,
+}
+
+/// The packs on GitHub, each marked with whether it has been added and whether it has changed
+/// since. `fresh` asks past every cache on the way, for Refresh.
 #[tauri::command]
-pub async fn community_packs(state: State<'_, AppState>) -> Result<Vec<PackDto>, String> {
-    let bytes = fetch(&format!("{}/index.json", base_url()), MAX_INDEX_BYTES)
+pub async fn community_packs(
+    state: State<'_, AppState>,
+    fresh: bool,
+) -> Result<Vec<PackDto>, String> {
+    let url = format!("{}/index.json", base_url());
+    let bytes = fetch(&uncached(&url, fresh), MAX_INDEX_BYTES)
         .await
         .map_err(|e| {
             if e == NOT_FOUND {
@@ -55,40 +82,54 @@ pub async fn community_packs(state: State<'_, AppState>) -> Result<Vec<PackDto>,
             }
         })?;
     let index = Index::parse(&bytes)?;
-    let added = state.added_packs();
+    let installed = state.installed_packs();
     Ok(index
         .packs
         .into_iter()
         .filter(|p| pack::is_pack_id(&p.id))
-        .map(|p| PackDto {
-            added: added.contains(&p.id),
-            id: p.id,
-            name: p.name,
-            author: p.author,
-            license: p.license,
-            tags: pack::clean_tags(&p.tags, usize::MAX),
-            count: p.count,
+        .map(|p| {
+            let have = installed.get(&p.id);
+            PackDto {
+                added: have.is_some(),
+                update: has_update(have, &p.hash),
+                id: p.id,
+                name: p.name,
+                author: p.author,
+                license: p.license,
+                tags: pack::clean_tags(&p.tags, usize::MAX),
+                count: p.count,
+            }
         })
         .collect())
 }
 
+/// Whether a pack added with hash `have` (itself `None` when it was added before FolderSkin kept
+/// one) differs from the version the index lists as `listed`. An index without hashes offers no
+/// updates; a pack with no recorded hash is offered one, since nothing says it's current.
+fn has_update(have: Option<&Option<String>>, listed: &str) -> bool {
+    match have {
+        None => false,
+        Some(_) if listed.is_empty() => false,
+        Some(hash) => hash.as_deref() != Some(listed),
+    }
+}
+
 /// A pack's preview (a few of its skins as folders, side by side) as a PNG data URL. Each is
-/// downloaded once per session.
+/// downloaded once per session, and again when `fresh`.
 #[tauri::command]
-pub async fn community_preview(pack_id: String) -> Result<String, String> {
+pub async fn community_preview(pack_id: String, fresh: bool) -> Result<String, String> {
     static PREVIEWS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
     let previews = PREVIEWS.get_or_init(Default::default);
     if !pack::is_pack_id(&pack_id) {
         return Err("that isn't a pack".into());
     }
-    if let Some(url) = lock(previews).get(&pack_id) {
-        return Ok(url.clone());
+    if !fresh {
+        if let Some(url) = lock(previews).get(&pack_id) {
+            return Ok(url.clone());
+        }
     }
-    let png = fetch(
-        &format!("{}/previews/{pack_id}.png", base_url()),
-        MAX_PREVIEW_BYTES,
-    )
-    .await?;
+    let url = format!("{}/previews/{pack_id}.png", base_url());
+    let png = fetch(&uncached(&url, fresh), MAX_PREVIEW_BYTES).await?;
     if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Err("that preview isn't a PNG".into());
     }
@@ -104,12 +145,59 @@ pub async fn community_add(
     state: State<'_, AppState>,
     pack_id: String,
 ) -> Result<Vec<SkinDto>, String> {
-    if !pack::is_pack_id(&pack_id) {
+    let (pack, hash, pictures) = download_pack(&pack_id).await?;
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        save_pack(&state, &pack_id, &pack, &pictures, Some(hash))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Every skin of pack `pack_id`, drawn as the folder it makes, to look through before adding it.
+/// It downloads and checks the whole pack as adding it would, and saves nothing.
+#[tauri::command]
+pub async fn community_pack_skins(pack_id: String) -> Result<Vec<PackSkinDto>, String> {
+    let (pack, _, pictures) = download_pack(&pack_id).await?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let ready = prepare_pack(&pack, &pictures)?;
+        Ok(crate::state::parallel_map(&ready, |(skin, _, image)| {
+            PackSkinDto {
+                name: skin.name.trim().to_string(),
+                tags: pack.tags_for(skin),
+                thumbnail: data_url(&image.preview_png(PACK_VIEW_SIZE)),
+            }
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Replaces an added pack's skins with the version on GitHub now. The new version is downloaded
+/// and checked before the old skins go, so a failed update leaves the pack as it was.
+#[tauri::command]
+pub async fn community_update(
+    state: State<'_, AppState>,
+    pack_id: String,
+) -> Result<PackUpdateDto, String> {
+    let (pack, hash, pictures) = download_pack(&pack_id).await?;
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        replace_pack(&state, &pack_id, &pack, &pictures, hash)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Pack `pack_id` from GitHub, fetched past any cache: what it lists, its hash
+/// ([`pack::pack_hash`]) and every picture, each within the pack limits.
+async fn download_pack(pack_id: &str) -> Result<(Pack, String, Vec<Vec<u8>>), String> {
+    if !pack::is_pack_id(pack_id) {
         return Err("that isn't a pack".into());
     }
     let base = format!("{}/packs/{pack_id}", base_url());
     let manifest = fetch(
-        &format!("{base}/{}", pack::MANIFEST_FILE),
+        &uncached(&format!("{base}/{}", pack::MANIFEST_FILE), true),
         pack::MAX_MANIFEST_BYTES,
     )
     .await?;
@@ -117,15 +205,20 @@ pub async fn community_add(
     let mut pictures = Vec::with_capacity(pack.skins.len());
     for skin in &pack.skins {
         // `file` passed `is_picture_file_name`, so it cannot leave the pack's folder.
-        let bytes = fetch(&format!("{base}/{}", skin.file), pack::MAX_PICTURE_BYTES)
+        let url = uncached(&format!("{base}/{}", skin.file), true);
+        let bytes = fetch(&url, pack::MAX_PICTURE_BYTES)
             .await
             .map_err(|e| format!("{}: {e}", skin.file))?;
         pictures.push(bytes);
     }
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || save_pack(&state, &pack_id, &pack, &pictures))
-        .await
-        .map_err(|e| e.to_string())?
+    let hash = pack::pack_hash(
+        &manifest,
+        pack.skins
+            .iter()
+            .zip(&pictures)
+            .map(|(s, bytes)| (s.file.as_str(), bytes.as_slice())),
+    );
+    Ok((pack, hash, pictures))
 }
 
 /// Deletes every skin a pack added and returns their ids.
@@ -183,7 +276,14 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
                     .map_err(|e| format!("{} {e}", s.file))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        save_pack(&state, &id, &pack, &pictures)
+        let hash = pack::pack_hash(
+            &manifest,
+            pack.skins
+                .iter()
+                .zip(&pictures)
+                .map(|(s, bytes)| (s.file.as_str(), bytes.as_slice())),
+        );
+        save_pack(&state, &id, &pack, &pictures, Some(hash))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -276,6 +376,16 @@ pub async fn export_pack(
 
 const NOT_FOUND: &str = "not found";
 
+/// `url` with a query no cache has seen when `fresh`, so the answer comes from GitHub itself
+/// rather than a copy up to a few minutes old.
+fn uncached(url: &str, fresh: bool) -> String {
+    if fresh {
+        format!("{url}?t={}", store::now_ms())
+    } else {
+        url.to_string()
+    }
+}
+
 fn base_url() -> String {
     std::env::var("FOLDERSKIN_COMMUNITY_URL")
         .ok()
@@ -326,19 +436,62 @@ async fn fetch(url: &str, max: usize) -> Result<Vec<u8>, String> {
 }
 
 /// Checks and decodes every picture of a pack, and only then saves each as a community skin
-/// carrying the pack's tags and id.
+/// carrying the pack's tags, its id and its `hash`.
 fn save_pack(
     state: &AppState,
     pack_id: &str,
     pack: &Pack,
     pictures: &[Vec<u8>],
+    hash: Option<String>,
 ) -> Result<Vec<SkinDto>, String> {
-    let mut ready = Vec::with_capacity(pictures.len());
-    for (skin, bytes) in pack.skins.iter().zip(pictures) {
-        let rgba = pack::decode_picture(bytes).map_err(|e| format!("{} {e}", skin.file))?;
-        let image = prepare_import(rgba).map_err(|e| format!("{}: {e}", skin.file))?;
-        ready.push((skin, store::skin_id(bytes), image));
-    }
+    let ready = prepare_pack(pack, pictures)?;
+    store_pack(state, pack_id, pack, ready, hash)
+}
+
+/// Swaps pack `pack_id`'s saved skins for this version of it. The new pictures are checked
+/// before the old skins are removed. A picture both versions share keeps its id, so a favourite
+/// of it stays.
+fn replace_pack(
+    state: &AppState,
+    pack_id: &str,
+    pack: &Pack,
+    pictures: &[Vec<u8>],
+    hash: String,
+) -> Result<PackUpdateDto, String> {
+    let ready = prepare_pack(pack, pictures)?;
+    let before = state.remove_pack(pack_id)?;
+    let skins = store_pack(state, pack_id, pack, ready, Some(hash))?;
+    let removed = before
+        .into_iter()
+        .filter(|id| !skins.iter().any(|s| &s.id == id))
+        .collect();
+    Ok(PackUpdateDto { removed, skins })
+}
+
+/// A pack's pictures decoded and checked, each with its skin and id; nothing saved yet.
+fn prepare_pack<'p>(
+    pack: &'p Pack,
+    pictures: &[Vec<u8>],
+) -> Result<Vec<(&'p PackSkin, String, SkinImage)>, String> {
+    pack.skins
+        .iter()
+        .zip(pictures)
+        .map(|(skin, bytes)| {
+            let rgba = pack::decode_picture(bytes).map_err(|e| format!("{} {e}", skin.file))?;
+            let image = prepare_import(rgba).map_err(|e| format!("{}: {e}", skin.file))?;
+            Ok((skin, store::skin_id(bytes), image))
+        })
+        .collect()
+}
+
+/// Saves prepared pictures as community skins carrying the pack's tags, its id and its `hash`.
+fn store_pack(
+    state: &AppState,
+    pack_id: &str,
+    pack: &Pack,
+    ready: Vec<(&PackSkin, String, SkinImage)>,
+    hash: Option<String>,
+) -> Result<Vec<SkinDto>, String> {
     let mut saved = Vec::with_capacity(ready.len());
     for (skin, id, image) in ready {
         let new = NewSkin {
@@ -353,6 +506,7 @@ fn save_pack(
             pack_name: Some(pack.name.trim().to_string()),
             author: Some(pack.author.clone()),
             license: Some(pack.license.clone()),
+            pack_hash: hash.clone(),
         };
         let (entry, thumb) = state.save(new, image)?;
         saved.push(SkinDto::saved(&entry, &thumb));
@@ -490,7 +644,7 @@ mod tests {
             .iter()
             .map(|s| std::fs::read(dir.join(&s.file)).unwrap())
             .collect();
-        let saved = save_pack(&state, "test-colours", &pack, &pictures).unwrap();
+        let saved = save_pack(&state, "test-colours", &pack, &pictures, Some("v1".into())).unwrap();
         assert_eq!(saved.len(), 2);
         assert_eq!(saved[0].tags, ["colour", "cool"]);
         assert_eq!(saved[1].tags, ["colour"]);
@@ -501,11 +655,64 @@ mod tests {
         assert_eq!(saved[0].author.as_deref(), Some("prajwal-svm"));
         assert_eq!(saved[0].license.as_deref(), Some("CC0-1.0"));
         assert!(saved.iter().all(|s| s.kind == SkinKind::Artwork));
-        assert!(state.added_packs().contains("test-colours"));
+        assert_eq!(
+            state.installed_packs().get("test-colours"),
+            Some(&Some("v1".to_string()))
+        );
 
         let removed = state.remove_pack("test-colours").unwrap();
         assert_eq!(removed.len(), 2);
-        assert!(state.added_packs().is_empty());
+        assert!(state.installed_packs().is_empty());
+    }
+
+    #[test]
+    fn an_update_swaps_the_skins_and_keeps_the_ones_both_versions_share() {
+        let state = AppState::default();
+        state.open_store(temp_dir("update-store"));
+        let pack = Pack::parse(PACK.as_bytes()).unwrap();
+        let teal = png(512, 480, [20, 140, 150, 255]);
+        let old = vec![teal.clone(), png(512, 480, [180, 70, 30, 255])];
+        let before = save_pack(&state, "test-colours", &pack, &old, Some("v1".into())).unwrap();
+
+        let new = vec![teal, png(512, 480, [90, 60, 160, 255])];
+        let update = replace_pack(&state, "test-colours", &pack, &new, "v2".into()).unwrap();
+        assert_eq!(
+            update.removed,
+            [before[1].id.clone()],
+            "only the changed picture goes"
+        );
+        assert_eq!(update.skins.len(), 2);
+        assert_eq!(
+            update.skins[0].id, before[0].id,
+            "the shared picture keeps its id"
+        );
+        assert_eq!(state.saved_skins().len(), 2);
+        assert_eq!(
+            state.installed_packs().get("test-colours"),
+            Some(&Some("v2".to_string()))
+        );
+
+        // A version with a bad picture changes nothing.
+        let broken = vec![png(512, 480, [1, 2, 3, 255]), png(100, 100, [1, 2, 3, 255])];
+        assert!(replace_pack(&state, "test-colours", &pack, &broken, "v3".into()).is_err());
+        assert_eq!(state.saved_skins().len(), 2);
+        assert_eq!(
+            state.installed_packs().get("test-colours"),
+            Some(&Some("v2".to_string()))
+        );
+    }
+
+    #[test]
+    fn an_update_is_offered_only_for_an_added_pack_that_changed() {
+        let v1 = Some("v1".to_string());
+        assert!(!has_update(None, "v1"), "not added");
+        assert!(!has_update(Some(&v1), "v1"), "the same version");
+        assert!(has_update(Some(&v1), "v2"));
+        assert!(!has_update(Some(&v1), ""), "an index without hashes");
+        assert!(
+            has_update(Some(&None), "v1"),
+            "added before hashes were kept"
+        );
     }
 
     #[test]
@@ -514,7 +721,7 @@ mod tests {
         let state = AppState::default();
         state.open_store(temp_dir("bad-store"));
         let pictures = vec![png(512, 480, [1, 2, 3, 255]), png(100, 100, [1, 2, 3, 255])];
-        let err = save_pack(&state, "test-colours", &pack, &pictures).unwrap_err();
+        let err = save_pack(&state, "test-colours", &pack, &pictures, None).unwrap_err();
         assert!(err.contains("rust.png"), "{err}");
         assert!(state.saved_skins().is_empty(), "nothing was saved");
     }

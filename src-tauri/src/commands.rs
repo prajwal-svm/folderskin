@@ -362,6 +362,7 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
             pack_name: None,
             author: None,
             license: None,
+            pack_hash: None,
         };
         let (entry, thumb) = state.save(new, image)?;
         Ok(SkinDto::saved(&entry, &thumb))
@@ -597,6 +598,7 @@ mod tests {
             pack_name: None,
             author: None,
             license: None,
+            pack_hash: None,
         };
         let json = serde_json::to_value(SkinDto::saved(&entry, b"png")).unwrap();
         assert_eq!(json["collection"], "yours");

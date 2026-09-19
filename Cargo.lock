@@ -1250,6 +1250,7 @@ dependencies = [
  "objc2-foundation",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.20",
  "tiny-skia",
  "windows-sys 0.61.2",

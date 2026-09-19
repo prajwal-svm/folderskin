@@ -159,8 +159,15 @@ background still comes out as artwork.
 
 ## How the app reads packs
 
-- `community/index.json` lists every pack: its id, name, author, licence, tags and number of
-  skins. `folderskin-tools packs index` writes it, together with
+Community has a **List** and a **Gallery** view, and **View** on any pack opens it: every skin
+drawn as the folder it makes, with its name, before anything is added. **Refresh** reads the list
+from GitHub again. A pack you added that has changed on GitHub since shows **Update**, which
+swaps its skins for the new version; folders keep their icons, and a favourite of a picture both
+versions share stays a favourite.
+
+- `community/index.json` lists every pack: its id, name, author, licence, tags, number of skins
+  and a hash of its exact contents (`pack.json` and every picture). The app keeps the hash with
+  the skins it adds, which is how it knows a pack has an update. `folderskin-tools packs index` writes it, together with
   `community/previews/<id>.png`, a strip of the pack's first four skins drawn as folders. Both
   are generated on `main`; never edit them by hand.
 - The app downloads a pack's pictures only when you press **Add**. It checks every one against

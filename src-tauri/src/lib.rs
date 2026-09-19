@@ -30,6 +30,8 @@ pub fn run() {
             community::community_packs,
             community::community_preview,
             community::community_add,
+            community::community_update,
+            community::community_pack_skins,
             community::community_remove,
             community::import_pack,
             community::export_pack,

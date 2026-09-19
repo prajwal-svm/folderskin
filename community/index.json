@@ -9,7 +9,8 @@
       "tags": [
         "classic art"
       ],
-      "count": 16
+      "count": 16,
+      "hash": "4edf8c11d48ab779"
     },
     {
       "id": "colours",
@@ -19,7 +20,8 @@
       "tags": [
         "colour"
       ],
-      "count": 8
+      "count": 8,
+      "hash": "8c46dc19991a23f9"
     }
   ]
 }
