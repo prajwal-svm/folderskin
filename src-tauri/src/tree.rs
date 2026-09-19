@@ -379,10 +379,8 @@ fn thousands(n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::{self, NewSkin, SkinImage, SkinSource};
-    use serde_json::{json, Value};
+    use serde_json::json;
     use std::sync::atomic::AtomicUsize;
-    use std::sync::{Arc, Mutex};
 
     /// A scratch folder for one test, removed when it drops.
     struct Scratch(PathBuf);
@@ -778,6 +776,9 @@ mod tests {
     #[cfg(not(windows))]
     mod ipc {
         use super::*;
+        use crate::store::{self, NewSkin, SkinImage, SkinSource};
+        use serde_json::Value;
+        use std::sync::{Arc, Mutex};
         // ---------- through the IPC ----------
 
         /// Tests that start or stop runs take turns: the stop flag belongs to the whole process.
