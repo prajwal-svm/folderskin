@@ -56,10 +56,14 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   [docs/SKINS.md](docs/SKINS.md).
 - A Claude Code skill for authoring skins at
   [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md).
+- Installers for macOS (one universal app, signed and notarized), Windows, and Linux on both
+  x86_64 and ARM64, built as a draft release from a tag and published by hand once tried. See
+  [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Notes
 
 - No accounts, no paywall, no telemetry. The only network access is the optional AI
-  assistant, which calls the provider you pick directly.
+  assistant, which calls the provider you pick directly, and Community, which reads the shared
+  packs from GitHub.
 - The macOS app is 10.2 MB installed, from an 8.5 MB DMG. The Windows and Linux packages
   have not been measured yet.

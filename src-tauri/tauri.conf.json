@@ -44,7 +44,9 @@
     "shortDescription": "Give your folders a skin",
     "longDescription": "FolderSkin applies one of ten built-in skins, or your own photo, as a folder icon on macOS, Windows and Linux.",
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist"
     },
     "linux": {
       "deb": {
