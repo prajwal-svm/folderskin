@@ -189,8 +189,6 @@ Free · Open source · No account · No tracking
 | Linux · x86_64 | AppImage, DEB or RPM | [![Download for Linux](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest) |
 | Linux · ARM64 | AppImage, DEB or RPM | [![Download for Linux](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest) |
 
-The first release is still being prepared; until it's out, [build from source](#build-from-source).
-
 The macOS app is signed and notarized by Apple, so it opens like any other. The Windows installer
 isn't signed yet, so SmartScreen asks first: choose "More info", then "Run anyway". The Linux
 packages need glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later).
