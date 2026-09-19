@@ -114,21 +114,27 @@ jobs:
             targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: "--target universal-apple-darwin"
             feed: darwin
+            # Every macOS build notarizes, which is a sign-in to Apple; see "Check the
+            # notarization sign-in".
+            retries: 0
           - name: Linux (x86_64)
             os: ubuntu-22.04
             targets: ""
             args: ""
             feed: linux-x86_64
+            retries: 3
           - name: Linux (ARM64)
             os: ubuntu-22.04-arm
             targets: ""
             args: ""
             feed: linux-aarch64
+            retries: 3
           - name: Windows (x86_64)
             os: windows-latest
             targets: ""
             args: ""
             feed: windows-x86_64
+            retries: 3
 
     steps:
       - uses: actions/checkout@v7
@@ -238,6 +244,22 @@ jobs:
           echo "MACOS_SIGNED=true" >> "$GITHUB_ENV"
           echo "macOS signing: on"
 
+      # One sign-in to Apple's notary service before the long build, so a wrong APPLE_ID or
+      # APPLE_PASSWORD fails here in seconds, and only once. Failed sign-ins add up: v0.1.0's
+      # builds retried notarization with a wrong password until Apple locked the Apple ID. So the
+      # macOS build never retries either (matrix.retries).
+      - name: Check the notarization sign-in
+        if: runner.os == 'macOS' && env.MACOS_SIGNED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! out="$(xcrun notarytool history --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" 2>&1)"; then
+            printf '%s\n' "$out" | head -5
+            echo "::error::Apple refused the notarization sign-in. APPLE_ID must be the developer account's Apple ID and APPLE_PASSWORD an app-specific password from account.apple.com. Fix the secrets before running this again: repeated failed sign-ins lock the Apple ID."
+            exit 1
+          fi
+          echo "notarization sign-in: ok"
+
       # Windows Authenticode through Azure Trusted Signing, as in Oleafly. Only when the AZURE_*
       # secrets exist; otherwise the Windows installers are unsigned.
       - name: Turn on Windows signing (when its secrets exist)
@@ -306,7 +328,7 @@ jobs:
           releaseBody: ${{ needs.draft.outputs.notes }}
           releaseDraft: true
           prerelease: false
-          retryAttempts: 3
+          retryAttempts: ${{ matrix.retries }}
           args: ${{ matrix.args }} ${{ env.TAURI_SIGN_ARGS }} ${{ env.UPDATER_ARGS }}
 
       # tauri-action adds this platform to the draft's latest.json, but the four builds do it at
