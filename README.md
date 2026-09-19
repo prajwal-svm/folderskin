@@ -116,15 +116,17 @@ choose **Whole folder** (the model paints the whole folder from FolderSkin's tem
 poster) or **Just the art** (flat art wrapped onto FolderSkin's folder). Every result is saved to
 **Yours** and can be tried on at once.
 
-| | Provider | Models | Per image | Key |
-| :-: | --- | --- | --- | --- |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/openai-dark.svg"><img src="docs/images/providers/openai.svg" width="20" height="20" alt=""></picture> | OpenAI | GPT Image 2.5 Flare, GPT Image 2.5 Sunburst, GPT Image 1 | ~$0.02–0.19 | [Get a key](https://platform.openai.com/api-keys) |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/xai-dark.svg"><img src="docs/images/providers/xai.svg" width="20" height="20" alt=""></picture> | xAI Grok | Grok Imagine | ~$0.02 | [Get a key](https://console.x.ai) |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/recraft-dark.svg"><img src="docs/images/providers/recraft.svg" width="20" height="20" alt=""></picture> | Recraft | Recraft V3 | ~$0.04 | [Get a key](https://www.recraft.ai/profile/api) |
-| <img src="docs/images/providers/google.svg" width="20" height="20" alt=""> | Google Gemini | Gemini 2.5 Flash Image | ~$0.04 | [Get a key](https://aistudio.google.com/apikey) |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/bfl-dark.svg"><img src="docs/images/providers/bfl.svg" width="20" height="20" alt=""></picture> | Black Forest Labs | FLUX 1.1 Pro | ~$0.04 | [Get a key](https://dashboard.bfl.ai) |
-| <img src="docs/images/providers/stability.svg" width="20" height="20" alt=""> | Stability AI | Stable Image Core | ~3 credits | [Get a key](https://platform.stability.ai/account/keys) |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/ideogram-dark.svg"><img src="docs/images/providers/ideogram.svg" width="20" height="20" alt=""></picture> | Ideogram | Ideogram v3 | ~$0.03–0.09 | [Get a key](https://ideogram.ai/manage-api) |
+Paste a key into **Settings → AI keys**. Each provider's name links to the page where you make one.
+
+| | Provider | Models | Per image |
+| :-: | --- | --- | --- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/openai-dark.svg"><img src="docs/images/providers/openai.svg" width="20" height="20" alt=""></picture> | [OpenAI](https://platform.openai.com/api-keys) | GPT Image 2.5 Flare, GPT Image 2.5 Sunburst, GPT Image 1 | ~$0.02–0.19 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/xai-dark.svg"><img src="docs/images/providers/xai.svg" width="20" height="20" alt=""></picture> | [xAI Grok](https://console.x.ai) | Grok Imagine | ~$0.02 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/recraft-dark.svg"><img src="docs/images/providers/recraft.svg" width="20" height="20" alt=""></picture> | [Recraft](https://www.recraft.ai/profile/api) | Recraft V3 | ~$0.04 |
+| <img src="docs/images/providers/google.svg" width="20" height="20" alt=""> | [Google Gemini](https://aistudio.google.com/apikey) | Gemini 2.5 Flash Image | ~$0.04 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/bfl-dark.svg"><img src="docs/images/providers/bfl.svg" width="20" height="20" alt=""></picture> | [Black Forest Labs](https://dashboard.bfl.ai) | FLUX 1.1 Pro | ~$0.04 |
+| <img src="docs/images/providers/stability.svg" width="20" height="20" alt=""> | [Stability AI](https://platform.stability.ai/account/keys) | Stable Image Core | ~3 credits |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/ideogram-dark.svg"><img src="docs/images/providers/ideogram.svg" width="20" height="20" alt=""></picture> | [Ideogram](https://ideogram.ai/manage-api) | Ideogram v3 | ~$0.03–0.09 |
 
 No key? [docs/PROMPTS.md](docs/PROMPTS.md) has a template and a prompt for Grok's or
 ChatGPT's own chat; the app shows the same prompt, filled in, under **No API key?**.
