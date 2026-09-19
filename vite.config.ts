@@ -17,5 +17,17 @@ export default defineConfig({
     watch: { ignored: ["**/src-tauri/**", "**/crates/**", "**/target/**"] },
   },
   build: { target: ["es2022", "safari15"], minify: true, sourcemap: false },
-  test: { environment: "node", include: ["src/**/*.test.ts"] },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+    // `pnpm test:coverage` writes the report SonarQube Cloud reads (sonar-project.properties).
+    // Files no test runs are listed too, as uncovered.
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "lcov"],
+      reportsDirectory: "coverage/frontend",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.ts", "src/**/*.d.ts"],
+    },
+  },
 });

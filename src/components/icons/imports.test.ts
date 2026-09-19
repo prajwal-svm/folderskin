@@ -1,13 +1,19 @@
+/// <reference types="node" />
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-/** Every source file's text, keyed by path. Tests are left out so their patterns do not count. */
-const sources = import.meta.glob(["/src/**/*.{ts,tsx}", "!/src/**/*.test.ts"], {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-
-const files = Object.entries(sources).map(([path, text]) => ({ path, text }));
+/**
+ * Every source file's text, with its path from the repository root. Tests are left out so their
+ * patterns do not count. Read from disk rather than imported with `?raw`: a raw import counts as
+ * running the file, so the coverage report called every component tested.
+ */
+const root = new URL("../../../", import.meta.url);
+const files = readdirSync(new URL("src/", root), { recursive: true, encoding: "utf8" })
+  .filter((name) => /\.tsx?$/.test(name) && !name.endsWith(".test.ts"))
+  .map((name) => {
+    const path = `/src/${name.split("\\").join("/")}`;
+    return { path, text: readFileSync(new URL(path.slice(1), root), "utf8") };
+  });
 
 describe("Motion stays tree-shaken", () => {
   it("never imports the full `motion` component", () => {

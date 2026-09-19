@@ -10,3 +10,4 @@ assets/previews/
 .playwright-mcp/
 docs/superpowers/
 .claude/worktrees/
+coverage/

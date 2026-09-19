@@ -1,36 +1,60 @@
-name: community
+name: Community
 
-# Rebuilds community/index.json and the preview strips whenever a pack changes on main, and
-# commits them if they differ. `packs index` is deterministic, so unchanged packs commit nothing.
+# A pull request that adds or changes a pack gets the same checks the app runs before it saves
+# one, without the full CI. On main, the index and the preview strips are rebuilt and committed
+# if they differ. `packs index` is deterministic, so unchanged packs commit nothing.
 on:
   push:
     branches: [main]
     paths:
       - "community/packs/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "community/**"
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-# One run at a time. A merge that lands mid-run queues the next run, which indexes it.
-concurrency:
-  group: community-index
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  index:
+  check:
+    name: Check the packs
     runs-on: ubuntu-22.04
-
+    timeout-minutes: 20
     steps:
-      # The branch rather than the commit that triggered the run, so a queued run indexes the
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check every pack
+        run: cargo run -p folderskin-tools --quiet -- packs check
+
+  index:
+    name: Update the index
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    # One run at a time. A merge that lands mid-run queues the next run, which indexes it.
+    concurrency:
+      group: community-index
+      cancel-in-progress: false
+    steps:
+      # The branch rather than the commit that started the run, so a queued run indexes the
       # newest packs.
-      - name: Check out the repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
 
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@v2
@@ -39,7 +63,7 @@ jobs:
         run: cargo run -p folderskin-tools --release -- packs index
 
       # A push made with the workflow's own token starts no other workflow, so this commit
-      # cannot trigger another run. The rebase covers commits that landed while it was building.
+      # cannot start another run. The rebase covers commits that landed while it was building.
       - name: Commit them if they changed
         run: |
           if [ -z "$(git status --porcelain -- community/index.json community/previews)" ]; then

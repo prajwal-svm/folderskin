@@ -1,0 +1,43 @@
+# Weekly grouped dependency updates: one pull request per ecosystem instead of one per package.
+# Security updates are separate (switched on in the repository settings) and open straight away.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Let a release age for a week before proposing it, so a version that gets pulled soon after
+    # publishing never reaches the lockfile.
+    cooldown:
+      default-days: 7
+    groups:
+      # Minor and patch updates come together in one pull request. Major versions come one at a
+      # time, so each migration is reviewed on its own.
+      npm-all:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      cargo-all:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-all:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
