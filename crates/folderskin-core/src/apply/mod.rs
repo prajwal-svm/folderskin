@@ -309,10 +309,12 @@ mod tests {
         let nested = tmp.join("a");
         std::fs::create_dir(&nested).unwrap();
         let round_about = tmp.join("a").join(".").join("..").join("a");
-        assert_eq!(
-            validate_folder(&round_about).unwrap(),
-            nested.canonicalize().unwrap()
-        );
+        // Canonical, less the `\\?\` prefix canonicalize adds on Windows, which validate_folder
+        // strips (see strip_verbatim_prefix). On other systems there is no prefix to strip.
+        let canonical = nested.canonicalize().unwrap();
+        let expected =
+            PathBuf::from(paths::strip_verbatim_prefix(&canonical.to_string_lossy()).as_ref());
+        assert_eq!(validate_folder(&round_about).unwrap(), expected);
     }
 
     #[test]
