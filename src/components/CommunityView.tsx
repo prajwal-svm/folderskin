@@ -14,6 +14,7 @@ import { PackViewer } from "./PackViewer";
 import { DeleteIcon } from "./icons/delete";
 import { DownloadIcon } from "./icons/download";
 import { EyeIcon } from "./icons/eye";
+import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { LayoutGridIcon } from "./icons/layout-grid";
 import { ListIcon } from "./icons/list";
@@ -23,27 +24,9 @@ import { SparklesIcon } from "./icons/sparkles";
 
 type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string; run: () => void } }) => void;
 
-/** How the packs are shown: rows with their details, or cards with bigger folders. */
+/** How the packs are shown: cards with bigger folders, or rows with their details. Community
+ *  always opens on the cards; the list lasts until you leave. */
 type PackView = "list" | "gallery";
-
-const VIEW_KEY = "folderskin.community.view";
-
-/** The view picked last time, remembered on this computer only. */
-function loadView(): PackView {
-  try {
-    return localStorage.getItem(VIEW_KEY) === "gallery" ? "gallery" : "list";
-  } catch {
-    return "list";
-  }
-}
-
-function saveView(view: PackView) {
-  try {
-    localStorage.setItem(VIEW_KEY, view);
-  } catch {
-    // Not saving it only means the list comes back next time.
-  }
-}
 
 /**
  * Skin packs other people shared on GitHub, filtered by tag like the library. Adding a pack
@@ -70,11 +53,7 @@ export function CommunityView({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [removing, setRemoving] = useState<CommunityPack | null>(null);
-  const [view, setView] = useState<PackView>(loadView);
-  const pickView = (next: PackView) => {
-    setView(next);
-    saveView(next);
-  };
+  const [view, setView] = useState<PackView>("gallery");
   /** The pack open in the viewer, by id, so it shows its latest state. */
   const [viewing, setViewing] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -245,8 +224,8 @@ export function CommunityView({
               <div className="view-switch" role="radiogroup" aria-label="show packs as">
                 {(
                   [
-                    ["list", "List", ListIcon],
                     ["gallery", "Gallery", LayoutGridIcon],
+                    ["list", "List", ListIcon],
                   ] as const
                 ).map(([id, label, Icon]) => (
                   <button
@@ -258,7 +237,7 @@ export function CommunityView({
                     title={label}
                     className={view === id ? "view-switch-btn is-active" : "view-switch-btn"}
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pickView(id)}
+                    onClick={() => setView(id)}
                   >
                     <Icon size={16} />
                   </button>
@@ -304,7 +283,10 @@ export function CommunityView({
                   <PackPreview key={`${p.id}:${generation}`} id={p.id} count={p.count} grid={view === "gallery"} fresh={generation > 0} />
                 </button>
                 <div className="pack-meta">
-                  <p className="pack-name">{p.name}</p>
+                  <div className="pack-title">
+                    <p className="pack-name">{p.name}</p>
+                    {p.added && <OkBadge size={20} playOnMount label="Added to your library" />}
+                  </div>
                   <p className="pack-by">
                     by{" "}
                     <button type="button" className="pack-author" onClick={() => void openUrl(`https://github.com/${p.author}`).catch(() => {})}>
@@ -327,7 +309,7 @@ export function CommunityView({
                   </button>
                   {p.added ? (
                     <>
-                      {p.update ? (
+                      {p.update && (
                         <button
                           type="button"
                           className="btn btn-primary"
@@ -340,10 +322,6 @@ export function CommunityView({
                           {busy === p.id ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
                           {busy === p.id ? "Updating…" : "Update"}
                         </button>
-                      ) : (
-                        <span className="chip chip-ok">
-                          <OkBadge size={16} /> Added
-                        </span>
                       )}
                       {view === "list" ? (
                         <button type="button" className="btn btn-ghost" disabled={busy === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => setRemoving(p)}>
@@ -376,9 +354,10 @@ export function CommunityView({
           </ul>
         )}
         <p className="community-foot">
-          Packs are checked before they're listed.{" "}
+          All skin packs are verified before they are listed in app.{" "}
           <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
-            How packs work
+            See how packs work
+            <ExternalLinkIcon size={13} />
           </button>
         </p>
       </div>

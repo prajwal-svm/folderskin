@@ -136,6 +136,23 @@
   gap: 4px;
 }
 
+/* The name, and a green tick once the pack is in the library: at the far end of a card, right
+   after the name in a row. */
+.pack-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.packs.is-gallery .pack-title {
+  justify-content: space-between;
+}
+
+.pack-title .ok-badge {
+  flex: none;
+}
+
 .pack-name,
 .pack-by {
   overflow: hidden;

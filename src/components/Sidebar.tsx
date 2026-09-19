@@ -16,6 +16,7 @@ type Item = { id: View; label: string; icon: ReactNode; badge?: string | number 
 export function Sidebar({
   view,
   onView,
+  skinsCount,
   favoritesCount,
   yoursCount,
   onImport,
@@ -29,6 +30,8 @@ export function Sidebar({
 }: {
   view: View;
   onView: (v: View) => void;
+  /** Every skin in the library. Each Library item shows its count, unless it's 0. */
+  skinsCount: number;
   favoritesCount: number;
   yoursCount: number;
   onImport: () => void;
@@ -46,7 +49,7 @@ export function Sidebar({
     {
       title: "Library",
       items: [
-        { id: "skins", label: "All skins", icon: <LayoutGridIcon size={18} /> },
+        { id: "skins", label: "All skins", icon: <LayoutGridIcon size={18} />, badge: skinsCount || undefined },
         { id: "yours", label: "Yours", icon: <FolderOpenIcon size={18} />, badge: yoursCount || undefined },
         { id: "faves", label: "Favourites", icon: <StarIcon size={17} />, badge: favoritesCount || undefined },
       ],

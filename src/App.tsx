@@ -363,6 +363,7 @@ export default function App() {
           setView(v);
           setTag("");
         }}
+        skinsCount={skins.length}
         favoritesCount={favorites.filter((id) => skins.some((s) => s.id === id)).length}
         yoursCount={yours.length}
         onImport={pickPhoto}

@@ -39,6 +39,8 @@ export type CommunityPack = {
   license: string;
   tags: string[];
   count: number;
+  /** The version on GitHub now; empty when the list doesn't say. */
+  hash: string;
   /** True when its skins are in the library. */
   added: boolean;
   /** True when it was added and GitHub has a different version of it now. */
@@ -145,7 +147,9 @@ const tauriApi = {
   addPack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
     invoke<Skin[]>("community_add", { packId, onProgress: new Channel<PackProgress>(onProgress) }),
   /** Every skin of a pack drawn as its folder, to look through before adding it. Saves nothing. */
-  packSkins: (packId: string) => invoke<PackSkinPreview[]>("community_pack_skins", { packId }),
+  /** Downloads and draws a pack to look through, or shows it as drawn before when this version
+   *  (`hash`) was looked at in the last week. */
+  packSkins: (packId: string, hash: string) => invoke<PackSkinPreview[]>("community_pack_skins", { packId, hash }),
   /** Swaps an added pack's skins for the version on GitHub now. */
   updatePack: (packId: string) => invoke<PackUpdate>("community_update", { packId }),
   /** Deletes a pack's skins; resolves to their ids. */

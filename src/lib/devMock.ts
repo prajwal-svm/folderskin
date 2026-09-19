@@ -34,8 +34,11 @@ import { cleanTags } from "./tags";
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
 const mockKeys = new Set<string>();
 
+/** A pack as the preview lists it, before whether it's added (or changed) is worked out. */
+type MockPack = Omit<CommunityPack, "added" | "update" | "hash">;
+
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
-const MOCK_PACKS: Omit<CommunityPack, "added" | "update">[] = [
+const MOCK_PACKS: MockPack[] = [
   { id: "classic-art", name: "Classic Art", author: "prajwal-svm", license: "CC0-1.0", tags: ["classic art"], count: 16 },
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
   { id: "night-prints", name: "Night prints", author: "example", license: "CC-BY-4.0", tags: ["woodblock", "night", "animals"], count: 12 },
@@ -70,6 +73,8 @@ let library: Skin[] = [];
 const mockStale = new Set<string>();
 /** Packs that have already failed once, so the next try works. */
 const mockFailedOnce = new Set<string>();
+/** Packs looked through already, which the app would show from its cache. */
+const mockViewed = new Set<string>();
 
 const ONBOARDED_KEY = "folderskin.mock.onboarded";
 const OFFLINE = "couldn't reach GitHub. Check your connection and try again";
@@ -85,7 +90,7 @@ function picture(i: number): string {
 }
 
 /** What a pack's skins look like here: the real pictures for Classic Art and Colours. */
-function packPictures(pack: Omit<CommunityPack, "added" | "update">): { name: string; thumbnail: string }[] {
+function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
   return Array.from({ length: pack.count }, (_, i) => {
     if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: `/community/packs/classic-art/${CLASSIC_ART[i][0]}.webp` };
     if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
@@ -93,7 +98,7 @@ function packPictures(pack: Omit<CommunityPack, "added" | "update">): { name: st
   });
 }
 
-function mockPackSkins(pack: Omit<CommunityPack, "added" | "update">): Skin[] {
+function mockPackSkins(pack: MockPack): Skin[] {
   const now = Date.now();
   return packPictures(pack).map((p, i) => ({
     id: `user:${pack.id}${i}`,
@@ -185,7 +190,7 @@ export const mockApi = {
   communityPacks: async (_fresh = false): Promise<CommunityPack[]> => {
     await sleep(500);
     if (offline()) throw OFFLINE;
-    return listed().map((p) => ({ ...p, added: packAdded(p.id), update: packAdded(p.id) && mockStale.has(p.id) }));
+    return listed().map((p) => ({ ...p, hash: "", added: packAdded(p.id), update: packAdded(p.id) && mockStale.has(p.id) }));
   },
   communityPreview: async (packId: string) => `/community/previews/${PREVIEW_OF[packId] ?? "colours"}.png`,
   addPack: async (packId: string, onProgress?: (progress: PackProgress) => void): Promise<Skin[]> => {
@@ -212,8 +217,10 @@ export const mockApi = {
     if (packId === "colours" && !mockStale.has("colours-updated")) mockStale.add(packId);
     return skins;
   },
-  packSkins: async (packId: string): Promise<PackSkinPreview[]> => {
-    await sleep(900);
+  packSkins: async (packId: string, _hash: string): Promise<PackSkinPreview[]> => {
+    // Like the app's cache: slow the first time, straight away after.
+    if (!mockViewed.has(packId)) await sleep(900);
+    mockViewed.add(packId);
     const pack = MOCK_PACKS.find((p) => p.id === packId);
     if (!pack) throw "that isn't a pack";
     return packPictures(pack).map((p) => ({ ...p, tags: pack.tags }));

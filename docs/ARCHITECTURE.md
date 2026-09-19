@@ -21,6 +21,7 @@ folderskin/
 │   ├── src/commands.rs      the library, import, apply and delete commands
 │   ├── src/community.rs     community packs: list, preview, add, update, remove, share
 │   ├── src/onboarding.rs    whether the first-launch onboarding has been finished
+│   ├── src/pack_views.rs    packs looked through, kept drawn for a week
 │   ├── src/ai.rs            the AI assistant's commands
 │   ├── src/state.rs         what the commands share: the store and its caches
 │   └── src/store.rs         saved skins on disk
@@ -86,9 +87,9 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
 | `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line, at most 60 characters; the tags cleaned, at most 8), or an error string for the plain default folder's id |
 | `skins_folder` | – | the folder the saved skins live in |
-| `community_packs` | `fresh` | the packs in `community/index.json` on GitHub, each with `added` and `update` |
+| `community_packs` | `fresh` | the packs in `community/index.json` on GitHub, each with its `hash`, `added` and `update` |
 | `community_preview` | `packId`, `fresh` | the pack's preview strip as a PNG data URL |
-| `community_pack_skins` | `packId` | every skin of the pack drawn as its folder, to look through; saves nothing |
+| `community_pack_skins` | `packId`, `hash` | every skin of the pack drawn as its folder, to look through; kept drawn for a week, so looking again at that `hash` downloads nothing |
 | `community_add` | `packId`, `onProgress` | the pack's skins in the pack's order, saved all together or not at all; progress on the channel (below) |
 | `community_update` | `packId` | `{removed, skins}`: the added pack swapped for the version on GitHub now |
 | `community_remove` | `packId` | the ids of the skins it deleted |
@@ -153,9 +154,15 @@ drop in a webview cannot expose a filesystem path. Browsing uses the dialog plug
   once. It is also cached as `thumbs/default.thumb-v2.png` in the app cache directory, so later
   launches skip the render.
 
-What persists: the saved skins, that thumbnail, the onboarding marker (below), the AI keys
-([AI.md](AI.md)) and the favourites list in the webview's `localStorage`. There is no database,
-and no network access outside the AI assistant, the community packs and the update check.
+Packs looked through in Community are kept drawn in `pack-views/` in the app cache directory
+(`src-tauri/src/pack_views.rs`), one file per pack version, named after its hash. A file older
+than a week is deleted when it is next read or when another pack is kept, and so is a pack's
+old version once its new one is kept.
+
+What persists: the saved skins, that thumbnail, the packs looked through, the onboarding marker
+(below), the AI keys ([AI.md](AI.md)) and the favourites list in the webview's `localStorage`.
+There is no database, and no network access outside the AI assistant, the community packs and
+the update check.
 
 ## Saved skins
 

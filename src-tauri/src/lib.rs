@@ -6,6 +6,7 @@ pub mod community;
 pub mod folder_icon;
 pub mod keys;
 pub mod onboarding;
+pub mod pack_views;
 pub mod state;
 pub mod store;
 pub mod window;

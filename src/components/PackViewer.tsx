@@ -38,13 +38,13 @@ export function PackViewer({
   useEffect(() => {
     let live = true;
     api
-      .packSkins(pack.id)
+      .packSkins(pack.id, pack.hash)
       .then((list) => live && setSkins(list))
       .catch((e) => live && setError(errorMessage(e)));
     return () => {
       live = false;
     };
-  }, [pack.id]);
+  }, [pack.id, pack.hash]);
 
   const primary = !pack.added ? (
     <button type="button" className="btn btn-primary" disabled={busy || blocked} aria-busy={busy} onClick={onAdd}>

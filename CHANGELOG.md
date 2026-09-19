@@ -57,6 +57,7 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - A translucent sidebar on macOS: the window sits on the system sidebar material, which
   follows the light/dark switch.
 - Favourites, stored locally.
+- The sidebar shows how many skins All skins, Yours and Favourites hold, and nothing for none.
 - `folderskin-tools`, a workspace binary that makes, checks and indexes packs, renders any
   picture as the folder it makes, draws the template's safe areas, and applies or reverts an
   icon from a terminal. See [docs/SKINS.md](docs/SKINS.md).
@@ -75,10 +76,12 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - A Soft Rainbow community pack: ten pastel folders, from Lemon Chiffon to Celadon.
 - A Scientists - Pop Art community pack: 42 scientists as comic-book folders, from Archimedes to
   Stephen Hawking, in the order they were born.
-- Community shows packs as a list or as a gallery of cards with four of each pack's folders,
-  and remembers which you picked. **View** opens a pack to look through all of its skins before
-  adding it, **Refresh** reads the list from GitHub again, and a pack that changed since you
-  added it offers **Update**.
+- Community opens on a gallery of cards with four of each pack's folders, with a list a click
+  away, and a pack you've added wears a green tick by its name. **View** opens a pack to look
+  through all of its skins before adding it; one looked through in the last week opens straight
+  away from a copy kept on this computer, drawn again whenever the pack changes. **Refresh**
+  reads the list from GitHub again, and a pack that changed since you added it offers
+  **Update**.
 - `packs make --flat-backdrop` for renders whose magenta drifted to pink or raspberry: it
   removes each picture's own flat background where it reaches the edge, drop shadow included,
   and splits the edge pixels back into painting and background so no pink rim is left. On a

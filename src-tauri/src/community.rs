@@ -7,20 +7,21 @@
 //! `folderskin_core::pack`, and docs/PACKS.md says the same in prose.
 
 use crate::commands::{data_url, prepare_import, SkinDto};
+use crate::pack_views::PackViews;
 use crate::state::{parallel_map, AppState};
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_core::pack::{self, Index, Pack, PackSkin};
 use futures_util::{StreamExt, TryStreamExt};
 use image::codecs::jpeg::JpegEncoder;
 use image::{ExtendedColorType, ImageEncoder};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tauri::ipc::Channel;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 /// The `community/` folder of the repository on GitHub. Set `FOLDERSKIN_COMMUNITY_URL` to read
 /// another copy of it instead, such as a checkout served locally while testing.
@@ -43,6 +44,8 @@ pub struct PackDto {
     pub license: String,
     pub tags: Vec<String>,
     pub count: usize,
+    /// The version on GitHub now (`pack::pack_hash`); empty when the index has none.
+    pub hash: String,
     /// True when the pack's skins are in the library.
     pub added: bool,
     /// True when it was added and GitHub has a different version of it now.
@@ -50,7 +53,7 @@ pub struct PackDto {
 }
 
 /// One skin of a pack being looked through before it's added.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct PackSkinDto {
     pub name: String,
     pub tags: Vec<String>,
@@ -145,6 +148,7 @@ pub async fn community_packs(
                 license: p.license,
                 tags: pack::clean_tags(&p.tags, usize::MAX),
                 count: p.count,
+                hash: p.hash,
             }
         })
         .collect())
@@ -213,17 +217,56 @@ pub async fn community_add(
 }
 
 /// Every skin of pack `pack_id`, drawn as the folder it makes, to look through before adding it.
-/// It downloads and checks the whole pack as adding it would, and saves nothing.
+/// It downloads and checks the whole pack as adding it would, and adds nothing to the library.
+/// The drawings are kept for a while (pack_views.rs), so looking again at the version the list
+/// names as `hash` shows them straight away, with nothing downloaded.
 #[tauri::command]
-pub async fn community_pack_skins(pack_id: String) -> Result<Vec<PackSkinDto>, String> {
-    let (pack, _, pictures) = download_pack(&pack_id, &no_progress).await?;
+pub async fn community_pack_skins(
+    app: AppHandle,
+    pack_id: String,
+    hash: String,
+) -> Result<Vec<PackSkinDto>, String> {
+    let views = app
+        .path()
+        .app_cache_dir()
+        .ok()
+        .map(|dir| PackViews::new(dir.join("pack-views")));
+    pack_skins(&base_url(), views, pack_id, hash).await
+}
+
+/// [`community_pack_skins`] with the pack read from the copy of `community/` at `base`, and the
+/// drawings kept in `views` (none: nowhere to keep them).
+async fn pack_skins(
+    base: &str,
+    views: Option<PackViews>,
+    pack_id: String,
+    hash: String,
+) -> Result<Vec<PackSkinDto>, String> {
+    if let Some(views) = views.clone() {
+        let id = pack_id.clone();
+        let kept =
+            tauri::async_runtime::spawn_blocking(move || views.get(&id, &hash, SystemTime::now()))
+                .await
+                .ok()
+                .flatten();
+        if let Some(skins) = kept {
+            return Ok(skins);
+        }
+    }
+    // Kept under the hash of what actually arrived, which the list names too unless the pack
+    // changed in between; then the next look downloads it again rather than show a mismatch.
+    let (pack, downloaded, pictures) = download_pack_from(base, &pack_id, &no_progress).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let ready = prepare_pack(&pack, &pictures)?;
-        Ok(parallel_map(&ready, |(skin, _, image)| PackSkinDto {
+        let skins = parallel_map(&ready, |(skin, _, image)| PackSkinDto {
             name: skin.name.trim().to_string(),
             tags: pack.tags_for(skin),
             thumbnail: data_url(&image.preview_png(PACK_VIEW_SIZE)),
-        }))
+        });
+        if let Some(views) = views {
+            views.put(&pack_id, &downloaded, &skins, SystemTime::now());
+        }
+        Ok(skins)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1130,5 +1173,61 @@ mod tests {
             tauri::async_runtime::block_on(download_pack_from(&base, "../escape", &no_progress))
                 .unwrap_err();
         assert_eq!(err, "that isn't a pack");
+    }
+
+    #[test]
+    fn a_pack_looked_through_again_comes_from_the_cache_without_downloading() {
+        let manifest = listing(&[("a.png", "Ada"), ("b.png", "Alan")]).into_bytes();
+        let pictures = [
+            png(256, 256, [200, 40, 40, 255]),
+            png(256, 256, [40, 40, 200, 255]),
+        ];
+        let (base, _) = serve(vec![
+            (
+                "/packs/test-pack/pack.json".into(),
+                manifest.clone(),
+                Duration::ZERO,
+            ),
+            (
+                "/packs/test-pack/a.png".into(),
+                pictures[0].clone(),
+                Duration::ZERO,
+            ),
+            (
+                "/packs/test-pack/b.png".into(),
+                pictures[1].clone(),
+                Duration::ZERO,
+            ),
+        ]);
+        let dir = temp_dir("pack-views");
+        let views = || Some(PackViews::new(dir.clone()));
+        let listed = pack::pack_hash(
+            &manifest,
+            [("a.png", &pictures[0][..]), ("b.png", &pictures[1][..])],
+        );
+        let look = |base: &str| {
+            tauri::async_runtime::block_on(pack_skins(
+                base,
+                views(),
+                "test-pack".into(),
+                listed.clone(),
+            ))
+        };
+
+        let first = look(&base).unwrap();
+        let names: Vec<&str> = first.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Ada", "Alan"]);
+        // Nothing listens here, so only the cache can answer.
+        let nowhere = "http://127.0.0.1:9";
+        assert_eq!(look(nowhere).unwrap(), first);
+        // A version it hasn't drawn has to be downloaded.
+        let other = tauri::async_runtime::block_on(pack_skins(
+            nowhere,
+            views(),
+            "test-pack".into(),
+            "0123456789abcdef".into(),
+        ));
+        assert!(other.is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
