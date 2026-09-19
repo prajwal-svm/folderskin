@@ -10,6 +10,7 @@ import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
 import { OkBadge } from "./OkBadge";
 import { PackViewer } from "./PackViewer";
+import { DeleteIcon } from "./icons/delete";
 import { DownloadIcon } from "./icons/download";
 import { EyeIcon } from "./icons/eye";
 import { FolderOpenIcon } from "./icons/folder-open";
@@ -346,9 +347,22 @@ export function CommunityView({
                           <OkBadge size={16} /> Added
                         </span>
                       )}
-                      {view === "list" && (
+                      {view === "list" ? (
                         <button type="button" className="btn btn-ghost" disabled={busy === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => setRemoving(p)}>
                           Remove
+                        </button>
+                      ) : busy === p.id ? null : (
+                        // A card is narrow: the can alone, and gone while the pack updates so
+                        // "Updating…" doesn't push it onto a line of its own.
+                        <button
+                          type="button"
+                          className="icon-btn pack-remove"
+                          title="Remove this pack"
+                          aria-label={`remove ${p.name}`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setRemoving(p)}
+                        >
+                          <DeleteIcon size={16} />
                         </button>
                       )}
                     </>

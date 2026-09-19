@@ -222,8 +222,10 @@
 /* the gallery: one card per pack, its first folders two by two above its details */
 .packs.is-gallery {
   display: grid;
-  /* auto-fit: a row with room to spare stretches its cards instead of leaving empty columns */
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  /* auto-fit: a row with room to spare stretches its cards instead of leaving empty columns.
+     250 px keeps View, Update and Remove on one line, and still two cards a row at the
+     window's default size. */
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 10px;
 }
 
@@ -257,6 +259,26 @@
 .packs.is-gallery .pack-action > * {
   flex: 1;
   justify-content: center;
+}
+
+/* They stretch to fill the card anyway; this only lets a narrow card fit three. */
+.packs.is-gallery .pack-action .btn {
+  gap: 6px;
+  padding: 0 12px;
+}
+
+/* the gallery's Remove: the can alone, round and as tall as the buttons beside it */
+.packs.is-gallery .pack-action > .pack-remove {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  background: var(--island);
+}
+
+.pack .pack-remove:hover:not(:disabled),
+.pack .pack-remove:focus-visible:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 /* a pack's preview opens it */
