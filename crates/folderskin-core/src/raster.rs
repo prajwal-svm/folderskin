@@ -42,7 +42,8 @@ pub fn downsample(src: &Premul, size: u32) -> Premul {
 /// Converts premultiplied RGBA8 to the straight-alpha RGBA8 that PNG (and `image`) expect.
 pub fn to_straight_rgba(p: &Premul) -> RgbaImage {
     let mut out = RgbaImage::new(p.width, p.height);
-    for (px, chunk) in out.pixels_mut().zip(p.data.chunks_exact(4)) {
+    let (pixels, _) = p.data.as_chunks::<4>();
+    for (px, chunk) in out.pixels_mut().zip(pixels) {
         let a = chunk[3];
         if a == 0 {
             continue; // already (0, 0, 0, 0)
@@ -127,7 +128,8 @@ mod tests {
             image::Rgba([(x * 16) as u8, (y * 16) as u8, 255, (x * 17) as u8])
         });
         let pm = straight_to_premul(&img);
-        for chunk in pm.data.chunks_exact(4) {
+        let (pixels, _) = pm.data.as_chunks::<4>();
+        for chunk in pixels {
             assert!(chunk[0] <= chunk[3] && chunk[1] <= chunk[3] && chunk[2] <= chunk[3]);
         }
         // Fully opaque pixels survive the round trip exactly.
