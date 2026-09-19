@@ -69,7 +69,7 @@ export function ProviderKeys({
   }, [provider, onChanged]);
 
   if (!provider) return null;
-  const where = isTauri() ? "on this computer" : "in this browser preview";
+  const where = isTauri() ? "on this device" : "in this browser preview";
 
   return (
     <>
@@ -159,8 +159,7 @@ export function ProviderKeys({
       </div>
 
       <p className="field-note">
-        Your key is saved {where} in a file only your account can read, with no keychain prompts. It leaves your computer
-        only inside the requests you start.
+        {isTauri() ? "Your API keys are securely stored on this device." : "In this browser preview, keys last until you reload."}
       </p>
     </>
   );

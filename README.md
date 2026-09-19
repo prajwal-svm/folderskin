@@ -58,7 +58,7 @@ paywall and no telemetry, and the macOS app is about 8.5 MB installed.
 | --- | --- |
 | Your folders and the icons FolderSkin writes | An AI request, sent to the provider you picked, with your key |
 | Every picture you add and every skin you make | Community and the first launch, which read the shared packs from GitHub |
-| Your AI keys, in a file only your account can read | |
+| Your AI keys, encrypted | |
 | Favourites, tags and settings | |
 
 ## How to use it
@@ -107,9 +107,9 @@ to 1024 px and 2 MB, licensed CC0, CC BY 4.0 or MIT.
 ## Generate a skin with AI
 
 FolderSkin can make a skin from a description, using **your own API key** from a provider you
-already use. The key is saved in a private file on your computer that only your account can
-read (no keychain password prompts), FolderSkin has no server of its own, and nothing is sent
-anywhere until you press Enter. Open **Generate with AI**, describe a scene, pick a style, and
+already use. The key is encrypted and stored on your computer (with no keychain password
+prompts), FolderSkin has no server of its own, and nothing is sent anywhere until you press
+Enter. Open **Generate with AI**, describe a scene, pick a style, and
 choose **Whole folder** (the model paints the whole folder from FolderSkin's template, like a
 poster) or **Just the art** (flat art wrapped onto FolderSkin's folder). Every result is saved to
 **Yours** and can be tried on at once.

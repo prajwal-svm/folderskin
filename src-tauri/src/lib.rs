@@ -54,7 +54,7 @@ pub fn run() {
                     "folderskin: no app data folder ({e}); skins added now last until you quit"
                 ),
             }
-            // API keys live in a private file here, not in the keychain (see keys.rs).
+            // API keys live here, encrypted, not in the keychain (see keys.rs).
             match app.path().app_config_dir() {
                 Ok(dir) => app.state::<keys::Keys>().open(&dir),
                 Err(e) => {

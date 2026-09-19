@@ -11,7 +11,7 @@ own blank folder template).
 
 ## Where the key lives
 
-In one file in FolderSkin's own folder, readable only by your user account:
+Encrypted, in FolderSkin's own folder, readable only by your user account:
 
 | | |
 |---|---|
@@ -19,9 +19,13 @@ In one file in FolderSkin's own folder, readable only by your user account:
 | Windows | `%APPDATA%\app.folderskin.desktop\keys.json` |
 | Linux | `~/.config/app.folderskin.desktop/keys.json` |
 
-The file is created with owner-only permissions (0600) and written atomically. It is the same
-approach `gh`, the AWS CLI and npm take with their tokens, and it has the same trade-off: other
-programs running as you could read it.
+The keys are sealed with AES-256-GCM before they are written. The encryption key is derived
+(HKDF-SHA256) from a random secret in `keys.secret`, beside `keys.json`, and from this computer's
+hardware id, so `keys.json` on its own gives nothing away and the two files copied to another
+computer don't open there: enter the keys again on the new one. Both files are created with
+owner-only permissions (0600) and written atomically. What no file can do is keep out a program
+already running as you, which could read both; only the system keychain could, with the
+password prompts below.
 
 Why not the system keychain: macOS ties a saved keychain item to the exact signature of the app
 that saved it. Open-source builds are usually unsigned or ad-hoc signed, so every rebuild or

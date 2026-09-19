@@ -27,6 +27,13 @@ sha2.workspace = true
 # A pack's pictures download a few at a time (`StreamExt::buffered`). Already in the tree through
 # reqwest, with the same features.
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+# Seals the saved API keys (AES-256-GCM with an HKDF-SHA256 key; see keys.rs). Already built for
+# rustls, which reqwest uses, so this adds no crate.
+aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys"] }
+
+[target.'cfg(windows)'.dependencies]
+# The machine GUID that ties the saved API keys to this computer (keys.rs).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

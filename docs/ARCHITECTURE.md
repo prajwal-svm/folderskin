@@ -301,8 +301,8 @@ windows-latest and macos-latest.
 
 `crates/folderskin-ai` talks to the AI providers, and only when the user presses Generate. It holds the provider catalogue, the per-provider request bodies and response
 readers (pure functions, unit-tested without a network) and the prompt templates. The app crate
-keeps the keys, in a private file rather than the keychain (`src-tauri/src/keys.rs` explains
-why). `crates/folderskin-core/src/matte.rs` turns a keyed render into a clean cutout for the
+keeps the keys, encrypted in a private file rather than in the keychain (`src-tauri/src/keys.rs`
+explains how and why). `crates/folderskin-core/src/matte.rs` turns a keyed render into a clean cutout for the
 providers that cannot return an alpha channel. [AI.md](AI.md) covers the feature itself.
 
 A finished folder image, generated whole or imported, is applied without going through the
