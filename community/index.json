@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "classic-art",
+      "name": "Classic Art",
+      "author": "prajwal-svm",
+      "license": "CC0-1.0",
+      "tags": [
+        "classic art"
+      ],
+      "count": 16
+    },
+    {
+      "id": "colours",
+      "name": "Colours",
+      "author": "prajwal-svm",
+      "license": "CC0-1.0",
+      "tags": [
+        "colour"
+      ],
+      "count": 8
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+name: Community
+
+# A pull request that adds or changes a pack gets the same checks the app runs before it saves
+# one, without the full CI. On main, the index and the preview strips are rebuilt and committed
+# if they differ. `packs index` is deterministic, so unchanged packs commit nothing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "community/packs/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "community/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the packs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check every pack
+        run: cargo run -p folderskin-tools --quiet -- packs check
+
+  index:
+    name: Update the index
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    # One run at a time. A merge that lands mid-run queues the next run, which indexes it.
+    concurrency:
+      group: community-index
+      cancel-in-progress: false
+    steps:
+      # The branch rather than the commit that started the run, so a queued run indexes the
+      # newest packs.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build the index and the previews
+        run: cargo run -p folderskin-tools --release -- packs index
+
+      # A push made with the workflow's own token starts no other workflow, so this commit
+      # cannot start another run. The rebase covers commits that landed while it was building.
+      - name: Commit them if they changed
+        run: |
+          if [ -z "$(git status --porcelain -- community/index.json community/previews)" ]; then
+            echo "The community index is up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- community/index.json community/previews
+          git commit -m "Update the community pack index"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

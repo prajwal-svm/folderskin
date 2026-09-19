@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "name": "Classic Art",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": [
+    "classic art"
+  ],
+  "skins": [
+    {
+      "file": "mona-lisa.webp",
+      "name": "Mona Lisa"
+    },
+    {
+      "file": "view-of-toledo.webp",
+      "name": "View of Toledo"
+    },
+    {
+      "file": "girl-with-a-pearl-earring.webp",
+      "name": "Girl with a Pearl Earring"
+    },
+    {
+      "file": "the-astronomer.webp",
+      "name": "The Astronomer"
+    },
+    {
+      "file": "oath-of-the-horatii.webp",
+      "name": "Oath of the Horatii"
+    },
+    {
+      "file": "napoleon-crossing-the-alps.webp",
+      "name": "Napoleon Crossing the Alps"
+    },
+    {
+      "file": "wanderer-above-the-sea-of-fog.webp",
+      "name": "Wanderer above the Sea of Fog"
+    },
+    {
+      "file": "the-ninth-wave.webp",
+      "name": "The Ninth Wave"
+    },
+    {
+      "file": "boulevard-des-capucines.webp",
+      "name": "Boulevard des Capucines"
+    },
+    {
+      "file": "breezing-up.webp",
+      "name": "Breezing Up"
+    },
+    {
+      "file": "paris-street-rainy-day.webp",
+      "name": "Paris Street; Rainy Day"
+    },
+    {
+      "file": "luncheon-of-the-boating-party.webp",
+      "name": "Luncheon of the Boating Party"
+    },
+    {
+      "file": "the-lady-of-shalott.webp",
+      "name": "The Lady of Shalott"
+    },
+    {
+      "file": "the-starry-night.webp",
+      "name": "The Starry Night"
+    },
+    {
+      "file": "mont-sainte-victoire.webp",
+      "name": "Mont Sainte-Victoire"
+    },
+    {
+      "file": "composition-viii.webp",
+      "name": "Composition VIII"
+    }
+  ]
+}

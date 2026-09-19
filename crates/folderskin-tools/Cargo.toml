@@ -1,0 +1,19 @@
+[package]
+name = "folderskin-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI to generate, import and check FolderSkin skins"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "folderskin-tools"
+path = "src/main.rs"
+
+[dependencies]
+folderskin-core.workspace = true
+image.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }

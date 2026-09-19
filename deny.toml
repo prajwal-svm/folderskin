@@ -1,0 +1,48 @@
+# cargo-deny policy for the whole Rust workspace. CI runs it as
+#   cargo deny check --workspace --all-features
+# from the repository root.
+
+[graph]
+all-features = true
+
+[advisories]
+yanked = "warn"
+# Everything ignored here is an "unmaintained" notice, not a vulnerability, for a crate Tauri
+# itself pulls in with no maintained replacement to move to. Dependabot brings them back up when
+# Tauri changes.
+ignore = [
+  # proc-macro-error, a build-time macro of the GTK 3 bindings Tauri's Linux side uses.
+  "RUSTSEC-2024-0370",
+  # unic-*, through urlpattern in tauri-utils.
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+]
+
+[licenses]
+# Licences an MIT-licensed app can ship: permissive ones, plus MPL-2.0, whose copyleft stays
+# inside the files of the crate that uses it.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "0BSD",
+  "CC0-1.0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

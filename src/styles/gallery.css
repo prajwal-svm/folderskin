@@ -1,0 +1,320 @@
+/* The library island: collection tabs, search, and the folder grid. */
+
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* Narrow library: the tabs keep the room and search folds into a round button until used. */
+@container (max-width: 600px) {
+  .search {
+    flex: 0 0 38px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    transition: flex-basis var(--t-slow) var(--ease-out), border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+  }
+
+  .search svg {
+    flex: none;
+  }
+
+  .search kbd {
+    display: none;
+  }
+
+  .search input {
+    flex: 0 0 0;
+    width: 0;
+    opacity: 0;
+  }
+
+  .search:focus-within,
+  .search.has-query {
+    flex-basis: 200px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .search:focus-within input,
+  .search.has-query input {
+    flex: 1;
+    width: auto;
+    opacity: 1;
+  }
+}
+
+.gallery-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 14px 28px;
+  /* content slides under the toolbar instead of being cut off by it */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
+  gap: 10px 8px;
+}
+
+/* ---------- tile ---------- */
+
+.tile {
+  position: relative;
+  min-width: 0;
+  animation: rise var(--t-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 24ms);
+}
+
+/* A one-column grid: the folder, with the AI badge laid over its corner, then the name. */
+.tile-hit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  row-gap: 4px;
+  width: 100%;
+  padding: 4px 4px 6px;
+}
+
+.tile-art {
+  grid-area: 1 / 1;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--r-card);
+  /* FolderThumb eases the tilt toward the pointer each frame; only the press is a transition. */
+  transition: scale var(--t-fast) var(--ease-out);
+  will-change: transform;
+}
+
+.tile-hit:active .tile-art {
+  scale: 0.95;
+}
+
+/* Selection, the way Finder shows it: a soft grey square behind the folder and the name on a
+   blue pill. Never an outline. */
+.tile-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--tile-selected);
+  opacity: 0;
+  transform: scale(0.86);
+  transition: opacity var(--t-base) ease, transform var(--t-slow) var(--ease-spring);
+}
+
+.tile.is-selected .tile-art::before {
+  opacity: 1;
+  transform: none;
+}
+
+.tile-hit:focus-visible .tile-art::before {
+  opacity: 0.7;
+  transform: none;
+}
+
+.tile-img {
+  position: absolute;
+  inset: 7%;
+  width: 86%;
+  height: 86%;
+  object-fit: contain;
+}
+
+.tile-name {
+  grid-area: 2 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--muted);
+  transition: color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.tile:hover .tile-name {
+  color: var(--ink-2);
+}
+
+.tile.is-selected .tile-name {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.tile-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- star and ⋯: they spring in on hover and step aside afterwards ---------- */
+
+.tile-star,
+.tile-more {
+  position: absolute;
+  top: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--island);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: scale(0.4) rotate(-30deg);
+  transition:
+    opacity var(--t-fast) ease,
+    transform var(--t-fast) var(--ease-in),
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+  z-index: 2;
+}
+
+.tile-star {
+  right: 8px;
+}
+
+.tile-more {
+  left: 8px;
+}
+
+.tile:hover .tile-star,
+.tile:hover .tile-more,
+.tile-star:focus-visible,
+.tile-more:focus-visible,
+.tile.is-menu-open .tile-more,
+.tile.is-favorite .tile-star {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--t-base) ease,
+    transform var(--t-slow) var(--ease-spring),
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+}
+
+.tile-star:hover,
+.tile-star:focus-visible {
+  color: var(--fave);
+}
+
+.tile.is-favorite .tile-star {
+  color: var(--fave);
+}
+
+.tile-more:hover,
+.tile-more:focus-visible,
+.tile.is-menu-open .tile-more {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/* ---------- add tile (Yours) ---------- */
+
+.tile-add .tile-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed var(--dash);
+  color: var(--muted);
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.tile-add .tile-art::before {
+  display: none;
+}
+
+.tile-add:hover .tile-art,
+.tile-add .tile-hit:focus-visible .tile-art {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+}
+
+.tile-add-plus {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--well);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1;
+  transition: transform var(--t-slow) var(--ease-spring), background-color var(--t-fast) ease;
+}
+
+.tile-add:hover .tile-add-plus {
+  transform: rotate(90deg);
+  background: var(--island);
+}
+
+.tile-add-label {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* ---------- empty states ---------- */
+
+.empty {
+  margin: 12% auto 0;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.empty-glyph {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--well);
+  color: var(--accent-ink);
+  margin-bottom: 6px;
+}
+
+.empty-title {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.empty-text {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.empty .btn {
+  margin-top: 8px;
+}

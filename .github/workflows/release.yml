@@ -1,0 +1,327 @@
+name: Release
+
+#     git tag v0.1.0 && git push origin v0.1.0
+#
+# or run it from the Actions tab with the tag to build.
+#
+# A tag always stops at a complete, checked DRAFT: every platform is built, signed where it can
+# be, and attached, but nobody can see the release yet. Making it public is a second, deliberate
+# step, once you have tried the draft's installers: run this workflow from the Actions tab for the
+# same tag with "Publish the release" ticked. That run builds nothing. It checks the draft again
+# and publishes exactly what you tried. docs/RELEASING.md has the whole routine and the secrets it
+# reads.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build or publish (e.g. v0.1.0)"
+        required: true
+        type: string
+      publish:
+        description: "Publish the draft already built for this tag. Leave unticked to build a draft."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write # tauri-action creates the draft release and uploads the installers
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    if: ${{ inputs.publish != true }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple silicon and Intel)
+            os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: "--target universal-apple-darwin"
+          - name: Linux (x86_64)
+            os: ubuntu-22.04
+            targets: ""
+            args: ""
+          - name: Linux (ARM64)
+            os: ubuntu-22.04-arm
+            targets: ""
+            args: ""
+          - name: Windows (x86_64)
+            os: windows-latest
+            targets: ""
+            args: ""
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # Ubuntu 22.04 on both Linux runners, so the packages run on any system with glibc 2.35 or
+      # newer.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install pnpm
+        # The version comes from `packageManager` in package.json.
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+        with:
+          targets: ${{ matrix.targets }}
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The installers are named after the version in tauri.conf.json, so a tag that doesn't
+      # match it would attach installers of another version.
+      - name: Check that the tag matches the version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          want="${TAG#v}"
+          for file in package.json src-tauri/tauri.conf.json; do
+            have="$(node -p "require('./$file').version")"
+            [ "$have" = "$want" ] || { echo "::error file=$file::the version is $have, but the tag is $TAG"; exit 1; }
+          done
+          have="$(awk -F'"' '/^version[ \t]*=/ { print $2; exit }' Cargo.toml)"
+          [ "$have" = "$want" ] || { echo "::error file=Cargo.toml::the workspace version is $have, but the tag is $TAG"; exit 1; }
+
+      # macOS signing and notarization, with the same six secrets as Oleafly. Each APPLE_* value
+      # is exported only when its secret exists: an empty variable would make the bundler sign
+      # with an empty identity, while an absent one means an unsigned build. A release from this
+      # repository has to be signed, so here missing secrets stop the build; a fork builds
+      # unsigned.
+      - name: Turn on macOS signing and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          SECRET_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          SECRET_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SECRET_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
+          SECRET_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="SECRET_${name}"
+            [ -n "${!value}" ] || missing+=("$name")
+          done
+          if ((${#missing[@]} == 6)) && [ "$GITHUB_REPOSITORY" != "prajwal-svm/folderskin" ]; then
+            echo "macOS signing: no secrets in this fork, building unsigned"
+            exit 0
+          fi
+          if ((${#missing[@]})); then
+            echo "::error::missing signing secrets: ${missing[*]}. docs/RELEASING.md says how to set them."
+            exit 1
+          fi
+          export_env() {
+            {
+              echo "$1<<FOLDERSKIN_SECRET_EOF"
+              echo "$2"
+              echo "FOLDERSKIN_SECRET_EOF"
+            } >> "$GITHUB_ENV"
+          }
+          export_env APPLE_CERTIFICATE "$SECRET_APPLE_CERTIFICATE"
+          export_env APPLE_CERTIFICATE_PASSWORD "$SECRET_APPLE_CERTIFICATE_PASSWORD"
+          export_env APPLE_SIGNING_IDENTITY "$SECRET_APPLE_SIGNING_IDENTITY"
+          export_env APPLE_ID "$SECRET_APPLE_ID"
+          export_env APPLE_PASSWORD "$SECRET_APPLE_PASSWORD"
+          export_env APPLE_TEAM_ID "$SECRET_APPLE_TEAM_ID"
+          export_env KEYCHAIN_PASSWORD "$(openssl rand -hex 24)"
+          echo "MACOS_SIGNED=true" >> "$GITHUB_ENV"
+          echo "macOS signing: on"
+
+      # Windows Authenticode through Azure Trusted Signing, as in Oleafly. Only when the AZURE_*
+      # secrets exist; otherwise the Windows installers are unsigned.
+      - name: Turn on Windows signing (when its secrets exist)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          SECRET_AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          SECRET_AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          SECRET_AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          SECRET_AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          if [ -z "$SECRET_AZURE_CLIENT_ID" ]; then
+            echo "Windows signing: secrets not set, building unsigned"
+            exit 0
+          fi
+          if [ -z "$SECRET_AZURE_SIGNING_ENDPOINT" ] || [ -z "$SECRET_AZURE_SIGNING_ACCOUNT" ] || [ -z "$SECRET_AZURE_SIGNING_PROFILE" ]; then
+            echo "::error::AZURE_CLIENT_ID is set, but the endpoint, account or profile secret is missing"
+            exit 1
+          fi
+          cargo install artifact-signing-cli
+          printf '{"bundle":{"windows":{"signCommand":"artifact-signing-cli -e %s -a %s -c %s -d FolderSkin %%1"}}}' \
+            "$SECRET_AZURE_SIGNING_ENDPOINT" "$SECRET_AZURE_SIGNING_ACCOUNT" "$SECRET_AZURE_SIGNING_PROFILE" \
+            > src-tauri/tauri.windows-signing.conf.json
+          echo 'TAURI_SIGN_ARGS=--config src-tauri/tauri.windows-signing.conf.json' >> "$GITHUB_ENV"
+          echo "Windows signing: on"
+
+      # The release notes are the version's section of CHANGELOG.md.
+      - name: Write the release notes
+        id: notes
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          section="$(awk -v v="$version" '
+            /^## / {
+              if (found) exit
+              if ($0 == "## " v || index($0, "## " v " ") == 1) { found = 1; next }
+            }
+            found { print }
+          ' CHANGELOG.md)"
+          if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
+            echo "::error file=CHANGELOG.md::there is no \"## $version\" section to use as the release notes"
+            exit 1
+          fi
+          {
+            echo 'body<<CHANGELOG_EOF'
+            printf '%s\n' "$section"
+            echo
+            echo '---'
+            echo
+            echo "**Downloads:** macOS (Apple silicon and Intel) \`.dmg\`, Windows \`-setup.exe\` or \`.msi\`, Linux \`.AppImage\`, \`.deb\` or \`.rpm\` for x86_64 and ARM64."
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and attach the installers
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Azure credentials for Windows signing. They are empty when that isn't set up, and
+          # artifact-signing-cli only runs when the step above wrote its config.
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        with:
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "FolderSkin ${{ inputs.tag || github.ref_name }}"
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          retryAttempts: 3
+          args: ${{ matrix.args }} ${{ env.TAURI_SIGN_ARGS }}
+
+      # Gatekeeper's own verdict on the app that went into the .dmg, so a signing or notarization
+      # problem fails here instead of on someone's Mac.
+      - name: Check the macOS signature and notarization
+        if: runner.os == 'macOS' && env.MACOS_SIGNED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="target/universal-apple-darwin/release/bundle/macos/FolderSkin.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+          xcrun stapler validate "$app"
+
+  # A draft handed over for review still has to be complete. Each platform uploads its own
+  # installers, so a platform that failed would otherwise leave a release that looks finished.
+  draft-ready:
+    name: Draft is complete (not published)
+    needs: build
+    if: ${{ always() && inputs.publish != true }}
+    runs-on: ubuntu-22.04
+    permissions:
+      # A draft release is only visible to a token that can write, so read access can't see it.
+      contents: write
+    steps:
+      - name: Require every platform's installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          BUILD: ${{ needs.build.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$BUILD" != "success" ]; then
+            echo "a platform build did not succeed, so the draft for $TAG is incomplete" >&2
+            exit 1
+          fi
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "$assets"
+          missing=()
+          grep -qE '\.dmg$'                      <<<"$assets" || missing+=("macOS .dmg")
+          grep -qE '\.(msi|exe)$'                <<<"$assets" || missing+=("Windows .msi/.exe")
+          grep -qE '_(amd64|x86_64)\.AppImage$'  <<<"$assets" || missing+=("Linux x86_64 .AppImage")
+          grep -qE '_(arm64|aarch64)\.AppImage$' <<<"$assets" || missing+=("Linux ARM64 .AppImage")
+          grep -qE '_amd64\.deb$'                <<<"$assets" || missing+=("Linux x86_64 .deb")
+          grep -qE '_arm64\.deb$'                <<<"$assets" || missing+=("Linux ARM64 .deb")
+          if ((${#missing[@]})); then
+            printf 'the draft for %s is incomplete; missing: %s\n' "$TAG" "${missing[*]}" >&2
+            exit 1
+          fi
+          echo "$TAG is a complete draft. Try its installers, then run this workflow again with publish ticked."
+
+  # Publishing flips the reviewed draft to public after checking it once more. It builds nothing,
+  # so what goes out is exactly what was tried.
+  publish:
+    name: Publish (every platform present)
+    if: ${{ inputs.publish == true }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Require every platform's installers, then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"; then
+            echo "there is no release for $TAG yet. Push the tag first; it builds the draft." >&2
+            exit 1
+          fi
+          if [ "$draft" != "true" ]; then
+            echo "$TAG is already published"
+            exit 0
+          fi
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "$assets"
+          missing=()
+          grep -qE '\.dmg$'                      <<<"$assets" || missing+=("macOS .dmg")
+          grep -qE '\.(msi|exe)$'                <<<"$assets" || missing+=("Windows .msi/.exe")
+          grep -qE '_(amd64|x86_64)\.AppImage$'  <<<"$assets" || missing+=("Linux x86_64 .AppImage")
+          grep -qE '_(arm64|aarch64)\.AppImage$' <<<"$assets" || missing+=("Linux ARM64 .AppImage")
+          grep -qE '_amd64\.deb$'                <<<"$assets" || missing+=("Linux x86_64 .deb")
+          grep -qE '_arm64\.deb$'                <<<"$assets" || missing+=("Linux ARM64 .deb")
+          if ((${#missing[@]})); then
+            printf 'refusing to publish %s; missing: %s\n' "$TAG" "${missing[*]}" >&2
+            exit 1
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "published $TAG"

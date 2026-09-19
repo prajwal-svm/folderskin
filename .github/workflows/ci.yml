@@ -1,0 +1,302 @@
+name: CI
+
+# Docs-only changes skip CI: a push here also cancels the run already going on the same branch
+# (see `concurrency`), so a README fix would otherwise stop a half-finished Windows build.
+# Community packs have their own, lighter checks in community.yml.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "community/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "community/**"
+  workflow_dispatch:
+
+# No job here writes to the repository, comments on pull requests or makes releases.
+permissions:
+  contents: read
+
+# Cancel a run that a newer push to the same branch has made out of date.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (typecheck, test, build)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        # The version comes from `packageManager` in package.json.
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `pnpm audit` exits 1 both for an advisory and when it can't reach the registry, so an
+      # outage would read as a vulnerability. Real findings still fail the job.
+      - name: Audit production dependencies
+        run: |
+          set +e
+          output="$(pnpm audit --prod --audit-level high 2>&1)"
+          status=$?
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if printf '%s' "$output" | grep -qE 'TimeoutError|operation was aborted|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|ETIMEDOUT|socket hang up|registry\.npmjs\.org.*error'; then
+            echo "::warning title=Audit skipped::The npm advisory service couldn't be reached, so production dependencies weren't audited in this run."
+            exit 0
+          fi
+          exit "$status"
+
+      # `pnpm build` type-checks with tsc, then bundles with Vite.
+      - name: Typecheck and build
+        run: pnpm build
+
+      - name: Test with coverage
+        run: pnpm test:coverage
+
+      - name: Upload the frontend coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-coverage
+          path: coverage/frontend/lcov.info
+          if-no-files-found: error
+          retention-days: 1
+
+  rust:
+    name: Rust (format, lint, test)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      # Tauri v2 on Linux needs webkit2gtk 4.1 and friends.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+        with:
+          tool: cargo-llvm-cov@0.8.7
+
+      - name: Test with coverage
+        run: |
+          mkdir -p coverage/rust
+          cargo llvm-cov --workspace --all-targets --no-fail-fast --lcov --output-path coverage/rust/lcov.info
+
+      - name: Upload the Rust coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-coverage
+          path: coverage/rust/lcov.info
+          if-no-files-found: error
+          retention-days: 1
+
+      # The packs under community/ still pass when the rules in folderskin_core::pack change.
+      - name: Check the community packs
+        run: cargo run -p folderskin-tools --quiet -- packs check
+
+      # The packs built into the app follow the same rules, with a smaller limit on each picture
+      # because they are part of every download.
+      - name: Check the built-in packs
+        run: cargo run -p folderskin-tools --quiet -- packs check --dir assets --max-kb 400
+
+  # The code that writes icons is different on each system and only compiles on its own, so
+  # macOS and Windows get their own lint and test run. While the repository is private, Actions
+  # minutes cost money and macOS counts ten times, so a pull request (most are Dependabot's) runs
+  # only the Linux checks; main still gets all three. Once it's public, pull requests do too.
+  platforms:
+    name: Rust (${{ matrix.name }})
+    if: github.event_name != 'pull_request' || !github.event.repository.private
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --no-fail-fast
+
+  cargo-deny:
+    # RustSec advisories, plus a gate that keeps every dependency under a licence an MIT app can
+    # ship. The policy is in deny.toml.
+    name: Rust (cargo-deny)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --workspace --all-features
+
+  sonarqube:
+    name: SonarQube Cloud
+    needs: [frontend, rust]
+    # Runs once the SonarQube Cloud project exists and the repository has its settings
+    # (docs/CI.md). A pull request from a fork gets no secrets, so it is left out.
+    if: >-
+      vars.SONAR_PROJECT_KEY != '' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, so Sonar can tell new code from old.
+          fetch-depth: 0
+
+      - name: Download the frontend coverage
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-coverage
+          path: coverage/frontend
+
+      - name: Download the Rust coverage
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-coverage
+          path: coverage/rust
+
+      - name: Check the SonarQube Cloud settings
+        env:
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          test -n "$SONAR_ORGANIZATION" || { echo "::error::the SONAR_ORGANIZATION repository variable is missing (docs/CI.md)"; exit 1; }
+          test -n "$SONAR_TOKEN" || { echo "::error::the SONAR_TOKEN repository secret is missing (docs/CI.md)"; exit 1; }
+
+      - name: Analyse with SonarQube Cloud
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+
+  # The installers for each system, built the way the release builds them but unsigned. They are
+  # kept for two weeks, to try a change on a system you don't have. Like `platforms`, skipped for
+  # a pull request while the repository is private.
+  bundle:
+    name: Bundle (${{ matrix.name }})
+    needs: [frontend, rust]
+    if: github.event_name != 'pull_request' || !github.event.repository.private
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the app bundles
+        run: pnpm tauri build --ci
+
+      # `src-tauri` is a workspace member, so the bundles land in the workspace's target folder.
+      - name: Upload the bundles
+        uses: actions/upload-artifact@v7
+        with:
+          name: folderskin-${{ runner.os }}
+          path: target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14

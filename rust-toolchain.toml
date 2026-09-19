@@ -1,0 +1,12 @@
+# The one Rust version this repository lints, tests and builds with: every CI job, the release
+# workflow and any plain `cargo` call inside the repository, because rustup reads this file.
+# .github/actions/rust-toolchain installs the same version on the runners.
+#
+# Bumping it is an ordinary change: edit the channel, run `cargo fmt --all --check`,
+# `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace`, and fix
+# what the newer clippy finds in the same commit. A floating "stable" let a clippy release fail
+# CI on code nobody had touched.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

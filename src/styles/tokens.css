@@ -1,0 +1,134 @@
+/*
+ * Design tokens. Everything the stylesheets use comes from here: colours, type, radii, depth
+ * and motion. Components never hard-code a colour.
+ *
+ * Surfaces: the window is glass on macOS (transparent over the system material) and --canvas
+ * elsewhere. Content sits on "islands" (--island). Inside an island, recessed controls sit in
+ * "wells" (--well). Selection is always a tint or a raised pill, never an outline.
+ *
+ * Depth: no shadows, except on things that float above the window (modals, popovers, toasts:
+ * --shadow-pop). Everything else is separated by hairline borders and tints.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --canvas: #e9edf2;
+  --island: #ffffff;
+  --island-line: rgba(16, 24, 40, 0.08);
+  --well: #f2f4f7;
+  --well-2: #e7ebf0;
+  --line: #e4e8ee;
+  --dash: #b9c2ce;
+
+  /* ink */
+  --ink: #10151d;
+  --ink-2: #344054;
+  --muted: #667085;
+  --hint: #98a2b3;
+  --on-ink: #ffffff;
+
+  /* accent: #3A86FF. --accent-hover is a background under white text; --accent-ink is the
+     accent as text, icon or stroke on an island (dark enough on white, lighter on dark). */
+  --accent: #3a86ff;
+  --accent-hover: #2470eb;
+  --accent-ink: #2470eb;
+  --accent-soft: #e3edff;
+  --accent-wash: rgba(58, 134, 255, 0.1);
+  --accent-glow: rgba(58, 134, 255, 0.5);
+  --on-accent: #ffffff;
+
+  /* status */
+  --ok: #12b981;
+  --ok-soft: #dcf7ec;
+  --ok-solid: #12b981;
+  /* green words on --ok-soft, dark enough to read at 12px */
+  --ok-ink: #047857;
+  --danger: #e5484d;
+  --danger-soft: #fde8e8;
+  /* behind white words, like a Delete button: dark enough in both themes */
+  --danger-solid: #d93a40;
+  --fave: #ffb020;
+
+  /* navigation on the glass */
+  --nav-hover: rgba(16, 24, 40, 0.06);
+  --nav-active: #ffffff;
+  /* behind a selected folder in the library, as Finder does it */
+  --tile-selected: rgba(16, 24, 40, 0.07);
+
+  /* type */
+  --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  /* shape */
+  --r-island: 18px;
+  --r-card: 14px;
+  --r-control: 10px;
+  --r-pill: 999px;
+  --gap: 10px;
+
+  /* depth */
+  --shadow-pop: 0 0 0 1px var(--island-line), 0 22px 56px -14px rgba(16, 24, 40, 0.34);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 140ms;
+  --t-base: 220ms;
+  --t-slow: 420ms;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #0b0d10;
+  --island: #15181d;
+  --island-line: rgba(255, 255, 255, 0.07);
+  --well: #1c2027;
+  --well-2: #252a33;
+  --line: #262b33;
+  --dash: #4a5361;
+
+  --ink: #eef2f7;
+  --ink-2: #c9d1dc;
+  --muted: #98a2b3;
+  --hint: #667085;
+  --on-ink: #0b0d10;
+
+  --accent: #3a86ff;
+  --accent-hover: #2a74ee;
+  --accent-ink: #6fa7ff;
+  --accent-soft: #172a48;
+  --accent-wash: rgba(58, 134, 255, 0.14);
+  --accent-glow: rgba(58, 134, 255, 0.55);
+  --on-accent: #ffffff;
+
+  --ok: #34d399;
+  --ok-soft: #0f2e24;
+  --ok-solid: #10a877;
+  --ok-ink: #34d399;
+  --danger: #ff6b6b;
+  --danger-soft: #3a1717;
+
+  --nav-hover: rgba(255, 255, 255, 0.07);
+  --nav-active: #232830;
+  --tile-selected: rgba(255, 255, 255, 0.08);
+
+  --shadow-pop: 0 0 0 1px var(--island-line), 0 24px 60px -14px rgba(0, 0, 0, 0.8);
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("/fonts/Manrope-variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+/* Animatable angle for the rotating borders (drop glow, busy ring). */
+@property --spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}

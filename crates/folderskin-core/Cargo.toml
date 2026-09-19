@@ -1,0 +1,21 @@
+[package]
+name = "folderskin-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "FolderSkin core: folder icon compositor and per-OS icon writers"
+
+[dependencies]
+image.workspace = true
+tiny-skia.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSGeometry"] }
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_Shell"] }
