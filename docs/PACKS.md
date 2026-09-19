@@ -3,17 +3,23 @@
 Anyone can share skins with everyone who uses FolderSkin, for free. A shared set of skins is a
 **pack**; one skin on its own is a pack of one. Packs live in this repository under
 `community/packs/` and reach the app straight from GitHub, so there are no accounts and no
-server of ours in between.
+server of ours in between. FolderSkin ships no skins of its own: packs, your own pictures and AI
+results are where every skin comes from.
 
 ## Adding a pack
 
-Open **Community** in the app. The filters at the top are the packs' tags. **Add** puts a
-pack's skins in your library, carrying the pack's tags, and each skin's ⋯ menu says which pack it
-came from and who shared it. **Remove** takes the whole pack out again. Folders that already use
-one of its skins keep their icon, because the icon lives in the folder itself.
+The first time FolderSkin opens, it offers packs to start your library with. After that, open
+**Community** in the app. The filters at the top are the packs' tags. **Add** puts a pack's skins
+in your library, carrying the pack's tags, and each skin's ⋯ menu says which pack it came from and
+who shared it. **Remove** takes the whole pack out again. Folders that already use one of its
+skins keep their icon, because the icon lives in the folder itself.
 
 **Add from a folder** does the same for a pack folder on your computer, which is also how you try
 a pack out before sharing it.
+
+A pack is added whole or not at all: every picture is downloaded and checked first, then all of
+them are saved in one go, so a dropped connection or a full disk never leaves half a pack in your
+library. Its skins appear in the pack's own order.
 
 ## Sharing yours
 
@@ -112,6 +118,40 @@ FolderSkin is MIT licensed, and shared skins use Creative Commons or MIT:
 
 Share only pictures you made or are allowed to share.
 
+## Making a pack from pictures
+
+`packs make` turns a folder of pictures, such as renders saved from an image model, into a pack
+under `community/packs/` that already passes the checks:
+
+```sh
+cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders \
+  --id 3d --name "3D" --tags 3d,glossy --author your-github-name --preview /tmp/3d.png
+```
+
+Each picture gets the split the app makes when you add one. A finished folder, painted on
+magenta the way the chat prompt in [PROMPTS.md](PROMPTS.md) asks, or on real transparency, is cut
+out and becomes the icon itself; anything else is artwork for FolderSkin's folder. Every picture
+is shrunk to 1024 px and compressed to at most 400 KB (`--max-kb` changes that), since a pack is
+downloaded by everyone who adds it: folders as WebP when `cwebp` is installed (`brew install
+webp`, or the `webp` package on Linux), which keeps the transparency at a fraction of a PNG's
+size, and artwork as JPEG. [SKINS.md](SKINS.md#pictures-for-a-pack) says more about the formats.
+The report says which way each picture went. Skins are named after their files, so name the files
+first or fix the names in `pack.json` afterwards, and `--preview` draws every skin as its folder in
+one PNG to look over. `packs make` never overwrites a pack: to start again, delete its folder.
+
+Image models asked for `#FF00FF` often paint a steady raspberry or hot pink instead (Grok did,
+for the Classic Art pack). `--flat-backdrop` cuts away a flat background of any colour: it
+measures each picture's own background, removes only what reaches the edge (so a red cloak
+inside the folder stays), takes a soft drop shadow with it, and gives the edge the painting's
+colours rather than a pink rim. Look at the `--preview` sheet afterwards; a picture with no flat
+background still comes out as artwork.
+
+To see one picture as the app will show it, `render` draws it as its folder:
+
+```sh
+cargo run -p folderskin-tools -- render community/packs/3d/glass.webp --out /tmp/glass.png --size 512
+```
+
 ## Checking a pack yourself
 
 From the repository root:
@@ -121,41 +161,8 @@ cargo run -p folderskin-tools -- packs check
 ```
 
 It checks every folder in `community/packs/` with the rules the app uses, and prints each
-problem as a sentence. `--dir` points it at another copy of `community/`.
-
-## Built-in packs
-
-A pack can also ship inside the app, so it's there offline from the first launch: a folder
-under `assets/packs/` instead of `community/packs/`, with the same `pack.json` and the same
-rules. The build embeds every folder there. Its skins join the library with the pack's tags,
-next to the ten built-in skins, and like them they can't be renamed or deleted.
-
-Because they're part of every download, a built-in pack's pictures are held to 400 KB each
-rather than 2 MB. `packs make` turns a folder of pictures into a pack that fits:
-
-```sh
-cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders \
-  --id 3d --name "3D" --tags 3d,glossy --author prajwal-svm --preview /tmp/3d.png
-```
-
-Each picture gets the split the app makes when you add one. A finished folder, painted on
-magenta the way the chat prompt in [PROMPTS.md](PROMPTS.md) asks, or on real transparency, is cut
-out and becomes the icon itself; anything else is artwork for FolderSkin's folder. Folders are
-saved as WebP when `cwebp` is installed (`brew install webp`, or the `webp` package on Linux),
-which keeps the transparency at a fraction of a PNG's size, and artwork as JPEG. The report
-says which way each picture went. Skins are named after their files, so name the files first or
-fix the names in `pack.json` afterwards, and `--preview` draws every skin as its folder in one
-PNG to look over.
-
-Image models asked for `#FF00FF` often paint a steady raspberry or hot pink instead (Grok did,
-for the Classic Art pack). `--flat-backdrop` cuts away a flat background of any colour: it
-measures each picture's own background, removes only what reaches the edge (so a red cloak
-inside the folder stays), takes a soft drop shadow with it, and gives the edge the painting's
-colours rather than a pink rim. Look at the `--preview` sheet afterwards; a picture with no flat
-background still comes out as artwork.
-
-`--dir community` makes a community pack the same way. CI checks the built-in packs with
-`packs check --dir assets --max-kb 400`.
+problem as a sentence. `--dir` points it at another copy of `community/`, and `--max-kb` holds
+the pictures to a smaller size than the 2 MB limit.
 
 ## How the app reads packs
 
@@ -170,8 +177,9 @@ versions share stays a favourite.
   the skins it adds, which is how it knows a pack has an update. `folderskin-tools packs index` writes it, together with
   `community/previews/<id>.png`, a strip of the pack's first four skins drawn as folders. Both
   are generated on `main`; never edit them by hand.
-- The app downloads a pack's pictures only when you press **Add**. It checks every one against
-  the limits above and saves nothing unless all of them pass.
+- The app downloads a pack's pictures only when you add it, four at a time, and shows how many
+  have arrived. It checks every one against the limits above and saves nothing unless all of
+  them pass; then it saves them together, so a pack is never half added.
 - `FOLDERSKIN_COMMUNITY_URL` points the app at another copy of `community/`. For example,
   serve a checkout with `python3 -m http.server` and set it to
   `http://localhost:8000/community` to try a pack end to end.

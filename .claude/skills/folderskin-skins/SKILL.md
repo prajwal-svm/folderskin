@@ -1,205 +1,188 @@
 ---
 name: folderskin-skins
-description: Adds, replaces and checks the skins FolderSkin ships. Crops a picture to the 1024×958 skin format around a focus point, writes the file and its manifest entry, renders a preview of the finished folder icon, judges the composition against the folder template's safe areas, adjusts the focus point and reruns until it is right, then validates the whole set and reminds the user to rebuild. Use when the user says "make a skin", "make a skin from this photo", "add a skin", "turn this photo into a folder icon", "use this picture as a folder icon", "replace the aurora skin", "regenerate skins" or "check the skins", or asks for a new built-in background for FolderSkin. Also turns a folder of renders (for example from Grok Imagine) into a pack built into the app: "make a pack from these", "add a built-in pack", "add the 3D pack".
+description: Makes and checks FolderSkin community skin packs. Turns a folder of pictures (renders from Grok Imagine, ChatGPT, Gemini or any image model, photos, paintings) into a pack under community/packs with `folderskin-tools packs make`, looks at every skin as the folder the app makes of it, cuts drifted pink or raspberry backdrops away with --flat-backdrop, names and orders the skins, validates the pack with `packs check`, and refreshes the index with `packs index`. Also previews any single picture as a folder icon with `render` and writes the safe-area template with `guide`. Use when the user says "make a pack", "make a pack from these", "turn these renders into a pack", "add a community pack", "share these as a pack", "check the packs", "update the pack index", "preview this picture as a folder", "how will this look on a folder" or "turn this photo into a folder icon", or asks where a picture's subject lands on the folder.
+version: 2.0.0
 ---
 
-# Authoring FolderSkin skins
+# Making FolderSkin community packs
 
-Follow these steps in order. Run every command from the repository root — the directory that
-contains `Cargo.toml`, `package.json` and `assets/skins/manifest.json`. Do not edit
-`assets/skins/manifest.json` by hand; the tool keeps it in sync.
+FolderSkin ships no skins of its own. Every skin in a library is a picture the user added, an AI
+result, or a skin from a community pack: a folder under `community/packs/` in this repository,
+which the app downloads from GitHub, and which the first-launch welcome offers to new users. This
+skill makes and checks those packs.
 
-Background, if you need it: [docs/SKINS.md](../../../docs/SKINS.md).
+Follow the steps in order. Run every command from the repository root, the directory that holds
+`Cargo.toml` and `community/`. Background, if you need it: [docs/PACKS.md](../../../docs/PACKS.md)
+has the contract and its limits, and [docs/SKINS.md](../../../docs/SKINS.md) how a picture becomes a
+folder icon.
 
-## Step 1 — confirm the source picture
+## Step 1 — collect the pictures and the facts
 
-1. Get the absolute path to the picture from the user. If they have not given one, ask; do not
-   guess and do not invent art.
-2. Check the file exists and note its extension:
-
-   ```sh
-   ls -l "<image>"
-   ```
-
-3. Accepted inputs are PNG, JPEG and WebP. If the file is HEIC or HEIF, convert it first (this
-   works on macOS only):
+1. Get the absolute path to the folder of pictures, or to the files, from the user. If they have
+   not given one, ask; do not guess and do not invent art.
+2. Accepted inputs are PNG, JPEG and WebP. Convert HEIC or HEIF first (macOS only):
 
    ```sh
-   sips -s format png "<image>" --out /tmp/in.png
+   sips -s format png "<picture>.heic" --out /tmp/<name>.png
    ```
 
-   Use `/tmp/in.png` as the image for the rest of the steps.
-4. Ask the user who made the picture and under what licence, unless they already said. Only
-   original art or CC0 art may be committed. If the answer is "I found it online" or is
-   unclear, stop and tell them the skin cannot go into the repository, but that they can drop
-   the picture onto the app to use it on their own machine.
+3. Ask who made the pictures and under what licence, unless the user already said. A pack is
+   `CC0-1.0` (the default), `CC-BY-4.0` or `MIT`, and may only hold pictures the user made or is
+   allowed to share. If the answer is "I found them online" or is unclear, stop: the pictures
+   cannot go in a pack, but the user can drop them on the app to use them on their own machine.
+4. The author is the user's GitHub user name.
+5. A pack holds 1 to 24 skins. Split a bigger set into themed packs.
 
-## Step 2 — choose the id, name and collection
+## Step 2 — name and order the pictures
 
-- `id`: lowercase letters, digits and dashes only, e.g. `dunes`, `night-market`. It is also the
-  preview's filename.
-- `name`: what the gallery shows, title case, one or two words, e.g. `Dunes`.
-- `collection`: exactly one of `glow` (luminous, gradient, dark), `grain` (textured, matte,
-  paper-like), `pop` (flat, graphic, high-contrast). Pick by how the picture looks, not by what
-  it depicts.
+Skins are named after their files: `glass_folder-2.png` becomes "Glass folder 2". Look at each
+picture with the Read tool and rename meaningless files such as `grok-image-3.jpg` before making
+the pack, or fix the names in `pack.json` afterwards (1 to 60 characters).
 
-Propose the three values to the user in one line and carry on unless they object.
+Order matters: the library shows a pack's skins in its own order, first skin first, and the
+pack's preview strip is its first four. `packs make` takes files in the order given and the
+pictures inside a folder in name order. To get another order, pass the files one by one, or move
+the entries in `pack.json` afterwards; the files never need renaming for it.
 
-## Step 3 — decide whether this replaces a skin
+## Step 3 — choose the id, name and tags
 
-Read the manifest and count:
+- `--id`: lower-case letters and digits in words joined by single dashes, at most 40 characters,
+  e.g. `night-prints`. It is the pack's folder name and part of every download URL.
+- `--name`: what the app shows, 1 to 40 characters, e.g. `Night prints`.
+- `--tags`: 1 to 5, comma-separated, lower case. The first names the pack in everyone's filters.
 
-```sh
-cargo run -p folderskin-tools -- skin check
-```
+Propose the three to the user in one line and carry on unless they object.
 
-The shipped set is exactly ten skins. If the manifest already lists ten and the user has not
-said to grow the set, ask which skin this one replaces, then pass that skin's `--id` in step 4
-so the entry and the file are overwritten in place. Never add an eleventh skin on your own
-initiative.
-
-## Step 4 — import the picture
+## Step 4 — make the pack
 
 ```sh
-cargo run -p folderskin-tools -- skin add "<image>" \
-  --id <id> --name <Name> --collection <collection> --focus 0.5,0.5
+cargo run -p folderskin-tools -- packs make "<folder or files>" --id <id> --name "<Name>" \
+  --tags <first>,<more> --author <github-name> --preview /tmp/<id>.png
 ```
 
-- Start at `--focus 0.5,0.5` unless the subject is obviously high or low in the frame.
-- Add `--lossless` to keep PNG instead of JPEG when the art is flat colour, hard-edged shapes,
-  halftone dots or stripes. Leave it off for photographs, gradients and grain.
-- `--dir assets/skins` is the default; pass it only when working on a copy of the set.
-- The command is idempotent per id: rerunning it with the same `--id` overwrites the file, the
-  manifest entry and the preview. It never creates a duplicate.
+- It writes `community/packs/<id>/` (`--dir community` is the default) with `pack.json` and one
+  picture per skin, each shrunk to 1024 px and compressed to at most 400 KB (`--max-kb 400` is
+  the default; the pack limit is 2 MB, but everyone who adds the pack downloads it).
+- Finished folders are saved as WebP when `cwebp` is installed, and as PNG otherwise, which is
+  several times bigger and often over 400 KB. If the report says `cwebp` is missing, install it
+  (`brew install webp`, or the `webp` package on Linux) and make the pack again.
+- `--license` defaults to `CC0-1.0`; pass the licence from step 1 if it is another.
+- It never overwrites a pack. To make it again, delete `community/packs/<id>/` first.
+- It runs `packs check` on what it wrote, and removes the folder again if anything fails.
 
-## Step 5 — look at the preview and judge it
+## Step 5 — check the split
 
-The command wrote `assets/previews/<id>.png`, which is the finished folder icon, not the raw
-crop. **Open it with the Read tool** and check all five of these:
+Every line of the report says `folder` or `artwork`:
 
-| check | what a failure looks like |
+- `folder`: a finished folder, cut out of its magenta or transparent background and used as the
+  icon exactly as drawn.
+- `artwork`: an ordinary picture, wrapped onto FolderSkin's own folder template.
+
+This is the split the app makes when someone adds the picture. Renders meant as whole folders
+that came out as `artwork` usually sit on a drifted pink or raspberry instead of `#FF00FF`
+(Grok does this). Delete the pack folder and make it again with `--flat-backdrop`: it measures
+each picture's own flat background, removes only what reaches the edge (so a red cloak inside the
+folder stays), takes a soft drop shadow with it, and gives the edge the painting's colours rather
+than a pink rim. A picture with no flat background still comes out as `artwork`.
+
+## Step 6 — look at every skin
+
+Open the `--preview` sheet with the Read tool. It draws every skin as the folder the app makes of
+it. Check:
+
+| skin | what a failure looks like |
 |---|---|
-| The subject sits inside the front panel | a head, horizon or logo cut in half by the top edge of the front panel |
-| Nothing important is in the top 12% of the source | the interesting part of the picture is buried in the narrow tab, or is sliced by the cream paper strip |
-| The front panel's crop keeps the subject whole | the subject's top or bottom is clipped by the panel edge (the front panel keeps only the middle ~85% of the image height) |
-| The corners are quiet | detail that matters is lost to the 55 px corner radius |
-| No letterboxing or edge artefacts | a band of flat colour along an edge, a seam, or a stretched-looking edge from an upscaled source |
+| finished folder | a magenta or pink fringe along the edge, a dark blob left from a drop shadow, a tab cut off, a folder that does not fill its square |
+| artwork | a face, horizon or logo cut by the paper strip (the top 12% of the picture), the subject clipped at the top or bottom of the front panel, detail lost in the rounded corners |
+| any | a name that reads badly |
 
-Say out loud which check failed before changing anything. If all five pass, go to step 7.
-
-## Step 6 — adjust the focus point and rerun
-
-Change `--focus` and rerun the exact command from step 4. Then repeat step 5. Two or three
-iterations is normal.
-
-- The `y` value is the one that does the work. The front panel keeps 838 of the 958 source
-  rows, so the whole travel is 120 px: `0.1` of focus y moves the crop by about 12 px.
-- Subject clipped at the **top** → lower `y` towards `0` (keeps more of the image's top).
-- Subject clipped at the **bottom**, or too much empty sky above it → raise `y` towards `1`.
-- The `x` value barely matters: the front panel is fitted to its width, so `x` only shifts the
-  back panel's 18 px side trim. A subject that is off-centre horizontally cannot be fixed with
-  focus — crop the source picture yourself and rerun step 4.
-- If no focus value keeps the subject whole, the picture is the wrong shape for a folder. Tell
-  the user, and offer to crop it to 1024 × 958 yourself before importing.
-
-To see where the template's regions fall on a source image, write the guide and open it:
+For a close look at one picture, draw it large; a one-pixel pink rim or a leftover shadow often
+only shows at full size:
 
 ```sh
-cargo run -p folderskin-tools -- skin guide --out /tmp/guide.png
+cargo run -p folderskin-tools -- render community/packs/<id>/<file> --out /tmp/one.png --size 1024
 ```
 
-## Step 7 — validate the set
+`render` also says whether the picture is a finished folder or artwork. To see where the folder
+crops artwork, write the safe-area template and open it:
 
 ```sh
-cargo run -p folderskin-tools -- skin check
+cargo run -p folderskin-tools -- guide --out /tmp/guide.png
 ```
 
-Fix every problem it reports before moving on. It exits non-zero on a problem and it checks
-ids, duplicates, missing files, dimensions (must be 1024 × 958), the 400 KB per-file limit and
-the total byte count. If the new file is over 400 KB, rerun step 4 with the other encoding
-(`--lossless` on or off) and keep the smaller file.
+Rows 0 to 62 of a 958-row picture land in the tab, 62 to 127 beside the paper strip, and the
+front panel keeps rows 60 to 898. The app always crops artwork around its centre (a pack has no
+focus point), so an off-centre subject is fixed by cropping the source picture and making the
+pack again. `render --focus x,y` shows what another crop would keep before you crop the file.
 
-## Step 8 — rebuild the app
+Say which check failed before changing anything.
 
-Skins are embedded into the binary at build time by `src-tauri/build.rs`. An app that is
-already built will not show the new skin. Tell the user this, and run the build if they want it
-now:
+## Step 7 — fix names, then check
+
+Edit `community/packs/<id>/pack.json` for names, per-skin tags (up to 3 each) or order. It takes
+no other fields. Then:
 
 ```sh
-pnpm tauri build      # or: pnpm tauri dev
+cargo run -p folderskin-tools -- packs check
 ```
 
-## Step 9 — report
+It checks every pack in `community/packs/` the way the app does before it saves one, prints each
+problem as a sentence and exits non-zero on any. Fix every problem before moving on.
+
+## Step 8 — try it in the app (optional)
+
+In the app, **Community → Add from a folder** with `community/packs/<id>` adds the pack exactly as
+one from GitHub would. To try the Community list itself, run step 9, serve the repository with
+`python3 -m http.server` from its root, and start the app with
+`FOLDERSKIN_COMMUNITY_URL=http://localhost:8000/community`. Add `FOLDERSKIN_ONBOARDING=1` to see
+the pack offered in the first-launch welcome as well.
+
+## Step 9 — the index
+
+`community/index.json` and `community/previews/<id>.png` are what the app reads to list the
+packs. The Community workflow rebuilds them on `main` after a pack is merged, so a pull request
+does not need them, and nobody edits them by hand. To rebuild them locally:
+
+```sh
+cargo run -p folderskin-tools -- packs index
+```
+
+It checks every pack first and writes nothing when one has a problem. It is deterministic, so a
+second run changes nothing.
+
+## Step 10 — report
 
 Tell the user, in a few lines:
 
-- the id, name, collection, file, final `--focus` and file size;
-- which skin was replaced, if any;
-- that `skin check` passed;
-- that the app needs a rebuild for the skin to appear.
+- the pack folder, its id, name, tags, licence and author;
+- how many skins, how many finished folders and how many artwork, and the total size;
+- whether `--flat-backdrop` was used;
+- the preview sheet's path;
+- that `packs check` passed.
 
-Do not commit anything unless the user asks. `assets/previews/` is gitignored, so previews stay
-out of the repository; the files to commit are `assets/skins/<id>.<ext>` and
-`assets/skins/manifest.json`.
-
-## Built-in packs
-
-A themed set of pictures, such as renders from Grok Imagine, ships as a pack under
-`assets/packs/<id>/` rather than as more manifest skins. docs/PACKS.md → Built-in packs has the
-background.
-
-1. Put the pictures in one folder. Skins are named after their files ("glass_folder.jpg" is
-   "Glass folder"), so rename meaningless ones such as `grok-image-3.jpg` first; look at each
-   with the Read tool to name it.
-2. Make the pack. The first tag names the pack in the library's filters; the author is the
-   user's GitHub name; the licence is `CC0-1.0` unless they say otherwise.
-
-   ```sh
-   cargo run -p folderskin-tools -- packs make <folder> --id <id> --name "<Name>" \
-     --tags <id>,<more> --author <github-name> --preview /tmp/<id>.png
-   ```
-
-3. Read the report. Each picture is `folder` (cut out of magenta or transparency and used as
-   the icon) or `artwork` (wrapped onto FolderSkin's folder). Renders meant as whole folders
-   that came out as `artwork` usually sit on a drifted pink or raspberry instead of `#FF00FF`
-   (Grok does this): delete the pack folder and run again with `--flat-backdrop`, which cuts
-   away each picture's own flat background. Without `cwebp` folders are PNG and often too big;
-   install it (`brew install webp`) and run again.
-4. Open the preview PNG with the Read tool. Look for magenta fringes, tabs cut off, a subject
-   that doesn't fill the folder, and names that read badly. For a close look at the edges,
-   composite a few of the pictures on light grey and crop their corners at 3×: a one-pixel pink
-   rim or a leftover shadow only shows there.
-5. Fix names in `assets/packs/<id>/pack.json` (1–60 characters) if needed, then run
-   `cargo run -p folderskin-tools -- packs check --dir assets --max-kb 400`.
-6. Rebuild. The skins appear in the library under the pack's first tag.
-
-To start over, delete `assets/packs/<id>/`: `packs make` never overwrites a pack.
+Do not commit anything unless the user asks. The files to commit are `community/packs/<id>/`.
 
 ## Rules
 
-- Only original art or CC0 art goes into `assets/skins/`. Fill in `author` and `license`
-  honestly. Never commit art extracted from another product, a stock photo, a wallpaper, or
-  model output whose licence you have not checked.
-- 400 KB maximum per skin; keep the whole set under 2.5 MB.
-- The shipped set is exactly ten skins — replace one rather than adding an eleventh — unless
-  the maintainer says otherwise.
-- Collections are `glow`, `grain` and `pop`. The gallery derives its tabs from the manifest,
-  so a fourth collection appears on its own — keep to the three unless a maintainer asks for
-  another, so the toolbar stays on one row.
-- HEIC and HEIF inputs must be converted with `sips -s format png in.heic --out /tmp/in.png`
-  first, and that only works on macOS.
-- Always rebuild after changing a skin, because the binary embeds them.
-- Never hand-edit `assets/skins/manifest.json`, and never delete a skin file without removing
-  its manifest entry through the tool.
+- Only pictures the user made or is allowed to share, under `CC0-1.0`, `CC-BY-4.0` or `MIT`, with
+  their GitHub name as the author. Never art extracted from another product, a stock photo, a
+  wallpaper, or model output whose terms have not been checked.
+- 1 to 24 skins a pack; pictures 256 to 1024 px on each side and at most 2 MB, which
+  `packs make` keeps to 400 KB.
+- Never hand-edit `community/index.json` or `community/previews/`.
+- FolderSkin ships no skins: nothing goes under `assets/`, and there is no skin manifest and no
+  pack built into the app.
+- HEIC and HEIF must be converted with `sips` first, which only works on macOS.
 
-## Other commands in this tool
+## Commands
 
 | command | use |
 |---|---|
-| `cargo run -p folderskin-tools -- skin gen` | regenerate all ten built-in skins, the manifest and the previews, deterministically. This overwrites imported skins, so only run it when the user asks to reset the set |
-| `cargo run -p folderskin-tools -- render "<image>" --out /tmp/icon.png --size 512 --focus x,y` | render the finished icon from any picture without touching the manifest — the fastest way to test a focus point before importing |
-| `cargo run -p folderskin-tools -- render --solid RRGGBB --out /tmp/flat.png` | render the template over a flat colour, to inspect the template itself |
-| `cargo run -p folderskin-tools -- apply "<folder>" --skin <id>` | apply a skin to a real folder from the terminal |
+| `cargo run -p folderskin-tools -- packs make <pictures…> --id … --name … --tags … --author … [--preview PNG] [--flat-backdrop]` | make a pack in `community/packs/` from pictures or folders of them |
+| `cargo run -p folderskin-tools -- packs check` | check every community pack the way the app and CI do |
+| `cargo run -p folderskin-tools -- packs index` | rebuild `community/index.json` and the preview strips |
+| `cargo run -p folderskin-tools -- render "<picture>" --out /tmp/icon.png --size 512` | draw one picture as the folder the app makes of it, and say which kind it is |
+| `cargo run -p folderskin-tools -- render --solid RRGGBB --out /tmp/flat.png` | the template in a flat colour, to inspect the template itself |
+| `cargo run -p folderskin-tools -- guide --out /tmp/guide.png` | the 1024 × 958 safe-area template |
+| `cargo run -p folderskin-tools -- apply "<folder>" --image "<picture>"` | apply a picture to a real folder from the terminal, as the app would |
 | `cargo run -p folderskin-tools -- revert "<folder>"` | put the default icon back |
-| `cargo run -p folderskin-tools -- packs make <pictures> --id … --name … --tags … --author …` | make a pack from pictures, built in (`--dir assets`, the default) or for the community (`--dir community`) |
-| `cargo run -p folderskin-tools -- packs check --dir assets --max-kb 400` | check the built-in packs the way CI does |

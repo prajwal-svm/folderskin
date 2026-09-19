@@ -61,10 +61,9 @@ function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref)
   return { theme, pref, setPref: choose, toggle };
 }
 
-/** Newest of the user's skins first, then the built-ins in their manifest order. */
-function withUserFirst(list: Skin[]): Skin[] {
-  const mine = list.filter((s) => s.custom).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
-  return [...mine, ...list.filter((s) => !s.custom)];
+/** Newest first. A pack keeps its own order: the app gives its first skin the newest time. */
+function newestFirst(list: Skin[]): Skin[] {
+  return [...list].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
 }
 
 export default function App() {
@@ -97,7 +96,7 @@ export default function App() {
     api
       .listSkins()
       .then((list) => {
-        setSkins(withUserFirst(list.skins));
+        setSkins(newestFirst(list.skins));
         setDefaultThumb(list.default_thumbnail);
       })
       .catch((e) => setLoadError(errorMessage(e)));
@@ -105,7 +104,7 @@ export default function App() {
 
   /** Puts skins in the library, or updates the ones already there. */
   const addSkins = useCallback((added: Skin[]) => {
-    setSkins((prev) => withUserFirst([...added, ...prev.filter((s) => !added.some((a) => a.id === s.id))]));
+    setSkins((prev) => newestFirst([...added, ...prev.filter((s) => !added.some((a) => a.id === s.id))]));
   }, []);
   const addSkin = useCallback((skin: Skin) => addSkins([skin]), [addSkins]);
 
@@ -254,7 +253,7 @@ export default function App() {
           toast(`Deleted ${skin.name}`, { tone: "ok" });
         })
         .catch((e) => {
-          setSkins((prev) => withUserFirst([skin, ...prev.filter((s) => s.id !== skin.id)]));
+          setSkins((prev) => newestFirst([skin, ...prev.filter((s) => s.id !== skin.id)]));
           toast(`Couldn't delete ${skin.name}: ${errorMessage(e)}`, { tone: "danger" });
         });
     },
@@ -333,7 +332,23 @@ export default function App() {
           }
         : view === "faves"
           ? { icon: <StarIcon size={20} />, title: "No favourites yet", text: "Tap the star on any skin and it will wait for you here." }
-          : null;
+          : view === "skins" && skins.length === 0
+            ? {
+                icon: <FolderOpenIcon size={22} />,
+                title: "No skins yet",
+                text: "Add a free pack from Community, bring a picture of your own, or have AI paint one.",
+                action: (
+                  <div className="empty-actions">
+                    <button type="button" className="btn btn-primary" onClick={() => setView("community")}>
+                      Browse packs
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={pickPhoto}>
+                      Add your photo
+                    </button>
+                  </div>
+                ),
+              }
+            : null;
 
   const library = view === "skins" || view === "yours" || view === "faves";
 

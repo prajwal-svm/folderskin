@@ -1,35 +1,11 @@
-//! Process-wide state shared by the commands: the decoded built-in skins, the store of saved
-//! skins with a small cache of decoded ones in front of it, and the thumbnail cache.
+//! Process-wide state shared by the commands: the store of saved skins with a small cache of
+//! decoded ones in front of it, the skins that could not be saved, and the default folder's
+//! thumbnail.
 
-use crate::skins::{BuiltinPack, BuiltinPackSkin, BuiltinSkin};
 use crate::store::{NewSkin, SavedSkin, SkinImage, Store, THUMB_SIZE};
-use folderskin_core::compositor::Artwork;
-use folderskin_core::pack;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
-
-/// A built-in skin decoded, ready for the compositor.
-pub struct LoadedSkin {
-    pub id: String,
-    pub name: String,
-    pub collection: String,
-    pub tags: Vec<String>,
-    /// For a skin from a built-in pack: the pack it belongs to.
-    pub pack: Option<PackInfo>,
-    pub image: SkinImage,
-    /// The embedded file, which keys the thumbnail cache.
-    pub bytes: &'static [u8],
-}
-
-/// The built-in pack a skin comes from.
-pub struct PackInfo {
-    pub id: String,
-    pub name: String,
-    /// The GitHub name of whoever made it.
-    pub author: String,
-    pub license: String,
-}
 
 /// How many decoded saved skins stay in memory (up to 16 MB each at 2048 px).
 const MAX_RECENT: usize = 12;
@@ -81,15 +57,14 @@ struct Unsaved {
 
 #[derive(Default)]
 pub struct Inner {
-    pub builtin: OnceLock<Vec<LoadedSkin>>,
     /// Saved skins on disk, opened in `setup` once the app data folder is known.
     store: OnceLock<Store>,
     /// Saved skins decoded recently, keyed by id.
     recent: Mutex<Recent>,
     /// Skins that could not be saved: no data folder, or a failed write of an AI result.
     unsaved: Mutex<HashMap<String, Unsaved>>,
-    /// Rendered thumbnails of the built-in skins and the default folder, as PNG data URLs.
-    pub thumbs: Mutex<HashMap<String, String>>,
+    /// The plain default folder's thumbnail, as a PNG data URL, once it has been drawn.
+    default_thumb: OnceLock<String>,
 }
 
 /// Cheap to clone; every command clones it before moving work to a blocking thread.
@@ -103,27 +78,6 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl AppState {
-    /// Decodes the embedded skins once and keeps them for the process lifetime: the manifest
-    /// skins, then every built-in pack's, in order. They are decoded on all cores at once, since
-    /// each takes 20 ms or more.
-    pub fn builtin(&self) -> &Vec<LoadedSkin> {
-        self.0.builtin.get_or_init(|| {
-            let skins: Vec<Embedded> = crate::skins::SKINS
-                .iter()
-                .map(Embedded::Skin)
-                .chain(
-                    crate::skins::PACKS
-                        .iter()
-                        .flat_map(|p| p.skins.iter().map(move |s| Embedded::Pack(p, s))),
-                )
-                .collect();
-            parallel_map(&skins, Embedded::decode)
-                .into_iter()
-                .flatten()
-                .collect()
-        })
-    }
-
     /// Opens the saved-skin store in `dir`. Called once, from `setup`.
     pub fn open_store(&self, dir: PathBuf) {
         if self.0.store.set(Store::open(dir)).is_err() {
@@ -136,8 +90,8 @@ impl AppState {
         self.0.store.get()
     }
 
-    /// The pixels of any skin: built in, saved, or kept for this session. A saved skin that is
-    /// not in memory is read back from disk, so this can take a moment on a cache miss.
+    /// The pixels of a saved skin, or of one kept for this session. A saved skin that is not in
+    /// memory is read back from disk, so this can take a moment on a cache miss.
     pub fn resolve(&self, skin_id: &str) -> Result<SkinImage, String> {
         if let Some(image) = lock(&self.0.recent).get(skin_id) {
             return Ok(image);
@@ -145,15 +99,14 @@ impl AppState {
         if let Some(unsaved) = lock(&self.0.unsaved).get(skin_id) {
             return Ok(unsaved.image.clone());
         }
-        if let Some(image) = self.store().map(|s| s.load(skin_id)).transpose()?.flatten() {
-            lock(&self.0.recent).put(skin_id.to_string(), image.clone());
-            return Ok(image);
-        }
-        self.builtin()
-            .iter()
-            .find(|s| s.id == skin_id)
-            .map(|s| s.image.clone())
-            .ok_or_else(|| "that skin isn't available any more".to_string())
+        let image = self
+            .store()
+            .map(|s| s.load(skin_id))
+            .transpose()?
+            .flatten()
+            .ok_or_else(|| "that skin isn't available any more".to_string())?;
+        lock(&self.0.recent).put(skin_id.to_string(), image.clone());
+        Ok(image)
     }
 
     /// A skin already saved (or kept for this session) under `id`, with its thumbnail PNG.
@@ -184,6 +137,42 @@ impl AppState {
         }
         let thumb = store.thumbnail_png(&entry)?;
         Ok((entry, thumb))
+    }
+
+    /// Saves new skins all together or not at all ([`Store::add_many`]) and returns each with its
+    /// thumbnail PNG, in the order given; one whose id is already saved comes back as it was
+    /// saved. The first is the newest, so the library lists them in the order given.
+    ///
+    /// Unlike [`AppState::save`], it keeps none of them decoded: a pack of sixteen would push
+    /// every other skin out of `recent`. Without a data folder each is kept for this session
+    /// only. `encoded` is called as each new skin is ready to be written, from whichever thread
+    /// prepared it.
+    pub fn save_many(
+        &self,
+        skins: Vec<(NewSkin, SkinImage)>,
+        encoded: &(dyn Fn() + Sync),
+    ) -> Result<Vec<(SavedSkin, Vec<u8>)>, String> {
+        let Some(store) = self.store() else {
+            return Ok(skins
+                .into_iter()
+                .map(|(new, image)| {
+                    let kept = self.keep_unsaved(new, image);
+                    encoded();
+                    kept
+                })
+                .collect());
+        };
+        let added = store.add_many(skins, encoded)?;
+        let mut unsaved = lock(&self.0.unsaved);
+        for skin in &added {
+            // Saved now, so any session-only copy from an earlier failed write is redundant.
+            unsaved.remove(&skin.entry.id);
+        }
+        drop(unsaved);
+        Ok(added
+            .into_iter()
+            .map(|skin| (skin.entry, skin.thumbnail_png))
+            .collect())
     }
 
     /// Keeps a skin that could not be saved for the rest of this session: it is listed, can be
@@ -287,77 +276,10 @@ impl AppState {
         }
     }
 
-    pub fn cached_thumb(&self, id: &str) -> Option<String> {
-        lock(&self.0.thumbs).get(id).cloned()
-    }
-
-    pub fn remember_thumb(&self, id: String, data_url: String) {
-        lock(&self.0.thumbs).insert(id, data_url);
-    }
-}
-
-/// A skin embedded in the binary, before it is decoded.
-enum Embedded {
-    /// One of the manifest skins in `assets/skins`: always artwork, with its focus point.
-    Skin(&'static BuiltinSkin),
-    /// A skin of a built-in pack: a finished folder or artwork, depending on the picture.
-    Pack(&'static BuiltinPack, &'static BuiltinPackSkin),
-}
-
-impl Embedded {
-    /// The skin decoded, or `None` (and a line on stderr) when its picture can't be used.
-    fn decode(&self) -> Option<LoadedSkin> {
-        let (id, bytes) = match self {
-            Embedded::Skin(s) => (s.id, s.bytes),
-            Embedded::Pack(_, s) => (s.id, s.bytes),
-        };
-        let rgba = match image::load_from_memory(bytes) {
-            Ok(img) => img.to_rgba8(),
-            Err(e) => {
-                eprintln!("folderskin: the built-in skin {id} couldn't be decoded: {e}");
-                return None;
-            }
-        };
-        Some(match self {
-            Embedded::Skin(s) => LoadedSkin {
-                id: s.id.to_string(),
-                name: s.name.to_string(),
-                collection: s.collection.to_string(),
-                tags: s.tags.iter().map(|t| t.to_string()).collect(),
-                pack: None,
-                image: SkinImage::Artwork(Arc::new(Artwork {
-                    rgba,
-                    focus: (s.focus[0], s.focus[1]),
-                })),
-                bytes: s.bytes,
-            },
-            Embedded::Pack(p, s) => {
-                // The same split a community pack's pictures get when they are added.
-                let image = match crate::commands::prepare_import(rgba) {
-                    Ok(image) => image,
-                    Err(e) => {
-                        eprintln!("folderskin: the built-in skin {id} can't be used: {e}");
-                        return None;
-                    }
-                };
-                let tags: Vec<String> =
-                    p.tags.iter().chain(s.tags).map(|t| t.to_string()).collect();
-                LoadedSkin {
-                    id: s.id.to_string(),
-                    name: s.name.to_string(),
-                    collection: p.id.to_string(),
-                    tags: pack::clean_tags(&tags, pack::MAX_TAGS),
-                    pack: Some(PackInfo {
-                        id: p.id.to_string(),
-                        name: p.name.to_string(),
-                        author: p.author.to_string(),
-                        license: p.license.to_string(),
-                    }),
-                    image,
-                    bytes: s.bytes,
-                }
-            }
-        })
+    /// The plain default folder's thumbnail: `draw()`'s data URL the first time, and the same
+    /// one after that. Callers that ask while it is being drawn wait for it.
+    pub fn default_thumbnail(&self, draw: impl FnOnce() -> String) -> String {
+        self.0.default_thumb.get_or_init(draw).clone()
     }
 }
 
@@ -474,91 +396,69 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    fn pack_skin(id: &str) -> NewSkin {
+        NewSkin {
+            id: id.into(),
+            name: "Pack skin".into(),
+            source: SkinSource::Community,
+            provider: None,
+            model: None,
+            idea: None,
+            tags: Vec::new(),
+            pack: Some("test-pack".into()),
+            pack_name: None,
+            author: None,
+            license: None,
+            pack_hash: None,
+        }
+    }
+
     #[test]
-    fn every_built_in_skin_decodes_once_with_its_own_id() {
+    fn a_batch_is_not_kept_decoded_and_replaces_session_only_copies() {
+        let dir =
+            std::env::temp_dir().join(format!("folderskin-state-batch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         let state = AppState::default();
-        let shipped = crate::skins::SKINS.len()
-            + crate::skins::PACKS
-                .iter()
-                .map(|p| p.skins.len())
-                .sum::<usize>();
-        let loaded = state.builtin();
-        assert_eq!(loaded.len(), shipped, "no built-in skin was dropped");
-        let ids: std::collections::HashSet<&str> = loaded.iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids.len(), loaded.len(), "ids are unique");
-        assert!(loaded.iter().all(|s| crate::skins::is_builtin(&s.id)));
-        assert!(std::ptr::eq(state.builtin(), loaded), "decoded once");
-    }
+        state.open_store(dir.clone());
+        let (a, b) = (skin_id(b"batch a"), skin_id(b"batch b"));
+        // `a` couldn't be written before, so it was kept for the session.
+        state.keep_unsaved(pack_skin(&a), folder(1));
 
-    fn leak<T>(items: Vec<T>) -> &'static [T] {
-        Box::leak(items.into_boxed_slice())
+        let batch = vec![(pack_skin(&a), folder(1)), (pack_skin(&b), folder(2))];
+        let saved = state.save_many(batch, &|| {}).unwrap();
+        let ids: Vec<&str> = saved.iter().map(|(e, _)| e.id.as_str()).collect();
+        assert_eq!(ids, [a.as_str(), b.as_str()]);
+        assert!(saved.iter().all(|(_, png)| png.starts_with(b"\x89PNG")));
+        assert!(
+            lock(&state.0.unsaved).is_empty(),
+            "saved now, so the session-only copy goes"
+        );
+        assert!(
+            lock(&state.0.recent).skins.is_empty(),
+            "a pack doesn't push every other skin out of the cache"
+        );
+        let newest_first: Vec<String> =
+            state.saved_skins().into_iter().map(|(e, _)| e.id).collect();
+        assert_eq!(newest_first, [a.clone(), b.clone()]);
+        assert!(matches!(state.resolve(&b), Ok(SkinImage::Folder(_))));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn a_pack_skin_is_a_folder_or_artwork_and_carries_the_packs_tags_first() {
-        let cutout = image::RgbaImage::from_fn(300, 300, |x, y| {
-            let inside = (40..260).contains(&x) && (60..240).contains(&y);
-            image::Rgba(if inside {
-                [30, 90, 200, 255]
-            } else {
-                [0, 0, 0, 0]
+    fn without_a_store_a_batch_lasts_for_the_session() {
+        let state = AppState::default();
+        let ids = [skin_id(b"loose a"), skin_id(b"loose b")];
+        let ready = std::sync::atomic::AtomicUsize::new(0);
+        let batch = ids.iter().map(|id| (pack_skin(id), folder(5))).collect();
+        let kept = state
+            .save_many(batch, &|| {
+                ready.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             })
-        });
-        let opaque = image::RgbaImage::from_pixel(300, 280, image::Rgba([240, 160, 40, 255]));
-        let skins = leak(vec![
-            BuiltinPackSkin {
-                id: "3d/glass",
-                name: "Glass",
-                tags: &["Shiny"],
-                bytes: leak(folderskin_core::raster::encode_png(&cutout)),
-            },
-            BuiltinPackSkin {
-                id: "3d/sky",
-                name: "Sky",
-                tags: &[],
-                bytes: leak(folderskin_core::raster::encode_png(&opaque)),
-            },
-            BuiltinPackSkin {
-                id: "3d/broken",
-                name: "Broken",
-                tags: &[],
-                bytes: b"not a picture",
-            },
-        ]);
-        let pack: &'static BuiltinPack = Box::leak(Box::new(BuiltinPack {
-            id: "3d",
-            name: "3D",
-            author: "prajwal-svm",
-            license: "CC0-1.0",
-            tags: &["3d", "glossy"],
-            skins,
-        }));
-
-        let glass = Embedded::Pack(pack, &skins[0]).decode().unwrap();
-        assert!(
-            matches!(glass.image, SkinImage::Folder(_)),
-            "a cutout is the icon itself"
-        );
-        assert_eq!(glass.tags, ["3d", "glossy", "shiny"]);
-        assert_eq!(glass.collection, "3d");
-        let info = glass.pack.as_ref().unwrap();
-        assert_eq!((info.id.as_str(), info.name.as_str()), ("3d", "3D"));
-        assert_eq!(
-            (info.author.as_str(), info.license.as_str()),
-            ("prajwal-svm", "CC0-1.0")
-        );
-
-        let sky = Embedded::Pack(pack, &skins[1]).decode().unwrap();
-        assert!(
-            matches!(sky.image, SkinImage::Artwork(_)),
-            "a picture goes on the template"
-        );
-        assert_eq!(sky.tags, ["3d", "glossy"]);
-
-        assert!(
-            Embedded::Pack(pack, &skins[2]).decode().is_none(),
-            "a picture that can't be decoded is left out"
-        );
+            .unwrap();
+        assert_eq!(kept.len(), 2);
+        assert_eq!(ready.into_inner(), 2);
+        assert_eq!(state.saved_skins().len(), 2);
+        assert!(state.resolve(&ids[1]).is_ok());
     }
 
     #[test]

@@ -1,20 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
 
-/** A skin the gallery can show: built-in, or one of the user's own (saved on disk). */
+/** A skin in the library: a picture the user added, an AI result, or one from a community pack. All are saved on disk. */
 export type Skin = {
   id: string;
   name: string;
-  /** "glow", "grain", "pop" for built-ins; "yours" for everything the user added. */
+  /** Always "yours": every skin is one the user added. */
   collection: string;
   /** PNG data URL rendered by the Rust compositor (same pixels the app applies). */
   thumbnail: string;
   custom: boolean;
   /** "artwork" is wrapped onto FolderSkin's folder; "folder" is a finished folder used as-is. */
   kind?: "artwork" | "folder";
-  source?: "builtin" | "import" | "ai" | "community";
-  /** Unix ms when the user added it; null for built-ins. */
+  source?: "import" | "ai" | "community";
+  /** Unix ms when the user added it. */
   created_at?: number | null;
   /** What the gallery filters it by, cleaned the way `cleanTag` does. */
   tags: string[];
@@ -53,6 +53,9 @@ export type PackSkinPreview = {
   thumbnail: string;
 };
 
+/** How far adding a pack has got: pictures downloaded, then pictures saved. */
+export type PackProgress = { stage: "download" | "save"; done: number; total: number };
+
 /** What updating a pack changed. */
 export type PackUpdate = {
   /** Old skins the new version doesn't have. */
@@ -75,7 +78,7 @@ export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path:
 
 export type PlatformInfo = { os: string; browse_label: string; note: string };
 
-/** Built-in skins plus the plain default folder rendered through the same compositor. */
+/** The saved skins, newest first, plus the plain default folder rendered through the same compositor. */
 export type SkinList = { skins: Skin[]; default_thumbnail: string };
 
 export type AiModel = {
@@ -127,9 +130,9 @@ const tauriApi = {
   folderIcon: (folder: string) => invoke<string>("folder_icon", { folder }),
   /** The folder the skins are saved in. */
   skinsFolder: () => invoke<string>("skins_folder"),
-  /** Deletes one of the user's saved skins from disk. Built-ins refuse. */
+  /** Deletes one of the user's saved skins from disk. */
   deleteSkin: (skinId: string) => invoke<void>("delete_skin", { skinId }),
-  /** Renames and retags one of the user's saved skins; resolves to both as saved. Built-ins refuse. */
+  /** Renames and retags one of the user's saved skins; resolves to both as saved. */
   editSkin: (skinId: string, name: string, tags: string[]) =>
     invoke<{ name: string; tags: string[] }>("edit_skin", { skinId, name, tags }),
 
@@ -138,8 +141,9 @@ const tauriApi = {
   communityPacks: (fresh = false) => invoke<CommunityPack[]>("community_packs", { fresh }),
   /** A pack's preview strip as a data URL, downloaded again when `fresh`. */
   communityPreview: (packId: string, fresh = false) => invoke<string>("community_preview", { packId, fresh }),
-  /** Downloads a pack and saves its skins; resolves to them. */
-  addPack: (packId: string) => invoke<Skin[]>("community_add", { packId }),
+  /** Downloads a pack and saves all of its skins or none; resolves to them. `onProgress` hears how far it has got. */
+  addPack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
+    invoke<Skin[]>("community_add", { packId, onProgress: new Channel<PackProgress>(onProgress) }),
   /** Every skin of a pack drawn as its folder, to look through before adding it. Saves nothing. */
   packSkins: (packId: string) => invoke<PackSkinPreview[]>("community_pack_skins", { packId }),
   /** Swaps an added pack's skins for the version on GitHub now. */
@@ -150,6 +154,12 @@ const tauriApi = {
   importPack: (path: string) => invoke<Skin[]>("import_pack", { path }),
   /** Writes skins as a pack folder inside `folder`; resolves to the folder it made. */
   exportPack: (req: ExportPackRequest) => invoke<string>("export_pack", { ...req }),
+  // ---- first launch ----
+  /** True until the first-launch onboarding has been finished on this computer. */
+  onboardingNeeded: () => invoke<boolean>("onboarding_needed"),
+  /** Remembers that the onboarding is done, so it never shows again. */
+  finishOnboarding: () => invoke<void>("finish_onboarding"),
+
   /** Native window appearance; `null` follows the system. Keeps the macOS sidebar material in step with the app theme. */
   setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
 

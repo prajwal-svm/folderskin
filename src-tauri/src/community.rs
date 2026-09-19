@@ -7,16 +7,19 @@
 //! `folderskin_core::pack`, and docs/PACKS.md says the same in prose.
 
 use crate::commands::{data_url, prepare_import, SkinDto};
-use crate::state::AppState;
+use crate::state::{parallel_map, AppState};
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_core::pack::{self, Index, Pack, PackSkin};
+use futures_util::{StreamExt, TryStreamExt};
 use image::codecs::jpeg::JpegEncoder;
 use image::{ExtendedColorType, ImageEncoder};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+use tauri::ipc::Channel;
 use tauri::State;
 
 /// The `community/` folder of the repository on GitHub. Set `FOLDERSKIN_COMMUNITY_URL` to read
@@ -28,6 +31,8 @@ const MAX_INDEX_BYTES: usize = 1024 * 1024;
 const MAX_PREVIEW_BYTES: usize = 1024 * 1024;
 /// Shown when GitHub cannot be reached at all.
 const OFFLINE: &str = "couldn't reach GitHub. Check your connection and try again";
+/// How many of a pack's pictures download at once.
+const PARALLEL_DOWNLOADS: usize = 4;
 
 /// One pack in the Community list.
 #[derive(Serialize)]
@@ -55,6 +60,48 @@ pub struct PackSkinDto {
 
 /// How big the folders are drawn when looking through a pack.
 const PACK_VIEW_SIZE: u32 = 256;
+
+/// How far adding a pack has got, sent to the webview as it goes:
+/// `{"stage": "download", "done": 3, "total": 16}`.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PackProgress {
+    pub stage: Stage,
+    /// Pictures done in this stage, out of `total`.
+    pub done: usize,
+    /// How many pictures the pack has.
+    pub total: usize,
+}
+
+/// The two stages of adding a pack, in order.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Stage {
+    /// The pictures are downloading; `done` counts the ones that have arrived.
+    Download,
+    /// They are being checked, encoded and saved; `done` reaches `total` once all are saved.
+    Save,
+}
+
+impl PackProgress {
+    fn download(done: usize, total: usize) -> PackProgress {
+        PackProgress {
+            stage: Stage::Download,
+            done,
+            total,
+        }
+    }
+
+    fn save(done: usize, total: usize) -> PackProgress {
+        PackProgress {
+            stage: Stage::Save,
+            done,
+            total,
+        }
+    }
+}
+
+/// Where the commands that report no progress send it.
+fn no_progress(_: PackProgress) {}
 
 /// What updating a pack changed: the old skins the new version doesn't have, and the new
 /// version's skins.
@@ -138,17 +185,28 @@ pub async fn community_preview(pack_id: String, fresh: bool) -> Result<String, S
     Ok(url)
 }
 
-/// Downloads a pack and saves its skins. Every picture is downloaded and checked before any is
-/// saved, so a dropped connection or a bad file never leaves half a pack behind.
+/// Downloads a pack and saves its skins, all of them or none, and returns them in the pack's
+/// order. The pictures download a few at a time and every one is checked before any is saved,
+/// then they are saved in one go, so a dropped connection, a bad file or a full disk never
+/// leaves half a pack behind.
+///
+/// `on_progress` hears how far it has got: `download` with nothing arrived, then as each picture
+/// arrives; then `save` with nothing saved, as each is ready to write, and with all of them once
+/// they are saved.
 #[tauri::command]
 pub async fn community_add(
     state: State<'_, AppState>,
     pack_id: String,
+    on_progress: Channel<PackProgress>,
 ) -> Result<Vec<SkinDto>, String> {
-    let (pack, hash, pictures) = download_pack(&pack_id).await?;
+    // The window may have gone, and the pack is saved all the same, so a failed send is ignored.
+    let progress = move |p: PackProgress| {
+        let _ = on_progress.send(p);
+    };
+    let (pack, hash, pictures) = download_pack(&pack_id, &progress).await?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        save_pack(&state, &pack_id, &pack, &pictures, Some(hash))
+        save_pack(&state, &pack_id, &pack, &pictures, Some(hash), &progress)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -158,15 +216,13 @@ pub async fn community_add(
 /// It downloads and checks the whole pack as adding it would, and saves nothing.
 #[tauri::command]
 pub async fn community_pack_skins(pack_id: String) -> Result<Vec<PackSkinDto>, String> {
-    let (pack, _, pictures) = download_pack(&pack_id).await?;
+    let (pack, _, pictures) = download_pack(&pack_id, &no_progress).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let ready = prepare_pack(&pack, &pictures)?;
-        Ok(crate::state::parallel_map(&ready, |(skin, _, image)| {
-            PackSkinDto {
-                name: skin.name.trim().to_string(),
-                tags: pack.tags_for(skin),
-                thumbnail: data_url(&image.preview_png(PACK_VIEW_SIZE)),
-            }
+        Ok(parallel_map(&ready, |(skin, _, image)| PackSkinDto {
+            name: skin.name.trim().to_string(),
+            tags: pack.tags_for(skin),
+            thumbnail: data_url(&image.preview_png(PACK_VIEW_SIZE)),
         }))
     })
     .await
@@ -180,7 +236,7 @@ pub async fn community_update(
     state: State<'_, AppState>,
     pack_id: String,
 ) -> Result<PackUpdateDto, String> {
-    let (pack, hash, pictures) = download_pack(&pack_id).await?;
+    let (pack, hash, pictures) = download_pack(&pack_id, &no_progress).await?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         replace_pack(&state, &pack_id, &pack, &pictures, hash)
@@ -190,27 +246,57 @@ pub async fn community_update(
 }
 
 /// Pack `pack_id` from GitHub, fetched past any cache: what it lists, its hash
-/// ([`pack::pack_hash`]) and every picture, each within the pack limits.
-async fn download_pack(pack_id: &str) -> Result<(Pack, String, Vec<Vec<u8>>), String> {
+/// ([`pack::pack_hash`]) and every picture in the pack's order, each within the pack limits.
+async fn download_pack(
+    pack_id: &str,
+    progress: &(dyn Fn(PackProgress) + Sync),
+) -> Result<(Pack, String, Vec<Vec<u8>>), String> {
+    download_pack_from(&base_url(), pack_id, progress).await
+}
+
+/// [`download_pack`] from the copy of `community/` at `base`. The pictures download
+/// [`PARALLEL_DOWNLOADS`] at a time; `progress` hears `download` with none arrived once the
+/// pack's list is in, then again as each one arrives. The first picture that fails, in the
+/// pack's order, is the error, and the downloads still going are dropped.
+async fn download_pack_from(
+    base: &str,
+    pack_id: &str,
+    progress: &(dyn Fn(PackProgress) + Sync),
+) -> Result<(Pack, String, Vec<Vec<u8>>), String> {
     if !pack::is_pack_id(pack_id) {
         return Err("that isn't a pack".into());
     }
-    let base = format!("{}/packs/{pack_id}", base_url());
+    let base = format!("{base}/packs/{pack_id}");
     let manifest = fetch(
         &uncached(&format!("{base}/{}", pack::MANIFEST_FILE), true),
         pack::MAX_MANIFEST_BYTES,
     )
     .await?;
     let pack = Pack::parse(&manifest).map_err(|problems| problems.join("; "))?;
-    let mut pictures = Vec::with_capacity(pack.skins.len());
-    for skin in &pack.skins {
-        // `file` passed `is_picture_file_name`, so it cannot leave the pack's folder.
-        let url = uncached(&format!("{base}/{}", skin.file), true);
-        let bytes = fetch(&url, pack::MAX_PICTURE_BYTES)
-            .await
-            .map_err(|e| format!("{}: {e}", skin.file))?;
-        pictures.push(bytes);
-    }
+    let total = pack.skins.len();
+    progress(PackProgress::download(0, total));
+    let arrived = AtomicUsize::new(0);
+    // Owned names rather than borrowed skins: a future borrowing its stream's items can't be
+    // proved `Send`, which every command's future must be.
+    let files: Vec<String> = pack.skins.iter().map(|s| s.file.clone()).collect();
+    let pictures: Vec<Vec<u8>> = futures_util::stream::iter(files)
+        .map(|file| {
+            // `file` passed `is_picture_file_name`, so it cannot leave the pack's folder.
+            let url = uncached(&format!("{base}/{file}"), true);
+            let arrived = &arrived;
+            async move {
+                let bytes = fetch(&url, pack::MAX_PICTURE_BYTES)
+                    .await
+                    .map_err(|e| format!("{file}: {e}"))?;
+                let done = arrived.fetch_add(1, Ordering::Relaxed) + 1;
+                progress(PackProgress::download(done, total));
+                Ok::<_, String>(bytes)
+            }
+        })
+        // Kept in the pack's order, whichever arrives first.
+        .buffered(PARALLEL_DOWNLOADS)
+        .try_collect()
+        .await?;
     let hash = pack::pack_hash(
         &manifest,
         pack.skins
@@ -283,7 +369,7 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
                 .zip(&pictures)
                 .map(|(s, bytes)| (s.file.as_str(), bytes.as_slice())),
         );
-        save_pack(&state, &id, &pack, &pictures, Some(hash))
+        save_pack(&state, &id, &pack, &pictures, Some(hash), &no_progress)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -435,17 +521,20 @@ async fn fetch(url: &str, max: usize) -> Result<Vec<u8>, String> {
     Ok(body)
 }
 
-/// Checks and decodes every picture of a pack, and only then saves each as a community skin
-/// carrying the pack's tags, its id and its `hash`.
+/// Checks and decodes every picture of a pack, and only then saves them all as community skins
+/// carrying the pack's tags, its id and its `hash`. `progress` hears `save` with nothing saved
+/// first, and then as [`store_pack`] goes.
 fn save_pack(
     state: &AppState,
     pack_id: &str,
     pack: &Pack,
     pictures: &[Vec<u8>],
     hash: Option<String>,
+    progress: &(dyn Fn(PackProgress) + Sync),
 ) -> Result<Vec<SkinDto>, String> {
+    progress(PackProgress::save(0, pictures.len()));
     let ready = prepare_pack(pack, pictures)?;
-    store_pack(state, pack_id, pack, ready, hash)
+    store_pack(state, pack_id, pack, ready, hash, progress)
 }
 
 /// Swaps pack `pack_id`'s saved skins for this version of it. The new pictures are checked
@@ -460,7 +549,7 @@ fn replace_pack(
 ) -> Result<PackUpdateDto, String> {
     let ready = prepare_pack(pack, pictures)?;
     let before = state.remove_pack(pack_id)?;
-    let skins = store_pack(state, pack_id, pack, ready, Some(hash))?;
+    let skins = store_pack(state, pack_id, pack, ready, Some(hash), &no_progress)?;
     let removed = before
         .into_iter()
         .filter(|id| !skins.iter().any(|s| &s.id == id))
@@ -468,50 +557,74 @@ fn replace_pack(
     Ok(PackUpdateDto { removed, skins })
 }
 
-/// A pack's pictures decoded and checked, each with its skin and id; nothing saved yet.
+/// A pack's pictures decoded and checked, each with its skin and id; nothing saved yet. They
+/// are decoded on all cores at once; the first picture that fails, in the pack's order, is the
+/// error.
 fn prepare_pack<'p>(
     pack: &'p Pack,
     pictures: &[Vec<u8>],
 ) -> Result<Vec<(&'p PackSkin, String, SkinImage)>, String> {
-    pack.skins
-        .iter()
-        .zip(pictures)
-        .map(|(skin, bytes)| {
-            let rgba = pack::decode_picture(bytes).map_err(|e| format!("{} {e}", skin.file))?;
-            let image = prepare_import(rgba).map_err(|e| format!("{}: {e}", skin.file))?;
-            Ok((skin, store::skin_id(bytes), image))
-        })
-        .collect()
+    let listed: Vec<(&PackSkin, &Vec<u8>)> = pack.skins.iter().zip(pictures).collect();
+    parallel_map(&listed, |&(skin, bytes)| {
+        let rgba = pack::decode_picture(bytes).map_err(|e| format!("{} {e}", skin.file))?;
+        let image = prepare_import(rgba).map_err(|e| format!("{}: {e}", skin.file))?;
+        Ok((skin, store::skin_id(bytes), image))
+    })
+    .into_iter()
+    .collect()
 }
 
-/// Saves prepared pictures as community skins carrying the pack's tags, its id and its `hash`.
+/// Saves prepared pictures as community skins carrying the pack's tags, its id and its `hash`,
+/// all of them or none ([`AppState::save_many`]), and returns them in the pack's order. The
+/// first is the newest, so the library shows the pack in its own order too. A picture the pack
+/// lists twice is one skin, returned once.
+///
+/// `progress` hears `save` as each picture is ready to write, and with all of them once they
+/// are saved.
 fn store_pack(
     state: &AppState,
     pack_id: &str,
     pack: &Pack,
     ready: Vec<(&PackSkin, String, SkinImage)>,
     hash: Option<String>,
+    progress: &(dyn Fn(PackProgress) + Sync),
 ) -> Result<Vec<SkinDto>, String> {
-    let mut saved = Vec::with_capacity(ready.len());
-    for (skin, id, image) in ready {
-        let new = NewSkin {
-            id,
-            name: skin.name.trim().to_string(),
-            source: SkinSource::Community,
-            provider: None,
-            model: None,
-            idea: None,
-            tags: pack.tags_for(skin),
-            pack: Some(pack_id.to_string()),
-            pack_name: Some(pack.name.trim().to_string()),
-            author: Some(pack.author.clone()),
-            license: Some(pack.license.clone()),
-            pack_hash: hash.clone(),
-        };
-        let (entry, thumb) = state.save(new, image)?;
-        saved.push(SkinDto::saved(&entry, &thumb));
-    }
-    Ok(saved)
+    let total = ready.len();
+    let skins = ready
+        .into_iter()
+        .map(|(skin, id, image)| {
+            let new = NewSkin {
+                id,
+                name: skin.name.trim().to_string(),
+                source: SkinSource::Community,
+                provider: None,
+                model: None,
+                idea: None,
+                tags: pack.tags_for(skin),
+                pack: Some(pack_id.to_string()),
+                pack_name: Some(pack.name.trim().to_string()),
+                author: Some(pack.author.clone()),
+                license: Some(pack.license.clone()),
+                pack_hash: hash.clone(),
+            };
+            (new, image)
+        })
+        .collect();
+    // The pictures are encoded on several threads at once; the count is kept and sent under one
+    // lock, so the webview hears it go up in order.
+    let count = Mutex::new(0);
+    let saved = state.save_many(skins, &|| {
+        let mut done = lock(&count);
+        *done += 1;
+        progress(PackProgress::save(*done, total));
+    })?;
+    progress(PackProgress::save(total, total));
+    let mut seen = HashSet::new();
+    Ok(saved
+        .iter()
+        .filter(|(entry, _)| seen.insert(entry.id.clone()))
+        .map(|(entry, thumb)| SkinDto::saved(entry, thumb))
+        .collect())
 }
 
 /// Reads a file of at most `max` bytes.
@@ -595,6 +708,7 @@ mod tests {
     use super::*;
     use crate::store::SkinKind;
     use std::io::Cursor;
+    use std::sync::Arc;
 
     fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -644,7 +758,15 @@ mod tests {
             .iter()
             .map(|s| std::fs::read(dir.join(&s.file)).unwrap())
             .collect();
-        let saved = save_pack(&state, "test-colours", &pack, &pictures, Some("v1".into())).unwrap();
+        let saved = save_pack(
+            &state,
+            "test-colours",
+            &pack,
+            &pictures,
+            Some("v1".into()),
+            &no_progress,
+        )
+        .unwrap();
         assert_eq!(saved.len(), 2);
         assert_eq!(saved[0].tags, ["colour", "cool"]);
         assert_eq!(saved[1].tags, ["colour"]);
@@ -672,7 +794,15 @@ mod tests {
         let pack = Pack::parse(PACK.as_bytes()).unwrap();
         let teal = png(512, 480, [20, 140, 150, 255]);
         let old = vec![teal.clone(), png(512, 480, [180, 70, 30, 255])];
-        let before = save_pack(&state, "test-colours", &pack, &old, Some("v1".into())).unwrap();
+        let before = save_pack(
+            &state,
+            "test-colours",
+            &pack,
+            &old,
+            Some("v1".into()),
+            &no_progress,
+        )
+        .unwrap();
 
         let new = vec![teal, png(512, 480, [90, 60, 160, 255])];
         let update = replace_pack(&state, "test-colours", &pack, &new, "v2".into()).unwrap();
@@ -721,7 +851,8 @@ mod tests {
         let state = AppState::default();
         state.open_store(temp_dir("bad-store"));
         let pictures = vec![png(512, 480, [1, 2, 3, 255]), png(100, 100, [1, 2, 3, 255])];
-        let err = save_pack(&state, "test-colours", &pack, &pictures, None).unwrap_err();
+        let err =
+            save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
         assert!(err.contains("rust.png"), "{err}");
         assert!(state.saved_skins().is_empty(), "nothing was saved");
     }
@@ -755,5 +886,249 @@ mod tests {
         assert_eq!(unique_stem("Sunset", 1, &used), "sunset-2");
         assert_eq!(unique_stem("***", 1, &used), "skin-2");
         assert_eq!(unique_stem("Night sky", 1, &used), "night-sky");
+    }
+
+    #[test]
+    fn progress_is_the_shape_the_webview_expects() {
+        assert_eq!(
+            serde_json::to_value(PackProgress::download(0, 16)).unwrap(),
+            serde_json::json!({"stage": "download", "done": 0, "total": 16})
+        );
+        assert_eq!(
+            serde_json::to_value(PackProgress::save(16, 16)).unwrap(),
+            serde_json::json!({"stage": "save", "done": 16, "total": 16})
+        );
+    }
+
+    /// A `pack.json` listing `skins` as (file, name).
+    fn listing(skins: &[(&str, &str)]) -> String {
+        let skins: Vec<String> = skins
+            .iter()
+            .map(|(file, name)| format!(r#"{{ "file": "{file}", "name": "{name}" }}"#))
+            .collect();
+        format!(
+            r#"{{ "version": 1, "name": "Test pack", "author": "prajwal-svm", "license": "CC0-1.0",
+  "tags": ["test"], "skins": [{}] }}"#,
+            skins.join(", ")
+        )
+    }
+
+    #[test]
+    fn a_pack_is_saved_in_its_own_order_and_says_how_far_it_has_got() {
+        let state = AppState::default();
+        state.open_store(temp_dir("order-store"));
+        let pack = Pack::parse(
+            listing(&[("a.png", "First"), ("b.png", "Second"), ("c.png", "Third")]).as_bytes(),
+        )
+        .unwrap();
+        let pictures = vec![
+            png(512, 480, [200, 40, 40, 255]),
+            png(512, 480, [40, 200, 40, 255]),
+            png(512, 480, [40, 40, 200, 255]),
+        ];
+        let heard = Mutex::new(Vec::new());
+        let saved = save_pack(&state, "test-pack", &pack, &pictures, None, &|p| {
+            lock(&heard).push(p)
+        })
+        .unwrap();
+
+        let names: Vec<&str> = saved.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["First", "Second", "Third"]);
+        let newest_first: Vec<String> = state
+            .saved_skins()
+            .into_iter()
+            .map(|(entry, _)| entry.name)
+            .collect();
+        assert_eq!(
+            newest_first,
+            ["First", "Second", "Third"],
+            "the pack's order"
+        );
+
+        let heard = heard.into_inner().unwrap();
+        assert_eq!(heard.first(), Some(&PackProgress::save(0, 3)));
+        assert_eq!(heard.last(), Some(&PackProgress::save(3, 3)));
+        assert_eq!(
+            heard.len(),
+            5,
+            "none, each of the three, then all saved: {heard:?}"
+        );
+        assert!(
+            heard.windows(2).all(|w| w[0].done <= w[1].done),
+            "it never goes back: {heard:?}"
+        );
+    }
+
+    #[test]
+    fn a_picture_listed_twice_is_one_skin() {
+        let state = AppState::default();
+        state.open_store(temp_dir("twice-store"));
+        let pack =
+            Pack::parse(listing(&[("a.png", "Teal"), ("b.png", "Teal again")]).as_bytes()).unwrap();
+        let teal = png(512, 480, [20, 140, 150, 255]);
+        let saved = save_pack(
+            &state,
+            "test-pack",
+            &pack,
+            &[teal.clone(), teal],
+            None,
+            &no_progress,
+        )
+        .unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].name, "Teal");
+        assert_eq!(state.saved_skins().len(), 1);
+    }
+
+    #[test]
+    fn a_pack_that_cannot_be_saved_adds_nothing() {
+        let dir = temp_dir("full-store");
+        let state = AppState::default();
+        state.open_store(dir.clone());
+        let pack = Pack::parse(PACK.as_bytes()).unwrap();
+        let pictures = vec![png(512, 480, [1, 2, 3, 255]), png(512, 480, [4, 5, 6, 255])];
+        // Something in the way of the second picture, as a full disk would be.
+        let second = store::skin_id(&pictures[1]);
+        let stem = second.strip_prefix("user:").unwrap();
+        std::fs::create_dir(dir.join(format!("{stem}.png"))).unwrap();
+
+        let err =
+            save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
+        assert!(err.starts_with("couldn't save those skins"), "{err}");
+        assert!(state.saved_skins().is_empty());
+        assert!(state.installed_packs().is_empty());
+        let left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left, [format!("{stem}.png")], "only what was in the way");
+    }
+
+    /// Serves `files` (path, body, delay before answering) over HTTP on a free local port, and
+    /// counts the most requests it had at once. Returns the base URL and that count.
+    fn serve(files: Vec<(String, Vec<u8>, Duration)>) -> (String, Arc<AtomicUsize>) {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let files: Arc<HashMap<String, (Vec<u8>, Duration)>> = Arc::new(
+            files
+                .into_iter()
+                .map(|(path, body, delay)| (path, (body, delay)))
+                .collect(),
+        );
+        let (open, most) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+        let most_seen = most.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let (files, open, most) = (files.clone(), open.clone(), most.clone());
+                std::thread::spawn(move || {
+                    most.fetch_max(open.fetch_add(1, Ordering::SeqCst) + 1, Ordering::SeqCst);
+                    let mut reader = BufReader::new(&stream);
+                    let mut request = String::new();
+                    let _ = reader.read_line(&mut request);
+                    let mut header = String::new();
+                    while reader.read_line(&mut header).is_ok_and(|n| n > 2) {
+                        header.clear();
+                    }
+                    let path = request.split(' ').nth(1).unwrap_or("");
+                    let path = path.split('?').next().unwrap_or("");
+                    let (status, body) = match files.get(path) {
+                        Some((body, delay)) => {
+                            std::thread::sleep(*delay);
+                            ("200 OK", body.clone())
+                        }
+                        None => ("404 Not Found", Vec::new()),
+                    };
+                    // Before answering, so a request that follows this answer is never counted
+                    // alongside it.
+                    open.fetch_sub(1, Ordering::SeqCst);
+                    let head = format!(
+                        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let mut stream = &stream;
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(&body);
+                });
+            }
+        });
+        (base, most_seen)
+    }
+
+    #[test]
+    fn a_pack_downloads_a_few_at_a_time_and_keeps_its_order() {
+        let files: Vec<String> = (1..=6).map(|i| format!("{i}.png")).collect();
+        let named: Vec<(&str, &str)> = files.iter().map(|f| (f.as_str(), "Skin")).collect();
+        let manifest = listing(&named).into_bytes();
+        let pictures: Vec<Vec<u8>> = (1..=6)
+            .map(|i| png(256, 256, [i * 40, 90, 200, 255]))
+            .collect();
+        let mut served = vec![(
+            "/packs/test-pack/pack.json".to_string(),
+            manifest.clone(),
+            Duration::ZERO,
+        )];
+        // The first pictures answer slowest, so they arrive out of order.
+        for (i, (file, bytes)) in files.iter().zip(&pictures).enumerate() {
+            let delay = Duration::from_millis(300 - 50 * i as u64);
+            served.push((format!("/packs/test-pack/{file}"), bytes.clone(), delay));
+        }
+        let (base, most) = serve(served);
+
+        let heard = Mutex::new(Vec::new());
+        let (pack, hash, got) =
+            tauri::async_runtime::block_on(download_pack_from(&base, "test-pack", &|p| {
+                lock(&heard).push(p)
+            }))
+            .unwrap();
+
+        assert_eq!(pack.skins.len(), 6);
+        assert_eq!(got, pictures, "in the pack's order");
+        let listed = files
+            .iter()
+            .map(String::as_str)
+            .zip(pictures.iter().map(Vec::as_slice));
+        assert_eq!(hash, pack::pack_hash(&manifest, listed));
+        let heard = heard.into_inner().unwrap();
+        let expected: Vec<PackProgress> = (0..=6).map(|n| PackProgress::download(n, 6)).collect();
+        assert_eq!(heard, expected);
+        let most = most.load(Ordering::SeqCst);
+        assert!(
+            (2..=PARALLEL_DOWNLOADS).contains(&most),
+            "{most} requests at once"
+        );
+    }
+
+    #[test]
+    fn a_picture_that_is_missing_stops_the_download() {
+        let manifest = listing(&[("a.png", "A"), ("b.png", "B")]).into_bytes();
+        let (base, _) = serve(vec![
+            (
+                "/packs/test-pack/pack.json".to_string(),
+                manifest,
+                Duration::ZERO,
+            ),
+            (
+                "/packs/test-pack/a.png".to_string(),
+                png(256, 256, [9, 9, 9, 255]),
+                Duration::ZERO,
+            ),
+        ]);
+        let heard = Mutex::new(Vec::new());
+        let err = tauri::async_runtime::block_on(download_pack_from(&base, "test-pack", &|p| {
+            lock(&heard).push(p)
+        }))
+        .unwrap_err();
+        assert_eq!(err, "b.png: not found");
+        assert_eq!(
+            heard.into_inner().unwrap().first(),
+            Some(&PackProgress::download(0, 2))
+        );
+
+        let err =
+            tauri::async_runtime::block_on(download_pack_from(&base, "../escape", &no_progress))
+                .unwrap_err();
+        assert_eq!(err, "that isn't a pack");
     }
 }

@@ -19,7 +19,7 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
  * (no CSS transition to fight), and settles flat again when the pointer leaves. The star
  * springs in on hover and stays while the skin is a favourite.
  *
- * Skins that aren't built in also get a ⋯ button, top left, for their menu: name, tags, what
+ * Every skin also has a ⋯ button, top left, for its menu: name, tags, what
  * is known about them, sharing and deleting. Return or F2 opens it from the keyboard, and
  * Delete or Backspace asks to delete the skin.
  */
@@ -40,9 +40,9 @@ export function FolderThumb({
   favorite: boolean;
   onSelect: () => void;
   onToggleFavorite: () => void;
-  /** Asks to delete the skin. Absent for the built-in skins. */
+  /** Asks to delete the skin. */
   onRemove?: () => void;
-  /** Opens its menu beside `anchor`. Absent for the built-in skins. */
+  /** Opens its menu beside `anchor`. */
   onMenu?: (anchor: HTMLElement, fromKeyboard: boolean) => void;
   /** Its menu is open, so the ⋯ button stays in view. */
   menuOpen?: boolean;

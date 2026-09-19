@@ -38,6 +38,11 @@ impl IconSet {
 pub const RENDER_SIZE: u32 = 2048;
 /// Sizes the app renders for an applied icon.
 pub const ICON_SIZES: [u32; 10] = [2048, 1024, 512, 256, 128, 64, 48, 32, 24, 16];
+/// Width of artwork made for the template. At 1024 × 958 it is close to the back panel's own
+/// aspect, so the folder crops little of it; artwork of any other size still works.
+pub const SKIN_WIDTH: u32 = 1024;
+/// Height of artwork made for the template; see [`SKIN_WIDTH`].
+pub const SKIN_HEIGHT: u32 = 958;
 
 /// Flat colour of the paper sheet.
 const PAPER_FILL: [u8; 4] = [0xEB, 0xE6, 0xE0, 0xFF];
@@ -271,10 +276,8 @@ pub fn render_preview_png(art: &Artwork, size: u32) -> Vec<u8> {
 pub fn default_folder_artwork() -> Artwork {
     const TOP: [u8; 3] = [0x7C, 0xC8, 0xF5];
     const BOTTOM: [u8; 3] = [0x4E, 0xA9, 0xE4];
-    const W: u32 = 1024;
-    const H: u32 = 958;
-    let rgba = image::RgbaImage::from_fn(W, H, |_, y| {
-        let t = y as f32 / (H - 1) as f32;
+    let rgba = image::RgbaImage::from_fn(SKIN_WIDTH, SKIN_HEIGHT, |_, y| {
+        let t = y as f32 / (SKIN_HEIGHT - 1) as f32;
         let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
         image::Rgba([
             mix(TOP[0], BOTTOM[0]),

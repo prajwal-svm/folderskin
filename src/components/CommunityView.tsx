@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type CommunityPack, type Skin } from "../lib/tauri";
@@ -9,6 +9,7 @@ import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
 import { OkBadge } from "./OkBadge";
+import { PackPreview, clearPreviews } from "./PackPreview";
 import { PackViewer } from "./PackViewer";
 import { DeleteIcon } from "./icons/delete";
 import { DownloadIcon } from "./icons/download";
@@ -21,9 +22,6 @@ import { RefreshCwIcon } from "./icons/refresh-cw";
 import { SparklesIcon } from "./icons/sparkles";
 
 type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string; run: () => void } }) => void;
-
-/** Previews downloaded this session, so coming back to Community doesn't load them again. */
-const previews = new Map<string, string>();
 
 /** How the packs are shown: rows with their details, or cards with bigger folders. */
 type PackView = "list" | "gallery";
@@ -101,7 +99,7 @@ export function CommunityView({
     setRefreshing(true);
     try {
       const list = await api.communityPacks(true);
-      previews.clear();
+      clearPreviews();
       setGeneration((g) => g + 1);
       setPacks(list);
       setError(null);
@@ -412,50 +410,4 @@ export function CommunityView({
       )}
     </section>
   );
-}
-
-/**
- * A pack's preview: its first few skins as folders, loaded once per session. The list shows the
- * strip as it is; the gallery cuts it into its folders and lays them out two by two.
- */
-function PackPreview({ id, count, grid, fresh }: { id: string; count: number; grid: boolean; fresh: boolean }) {
-  const [src, setSrc] = useState(() => previews.get(id) ?? null);
-  useEffect(() => {
-    if (src) return;
-    let live = true;
-    api
-      .communityPreview(id, fresh)
-      .then((url) => {
-        previews.set(id, url);
-        if (live) setSrc(url);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [id, src, fresh]);
-  if (grid) {
-    // The strip holds up to four folders side by side, one per cell here.
-    const shown = Math.max(1, Math.min(count, 4));
-    return (
-      <span className="pack-preview">
-        {src ? (
-          <span className="pack-quad" style={{ "--strip": `url("${src}")` } as CSSProperties}>
-            {Array.from({ length: shown }, (_, i) => (
-              <span
-                key={i}
-                style={{
-                  backgroundSize: `${shown * 100}% 100%`,
-                  backgroundPositionX: shown === 1 ? "0%" : `${(i / (shown - 1)) * 100}%`,
-                }}
-              />
-            ))}
-          </span>
-        ) : (
-          <span className="pack-preview-blank" />
-        )}
-      </span>
-    );
-  }
-  return <span className="pack-preview">{src ? <img src={src} alt="" draggable={false} /> : <span className="pack-preview-blank" />}</span>;
 }

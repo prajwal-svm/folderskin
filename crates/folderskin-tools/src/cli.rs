@@ -1,13 +1,13 @@
 //! Command-line surface of folderskin-tools (clap derive).
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "folderskin-tools",
     version,
-    about = "Generate, import and check FolderSkin skins"
+    about = "Make and check FolderSkin skin packs, preview skins, and apply them from a terminal"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -16,14 +16,10 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Work with the skins in assets/skins
-    Skin {
-        #[command(subcommand)]
-        command: SkinCommand,
-    },
-    /// Render a folder icon preview from a picture (or a solid colour) to a PNG
+    /// Render a picture (or a solid colour) as the folder icon the app makes of it, to a PNG
     Render {
-        /// Picture to composite (PNG, JPEG, WebP)
+        /// Picture to render (PNG, JPEG, WebP). A finished folder, cut out or on magenta, is used
+        /// as it is; anything else is wrapped onto FolderSkin's folder, as the app does
         image: Option<PathBuf>,
         /// Use a solid colour instead of a picture, e.g. 2A9D8F
         #[arg(long, value_name = "RRGGBB")]
@@ -33,9 +29,14 @@ pub enum Command {
         /// Output size in pixels (square)
         #[arg(long, default_value_t = 1024)]
         size: u32,
-        /// Focus point that stays centred in the crop, e.g. 0.5,0.4
+        /// Focus point that stays centred in the crop, e.g. 0.5,0.4 (artwork only)
         #[arg(long, value_parser = parse_focus)]
         focus: Option<(f32, f32)>,
+    },
+    /// Write a 1024×958 safe-area template showing where the tab, paper and front panel land
+    Guide {
+        #[arg(long, default_value = "guide.png")]
+        out: PathBuf,
     },
     /// Validate the app icon source (1024×1024 PNG with alpha) and print the command that builds the icon set
     AppIcon {
@@ -44,23 +45,19 @@ pub enum Command {
         #[arg(long, default_value = "src-tauri/icons")]
         out: PathBuf,
     },
-    /// Apply a skin (or a picture) to a folder from the terminal
+    /// Apply a picture to a folder from the terminal, the way the app would
     Apply {
         folder: PathBuf,
-        /// Id of a skin in assets/skins/manifest.json
-        #[arg(long, conflicts_with = "image")]
-        skin: Option<String>,
         /// Any picture file
-        #[arg(long, conflicts_with = "skin")]
-        image: Option<PathBuf>,
-        #[arg(long, default_value = "assets/skins")]
-        dir: PathBuf,
+        #[arg(long)]
+        image: PathBuf,
+        /// Focus point that stays centred in the crop, e.g. 0.5,0.4 (artwork only)
         #[arg(long, value_parser = parse_focus)]
         focus: Option<(f32, f32)>,
     },
     /// Put the default icon back
     Revert { folder: PathBuf },
-    /// Make, check and index skin packs: the community's, and the ones built into the app
+    /// Make, check and index community skin packs
     Packs {
         #[command(subcommand)]
         command: PacksCommand,
@@ -71,11 +68,10 @@ pub enum Command {
 pub enum PacksCommand {
     /// Check every pack in <dir>/packs the way the app will; exit 1 on problems
     Check {
-        /// The folder holding packs/: community, or assets for the built-in packs
+        /// The community folder, holding packs/
         #[arg(long, default_value = "community")]
         dir: PathBuf,
-        /// The largest a picture may be, in KB, if less than the pack limit of 2048. The built-in
-        /// packs are in every download, so CI holds them to 400
+        /// The largest a picture may be, in KB, if less than the pack limit of 2048
         #[arg(long, value_name = "KB")]
         max_kb: Option<usize>,
     },
@@ -100,10 +96,11 @@ pub enum PacksCommand {
         /// CC0-1.0, CC-BY-4.0 or MIT
         #[arg(long, default_value = "CC0-1.0")]
         license: String,
-        /// The folder holding packs/: assets to build the pack into the app, community to share it
-        #[arg(long, default_value = "assets")]
+        /// The community folder, holding packs/
+        #[arg(long, default_value = "community")]
         dir: PathBuf,
-        /// The largest a picture may be, in KB
+        /// The largest a picture may be, in KB. The pack limit is 2048; smaller pictures make a
+        /// pack quicker to add
         #[arg(long, value_name = "KB", default_value_t = 400)]
         max_kb: usize,
         /// Also write a PNG showing every skin as the folder it makes
@@ -120,57 +117,6 @@ pub enum PacksCommand {
         #[arg(long, default_value = "community")]
         dir: PathBuf,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum SkinCommand {
-    /// Regenerate the ten built-in skins, the manifest and the previews (deterministic)
-    Gen {
-        #[arg(long, default_value = "assets/skins")]
-        out: PathBuf,
-        #[arg(long, default_value = "assets/previews")]
-        previews: PathBuf,
-    },
-    /// Import a picture as a skin: crop to 1024×958, encode, preview, register in the manifest
-    Add {
-        image: PathBuf,
-        #[arg(long)]
-        id: String,
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        collection: String,
-        /// Focus point in 0..1 that stays centred in the crop (default 0.5,0.5)
-        #[arg(long, value_parser = parse_focus)]
-        focus: Option<(f32, f32)>,
-        /// Keep PNG instead of JPEG (bigger, exact colours)
-        #[arg(long)]
-        lossless: bool,
-        #[arg(long, default_value = "assets/skins")]
-        dir: PathBuf,
-        #[arg(long, default_value = "assets/previews")]
-        previews: PathBuf,
-        #[arg(long, default_value = "")]
-        author: String,
-        #[arg(long, default_value = "CC0-1.0")]
-        license: String,
-    },
-    /// Validate the manifest and every skin file; exit 1 on problems
-    Check {
-        #[arg(long, default_value = "assets/skins")]
-        dir: PathBuf,
-    },
-    /// Write a 1024×958 safe-area template showing where the tab, paper and front panel land
-    Guide {
-        #[arg(long, default_value = "guide.png")]
-        out: PathBuf,
-    },
-}
-
-#[derive(Copy, Clone, Debug, ValueEnum)]
-pub enum Encoding {
-    Jpeg,
-    Png,
 }
 
 pub fn parse_focus(s: &str) -> Result<(f32, f32), String> {
@@ -209,29 +155,41 @@ mod tests {
     }
 
     #[test]
-    fn parses_skin_add() {
+    fn parses_guide_and_apply_with_a_picture() {
+        match Cli::parse_from(["folderskin-tools", "guide"]).command {
+            Command::Guide { out } => assert_eq!(out, PathBuf::from("guide.png")),
+            other => panic!("{other:?}"),
+        }
         let cli = Cli::parse_from([
             "folderskin-tools",
-            "skin",
-            "add",
-            "in.jpg",
-            "--id",
-            "x",
-            "--name",
-            "X",
-            "--collection",
-            "pop",
+            "apply",
+            "/tmp/folder",
+            "--image",
+            "koi.webp",
             "--focus",
             "0.3,0.6",
         ]);
         match cli.command {
-            Command::Skin {
-                command: SkinCommand::Add { id, focus, .. },
+            Command::Apply {
+                folder,
+                image,
+                focus,
             } => {
-                assert_eq!(id, "x");
+                assert_eq!(folder, PathBuf::from("/tmp/folder"));
+                assert_eq!(image, PathBuf::from("koi.webp"));
                 assert_eq!(focus, Some((0.3, 0.6)));
             }
             other => panic!("{other:?}"),
+        }
+        assert!(
+            Cli::try_parse_from(["folderskin-tools", "apply", "/tmp/folder"]).is_err(),
+            "apply needs a picture"
+        );
+        for gone in [
+            vec!["folderskin-tools", "apply", "/tmp/f", "--skin", "aurora"],
+            vec!["folderskin-tools", "skin", "gen"],
+        ] {
+            assert!(Cli::try_parse_from(&gone).is_err(), "{gone:?}");
         }
     }
 
@@ -255,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_packs_make_into_a_built_in_pack_by_default() {
+    fn parses_packs_make_into_the_community_folder_by_default() {
         let cli = Cli::parse_from([
             "folderskin-tools",
             "packs",
@@ -280,6 +238,7 @@ mod tests {
                         dir,
                         max_kb,
                         license,
+                        flat_backdrop,
                         ..
                     },
             } => {
@@ -288,9 +247,10 @@ mod tests {
                     [PathBuf::from("renders/"), PathBuf::from("extra.png")]
                 );
                 assert_eq!(tags, ["3d", "glossy"]);
-                assert_eq!(dir, PathBuf::from("assets"));
+                assert_eq!(dir, PathBuf::from("community"));
                 assert_eq!(max_kb, 400);
                 assert_eq!(license, "CC0-1.0");
+                assert!(!flat_backdrop);
             }
             other => panic!("{other:?}"),
         }

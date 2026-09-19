@@ -42,7 +42,7 @@
     ],
     "category": "GraphicsAndDesign",
     "shortDescription": "Give your folders a skin",
-    "longDescription": "FolderSkin applies one of ten built-in skins, or your own photo, as a folder icon on macOS, Windows and Linux.",
+    "longDescription": "FolderSkin gives any folder a custom icon: skins from free community packs, your own photos, or art painted by an AI model with your own key. macOS, Windows and Linux.",
     "macOS": {
       "minimumSystemVersion": "12.0",
       "hardenedRuntime": true,

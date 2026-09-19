@@ -8,7 +8,6 @@ pub mod compositor;
 pub mod fit;
 pub mod geometry;
 pub mod ico;
-pub mod manifest;
 pub mod matte;
 pub mod pack;
 pub mod raster;

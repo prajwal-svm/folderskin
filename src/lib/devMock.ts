@@ -1,25 +1,31 @@
 /**
- * Browser-only stand-in for the Tauri commands so `pnpm dev` in a plain browser shows the
- * real layout with the generated previews. Vite serves them from assets/previews in dev only,
- * so they never reach a build (the app renders its own thumbnails).
+ * Browser-only stand-in for the Tauri commands so `pnpm dev` in a plain browser shows the real
+ * layout. The library lives in memory and starts empty, like a first launch; community packs use
+ * the pictures in community/packs (Vite serves the repository in dev only, so they never reach a
+ * build) and the intro's colour folders.
  * Never used inside the app: `isTauri()` is true there.
+ *
+ * The onboarding shows until it's finished once in this browser; add `?onboarding` to the address
+ * to see it again. "Chrome dreams" fails the first time it's added, to show what a failure does,
+ * and `?offline` makes everything from GitHub fail, as it does without a connection. `?real` leaves
+ * out the made-up packs, for screenshots.
  */
-import type { AiCatalogue, AiGenerateRequest, CommunityPack, ExportPackRequest, PackSkinPreview, PackUpdate, PathInfo, PlatformInfo, Skin, SkinList } from "./tauri";
+import { COLOUR_FOLDERS } from "../assets/onboarding";
+import type {
+  AiCatalogue,
+  AiGenerateRequest,
+  CommunityPack,
+  ExportPackRequest,
+  PackProgress,
+  PackSkinPreview,
+  PackUpdate,
+  PathInfo,
+  PlatformInfo,
+  Skin,
+  SkinList,
+} from "./tauri";
 import { cleanName } from "./names";
 import { cleanTags } from "./tags";
-
-const IDS: [string, string, string][] = [
-  ["aurora", "Aurora", "glow"],
-  ["sunset", "Sunset", "glow"],
-  ["mesh", "Mesh", "glow"],
-  ["ember", "Ember", "glow"],
-  ["paper", "Paper", "grain"],
-  ["denim", "Denim", "grain"],
-  ["slate", "Slate", "grain"],
-  ["halftone", "Halftone", "pop"],
-  ["stripes", "Stripes", "pop"],
-  ["bubbles", "Bubbles", "pop"],
-];
 
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
 const mockKeys = new Set<string>();
@@ -33,22 +39,68 @@ const MOCK_PACKS: Omit<CommunityPack, "added" | "update">[] = [
 ];
 /** The real preview strips from community/previews; the made-up packs borrow one. */
 const PREVIEW_OF: Record<string, string> = { "classic-art": "classic-art", colours: "colours", "night-prints": "classic-art", "chrome-dreams": "colours" };
-/** The skins each added sample pack put in the library. */
-const mockAdded = new Map<string, string[]>();
+/** Classic Art's pictures, finished folders already, in the pack's order. */
+const CLASSIC_ART = [
+  ["mona-lisa", "Mona Lisa"],
+  ["view-of-toledo", "View of Toledo"],
+  ["girl-with-a-pearl-earring", "Girl with a Pearl Earring"],
+  ["the-astronomer", "The Astronomer"],
+  ["oath-of-the-horatii", "Oath of the Horatii"],
+  ["napoleon-crossing-the-alps", "Napoleon Crossing the Alps"],
+  ["wanderer-above-the-sea-of-fog", "Wanderer above the Sea of Fog"],
+  ["the-ninth-wave", "The Ninth Wave"],
+  ["boulevard-des-capucines", "Boulevard des Capucines"],
+  ["breezing-up", "Breezing Up"],
+  ["paris-street-rainy-day", "Paris Street; Rainy Day"],
+  ["luncheon-of-the-boating-party", "Luncheon of the Boating Party"],
+  ["the-lady-of-shalott", "The Lady of Shalott"],
+  ["the-starry-night", "The Starry Night"],
+  ["mont-sainte-victoire", "Mont Sainte-Victoire"],
+  ["composition-viii", "Composition VIII"],
+] as const;
+const COLOUR_NAMES = ["Blue", "Orange", "Purple", "Green"];
+
+/** Everything in the preview's library, newest first. */
+let library: Skin[] = [];
 /** Sample packs added before their "new version": Colours gets one the first time it is added. */
 const mockStale = new Set<string>();
+/** Packs that have already failed once, so the next try works. */
+const mockFailedOnce = new Set<string>();
+
+const ONBOARDED_KEY = "folderskin.mock.onboarded";
+const OFFLINE = "couldn't reach GitHub. Check your connection and try again";
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const offline = () => new URLSearchParams(location.search).has("offline");
+/** The packs that really are on GitHub; the others only show what a longer list looks like. */
+const REAL_PACKS = new Set(["classic-art", "colours"]);
+const listed = () => (new URLSearchParams(location.search).has("real") ? MOCK_PACKS.filter((p) => REAL_PACKS.has(p.id)) : MOCK_PACKS);
+
+/** A stand-in skin picture: one of Classic Art's, or one of the intro's colour folders. */
+function picture(i: number): string {
+  return i % 3 === 2 ? COLOUR_FOLDERS[i % COLOUR_FOLDERS.length] : `/community/packs/classic-art/${CLASSIC_ART[i % CLASSIC_ART.length][0]}.webp`;
+}
+
+/** What a pack's skins look like here: the real pictures for Classic Art and Colours. */
+function packPictures(pack: Omit<CommunityPack, "added" | "update">): { name: string; thumbnail: string }[] {
+  return Array.from({ length: pack.count }, (_, i) => {
+    if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: `/community/packs/classic-art/${CLASSIC_ART[i][0]}.webp` };
+    if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
+    return { name: `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
+  });
+}
 
 function mockPackSkins(pack: Omit<CommunityPack, "added" | "update">): Skin[] {
-  const pictures = ["aurora", "sunset", "mesh", "ember", "paper", "denim", "slate", "halftone"];
-  return Array.from({ length: Math.min(pack.count, 4) }, (_, i) => ({
+  const now = Date.now();
+  return packPictures(pack).map((p, i) => ({
     id: `user:${pack.id}${i}`,
-    name: `${pack.name} ${i + 1}`,
-    collection: "community",
-    thumbnail: `/assets/previews/${pictures[i % pictures.length]}.png`,
+    name: p.name,
+    collection: "yours",
+    thumbnail: p.thumbnail,
     custom: true,
-    kind: "artwork" as const,
+    kind: "folder" as const,
     source: "community" as const,
-    created_at: Date.now() + i,
+    // The pack's first skin is the newest, as the app does it, so the library shows the pack in order.
+    created_at: now + pack.count - i,
     tags: pack.tags,
     pack: pack.id,
     pack_name: pack.name,
@@ -57,83 +109,110 @@ function mockPackSkins(pack: Omit<CommunityPack, "added" | "update">): Skin[] {
   }));
 }
 
+/** Puts skins in the library, replacing any with the same id. */
+function keep(skins: Skin[]) {
+  library = [...skins, ...library.filter((s) => !skins.some((k) => k.id === s.id))];
+}
+
+const packAdded = (id: string) => library.some((s) => s.pack === id);
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 export const mockApi = {
   listSkins: async (): Promise<SkinList> => ({
-    skins: [
-      ...IDS.map(([id, name, collection]) => ({
-        id,
-        name,
-        collection,
-        thumbnail: `/assets/previews/${id}.png`,
-        custom: false,
-        kind: "artwork" as const,
-        source: "builtin" as const,
-        created_at: null,
-        tags: [collection],
-      })),
-    ],
-    default_thumbnail: "/assets/previews/mesh.png",
+    skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
+    default_thumbnail: COLOUR_FOLDERS[0],
   }),
   inspectPath: async (path: string): Promise<PathInfo> => ({ kind: "folder", name: path.split(/[\\/]/).pop() || path, path }),
   importImage: async (path: string): Promise<Skin> => {
-    await new Promise((r) => setTimeout(r, 500));
+    await sleep(500);
     const name = (path.split(/[\\/]/).pop() || "Your picture").replace(/\.[^.]+$/, "");
-    return { id: `user:${Date.now()}`, name, collection: "yours", thumbnail: "/assets/previews/ember.png", custom: true, kind: "artwork", source: "import", created_at: Date.now(), tags: [] };
+    const skin: Skin = { id: `user:${Date.now()}`, name, collection: "yours", thumbnail: picture(library.length), custom: true, kind: "artwork", source: "import", created_at: Date.now(), tags: [] };
+    keep([skin]);
+    return skin;
   },
   applySkin: async () => new Promise<void>((r) => setTimeout(r, 600)),
   revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
-  folderIcon: async (): Promise<string> => "/assets/previews/mesh.png",
+  folderIcon: async (): Promise<string> => COLOUR_FOLDERS[0],
   skinsFolder: async () => "/Users/you/Library/Application Support/app.folderskin/skins",
-  deleteSkin: async () => {},
+  deleteSkin: async (skinId: string) => {
+    library = library.filter((s) => s.id !== skinId);
+  },
   editSkin: async (_skinId: string, name: string, tags: string[]) => ({ name: cleanName(name), tags: cleanTags(tags) }),
   communityPacks: async (_fresh = false): Promise<CommunityPack[]> => {
-    await new Promise((r) => setTimeout(r, 500));
-    return MOCK_PACKS.map((p) => ({ ...p, added: mockAdded.has(p.id), update: mockAdded.has(p.id) && mockStale.has(p.id) }));
+    await sleep(500);
+    if (offline()) throw OFFLINE;
+    return listed().map((p) => ({ ...p, added: packAdded(p.id), update: packAdded(p.id) && mockStale.has(p.id) }));
   },
   communityPreview: async (packId: string) => `/community/previews/${PREVIEW_OF[packId] ?? "colours"}.png`,
-  addPack: async (packId: string): Promise<Skin[]> => {
-    await new Promise((r) => setTimeout(r, 1200));
+  addPack: async (packId: string, onProgress?: (progress: PackProgress) => void): Promise<Skin[]> => {
     const pack = MOCK_PACKS.find((p) => p.id === packId);
     if (!pack) throw "that isn't a pack";
+    const total = pack.count;
+    if (offline()) throw OFFLINE;
+    onProgress?.({ stage: "download", done: 0, total });
+    for (let done = 1; done <= total; done++) {
+      await sleep(110);
+      if (packId === "chrome-dreams" && !mockFailedOnce.has(packId) && done > total / 2) {
+        mockFailedOnce.add(packId);
+        throw OFFLINE;
+      }
+      onProgress?.({ stage: "download", done, total });
+    }
+    for (let done = 0; done <= total; done += 4) {
+      onProgress?.({ stage: "save", done: Math.min(done, total), total });
+      await sleep(80);
+    }
+    onProgress?.({ stage: "save", done: total, total });
     const skins = mockPackSkins(pack);
-    mockAdded.set(packId, skins.map((s) => s.id));
+    keep(skins);
     if (packId === "colours" && !mockStale.has("colours-updated")) mockStale.add(packId);
     return skins;
   },
   packSkins: async (packId: string): Promise<PackSkinPreview[]> => {
-    await new Promise((r) => setTimeout(r, 900));
+    await sleep(900);
     const pack = MOCK_PACKS.find((p) => p.id === packId);
     if (!pack) throw "that isn't a pack";
-    const pictures = ["aurora", "sunset", "mesh", "ember", "paper", "denim", "slate", "halftone", "stripes", "bubbles"];
-    return Array.from({ length: pack.count }, (_, i) => ({
-      name: `${pack.name} ${i + 1}`,
-      tags: pack.tags,
-      thumbnail: `/assets/previews/${pictures[i % pictures.length]}.png`,
-    }));
+    return packPictures(pack).map((p) => ({ ...p, tags: pack.tags }));
   },
   updatePack: async (packId: string): Promise<PackUpdate> => {
-    await new Promise((r) => setTimeout(r, 1200));
+    await sleep(1200);
     const pack = MOCK_PACKS.find((p) => p.id === packId);
     if (!pack) throw "that isn't a pack";
     mockStale.delete(packId);
     mockStale.add(`${packId}-updated`);
-    return { removed: [], skins: mockPackSkins(pack) };
+    const skins = mockPackSkins(pack);
+    keep(skins);
+    return { removed: [], skins };
   },
   removePack: async (packId: string): Promise<string[]> => {
-    const ids = mockAdded.get(packId) ?? [];
-    mockAdded.delete(packId);
+    const ids = library.filter((s) => s.pack === packId).map((s) => s.id);
+    library = library.filter((s) => s.pack !== packId);
     return ids;
   },
   importPack: async (path: string): Promise<Skin[]> => {
     const id = (path.split(/[\\/]/).pop() || "my-pack").toLowerCase();
     const skins = mockPackSkins({ id, name: "Folder pack", author: "you", license: "CC0-1.0", tags: ["test"], count: 2 });
-    mockAdded.set(id, skins.map((s) => s.id));
+    keep(skins);
     return skins;
+  },
+  onboardingNeeded: async (): Promise<boolean> => {
+    if (new URLSearchParams(location.search).has("onboarding")) return true;
+    try {
+      return localStorage.getItem(ONBOARDED_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  },
+  finishOnboarding: async () => {
+    try {
+      localStorage.setItem(ONBOARDED_KEY, "1");
+    } catch {
+      // The preview shows the onboarding again next time; nothing else depends on it.
+    }
   },
   exportPack: async (req: ExportPackRequest): Promise<string> => {
     await new Promise((r) => setTimeout(r, 600));
@@ -194,8 +273,10 @@ export const mockApi = {
   },
   aiTestKey: async () => {},
   aiGenerate: async (_req: AiGenerateRequest): Promise<Skin> => {
-    await new Promise((r) => setTimeout(r, 4200));
+    await sleep(4200);
     const name = _req.idea.split(/\s+/).slice(0, 4).join(" ");
-    return { id: `user:ai${Date.now()}`, name: name.charAt(0).toUpperCase() + name.slice(1), collection: "yours", thumbnail: "/assets/previews/bubbles.png", custom: true, kind: _req.shape === "folder" ? "folder" : "artwork", source: "ai", created_at: Date.now(), tags: cleanTags(_req.tags), made_with: "OpenAI · GPT Image 2.5 Flare", idea: _req.idea };
+    const skin: Skin = { id: `user:ai${Date.now()}`, name: name.charAt(0).toUpperCase() + name.slice(1), collection: "yours", thumbnail: picture(library.length + 1), custom: true, kind: _req.shape === "folder" ? "folder" : "artwork", source: "ai", created_at: Date.now(), tags: cleanTags(_req.tags), made_with: "OpenAI · GPT Image 2.5 Flare", idea: _req.idea };
+    keep([skin]);
+    return skin;
   },
 };

@@ -16,8 +16,11 @@
 //!
 //! Files are written before the index entry that names them, and every file, the index included,
 //! is written atomically (a temp file, then a rename). A crash therefore leaves at worst an
-//! unreferenced picture, never an entry without one. An index that cannot be read is set aside
-//! under another name rather than overwritten, and the store starts empty.
+//! unreferenced picture or temp file, never an entry without one, and the next launch removes
+//! those ([`Store::open`]). Several skins saved together, such as a community pack, share one
+//! index write, so they are saved all together or not at all ([`Store::add_many`]). An index that
+//! cannot be read is set aside under another name rather than overwritten, and the store starts
+//! empty.
 
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
@@ -25,15 +28,20 @@ use folderskin_core::pack;
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Bump when the index format changes in a way an older build could misread.
 const INDEX_VERSION: u32 = 1;
 const INDEX_FILE: &str = "skins.json";
+/// What an index that could not be read is renamed to start with ([`set_aside`]).
+const SET_ASIDE_PREFIX: &str = "skins-unreadable-";
 const ID_PREFIX: &str = "user:";
+/// How long a file the index doesn't name is left alone before [`Store::open`] removes it:
+/// another FolderSkin running at the same time may be part way through saving it.
+const LEFTOVER_AGE: Duration = Duration::from_secs(10 * 60);
 /// Longest side of a stored picture. The compositor's master render is 2048 px, so anything
 /// larger would only be thrown away at render time.
 pub const MAX_STORED_SIDE: u32 = 2048;
@@ -55,8 +63,6 @@ pub enum SkinKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SkinSource {
-    /// Shipped inside the app. Never stored.
-    Builtin,
     /// A picture the user imported.
     Import,
     /// A result from the AI assistant.
@@ -253,11 +259,14 @@ pub fn skin_id(content: &[u8]) -> String {
 /// The file-name stem of a well-formed saved-skin id, or `None` for anything else. Ids reach
 /// the store from the webview, so this is what keeps them from naming other files.
 fn stem(id: &str) -> Option<&str> {
-    let stem = id.strip_prefix(ID_PREFIX)?;
-    let hex = stem
-        .bytes()
-        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-    (stem.len() == 12 && hex).then_some(stem)
+    id.strip_prefix(ID_PREFIX).filter(|stem| is_stem(stem))
+}
+
+/// Twelve lower-case hex digits: the stem of every file a skin has.
+fn is_stem(s: &str) -> bool {
+    s.len() == 12
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn image_file(stem: &str) -> String {
@@ -295,6 +304,10 @@ fn save_error(e: std::io::Error) -> String {
     format!("couldn't save that skin: {e}")
 }
 
+fn save_many_error(e: std::io::Error) -> String {
+    format!("couldn't save those skins: {e}")
+}
+
 #[derive(Deserialize)]
 struct IndexIn {
     version: u32,
@@ -309,6 +322,26 @@ struct IndexOut<'a> {
     skins: &'a [SavedSkin],
 }
 
+/// A skin [`Store::add_many`] saved, or found saved already.
+#[derive(Clone, Debug)]
+pub struct Added {
+    pub entry: SavedSkin,
+    /// Its gallery thumbnail, as a PNG.
+    pub thumbnail_png: Vec<u8>,
+    /// False when it was saved before, by an earlier call or earlier in the same one.
+    pub fresh: bool,
+}
+
+/// What [`Store::add_many`] does with one of the skins it was given.
+enum Step {
+    /// Nothing: it is saved already, with this entry and thumbnail.
+    Saved(Box<SavedSkin>, Vec<u8>),
+    /// Nothing: it has the same id as the skin at this earlier position.
+    Repeat(usize),
+    /// Write it: its encoded picture and thumbnail.
+    New(Vec<u8>, Vec<u8>),
+}
+
 /// The saved skins on disk. Safe to share between threads; every method locks for as short a
 /// time as it can, and the slow work (encoding, rendering) happens outside the lock.
 pub struct Store {
@@ -319,8 +352,16 @@ pub struct Store {
 impl Store {
     /// Opens the store in `dir`, which need not exist yet. Never fails: a missing index is an
     /// empty store, and one that cannot be read is set aside and logged.
+    ///
+    /// Then it clears away what a crash or an unfinished write left behind: pictures and
+    /// thumbnails no entry names, and temp files ([`remove_leftovers`]). Only when the index was
+    /// read whole, or there is none, and no unreadable index was ever set aside here: otherwise a
+    /// file the index doesn't name may belong to a skin it has lost, and is kept.
     pub fn open(dir: PathBuf) -> Store {
-        let skins = read_index(&dir);
+        let (skins, whole) = read_index(&dir);
+        if whole && !has_set_aside(&dir) {
+            remove_leftovers(&dir, &skins, LEFTOVER_AGE);
+        }
         Store {
             dir,
             index: Mutex::new(skins),
@@ -391,6 +432,144 @@ impl Store {
             return Err(save_error(e));
         }
         Ok((entry, true))
+    }
+
+    /// Saves several skins at once, all of them or none: every new picture and thumbnail is
+    /// encoded first, on all cores and outside the lock, then all of their files are written, then
+    /// the index, once. If anything fails, the files this call wrote are removed again and the
+    /// index is left exactly as it was.
+    ///
+    /// Returns one [`Added`] per skin, in the order given. A skin whose id is saved already, or
+    /// that came up earlier in `skins`, comes back as it was saved, and nothing is written for it.
+    /// The first new skin gets the newest `created_at` and each after it an older one, all newer
+    /// than any skin saved before, so a list sorted newest first shows them in the order given.
+    /// `encoded` is called as each new skin's files are encoded, from whichever thread did it.
+    pub fn add_many(
+        &self,
+        skins: Vec<(NewSkin, SkinImage)>,
+        encoded: &(dyn Fn() + Sync),
+    ) -> Result<Vec<Added>, String> {
+        let stems = skins
+            .iter()
+            .map(|(new, _)| stem(&new.id))
+            .collect::<Option<Vec<&str>>>()
+            .ok_or_else(|| "that skin id isn't one FolderSkin made".to_string())?;
+
+        // Which are saved already or repeated. A saved one's thumbnail is read now, so that
+        // nothing can fail once new files are written.
+        let mut first_at: HashMap<&str, usize> = HashMap::new();
+        let mut known: Vec<Option<Step>> = Vec::with_capacity(skins.len());
+        for (i, (new, _)) in skins.iter().enumerate() {
+            if let Some(&j) = first_at.get(new.id.as_str()) {
+                known.push(Some(Step::Repeat(j)));
+                continue;
+            }
+            first_at.insert(&new.id, i);
+            known.push(match self.get(&new.id) {
+                Some(entry) => {
+                    let thumbnail_png = self.thumbnail_png(&entry)?;
+                    Some(Step::Saved(Box::new(entry), thumbnail_png))
+                }
+                None => None,
+            });
+        }
+
+        // The slow part, on all cores and outside the lock.
+        let fresh: Vec<usize> = (0..skins.len()).filter(|&i| known[i].is_none()).collect();
+        let mut files = crate::state::parallel_map(&fresh, |&i| {
+            let image = skins[i].1.bounded();
+            let files = (
+                encode_stored_png(image.rgba()),
+                image.preview_png(THUMB_SIZE),
+            );
+            encoded();
+            files
+        })
+        .into_iter();
+        let mut steps: Vec<Step> = known
+            .into_iter()
+            .map(|step| {
+                step.unwrap_or_else(|| {
+                    let (png, thumb) = files.next().expect("every new skin was encoded");
+                    Step::New(png, thumb)
+                })
+            })
+            .collect();
+
+        let mut index = self.lock();
+        for (step, (new, _)) in steps.iter_mut().zip(&skins) {
+            if let Step::New(_, thumb) = step {
+                // Saved by another call since this one looked. The same id is the same picture,
+                // so the thumbnail just drawn is its thumbnail too.
+                if let Some(entry) = index.iter().find(|s| s.id == new.id) {
+                    *step = Step::Saved(Box::new(entry.clone()), std::mem::take(thumb));
+                }
+            }
+        }
+        let adding: Vec<usize> = (0..steps.len())
+            .filter(|&i| matches!(steps[i], Step::New(..)))
+            .collect();
+        if !adding.is_empty() {
+            let mut written = Vec::with_capacity(adding.len() * 2);
+            let wrote = (|| -> std::io::Result<()> {
+                std::fs::create_dir_all(&self.dir)?;
+                for &i in &adding {
+                    let Step::New(png, thumb) = &steps[i] else {
+                        continue;
+                    };
+                    for (file, bytes) in
+                        [(image_file(stems[i]), png), (thumb_file(stems[i]), thumb)]
+                    {
+                        let path = self.dir.join(file);
+                        write_atomic(&path, bytes)?;
+                        written.push(path);
+                    }
+                }
+                Ok(())
+            })();
+            if let Err(e) = wrote {
+                remove_written(&written);
+                return Err(save_many_error(e));
+            }
+
+            // Strictly decreasing from the newest, and all above the newest saved before.
+            let latest = index.iter().map(|s| s.created_at).max().unwrap_or(0);
+            let newest = now_ms().max(latest + adding.len() as u64);
+            let before = index.len();
+            for (k, &i) in adding.iter().enumerate() {
+                let (new, image) = &skins[i];
+                index.push(new.clone().entry(image, newest - k as u64));
+            }
+            if let Err(e) = self.write_index(&index) {
+                index.truncate(before);
+                remove_written(&written);
+                return Err(save_many_error(e));
+            }
+        }
+        let new_entries: Vec<SavedSkin> = index[index.len() - adding.len()..].to_vec();
+        drop(index);
+        let mut new_entries = new_entries.into_iter();
+
+        let mut added: Vec<Added> = Vec::with_capacity(steps.len());
+        for step in steps {
+            added.push(match step {
+                Step::Saved(entry, thumbnail_png) => Added {
+                    entry: *entry,
+                    thumbnail_png,
+                    fresh: false,
+                },
+                Step::Repeat(j) => Added {
+                    fresh: false,
+                    ..added[j].clone()
+                },
+                Step::New(_, thumbnail_png) => Added {
+                    entry: new_entries.next().expect("an entry for every skin written"),
+                    thumbnail_png,
+                    fresh: true,
+                },
+            });
+        }
+        Ok(added)
     }
 
     /// Reads a saved skin's picture back. `Ok(None)` when no saved skin has this id.
@@ -514,31 +693,34 @@ impl Store {
     }
 }
 
-/// Reads the index in `dir`. Entries that are damaged, repeated or whose picture is gone are
-/// dropped and logged; an index that cannot be read at all is set aside.
-fn read_index(dir: &Path) -> Vec<SavedSkin> {
+/// Reads the index in `dir`, and says whether it was read whole. Entries that are damaged,
+/// repeated or whose picture is gone are dropped and logged; an index that cannot be read at all
+/// is set aside. It was not read whole when it was set aside or an entry was dropped as damaged
+/// or with a bad id, since those may name files nothing else does; a missing index is whole.
+fn read_index(dir: &Path) -> (Vec<SavedSkin>, bool) {
     let path = dir.join(INDEX_FILE);
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (Vec::new(), true),
         Err(e) => {
             set_aside(&path, &e.to_string());
-            return Vec::new();
+            return (Vec::new(), false);
         }
     };
     let index: IndexIn = match serde_json::from_slice(&bytes) {
         Ok(index) => index,
         Err(e) => {
             set_aside(&path, &e.to_string());
-            return Vec::new();
+            return (Vec::new(), false);
         }
     };
     if index.version != INDEX_VERSION {
         set_aside(&path, &format!("index version {}", index.version));
-        return Vec::new();
+        return (Vec::new(), false);
     }
     let mut seen = HashSet::new();
-    index
+    let mut whole = true;
+    let skins = index
         .skins
         .into_iter()
         .filter_map(|value| {
@@ -546,6 +728,7 @@ fn read_index(dir: &Path) -> Vec<SavedSkin> {
                 Ok(skin) => skin,
                 Err(e) => {
                     eprintln!("folderskin: dropping a damaged saved-skin entry: {e}");
+                    whole = false;
                     return None;
                 }
             };
@@ -554,6 +737,7 @@ fn read_index(dir: &Path) -> Vec<SavedSkin> {
                     "folderskin: dropping saved skin with a bad id {:?}",
                     skin.id
                 );
+                whole = false;
                 return None;
             };
             if !dir.join(image_file(stem)).is_file() {
@@ -572,13 +756,95 @@ fn read_index(dir: &Path) -> Vec<SavedSkin> {
             }
             Some(skin)
         })
-        .collect()
+        .collect();
+    (skins, whole)
+}
+
+/// Removes the files a crash or an unfinished write left in `dir`, each logged: a picture or
+/// thumbnail of a skin `skins` doesn't list, and a temp file of [`write_atomic`]. Only files
+/// with exactly those shapes of name ([`is_leftover`]), and only ones last changed at least
+/// `min_age` ago. Nothing else in the folder is touched.
+fn remove_leftovers(dir: &Path, skins: &[SavedSkin], min_age: Duration) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let listed: HashSet<&str> = skins.iter().filter_map(|s| stem(&s.id)).collect();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if !name.to_str().is_some_and(|n| is_leftover(n, &listed)) {
+            continue;
+        }
+        // Not a link or a folder, and not written in the last `min_age`.
+        let settled = entry.file_type().is_ok_and(|t| t.is_file())
+            && entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|changed| changed.elapsed().ok())
+                .is_some_and(|age| age >= min_age);
+        if !settled {
+            continue;
+        }
+        let path = entry.path();
+        match std::fs::remove_file(&path) {
+            Ok(()) => eprintln!(
+                "folderskin: removed {}, which an earlier run left unfinished",
+                path.display()
+            ),
+            Err(e) => eprintln!("folderskin: couldn't remove {}: {e}", path.display()),
+        }
+    }
+}
+
+/// Whether `name` is a file the store writes that no skin in `listed` owns: `<stem>.png` or a
+/// `<stem>.thumb….png` thumbnail whose stem isn't listed, or a temp file of [`write_atomic`] for
+/// any file the store writes, `.<name>.folderskin-<pid>-<seq>.tmp`.
+fn is_leftover(name: &str, listed: &HashSet<&str>) -> bool {
+    if let Some(temp) = name.strip_prefix('.').and_then(|n| n.strip_suffix(".tmp")) {
+        let Some((target, tag)) = temp.rsplit_once(".folderskin-") else {
+            return false;
+        };
+        let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+        let tagged = tag
+            .split_once('-')
+            .is_some_and(|(pid, seq)| digits(pid) && digits(seq));
+        return tagged && (target == INDEX_FILE || skin_file_stem(target).is_some());
+    }
+    skin_file_stem(name).is_some_and(|stem| !listed.contains(stem))
+}
+
+/// The stem of `<stem>.png` or `<stem>.thumb….png`, the names a skin's files have.
+fn skin_file_stem(name: &str) -> Option<&str> {
+    let stem = name.get(..12).filter(|s| is_stem(s))?;
+    let rest = &name[12..];
+    let picture = rest == ".png";
+    let thumbnail = rest.starts_with(".thumb") && rest.ends_with(".png");
+    (picture || thumbnail).then_some(stem)
+}
+
+/// Whether an index that could not be read was ever set aside in `dir`. Its skins' files are
+/// still there, and nothing else says which they are.
+fn has_set_aside(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with(SET_ASIDE_PREFIX) && name.ends_with(".json")
+        })
+    })
+}
+
+/// Removes the files a failed save wrote.
+fn remove_written(paths: &[PathBuf]) {
+    for path in paths {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// Renames an unreadable index out of the way, so the next save starts a fresh one without
 /// destroying whatever the old one held.
 fn set_aside(path: &Path, why: &str) {
-    let aside = path.with_file_name(format!("skins-unreadable-{}.json", now_ms()));
+    let aside = path.with_file_name(format!("{SET_ASIDE_PREFIX}{}.json", now_ms()));
     match std::fs::rename(path, &aside) {
         Ok(()) => eprintln!(
             "folderskin: {} could not be read ({why}); moved it to {} and started with no saved skins",
@@ -595,6 +861,30 @@ fn set_aside(path: &Path, why: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const HOUR: Duration = Duration::from_secs(60 * 60);
+
+    /// The names in `dir`, sorted.
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Makes the file at `path` look `age` old.
+    fn age(path: &Path, age: Duration) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(SystemTime::now() - age)
+            .unwrap();
+    }
 
     /// A fresh, empty directory for one test.
     fn temp_dir(name: &str) -> PathBuf {
@@ -930,5 +1220,306 @@ mod tests {
         assert!(stem(&id).is_some(), "{id}");
         assert_eq!(id, skin_id(b"hello"));
         assert_ne!(id, skin_id(b"hello!"));
+    }
+
+    #[test]
+    fn a_batch_is_listed_in_its_own_order_above_what_was_saved_before() {
+        let dir = temp_dir("batch-order");
+        let store = Store::open(dir.clone());
+        let (earlier, _) = store
+            .add(
+                new_skin(&skin_id(b"earlier"), "Earlier", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        let ids: Vec<String> = ["mona lisa", "starry night", "great wave"]
+            .iter()
+            .map(|name| skin_id(name.as_bytes()))
+            .collect();
+        let batch = ids
+            .iter()
+            .map(|id| {
+                let art = artwork([90, 60, 30], (0.5, 0.5));
+                (new_skin(id, "Painting", SkinSource::Community), art)
+            })
+            .collect();
+        let encoded = AtomicUsize::new(0);
+        let added = store
+            .add_many(batch, &|| {
+                encoded.fetch_add(1, Ordering::Relaxed);
+            })
+            .unwrap();
+
+        assert_eq!(encoded.load(Ordering::Relaxed), 3);
+        assert!(added.iter().all(|a| a.fresh));
+        let returned: Vec<&String> = added.iter().map(|a| &a.entry.id).collect();
+        assert_eq!(
+            returned,
+            ids.iter().collect::<Vec<_>>(),
+            "in the order given"
+        );
+        assert!(added
+            .windows(2)
+            .all(|w| w[0].entry.created_at > w[1].entry.created_at));
+        assert!(added[2].entry.created_at > earlier.created_at);
+        for a in &added {
+            let written = std::fs::read(dir.join(thumb_file(stem(&a.entry.id).unwrap()))).unwrap();
+            assert_eq!(a.thumbnail_png, written, "the thumbnail that was saved");
+        }
+
+        let newest_first: Vec<String> = Store::open(dir.clone())
+            .list()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        let mut expected = ids.clone();
+        expected.push(earlier.id.clone());
+        assert_eq!(
+            newest_first, expected,
+            "the batch's own order, after a restart too"
+        );
+
+        let (later, _) = store
+            .add(
+                new_skin(&skin_id(b"later"), "Later", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        assert!(later.created_at > added[0].entry.created_at);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_batch_returns_saved_skins_as_they_were_and_saves_a_repeat_once() {
+        let dir = temp_dir("batch-saved");
+        let store = Store::open(dir.clone());
+        let old = skin_id(b"old");
+        let (saved, _) = store
+            .add(new_skin(&old, "Old name", SkinSource::Import), &folder())
+            .unwrap();
+        let new = skin_id(b"new");
+        let batch = vec![
+            (new_skin(&new, "New", SkinSource::Community), folder()),
+            (
+                new_skin(&old, "Another name", SkinSource::Community),
+                folder(),
+            ),
+            (new_skin(&new, "New again", SkinSource::Community), folder()),
+        ];
+        let encoded = AtomicUsize::new(0);
+        let added = store
+            .add_many(batch, &|| {
+                encoded.fetch_add(1, Ordering::Relaxed);
+            })
+            .unwrap();
+
+        assert_eq!(encoded.load(Ordering::Relaxed), 1, "only the new picture");
+        assert!(added[0].fresh);
+        assert_eq!(added[0].entry.name, "New");
+        assert!(!added[1].fresh);
+        assert_eq!(added[1].entry, saved, "a saved skin comes back unchanged");
+        assert_eq!(added[1].thumbnail_png, store.thumbnail_png(&saved).unwrap());
+        assert!(!added[2].fresh);
+        assert_eq!(added[2].entry, added[0].entry, "a repeat is the first one");
+        assert_eq!(store.list().len(), 2);
+
+        // Nothing new: nothing is encoded, and the index isn't written again.
+        let index = std::fs::read(dir.join(INDEX_FILE)).unwrap();
+        let again = store
+            .add_many(
+                vec![(new_skin(&old, "X", SkinSource::Import), folder())],
+                &|| panic!("encoded a saved skin"),
+            )
+            .unwrap();
+        assert_eq!(again[0].entry, saved);
+        assert_eq!(std::fs::read(dir.join(INDEX_FILE)).unwrap(), index);
+        assert!(store.add_many(Vec::new(), &|| {}).unwrap().is_empty());
+
+        // An id FolderSkin didn't make stops the whole batch before anything is encoded.
+        let fine = skin_id(b"fine");
+        let err = store
+            .add_many(
+                vec![
+                    (new_skin(&fine, "Fine", SkinSource::Import), folder()),
+                    (
+                        new_skin("user:../../etc", "Bad", SkinSource::Import),
+                        folder(),
+                    ),
+                ],
+                &|| panic!("encoded before every id was checked"),
+            )
+            .unwrap_err();
+        assert!(err.contains("isn't one FolderSkin made"), "{err}");
+        assert!(store.get(&fine).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_batch_that_cannot_be_saved_leaves_the_store_as_it_was() {
+        let dir = temp_dir("batch-fail");
+        let store = Store::open(dir.clone());
+        let (kept, _) = store
+            .add(
+                new_skin(&skin_id(b"kept"), "Kept", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        let index = std::fs::read(dir.join(INDEX_FILE)).unwrap();
+        let ids = [skin_id(b"a"), skin_id(b"b"), skin_id(b"c")];
+        let batch = || -> Vec<(NewSkin, SkinImage)> {
+            ids.iter()
+                .map(|id| (new_skin(id, "Pack skin", SkinSource::Community), folder()))
+                .collect()
+        };
+
+        // A folder where the second picture goes: its write fails after the first skin's
+        // picture and thumbnail are written.
+        let blocker = image_file(stem(&ids[1]).unwrap());
+        std::fs::create_dir(dir.join(&blocker)).unwrap();
+        let mut expected = names_in(&dir);
+        let err = store.add_many(batch(), &|| {}).unwrap_err();
+        assert!(err.starts_with("couldn't save those skins"), "{err}");
+        assert_eq!(store.list(), vec![kept.clone()], "nothing was added");
+        assert_eq!(std::fs::read(dir.join(INDEX_FILE)).unwrap(), index);
+        assert_eq!(
+            names_in(&dir),
+            expected,
+            "the files it wrote are gone again"
+        );
+        std::fs::remove_dir(dir.join(&blocker)).unwrap();
+
+        // An index that can't be written: every file goes again, and the list is unchanged.
+        std::fs::remove_file(dir.join(INDEX_FILE)).unwrap();
+        std::fs::create_dir(dir.join(INDEX_FILE)).unwrap();
+        expected = names_in(&dir);
+        let err = store.add_many(batch(), &|| {}).unwrap_err();
+        assert!(err.starts_with("couldn't save those skins"), "{err}");
+        assert_eq!(store.list(), vec![kept.clone()]);
+        assert_eq!(names_in(&dir), expected);
+        std::fs::remove_dir(dir.join(INDEX_FILE)).unwrap();
+        std::fs::write(dir.join(INDEX_FILE), &index).unwrap();
+
+        assert_eq!(Store::open(dir.clone()).list(), vec![kept]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn leftovers_of_a_crash_are_removed_on_open_and_nothing_else() {
+        let dir = temp_dir("leftovers");
+        let store = Store::open(dir.clone());
+        let (kept, _) = store
+            .add(
+                new_skin(&skin_id(b"kept"), "Kept", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        let (lost, _) = store
+            .add(
+                new_skin(&skin_id(b"lost"), "Lost", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        drop(store);
+        // A picture that went missing drops its entry cleanly and leaves its thumbnail over.
+        let lost_stem = stem(&lost.id).unwrap();
+        std::fs::remove_file(dir.join(image_file(lost_stem))).unwrap();
+
+        let leftovers = [
+            "0123456789ab.png".to_string(),
+            "0123456789ab.thumb-v2.png".to_string(),
+            "0123456789ab.thumb-v1.png".to_string(),
+            thumb_file(lost_stem),
+            ".skins.json.folderskin-4242-7.tmp".to_string(),
+            ".0123456789ab.thumb-v2.png.folderskin-1-0.tmp".to_string(),
+        ];
+        let others = [
+            "notes.txt",
+            ".DS_Store",
+            // Upper case, on a stem no leftover has: some disks ignore case in names.
+            "ABCDEF012345.png",
+            "0123456789a.png",
+            "0123456789abc.png",
+            "0123456789ab.jpg",
+            "0123456789ab.png.bak",
+            "skins.json.folderskin-1-2.tmp",
+            ".notes.txt.folderskin-1-2.tmp",
+            ".skins.json.folderskin-x-2.tmp",
+            ".skins.json.folderskin-12.tmp",
+        ];
+        for name in leftovers.iter().map(String::as_str).chain(others) {
+            if !dir.join(name).exists() {
+                std::fs::write(dir.join(name), b"x").unwrap();
+            }
+        }
+        // Everything is an hour old, the kept skin's own files included...
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            age(&entry.path(), HOUR);
+        }
+        // ...but this one, which another FolderSkin could be saving right now.
+        std::fs::write(dir.join("fedcba987654.png"), b"x").unwrap();
+        // A folder named like a picture is never a file FolderSkin wrote.
+        std::fs::create_dir(dir.join("abcdefabcdef.png")).unwrap();
+
+        let store = Store::open(dir.clone());
+        assert_eq!(store.list(), vec![kept.clone()]);
+        let names = names_in(&dir);
+        for gone in &leftovers {
+            assert!(!names.contains(gone), "{gone} is still there: {names:?}");
+        }
+        let kept_stem = stem(&kept.id).unwrap();
+        let stays = others
+            .iter()
+            .map(|n| n.to_string())
+            .chain([INDEX_FILE, "fedcba987654.png", "abcdefabcdef.png"].map(String::from))
+            .chain([image_file(kept_stem), thumb_file(kept_stem)]);
+        for name in stays {
+            assert!(names.contains(&name), "{name} was removed");
+        }
+        assert!(store.load(&kept.id).unwrap().is_some());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn leftovers_are_kept_while_a_lost_entry_could_name_them() {
+        let orphan = "0123456789ab.png";
+        let prepare = |test: &str| {
+            let dir = temp_dir(test);
+            std::fs::write(dir.join(orphan), b"x").unwrap();
+            age(&dir.join(orphan), HOUR);
+            dir
+        };
+
+        // An entry dropped as damaged, or with an id that names no file, may have named it.
+        for broken in [
+            serde_json::json!({"id": "user:0123456789ab", "kind": "sticker"}),
+            serde_json::json!({"id": "user:../0123456789ab", "name": "X", "kind": "folder",
+                "source": "import", "created_at": 1}),
+        ] {
+            let dir = prepare("leftovers-damaged");
+            let index = serde_json::json!({"version": 1, "skins": [broken]});
+            std::fs::write(dir.join(INDEX_FILE), serde_json::to_vec(&index).unwrap()).unwrap();
+            assert!(Store::open(dir.clone()).list().is_empty());
+            assert!(dir.join(orphan).exists(), "{broken}");
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+
+        // So may an index set aside, whether on this launch or an earlier one.
+        let dir = prepare("leftovers-set-aside");
+        std::fs::write(dir.join("skins-unreadable-1790000000000.json"), b"{").unwrap();
+        Store::open(dir.clone());
+        assert!(dir.join(orphan).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        let dir = prepare("leftovers-corrupt");
+        std::fs::write(dir.join(INDEX_FILE), b"{\"version\": 1, \"skins\": [").unwrap();
+        Store::open(dir.clone());
+        assert!(dir.join(orphan).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        // With no index at all, nothing can name it, and it goes.
+        let dir = prepare("leftovers-no-index");
+        Store::open(dir.clone());
+        assert!(!dir.join(orphan).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

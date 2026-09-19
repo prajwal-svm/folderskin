@@ -17,8 +17,13 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - Apply a folder icon on macOS, Windows and Linux from one rendering path in
   `folderskin-core`, so the gallery preview and the icon written to disk are the same
   pixels.
-- Ten built-in skins in three collections: `aurora`, `sunset`, `mesh`, `ember` (glow),
-  `paper`, `denim`, `slate` (grain), `halftone`, `stripes`, `bubbles` (pop).
+- A first-launch welcome: five folders try on skin after skin, fold into one and land on the
+  logo, then the community's packs are offered with Classic Art picked for you. Each pack shows
+  its progress, nothing can be skipped or undone while one is being added, and a pack that fails
+  can be tried again or left for later from Community. It shows once; a click or a key skips the
+  animation, and reduced motion shows its last frame straight away.
+- FolderSkin ships no skins of its own: the library holds community packs, your own pictures
+  and AI results, and an empty library points to all three.
 - Use your own photo as a skin: drop a picture on the window, or pick one with the
   "your photo" button.
 - An optional AI assistant that makes skins with your own API key for OpenAI, xAI,
@@ -50,17 +55,20 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   place and can be tried on straight away, and provider settings live in a dialog.
 - A translucent sidebar on macOS: the window sits on the system sidebar material, which
   follows the light/dark switch.
-- Favourites, stored locally, and the three built-in collections as tags.
-- `folderskin-tools`, a workspace binary that generates and imports skins, renders
-  previews, checks the manifest, and applies or reverts an icon from a terminal. See
-  [docs/SKINS.md](docs/SKINS.md).
-- A Claude Code skill for authoring skins at
+- Favourites, stored locally.
+- `folderskin-tools`, a workspace binary that makes, checks and indexes packs, renders any
+  picture as the folder it makes, draws the template's safe areas, and applies or reverts an
+  icon from a terminal. See [docs/SKINS.md](docs/SKINS.md).
+- A Claude Code skill for making packs at
   [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md).
-- Built-in packs: a pack folder under `assets/packs/` ships inside the app, with the same
-  `pack.json` as a community pack, so themed sets are there offline from the first launch.
-  `folderskin-tools packs make` turns a folder of pictures, such as renders from an image model,
-  into a pack: finished folders on magenta or transparency are cut out and saved as WebP,
-  everything else as artwork, each within 400 KB. See [docs/PACKS.md](docs/PACKS.md).
+- `folderskin-tools packs make` turns a folder of pictures, such as renders from an image model,
+  into a community pack: finished folders on magenta or transparency are cut out and saved as
+  WebP, everything else as artwork, each within 400 KB. See [docs/PACKS.md](docs/PACKS.md).
+- A pack is added whole or not at all: its pictures download four at a time and are all checked,
+  then saved in one step, so a dropped connection, a full disk or a crash never leaves half a
+  pack, and files a crash left behind are cleared on a later launch. Adding one reports its
+  progress, and its skins keep the pack's order in the library. See
+  [docs/PACKS.md](docs/PACKS.md).
 - A Classic Art community pack: sixteen public-domain paintings, from the Mona Lisa to
   Composition VIII, each painted onto a folder.
 - Community shows packs as a list or as a gallery of cards with four of each pack's folders,
@@ -80,7 +88,7 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 ### Notes
 
 - No accounts, no paywall, no telemetry. The only network access is the optional AI
-  assistant, which calls the provider you pick directly, and Community, which reads the shared
-  packs from GitHub.
-- The macOS app is 10.2 MB installed, from an 8.5 MB DMG. The Windows and Linux packages
-  have not been measured yet.
+  assistant, which calls the provider you pick directly, and Community and the first-launch
+  welcome, which read the shared packs from GitHub.
+- The macOS app is 8.5 MB installed. The DMG and the Windows and Linux packages have not been
+  measured yet.

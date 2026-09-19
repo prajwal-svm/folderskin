@@ -1215,6 +1215,7 @@ dependencies = [
  "base64 0.22.1",
  "folderskin-ai",
  "folderskin-core",
+ "futures-util",
  "image",
  "objc2",
  "objc2-app-kit",

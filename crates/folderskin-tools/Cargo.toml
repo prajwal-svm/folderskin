@@ -3,7 +3,7 @@ name = "folderskin-tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CLI to generate, import and check FolderSkin skins"
+description = "CLI to make and check FolderSkin skin packs and preview skins"
 
 [lib]
 path = "src/lib.rs"

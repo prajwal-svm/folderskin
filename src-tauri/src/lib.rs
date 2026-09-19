@@ -5,7 +5,7 @@ pub mod commands;
 pub mod community;
 pub mod folder_icon;
 pub mod keys;
-pub mod skins;
+pub mod onboarding;
 pub mod state;
 pub mod store;
 pub mod window;
@@ -37,6 +37,8 @@ pub fn run() {
             community::export_pack,
             commands::folder_icon,
             commands::platform_info,
+            onboarding::onboarding_needed,
+            onboarding::finish_onboarding,
             ai::ai_catalogue,
             ai::ai_set_key,
             ai::ai_clear_key,
@@ -45,6 +47,7 @@ pub fn run() {
         ])
         .setup(|app| {
             // Open the saved skins before the window exists, so the first list_skins sees them.
+            // The onboarding's marker sits beside them (onboarding.rs).
             match app.path().app_data_dir() {
                 Ok(dir) => app.state::<state::AppState>().open_store(dir.join("skins")),
                 Err(e) => eprintln!(

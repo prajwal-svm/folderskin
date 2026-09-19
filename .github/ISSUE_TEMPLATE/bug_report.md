@@ -28,7 +28,7 @@ labels: bug
 
 - Where it lives: <!-- local disk, external drive, network share (SMB/NFS) -->
 - Cloud-synced: <!-- no, or iCloud Drive / OneDrive / Dropbox / Google Drive -->
-- Which skin: <!-- a built-in skin's name, or your own photo -->
+- Which skin: <!-- a community pack's skin (which pack), your own photo, or an AI result -->
 
 ## Before you file
 

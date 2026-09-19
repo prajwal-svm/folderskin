@@ -28,9 +28,9 @@ export function Gallery({
   onAdd?: () => void;
   onSelect: (id: string) => void;
   onToggleFavorite: (id: string) => void;
-  /** Asks to delete a skin that isn't built in. */
+  /** Asks to delete a skin. */
   onRemove: (skin: Skin) => void;
-  /** Opens the menu of a skin that isn't built in, beside `anchor`. */
+  /** Opens a skin's menu beside `anchor`. */
   onMenu: (skin: Skin, anchor: HTMLElement, fromKeyboard: boolean) => void;
   /** The skin whose menu is open. */
   menuFor: string | null;

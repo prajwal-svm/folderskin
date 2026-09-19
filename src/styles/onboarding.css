@@ -1,0 +1,593 @@
+/*
+ * The first-launch onboarding: a welcome where five folders try on skin after skin and land on the
+ * logo, then a step that adds the first community packs. It has no background of its own: the
+ * window's glass shows through on macOS, as it does behind the sidebar, and the canvas elsewhere.
+ */
+
+.onboard {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: radial-gradient(64% 52% at 50% 46%, var(--accent-wash), transparent 72%);
+  animation: fade-in var(--t-slow) ease both;
+}
+
+.onboard.is-leaving {
+  pointer-events: none;
+  animation: onboard-leave 460ms var(--ease-in) both;
+}
+
+@keyframes onboard-leave {
+  to {
+    opacity: 0;
+    transform: scale(1.025);
+  }
+}
+
+/* the window moves by the strip along the top, where a title bar would be */
+.onboard-drag {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 44px;
+  z-index: 2;
+}
+
+/* ---------- the welcome ---------- */
+
+.welcome {
+  /* the middle folder; the others are sized from it, and it all fits the smallest window */
+  --hero: min(34vh, 260px, 24vw);
+  --gap: 22px;
+  position: relative;
+  flex: 1;
+}
+
+.welcome-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.welcome-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.welcome-slot {
+  position: relative;
+  flex: none;
+  width: var(--size);
+  aspect-ratio: 1;
+  transition:
+    transform 520ms var(--ease-in),
+    opacity 380ms ease;
+}
+
+/* nearer the edges, smaller and fainter: the middle one has the light */
+.slot-0,
+.slot-4 {
+  --size: calc(var(--hero) * 0.5);
+  opacity: 0.6;
+}
+
+.slot-1,
+.slot-3 {
+  --size: calc(var(--hero) * 0.68);
+  opacity: 0.85;
+}
+
+.slot-2 {
+  --size: var(--hero);
+  z-index: 1;
+  transition: transform 760ms var(--ease-out);
+}
+
+/* how far each side folder travels to fold into the middle one */
+.slot-0 {
+  --to-middle: calc(var(--hero) * 1.43 + var(--gap) * 2);
+}
+
+.slot-1 {
+  --to-middle: calc(var(--hero) * 0.84 + var(--gap));
+}
+
+.slot-3 {
+  --to-middle: calc(var(--hero) * -0.84 - var(--gap));
+}
+
+.slot-4 {
+  --to-middle: calc(var(--hero) * -1.43 - var(--gap) * 2);
+}
+
+.welcome.is-landing .welcome-slot:not(.slot-2),
+.welcome.is-logo .welcome-slot:not(.slot-2),
+.welcome.is-welcome .welcome-slot:not(.slot-2) {
+  opacity: 0;
+  transform: translateX(var(--to-middle)) scale(0.4);
+}
+
+/* the logo lifts and shrinks to make room for the words */
+.welcome.is-welcome .slot-2 {
+  transform: translateY(calc(var(--hero) * -0.47)) scale(0.6);
+}
+
+.welcome-skin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* the first skins rise into place one after another */
+.welcome-skin.is-first {
+  animation: skin-rise 760ms var(--ease-spring) both;
+  animation-delay: calc(var(--slot) * 80ms + 80ms);
+}
+
+/* each later one pours down over the last, in a wave from left to right */
+.welcome-skin.is-in {
+  -webkit-mask-image: linear-gradient(to bottom, #000 42%, transparent 58%);
+  mask-image: linear-gradient(to bottom, #000 42%, transparent 58%);
+  -webkit-mask-size: 100% 300%;
+  mask-size: 100% 300%;
+  animation: skin-pour 620ms var(--ease-out) both;
+  animation-delay: calc(var(--slot) * 90ms);
+}
+
+.welcome-skin.is-out {
+  animation: skin-fade 520ms ease both;
+  animation-delay: calc(var(--slot) * 90ms + 140ms);
+}
+
+/* the landing: the middle folder flicks through a few more, like a reel */
+.welcome-skin.is-fast {
+  animation: skin-tick 150ms var(--ease-out) both;
+}
+
+.welcome-skin.is-logo {
+  animation: logo-land 680ms var(--ease-spring) both;
+}
+
+@keyframes skin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes skin-pour {
+  from {
+    -webkit-mask-position: 0 100%;
+    mask-position: 0 100%;
+  }
+  to {
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+  }
+}
+
+@keyframes skin-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes skin-tick {
+  from {
+    opacity: 0.55;
+    transform: translateY(-7%);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes logo-land {
+  0% {
+    opacity: 0;
+    transform: scale(0.74);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* a ring of light that spreads from the logo as it lands */
+.welcome-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--hero) * 2.4);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-glow), transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.4);
+}
+
+.welcome.is-logo .welcome-halo {
+  animation: halo 1150ms var(--ease-out) both;
+}
+
+@keyframes halo {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  22% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+
+.welcome-copy {
+  position: absolute;
+  inset: calc(50% - var(--hero) * 0.08) 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 24px;
+  text-align: center;
+  visibility: hidden;
+}
+
+.welcome.is-welcome .welcome-copy {
+  visibility: visible;
+}
+
+.welcome.is-welcome .welcome-copy > * {
+  animation: fade-up 560ms var(--ease-out) both;
+}
+
+.welcome.is-welcome .welcome-copy > :nth-child(1) {
+  animation-delay: 200ms;
+}
+
+.welcome.is-welcome .welcome-copy > :nth-child(2) {
+  animation-delay: 290ms;
+}
+
+.welcome.is-welcome .welcome-copy > :nth-child(3) {
+  animation-delay: 400ms;
+}
+
+.welcome.is-welcome .welcome-copy > :nth-child(4) {
+  animation-delay: 520ms;
+}
+
+.welcome-title {
+  font-weight: 800;
+  font-size: 46px;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+/* the second half of the name in the folder's own blue */
+.welcome-title span {
+  color: var(--accent-ink);
+}
+
+.welcome-tagline {
+  margin-top: 10px;
+  font-weight: 650;
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.welcome-next {
+  margin-top: 30px;
+  min-width: 168px;
+}
+
+.welcome-next svg {
+  transition: transform var(--t-base) var(--ease-out);
+}
+
+.welcome-next:hover svg,
+.welcome-next:focus-visible svg {
+  transform: translateX(3px);
+}
+
+.welcome-fine {
+  margin-top: 18px;
+  font-weight: 650;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--hint);
+}
+
+/* arriving at the end at once: skipped, come back to, or reduced motion */
+.welcome.is-instant .welcome-slot {
+  transition: none;
+}
+
+.welcome.is-instant .welcome-skin.is-logo {
+  animation: fade-in 320ms ease both;
+}
+
+.welcome.is-instant .welcome-copy > * {
+  animation-duration: 320ms;
+  animation-delay: 0ms;
+}
+
+/* ---------- the packs ---------- */
+
+.packstep {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: fade-up var(--t-slow) var(--ease-out) both;
+}
+
+.packstep-head {
+  flex: none;
+  padding: 62px 32px 6px;
+  text-align: center;
+}
+
+.packstep-title {
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.025em;
+}
+
+.packstep-sub {
+  max-width: 520px;
+  margin: 10px auto 0;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.packstep-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 32px 26px;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 18px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 18px), transparent);
+}
+
+/* however many packs there are, they sit in the middle */
+.packstep-grid {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 920px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.packstep-error {
+  margin-top: 4%;
+  max-width: 340px;
+}
+
+/* each pack is an island on the glass, like the app's own panels */
+.onboard-pack {
+  width: 214px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  background: var(--island);
+  transition: background-color var(--t-base) ease;
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+.onboard-pack:not(.is-locked):hover {
+  background: color-mix(in srgb, var(--island) 88%, var(--accent));
+}
+
+/* picked: a tint, never a frame */
+.onboard-pack.is-picked {
+  background: var(--accent-soft);
+}
+
+.onboard-pack.is-picked:not(.is-locked):hover {
+  background: color-mix(in srgb, var(--accent-soft) 82%, var(--accent));
+}
+
+.onboard-pack-hit {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 12px 4px;
+  border-radius: inherit;
+  text-align: left;
+}
+
+.onboard-pack-hit:disabled {
+  cursor: default;
+}
+
+.onboard-pack .pack-preview {
+  width: 100%;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.onboard-pack .pack-quad {
+  max-width: none;
+  background: var(--well);
+}
+
+.onboard-pack .pack-preview-blank {
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 12px;
+}
+
+/* the round tick in the corner: empty, or filled when the pack is picked */
+.onboard-pack-tick {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--dash);
+  background: var(--island);
+  color: #ffffff;
+  transition:
+    background-color var(--t-fast) ease,
+    border-color var(--t-fast) ease;
+}
+
+.onboard-pack.is-picked .onboard-pack-tick {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.onboard-pack-name {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.onboard-pack-by {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* the line under a pack while it's added, or after; always there so the cards keep their height */
+.onboard-pack-status {
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 4px 12px 12px;
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.onboard-pack-status.is-ok {
+  color: var(--ok-ink);
+}
+
+.onboard-pack-status.is-error {
+  color: var(--danger);
+}
+
+.onboard-pack-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.onboard-pack-failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.onboard-retry {
+  margin-right: -6px;
+}
+
+.onboard-bar {
+  display: block;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  overflow: hidden;
+}
+
+.onboard-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 280ms var(--ease-out);
+}
+
+/* while the list loads */
+.onboard-pack.is-skeleton {
+  pointer-events: none;
+}
+
+.onboard-pack-line {
+  height: 12px;
+  width: 70%;
+  margin-top: 6px;
+  border-radius: 6px;
+  background: var(--well-2);
+}
+
+.onboard-pack-line.is-short {
+  width: 45%;
+  margin-bottom: 42px;
+}
+
+.packstep-foot {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 28px 24px;
+}
+
+.packstep-foot .btn-ghost {
+  gap: 6px;
+}
+
+.packstep-note {
+  font-weight: 650;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--muted);
+}
+
+.packstep-foot .btn-lg {
+  min-width: 176px;
+}
+
+/* the app, arriving once the onboarding has faded away */
+.app-arrive {
+  height: 100%;
+  animation: fade-up 520ms var(--ease-out) both;
+}
+
+/* ---------- the library with nothing in it ---------- */
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}

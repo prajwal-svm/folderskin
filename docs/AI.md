@@ -38,8 +38,8 @@ deleting `keys.json` removes them all.
 This is the choice that matters most, and it is not about quality.
 
 **Artwork** asks the model for a flat 1024 × 958 picture and FolderSkin wraps it onto its own
-folder template, exactly like the ten built-in skins. The geometry is ours, so every skin lines
-up with every other, at every icon size. Any provider can do this, including the ones with no
+folder template, exactly like a photo you add. The geometry is ours, so every skin lines up with
+every other, at every icon size. Any provider can do this, including the ones with no
 transparency support. This is the default and the right answer most of the time.
 
 **Whole folder** asks the model to draw the folder itself on a transparent or keyed background,
@@ -131,12 +131,7 @@ deleting it there removes it from disk. [ARCHITECTURE.md](ARCHITECTURE.md#saved-
 where the files live. If the write fails (a full disk, say), the skin stays for the rest of the
 session rather than being lost.
 
-To add one to the repository's built-in set, save the image and import it with the maintainer
-CLI, which crops it and writes the manifest entry:
-
-```sh
-cargo run -p folderskin-tools -- skin add ~/Downloads/aurora.png \
-  --id aurora-night --name "Aurora Night" --collection glow
-```
-
-See [SKINS.md](SKINS.md) for the format rules and the safe areas.
+To share generated skins with everyone, put them in a community pack: tag them and use **Share
+with community** in the app, or turn a folder of saved renders into a pack with
+`folderskin-tools packs make`. [PACKS.md](PACKS.md) has both, and [SKINS.md](SKINS.md) says how a
+picture lands on the folder.

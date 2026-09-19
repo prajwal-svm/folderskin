@@ -11,3 +11,4 @@ assets/previews/
 docs/superpowers/
 .claude/worktrees/
 coverage/
+*.tsbuildinfo

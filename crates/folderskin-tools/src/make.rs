@@ -29,7 +29,7 @@ pub struct MakeOptions {
     /// The GitHub name of whoever made the pictures.
     pub author: String,
     pub license: String,
-    /// The folder holding `packs/`: `assets` for a built-in pack, `community` for a shared one.
+    /// The community folder, holding `packs/`.
     pub dir: PathBuf,
     /// The largest a picture may be once compressed.
     pub max_bytes: usize,

@@ -7,7 +7,7 @@
 //! writes what the app downloads: `index.json` and one preview strip per pack. Both are pure
 //! functions of the packs, so running `index` again on the same packs changes nothing.
 
-use folderskin_core::compositor::{self, Artwork};
+use crate::skin::Skin;
 use folderskin_core::pack::{
     self, Index, IndexEntry, Pack, INDEX_VERSION, MANIFEST_FILE, MAX_PICTURE_BYTES,
 };
@@ -83,8 +83,8 @@ pub fn check(dir: &Path) -> Result<Report, String> {
     check_within(dir, MAX_PICTURE_BYTES)
 }
 
-/// [`check`] with a tighter limit on each picture's size, such as the one for the packs built
-/// into the app, which are part of every download.
+/// [`check`] with a tighter limit on each picture's size, such as the 400 KB `packs make` keeps
+/// to.
 pub fn check_within(dir: &Path, max_bytes: usize) -> Result<Report, String> {
     let packs_dir = dir.join(PACKS_DIR);
     let entries =
@@ -252,7 +252,7 @@ pub fn preview_strip(folder: &Path, pack: &Pack) -> Result<RgbaImage, String> {
     for (i, skin) in shown.iter().enumerate() {
         let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
-        let icon = render_skin(rgba, PREVIEW_SIDE)?;
+        let icon = render_skin(rgba, PREVIEW_SIDE).map_err(|e| format!("{} {e}", skin.file))?;
         // Copied rather than blended: the tiles never overlap, and copying keeps them exact.
         image::imageops::replace(&mut strip, &icon, i64::from(i as u32 * PREVIEW_SIDE), 0);
     }
@@ -274,7 +274,7 @@ pub fn contact_sheet(
     for (i, skin) in pack.skins.iter().enumerate() {
         let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
-        let icon = render_skin(rgba, side)?;
+        let icon = render_skin(rgba, side).map_err(|e| format!("{} {e}", skin.file))?;
         let (col, row) = (i as u32 % columns, i as u32 / columns);
         image::imageops::replace(
             &mut sheet,
@@ -287,19 +287,10 @@ pub fn contact_sheet(
 }
 
 /// A skin as the folder the app makes of it, `size` px square: a finished folder picture (cut
-/// out, or on the magenta key) as it is, and anything else as artwork on FolderSkin's template.
-/// This is the split the app's `prepare_import` makes.
+/// out, or on the magenta key) as it is, and anything else as artwork on FolderSkin's template
+/// ([`Skin`]). The error finishes a sentence that starts with the picture's name.
 pub fn render_skin(rgba: RgbaImage, size: u32) -> Result<RgbaImage, String> {
-    let png = match matte::finished_cutout(&rgba, matte::MAGENTA) {
-        Some(cut) => compositor::preview_png_from_image(&cut, size),
-        None => compositor::render_preview_png(
-            &Artwork {
-                rgba,
-                focus: (0.5, 0.5),
-            },
-            size,
-        ),
-    };
+    let png = Skin::from_picture(rgba, (0.5, 0.5))?.preview_png(size);
     image::load_from_memory(&png)
         .map(|img| img.to_rgba8())
         .map_err(|e| format!("couldn't be rendered: {e}"))

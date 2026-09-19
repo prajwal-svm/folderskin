@@ -46,7 +46,8 @@ pub struct Preset {
     pub idea: &'static str,
 }
 
-/// Starting points offered in the Generate view, one per built-in collection plus a few extras.
+/// Starting points offered in the Generate view: a spread of subjects and styles that make good
+/// skins.
 pub const PRESETS: &[Preset] = &[
     Preset {
         id: "aurora",
@@ -90,7 +91,8 @@ pub const PRESETS: &[Preset] = &[
     },
 ];
 
-/// Style notes appended to a `Skin` prompt so a generated skin sits beside the built-in ten.
+/// Style notes appended to a `Skin` prompt so a generated skin reads well on the folder at every
+/// icon size.
 const SKIN_CONTRACT: &str = "\
 Fill the entire frame with the artwork: a flat, evenly composed surface design with no border, \
 no frame, no vignette and no letterboxing. Keep the composition readable when it is shrunk to a \

@@ -5,39 +5,44 @@
 use crate::state::AppState;
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinKind, SkinSource, MAX_STORED_SIDE};
 use base64::Engine;
+use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::apply::{apply_icon, revert_icon, validate_folder};
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
 use folderskin_core::matte;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
-/// Bump when the compositor's output changes so cached thumbnails, the built-in ones and the
+/// Bump when the compositor's output changes so cached thumbnails, the default folder's and the
 /// saved skins' alike, are re-rendered.
 pub const THUMB_CACHE_VERSION: u32 = 2;
 const THUMB_SIZE: u32 = 512;
+/// The id the webview can give the plain default folder, which is not a skin.
 const DEFAULT_ID: &str = "__default__";
 const IMAGE_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
 ];
 
+/// One skin in the library. Every skin is the user's own: a picture they added, an AI result, or
+/// one from a community pack, saved on disk or kept for this session.
 #[derive(Serialize, Clone, Debug)]
 pub struct SkinDto {
     pub id: String,
     pub name: String,
+    /// Always "yours".
     pub collection: String,
     pub thumbnail: String,
+    /// Always true.
     pub custom: bool,
     /// "artwork" (wrapped onto the folder template) or "folder" (a finished folder image).
     pub kind: SkinKind,
-    /// "builtin", "import" or "ai".
+    /// "import", "ai" or "community".
     pub source: SkinSource,
-    /// When a saved skin was added, in Unix milliseconds; `null` for the built-in skins.
-    pub created_at: Option<u64>,
+    /// When the skin was added, in Unix milliseconds.
+    pub created_at: u64,
     /// What the gallery filters it by.
     pub tags: Vec<String>,
     /// For a community skin, the pack it came from.
@@ -63,7 +68,7 @@ impl SkinDto {
             custom: true,
             kind: entry.kind,
             source: entry.source,
-            created_at: Some(entry.created_at),
+            created_at: entry.created_at,
             tags: entry.tags.clone(),
             pack: entry.pack.clone(),
             made_with: made_with(entry),
@@ -85,9 +90,11 @@ fn made_with(entry: &SavedSkin) -> Option<String> {
     Some(format!("{provider_label} · {model_label}"))
 }
 
+/// The library: the user's skins, newest first, and the plain default folder.
 #[derive(Serialize)]
 pub struct SkinListDto {
     pub skins: Vec<SkinDto>,
+    /// The plain default folder, drawn by the same compositor, as a PNG data URL.
     pub default_thumbnail: String,
 }
 
@@ -125,9 +132,10 @@ pub fn has_image_extension(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// True for the shipped skins and the plain default folder, which cannot be deleted.
-pub fn is_builtin_id(id: &str) -> bool {
-    id == DEFAULT_ID || crate::skins::is_builtin(id)
+/// True for the id of the plain default folder, which is not a skin, so it can't be deleted or
+/// changed.
+pub fn is_reserved_id(id: &str) -> bool {
+    id == DEFAULT_ID
 }
 
 /// Decides what an imported picture is: a finished folder image, used as the icon as it is
@@ -165,63 +173,40 @@ pub fn data_url(png: &[u8]) -> String {
     )
 }
 
-fn thumb_cache_dir(app: &AppHandle) -> Option<PathBuf> {
+/// Where the default folder's thumbnail is cached: the app cache directory, so a later launch
+/// skips the render. `None` when there is no cache directory to use.
+fn default_thumb_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_cache_dir().ok()?.join("thumbs");
     std::fs::create_dir_all(&dir).ok()?;
-    Some(dir)
+    Some(dir.join(format!("default.thumb-v{THUMB_CACHE_VERSION}.png")))
 }
 
-fn cache_key(id: &str, bytes: &[u8], focus: (f32, f32)) -> String {
-    let mut h = Sha256::new();
-    h.update(bytes);
-    h.update(focus.0.to_le_bytes());
-    h.update(focus.1.to_le_bytes());
-    h.update(THUMB_CACHE_VERSION.to_le_bytes());
-    let safe: String = id
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    format!("{safe}-{:x}.png", h.finalize())[..(safe.len() + 1 + 16)].to_string() + ".png"
-}
-
-/// Renders (or loads from the disk cache) a thumbnail and returns it as a data URL.
-fn thumbnail(
-    app: &AppHandle,
-    state: &AppState,
-    id: &str,
-    image: &SkinImage,
-    source_bytes: Option<&[u8]>,
-) -> String {
-    if let Some(t) = state.cached_thumb(id) {
-        return t;
-    }
-    // A finished folder has no focus point; one no artwork can have keeps the keys apart.
-    let focus = match image {
-        SkinImage::Artwork(art) => art.focus,
-        SkinImage::Folder(_) => (-1.0, -1.0),
-    };
-    let cache_dir = source_bytes.and_then(|_| thumb_cache_dir(app));
-    let cache_path =
-        cache_dir.map(|d| d.join(cache_key(id, source_bytes.unwrap_or_default(), focus)));
-    let png = cache_path
-        .as_ref()
-        .and_then(|p| std::fs::read(p).ok())
-        .unwrap_or_else(|| {
-            let png = image.preview_png(THUMB_SIZE);
-            if let Some(p) = &cache_path {
-                let _ = std::fs::write(p, &png);
-            }
-            png
+/// The plain default folder's thumbnail as a data URL: kept in memory once drawn, and on disk
+/// between launches.
+fn default_thumbnail(app: &AppHandle, state: &AppState) -> String {
+    state.default_thumbnail(|| {
+        let png = cached_png(default_thumb_path(app).as_deref(), || {
+            compositor::render_preview_png(&compositor::default_folder_artwork(), THUMB_SIZE)
         });
-    let url = data_url(&png);
-    state.remember_thumb(id.to_string(), url.clone());
-    url
+        data_url(&png)
+    })
+}
+
+/// The PNG cached at `path`, or `render()`'s when there is none (or it is damaged), which is then
+/// cached there. With no `path` it only renders.
+fn cached_png(path: Option<&Path>, render: impl FnOnce() -> Vec<u8>) -> Vec<u8> {
+    if let Some(bytes) = path.and_then(|p| std::fs::read(p).ok()) {
+        if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return bytes;
+        }
+    }
+    let png = render();
+    if let Some(path) = path {
+        if let Err(e) = write_atomic(path, &png) {
+            eprintln!("folderskin: couldn't cache {}: {e}", path.display());
+        }
+    }
+    png
 }
 
 /// Decodes a picture the user picked, `bytes` being the file as read, downscaled so its longer
@@ -276,44 +261,17 @@ fn heic_to_png(_path: &Path) -> Result<Vec<u8>, String> {
 
 // ---------- commands ----------
 
-/// The built-in skins first, then the user's saved skins, newest first.
+/// The user's skins, newest first, and the plain default folder.
 #[tauri::command]
 pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<SkinListDto, String> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut skins: Vec<SkinDto> = state
-            .builtin()
+    tauri::async_runtime::spawn_blocking(move || SkinListDto {
+        skins: state
+            .saved_skins()
             .iter()
-            .map(|s| SkinDto {
-                id: s.id.clone(),
-                name: s.name.clone(),
-                collection: s.collection.clone(),
-                thumbnail: thumbnail(&app, &state, &s.id, &s.image, Some(s.bytes)),
-                custom: false,
-                kind: s.image.kind(),
-                source: SkinSource::Builtin,
-                created_at: None,
-                tags: s.tags.clone(),
-                pack: s.pack.as_ref().map(|p| p.id.clone()),
-                made_with: None,
-                idea: None,
-                pack_name: s.pack.as_ref().map(|p| p.name.clone()),
-                author: s.pack.as_ref().map(|p| p.author.clone()),
-                license: s.pack.as_ref().map(|p| p.license.clone()),
-            })
-            .collect();
-        skins.extend(
-            state
-                .saved_skins()
-                .iter()
-                .map(|(entry, png)| SkinDto::saved(entry, png)),
-        );
-        let default_art = SkinImage::Artwork(Arc::new(compositor::default_folder_artwork()));
-        let default_thumbnail = thumbnail(&app, &state, DEFAULT_ID, &default_art, Some(b"default"));
-        SkinListDto {
-            skins,
-            default_thumbnail,
-        }
+            .map(|(entry, png)| SkinDto::saved(entry, png))
+            .collect(),
+        default_thumbnail: default_thumbnail(&app, &state),
     })
     .await
     .map_err(|e| e.to_string())
@@ -406,12 +364,12 @@ pub fn skins_folder(state: State<'_, AppState>) -> Result<String, String> {
         .ok_or_else(|| "skins are only kept until you quit, since there is no data folder".into())
 }
 
-/// Removes a saved skin: its index entry, its files and anything cached for it. The built-in
-/// skins cannot be deleted; a saved skin that is already gone is not an error.
+/// Removes a saved skin: its index entry, its files and anything cached for it. A saved skin
+/// that is already gone is not an error.
 #[tauri::command]
 pub async fn delete_skin(state: State<'_, AppState>, skin_id: String) -> Result<(), String> {
-    if is_builtin_id(&skin_id) {
-        return Err("the built-in skins can't be deleted".into());
+    if is_reserved_id(&skin_id) {
+        return Err("the plain folder isn't a skin, so it can't be deleted".into());
     }
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || state.delete(&skin_id))
@@ -427,8 +385,7 @@ pub struct SkinEditDto {
 }
 
 /// Gives one of the user's skins a new name and tags and returns them as saved: the name on one
-/// line and at most `MAX_NAME_CHARS` long, the tags cleaned and at most eight. The built-in skins
-/// keep theirs.
+/// line and at most `MAX_NAME_CHARS` long, the tags cleaned and at most eight.
 #[tauri::command]
 pub async fn edit_skin(
     state: State<'_, AppState>,
@@ -436,8 +393,8 @@ pub async fn edit_skin(
     name: String,
     tags: Vec<String>,
 ) -> Result<SkinEditDto, String> {
-    if is_builtin_id(&skin_id) {
-        return Err("the built-in skins can't be changed".into());
+    if is_reserved_id(&skin_id) {
+        return Err("the plain folder isn't a skin, so it can't be changed".into());
     }
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -469,11 +426,10 @@ pub async fn folder_icon(
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let p = PathBuf::from(&folder);
-        if let Some(png) = crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
-            return data_url(&png);
+        match crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
+            Some(png) => data_url(&png),
+            None => default_thumbnail(&app, &state),
         }
-        let default_art = SkinImage::Artwork(Arc::new(compositor::default_folder_artwork()));
-        thumbnail(&app, &state, DEFAULT_ID, &default_art, Some(b"default"))
     })
     .await
     .map_err(|e| e.to_string())
@@ -573,12 +529,14 @@ mod tests {
     }
 
     #[test]
-    fn only_shipped_skins_count_as_built_in() {
-        assert!(is_builtin_id(DEFAULT_ID));
-        let first = crate::skins::SKINS.first().expect("the app ships skins");
-        assert!(is_builtin_id(first.id));
-        assert!(!is_builtin_id(&store::skin_id(b"mine")));
-        assert!(!is_builtin_id(""));
+    fn only_the_default_folder_is_reserved() {
+        assert!(is_reserved_id(DEFAULT_ID));
+        assert!(!is_reserved_id(&store::skin_id(b"mine")));
+        assert!(
+            !is_reserved_id("aurora"),
+            "no skin ships with the app any more"
+        );
+        assert!(!is_reserved_id(""));
     }
 
     #[test]
@@ -615,37 +573,31 @@ mod tests {
         assert_eq!(json["made_with"], "xAI Grok · Grok Imagine");
         assert_eq!(json["idea"], "a fox");
         assert!(json["author"].is_null());
-
-        let builtin = SkinDto {
-            id: "aurora".into(),
-            name: "Aurora".into(),
-            collection: "glow".into(),
-            thumbnail: String::new(),
-            custom: false,
-            kind: SkinKind::Artwork,
-            source: SkinSource::Builtin,
-            created_at: None,
-            tags: vec!["glow".into()],
-            pack: None,
-            made_with: None,
-            idea: None,
-            pack_name: None,
-            author: None,
-            license: None,
-        };
-        let json = serde_json::to_value(builtin).unwrap();
-        assert_eq!(json["kind"], "artwork");
-        assert_eq!(json["source"], "builtin");
-        assert!(json["created_at"].is_null());
     }
 
     #[test]
-    fn cache_keys_change_with_focus_and_are_filesystem_safe() {
-        let a = cache_key("aurora", b"img", (0.5, 0.5));
-        let b = cache_key("aurora", b"img", (0.4, 0.5));
-        assert_ne!(a, b);
-        assert!(a.starts_with("aurora-") && a.ends_with(".png"));
-        let c = cache_key("custom:ab/cd", b"img", (0.5, 0.5));
-        assert!(!c.contains(':') && !c.contains('/'));
+    fn a_cached_thumbnail_is_read_back_and_a_damaged_one_drawn_again() {
+        let dir = std::env::temp_dir().join(format!("folderskin-thumb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("default.thumb-v2.png");
+        let png = b"\x89PNG\r\n\x1a\nfirst".to_vec();
+
+        assert_eq!(cached_png(Some(&path), || png.clone()), png);
+        assert_eq!(std::fs::read(&path).unwrap(), png, "and cached");
+        let again = cached_png(Some(&path), || panic!("drawn a second time"));
+        assert_eq!(again, png, "read back instead");
+
+        std::fs::write(&path, b"not a png").unwrap();
+        let redrawn = b"\x89PNG\r\n\x1a\nsecond".to_vec();
+        assert_eq!(cached_png(Some(&path), || redrawn.clone()), redrawn);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            redrawn,
+            "a damaged file is replaced"
+        );
+
+        assert_eq!(cached_png(None, || png.clone()), png, "no cache folder");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -1,7 +1,8 @@
 # Contributing
 
 Thanks for looking. FolderSkin is small on purpose, so the most useful contributions are bug
-reports with a platform and a folder path, fixes for the per-OS icon writers, and skins.
+reports with a platform and a folder path, fixes for the per-OS icon writers, and community skin
+packs.
 
 ## Getting set up
 
@@ -75,20 +76,18 @@ get a request for changes, not a silent merge.
 7. **Only clean assets.** Art in the repository must be original or CC0, with `author` and
    `license` filled in. Never commit anything extracted from another product.
 8. **Tests come with behaviour.** Pure functions — geometry, cover-fit, `desktop.ini` and
-   `.directory` generation and parsing, the manifest, the drop-zone reducer — are all unit
+   `.directory` generation and parsing, the pack checks, the drop-zone reducer — are all unit
    tested, and new behaviour in them should arrive with its test. Write the test first if you
    can.
 
-## Adding or changing a skin
+## Sharing skins
 
-[docs/SKINS.md](docs/SKINS.md) has the format, the safe areas and the commands.
-[.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md) is the
-same workflow written for Claude Code.
-
-Two things catch everybody: skins are **embedded at build time**, so you must rebuild to see a
-change, and the shipped set is **exactly ten** — replace a skin rather than adding an
-eleventh, unless a maintainer has agreed otherwise. Include the preview in your pull request
-so reviewers can see the composition without building.
+FolderSkin ships no skins of its own; they come from community packs under `community/packs/`.
+[docs/PACKS.md](docs/PACKS.md) has the pack contract, how to make one with `folderskin-tools packs
+make` and how to check it, and [docs/SKINS.md](docs/SKINS.md) how a picture lands on the folder.
+[.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md) is the same
+workflow written for Claude Code. Include a `--preview` sheet in your pull request so reviewers
+can see every skin as its folder without running anything.
 
 ## Working on the icon writers
 
@@ -97,8 +96,8 @@ the pull request which OS and file manager you tested on. Two things make this e
 
 - The pure content generators (`desktop.ini` and `.directory` text, and the revert parsers) are
   unit-testable without touching a filesystem. Add cases there first.
-- `folderskin-tools apply <folder> --skin aurora` and `folderskin-tools revert <folder>` drive
-  the writers from a terminal, so you can test on a headless VM with no GUI.
+- `folderskin-tools apply <folder> --image <picture>` and `folderskin-tools revert <folder>`
+  drive the writers from a terminal, so you can test on a headless VM with no GUI.
 
 Every writer must validate the path, refuse filesystem roots, write atomically, remove only
 what FolderSkin wrote, and be safe to run twice.
