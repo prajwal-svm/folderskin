@@ -127,7 +127,7 @@ pub fn has_image_extension(path: &Path) -> bool {
 
 /// True for the shipped skins and the plain default folder, which cannot be deleted.
 pub fn is_builtin_id(id: &str) -> bool {
-    id == DEFAULT_ID || crate::skins::SKINS.iter().any(|s| s.id == id)
+    id == DEFAULT_ID || crate::skins::is_builtin(id)
 }
 
 /// Decides what an imported picture is: a finished folder image, used as the icon as it is
@@ -195,20 +195,25 @@ fn thumbnail(
     app: &AppHandle,
     state: &AppState,
     id: &str,
-    art: &Artwork,
+    image: &SkinImage,
     source_bytes: Option<&[u8]>,
 ) -> String {
     if let Some(t) = state.cached_thumb(id) {
         return t;
     }
+    // A finished folder has no focus point; one no artwork can have keeps the keys apart.
+    let focus = match image {
+        SkinImage::Artwork(art) => art.focus,
+        SkinImage::Folder(_) => (-1.0, -1.0),
+    };
     let cache_dir = source_bytes.and_then(|_| thumb_cache_dir(app));
     let cache_path =
-        cache_dir.map(|d| d.join(cache_key(id, source_bytes.unwrap_or_default(), art.focus)));
+        cache_dir.map(|d| d.join(cache_key(id, source_bytes.unwrap_or_default(), focus)));
     let png = cache_path
         .as_ref()
         .and_then(|p| std::fs::read(p).ok())
         .unwrap_or_else(|| {
-            let png = compositor::render_preview_png(art, THUMB_SIZE);
+            let png = image.preview_png(THUMB_SIZE);
             if let Some(p) = &cache_path {
                 let _ = std::fs::write(p, &png);
             }
@@ -279,28 +284,22 @@ pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<Sk
         let mut skins: Vec<SkinDto> = state
             .builtin()
             .iter()
-            .map(|s| {
-                let bytes = crate::skins::SKINS
-                    .iter()
-                    .find(|b| b.id == s.id)
-                    .map(|b| b.bytes);
-                SkinDto {
-                    id: s.id.clone(),
-                    name: s.name.clone(),
-                    collection: s.collection.clone(),
-                    thumbnail: thumbnail(&app, &state, &s.id, &s.art, bytes),
-                    custom: false,
-                    kind: SkinKind::Artwork,
-                    source: SkinSource::Builtin,
-                    created_at: None,
-                    tags: s.tags.clone(),
-                    pack: None,
-                    made_with: None,
-                    idea: None,
-                    pack_name: None,
-                    author: None,
-                    license: None,
-                }
+            .map(|s| SkinDto {
+                id: s.id.clone(),
+                name: s.name.clone(),
+                collection: s.collection.clone(),
+                thumbnail: thumbnail(&app, &state, &s.id, &s.image, Some(s.bytes)),
+                custom: false,
+                kind: s.image.kind(),
+                source: SkinSource::Builtin,
+                created_at: None,
+                tags: s.tags.clone(),
+                pack: s.pack.as_ref().map(|p| p.id.clone()),
+                made_with: None,
+                idea: None,
+                pack_name: s.pack.as_ref().map(|p| p.name.clone()),
+                author: s.pack.as_ref().map(|p| p.author.clone()),
+                license: s.pack.as_ref().map(|p| p.license.clone()),
             })
             .collect();
         skins.extend(
@@ -309,7 +308,7 @@ pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<Sk
                 .iter()
                 .map(|(entry, png)| SkinDto::saved(entry, png)),
         );
-        let default_art = compositor::default_folder_artwork();
+        let default_art = SkinImage::Artwork(Arc::new(compositor::default_folder_artwork()));
         let default_thumbnail = thumbnail(&app, &state, DEFAULT_ID, &default_art, Some(b"default"));
         SkinListDto {
             skins,
@@ -472,7 +471,7 @@ pub async fn folder_icon(
         if let Some(png) = crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
             return data_url(&png);
         }
-        let default_art = compositor::default_folder_artwork();
+        let default_art = SkinImage::Artwork(Arc::new(compositor::default_folder_artwork()));
         thumbnail(&app, &state, DEFAULT_ID, &default_art, Some(b"default"))
     })
     .await

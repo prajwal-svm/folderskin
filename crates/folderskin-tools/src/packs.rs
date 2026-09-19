@@ -80,13 +80,19 @@ impl Changes {
 /// Checks every entry of `<dir>/packs`. Fails only when that folder cannot be read at all, so a
 /// mistyped `--dir` is an error rather than "0 packs, all good".
 pub fn check(dir: &Path) -> Result<Report, String> {
+    check_within(dir, MAX_PICTURE_BYTES)
+}
+
+/// [`check`] with a tighter limit on each picture's size, such as the one for the packs built
+/// into the app, which are part of every download.
+pub fn check_within(dir: &Path, max_bytes: usize) -> Result<Report, String> {
     let packs_dir = dir.join(PACKS_DIR);
     let entries =
         list(&packs_dir).map_err(|e| format!("couldn't read {}: {e}", packs_dir.display()))?;
     let mut report = Report::default();
     for (name, kind) in entries {
         let result = if kind.is_dir() {
-            check_pack(&packs_dir.join(&name), &name)
+            check_pack_within(&packs_dir.join(&name), &name, max_bytes)
         } else {
             Err(vec![
                 "isn't a folder; every pack is a folder of its own".into()
@@ -111,6 +117,11 @@ pub fn check(dir: &Path) -> Result<Report, String> {
 /// Checks one pack folder called `name`: the name, `pack.json`, every picture it lists, and
 /// that nothing else is in it. Dotfiles such as `.DS_Store` are ignored.
 pub fn check_pack(folder: &Path, name: &str) -> Result<Pack, Vec<String>> {
+    check_pack_within(folder, name, MAX_PICTURE_BYTES)
+}
+
+/// [`check_pack`] with pictures of at most `max_bytes`.
+pub fn check_pack_within(folder: &Path, name: &str, max_bytes: usize) -> Result<Pack, Vec<String>> {
     let mut problems = Vec::new();
     if !pack::is_pack_id(name) {
         problems.push(bad_id(name));
@@ -128,7 +139,7 @@ pub fn check_pack(folder: &Path, name: &str) -> Result<Pack, Vec<String>> {
     for skin in &listing.skins {
         // A name Pack::parse turned down is reported already, and could point outside the folder.
         if pack::is_picture_file_name(&skin.file) {
-            if let Err(e) = check_listed_picture(folder, &files, &skin.file) {
+            if let Err(e) = check_listed_picture(folder, &files, &skin.file, max_bytes) {
                 problems.push(e);
             }
         }
@@ -214,13 +225,40 @@ pub fn preview_strip(folder: &Path, pack: &Pack) -> Result<RgbaImage, String> {
     let shown = &pack.skins[..pack.skins.len().min(PREVIEW_SKINS)];
     let mut strip = RgbaImage::new(PREVIEW_SIDE * shown.len() as u32, PREVIEW_SIDE);
     for (i, skin) in shown.iter().enumerate() {
-        let rgba =
-            read_picture(&folder.join(&skin.file)).map_err(|e| format!("{} {e}", skin.file))?;
+        let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
+            .map_err(|e| format!("{} {e}", skin.file))?;
         let icon = render_skin(rgba, PREVIEW_SIDE)?;
         // Copied rather than blended: the tiles never overlap, and copying keeps them exact.
         image::imageops::replace(&mut strip, &icon, i64::from(i as u32 * PREVIEW_SIDE), 0);
     }
     Ok(strip)
+}
+
+/// Every skin of a pack as the folder the app makes of it, `side` px square, `columns` to a row,
+/// on transparency: a sheet to look over a pack before it ships.
+pub fn contact_sheet(
+    folder: &Path,
+    pack: &Pack,
+    side: u32,
+    columns: u32,
+) -> Result<RgbaImage, String> {
+    let count = pack.skins.len() as u32;
+    let columns = columns.clamp(1, count.max(1));
+    let rows = count.div_ceil(columns).max(1);
+    let mut sheet = RgbaImage::new(side * columns, side * rows);
+    for (i, skin) in pack.skins.iter().enumerate() {
+        let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
+            .map_err(|e| format!("{} {e}", skin.file))?;
+        let icon = render_skin(rgba, side)?;
+        let (col, row) = (i as u32 % columns, i as u32 / columns);
+        image::imageops::replace(
+            &mut sheet,
+            &icon,
+            i64::from(col * side),
+            i64::from(row * side),
+        );
+    }
+    Ok(sheet)
 }
 
 /// A skin as the folder the app makes of it, `size` px square: a finished folder picture (cut
@@ -292,31 +330,37 @@ fn read_manifest(folder: &Path, files: &Files, problems: &mut Vec<String>) -> Op
 }
 
 /// Checks one picture a pack lists, the way the app does before it saves it.
-fn check_listed_picture(folder: &Path, files: &Files, file: &str) -> Result<(), String> {
+fn check_listed_picture(
+    folder: &Path,
+    files: &Files,
+    file: &str,
+    max_bytes: usize,
+) -> Result<(), String> {
     match files.get(file) {
         None => return Err(missing(files, file)),
         Some(kind) if !kind.is_file() => return Err(not_a_file(file)),
         Some(_) => {}
     }
-    let rgba = read_picture(&folder.join(file)).map_err(|e| format!("{file} {e}"))?;
+    let rgba = read_picture(&folder.join(file), max_bytes).map_err(|e| format!("{file} {e}"))?;
     if matte::alpha_bounds(&rgba, 8).is_none() {
         return Err(format!("{file} is completely transparent"));
     }
     Ok(())
 }
 
-/// Reads and decodes a picture within the pack limits. The error finishes a sentence that starts
-/// with the file's name.
-fn read_picture(path: &Path) -> Result<RgbaImage, String> {
+/// Reads and decodes a picture within the pack limits and at most `max_bytes`. The error
+/// finishes a sentence that starts with the file's name.
+fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, String> {
     let len = std::fs::metadata(path)
         .map_err(|e| format!("couldn't be read: {e}"))?
         .len();
     // Measured before reading, so an oversized file is never loaded.
-    if len > MAX_PICTURE_BYTES as u64 {
+    let most = max_bytes.min(MAX_PICTURE_BYTES);
+    if len > most as u64 {
         return Err(format!(
             "is {} KB; the most is {} KB",
             len.div_ceil(1024),
-            MAX_PICTURE_BYTES / 1024
+            most / 1024
         ));
     }
     let bytes = std::fs::read(path).map_err(|e| format!("couldn't be read: {e}"))?;

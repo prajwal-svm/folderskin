@@ -56,6 +56,11 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   [docs/SKINS.md](docs/SKINS.md).
 - A Claude Code skill for authoring skins at
   [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md).
+- Built-in packs: a pack folder under `assets/packs/` ships inside the app, with the same
+  `pack.json` as a community pack, so themed sets are there offline from the first launch.
+  `folderskin-tools packs make` turns a folder of pictures, such as renders from an image model,
+  into a pack: finished folders on magenta or transparency are cut out and saved as WebP,
+  everything else as artwork, each within 400 KB. See [docs/PACKS.md](docs/PACKS.md).
 - Installers for macOS (one universal app, signed and notarized), Windows, and Linux on both
   x86_64 and ARM64, built as a draft release from a tag and published by hand once tried. See
   [docs/RELEASING.md](docs/RELEASING.md).

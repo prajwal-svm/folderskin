@@ -5,7 +5,7 @@ use folderskin_core::apply::{apply_icon, revert_icon};
 use folderskin_core::compositor::{render_icon_set, render_preview_png, Artwork, ICON_SIZES};
 use folderskin_core::manifest::{Manifest, SkinEntry, MAX_SKIN_BYTES, SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_tools::cli::{Cli, Command, PacksCommand, SkinCommand};
-use folderskin_tools::{gen, packs};
+use folderskin_tools::{gen, make, packs};
 use image::{ImageEncoder, RgbaImage};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -135,8 +135,31 @@ fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         Command::Packs { command } => match command {
-            PacksCommand::Check { dir } => packs_check(&dir),
+            PacksCommand::Check { dir, max_kb } => packs_check(&dir, max_kb),
             PacksCommand::Index { dir } => packs_index(&dir),
+            PacksCommand::Make {
+                pictures,
+                id,
+                name,
+                tags,
+                author,
+                license,
+                dir,
+                max_kb,
+                preview,
+            } => {
+                let opts = make::MakeOptions {
+                    id,
+                    name,
+                    tags,
+                    author,
+                    license,
+                    dir,
+                    max_bytes: max_kb * 1024,
+                    cwebp: make::find_cwebp(),
+                };
+                packs_make(&pictures, &opts, preview.as_deref())
+            }
         },
     }
 }
@@ -344,9 +367,12 @@ fn skin_check(dir: &Path) -> Result<(), String> {
     }
 }
 
-/// Checks every community pack, printing each problem on its own line.
-fn packs_check(dir: &Path) -> Result<(), String> {
-    let report = packs::check(dir)?;
+/// Checks every pack in `dir`, printing each problem on its own line.
+fn packs_check(dir: &Path, max_kb: Option<usize>) -> Result<(), String> {
+    let report = match max_kb {
+        Some(kb) => packs::check_within(dir, kb * 1024)?,
+        None => packs::check(dir)?,
+    };
     for problem in &report.problems {
         println!("{problem}");
     }
@@ -354,6 +380,52 @@ fn packs_check(dir: &Path) -> Result<(), String> {
         return Err(report.summary());
     }
     println!("{}", report.summary());
+    Ok(())
+}
+
+/// Makes a pack from pictures and says what went into it: each skin's file, whether it is a
+/// finished folder or artwork, and its size.
+fn packs_make(
+    pictures: &[PathBuf],
+    opts: &make::MakeOptions,
+    preview: Option<&Path>,
+) -> Result<(), String> {
+    if opts.cwebp.is_none() {
+        println!("cwebp isn't installed, so finished folders are saved as PNG, which is bigger");
+    }
+    let (folder, made) = make::make(pictures, opts)?;
+    for m in &made {
+        let kind = if m.folder { "folder " } else { "artwork" };
+        println!(
+            "{kind}  {:>4} KB  {}  \"{}\"  from {}",
+            m.bytes.div_ceil(1024),
+            m.file,
+            m.name,
+            m.source.display()
+        );
+    }
+    let total: usize = made.iter().map(|m| m.bytes).sum();
+    let folders = made.iter().filter(|m| m.folder).count();
+    println!(
+        "wrote {}: {} skins ({folders} finished folders, {} artwork), {} KB",
+        folder.display(),
+        made.len(),
+        made.len() - folders,
+        total.div_ceil(1024)
+    );
+    if let Some(path) = preview {
+        let pack = folderskin_core::pack::Pack::parse(
+            &std::fs::read(folder.join(folderskin_core::pack::MANIFEST_FILE))
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|problems| problems.join("; "))?;
+        let sheet = packs::contact_sheet(&folder, &pack, 256, 6)?;
+        sheet
+            .save(path)
+            .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+        println!("preview: {}", path.display());
+    }
+    println!("Rename the skins in pack.json if their file names don't make good names.");
     Ok(())
 }
 

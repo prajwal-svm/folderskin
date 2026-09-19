@@ -123,6 +123,33 @@ cargo run -p folderskin-tools -- packs check
 It checks every folder in `community/packs/` with the rules the app uses, and prints each
 problem as a sentence. `--dir` points it at another copy of `community/`.
 
+## Built-in packs
+
+A pack can also ship inside the app, so it's there offline from the first launch: a folder
+under `assets/packs/` instead of `community/packs/`, with the same `pack.json` and the same
+rules. The build embeds every folder there. Its skins join the library with the pack's tags,
+next to the ten built-in skins, and like them they can't be renamed or deleted.
+
+Because they're part of every download, a built-in pack's pictures are held to 400 KB each
+rather than 2 MB. `packs make` turns a folder of pictures into a pack that fits:
+
+```sh
+cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders \
+  --id 3d --name "3D" --tags 3d,glossy --author prajwal-svm --preview /tmp/3d.png
+```
+
+Each picture gets the split the app makes when you add one. A finished folder, painted on
+magenta the way the chat prompt in [PROMPTS.md](PROMPTS.md) asks, or on real transparency, is cut
+out and becomes the icon itself; anything else is artwork for FolderSkin's folder. Folders are
+saved as WebP when `cwebp` is installed (`brew install webp`, or the `webp` package on Linux),
+which keeps the transparency at a fraction of a PNG's size, and artwork as JPEG. The report
+says which way each picture went. Skins are named after their files, so name the files first or
+fix the names in `pack.json` afterwards, and `--preview` draws every skin as its folder in one
+PNG to look over.
+
+`--dir community` makes a community pack the same way. CI checks the built-in packs with
+`packs check --dir assets --max-kb 400`.
+
 ## How the app reads packs
 
 - `community/index.json` lists every pack: its id, name, author, licence, tags and number of

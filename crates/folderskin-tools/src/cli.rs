@@ -60,7 +60,7 @@ pub enum Command {
     },
     /// Put the default icon back
     Revert { folder: PathBuf },
-    /// Check the community skin packs, and write their index and previews
+    /// Make, check and index skin packs: the community's, and the ones built into the app
     Packs {
         #[command(subcommand)]
         command: PacksCommand,
@@ -71,9 +71,44 @@ pub enum Command {
 pub enum PacksCommand {
     /// Check every pack in <dir>/packs the way the app will; exit 1 on problems
     Check {
-        /// The community folder, holding packs/
+        /// The folder holding packs/: community, or assets for the built-in packs
         #[arg(long, default_value = "community")]
         dir: PathBuf,
+        /// The largest a picture may be, in KB, if less than the pack limit of 2048. The built-in
+        /// packs are in every download, so CI holds them to 400
+        #[arg(long, value_name = "KB")]
+        max_kb: Option<usize>,
+    },
+    /// Make a pack from pictures: finished folders (on magenta or transparency) are cut out,
+    /// everything is shrunk and compressed to fit, and pack.json is written
+    Make {
+        /// Pictures (PNG, JPEG or WebP), or folders of them, taken in name order
+        #[arg(required = true)]
+        pictures: Vec<PathBuf>,
+        /// The pack's id, which is also its folder's name: lower-case words joined by dashes
+        #[arg(long)]
+        id: String,
+        /// The pack's name as the app shows it
+        #[arg(long)]
+        name: String,
+        /// Tags for every skin, comma-separated; the first one names the pack
+        #[arg(long, value_delimiter = ',', required = true)]
+        tags: Vec<String>,
+        /// The GitHub name of whoever made the pictures
+        #[arg(long)]
+        author: String,
+        /// CC0-1.0, CC-BY-4.0 or MIT
+        #[arg(long, default_value = "CC0-1.0")]
+        license: String,
+        /// The folder holding packs/: assets to build the pack into the app, community to share it
+        #[arg(long, default_value = "assets")]
+        dir: PathBuf,
+        /// The largest a picture may be, in KB
+        #[arg(long, value_name = "KB", default_value_t = 400)]
+        max_kb: usize,
+        /// Also write a PNG showing every skin as the folder it makes
+        #[arg(long, value_name = "PNG")]
+        preview: Option<PathBuf>,
     },
     /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic)
     Index {
@@ -200,14 +235,59 @@ mod tests {
     fn parses_packs_commands_with_community_as_the_default_folder() {
         match Cli::parse_from(["folderskin-tools", "packs", "check"]).command {
             Command::Packs {
-                command: PacksCommand::Check { dir },
-            } => assert_eq!(dir, PathBuf::from("community")),
+                command: PacksCommand::Check { dir, max_kb },
+            } => {
+                assert_eq!(dir, PathBuf::from("community"));
+                assert_eq!(max_kb, None);
+            }
             other => panic!("{other:?}"),
         }
         match Cli::parse_from(["folderskin-tools", "packs", "index", "--dir", "/tmp/c"]).command {
             Command::Packs {
                 command: PacksCommand::Index { dir },
             } => assert_eq!(dir, PathBuf::from("/tmp/c")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_packs_make_into_a_built_in_pack_by_default() {
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "packs",
+            "make",
+            "renders/",
+            "extra.png",
+            "--id",
+            "3d",
+            "--name",
+            "3D",
+            "--tags",
+            "3d,glossy",
+            "--author",
+            "prajwal-svm",
+        ]);
+        match cli.command {
+            Command::Packs {
+                command:
+                    PacksCommand::Make {
+                        pictures,
+                        tags,
+                        dir,
+                        max_kb,
+                        license,
+                        ..
+                    },
+            } => {
+                assert_eq!(
+                    pictures,
+                    [PathBuf::from("renders/"), PathBuf::from("extra.png")]
+                );
+                assert_eq!(tags, ["3d", "glossy"]);
+                assert_eq!(dir, PathBuf::from("assets"));
+                assert_eq!(max_kb, 400);
+                assert_eq!(license, "CC0-1.0");
+            }
             other => panic!("{other:?}"),
         }
     }

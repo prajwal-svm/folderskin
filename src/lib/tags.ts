@@ -30,8 +30,12 @@ export function cleanTags(tags: Iterable<string>, max = MAX_TAGS): string[] {
   return out;
 }
 
-/** How a tag reads as a filter: its first letter a capital. */
-export const tagLabel = (tag: string) => tag.charAt(0).toUpperCase() + tag.slice(1);
+/**
+ * How a tag reads as a filter: its first letter a capital, and a number with a one-letter unit
+ * in capitals, the way people write them ("3D", "4K").
+ */
+export const tagLabel = (tag: string) =>
+  /^\d+[a-z]$/.test(tag) ? tag.toUpperCase() : tag.charAt(0).toUpperCase() + tag.slice(1);
 
 /** Every tag on `items` with how many carry it: most used first, then A to Z. */
 export function tagCounts(items: { tags?: string[] }[]): { tag: string; count: number }[] {

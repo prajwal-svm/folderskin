@@ -136,6 +136,11 @@ jobs:
       - name: Check the community packs
         run: cargo run -p folderskin-tools --quiet -- packs check
 
+      # The packs built into the app follow the same rules, with a smaller limit on each picture
+      # because they are part of every download.
+      - name: Check the built-in packs
+        run: cargo run -p folderskin-tools --quiet -- packs check --dir assets --max-kb 400
+
   # The code that writes icons is different on each system and only compiles on its own, so
   # macOS and Windows get their own lint and test run.
   platforms:

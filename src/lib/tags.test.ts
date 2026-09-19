@@ -16,6 +16,9 @@ describe("tags", () => {
 
   it("read as filters with a capital first letter", () => {
     expect(tagLabel("art nouveau")).toBe("Art nouveau");
+    expect(tagLabel("3d")).toBe("3D");
+    expect(tagLabel("4k")).toBe("4K");
+    expect(tagLabel("8bit")).toBe("8bit");
   });
 
   it("are counted most used first, then A to Z", () => {

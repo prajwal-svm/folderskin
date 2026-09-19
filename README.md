@@ -119,10 +119,15 @@ ChatGPT's own chat; the app shows the same prompt, filled in, under **No API key
 [docs/AI.md](docs/AI.md) covers the providers, where the key is stored, how transparency is
 handled for models that cannot return an alpha channel, and what each error message means.
 
-## Make your own built-in skin
+## Add to the built-in skins
 
-A skin is a 1024 × 958 image under 400 KB. The maintainer CLI does the cropping and the
-bookkeeping:
+A themed set, such as 3D folders rendered with an image model, ships as a **built-in pack**: a
+pack folder under `assets/packs/`, the same format as a community pack, embedded at build time.
+`folderskin-tools packs make` cuts finished folders out of their magenta background and
+compresses every picture to fit; [docs/PACKS.md](docs/PACKS.md#built-in-packs) has the steps.
+
+A single built-in skin is a 1024 × 958 image under 400 KB. The maintainer CLI does the cropping
+and the bookkeeping:
 
 ```sh
 cargo run -p folderskin-tools -- skin add ~/Pictures/dunes.jpg \

@@ -1,6 +1,6 @@
 ---
 name: folderskin-skins
-description: Adds, replaces and checks the skins FolderSkin ships. Crops a picture to the 1024×958 skin format around a focus point, writes the file and its manifest entry, renders a preview of the finished folder icon, judges the composition against the folder template's safe areas, adjusts the focus point and reruns until it is right, then validates the whole set and reminds the user to rebuild. Use when the user says "make a skin", "make a skin from this photo", "add a skin", "turn this photo into a folder icon", "use this picture as a folder icon", "replace the aurora skin", "regenerate skins" or "check the skins", or asks for a new built-in background for FolderSkin.
+description: Adds, replaces and checks the skins FolderSkin ships. Crops a picture to the 1024×958 skin format around a focus point, writes the file and its manifest entry, renders a preview of the finished folder icon, judges the composition against the folder template's safe areas, adjusts the focus point and reruns until it is right, then validates the whole set and reminds the user to rebuild. Use when the user says "make a skin", "make a skin from this photo", "add a skin", "turn this photo into a folder icon", "use this picture as a folder icon", "replace the aurora skin", "regenerate skins" or "check the skins", or asks for a new built-in background for FolderSkin. Also turns a folder of renders (for example from Grok Imagine) into a pack built into the app: "make a pack from these", "add a built-in pack", "add the 3D pack".
 ---
 
 # Authoring FolderSkin skins
@@ -142,6 +142,36 @@ Do not commit anything unless the user asks. `assets/previews/` is gitignored, s
 out of the repository; the files to commit are `assets/skins/<id>.<ext>` and
 `assets/skins/manifest.json`.
 
+## Built-in packs
+
+A themed set of pictures, such as renders from Grok Imagine, ships as a pack under
+`assets/packs/<id>/` rather than as more manifest skins. docs/PACKS.md → Built-in packs has the
+background.
+
+1. Put the pictures in one folder. Skins are named after their files ("glass_folder.jpg" is
+   "Glass folder"), so rename meaningless ones such as `grok-image-3.jpg` first; look at each
+   with the Read tool to name it.
+2. Make the pack. The first tag names the pack in the library's filters; the author is the
+   user's GitHub name; the licence is `CC0-1.0` unless they say otherwise.
+
+   ```sh
+   cargo run -p folderskin-tools -- packs make <folder> --id <id> --name "<Name>" \
+     --tags <id>,<more> --author <github-name> --preview /tmp/<id>.png
+   ```
+
+3. Read the report. Each picture is `folder` (cut out of magenta or transparency and used as
+   the icon) or `artwork` (wrapped onto FolderSkin's folder). A render meant as a whole folder
+   that came out as `artwork` wasn't on a clean enough magenta: say so, and ask for a re-render
+   rather than forcing it. Without `cwebp` folders are PNG and often too big; install it
+   (`brew install webp`) and run again.
+4. Open the preview PNG with the Read tool. Look for magenta fringes, tabs cut off, a subject
+   that doesn't fill the folder, and names that read badly.
+5. Fix names in `assets/packs/<id>/pack.json` (1–60 characters) if needed, then run
+   `cargo run -p folderskin-tools -- packs check --dir assets --max-kb 400`.
+6. Rebuild. The skins appear in the library under the pack's first tag.
+
+To start over, delete `assets/packs/<id>/`: `packs make` never overwrites a pack.
+
 ## Rules
 
 - Only original art or CC0 art goes into `assets/skins/`. Fill in `author` and `license`
@@ -168,3 +198,5 @@ out of the repository; the files to commit are `assets/skins/<id>.<ext>` and
 | `cargo run -p folderskin-tools -- render --solid RRGGBB --out /tmp/flat.png` | render the template over a flat colour, to inspect the template itself |
 | `cargo run -p folderskin-tools -- apply "<folder>" --skin <id>` | apply a skin to a real folder from the terminal |
 | `cargo run -p folderskin-tools -- revert "<folder>"` | put the default icon back |
+| `cargo run -p folderskin-tools -- packs make <pictures> --id … --name … --tags … --author …` | make a pack from pictures, built in (`--dir assets`, the default) or for the community (`--dir community`) |
+| `cargo run -p folderskin-tools -- packs check --dir assets --max-kb 400` | check the built-in packs the way CI does |

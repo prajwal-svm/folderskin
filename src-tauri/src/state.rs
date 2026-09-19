@@ -1,19 +1,34 @@
 //! Process-wide state shared by the commands: the decoded built-in skins, the store of saved
 //! skins with a small cache of decoded ones in front of it, and the thumbnail cache.
 
+use crate::skins::{BuiltinPack, BuiltinPackSkin, BuiltinSkin};
 use crate::store::{NewSkin, SavedSkin, SkinImage, Store, THUMB_SIZE};
 use folderskin_core::compositor::Artwork;
+use folderskin_core::pack;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-/// A built-in skin decoded to RGBA, ready for the compositor.
+/// A built-in skin decoded, ready for the compositor.
 pub struct LoadedSkin {
     pub id: String,
     pub name: String,
     pub collection: String,
     pub tags: Vec<String>,
-    pub art: Arc<Artwork>,
+    /// For a skin from a built-in pack: the pack it belongs to.
+    pub pack: Option<PackInfo>,
+    pub image: SkinImage,
+    /// The embedded file, which keys the thumbnail cache.
+    pub bytes: &'static [u8],
+}
+
+/// The built-in pack a skin comes from.
+pub struct PackInfo {
+    pub id: String,
+    pub name: String,
+    /// The GitHub name of whoever made it.
+    pub author: String,
+    pub license: String,
 }
 
 /// How many decoded saved skins stay in memory (up to 16 MB each at 2048 px).
@@ -88,24 +103,23 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl AppState {
-    /// Decodes the embedded skins once (about 20 ms each) and keeps them for the process lifetime.
+    /// Decodes the embedded skins once and keeps them for the process lifetime: the manifest
+    /// skins, then every built-in pack's, in order. They are decoded on all cores at once, since
+    /// each takes 20 ms or more.
     pub fn builtin(&self) -> &Vec<LoadedSkin> {
         self.0.builtin.get_or_init(|| {
-            crate::skins::SKINS
+            let skins: Vec<Embedded> = crate::skins::SKINS
                 .iter()
-                .filter_map(|s| {
-                    let rgba = image::load_from_memory(s.bytes).ok()?.to_rgba8();
-                    Some(LoadedSkin {
-                        id: s.id.to_string(),
-                        name: s.name.to_string(),
-                        collection: s.collection.to_string(),
-                        tags: s.tags.iter().map(|t| t.to_string()).collect(),
-                        art: Arc::new(Artwork {
-                            rgba,
-                            focus: (s.focus[0], s.focus[1]),
-                        }),
-                    })
-                })
+                .map(Embedded::Skin)
+                .chain(
+                    crate::skins::PACKS
+                        .iter()
+                        .flat_map(|p| p.skins.iter().map(move |s| Embedded::Pack(p, s))),
+                )
+                .collect();
+            parallel_map(&skins, Embedded::decode)
+                .into_iter()
+                .flatten()
                 .collect()
         })
     }
@@ -138,7 +152,7 @@ impl AppState {
         self.builtin()
             .iter()
             .find(|s| s.id == skin_id)
-            .map(|s| SkinImage::Artwork(s.art.clone()))
+            .map(|s| s.image.clone())
             .ok_or_else(|| "that skin isn't available any more".to_string())
     }
 
@@ -272,6 +286,92 @@ impl AppState {
     }
 }
 
+/// A skin embedded in the binary, before it is decoded.
+enum Embedded {
+    /// One of the manifest skins in `assets/skins`: always artwork, with its focus point.
+    Skin(&'static BuiltinSkin),
+    /// A skin of a built-in pack: a finished folder or artwork, depending on the picture.
+    Pack(&'static BuiltinPack, &'static BuiltinPackSkin),
+}
+
+impl Embedded {
+    /// The skin decoded, or `None` (and a line on stderr) when its picture can't be used.
+    fn decode(&self) -> Option<LoadedSkin> {
+        let (id, bytes) = match self {
+            Embedded::Skin(s) => (s.id, s.bytes),
+            Embedded::Pack(_, s) => (s.id, s.bytes),
+        };
+        let rgba = match image::load_from_memory(bytes) {
+            Ok(img) => img.to_rgba8(),
+            Err(e) => {
+                eprintln!("folderskin: the built-in skin {id} couldn't be decoded: {e}");
+                return None;
+            }
+        };
+        Some(match self {
+            Embedded::Skin(s) => LoadedSkin {
+                id: s.id.to_string(),
+                name: s.name.to_string(),
+                collection: s.collection.to_string(),
+                tags: s.tags.iter().map(|t| t.to_string()).collect(),
+                pack: None,
+                image: SkinImage::Artwork(Arc::new(Artwork {
+                    rgba,
+                    focus: (s.focus[0], s.focus[1]),
+                })),
+                bytes: s.bytes,
+            },
+            Embedded::Pack(p, s) => {
+                // The same split a community pack's pictures get when they are added.
+                let image = match crate::commands::prepare_import(rgba) {
+                    Ok(image) => image,
+                    Err(e) => {
+                        eprintln!("folderskin: the built-in skin {id} can't be used: {e}");
+                        return None;
+                    }
+                };
+                let tags: Vec<String> =
+                    p.tags.iter().chain(s.tags).map(|t| t.to_string()).collect();
+                LoadedSkin {
+                    id: s.id.to_string(),
+                    name: s.name.to_string(),
+                    collection: p.id.to_string(),
+                    tags: pack::clean_tags(&tags, pack::MAX_TAGS),
+                    pack: Some(PackInfo {
+                        id: p.id.to_string(),
+                        name: p.name.to_string(),
+                        author: p.author.to_string(),
+                        license: p.license.to_string(),
+                    }),
+                    image,
+                    bytes: s.bytes,
+                }
+            }
+        })
+    }
+}
+
+/// `f` applied to every item, on up to one thread per core, with the results in item order.
+fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .clamp(1, items.len().max(1));
+    let per_thread = items.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = items
+            .chunks(per_thread)
+            .map(|part| scope.spawn(|| part.iter().map(&f).collect::<Vec<R>>()))
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|w| {
+                w.join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,5 +460,100 @@ mod tests {
         state.delete(&id).unwrap();
         assert!(state.resolve(&id).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn every_built_in_skin_decodes_once_with_its_own_id() {
+        let state = AppState::default();
+        let shipped = crate::skins::SKINS.len()
+            + crate::skins::PACKS
+                .iter()
+                .map(|p| p.skins.len())
+                .sum::<usize>();
+        let loaded = state.builtin();
+        assert_eq!(loaded.len(), shipped, "no built-in skin was dropped");
+        let ids: std::collections::HashSet<&str> = loaded.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids.len(), loaded.len(), "ids are unique");
+        assert!(loaded.iter().all(|s| crate::skins::is_builtin(&s.id)));
+        assert!(std::ptr::eq(state.builtin(), loaded), "decoded once");
+    }
+
+    fn leak<T>(items: Vec<T>) -> &'static [T] {
+        Box::leak(items.into_boxed_slice())
+    }
+
+    #[test]
+    fn a_pack_skin_is_a_folder_or_artwork_and_carries_the_packs_tags_first() {
+        let cutout = image::RgbaImage::from_fn(300, 300, |x, y| {
+            let inside = (40..260).contains(&x) && (60..240).contains(&y);
+            image::Rgba(if inside {
+                [30, 90, 200, 255]
+            } else {
+                [0, 0, 0, 0]
+            })
+        });
+        let opaque = image::RgbaImage::from_pixel(300, 280, image::Rgba([240, 160, 40, 255]));
+        let skins = leak(vec![
+            BuiltinPackSkin {
+                id: "3d/glass",
+                name: "Glass",
+                tags: &["Shiny"],
+                bytes: leak(folderskin_core::raster::encode_png(&cutout)),
+            },
+            BuiltinPackSkin {
+                id: "3d/sky",
+                name: "Sky",
+                tags: &[],
+                bytes: leak(folderskin_core::raster::encode_png(&opaque)),
+            },
+            BuiltinPackSkin {
+                id: "3d/broken",
+                name: "Broken",
+                tags: &[],
+                bytes: b"not a picture",
+            },
+        ]);
+        let pack: &'static BuiltinPack = Box::leak(Box::new(BuiltinPack {
+            id: "3d",
+            name: "3D",
+            author: "prajwal-svm",
+            license: "CC0-1.0",
+            tags: &["3d", "glossy"],
+            skins,
+        }));
+
+        let glass = Embedded::Pack(pack, &skins[0]).decode().unwrap();
+        assert!(
+            matches!(glass.image, SkinImage::Folder(_)),
+            "a cutout is the icon itself"
+        );
+        assert_eq!(glass.tags, ["3d", "glossy", "shiny"]);
+        assert_eq!(glass.collection, "3d");
+        let info = glass.pack.as_ref().unwrap();
+        assert_eq!((info.id.as_str(), info.name.as_str()), ("3d", "3D"));
+        assert_eq!(
+            (info.author.as_str(), info.license.as_str()),
+            ("prajwal-svm", "CC0-1.0")
+        );
+
+        let sky = Embedded::Pack(pack, &skins[1]).decode().unwrap();
+        assert!(
+            matches!(sky.image, SkinImage::Artwork(_)),
+            "a picture goes on the template"
+        );
+        assert_eq!(sky.tags, ["3d", "glossy"]);
+
+        assert!(
+            Embedded::Pack(pack, &skins[2]).decode().is_none(),
+            "a picture that can't be decoded is left out"
+        );
+    }
+
+    #[test]
+    fn parallel_map_keeps_the_order() {
+        let numbers: Vec<u32> = (0..103).collect();
+        let doubled = parallel_map(&numbers, |n| n * 2);
+        assert_eq!(doubled, numbers.iter().map(|n| n * 2).collect::<Vec<_>>());
+        assert!(parallel_map(&[] as &[u32], |n| *n).is_empty());
     }
 }
