@@ -74,7 +74,7 @@ community/packs/night-prints/
 | `author` | your GitHub user name |
 | `license` | `CC0-1.0`, `CC-BY-4.0` or `MIT` |
 | `tags` | 1 to 5 tags. Every skin in the pack gets them, and the first names the pack in everyone's filters |
-| `skins` | 1 to 24 entries |
+| `skins` | 1 to 50 entries |
 | `skins[].file` | a picture in the folder |
 | `skins[].name` | 1 to 60 characters |
 | `skins[].tags` | optional, up to 3 more for that skin |
@@ -85,7 +85,7 @@ No other fields are allowed, so a typo such as `"tag"` fails the check instead o
 
 | | limit |
 |---|---|
-| skins in a pack | 1 to 24 |
+| skins in a pack | 1 to 50 |
 | each picture | PNG, JPEG or WebP, at most 2 MB |
 | picture sides | 256 to 1024 px |
 | file names | letters, digits, `.`, `-` and `_`, ending in `.png`, `.jpg`, `.jpeg` or `.webp` |

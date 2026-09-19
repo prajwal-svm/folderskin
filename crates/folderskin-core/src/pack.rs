@@ -15,7 +15,7 @@ pub const INDEX_VERSION: u32 = 1;
 /// The file every pack has.
 pub const MANIFEST_FILE: &str = "pack.json";
 /// Most skins in one pack: a themed set that is quick to review and to download.
-pub const MAX_SKINS: usize = 24;
+pub const MAX_SKINS: usize = 50;
 /// Largest picture file.
 pub const MAX_PICTURE_BYTES: usize = 2 * 1024 * 1024;
 /// Largest side of a picture. 1024 px is the biggest icon any of the three systems draws.
@@ -513,10 +513,10 @@ mod tests {
     }
 
     #[test]
-    fn a_pack_holds_one_to_twenty_four_skins() {
+    fn a_pack_holds_one_to_fifty_skins() {
         assert!(Pack::parse(pack_json(MAX_SKINS - 1).as_bytes()).is_ok());
         let too_many = Pack::parse(pack_json(MAX_SKINS).as_bytes()).unwrap_err();
-        assert!(too_many[0].contains("1 to 24 skins"), "{too_many:?}");
+        assert!(too_many[0].contains("1 to 50 skins"), "{too_many:?}");
     }
 
     #[test]

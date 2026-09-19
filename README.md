@@ -102,7 +102,7 @@ its skins in your library with their tags. **Classic Art** is a good first pack:
 public-domain paintings, from the Mona Lisa to The Starry Night, each painted onto a folder. To share yours, open a skin's ⋯ menu and
 choose **Share with community**, or use **Community → Share your skins** for several. FolderSkin
 saves a pack folder that passes the checks, and you drop it on GitHub as a pull request.
-[docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 24 skins a pack, pictures up
+[docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 50 skins a pack, pictures up
 to 1024 px and 2 MB, licensed CC0, CC BY 4.0 or MIT.
 
 ## Generate a skin with AI

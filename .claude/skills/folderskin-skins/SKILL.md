@@ -31,7 +31,7 @@ folder icon.
    allowed to share. If the answer is "I found them online" or is unclear, stop: the pictures
    cannot go in a pack, but the user can drop them on the app to use them on their own machine.
 4. The author is the user's GitHub user name.
-5. A pack holds 1 to 24 skins. Split a bigger set into themed packs.
+5. A pack holds 1 to 50 skins. Split a bigger set into themed packs.
 
 ## Step 2 — name and order the pictures
 
@@ -167,7 +167,7 @@ Do not commit anything unless the user asks. The files to commit are `community/
 - Only pictures the user made or is allowed to share, under `CC0-1.0`, `CC-BY-4.0` or `MIT`, with
   their GitHub name as the author. Never art extracted from another product, a stock photo, a
   wallpaper, or model output whose terms have not been checked.
-- 1 to 24 skins a pack; pictures 256 to 1024 px on each side and at most 2 MB, which
+- 1 to 50 skins a pack; pictures 256 to 1024 px on each side and at most 2 MB, which
   `packs make` keeps to 400 KB.
 - Never hand-edit `community/index.json` or `community/previews/`.
 - FolderSkin ships no skins: nothing goes under `assets/`, and there is no skin manifest and no

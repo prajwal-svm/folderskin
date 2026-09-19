@@ -40,7 +40,7 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   results are tagged with their style, and a skin's ⋯ menu renames it, edits its tags and shows
   how it was made.
 - Community packs: free skins shared on GitHub under `community/packs/`, added from the
-  Community view and filtered by tag. Share one skin or a pack of up to 24 from the app, which
+  Community view and filtered by tag. Share one skin or a pack of up to 50 from the app, which
   saves a folder ready for a pull request. The contract, its limits and the licences (CC0, CC BY
   4.0, MIT) are in [docs/PACKS.md](docs/PACKS.md); `folderskin-tools packs check` runs the same
   checks in CI, and a workflow publishes the list and previews.

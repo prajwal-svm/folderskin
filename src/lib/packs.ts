@@ -8,7 +8,7 @@ export const UPLOAD_URL = `${REPO_URL}/upload/main/community/packs`;
 export const PACKS_GUIDE_URL = `${REPO_URL}/blob/main/docs/PACKS.md`;
 
 /** Most skins in one pack; `folderskin_core::pack::MAX_SKINS` is the same. */
-export const MAX_PACK_SKINS = 24;
+export const MAX_PACK_SKINS = 50;
 
 /**
  * The licences shared skins can use: Creative Commons, or MIT like FolderSkin's own code.
