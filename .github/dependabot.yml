@@ -17,6 +17,11 @@ updates:
       npm-all:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # The Node types follow the Node version CI and the release build run (22), not the newest
+      # Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: cargo

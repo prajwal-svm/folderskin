@@ -83,4 +83,7 @@ percentage. Sonar still analyses them.
 
 Public repositories run Actions for free. A private one spends the account's monthly minutes,
 and macOS minutes count ten times and Windows twice, so one full CI run can use a few hundred.
-Docs-only pushes skip CI for that reason too.
+So while the repository is private, a pull request runs only the Linux jobs (frontend, Rust,
+cargo-deny, Sonar) and skips the macOS and Windows checks and the bundles; pushes to `main` run
+everything. Once the repository is public, pull requests get the full set again without any
+change. Docs-only pushes skip CI for the same reason.

@@ -142,9 +142,12 @@ jobs:
         run: cargo run -p folderskin-tools --quiet -- packs check --dir assets --max-kb 400
 
   # The code that writes icons is different on each system and only compiles on its own, so
-  # macOS and Windows get their own lint and test run.
+  # macOS and Windows get their own lint and test run. While the repository is private, Actions
+  # minutes cost money and macOS counts ten times, so a pull request (most are Dependabot's) runs
+  # only the Linux checks; main still gets all three. Once it's public, pull requests do too.
   platforms:
     name: Rust (${{ matrix.name }})
+    if: github.event_name != 'pull_request' || !github.event.repository.private
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -232,10 +235,12 @@ jobs:
             -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
 
   # The installers for each system, built the way the release builds them but unsigned. They are
-  # kept for two weeks, to try a change on a system you don't have.
+  # kept for two weeks, to try a change on a system you don't have. Like `platforms`, skipped for
+  # a pull request while the repository is private.
   bundle:
     name: Bundle (${{ matrix.name }})
     needs: [frontend, rust]
+    if: github.event_name != 'pull_request' || !github.event.repository.private
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
