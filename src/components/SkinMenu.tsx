@@ -4,6 +4,7 @@ import type { Skin } from "../lib/tauri";
 import { skinFacts } from "../lib/facts";
 import { cleanName, MAX_NAME_CHARS } from "../lib/names";
 import { TagInput } from "./TagInput";
+import { DeleteIcon } from "./icons/delete";
 import { EarthIcon } from "./icons/earth";
 
 const WIDTH = 300;
@@ -180,9 +181,7 @@ export function SkinMenu({
           </button>
         )}
         <button type="button" className="menu-item is-danger" onClick={onDelete}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-          </svg>
+          <DeleteIcon size={16} />
           Delete…
         </button>
       </div>

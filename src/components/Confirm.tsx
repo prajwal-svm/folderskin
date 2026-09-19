@@ -1,4 +1,5 @@
 import { Modal } from "./Modal";
+import { DeleteIcon } from "./icons/delete";
 
 /**
  * "Are you sure?" before something can't be undone, like deleting a skin or removing a pack.
@@ -32,6 +33,7 @@ export function Confirm({
             Cancel
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm}>
+            <DeleteIcon size={15} />
             {action}
           </button>
         </>

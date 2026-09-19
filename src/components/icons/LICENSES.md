@@ -2,8 +2,8 @@
 
 The animated icons in this folder are adapted from
 [lucide-animated](https://lucide-animated.com) (source: https://github.com/pqoqubbw/icons):
-`arrow-down`, `check`, `download`, `earth`, `external-link`, `folder-open`, `layout-grid`,
-`moon`, `rotate-ccw`, `search`, `sliders-horizontal` and `sparkles`. The changes are described at the
+`arrow-down`, `check`, `delete`, `download`, `earth`, `external-link`, `folder-open`,
+`layout-grid`, `moon`, `rotate-ccw`, `search`, `sliders-horizontal` and `sparkles`. The changes are described at the
 top of `trigger.ts`.
 
 `star`, `image` and `loader` use the shapes of the [Lucide](https://lucide.dev) icons of the same
