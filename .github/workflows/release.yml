@@ -33,8 +33,74 @@ permissions:
   contents: write # tauri-action creates the draft release and uploads the installers
 
 jobs:
+  # The draft release comes first, made on the existing tag with no target commit. GitHub refuses
+  # the workflow token a release (or a tag) at a commit whose .github/workflows differ from main's
+  # tip, with a bare "Resource not accessible by integration", and main can move while the builds
+  # run: v0.1.0's builds were refused once a workflow change landed on main after the tag.
+  # tauri-action would create the release at the tag's commit; with the draft already there it
+  # only uploads.
+  draft:
+    name: Draft release
+    if: ${{ inputs.publish != true }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      notes: ${{ steps.notes.outputs.body }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # The release notes are the version's section of CHANGELOG.md. tauri-action also puts them
+      # in latest.json, and the app shows them when it offers the update.
+      - name: Write the release notes
+        id: notes
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          section="$(awk -v v="$version" '
+            /^## / {
+              if (found) exit
+              if ($0 == "## " v || index($0, "## " v " ") == 1) { found = 1; next }
+            }
+            found { print }
+          ' CHANGELOG.md)"
+          if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
+            echo "::error file=CHANGELOG.md::there is no \"## $version\" section to use as the release notes"
+            exit 1
+          fi
+          {
+            echo 'body<<CHANGELOG_EOF'
+            printf '%s\n' "$section"
+            echo
+            echo '---'
+            echo
+            echo "**Downloads:** macOS (Apple silicon and Intel) \`.dmg\`, Windows \`-setup.exe\` or \`.msi\`, Linux \`.AppImage\`, \`.deb\` or \`.rpm\` for x86_64 and ARM64."
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create the draft, or keep the one there
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          NOTES: ${{ steps.notes.outputs.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.tag_name == env.TAG) | .id' | grep -q .; then
+            echo "$TAG already has a release; the builds add to it"
+            exit 0
+          fi
+          printf '%s\n' "$NOTES" > notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "FolderSkin $TAG" --notes-file notes.md
+
   build:
     name: ${{ matrix.name }}
+    needs: draft
     if: ${{ inputs.publish != true }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -70,7 +136,8 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       # Ubuntu 22.04 on both Linux runners, so the packages run on any system with glibc 2.35 or
-      # newer.
+      # newer. xdg-utils: the AppImage carries xdg-open for the opener plugin, and the ARM64
+      # image doesn't have it.
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -84,7 +151,8 @@ jobs:
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            xdg-utils
 
       - name: Install pnpm
         # The version comes from `packageManager` in package.json.
@@ -219,37 +287,6 @@ jobs:
           echo "UPDATES_SIGNED=true" >> "$GITHUB_ENV"
           echo "update signing: on"
 
-      # The release notes are the version's section of CHANGELOG.md. tauri-action also puts them
-      # in latest.json, and the app shows them when it offers the update.
-      - name: Write the release notes
-        id: notes
-        shell: bash
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          set -euo pipefail
-          version="${TAG#v}"
-          section="$(awk -v v="$version" '
-            /^## / {
-              if (found) exit
-              if ($0 == "## " v || index($0, "## " v " ") == 1) { found = 1; next }
-            }
-            found { print }
-          ' CHANGELOG.md)"
-          if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
-            echo "::error file=CHANGELOG.md::there is no \"## $version\" section to use as the release notes"
-            exit 1
-          fi
-          {
-            echo 'body<<CHANGELOG_EOF'
-            printf '%s\n' "$section"
-            echo
-            echo '---'
-            echo
-            echo "**Downloads:** macOS (Apple silicon and Intel) \`.dmg\`, Windows \`-setup.exe\` or \`.msi\`, Linux \`.AppImage\`, \`.deb\` or \`.rpm\` for x86_64 and ARM64."
-            echo 'CHANGELOG_EOF'
-          } >> "$GITHUB_OUTPUT"
-
       - name: Build and attach the installers
         uses: tauri-apps/tauri-action@v1
         env:
@@ -266,7 +303,7 @@ jobs:
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: "FolderSkin ${{ inputs.tag || github.ref_name }}"
-          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseBody: ${{ needs.draft.outputs.notes }}
           releaseDraft: true
           prerelease: false
           retryAttempts: 3
