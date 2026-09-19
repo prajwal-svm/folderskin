@@ -125,8 +125,8 @@ handled for models that cannot return an alpha channel, and what each error mess
 
 A themed set, such as 3D folders rendered with an image model, becomes a community pack in one
 command. `folderskin-tools packs make` cuts finished folders out of their magenta background
-(`--flat-backdrop` when the model drifted to pink), shrinks and compresses every picture to fit,
-and writes `pack.json`:
+(`--flat-backdrop` for any other flat background, such as a pink drift or plain grey), shrinks
+and compresses every picture to fit, and writes `pack.json`:
 
 ```sh
 cargo run -p folderskin-tools -- packs make ~/Pictures/renders \

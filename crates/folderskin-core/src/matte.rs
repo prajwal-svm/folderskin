@@ -200,6 +200,45 @@ pub const CONNECTED_TOLERANCE: f32 = 0.08;
 /// backdrop. A model's anti-aliased edge is two or three pixels wide.
 const EDGE_RINGS: u8 = 2;
 
+/// A backdrop whose channels differ by no more than this (of 255) is neutral: black, grey or
+/// white, with no hue of its own.
+const NEUTRAL_CHROMA: u8 = 16;
+
+/// The bounds of the tolerance [`cutout_connected`] measures for a neutral backdrop.
+const NEUTRAL_TOLERANCE: std::ops::RangeInclusive<f32> = 0.02..=0.045;
+
+/// Islands of the subject smaller than this, in pixels, left in a neutral backdrop are noise.
+const SPECK: usize = 256;
+
+/// Whether `key` is a neutral colour: black, grey or white.
+fn is_neutral(key: [u8; 3]) -> bool {
+    let (max, min) = (
+        key.iter().max().unwrap_or(&0),
+        key.iter().min().unwrap_or(&0),
+    );
+    max - min <= NEUTRAL_CHROMA
+}
+
+/// How far from a neutral `key` the backdrop's own pixels stray: two and a half times the 99th
+/// percentile of the edge band's distance from it, within [`NEUTRAL_TOLERANCE`]. A flat JPEG
+/// backdrop measures about 0.01, so this is near 0.025: far tighter than [`CONNECTED_TOLERANCE`],
+/// which a navy suit on a dark grey backdrop would pass.
+fn neutral_tolerance(img: &RgbaImage, key: [u8; 3]) -> f32 {
+    let (w, h) = img.dimensions();
+    let band = (w.min(h) / 100).max(1);
+    let mut d: Vec<f32> = img
+        .enumerate_pixels()
+        .filter(|&(x, y, _)| x < band || y < band || x >= w - band || y >= h - band)
+        .map(|(_, _, p)| distance(&[p.0[0], p.0[1], p.0[2]], &key))
+        .collect();
+    if d.is_empty() {
+        return *NEUTRAL_TOLERANCE.start();
+    }
+    d.sort_by(f32::total_cmp);
+    let p99 = d[(d.len() - 1) * 99 / 100];
+    (p99 * 2.5).clamp(*NEUTRAL_TOLERANCE.start(), *NEUTRAL_TOLERANCE.end())
+}
+
 /// The colour of a flat backdrop around a picture, whatever colour it is, or `None`.
 ///
 /// Image models asked for #FF00FF often paint a steady raspberry or hot pink instead, so a
@@ -260,6 +299,15 @@ fn in_key_shade(px: [u8; 3], key: [u8; 3]) -> bool {
 /// and backdrop; each is split back into the two, using the backdrop and the subject colours
 /// nearby, so the edge keeps the subject's colour with a soft alpha instead of a pink rim. Then
 /// the result is trimmed like [`cutout`].
+///
+/// A neutral backdrop (black, grey, white) has no hue to follow into shade, and on a dark one a
+/// subject's ink lines and dark clothes come within [`CONNECTED_TOLERANCE`]: grown the usual way,
+/// the backdrop runs in wherever a dark coat meets the folder's bottom edge and eats the coat, the
+/// hair and every outline joined to them. So there the backdrop is only what lies within its own
+/// noise ([`neutral_tolerance`]), with no shade, and it grows sideways and down but never up. The
+/// space under the subject is still reached, row by row from the sides, and a coat standing on
+/// the bottom edge is not. Islands of the subject smaller than [`SPECK`] left in the backdrop,
+/// JPEG noise the growth went around, go with it.
 pub fn cutout_connected(img: &RgbaImage, key: [u8; 3]) -> RgbaImage {
     let (w, h) = img.dimensions();
     let at = |x: u32, y: u32| (y * w + x) as usize;
@@ -267,9 +315,15 @@ pub fn cutout_connected(img: &RgbaImage, key: [u8; 3]) -> RgbaImage {
         let p = img.get_pixel(x, y).0;
         [p[0], p[1], p[2]]
     };
+    let neutral = is_neutral(key);
+    let tolerance = if neutral {
+        neutral_tolerance(img, key)
+    } else {
+        CONNECTED_TOLERANCE
+    };
     let is_backdrop = |x: u32, y: u32| {
         let p = rgb(x, y);
-        distance(&p, &key) <= CONNECTED_TOLERANCE || in_key_shade(p, key)
+        distance(&p, &key) <= tolerance || (!neutral && in_key_shade(p, key))
     };
 
     // 0 for the backdrop; for the rest, how many pixels (8-connected) it is from the backdrop, up
@@ -286,18 +340,18 @@ pub fn cutout_connected(img: &RgbaImage, key: [u8; 3]) -> RgbaImage {
         }
     }
     while let Some((x, y)) = queue.pop_front() {
-        let neighbours = [
-            (x.wrapping_sub(1), y),
-            (x + 1, y),
-            (x, y.wrapping_sub(1)),
-            (x, y + 1),
-        ];
+        // On a neutral backdrop, never up: see above.
+        let up = if neutral { h } else { y.wrapping_sub(1) };
+        let neighbours = [(x.wrapping_sub(1), y), (x + 1, y), (x, up), (x, y + 1)];
         for (nx, ny) in neighbours {
             if nx < w && ny < h && ring[at(nx, ny)] == u8::MAX && is_backdrop(nx, ny) {
                 ring[at(nx, ny)] = 0;
                 queue.push_back((nx, ny));
             }
         }
+    }
+    if neutral {
+        clear_specks(&mut ring, w, h);
     }
     for r in 1..=EDGE_RINGS + 1 {
         let previous = ring.clone();
@@ -377,6 +431,46 @@ pub fn cutout_connected(img: &RgbaImage, key: [u8; 3]) -> RgbaImage {
         }
     }
     autocrop(&out, 0)
+}
+
+/// Marks as backdrop (0) every 4-connected island of the subject (`u8::MAX`) smaller than
+/// [`SPECK`] pixels: noise in a neutral backdrop that its growth went around.
+fn clear_specks(ring: &mut [u8], w: u32, h: u32) {
+    let at = |x: u32, y: u32| (y * w + x) as usize;
+    let mut seen = vec![false; ring.len()];
+    let mut island = Vec::new();
+    for start in 0..ring.len() {
+        if seen[start] || ring[start] != u8::MAX {
+            continue;
+        }
+        island.clear();
+        seen[start] = true;
+        let mut stack = vec![start];
+        while let Some(i) = stack.pop() {
+            island.push(i);
+            let (x, y) = ((i % w as usize) as u32, (i / w as usize) as u32);
+            let neighbours = [
+                (x.wrapping_sub(1), y),
+                (x + 1, y),
+                (x, y.wrapping_sub(1)),
+                (x, y + 1),
+            ];
+            for (nx, ny) in neighbours {
+                if nx < w && ny < h {
+                    let n = at(nx, ny);
+                    if !seen[n] && ring[n] == u8::MAX {
+                        seen[n] = true;
+                        stack.push(n);
+                    }
+                }
+            }
+        }
+        if island.len() < SPECK {
+            for &i in &island {
+                ring[i] = 0;
+            }
+        }
+    }
 }
 
 /// Fits an opaque generated image to the skin format by cropping to the target aspect around a
@@ -922,6 +1016,55 @@ mod tests {
         assert!((110..=145).contains(&rim[3]), "half transparent: {rim:?}");
         let off = [0, 1, 2].map(|i| (i16::from(rim[i]) - i16::from(blue[i])).abs());
         assert!(off.iter().all(|&d| d <= 6), "blue, not pink: {rim:?}");
+    }
+
+    /// A pop-art folder on a flat dark grey backdrop, as a batch of renders came: a blue panel,
+    /// a dark coat standing on its bottom edge that is as good as the backdrop's colour, and a
+    /// near-black ink line running to the panel's left edge. Plus a speck of JPEG noise.
+    fn dark_backdrop_render() -> RgbaImage {
+        RgbaImage::from_fn(200, 200, |x, y| {
+            let folder = (30..170).contains(&x) && (30..170).contains(&y);
+            if !folder {
+                return if (10..12).contains(&x) && (185..187).contains(&y) {
+                    Rgba([62, 62, 62, 255])
+                } else {
+                    jitter([31, 31, 31], x, y, 2)
+                };
+            }
+            if (70..130).contains(&x) && (120..170).contains(&y) {
+                Rgba([28, 28, 30, 255]) // the coat
+            } else if y == 100 && x < 130 {
+                Rgba([8, 8, 8, 255]) // the ink line
+            } else {
+                Rgba([40, 90, 180, 255])
+            }
+        })
+    }
+
+    #[test]
+    fn a_neutral_backdrop_doesnt_run_into_a_dark_subject() {
+        let img = dark_backdrop_render();
+        let key = flat_backdrop(&img).expect("the grey backdrop");
+        assert!(is_neutral(key), "{key:?}");
+        let cut = cutout_connected(&img, key);
+        assert_eq!(cut.dimensions(), (140, 140), "just the folder, speck gone");
+        assert_eq!(cut.get_pixel(70, 120).0[3], 255, "the coat stays");
+        assert_eq!(cut.get_pixel(70, 139).0[3], 255, "down to the bottom edge");
+        assert_eq!(cut.get_pixel(20, 70).0[3], 255, "the ink line stays");
+        assert_eq!(cut.get_pixel(5, 5).0[3], 255, "the panel is solid");
+    }
+
+    #[test]
+    fn a_neutral_backdrop_is_measured_tightly_and_a_coloured_one_is_not() {
+        let img = dark_backdrop_render();
+        let tight = neutral_tolerance(&img, [31, 31, 31]);
+        assert!(NEUTRAL_TOLERANCE.contains(&tight), "{tight}");
+        assert!(tight < CONNECTED_TOLERANCE / 2.0);
+        assert!(
+            !is_neutral([189, 0, 103]),
+            "raspberry keeps its shade and tolerance"
+        );
+        assert!(is_neutral([255, 255, 250]), "near white is neutral too");
     }
 
     #[test]

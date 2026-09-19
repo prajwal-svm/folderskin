@@ -143,8 +143,10 @@ Image models asked for `#FF00FF` often paint a steady raspberry or hot pink inst
 for the Classic Art pack). `--flat-backdrop` cuts away a flat background of any colour: it
 measures each picture's own background, removes only what reaches the edge (so a red cloak
 inside the folder stays), takes a soft drop shadow with it, and gives the edge the painting's
-colours rather than a pink rim. Look at the `--preview` sheet afterwards; a picture with no flat
-background still comes out as artwork.
+colours rather than a pink rim. On a plain grey or black background it keeps to that
+background's own noise and never grows upward, so a dark coat or an ink line meeting the folder's
+edge isn't mistaken for background. Look at the `--preview` sheet afterwards (it's drawn on light
+grey, so a hole shows); a picture with no flat background still comes out as artwork.
 
 To see one picture as the app will show it, `render` draws it as its folder:
 

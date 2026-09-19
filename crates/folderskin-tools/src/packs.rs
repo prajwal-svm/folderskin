@@ -259,8 +259,12 @@ pub fn preview_strip(folder: &Path, pack: &Pack) -> Result<RgbaImage, String> {
     Ok(strip)
 }
 
+/// The contact sheet's background.
+const SHEET_GREY: [u8; 3] = [235, 235, 235];
+
 /// Every skin of a pack as the folder the app makes of it, `side` px square, `columns` to a row,
-/// on transparency: a sheet to look over a pack before it ships.
+/// on light grey: a sheet to look over a pack before it ships. Not on transparency, which most
+/// viewers draw black: a cut-out that went into a dark coat or dark hair would look whole there.
 pub fn contact_sheet(
     folder: &Path,
     pack: &Pack,
@@ -270,7 +274,8 @@ pub fn contact_sheet(
     let count = pack.skins.len() as u32;
     let columns = columns.clamp(1, count.max(1));
     let rows = count.div_ceil(columns).max(1);
-    let mut sheet = RgbaImage::new(side * columns, side * rows);
+    let [r, g, b] = SHEET_GREY;
+    let mut sheet = RgbaImage::from_pixel(side * columns, side * rows, image::Rgba([r, g, b, 255]));
     for (i, skin) in pack.skins.iter().enumerate() {
         let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
@@ -278,7 +283,7 @@ pub fn contact_sheet(
         let (col, row) = (i as u32 % columns, i as u32 / columns);
         image::imageops::replace(
             &mut sheet,
-            &icon,
+            &matte::flatten(&icon, SHEET_GREY),
             i64::from(col * side),
             i64::from(row * side),
         );
@@ -680,5 +685,34 @@ mod tests {
                 "({x},{y}) {px:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_contact_sheet_is_opaque_so_a_hole_in_a_dark_folder_shows() {
+        let c = Community::new("sheet");
+        // A dark finished folder with a see-through hole in the middle, as a cut-out that ran
+        // into a dark coat leaves: on black it would look whole.
+        let holed = RgbaImage::from_fn(300, 300, |x, y| {
+            let hole = (130..170).contains(&x) && (130..170).contains(&y);
+            if (50..250).contains(&x) && (50..250).contains(&y) && !hole {
+                Rgba([20, 20, 20, 255])
+            } else {
+                Rgba([0, 0, 0, 0])
+            }
+        });
+        c.pack(
+            "sheet",
+            &[("art.png", &artwork([200, 40, 40])), ("holed.png", &holed)],
+        );
+        let report = check(&c.0).unwrap();
+        let sheet = contact_sheet(&c.path("packs/sheet"), &report.packs[0].1, 128, 6).unwrap();
+        assert_eq!(sheet.dimensions(), (256, 128), "two skins make one row");
+        assert!(sheet.pixels().all(|p| p.0[3] == 255));
+        // Above the artwork's tab, and through the hole in the dark folder: the grey.
+        let [r, g, b] = SHEET_GREY;
+        assert_eq!(sheet.get_pixel(2, 2).0, [r, g, b, 255]);
+        assert_eq!(sheet.get_pixel(128 + 64, 64).0, [r, g, b, 255]);
+        let dark = sheet.get_pixel(128 + 20, 20).0;
+        assert!(dark[0] < 40, "{dark:?}");
     }
 }
