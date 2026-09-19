@@ -30,7 +30,7 @@ Free · Open source · No account · No tracking
 </div>
 
 <div align="center">
-  <img src="docs/images/app.png" alt="FolderSkin: the Classic Art skins in the library in the middle, and a folder trying on The Starry Night on the right" width="100%" />
+  <img src="docs/images/app.webp" alt="FolderSkin on macOS: a library of painted folder skins in the middle, and the folder panel waiting for a folder on the right" width="100%" />
 </div>
 
 <details><summary>Dark mode</summary>
