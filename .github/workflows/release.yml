@@ -150,7 +150,7 @@ jobs:
             exit 0
           fi
           if ((${#missing[@]})); then
-            echo "::error::missing signing secrets: ${missing[*]}. docs/RELEASING.md says how to set them."
+            echo "::error::missing or empty signing secrets: ${missing[*]}. docs/RELEASING.md says how to set them."
             exit 1
           fi
           export_env() {

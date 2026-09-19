@@ -56,10 +56,12 @@ Set them here from the same sources you used for Oleafly:
 | `APPLE_PASSWORD` | an app-specific password from [account.apple.com](https://account.apple.com) (Sign-In and Security) |
 | `APPLE_TEAM_ID` | the 10-character team ID from the membership page |
 
-The certificate goes in straight from the file, so its text never appears on screen:
+The certificate goes in straight from the file, so its text never appears on screen. `gh` stores
+whatever arrives, even nothing, so the `test -s` stops a mistyped file name from saving an empty
+certificate (the release would then stop at the signing step):
 
 ```sh
-base64 -i DeveloperID.p12 | gh secret set APPLE_CERTIFICATE --repo prajwal-svm/folderskin
+test -s DeveloperID.p12 && base64 -i DeveloperID.p12 | gh secret set APPLE_CERTIFICATE --repo prajwal-svm/folderskin
 ```
 
 The other five ask for their value when you run them:
@@ -120,7 +122,7 @@ repository secret, and it's FolderSkin's own, not Oleafly's.
 The key goes in straight from its file, so it never appears on screen:
 
 ```sh
-gh secret set TAURI_SIGNING_PRIVATE_KEY --repo prajwal-svm/folderskin < path/to/folderskin.key
+test -s path/to/folderskin.key && gh secret set TAURI_SIGNING_PRIVATE_KEY --repo prajwal-svm/folderskin < path/to/folderskin.key
 ```
 
 With the secret set, each platform's build signs its installers and writes its part of the feed.
