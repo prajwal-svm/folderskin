@@ -1212,7 +1212,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 name = "folderskin"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "folderskin-ai",
  "folderskin-core",
  "image",
@@ -1233,7 +1233,7 @@ dependencies = [
 name = "folderskin-ai"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "reqwest",
  "serde",
  "serde_json",
