@@ -71,6 +71,7 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   [docs/PACKS.md](docs/PACKS.md).
 - A Classic Art community pack: sixteen public-domain paintings, from the Mona Lisa to
   Composition VIII, each painted onto a folder.
+- A Soft Rainbow community pack: ten pastel folders, from Lemon Chiffon to Celadon.
 - Community shows packs as a list or as a gallery of cards with four of each pack's folders,
   and remembers which you picked. **View** opens a pack to look through all of its skins before
   adding it, **Refresh** reads the list from GitHub again, and a pack that changed since you

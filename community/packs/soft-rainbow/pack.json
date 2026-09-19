@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Soft Rainbow",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": ["pastel", "colour"],
+  "skins": [
+    { "file": "lemon-chiffon.png", "name": "Lemon Chiffon" },
+    { "file": "powder-petal.png", "name": "Powder Petal" },
+    { "file": "cotton-rose.png", "name": "Cotton Rose" },
+    { "file": "pink-orchid.png", "name": "Pink Orchid" },
+    { "file": "mauve.png", "name": "Mauve" },
+    { "file": "baby-blue-ice.png", "name": "Baby Blue Ice" },
+    { "file": "frosted-blue.png", "name": "Frosted Blue" },
+    { "file": "electric-aqua.png", "name": "Electric Aqua" },
+    { "file": "aquamarine.png", "name": "Aquamarine" },
+    { "file": "celadon.png", "name": "Celadon" }
+  ]
+}

@@ -22,6 +22,18 @@
       ],
       "count": 8,
       "hash": "8c46dc19991a23f9"
+    },
+    {
+      "id": "soft-rainbow",
+      "name": "Soft Rainbow",
+      "author": "prajwal-svm",
+      "license": "CC0-1.0",
+      "tags": [
+        "pastel",
+        "colour"
+      ],
+      "count": 10,
+      "hash": "058617929b4f8f82"
     }
   ]
 }
