@@ -61,6 +61,32 @@ pub fn revert(folder: &Path) -> Result<(), ApplyError> {
     set_icon(folder, None)
 }
 
+/// True when Finder draws a custom icon for `folder`: the custom-icon flag in its Finder info,
+/// which a revert clears whoever set it.
+pub fn has_custom_icon(folder: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let Ok(path) = std::ffi::CString::new(folder.as_os_str().as_bytes()) else {
+        return false;
+    };
+    let mut info = [0u8; 32];
+    // SAFETY: both names are NUL-terminated and `info` is writable for its whole length.
+    let read = unsafe {
+        libc::getxattr(
+            path.as_ptr(),
+            FINDER_INFO.as_ptr(),
+            info.as_mut_ptr().cast(),
+            info.len(),
+            0,
+            0,
+        )
+    };
+    // The Finder flags are the big-endian u16 at bytes 8 and 9, and kHasCustomIcon is 0x0400.
+    read >= 10 && info[8] & 0x04 != 0
+}
+
+/// The extended attribute macOS keeps a file's or folder's Finder flags in.
+const FINDER_INFO: &std::ffi::CStr = c"com.apple.FinderInfo";
+
 /// The one call that changes a folder's icon; `None` reverts it.
 fn set_icon(folder: &Path, image: Option<&NSImage>) -> Result<(), ApplyError> {
     let workspace = NSWorkspace::sharedWorkspace();
@@ -123,6 +149,41 @@ mod tests {
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
 
+    /// Writes `folder`'s 32 bytes of Finder info.
+    fn set_finder_info(folder: &Path, info: &[u8; 32]) {
+        use std::os::unix::ffi::OsStrExt;
+        let path = std::ffi::CString::new(folder.as_os_str().as_bytes()).unwrap();
+        // SAFETY: both names are NUL-terminated and `info` is readable for its whole length.
+        let status = unsafe {
+            libc::setxattr(
+                path.as_ptr(),
+                FINDER_INFO.as_ptr(),
+                info.as_ptr().cast(),
+                info.len(),
+                0,
+                0,
+            )
+        };
+        assert_eq!(status, 0, "setxattr failed");
+    }
+
+    #[test]
+    fn a_custom_icon_is_read_from_the_finder_flags() {
+        let folder = tempfile_dir();
+        assert!(!has_custom_icon(&folder), "a new folder has no Finder info");
+
+        let mut info = [0u8; 32];
+        info[8] = 0x04;
+        set_finder_info(&folder, &info);
+        assert!(has_custom_icon(&folder));
+
+        // Other flags alone don't make a custom icon.
+        info[8] = 0x40;
+        info[9] = 0x10;
+        set_finder_info(&folder, &info);
+        assert!(!has_custom_icon(&folder));
+    }
+
     #[test]
     #[ignore = "touches a real folder and needs a desktop session: cargo test -p folderskin-core -- --ignored macos_roundtrip"]
     fn macos_roundtrip() {
@@ -144,6 +205,7 @@ mod tests {
             after.contains('C'),
             "no custom-icon flag after apply: {after}"
         );
+        assert!(has_custom_icon(&folder));
 
         // A second skin over the first: the icon is cleared on the way, but never left cleared.
         apply_icon(&folder, &solid_icons(&[16, 32, 128, 512])).unwrap();
@@ -163,6 +225,7 @@ mod tests {
             reverted.contains('c') && !reverted.contains('C'),
             "custom-icon flag survived revert: {reverted}"
         );
+        assert!(!has_custom_icon(&folder));
 
         println!("GetFileInfo -a: before={before} after={after} reverted={reverted}");
     }

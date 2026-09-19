@@ -31,11 +31,13 @@ export function FolderStage({
   state,
   skin,
   folderIcon,
+  customIcon,
   defaultThumb,
   os,
   browseLabel,
   onBrowse,
   onApply,
+  onTryOn,
   onRevert,
   onReveal,
 }: {
@@ -44,11 +46,15 @@ export function FolderStage({
   skin: Skin | null;
   /** The folder's real icon as the OS draws it now; undefined while it's on its way. */
   folderIcon: string | null | undefined;
+  /** The folder wears an icon of its own (not the default one) that a revert would take off. */
+  customIcon: boolean;
   defaultThumb: string | null;
   os: string;
   browseLabel: string;
   onBrowse: () => void;
   onApply: () => void;
+  /** Puts the selected skin on a folder that's waiting with its own icon. */
+  onTryOn: () => void;
   onRevert: () => void;
   onReveal: () => void;
 }) {
@@ -127,15 +133,18 @@ export function FolderStage({
 
         <StageActions
           state={state}
+          skin={skin}
+          customIcon={customIcon}
           fileBrowser={fileBrowser(os)}
           onApply={onApply}
+          onTryOn={onTryOn}
           onRevert={onRevert}
           onReveal={onReveal}
           onBrowse={onBrowse}
         />
 
         <p className={error ? "stage-status is-error" : "stage-status"} role={error ? "alert" : undefined} aria-live="polite">
-          {error ?? statusLine(state, skin, fileBrowser(os))}
+          {error ?? statusLine(state, skin, fileBrowser(os), customIcon)}
         </p>
       </div>
     </aside>
@@ -194,7 +203,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
 
   // The one place that says the skin is on the folder; the buttons below only offer what's next.
   const eyebrow =
-    phase === "applied" || phase === "reverting" ? (
+    phase === "applied" || (phase === "reverting" && state.appliedSkinId !== null) ? (
       <span className="chip chip-ok stage-eyebrow" key="applied">
         <OkBadge size={16} playOnMount /> Applied
       </span>
@@ -223,15 +232,21 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
 
 function StageActions({
   state,
+  skin,
+  customIcon,
   fileBrowser,
   onApply,
+  onTryOn,
   onRevert,
   onReveal,
   onBrowse,
 }: {
   state: State;
+  skin: Skin | null;
+  customIcon: boolean;
   fileBrowser: string;
   onApply: () => void;
+  onTryOn: () => void;
   onRevert: () => void;
   onReveal: () => void;
   onBrowse: () => void;
@@ -239,18 +254,40 @@ function StageActions({
   const { phase, drag } = state;
   if (drag || phase === "idle") return null;
 
-  if (phase === "folder") {
+  const noFocusSteal = (e: MouseEvent) => e.preventDefault();
+  const nudge = (
+    <p className="nudge">
+      <span className="nudge-arrow">
+        <ArrowLeftIcon />
+      </span>
+      Pick a skin to try it on
+    </p>
+  );
+
+  // The folder as it is, wearing an icon of its own: it can be taken off, and a skin waiting to
+  // go on is put on only when asked. "Removing" is taking that icon off, not one applied here.
+  const removing = phase === "reverting" && state.appliedSkinId === null;
+  const waiting = phase === "ready" && state.arriving && customIcon;
+  if ((phase === "folder" && customIcon) || waiting || removing) {
     return (
-      <p className="nudge">
-        <span className="nudge-arrow">
-          <ArrowLeftIcon />
-        </span>
-        Pick a skin to try it on
-      </p>
+      <div className="stage-actions">
+        {skin ? (
+          <button type="button" className="btn btn-primary btn-lg" disabled={removing} onMouseDown={noFocusSteal} onClick={onTryOn}>
+            <ArrowDownIcon />
+            <span className="stage-try">Try on {skin.name}</span>
+          </button>
+        ) : (
+          nudge
+        )}
+        <button type="button" className="btn btn-ghost" disabled={removing} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
+          {removing ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
+          {removing ? "Removing…" : "Remove custom icon"}
+        </button>
+      </div>
     );
   }
 
-  const noFocusSteal = (e: MouseEvent) => e.preventDefault();
+  if (phase === "folder") return nudge;
 
   if (phase === "applied" || phase === "reverting") {
     return <DoneActions reverting={phase === "reverting"} fileBrowser={fileBrowser} onReveal={onReveal} onRevert={onRevert} />;
@@ -319,12 +356,14 @@ function DoneActions({
 }
 
 /** One quiet line under the buttons: what just happened or what happens next. */
-function statusLine(state: State, skin: Skin | null, fileBrowser: string): string {
+function statusLine(state: State, skin: Skin | null, fileBrowser: string, customIcon: boolean): string {
   switch (state.phase) {
     case "idle":
       return state.drag ? "" : "Pictures work too. Drop one to turn it into a skin.";
+    case "folder":
+      return customIcon ? "It has an icon of its own." : "";
     case "ready":
-      return "Nothing changes on disk until you apply.";
+      return state.arriving && customIcon ? "It has an icon of its own." : "Nothing changes on disk until you apply.";
     case "applying":
       return `Writing ${skin?.name ?? "the skin"} into ${state.folder?.name}…`;
     case "applied":

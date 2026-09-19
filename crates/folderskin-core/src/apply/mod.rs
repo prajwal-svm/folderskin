@@ -81,6 +81,32 @@ pub fn revert_icon(folder: &Path) -> Result<(), ApplyError> {
     }
 }
 
+/// True when `folder` wears an icon of its own that [`revert_icon`] would take off: any custom
+/// icon on macOS, FolderSkin's on Windows, and FolderSkin's or a GIO custom icon on Linux. False
+/// for a folder FolderSkin wouldn't touch at all, since a revert there is refused.
+pub fn has_custom_icon(folder: &Path) -> bool {
+    let Ok(folder) = validate_folder(folder) else {
+        return false;
+    };
+    #[cfg(target_os = "macos")]
+    {
+        macos::has_custom_icon(&folder)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        windows::has_custom_icon(&folder)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux::has_custom_icon(&folder)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        let _ = folder;
+        false
+    }
+}
+
 /// A unique scratch directory under the system temp dir, removed when the guard drops.
 ///
 /// Derefs to `Path`, so it can be passed straight to anything taking `&Path`.
@@ -189,6 +215,28 @@ mod tests {
         let s = windows::desktop_ini_contents(Some("\u{feff}[.ShellClassInfo]\r\nInfoTip=hi\r\n"));
         assert!(s.starts_with("\u{feff}[.ShellClassInfo]\r\n"));
         assert_eq!(s.matches("[.ShellClassInfo]").count(), 1);
+    }
+
+    #[test]
+    fn a_folder_counts_as_skinned_only_when_revert_would_change_it() {
+        let ours = windows::desktop_ini_contents(None);
+        assert!(windows::would_revert(Some(&ours), false));
+        assert!(windows::would_revert(None, true));
+        let theirs = "[.ShellClassInfo]\r\nIconResource=theirs.ico,0\r\n";
+        assert!(!windows::would_revert(Some(theirs), false));
+        assert!(!windows::would_revert(None, false));
+
+        let png = std::path::Path::new("/home/me/Pics/.folderskin.png");
+        assert!(linux::would_revert(
+            Some(&linux::directory_file_contents(png)),
+            false
+        ));
+        assert!(linux::would_revert(None, true));
+        let edited = linux::directory_file_with_icon("[Desktop Entry]\nName=Pics\n", png);
+        assert!(linux::would_revert(Some(&edited), false));
+        let theirs = "[Desktop Entry]\nIcon=folder-pictures\n";
+        assert!(!linux::would_revert(Some(theirs), false));
+        assert!(!linux::would_revert(None, false));
     }
 
     // -------------------------------------------------------------------- .directory

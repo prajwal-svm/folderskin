@@ -50,7 +50,7 @@ Free · Open source · No account · No tracking
 | Get skins other people made | **Community**, then add a pack |
 | Share yours | A skin's ⋯ menu → **Share with community** |
 | Find a skin again | The tags along the top, ⌘F / Ctrl+F, the filter button (colour, pack, when you added it and more), or the star for **Favourites** |
-| Undo it | **Revert** puts the operating system's icon back |
+| Undo it | **Revert**, or **Remove custom icon** on a folder that already has one, puts the operating system's icon back |
 
 ## What stays on your computer
 
@@ -82,7 +82,8 @@ again.
    The sidebar picks **All skins**, **Yours** or **Favourites**, the tags along the top narrow
    that down, and ⌘F / Ctrl+F searches.
 3. Press **Apply skin**. The folder is marked **Applied**, and **Show in Finder** opens it.
-4. Press **Revert** to put the operating system's default icon back.
+4. Press **Revert** to put the operating system's default icon back. A folder that already has a
+   custom icon offers **Remove custom icon** as soon as you pick it.
 
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
 **Yours** and stays there until you delete it, which asks first. A finished folder on a flat

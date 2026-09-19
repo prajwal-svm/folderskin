@@ -52,7 +52,10 @@ inside the folder. Finder is slow to notice a new one when it replaces another: 
 the old icon, on the Desktop and in its windows, until the folder is opened. So the icon is
 cleared first and then set, which Finder does redraw straight away (Apple's workaround,
 developer.apple.com/forums/thread/788252), and Finder is told the folder and the folder around
-it changed. Setting an icon needs write access
+it changed. A folder counts as having a custom icon, and offers **Remove custom icon**, when the
+custom-icon flag is set in its Finder info (the `com.apple.FinderInfo` extended attribute),
+whoever set it. On Windows and Linux only FolderSkin's own files count (and, on Linux, a GIO
+custom icon), since those are all a revert takes off. Setting an icon needs write access
 to the folder, so folders on read-only volumes and inside some sandboxed locations are
 refused with the reason the OS gave.
 

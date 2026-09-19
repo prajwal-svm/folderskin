@@ -6,7 +6,7 @@ use crate::state::AppState;
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinKind, SkinSource, MAX_STORED_SIDE};
 use base64::Engine;
 use folderskin_core::apply::paths::write_atomic;
-use folderskin_core::apply::{apply_icon, revert_icon, validate_folder};
+use folderskin_core::apply::{apply_icon, has_custom_icon, revert_icon, validate_folder};
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
 use folderskin_core::matte;
 use serde::Serialize;
@@ -415,20 +415,32 @@ pub async fn revert_skin(folder: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 
-/// The folder's current icon as a data URL: the real OS icon on macOS, the plain rendered
-/// folder elsewhere (or when the OS cannot provide one).
+/// A folder's icon as it looks now, and whether it's one of its own that a revert would take off.
+#[derive(Serialize)]
+pub struct FolderIconDto {
+    /// A data URL: the real OS icon on macOS, the plain rendered folder elsewhere (or when the
+    /// OS cannot provide one).
+    pub url: String,
+    pub custom: bool,
+}
+
+/// The folder's current icon, and whether it's a custom one FolderSkin can remove.
 #[tauri::command]
 pub async fn folder_icon(
     app: AppHandle,
     state: State<'_, AppState>,
     folder: String,
-) -> Result<String, String> {
+) -> Result<FolderIconDto, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let p = PathBuf::from(&folder);
-        match crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
+        let url = match crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
             Some(png) => data_url(&png),
             None => default_thumbnail(&app, &state),
+        };
+        FolderIconDto {
+            url,
+            custom: has_custom_icon(&p),
         }
     })
     .await

@@ -19,6 +19,7 @@ import type {
   AiGenerateRequest,
   CommunityPack,
   ExportPackRequest,
+  FolderIcon,
   PackProgress,
   PackSkinPreview,
   PackUpdate,
@@ -128,6 +129,11 @@ const packAdded = (id: string) => library.some((s) => s.pack === id);
 /** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried. */
 const SAMPLE_FOLDERS = ["/Users/you/Documents/Projects", "/Users/you/Pictures/Wedding", "/Users/you/Desktop/Taxes 2026"];
 let nextSample = 0;
+/**
+ * The icon each folder wears in the preview: Projects starts plain and the others with a colour
+ * of their own, so a custom icon can be tried. Applying and reverting change it.
+ */
+const mockIcons = new Map<string, string | null>(SAMPLE_FOLDERS.map((path, i) => [path, i === 0 ? null : COLOUR_FOLDERS[i]]));
 
 /** The next sample folder, for the preview's "choose a folder". */
 export function mockPickFolder(): string {
@@ -189,14 +195,19 @@ export const mockApi = {
     keep([skin]);
     return skin;
   },
-  applySkin: async () => new Promise<void>((r) => setTimeout(r, 600)),
-  revertSkin: async () => new Promise<void>((r) => setTimeout(r, 400)),
+  applySkin: async (folder: string, skinId: string) => {
+    await sleep(600);
+    mockIcons.set(folder, library.find((s) => s.id === skinId)?.thumbnail ?? null);
+  },
+  revertSkin: async (folder: string) => {
+    await sleep(400);
+    mockIcons.set(folder, null);
+  },
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
-  // Each sample folder wears its own colour, so a new one looks different as it arrives.
-  folderIcon: async (path: string): Promise<string> => {
+  folderIcon: async (path: string): Promise<FolderIcon> => {
     await sleep(120);
-    const i = SAMPLE_FOLDERS.indexOf(path);
-    return COLOUR_FOLDERS[i < 0 ? 0 : i % COLOUR_FOLDERS.length];
+    const custom = mockIcons.get(path) ?? null;
+    return { url: custom ?? COLOUR_FOLDERS[0], custom: custom !== null };
   },
   skinsFolder: async () => "/Users/you/Library/Application Support/app.folderskin/skins",
   deleteSkin: async (skinId: string) => {

@@ -157,6 +157,31 @@ describe("drop zone state machine", () => {
     expect(reduce(arriving, { type: "skinCleared" }).arriving).toBe(false);
   });
 
+  it("a folder's own custom icon can be removed while it shows, and comes back as it was if that fails", () => {
+    const shown = run([{ type: "folderDropped", folder: readme }]);
+    const removing = reduce(shown, { type: "revertStarted" });
+    expect(removing.phase).toBe("reverting");
+    expect(reduce(removing, { type: "revertSucceeded" }).phase).toBe("folder");
+    const failed = reduce(removing, { type: "revertFailed", message: "couldn't: permission denied" });
+    expect(failed.phase).toBe("folder");
+    expect(failed.error).toContain("permission denied");
+  });
+
+  it("a folder waiting with its own icon can have it removed, which puts the skin down", () => {
+    const waiting = run([
+      { type: "folderDropped", folder: readme },
+      { type: "skinSelected", skinId: "aurora" },
+      { type: "folderDropped", folder: { path: "/tmp/b", name: "b" } },
+    ]);
+    const removing = reduce(waiting, { type: "revertStarted" });
+    expect(removing.phase).toBe("reverting");
+    const done = reduce(removing, { type: "revertSucceeded" });
+    expect(done).toMatchObject({ phase: "folder", skinId: null, arriving: false });
+    // Trying a skin on, nothing is on show to remove.
+    const trying = reduce(waiting, { type: "arrived" });
+    expect(reduce(trying, { type: "revertStarted" })).toBe(trying);
+  });
+
   it("an invalid drop only sets the error and clears the drag", () => {
     const hovering = reduce(initialState, { type: "drag", info: { kind: "folder", name: "readme" } });
     expect(hovering.drag).toEqual({ kind: "folder", name: "readme" });

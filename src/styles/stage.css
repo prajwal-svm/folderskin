@@ -419,6 +419,18 @@
   animation: fade-up var(--t-base) var(--ease-out) both;
 }
 
+/* beside "Remove custom icon", the hint stays a pill in the middle */
+.stage-actions .nudge {
+  align-self: center;
+}
+
+/* "Try on" and the skin's name, cut short when the name is long */
+.stage-try {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .stage-status {
   min-height: 20px;
   max-width: 290px;

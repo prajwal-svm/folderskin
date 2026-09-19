@@ -140,6 +140,14 @@ pub fn is_ours(contents: &str) -> bool {
     contents.lines().any(|line| line.trim() == MARKER)
 }
 
+/// True when a revert would take something off: FolderSkin's lines in `desktop.ini` (its text,
+/// if the folder has one) or its icon file. Someone else's `IconResource` doesn't count, since a
+/// revert leaves it alone.
+pub fn would_revert(desktop_ini: Option<&str>, ico_exists: bool) -> bool {
+    ico_exists
+        || desktop_ini.is_some_and(|ini| desktop_ini_without_ours(ini).as_deref() != Some(ini))
+}
+
 /// True for a `[Section]` header line.
 fn is_header(trimmed: &str) -> bool {
     trimmed.starts_with('[') && trimmed.ends_with(']') && trimmed.len() >= 2
@@ -188,11 +196,13 @@ fn join_lines(bom: &str, lines: &[String]) -> String {
 }
 
 #[cfg(windows)]
-pub use imp::{apply, revert};
+pub use imp::{apply, has_custom_icon, revert};
 
 #[cfg(windows)]
 mod imp {
-    use super::{desktop_ini_contents, desktop_ini_without_ours, ICO_NAME, ICO_SIZES, INI_NAME};
+    use super::{
+        desktop_ini_contents, desktop_ini_without_ours, would_revert, ICO_NAME, ICO_SIZES, INI_NAME,
+    };
     use crate::apply::paths::{read_text_if_present, write_atomic};
     use crate::apply::ApplyError;
     use crate::compositor::IconSet;
@@ -237,6 +247,12 @@ mod imp {
         set_readonly(folder, true)?;
         notify(folder);
         Ok(())
+    }
+
+    /// True when the folder wears FolderSkin's icon, which `revert` would take off.
+    pub fn has_custom_icon(folder: &Path) -> bool {
+        let ini = read_text_if_present(&folder.join(INI_NAME)).ok().flatten();
+        would_revert(ini.as_deref(), folder.join(ICO_NAME).exists())
     }
 
     /// Removes our ini lines and icon file, leaving anything else in the folder alone.

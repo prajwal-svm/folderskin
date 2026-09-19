@@ -103,21 +103,23 @@ export function reduce(state: State, action: Action): State {
       return { ...next, phase: actionablePhase(next) };
     }
 
+    // A revert takes off the skin just applied, or an icon the folder already had while it's on
+    // show (on its own, or while it waits before a skin goes on).
     case "revertStarted":
-      if (state.phase !== "applied") return state;
+      if (state.phase !== "applied" && state.phase !== "folder" && !(state.phase === "ready" && state.arriving)) return state;
       return { ...state, phase: "reverting", error: null };
 
     case "revertSucceeded": {
       // The skin is put down too, so the folder is seen wearing its default icon again
       // instead of jumping straight back into a preview of the skin just removed.
       if (state.phase !== "reverting") return state;
-      const next = { ...state, appliedSkinId: null, skinId: null };
+      const next = { ...state, appliedSkinId: null, skinId: null, arriving: false };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "revertFailed":
       if (state.phase !== "reverting") return state;
-      return { ...state, phase: "applied", error: action.message };
+      return { ...state, phase: actionablePhase(state), error: action.message };
 
     case "invalidDrop":
       return { ...state, drag: null, error: action.message };

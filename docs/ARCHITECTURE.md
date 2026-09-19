@@ -283,6 +283,9 @@ and picking a skin are separate axes in the machine. A folder that replaces anot
 `arriving`: it shows its own icon (fetched for that folder alone, so a late answer for the one
 before can't land on it) until `arrived`, about a second after the icon shows, and only then
 tries the selected skin on, so the switch can be seen. Picking a skin or applying ends it early.
+A folder that already wears a custom icon (`folder_icon` reports it, from
+`folderskin_core::apply::has_custom_icon`) waits instead, offering **Try on** or **Remove custom
+icon**, and a revert can start from there or from `folder` as well as from `applied`.
 
 The library's filters are pure functions in `src/lib/filters.ts`: the sidebar's view, then the
 filters (where a skin came from, its pack, colours, brightness, when it was added, the AI model,

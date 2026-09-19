@@ -31,7 +31,9 @@ The first release.
   computer (AES-256-GCM, tied to that computer) in a file only your account can read, so there
   are no keychain password prompts. See [docs/AI.md](docs/AI.md).
 - Revert, which restores the operating system's default folder icon and removes the
-  files FolderSkin wrote.
+  files FolderSkin wrote. A folder that already wears a custom icon when you pick it offers
+  **Remove custom icon** straight away, and waits for you to try a skin on instead of doing it
+  for you.
 - Animated icons, adapted from lucide-animated, that play when their button is hovered or
   focused.
 - Everything you add is saved: pictures you import and every AI result come back after a

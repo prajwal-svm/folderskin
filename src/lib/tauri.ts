@@ -78,6 +78,9 @@ export type ExportPackRequest = {
 
 export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path: string };
 
+/** A folder's icon as it looks now (a data URL), and whether it's a custom one a revert would take off. */
+export type FolderIcon = { url: string; custom: boolean };
+
 export type PlatformInfo = { os: string; browse_label: string; note: string };
 
 /** The saved skins, newest first, plus the plain default folder rendered through the same compositor. */
@@ -128,8 +131,8 @@ const tauriApi = {
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),
   revertSkin: (folder: string) => invoke<void>("revert_skin", { folder }),
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
-  /** The folder's current icon (data URL): the real OS icon where available. */
-  folderIcon: (folder: string) => invoke<string>("folder_icon", { folder }),
+  /** The folder's current icon (the real OS icon where available), and whether it's a custom one. */
+  folderIcon: (folder: string) => invoke<FolderIcon>("folder_icon", { folder }),
   /** The folder the skins are saved in. */
   skinsFolder: () => invoke<string>("skins_folder"),
   /** Deletes one of the user's saved skins from disk. */

@@ -182,14 +182,23 @@ fn join_lines(lines: &[String]) -> String {
     out
 }
 
+/// True when a revert would take something off: FolderSkin's PNG, or its lines in `.directory`
+/// (its text, if the folder has one). Someone else's `Icon=` doesn't count, since a revert leaves
+/// it alone.
+pub fn would_revert(directory: Option<&str>, png_exists: bool) -> bool {
+    png_exists
+        || directory
+            .is_some_and(|d| is_ours(d) || directory_file_without_ours(d).as_deref() != Some(d))
+}
+
 #[cfg(target_os = "linux")]
-pub use imp::{apply, revert};
+pub use imp::{apply, has_custom_icon, revert};
 
 #[cfg(target_os = "linux")]
 mod imp {
     use super::{
         directory_file_contents, directory_file_with_icon, directory_file_without_ours, is_ours,
-        DIRECTORY_NAME, PNG_NAME, PNG_SIZE,
+        would_revert, DIRECTORY_NAME, PNG_NAME, PNG_SIZE,
     };
     use crate::apply::paths::{read_text_if_present, write_atomic};
     use crate::apply::ApplyError;
@@ -218,6 +227,35 @@ mod imp {
 
         set_gio_icon(folder, &png_path);
         Ok(())
+    }
+
+    /// True when the folder wears an icon `revert` would take off: FolderSkin's files, or a GIO
+    /// custom icon, which a revert unsets whoever set it.
+    pub fn has_custom_icon(folder: &Path) -> bool {
+        let directory = read_text_if_present(&folder.join(DIRECTORY_NAME))
+            .ok()
+            .flatten();
+        would_revert(directory.as_deref(), folder.join(PNG_NAME).exists()) || has_gio_icon(folder)
+    }
+
+    /// `gio info -a metadata::custom-icon <folder>` lists the attribute only when it's set.
+    fn has_gio_icon(folder: &Path) -> bool {
+        let Some(gio) = gio_on_path() else {
+            return false;
+        };
+        Command::new(gio)
+            .arg("info")
+            .arg("-a")
+            .arg(GIO_KEY)
+            .arg(folder)
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .map(|out| {
+                out.status.success()
+                    && String::from_utf8_lossy(&out.stdout).contains(&format!("{GIO_KEY}:"))
+            })
+            .unwrap_or(false)
     }
 
     /// Removes our `.directory` lines, the PNG and the GIO attribute.

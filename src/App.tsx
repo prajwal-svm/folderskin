@@ -79,8 +79,11 @@ export default function App() {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [skins, setSkins] = useState<Skin[]>([]);
   const [defaultThumb, setDefaultThumb] = useState<string | null>(null);
-  /** A folder's icon as the OS draws it, and which folder it is; null `url` when the OS can't say. */
-  const [folderIcon, setFolderIcon] = useState<{ path: string; url: string | null } | null>(null);
+  /**
+   * A folder's icon as the OS draws it, which folder it is, and whether it's a custom one a revert
+   * would take off; null `url` when the OS can't say.
+   */
+  const [folderIcon, setFolderIcon] = useState<{ path: string; url: string | null; custom: boolean } | null>(null);
   const [platform, setPlatform] = useState<PlatformInfo>({ os: "macos", browse_label: "your Mac", note: "" });
   const [view, setView] = useState<View>("skins");
   /** The tag the library is filtered by; empty for all of them. */
@@ -162,8 +165,8 @@ export default function App() {
   const refreshFolderIcon = useCallback((path: string) => {
     api
       .folderIcon(path)
-      .then((url) => setFolderIcon({ path, url }))
-      .catch(() => setFolderIcon({ path, url: null }));
+      .then((icon) => setFolderIcon({ path, url: icon.url, custom: icon.custom }))
+      .catch(() => setFolderIcon({ path, url: null, custom: false }));
   }, []);
 
   const takePath = useCallback(
@@ -202,13 +205,15 @@ export default function App() {
   );
 
   // A folder that replaced another shows its own icon for a moment, then tries the skin on. The
-  // moment starts once its icon is on screen (or, if the icon is slow, a little later anyway).
+  // moment starts once its icon is on screen (or, if the icon is slow, a little later anyway). A
+  // folder with a custom icon waits instead, offering to try the skin on or to remove its icon.
   const iconShown = folderIcon !== null && folderIcon.path === state.folder?.path;
+  const customIcon = iconShown && folderIcon.custom;
   useEffect(() => {
-    if (!state.arriving) return;
+    if (!state.arriving || customIcon) return;
     const t = window.setTimeout(() => dispatch({ type: "arrived" }), iconShown ? ARRIVAL_MS : ARRIVAL_MS + 600);
     return () => window.clearTimeout(t);
-  }, [state.arriving, state.folder?.path, iconShown]);
+  }, [state.arriving, state.folder?.path, iconShown, customIcon]);
 
   const browseFolder = useCallback(async () => {
     if (!isTauri()) return takePath(mockPickFolder());
@@ -499,11 +504,13 @@ export default function App() {
         state={state}
         skin={selected}
         folderIcon={stageIcon}
+        customIcon={customIcon}
         defaultThumb={defaultThumb}
         os={platform.os}
         browseLabel={browseLabel(platform.os)}
         onBrowse={browseFolder}
         onApply={apply}
+        onTryOn={() => dispatch({ type: "arrived" })}
         onRevert={revert}
         onReveal={reveal}
       />
