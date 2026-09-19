@@ -64,16 +64,7 @@ export function Settings({
 }) {
   const [tab, setTab] = useState<SettingsTab>(first);
   return (
-    <Modal
-      wide
-      title="Settings"
-      onClose={onClose}
-      footer={
-        <button type="button" className="btn btn-primary" onClick={onClose}>
-          Done
-        </button>
-      }
-    >
+    <Modal wide title="Settings" onClose={onClose}>
       <div className="settings-tabs" role="tablist" aria-label="settings">
         {TABS.map((t) => (
           <button
@@ -261,28 +252,22 @@ function About({ note }: { note: string }) {
     </button>
   );
   return (
-    <>
-      <div className="settings-about-top">
-        <div className="settings-about">
-          <img className="settings-mark" src="/brand-mark.png" alt="" draggable={false} />
-          <div>
-            <p className="about-title">
-              FolderSkin <span className="about-version">v{__APP_VERSION__}</span>
-            </p>
-            <p className="about-line">Free and open source · MIT</p>
-          </div>
-        </div>
-        {note && <p className="field-note">{note}</p>}
-        <div className="about-links">
-          {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
-          {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
-          {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
+    <div className="settings-about-top">
+      <div className="settings-about">
+        <img className="settings-mark" src="/brand-mark.png" alt="" draggable={false} />
+        <div>
+          <p className="about-title">
+            FolderSkin <span className="about-version">v{__APP_VERSION__}</span>
+          </p>
+          <p className="about-line">Free and open source · MIT</p>
         </div>
       </div>
-      <p className="field-note">
-        Icons from Lucide (ISC) and lucide-animated (MIT); provider logos from lobe-icons (MIT) and each company's own. Community
-        skins belong to the people who shared them, under the licence each one names.
-      </p>
-    </>
+      {note && <p className="field-note">{note}</p>}
+      <div className="about-links">
+        {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
+        {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
+        {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
+      </div>
+    </div>
   );
 }
