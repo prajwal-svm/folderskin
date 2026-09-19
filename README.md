@@ -232,8 +232,9 @@ helps other people find it.
 MIT — see [LICENSE](LICENSE). Copyright 2026 FolderSkin contributors. The bundled font is
 Manrope under the SIL Open Font License (`assets/fonts/OFL.txt`); the built-in skins are CC0.
 The animated icons are adapted from [lucide-animated](https://lucide-animated.com) (MIT) and
-[Lucide](https://lucide.dev) (ISC); see
-[src/components/icons/LICENSES.md](src/components/icons/LICENSES.md).
+[Lucide](https://lucide.dev) (ISC), and the AI providers' logos come from
+[lobe-icons](https://github.com/lobehub/lobe-icons) (MIT) and remain their companies' trademarks;
+see [src/components/icons/LICENSES.md](src/components/icons/LICENSES.md).
 
 [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [MIT](LICENSE)
 

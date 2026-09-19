@@ -66,6 +66,9 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - `packs make --flat-backdrop` for renders whose magenta drifted to pink or raspberry: it
   removes each picture's own flat background where it reaches the edge, drop shadow included,
   and splits the edge pixels back into painting and background so no pink rim is left.
+- The AI providers' own logos (from lobe-icons) on their key tiles and on the studio's model
+  button, and animated icons on the appearance choices and the About links. The Settings tabs
+  are centred.
 - Installers for macOS (one universal app, signed and notarized), Windows, and Linux on both
   x86_64 and ARM64, built as a draft release from a tag and published by hand once tried. See
   [docs/RELEASING.md](docs/RELEASING.md).

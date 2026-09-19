@@ -2,14 +2,18 @@
 
 The animated icons in this folder are adapted from
 [lucide-animated](https://lucide-animated.com) (source: https://github.com/pqoqubbw/icons):
-`arrow-down`, `check`, `delete`, `download`, `earth`, `external-link`, `folder-open`,
-`layout-grid`, `moon`, `rotate-ccw`, `search`, `sliders-horizontal` and `sparkles`. The changes are described at the
-top of `trigger.ts`.
+`arrow-down`, `badge-alert`, `check`, `delete`, `download`, `earth`, `external-link`,
+`folder-open`, `github`, `layout-grid`, `monitor-check`, `moon`, `rotate-ccw`, `search`,
+`sliders-horizontal`, `sparkles` and `sun`. The changes are described at the top of `trigger.ts`.
+
+The AI providers' logos in `../ProviderLogo.tsx` come from
+[lobe-icons](https://github.com/lobehub/lobe-icons) (`packages/static-svg`), trimmed to their
+paths. Each logo is its company's trademark and is shown only to name that provider.
 
 `star`, `image` and `loader` use the shapes of the [Lucide](https://lucide.dev) icons of the same
 names (`loader` is Lucide's `loader-circle`); their animations are FolderSkin's own.
 
-Both projects' licences follow, as their terms require.
+The three projects' licences follow, as their terms require.
 
 ## lucide-animated
 
@@ -17,6 +21,32 @@ Both projects' licences follow, as their terms require.
 MIT License
 
 Copyright (c) 2024-2026 pqoqubbw
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## lobe-icons
+
+```
+MIT License
+
+Copyright (c) 2023 LobeHub
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

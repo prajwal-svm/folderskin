@@ -493,8 +493,16 @@
 }
 
 .provider-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
   font-weight: 750;
   font-size: 13px;
+}
+
+.provider-name svg {
+  flex: none;
 }
 
 .provider-state {

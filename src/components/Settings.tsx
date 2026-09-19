@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type AiCatalogue } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
@@ -7,8 +7,14 @@ import type { ThemePref } from "../state/theme";
 import type { ToastTone } from "../hooks/useToasts";
 import { Modal } from "./Modal";
 import { ProviderKeys } from "./ProviderKeys";
+import { BadgeAlertIcon } from "./icons/badge-alert";
+import { DownloadIcon } from "./icons/download";
 import { FolderOpenIcon } from "./icons/folder-open";
+import { GithubIcon } from "./icons/github";
 import { LoaderIcon } from "./icons/loader";
+import { MonitorCheckIcon } from "./icons/monitor-check";
+import { MoonIcon } from "./icons/moon";
+import { SunIcon } from "./icons/sun";
 
 export type SettingsTab = "general" | "ai" | "sharing" | "about";
 
@@ -19,10 +25,10 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "about", label: "About" },
 ];
 
-const THEMES: { id: ThemePref; label: string }[] = [
-  { id: "system", label: "Match the system" },
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
+const THEMES: { id: ThemePref; label: string; Icon: typeof SunIcon }[] = [
+  { id: "system", label: "Match the system", Icon: MonitorCheckIcon },
+  { id: "light", label: "Light", Icon: SunIcon },
+  { id: "dark", label: "Dark", Icon: MoonIcon },
 ];
 
 type Toast = (text: string, opts?: { tone?: ToastTone }) => void;
@@ -126,6 +132,7 @@ function General({
               className={t.id === themePref ? "choice-btn is-active" : "choice-btn"}
               onClick={() => onThemePref(t.id)}
             >
+              <t.Icon size={16} />
               {t.label}
             </button>
           ))}
@@ -247,8 +254,9 @@ function Sharing() {
 }
 
 function About({ note }: { note: string }) {
-  const link = (url: string, label: string) => (
+  const link = (url: string, label: string, icon: ReactNode) => (
     <button type="button" className="about-link" onClick={() => void openUrl(url).catch(() => {})}>
+      {icon}
       {label}
     </button>
   );
@@ -265,13 +273,13 @@ function About({ note }: { note: string }) {
       </div>
       {note && <p className="field-note">{note}</p>}
       <div className="about-links">
-        {link(REPO_URL, "Source code")}
-        {link(`${REPO_URL}/issues`, "Report a problem")}
-        {link(`${REPO_URL}/releases`, "Releases")}
+        {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
+        {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
+        {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
       </div>
       <p className="field-note">
-        Icons from Lucide (ISC) and lucide-animated (MIT). Community skins belong to the people who shared them, under the licence
-        each one names.
+        Icons from Lucide (ISC) and lucide-animated (MIT); provider logos from lobe-icons (MIT) and each company's own. Community
+        skins belong to the people who shared them, under the licence each one names.
       </p>
     </>
   );

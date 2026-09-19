@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { BadgeAlertIcon } from "./icons/badge-alert";
+import { GithubIcon } from "./icons/github";
 
 const REPO_URL = "https://github.com/prajwal-svm/folderskin";
 
@@ -37,8 +39,9 @@ export function AboutMenu({
   }, [open, onClose]);
 
   if (!open) return null;
-  const link = (url: string, label: string) => (
+  const link = (url: string, label: string, icon: ReactNode) => (
     <button type="button" className="about-link" onClick={() => void openUrl(url).catch(() => {})}>
+      {icon}
       {label}
     </button>
   );
@@ -59,8 +62,8 @@ export function AboutMenu({
       <p className="about-line">Free and open source · MIT</p>
       {note && <p className="about-note">{note}</p>}
       <div className="about-links">
-        {link(REPO_URL, "Source code")}
-        {link(`${REPO_URL}/issues`, "Report a problem")}
+        {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
+        {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
       </div>
     </div>
   );

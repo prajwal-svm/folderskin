@@ -8,6 +8,7 @@ import type { ToastTone } from "../hooks/useToasts";
 import { FolderGhost } from "./FolderGhost";
 import { StudioSettings } from "./StudioSettings";
 import { ChatHelper } from "./ChatHelper";
+import { ProviderLogo } from "./ProviderLogo";
 import { ArrowUpIcon } from "./icons/arrow-up";
 import { PaperclipIcon } from "./icons/paperclip";
 import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
@@ -322,6 +323,7 @@ export function Studio({
                 title={provider?.has_key ? "Key saved" : "No key yet"}
                 aria-hidden="true"
               />
+              {provider && <ProviderLogo id={provider.id} size={14} />}
               <span className="model-pill-text">{provider ? `${provider.label} · ${model?.label ?? ""}` : "Choose a provider"}</span>
               <SlidersHorizontalIcon size={14} />
             </button>

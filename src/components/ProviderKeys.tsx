@@ -4,6 +4,7 @@ import { api, errorMessage, type AiCatalogue } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import type { ToastTone } from "../hooks/useToasts";
 import { OkBadge } from "./OkBadge";
+import { ProviderLogo } from "./ProviderLogo";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
 
@@ -86,7 +87,10 @@ export function ProviderKeys({
               setDraft("");
             }}
           >
-            <span className="provider-name">{p.label}</span>
+            <span className="provider-name">
+              <ProviderLogo id={p.id} size={18} />
+              {p.label}
+            </span>
             {p.has_key ? (
               <OkBadge size={17} playOnMount label="Key saved" />
             ) : (
