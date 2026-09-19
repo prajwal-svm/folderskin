@@ -284,11 +284,6 @@
   letter-spacing: -0.035em;
 }
 
-/* the second half of the name in the folder's own blue */
-.welcome-title span {
-  color: var(--accent-ink);
-}
-
 .welcome-tagline {
   margin-top: 10px;
   font-weight: 650;

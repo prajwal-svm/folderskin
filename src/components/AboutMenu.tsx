@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { GithubIcon } from "./icons/github";
+import { StarIcon } from "./icons/star";
 
 const REPO_URL = "https://github.com/prajwal-svm/folderskin";
 
@@ -57,13 +58,14 @@ export function AboutMenu({
       onBlur={() => onHover(false)}
     >
       <p className="about-title">
-        FolderSkin <span className="about-version">v{__APP_VERSION__}</span>
+        Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
       </p>
       <p className="about-line">Free and open source · MIT</p>
       {note && <p className="about-note">{note}</p>}
       <div className="about-links">
         {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
         {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
+        {link(REPO_URL, "Star on GitHub", <StarIcon size={15} className="about-star" />)}
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import { GithubIcon } from "./icons/github";
 import { LoaderIcon } from "./icons/loader";
 import { MonitorCheckIcon } from "./icons/monitor-check";
 import { MoonIcon } from "./icons/moon";
+import { StarIcon } from "./icons/star";
 import { SunIcon } from "./icons/sun";
 
 export type SettingsTab = "general" | "ai" | "sharing" | "about";
@@ -131,24 +132,24 @@ function General({
       </div>
       <div className="field">
         <span className="field-label">Your skins</span>
-        <p className="settings-line">
-          {savedCount === 1 ? "1 skin is saved" : `${savedCount} skins are saved`}
-          {folder ? (
-            <>
-              {" "}
-              in <code className="settings-path">{prettyPath(folder)}</code>
-            </>
-          ) : null}
-          .
-        </p>
-        {folder && (
-          <button type="button" className="btn btn-secondary settings-btn" onClick={() => void revealItemInDir(folder).catch(() => {})}>
-            <FolderOpenIcon size={15} />
-            Show in {fileBrowser}
-          </button>
-        )}
+        <div className="storage">
+          <span className="storage-icon" aria-hidden="true">
+            <FolderOpenIcon size={20} />
+          </span>
+          <div className="storage-text">
+            <p className="storage-count">{savedCount === 1 ? "1 skin" : `${savedCount} skins`}</p>
+            <p className="storage-path" title={folder ?? undefined}>
+              {folder ? prettyPath(folder) : folderError ? "Kept until you quit" : "…"}
+            </p>
+          </div>
+          {folder && (
+            <button type="button" className="btn btn-secondary" onClick={() => void revealItemInDir(folder).catch(() => {})}>
+              Show in {fileBrowser}
+            </button>
+          )}
+        </div>
         <span className={folderError ? "field-note is-error" : "field-note"}>
-          {folderError ?? "Pictures you add, AI results and community packs stay there between launches. Copy the folder to back them up."}
+          {folderError ?? "Everything you add stays here between launches. Copy this folder to back it up."}
         </span>
       </div>
     </>
@@ -257,7 +258,7 @@ function About({ note }: { note: string }) {
         <img className="settings-mark" src="/brand-mark.png" alt="" draggable={false} />
         <div>
           <p className="about-title">
-            FolderSkin <span className="about-version">v{__APP_VERSION__}</span>
+            Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
           </p>
           <p className="about-line">Free and open source · MIT</p>
         </div>
@@ -267,6 +268,7 @@ function About({ note }: { note: string }) {
         {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
         {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
         {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
+        {link(REPO_URL, "Star on GitHub", <StarIcon size={15} className="about-star" />)}
       </div>
     </div>
   );

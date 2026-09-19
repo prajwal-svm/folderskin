@@ -223,7 +223,7 @@ function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
       </div>
       <div className="welcome-copy">
         <h1 id="welcome-title" className="welcome-title">
-          Folder<span>Skin</span>
+          Folder<span className="brand-accent">Skin</span>
         </h1>
         <p className="welcome-tagline">Give any folder a skin.</p>
         <button ref={next} type="button" className="btn btn-primary btn-lg welcome-next" onClick={onNext}>

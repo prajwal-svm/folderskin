@@ -8,14 +8,32 @@
   animation: fade-up var(--t-base) var(--ease-out) both;
 }
 
+/* The heading scrolls away with the packs; the filters below it stay at the top. */
 .community-head {
-  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 14px 20px;
-  padding: 22px 22px 6px;
+  padding: 22px 6px 6px;
+}
+
+.community .toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -16px 8px;
+  background: var(--island);
+}
+
+/* a soft edge for the packs passing under the filters */
+.community .toolbar::after {
+  content: "";
+  position: absolute;
+  inset: 100% 0 auto;
+  height: 14px;
+  background: linear-gradient(var(--island), transparent);
+  pointer-events: none;
 }
 
 .community-intro {
@@ -34,10 +52,8 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 16px 28px;
+  padding: 0 16px 28px;
   container-type: inline-size;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 
 .community-note {

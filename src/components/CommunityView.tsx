@@ -201,74 +201,74 @@ export function CommunityView({
 
   return (
     <section className="community">
-      <header className="community-head">
-        <div className="community-intro">
-          <h2 className="view-title">Community</h2>
-          <p className="view-sub">Free skins and packs people share on GitHub. Add one and its skins join your library.</p>
-        </div>
-        <div className="community-actions">
-          <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => void addFromFolder()}>
-            <FolderOpenIcon size={15} />
-            Add from a folder
-          </button>
-          <button type="button" className="btn btn-primary" onMouseDown={(e) => e.preventDefault()} onClick={onShare}>
-            <SparklesIcon size={15} />
-            Share your skins
-          </button>
-        </div>
-      </header>
-
-      {packs && packs.length > 0 && (
-        <GalleryToolbar
-          tabs={tabs}
-          active={tag}
-          onChange={setTag}
-          query={query}
-          onQuery={setQuery}
-          label="filter packs by tag"
-          placeholder="Search packs"
-          extra={
-            <>
-            <button
-              type="button"
-              className="icon-btn"
-              title="Check GitHub for new and updated packs"
-              aria-label="refresh packs"
-              aria-busy={refreshing}
-              disabled={refreshing}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => void refresh()}
-            >
-              {refreshing ? <LoaderIcon size={16} /> : <RefreshCwIcon size={16} />}
-            </button>
-            <div className="view-switch" role="radiogroup" aria-label="show packs as">
-              {(
-                [
-                  ["list", "List", ListIcon],
-                  ["gallery", "Gallery", LayoutGridIcon],
-                ] as const
-              ).map(([id, label, Icon]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={view === id}
-                  aria-label={label}
-                  title={label}
-                  className={view === id ? "view-switch-btn is-active" : "view-switch-btn"}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pickView(id)}
-                >
-                  <Icon size={16} />
-                </button>
-              ))}
-            </div>
-            </>
-          }
-        />
-      )}
-
       <div className="community-scroll scroll-on-hover">
+        <header className="community-head">
+          <div className="community-intro">
+            <h2 className="view-title">Community</h2>
+            <p className="view-sub">Free skins and packs people share on GitHub. Add one and its skins join your library.</p>
+          </div>
+          <div className="community-actions">
+            <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => void addFromFolder()}>
+              <FolderOpenIcon size={15} />
+              Add from a folder
+            </button>
+            <button type="button" className="btn btn-primary" onMouseDown={(e) => e.preventDefault()} onClick={onShare}>
+              <SparklesIcon size={15} />
+              Share your skins
+            </button>
+          </div>
+        </header>
+
+        {packs && packs.length > 0 && (
+          <GalleryToolbar
+            tabs={tabs}
+            active={tag}
+            onChange={setTag}
+            query={query}
+            onQuery={setQuery}
+            label="filter packs by tag"
+            placeholder="Search packs"
+            extra={
+              <>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Check GitHub for new and updated packs"
+                aria-label="refresh packs"
+                aria-busy={refreshing}
+                disabled={refreshing}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void refresh()}
+              >
+                {refreshing ? <LoaderIcon size={16} /> : <RefreshCwIcon size={16} />}
+              </button>
+              <div className="view-switch" role="radiogroup" aria-label="show packs as">
+                {(
+                  [
+                    ["list", "List", ListIcon],
+                    ["gallery", "Gallery", LayoutGridIcon],
+                  ] as const
+                ).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={view === id}
+                    aria-label={label}
+                    title={label}
+                    className={view === id ? "view-switch-btn is-active" : "view-switch-btn"}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickView(id)}
+                  >
+                    <Icon size={16} />
+                  </button>
+                ))}
+              </div>
+              </>
+            }
+          />
+        )}
+
         {packs === null ? (
           <p className="community-note">
             <LoaderIcon /> Loading packs from GitHub…

@@ -776,21 +776,61 @@ select.input {
   color: var(--ink);
 }
 
-.settings-line {
-  font-weight: 600;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--ink-2);
+/* Your skins: how many, where they are, and the way there */
+.storage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--r-card);
+  background: var(--well);
 }
 
-.settings-path {
+.storage-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.storage-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.storage-count {
+  font-weight: 800;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
+}
+
+.storage-path {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--muted);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.settings-btn,
+/* on the well, the button takes the island colour to show */
+.storage .btn-secondary {
+  flex: none;
+  background: var(--island);
+}
+
+.storage .btn-secondary:hover:not(:disabled),
+.storage .btn-secondary:focus-visible:not(:disabled) {
+  background: var(--well-2);
+}
+
 .settings-link {
   align-self: flex-start;
 }

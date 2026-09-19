@@ -42,9 +42,10 @@
   flex: none;
 }
 
+/* below the traffic lights, with the same room above the logo as below it */
 .os-macos .sidebar-top {
-  height: 86px;
-  padding-top: 28px; /* clears the traffic lights */
+  height: 72px;
+  padding-top: 20px;
 }
 
 .brand-lockup {
@@ -67,6 +68,11 @@
   font-size: 19px;
   line-height: 1;
   letter-spacing: -0.035em;
+}
+
+/* "Skin", wherever the name is written as the logo */
+.brand-accent {
+  color: var(--accent);
 }
 
 /* The version badge opens About while it is hovered or focused. It is the one part of the
@@ -235,7 +241,7 @@
 }
 
 .os-macos .about-pop {
-  top: 76px;
+  top: 66px;
 }
 
 .about-title {
@@ -268,8 +274,14 @@
 
 .about-links {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 14px;
+}
+
+/* the star keeps the favourites' gold */
+.about-link .about-star {
+  color: var(--fave);
 }
 
 .about-link {

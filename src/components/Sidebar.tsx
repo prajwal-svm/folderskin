@@ -62,7 +62,9 @@ export function Sidebar({
       <div className="sidebar-top" data-tauri-drag-region>
         <div className="brand-lockup" aria-label={`FolderSkin version ${__APP_VERSION__}`}>
           <img className="brand-mark" src="/brand-mark.png" alt="" draggable={false} />
-          <span className="brand-name">FolderSkin</span>
+          <span className="brand-name">
+            Folder<span className="brand-accent">Skin</span>
+          </span>
           <button
             type="button"
             className="brand-version"

@@ -20,6 +20,7 @@ or a poster-style folder an AI paints for you. Revert puts the system icon back.
   <a href="https://github.com/prajwal-svm/folderskin/releases/latest"><strong>Download free</strong></a>
   · <a href="docs/PACKS.md">Share a skin pack</a>
   · <a href="#build-from-source">Build from source</a>
+  · <a href="https://github.com/prajwal-svm/folderskin">⭐ Star on GitHub</a>
 </p>
 
 Free · Open source · No account · No tracking
