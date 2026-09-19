@@ -380,7 +380,7 @@ export default function App() {
         {library && (
           <>
             <GalleryToolbar tabs={tabs} active={activeTag} onChange={setTag} query={query} onQuery={setQuery} />
-            <div className="gallery-scroll">
+            <div className="gallery-scroll scroll-on-hover">
               <Gallery
                 skins={visible}
                 selectedId={state.skinId}

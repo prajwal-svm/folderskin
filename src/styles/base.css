@@ -112,6 +112,25 @@ p {
   background: transparent;
 }
 
+/* A scroller whose scrollbar shows only while the pointer is over it. The track keeps its width,
+   so nothing moves when the thumb appears. The thumb's colour is a variable the scroller's own
+   :hover sets: hovering restyles the scroller itself, and its scrollbar is redrawn with it. */
+.scroll-on-hover {
+  --scroll-thumb: transparent;
+}
+
+.scroll-on-hover:hover {
+  --scroll-thumb: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.scroll-on-hover::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb);
+}
+
+.scroll-on-hover::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
 /* ---------- shared keyframes ---------- */
 
 @keyframes rise {

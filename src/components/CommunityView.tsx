@@ -268,7 +268,7 @@ export function CommunityView({
         />
       )}
 
-      <div className="community-scroll">
+      <div className="community-scroll scroll-on-hover">
         {packs === null ? (
           <p className="community-note">
             <LoaderIcon /> Loading packs from GitHub…
