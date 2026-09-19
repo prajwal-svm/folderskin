@@ -1,5 +1,12 @@
 # FolderSkin
 
+[![CI](https://github.com/prajwal-svm/folderskin/actions/workflows/ci.yml/badge.svg)](https://github.com/prajwal-svm/folderskin/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/package-json/v/prajwal-svm/folderskin?label=version&color=3A86FF)](https://github.com/prajwal-svm/folderskin/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3A86FF)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-5b6472)](#download)
+[![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
+[![Community packs welcome](https://img.shields.io/badge/community%20packs-welcome-12b981)](docs/PACKS.md)
+
 Give any folder a skin.
 
 ![FolderSkin window](docs/images/app.png)
@@ -16,9 +23,9 @@ an AI paints for you, with your own key or straight from Grok's or ChatGPT's cha
 changes right away in Finder, Explorer or your file manager, and Revert puts the system icon
 back. Everything you add is kept under **Yours**.
 
-It's free and MIT-licensed, with no accounts, no paywall and no telemetry. The only network
-access is the AI assistant, and only when you ask it for something. The macOS app is about
-10 MB installed.
+It's free and MIT-licensed, with no accounts, no paywall and no telemetry. It goes online
+only when you ask it to: the AI assistant sends your request to the provider you picked, and
+Community reads the shared packs from GitHub. The macOS app is about 10 MB installed.
 
 ## Download
 
