@@ -4,8 +4,8 @@
  * folder each from Soft Rainbow and Colours, and three marble statues from a pack on its way.
  * Each shows once: five for every wave, then one for every flip of the middle folder
  * (INTRO_FRAME_COUNT in src/lib/onboarding.ts). Side by side, folders never come from the same
- * pack, the middle one always wears a picture, and a plain folder only turns up at an end
- * (src/lib/onboarding.test.ts holds all of it).
+ * pack, the middle one always wears a picture and every picture pack gets it at least once, and a
+ * plain folder only turns up at an end (src/lib/onboarding.test.ts holds all of it).
  *
  * They're the only pictures the app ships, so each is drawn at the size it's shown at: 512 px for
  * the middle folder, 384 px beside it, 288 px at the ends, and 320 px for the quick flips, whose
@@ -29,7 +29,6 @@ import galileoGalilei from "./galileo-galilei.webp";
 import girlWithAPearlEarring from "./girl-with-a-pearl-earring.webp";
 import graceHopper from "./grace-hopper.webp";
 import green from "./green.webp";
-import isaacNewton from "./isaac-newton.webp";
 import katherineJohnson from "./katherine-johnson.webp";
 import logo from "./logo.webp";
 import luncheonOfTheBoatingParty from "./luncheon-of-the-boating-party.webp";
@@ -45,6 +44,7 @@ import statueOpenArms from "./statue-open-arms.webp";
 import theAstronomer from "./the-astronomer.webp";
 import theLadyOfShalott from "./the-lady-of-shalott.webp";
 import theNinthWave from "./the-ninth-wave.webp";
+import viewOfToledo from "./view-of-toledo.webp";
 import wandererAboveTheSeaOfFog from "./wanderer-above-the-sea-of-fog.webp";
 
 const CLASSIC = "classic-art";
@@ -62,16 +62,16 @@ export const INTRO: { src: string; pack: string }[] = [
   { src: babyBlueIce, pack: "soft-rainbow" },
   // the second wave
   { src: theNinthWave, pack: CLASSIC },
+  { src: statueGaze, pack: STATUES },
   { src: archimedes, pack: SCIENTISTS },
-  { src: girlWithAPearlEarring, pack: CLASSIC },
-  { src: nikolaTesla, pack: SCIENTISTS },
+  { src: theLadyOfShalott, pack: CLASSIC },
   { src: orange, pack: "colours" },
   // the third wave
   { src: wandererAboveTheSeaOfFog, pack: CLASSIC },
   { src: adaLovelace, pack: SCIENTISTS },
-  { src: statueGaze, pack: STATUES },
-  { src: theLadyOfShalott, pack: CLASSIC },
-  { src: isaacNewton, pack: SCIENTISTS },
+  { src: girlWithAPearlEarring, pack: CLASSIC },
+  { src: nikolaTesla, pack: SCIENTISTS },
+  { src: viewOfToledo, pack: CLASSIC },
   // the last wave
   { src: charlesDarwin, pack: SCIENTISTS },
   { src: napoleonCrossingTheAlps, pack: CLASSIC },

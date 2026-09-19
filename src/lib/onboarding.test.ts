@@ -55,6 +55,11 @@ describe("the intro's frames", () => {
     }
   });
 
+  it("give the middle folder to every picture pack at least once", () => {
+    const centre = new Set(Array.from({ length: INTRO_WAVES }, (_, w) => INTRO[frameAt(middle, w)].pack));
+    expect(centre).toEqual(new Set(pictures));
+  });
+
   it("flip the middle folder through pictures, never two from one pack in a row", () => {
     const flips = [frameAt(middle, INTRO_WAVES - 1), ...Array.from({ length: INTRO_SPINS }, (_, i) => spinFrameAt(i + 1))].map((f) => INTRO[f].pack);
     for (const pack of flips) expect(pictures).toContain(pack);
