@@ -80,40 +80,42 @@
   --t-slow: 420ms;
 }
 
+/* Dark is warm grey, built around the islands' #2c2929: the canvas a step darker, wells a step
+   lighter, and the text and tints warmed to match. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --canvas: #0b0d10;
-  --island: #15181d;
+  --canvas: #1f1c1c;
+  --island: #2c2929;
   --island-line: rgba(255, 255, 255, 0.07);
-  --well: #1c2027;
-  --well-2: #252a33;
-  --line: #262b33;
-  --dash: #4a5361;
+  --well: #363232;
+  --well-2: #403b3b;
+  --line: #3d3838;
+  --dash: #5e5757;
 
-  --ink: #eef2f7;
-  --ink-2: #c9d1dc;
-  --muted: #98a2b3;
-  --hint: #667085;
-  --on-ink: #0b0d10;
+  --ink: #f2eeed;
+  --ink-2: #d4cecd;
+  --muted: #aba4a3;
+  --hint: #857d7c;
+  --on-ink: #1f1c1c;
 
   --accent: #3a86ff;
   --accent-hover: #2a74ee;
   --accent-ink: #6fa7ff;
-  --accent-soft: #172a48;
+  --accent-soft: #2d3b54;
   --accent-wash: rgba(58, 134, 255, 0.14);
   --accent-glow: rgba(58, 134, 255, 0.55);
   --on-accent: #ffffff;
 
   --ok: #34d399;
-  --ok-soft: #0f2e24;
+  --ok-soft: #2d483d;
   --ok-solid: #10a877;
   --ok-ink: #34d399;
   --danger: #ff6b6b;
-  --danger-soft: #3a1717;
+  --danger-soft: #3e2b2b;
 
   --nav-hover: rgba(255, 255, 255, 0.07);
-  --nav-active: #232830;
+  --nav-active: #3a3535;
   --tile-selected: rgba(255, 255, 255, 0.08);
 
   --shadow-pop: 0 0 0 1px var(--island-line), 0 24px 60px -14px rgba(0, 0, 0, 0.8);

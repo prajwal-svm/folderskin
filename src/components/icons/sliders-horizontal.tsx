@@ -26,6 +26,9 @@ export function SlidersHorizontalIcon({ size = 18, className, playOnMount }: Ico
         <m.line
           key={`${line.x1},${line.y1},${line.x2},${line.y2}`}
           animate={controls}
+          // Without a starting variant motion reads each line's ends back as undefined on the
+          // first hover and writes that into the SVG before animating.
+          initial="normal"
           transition={TRANSITION}
           variants={{ normal, animate }}
           {...line}
