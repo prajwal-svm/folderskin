@@ -8,9 +8,9 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 Nothing yet.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-09-19
 
-First release. The date lands here when the `v0.1.0` tag is pushed.
+The first release.
 
 ### Added
 
