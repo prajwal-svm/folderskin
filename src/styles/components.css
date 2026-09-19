@@ -110,6 +110,39 @@
   transform: scale(0.92);
 }
 
+/* A label under an icon-only button while it's hovered or focused, from its data-tip. It waits a
+   moment before showing, so passing over the button doesn't flash it. */
+.has-tip {
+  position: relative;
+}
+
+.has-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--island);
+  font-weight: 700;
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.has-tip:hover::after,
+.has-tip:focus-visible::after {
+  opacity: 1;
+  transform: none;
+  transition-delay: 350ms;
+}
+
 .link-btn {
   display: inline-flex;
   align-items: center;

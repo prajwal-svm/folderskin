@@ -16,6 +16,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // Updates: the newest GitHub release's latest.json, signed with the key whose public half
+        // is in tauri.conf.json; the page restarts the app once one is installed.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(state::AppState::default())
         .manage(keys::Keys::default())
         .invoke_handler(tauri::generate_handler![

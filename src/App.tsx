@@ -11,6 +11,7 @@ import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites"
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
+import { useUpdates } from "./hooks/useUpdates";
 import { Sidebar, type View } from "./components/Sidebar";
 import { GalleryToolbar, type TabCount } from "./components/GalleryToolbar";
 import { Gallery, type Empty } from "./components/Gallery";
@@ -23,6 +24,7 @@ import { SkinMenu } from "./components/SkinMenu";
 import { SharePack } from "./components/SharePack";
 import { Settings, type SettingsTab } from "./components/Settings";
 import { Toaster } from "./components/Toaster";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { SearchIcon } from "./components/icons/search";
 import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
@@ -90,6 +92,7 @@ export default function App() {
   const [keysVersion, setKeysVersion] = useState(0);
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleThemePref } = useTheme();
   const { items: toastItems, push: toast, dismiss: dismissToast } = useToasts();
+  const updates = useUpdates();
 
   useEffect(() => {
     api.platformInfo().then(setPlatform).catch(() => {});
@@ -367,10 +370,19 @@ export default function App() {
         onToggleTheme={toggleThemePref}
         onAboutHover={hoverAbout}
         aboutOpen={aboutOpen}
+        updateReady={updates.status.state === "available"}
         onSettings={() => setSettingsTab("general")}
         settingsOpen={settingsTab !== null}
       />
-      <AboutMenu note={platform.note} open={aboutOpen} onHover={hoverAbout} onClose={() => setAboutOpen(false)} />
+      <AboutMenu
+        note={platform.note}
+        open={aboutOpen}
+        onHover={hoverAbout}
+        onClose={() => setAboutOpen(false)}
+        updates={updates.status}
+        onCheckUpdates={updates.check}
+        onShowUpdate={updates.showDialog}
+      />
 
       <section
         className={state.drag?.kind === "image" ? "island island-main is-drop-target" : "island island-main"}
@@ -473,8 +485,12 @@ export default function App() {
           onKeysChanged={() => setKeysVersion((v) => v + 1)}
           onClose={closeSettings}
           toast={toast}
+          updates={updates.status}
+          onCheckUpdates={updates.check}
+          onShowUpdate={updates.showDialog}
         />
       )}
+      {updates.dialog && <UpdateDialog update={updates.dialog} onClose={updates.hideDialog} />}
       <Toaster items={toastItems} onDismiss={dismissToast} />
     </main>
   );

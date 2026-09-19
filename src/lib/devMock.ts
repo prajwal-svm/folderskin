@@ -9,6 +9,9 @@
  * to see it again. "Chrome dreams" fails the first time it's added, to show what a failure does,
  * and `?offline` makes everything from GitHub fail, as it does without a connection. `?real` leaves
  * out the made-up packs, for screenshots.
+ *
+ * `?update` finds a made-up next version a few seconds after the app opens, as a release build
+ * does; `?update=fail` stops its download halfway and `?update=offline` can't check at all.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import type {
@@ -24,6 +27,7 @@ import type {
   Skin,
   SkinList,
 } from "./tauri";
+import type { AvailableUpdate } from "./updater";
 import { cleanName } from "./names";
 import { cleanTags } from "./tags";
 
@@ -118,6 +122,42 @@ const packAdded = (id: string) => library.some((s) => s.pack === id);
 
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/** Notes for the made-up update, written the way a CHANGELOG.md section is. */
+const MOCK_NOTES = `### Added
+
+- FolderSkin updates itself: it looks for a new version when it opens, shows what changed, and
+  restarts into it.
+- A **Scientists - Pop Art** community pack.
+
+### Fixed
+
+- Cut-outs on a plain grey or black background keep dark clothes and ink lines.
+
+---
+
+**Downloads:** macOS \`.dmg\`, Windows \`-setup.exe\` or \`.msi\`, Linux \`.AppImage\`, \`.deb\` or \`.rpm\`.`;
+
+/** The browser preview's update check: see `?update` at the top. */
+export async function mockFindUpdate(): Promise<AvailableUpdate | null> {
+  const mode = new URLSearchParams(location.search).get("update");
+  await sleep(900);
+  if (mode === null) return null;
+  if (mode === "offline" || offline()) throw new Error("Could not fetch a valid release JSON from the remote");
+  return {
+    version: "0.2.0",
+    notes: MOCK_NOTES,
+    install: async (onProgress) => {
+      onProgress(0);
+      for (let step = 1; step <= 24; step++) {
+        await sleep(110);
+        if (mode === "fail" && step === 13) throw new Error("error decoding response body");
+        onProgress(step / 24);
+      }
+      await sleep(500);
+    },
+  };
 }
 
 export const mockApi = {

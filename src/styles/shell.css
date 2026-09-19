@@ -99,6 +99,22 @@
   color: var(--accent-ink);
 }
 
+/* a newer version is waiting (About says which) */
+.brand-version.has-update {
+  position: relative;
+}
+
+.brand-version.has-update::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .cta {
   flex: none;
   margin: 0 0 10px;
@@ -230,7 +246,7 @@
   position: fixed;
   left: 18px;
   top: 58px;
-  width: 268px;
+  width: 292px;
   padding: 16px;
   border-radius: 16px;
   background: var(--island);
@@ -242,6 +258,24 @@
 
 .os-macos .about-pop {
   top: 66px;
+}
+
+/* the name and licence, with the GitHub link in the corner */
+.about-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.about-head-text {
+  min-width: 0;
+}
+
+.about-source {
+  flex: none;
+  margin: -5px -6px 0 0;
+  color: var(--ink-2);
 }
 
 .about-title {
@@ -277,6 +311,17 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 14px;
+}
+
+/* Report and Star share a row */
+.about-pop .about-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.about-pop .about-link {
+  justify-content: center;
+  padding: 0 10px;
 }
 
 /* the star keeps the favourites' gold */

@@ -45,7 +45,8 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
   4.0, MIT) are in [docs/PACKS.md](docs/PACKS.md); `folderskin-tools packs check` runs the same
   checks in CI, and a workflow publishes the list and previews.
 - Settings: theme, AI keys, sharing defaults and where skins are saved, in one dialog. About
-  opens from the version badge beside the logo.
+  opens from the version badge beside the logo, with GitHub in its corner (View Source), Report
+  issues and Star project side by side, and a check for updates.
 - Finished folder pictures on a flat magenta background, such as ones painted in Grok's or
   ChatGPT's chat from [docs/PROMPTS.md](docs/PROMPTS.md), are cut out and used as they are.
 - A layout built around the folder: the library and the folder each sit on their own island,
@@ -89,11 +90,18 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - Installers for macOS (one universal app, signed and notarized), Windows, and Linux on both
   x86_64 and ARM64, built as a draft release from a tag and published by hand once tried. See
   [docs/RELEASING.md](docs/RELEASING.md).
+- FolderSkin updates itself. A few seconds after it opens it looks for a newer release on
+  GitHub; if there is one it shows what changed and, on **Update and restart**, downloads it,
+  checks its signature against the key built into the app, installs it and restarts. About and
+  Settings → About check on request, and the version badge wears a dot while an update waits.
+- A release build behaves like an app, not a web page: no right-click menu, no web inspector,
+  and the reload and inspector shortcuts do nothing. Development builds keep them.
 
 ### Notes
 
 - No accounts, no paywall, no telemetry. The only network access is the optional AI
-  assistant, which calls the provider you pick directly, and Community and the first-launch
-  welcome, which read the shared packs from GitHub.
-- The macOS app is 8.5 MB installed. The DMG and the Windows and Linux packages have not been
+  assistant, which calls the provider you pick directly; Community and the first-launch
+  welcome, which read the shared packs from GitHub; and the update check, which reads the
+  newest release's `latest.json` from GitHub when the app opens.
+- The macOS app is 8.8 MB installed. The DMG and the Windows and Linux packages have not been
   measured yet.

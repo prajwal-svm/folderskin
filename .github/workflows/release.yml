@@ -10,6 +10,9 @@ name: Release
 # same tag with "Publish the release" ticked. That run builds nothing. It checks the draft again
 # and publishes exactly what you tried. docs/RELEASING.md has the whole routine and the secrets it
 # reads.
+#
+# Publishing also starts the update: every installed FolderSkin reads the newest public release's
+# latest.json, which the update-feed job below attaches to the draft.
 on:
   push:
     tags:
@@ -39,22 +42,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `feed`: the start of the keys this build owns in latest.json, the update feed
           - name: macOS (Apple silicon and Intel)
             os: macos-latest
             targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: "--target universal-apple-darwin"
+            feed: darwin
           - name: Linux (x86_64)
             os: ubuntu-22.04
             targets: ""
             args: ""
+            feed: linux-x86_64
           - name: Linux (ARM64)
             os: ubuntu-22.04-arm
             targets: ""
             args: ""
+            feed: linux-aarch64
           - name: Windows (x86_64)
             os: windows-latest
             targets: ""
             args: ""
+            feed: windows-x86_64
 
     steps:
       - uses: actions/checkout@v7
@@ -188,7 +196,31 @@ jobs:
           echo 'TAURI_SIGN_ARGS=--config src-tauri/tauri.windows-signing.conf.json' >> "$GITHUB_ENV"
           echo "Windows signing: on"
 
-      # The release notes are the version's section of CHANGELOG.md.
+      # Updates. An installed FolderSkin installs only what the key in tauri.conf.json
+      # (plugins.updater.pubkey) signed. With the private half, the bundler signs each installer
+      # and tauri-action writes latest.json, the feed the app reads. A release from this repository
+      # needs it, or nobody would be offered the new version; a fork builds without.
+      - name: Turn on update signing
+        shell: bash
+        env:
+          SECRET_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SECRET_TAURI_SIGNING_PRIVATE_KEY" ]; then
+            if [ "$GITHUB_REPOSITORY" = "prajwal-svm/folderskin" ]; then
+              echo "::error::the TAURI_SIGNING_PRIVATE_KEY secret is missing, so this release would offer no update. docs/RELEASING.md says how to set it."
+              exit 1
+            fi
+            echo "update signing: no key in this fork, building without an update feed"
+            exit 0
+          fi
+          echo '{"bundle":{"createUpdaterArtifacts":true}}' > src-tauri/tauri.updater.conf.json
+          echo 'UPDATER_ARGS=--config src-tauri/tauri.updater.conf.json' >> "$GITHUB_ENV"
+          echo "UPDATES_SIGNED=true" >> "$GITHUB_ENV"
+          echo "update signing: on"
+
+      # The release notes are the version's section of CHANGELOG.md. tauri-action also puts them
+      # in latest.json, and the app shows them when it offers the update.
       - name: Write the release notes
         id: notes
         shell: bash
@@ -227,6 +259,10 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          # The update key. Used only when the step above turned update signing on; the password
+          # is empty for a key made without one.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: "FolderSkin ${{ inputs.tag || github.ref_name }}"
@@ -234,7 +270,19 @@ jobs:
           releaseDraft: true
           prerelease: false
           retryAttempts: 3
-          args: ${{ matrix.args }} ${{ env.TAURI_SIGN_ARGS }}
+          args: ${{ matrix.args }} ${{ env.TAURI_SIGN_ARGS }} ${{ env.UPDATER_ARGS }}
+
+      # tauri-action adds this platform to the draft's latest.json, but the four builds do it at
+      # the same time and one can overwrite another's. So each keeps its own copy too, and the
+      # update-feed job puts them together once all four are done.
+      - name: Keep this platform's part of the update feed
+        if: env.UPDATES_SIGNED == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: update-feed-${{ matrix.feed }}
+          path: latest.json
+          if-no-files-found: error
+          retention-days: 2
 
       # Gatekeeper's own verdict on the app that went into the .dmg, so a signing or notarization
       # problem fails here instead of on someone's Mac.
@@ -248,11 +296,68 @@ jobs:
           spctl --assess --type execute --verbose=4 "$app"
           xcrun stapler validate "$app"
 
+  # The update feed: one latest.json with every platform, put together from each build's own copy
+  # and attached to the draft in place of whichever copy won the race.
+  update-feed:
+    name: Update feed (every platform)
+    needs: build
+    if: ${{ inputs.publish != true }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Collect each platform's part
+        uses: actions/download-artifact@v7
+        with:
+          pattern: update-feed-*
+          path: update-feed
+
+      - name: Put latest.json together and attach it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d update-feed ] && [ "$GITHUB_REPOSITORY" != "prajwal-svm/folderskin" ]; then
+            echo "no update feed in this fork"
+            exit 0
+          fi
+          part() { echo "update-feed/update-feed-$1/latest.json"; }
+          for feed in darwin windows-x86_64 linux-x86_64 linux-aarch64; do
+            test -s "$(part "$feed")" || { echo "the $feed build left no update feed" >&2; exit 1; }
+          done
+          # Every build read the same tag and notes, so they agree unless something went wrong.
+          versions="$(jq -c '[.version, .notes]' update-feed/*/latest.json | sort -u | wc -l | tr -d ' ')"
+          [ "$versions" = 1 ] || { echo "the builds disagree on the version or the notes" >&2; exit 1; }
+          jq -n \
+            --slurpfile mac "$(part darwin)" \
+            --slurpfile win "$(part windows-x86_64)" \
+            --slurpfile x64 "$(part linux-x86_64)" \
+            --slurpfile arm "$(part linux-aarch64)" '
+              def own($doc; $prefix): $doc.platforms | with_entries(select(.key | startswith($prefix)));
+              {
+                version: $mac[0].version,
+                notes: $mac[0].notes,
+                pub_date: ([$mac[0], $win[0], $x64[0], $arm[0]] | map(.pub_date) | max),
+                platforms: (own($mac[0]; "darwin-") + own($win[0]; "windows-x86_64")
+                  + own($x64[0]; "linux-x86_64") + own($arm[0]; "linux-aarch64"))
+              }' > latest.json
+          for key in darwin-aarch64 darwin-x86_64 darwin-aarch64-app darwin-x86_64-app \
+            windows-x86_64 windows-x86_64-msi windows-x86_64-nsis \
+            linux-x86_64 linux-x86_64-appimage linux-x86_64-deb \
+            linux-aarch64 linux-aarch64-appimage linux-aarch64-deb; do
+            jq -e --arg k "$key" '.platforms | has($k)' latest.json >/dev/null \
+              || { echo "latest.json offers nothing for $key" >&2; exit 1; }
+          done
+          jq -r '.platforms | keys | join(" ")' latest.json
+          gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
+
   # A draft handed over for review still has to be complete. Each platform uploads its own
   # installers, so a platform that failed would otherwise leave a release that looks finished.
   draft-ready:
     name: Draft is complete (not published)
-    needs: build
+    needs: [build, update-feed]
     if: ${{ always() && inputs.publish != true }}
     runs-on: ubuntu-22.04
     permissions:
@@ -264,11 +369,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag || github.ref_name }}
           BUILD: ${{ needs.build.result }}
+          FEED: ${{ needs.update-feed.result }}
         shell: bash
         run: |
           set -euo pipefail
           if [ "$BUILD" != "success" ]; then
             echo "a platform build did not succeed, so the draft for $TAG is incomplete" >&2
+            exit 1
+          fi
+          if [ "$FEED" != "success" ]; then
+            echo "the update feed wasn't put together, so the draft for $TAG is incomplete" >&2
             exit 1
           fi
           assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
@@ -280,6 +390,18 @@ jobs:
           grep -qE '_(arm64|aarch64)\.AppImage$' <<<"$assets" || missing+=("Linux ARM64 .AppImage")
           grep -qE '_amd64\.deb$'                <<<"$assets" || missing+=("Linux x86_64 .deb")
           grep -qE '_arm64\.deb$'                <<<"$assets" || missing+=("Linux ARM64 .deb")
+          # the update feed, for this version and every platform (not in a fork, which has none)
+          if [ "$GITHUB_REPOSITORY" = "prajwal-svm/folderskin" ]; then
+            if grep -qx 'latest.json' <<<"$assets"; then
+              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -O latest.json --clobber
+              [ "$(jq -r .version latest.json)" = "${TAG#v}" ] || missing+=("a latest.json for ${TAG#v}")
+              for key in darwin-aarch64 darwin-x86_64 windows-x86_64 linux-x86_64 linux-aarch64; do
+                jq -e --arg k "$key" '.platforms | has($k)' latest.json >/dev/null || missing+=("$key in latest.json")
+              done
+            else
+              missing+=("latest.json, the update feed")
+            fi
+          fi
           if ((${#missing[@]})); then
             printf 'the draft for %s is incomplete; missing: %s\n' "$TAG" "${missing[*]}" >&2
             exit 1
@@ -319,6 +441,18 @@ jobs:
           grep -qE '_(arm64|aarch64)\.AppImage$' <<<"$assets" || missing+=("Linux ARM64 .AppImage")
           grep -qE '_amd64\.deb$'                <<<"$assets" || missing+=("Linux x86_64 .deb")
           grep -qE '_arm64\.deb$'                <<<"$assets" || missing+=("Linux ARM64 .deb")
+          # the update feed, for this version and every platform (not in a fork, which has none)
+          if [ "$GITHUB_REPOSITORY" = "prajwal-svm/folderskin" ]; then
+            if grep -qx 'latest.json' <<<"$assets"; then
+              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -O latest.json --clobber
+              [ "$(jq -r .version latest.json)" = "${TAG#v}" ] || missing+=("a latest.json for ${TAG#v}")
+              for key in darwin-aarch64 darwin-x86_64 windows-x86_64 linux-x86_64 linux-aarch64; do
+                jq -e --arg k "$key" '.platforms | has($k)' latest.json >/dev/null || missing+=("$key in latest.json")
+              done
+            else
+              missing+=("latest.json, the update feed")
+            fi
+          fi
           if ((${#missing[@]})); then
             printf 'refusing to publish %s; missing: %s\n' "$TAG" "${missing[*]}" >&2
             exit 1

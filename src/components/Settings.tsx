@@ -5,8 +5,10 @@ import { prettyPath } from "../lib/files";
 import { isGithubUser, LICENSES, loadSharingPrefs, PACKS_GUIDE_URL, REPO_URL, saveSharingPrefs, type SharingPrefs } from "../lib/packs";
 import type { ThemePref } from "../state/theme";
 import type { ToastTone } from "../hooks/useToasts";
+import type { UpdateStatus } from "../hooks/useUpdates";
 import { Modal } from "./Modal";
 import { ProviderKeys } from "./ProviderKeys";
+import { UpdateButton } from "./UpdateDialog";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { DownloadIcon } from "./icons/download";
 import { FolderOpenIcon } from "./icons/folder-open";
@@ -49,6 +51,9 @@ export function Settings({
   onKeysChanged,
   onClose,
   toast,
+  updates,
+  onCheckUpdates,
+  onShowUpdate,
 }: {
   tab?: SettingsTab;
   themePref: ThemePref;
@@ -62,6 +67,9 @@ export function Settings({
   onKeysChanged: () => void;
   onClose: () => void;
   toast: Toast;
+  updates: UpdateStatus;
+  onCheckUpdates: () => void;
+  onShowUpdate: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>(first);
   return (
@@ -84,7 +92,7 @@ export function Settings({
         {tab === "general" && <General themePref={themePref} onThemePref={onThemePref} fileBrowser={fileBrowser} savedCount={savedCount} />}
         {tab === "ai" && <AiKeys onKeysChanged={onKeysChanged} toast={toast} />}
         {tab === "sharing" && <Sharing />}
-        {tab === "about" && <About note={note} />}
+        {tab === "about" && <About note={note} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
       </div>
     </Modal>
   );
@@ -245,7 +253,17 @@ function Sharing() {
   );
 }
 
-function About({ note }: { note: string }) {
+function About({
+  note,
+  updates,
+  onCheckUpdates,
+  onShowUpdate,
+}: {
+  note: string;
+  updates: UpdateStatus;
+  onCheckUpdates: () => void;
+  onShowUpdate: () => void;
+}) {
   const link = (url: string, label: string, icon: ReactNode) => (
     <button type="button" className="about-link" onClick={() => void openUrl(url).catch(() => {})}>
       {icon}
@@ -266,10 +284,11 @@ function About({ note }: { note: string }) {
       {note && <p className="field-note">{note}</p>}
       <div className="about-links">
         {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
-        {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
+        {link(`${REPO_URL}/issues`, "Report issues", <BadgeAlertIcon size={15} />)}
         {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
-        {link(REPO_URL, "Star on GitHub", <StarIcon size={15} className="about-star" />)}
+        {link(REPO_URL, "Star project", <StarIcon size={15} className="about-star" />)}
       </div>
+      <UpdateButton status={updates} onCheck={onCheckUpdates} onShow={onShowUpdate} />
     </div>
   );
 }

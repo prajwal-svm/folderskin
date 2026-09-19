@@ -52,14 +52,14 @@ Free · Open source · No account · No tracking
 
 ## What stays on your computer
 
-Everything, unless you ask for something that needs the internet. There's no account, no
-paywall and no telemetry, and the macOS app is about 8.5 MB installed.
+Everything except the few things that need the internet. There's no account, no paywall and no
+telemetry, and the macOS app is about 8.8 MB installed.
 
-| Stays on your computer | Goes online only when you ask |
+| Stays on your computer | Goes online |
 | --- | --- |
-| Your folders and the icons FolderSkin writes | An AI request, sent to the provider you picked, with your key |
+| Your folders and the icons FolderSkin writes | An AI request, when you make one: sent to the provider you picked, with your key |
 | Every picture you add and every skin you make | Community and the first launch, which read the shared packs from GitHub |
-| Your AI keys, encrypted | |
+| Your AI keys, encrypted | The update check: when it opens, FolderSkin reads the newest release's version file from GitHub |
 | Favourites, tags and settings | |
 
 ## How to use it
@@ -179,6 +179,10 @@ The first release is still being prepared; until it's out, [build from source](#
 The macOS app is signed and notarized by Apple, so it opens like any other. The Windows installer
 isn't signed yet, so SmartScreen asks first: choose "More info", then "Run anyway". The Linux
 packages need glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later).
+
+Once it's installed, FolderSkin keeps itself up to date: when a new version is out it shows what
+changed, and **Update and restart** installs it. Each update is signed, and the app checks the
+signature before installing anything.
 
 ## Build from source
 

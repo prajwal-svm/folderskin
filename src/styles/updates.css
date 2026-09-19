@@ -1,0 +1,183 @@
+/* Updates: the check in About and Settings, and the dialog that installs a new version. */
+
+/* ---------- the check: one pill that says where things stand ---------- */
+
+.update-check {
+  display: flex;
+}
+
+.about-pop .update-check {
+  margin-top: 6px;
+}
+
+.about-pop .update-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.update-btn.is-current {
+  color: var(--ok-ink);
+}
+
+.update-btn.is-failed {
+  color: var(--danger);
+}
+
+.update-btn.is-available {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.update-btn.is-available:hover,
+.update-btn.is-available:focus-visible {
+  background: color-mix(in srgb, var(--accent) 24%, var(--island));
+}
+
+.update-btn[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: progress;
+}
+
+/* ---------- the dialog ---------- */
+
+.update-notes {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--well);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.update-notes > * + * {
+  margin-top: 8px;
+}
+
+.update-notes-heading {
+  font-weight: 800;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.update-notes > .update-notes-heading:not(:first-child) {
+  margin-top: 14px;
+}
+
+.update-notes ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.update-notes li + li {
+  margin-top: 5px;
+}
+
+.update-notes li::marker {
+  color: var(--hint);
+}
+
+.update-notes strong {
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.update-notes code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--well-2);
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+/* why the update stopped, or that it's in but needs a restart */
+.update-problem {
+  display: flex;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: var(--r-card);
+  background: var(--danger-soft);
+  font-weight: 650;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.update-problem > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--danger);
+}
+
+.update-problem.is-done {
+  background: var(--ok-soft);
+}
+
+.update-problem.is-done > svg {
+  color: var(--ok-ink);
+}
+
+/* a link inside the sentence, flowing with it */
+.update-inline-link {
+  display: inline;
+  padding: 0;
+  border-radius: 4px;
+  font-size: inherit;
+}
+
+/* while it downloads and installs, the buttons give way to how far it has got */
+.update-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 3px 4px;
+}
+
+.update-progress-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.update-bar {
+  display: block;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  overflow: hidden;
+}
+
+.update-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 240ms var(--ease-out);
+}
+
+/* no size to measure against: a stretch of bar travels along instead */
+.update-bar.is-unknown > span {
+  width: 35%;
+  transform: none;
+  animation: update-travel 1.2s var(--ease-in) infinite alternate;
+}
+
+@keyframes update-travel {
+  from {
+    margin-left: 0;
+  }
+  to {
+    margin-left: 65%;
+  }
+}

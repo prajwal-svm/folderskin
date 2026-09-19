@@ -7,7 +7,8 @@ A release is two steps, so nothing reaches users that nobody has tried:
    visible only to people who can push to the repository.
 2. **Publish the draft** once you've tried its installers: Actions → Release → Run workflow, enter
    the tag, tick **Publish the release**. That run builds nothing. It checks that every platform's
-   installers are attached and makes the draft public, so what goes out is exactly what you tried.
+   installers and the update feed are attached and makes the draft public, so what goes out is
+   exactly what you tried. From then on every installed FolderSkin offers the new version.
 
 | Platform | Built on | Installers | Signed |
 | --- | --- | --- | --- |
@@ -16,7 +17,9 @@ A release is two steps, so nothing reaches users that nobody has tried:
 | Linux x86_64 | `ubuntu-22.04` | `.AppImage`, `.deb`, `.rpm` | not needed |
 | Linux ARM64 | `ubuntu-22.04-arm` | `.AppImage`, `.deb`, `.rpm` | not needed |
 
-Both Linux builds run on Ubuntu 22.04, so the packages work with glibc 2.35 or newer.
+Both Linux builds run on Ubuntu 22.04, so the packages work with glibc 2.35 or newer. Every
+installer is also signed with FolderSkin's update key, which the app checks before it installs an
+update (see [Updates](#updates)).
 
 ## Before you tag
 
@@ -33,7 +36,7 @@ Both Linux builds run on Ubuntu 22.04, so the packages work with glibc 2.35 or n
    ```
 
 The **Draft is complete** job at the end of the run lists the installers and fails if a platform
-is missing. The draft is under Releases, marked Draft.
+or the update feed is missing. The draft is under Releases, marked Draft.
 
 ## Signing
 
@@ -102,8 +105,39 @@ It should say `source=Notarized Developer ID`. `codesign -dv --verbose=4 /Applic
 shows the identity, and `codesign -d --entitlements - /Applications/FolderSkin.app` the two keys
 above.
 
-## Not set up yet
+### Updates
 
-FolderSkin has no in-app updater, so there is no update feed to sign. If it gets one, Oleafly's
-`TAURI_SIGNING_PRIVATE_KEY` could sign it too, or it can have its own key pair
-(`pnpm tauri signer generate`).
+Every installed FolderSkin reads the newest public release's `latest.json` a few seconds after it
+opens (`plugins.updater` in `src-tauri/tauri.conf.json`), and installs a download only if it's
+signed with FolderSkin's update key. The public half is the `pubkey` there; the private half is a
+repository secret, and it's FolderSkin's own, not Oleafly's.
+
+| Secret | Value |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | the private key file's contents |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password; leave it unset for a key made without one |
+
+The key goes in straight from its file, so it never appears on screen:
+
+```sh
+gh secret set TAURI_SIGNING_PRIVATE_KEY --repo prajwal-svm/folderskin < path/to/folderskin.key
+```
+
+With the secret set, each platform's build signs its installers and writes its part of the feed.
+The **Update feed** job puts the four parts into one `latest.json`, with the version's notes from
+`CHANGELOG.md`, and attaches it to the draft. The draft and publish checks refuse a release
+without it. A tag build in this repository stops at the signing step while the secret is missing;
+a fork builds without a feed.
+
+Keep the private key somewhere safe, such as a password manager, as well as in the secret: GitHub
+never shows it again, and without it no later version can reach people who already have
+FolderSkin. If it leaks, make a new pair with `pnpm tauri signer generate -w <file>`, put the new
+public key in `tauri.conf.json` and the new private key in the secret. Copies with the old public
+key then need one manual install of a release signed with the new key.
+
+Publishing is what turns an update on, because the app asks for `releases/latest`, which skips
+drafts. To watch it work, install the previous release, publish the new one and open the old copy:
+a few seconds later it offers the update.
+
+Local builds (`pnpm tauri build`) make no update files and need no key; only the release workflow
+turns `createUpdaterArtifacts` on.

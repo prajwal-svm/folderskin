@@ -155,7 +155,7 @@ drop in a webview cannot expose a filesystem path. Browsing uses the dialog plug
 
 What persists: the saved skins, that thumbnail, the onboarding marker (below), the AI keys
 ([AI.md](AI.md)) and the favourites list in the webview's `localStorage`. There is no database,
-and no network access outside the AI assistant and the community packs.
+and no network access outside the AI assistant, the community packs and the update check.
 
 ## Saved skins
 
@@ -311,13 +311,35 @@ one path where the icon's geometry is not ours, which is why a whole-folder gene
 the model our own blank template to repaint whenever the model accepts a picture
 (`compositor::blank_template`).
 
+## Updates
+
+`tauri-plugin-updater` does the work. It reads the newest public release's `latest.json`
+(`plugins.updater` in `tauri.conf.json`), downloads this platform's installer and checks its
+minisign signature against the `pubkey` built into the app before it installs anything.
+`tauri-plugin-process` then restarts into the new version. The page decides when to ask:
+
+- `src/lib/updater.ts` wraps the plugin.
+- `src/hooks/useUpdates.ts` asks a few seconds after a release build opens (never in
+  development), and whenever About or Settings asks.
+- `src/components/UpdateDialog.tsx` shows the notes and the progress. It can't be closed while
+  an update installs.
+
+The plugin's own TLS feature is off. It uses the app's reqwest, with rustls on aws-lc-rs, so
+`ring` isn't compiled in. The signing key and the feed that `.github/workflows/release.yml`
+assembles are covered in [RELEASING.md](RELEASING.md#updates).
+
+A release build is locked down as an app (`src/lib/lockdown.ts`): no right-click menu, and no
+reload or inspector shortcuts. `tauri` has no `devtools` feature, so release builds have no web
+inspector at all.
+
 ## Size budget
 
 Under 15 MB installed. The macOS app bundle (Apple Silicon) is the stripped release binary, the
 1.4 MB app icon and a 1 KB `Info.plist`. The binary carries the Rust code and the frontend,
 which Tauri embeds, including a 165 KB variable font (Manrope) and the first-launch welcome's
 330 KB of pictures. Once FolderSkin stopped shipping skins the binary measured 7.0 MB and the
-bundle 8.5 MB; with 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. `image` is built with `default-features = false` and
+bundle 8.5 MB; with 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. The updater
+added 0.25 MB, to a 7.3 MB binary and an 8.8 MB bundle. `image` is built with `default-features = false` and
 only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one
 codegen unit. Any dependency that would move this budget needs a reason in the pull request.
 

@@ -23,6 +23,7 @@ export function Sidebar({
   onToggleTheme,
   onAboutHover,
   aboutOpen,
+  updateReady,
   onSettings,
   settingsOpen,
 }: {
@@ -36,6 +37,8 @@ export function Sidebar({
   /** The pointer or focus came to the version badge (true) or left it (false). */
   onAboutHover: (open: boolean) => void;
   aboutOpen: boolean;
+  /** A newer FolderSkin is waiting: the badge wears a dot until it's installed. */
+  updateReady: boolean;
   onSettings: () => void;
   settingsOpen: boolean;
 }) {
@@ -67,7 +70,7 @@ export function Sidebar({
           </span>
           <button
             type="button"
-            className="brand-version"
+            className={updateReady ? "brand-version has-update" : "brand-version"}
             aria-label="about FolderSkin"
             aria-expanded={aboutOpen}
             onMouseDown={(e) => e.preventDefault()}

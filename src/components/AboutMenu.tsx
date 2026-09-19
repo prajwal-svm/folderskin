@@ -1,10 +1,13 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { REPO_URL } from "../lib/packs";
+import type { UpdateStatus } from "../hooks/useUpdates";
+import { UpdateButton } from "./UpdateDialog";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { GithubIcon } from "./icons/github";
 import { StarIcon } from "./icons/star";
 
-const REPO_URL = "https://github.com/prajwal-svm/folderskin";
+const open = (url: string) => void openUrl(url).catch(() => {});
 
 /**
  * About FolderSkin, under the version badge beside the logo. It opens while the badge is hovered
@@ -12,20 +15,26 @@ const REPO_URL = "https://github.com/prajwal-svm/folderskin";
  */
 export function AboutMenu({
   note,
-  open,
+  open: shown,
   onHover,
   onClose,
+  updates,
+  onCheckUpdates,
+  onShowUpdate,
 }: {
   note: string;
   open: boolean;
   /** The pointer or focus came into the popover (true) or left it (false). */
   onHover: (inside: boolean) => void;
   onClose: () => void;
+  updates: UpdateStatus;
+  onCheckUpdates: () => void;
+  onShowUpdate: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!shown) return;
     const close = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (ref.current && !ref.current.contains(t) && !t.closest('[aria-label="about FolderSkin"]')) onClose();
@@ -37,11 +46,11 @@ export function AboutMenu({
       document.removeEventListener("mousedown", close);
       document.removeEventListener("keydown", esc);
     };
-  }, [open, onClose]);
+  }, [shown, onClose]);
 
-  if (!open) return null;
+  if (!shown) return null;
   const link = (url: string, label: string, icon: ReactNode) => (
-    <button type="button" className="about-link" onClick={() => void openUrl(url).catch(() => {})}>
+    <button type="button" className="about-link" onClick={() => open(url)}>
       {icon}
       {label}
     </button>
@@ -57,16 +66,23 @@ export function AboutMenu({
       onFocus={() => onHover(true)}
       onBlur={() => onHover(false)}
     >
-      <p className="about-title">
-        Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
-      </p>
-      <p className="about-line">Free and open source · MIT</p>
+      <div className="about-head">
+        <div className="about-head-text">
+          <p className="about-title">
+            Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
+          </p>
+          <p className="about-line">Free and open source · MIT</p>
+        </div>
+        <button type="button" className="icon-btn about-source has-tip" aria-label="View Source" data-tip="View Source" onClick={() => open(REPO_URL)}>
+          <GithubIcon size={18} />
+        </button>
+      </div>
       {note && <p className="about-note">{note}</p>}
       <div className="about-links">
-        {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
-        {link(`${REPO_URL}/issues`, "Report a problem", <BadgeAlertIcon size={15} />)}
-        {link(REPO_URL, "Star on GitHub", <StarIcon size={15} className="about-star" />)}
+        {link(`${REPO_URL}/issues`, "Report issues", <BadgeAlertIcon size={15} />)}
+        {link(REPO_URL, "Star project", <StarIcon size={15} className="about-star" />)}
       </div>
+      <UpdateButton status={updates} onCheck={onCheckUpdates} onShow={onShowUpdate} />
     </div>
   );
 }
