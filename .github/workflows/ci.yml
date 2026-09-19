@@ -115,7 +115,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
         with:
           tool: cargo-llvm-cov@0.8.7
 
@@ -206,13 +206,13 @@ jobs:
           fetch-depth: 0
 
       - name: Download the frontend coverage
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-coverage
           path: coverage/frontend
 
       - name: Download the Rust coverage
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: rust-coverage
           path: coverage/rust
