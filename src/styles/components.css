@@ -22,6 +22,11 @@
     opacity var(--t-fast) ease;
 }
 
+/* an icon keeps its size when a long label is cut short beside it */
+.btn > svg {
+  flex: none;
+}
+
 .btn:active:not(:disabled) {
   transform: scale(0.97);
 }
@@ -189,6 +194,13 @@
   font-weight: 700;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* a chip's words, cut with an ellipsis when a long name doesn't fit (bare text in a flex box can't be) */
+.chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chip-accent {
@@ -456,8 +468,10 @@
   transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
 }
 
+/* background-color, not the shorthand: `background` would wipe the background-image that draws
+   a select's chevron, so the arrow vanished under the pointer. */
 .input:hover {
-  background: var(--well-2);
+  background-color: var(--well-2);
 }
 
 .input:focus,
@@ -629,17 +643,37 @@ select.input {
 }
 
 /* the name reads as the menu's title and turns into a field when pointed at */
-.skin-menu-name {
-  width: 100%;
-  height: 34px;
-  padding: 0 8px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink);
+/* A pack's skin: its name is shown, not offered for editing. */
+.skin-menu-title {
+  margin: 0;
+  padding: 0 2px;
   font-weight: 800;
   font-size: 15px;
   letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.skin-menu-field {
+  position: relative;
+}
+
+/* A field at rest too, like the tag field below it, so the name reads as one to change. */
+.skin-menu-name {
+  width: 100%;
+  height: 36px;
+  padding: 0 32px 0 10px;
+  border-radius: var(--r-control);
+  border: 1px solid transparent;
+  background: var(--well);
+  color: var(--ink);
+  font-weight: 750;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
   cursor: text;
   user-select: text;
   -webkit-user-select: text;
@@ -647,12 +681,27 @@ select.input {
 }
 
 .skin-menu-name:hover {
-  background: var(--well);
+  background: var(--well-2);
 }
 
 .skin-menu-name:focus {
   border-color: var(--accent);
   background: var(--island);
+}
+
+.skin-menu-pencil {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  display: flex;
+  color: var(--hint);
+  transform: translateY(-50%);
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.skin-menu-name:focus + .skin-menu-pencil {
+  opacity: 0;
 }
 
 .skin-menu-label {
@@ -914,6 +963,13 @@ select.input {
   object-fit: contain;
 }
 
+.share-one span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* sharing a pack: the skins going in, then the steps on GitHub */
 .share-thumbs {
   display: flex;
@@ -985,6 +1041,8 @@ select.input {
 
 .modal-title {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: 800;
   font-size: 17px;
   letter-spacing: -0.02em;

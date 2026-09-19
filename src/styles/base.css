@@ -59,7 +59,7 @@ summary {
 
 button:disabled,
 [aria-disabled="true"] {
-  cursor: default;
+  cursor: not-allowed;
 }
 
 [aria-busy="true"],
@@ -67,9 +67,22 @@ button[aria-busy="true"] {
   cursor: progress;
 }
 
-input:not([type="checkbox"]):not([type="radio"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 textarea {
   cursor: text;
+}
+
+/* A slider is dragged, not typed into: the hand over its track and its thumb alike. */
+input[type="range"],
+input[type="range"]::-webkit-slider-runnable-track,
+input[type="range"]::-webkit-slider-thumb {
+  cursor: pointer;
+}
+
+input[type="range"]:disabled,
+input[type="range"]:disabled::-webkit-slider-runnable-track,
+input[type="range"]:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
 }
 
 input,
@@ -98,10 +111,22 @@ p {
   height: 10px;
 }
 
+/* Every scroller shows its scrollbar only while the pointer is over it, and keeps the track's
+   width either way, so nothing moves when the thumb appears. The thumb's colour is a variable an
+   element sets on itself while hovered; `*` gives every element its own, so a scroller can't
+   inherit a colour from an ancestor the pointer happens to be in. */
+* {
+  --scroll-thumb: transparent;
+}
+
+*:hover {
+  --scroll-thumb: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--ink) 16%, transparent) padding-box;
+  background: var(--scroll-thumb) padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -110,25 +135,6 @@ p {
 
 ::-webkit-scrollbar-track {
   background: transparent;
-}
-
-/* A scroller whose scrollbar shows only while the pointer is over it. The track keeps its width,
-   so nothing moves when the thumb appears. The thumb's colour is a variable the scroller's own
-   :hover sets: hovering restyles the scroller itself, and its scrollbar is redrawn with it. */
-.scroll-on-hover {
-  --scroll-thumb: transparent;
-}
-
-.scroll-on-hover:hover {
-  --scroll-thumb: color-mix(in srgb, var(--ink) 16%, transparent);
-}
-
-.scroll-on-hover::-webkit-scrollbar-thumb {
-  background-color: var(--scroll-thumb);
-}
-
-.scroll-on-hover::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--ink) 28%, transparent);
 }
 
 /* ---------- shared keyframes ---------- */

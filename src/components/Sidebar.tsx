@@ -5,11 +5,12 @@ import { FolderOpenIcon } from "./icons/folder-open";
 import { ImageIcon } from "./icons/image";
 import { LayoutGridIcon } from "./icons/layout-grid";
 import { MoonIcon } from "./icons/moon";
+import { PaletteIcon } from "./icons/palette";
 import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 
-export type View = "skins" | "yours" | "faves" | "community" | "generate";
+export type View = "skins" | "yours" | "faves" | "compose" | "generate" | "community";
 
 type Item = { id: View; label: string; icon: ReactNode; badge?: string | number };
 
@@ -55,11 +56,15 @@ export function Sidebar({
       ],
     },
     {
-      title: "Explore",
+      title: "Create",
       items: [
-        { id: "community", label: "Community", icon: <EarthIcon size={18} /> },
+        { id: "compose", label: "Design your own", icon: <PaletteIcon size={18} /> },
         { id: "generate", label: "Generate with AI", icon: <SparklesIcon size={18} /> },
       ],
+    },
+    {
+      title: "Explore",
+      items: [{ id: "community", label: "Community", icon: <EarthIcon size={18} /> }],
     },
   ];
   const dark = theme === "dark";

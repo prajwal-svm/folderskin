@@ -448,7 +448,7 @@ pub async fn export_pack(
             let (entry, _) = state
                 .find_saved(skin_id)
                 .ok_or_else(|| "one of those skins isn't saved any more".to_string())?;
-            if !matches!(entry.source, SkinSource::Import | SkinSource::Ai) {
+            if entry.source == SkinSource::Community {
                 return Err(format!(
                     "{} came from someone else's pack, so it can't go in yours",
                     entry.name

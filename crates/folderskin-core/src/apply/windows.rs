@@ -6,7 +6,10 @@
 //! [`desktop_ini_contents`] and [`desktop_ini_without_ours`], which edit only our own two
 //! lines and leave every other key where it was. Those two functions are pure and compile on
 //! every OS, so the logic that could eat a user's file is unit-tested everywhere rather than
-//! only on Windows.
+//! only on Windows. So is [`prepare`], which packs the `.ico` once for any number of folders.
+
+use super::ApplyError;
+use crate::compositor::IconSet;
 
 /// The icon file FolderSkin writes into the folder.
 pub const ICO_NAME: &str = "folderskin.ico";
@@ -25,6 +28,20 @@ const ICON_RESOURCE: &str = "IconResource";
 /// The `IconResource` line FolderSkin writes.
 fn our_icon_line() -> String {
     format!("{ICON_RESOURCE}={ICO_NAME},0")
+}
+
+/// The bytes of `folderskin.ico` for `icons`: every size in [`ICO_SIZES`] the set has.
+pub fn prepare(icons: &IconSet) -> Result<Vec<u8>, ApplyError> {
+    let entries: Vec<(u32, Vec<u8>)> = ICO_SIZES
+        .iter()
+        .filter_map(|&size| icons.png(size).map(|png| (size, png)))
+        .collect();
+    if entries.is_empty() {
+        return Err(ApplyError::Platform(
+            "the rendered icon has no size Windows can use".into(),
+        ));
+    }
+    Ok(crate::ico::write_ico(&entries))
 }
 
 /// `desktop.ini` contents that point Explorer at `folderskin.ico`.
@@ -200,12 +217,9 @@ pub use imp::{apply, has_custom_icon, revert};
 
 #[cfg(windows)]
 mod imp {
-    use super::{
-        desktop_ini_contents, desktop_ini_without_ours, would_revert, ICO_NAME, ICO_SIZES, INI_NAME,
-    };
+    use super::{desktop_ini_contents, desktop_ini_without_ours, would_revert, ICO_NAME, INI_NAME};
     use crate::apply::paths::{read_text_if_present, write_atomic};
     use crate::apply::ApplyError;
-    use crate::compositor::IconSet;
     use std::ffi::{c_void, OsStr};
     use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
@@ -216,18 +230,9 @@ mod imp {
         SHChangeNotify, SHCNE_UPDATEDIR, SHCNE_UPDATEITEM, SHCNF_FLUSH, SHCNF_PATHW,
     };
 
-    /// Writes `folderskin.ico` and a `desktop.ini` that points at it, then tells Explorer.
-    pub fn apply(folder: &Path, icons: &IconSet) -> Result<(), ApplyError> {
-        let entries: Vec<(u32, Vec<u8>)> = ICO_SIZES
-            .iter()
-            .filter_map(|&size| icons.png(size).map(|png| (size, png)))
-            .collect();
-        if entries.is_empty() {
-            return Err(ApplyError::Platform(
-                "the rendered icon has no size Windows can use".into(),
-            ));
-        }
-
+    /// Writes `folderskin.ico` (the [`prepare`](super::prepare)d bytes) and a `desktop.ini`
+    /// that points at it, then tells Explorer.
+    pub fn apply(folder: &Path, ico_bytes: &[u8]) -> Result<(), ApplyError> {
         let ico = folder.join(ICO_NAME);
         let ini = folder.join(INI_NAME);
 
@@ -238,7 +243,7 @@ mod imp {
         clear_attributes(&ico);
         clear_attributes(&ini);
 
-        write_atomic(&ico, &crate::ico::write_ico(&entries))?;
+        write_atomic(&ico, ico_bytes)?;
         let existing = read_text_if_present(&ini)?;
         write_atomic(&ini, desktop_ini_contents(existing.as_deref()).as_bytes())?;
 

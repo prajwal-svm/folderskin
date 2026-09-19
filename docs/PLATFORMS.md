@@ -59,8 +59,11 @@ custom icon), since those are all a revert takes off. Setting an icon needs writ
 to the folder, so folders on read-only volumes and inside some sandboxed locations are
 refused with the reason the OS gave.
 
-`NSWorkspace.setIcon` is thread-safe, so the app calls it off the main thread and the window
-keeps animating while a slow disk finishes the write.
+`NSWorkspace.setIcon` works off the main thread, so the app calls it there and the window keeps
+animating while a slow disk finishes the write. It isn't safe on two threads at once, though:
+overlapping calls garble each other's `Icon\r` (a 37 KB icon came out as 286 bytes) or fail, so
+every change of a folder's icon takes one lock for the whole process, and each runs in its own
+autorelease pool so a long run over subfolders doesn't hold on to every folder's icon data.
 
 The window is transparent over the system's sidebar material (`NSVisualEffectView`), which is
 what makes the sidebar translucent; the light/dark switch sets the window's appearance so the
@@ -98,6 +101,27 @@ default icon until `gio` is available.
 
 `Icon=` must be an absolute path, so a skinned folder that is moved or renamed loses its
 icon. Apply again after moving it.
+
+## A folder and its subfolders
+
+With **Include subfolders** on, every folder in the tree gets exactly what a single apply
+writes, as if each had been applied on its own: the `Icon\r` on macOS, `desktop.ini` and
+`folderskin.ico` on Windows, `.directory` and `.folderskin.png` on Linux. Each folder keeps its
+own copy, so the space adds up: on macOS a painted skin takes about 2.7 MB a folder, because
+macOS stores the icon in its own, larger encoding, and the confirmation before a run over more
+than ten folders gives the total. On Windows and Linux a copy is the icon file plus a disk block
+for the text file.
+
+The run leaves alone, along with everything inside them: symlinks and junctions, folders whose
+names start with a dot, folders the OS hides (Finder's hidden flag; Windows' hidden or system
+attribute), packages such as apps, photo and music libraries, Xcode projects and Keynote or
+Pages documents, and the system locations listed under Known limits. At most 5,000 folders go in
+one run. On a Mac a folder takes about a tenth of a second to skin and a thousandth to revert.
+
+Reverting a run takes off exactly the folders it changed. Reverting the whole tree instead
+(**Remove custom icons**, with the switch on) takes the custom icon off every folder that has one:
+on macOS that is any custom icon, whoever set it, as with a single folder; on Windows and Linux
+it is only FolderSkin's own files, as always. Cloud-synced trees sync every folder's copy.
 
 ## Known limits
 

@@ -14,10 +14,16 @@
  * does; `?update=fail` stops its download halfway and `?update=offline` can't check at all.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
+import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
+import { FALLBACK_PARTS } from "../composer/parts";
 import type {
   AiCatalogue,
   AiGenerateRequest,
   CommunityPack,
+  ComposerImage,
+  ComposerSaved,
+  ComposerSaveHeader,
+  ComposerTemplate,
   ExportPackRequest,
   FolderIcon,
   PackProgress,
@@ -29,7 +35,9 @@ import type {
   SkinList,
 } from "./tauri";
 import type { AvailableUpdate } from "./updater";
+import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import { cleanName } from "./names";
+import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
 
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
@@ -127,13 +135,63 @@ function keep(skins: Skin[]) {
 const packAdded = (id: string) => library.some((s) => s.pack === id);
 
 /** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried. */
-const SAMPLE_FOLDERS = ["/Users/you/Documents/Projects", "/Users/you/Pictures/Wedding", "/Users/you/Desktop/Taxes 2026"];
+const SAMPLE_FOLDERS = ["/Users/you/Documents/Projects", "/Users/you/Pictures/Wedding", "/Users/you/Desktop/Taxes 2026", "/Users/you/Pictures/Photo archive"];
+/** Too big for a run: its switch can't be turned on. */
+const HUGE_TREE = "/Users/you/Pictures/Photo archive";
 let nextSample = 0;
 /**
  * The icon each folder wears in the preview: Projects starts plain and the others with a colour
  * of their own, so a custom icon can be tried. Applying and reverting change it.
  */
 const mockIcons = new Map<string, string | null>(SAMPLE_FOLDERS.map((path, i) => [path, i === 0 ? null : COLOUR_FOLDERS[i]]));
+
+/**
+ * The folders inside each sample folder, for trying "Include subfolders": Projects has plenty,
+ * Wedding has one the preview can't change (to show a partial result), Taxes 2026 has none, and
+ * Photo archive has more than a run takes.
+ */
+const SAMPLE_TREES: Record<string, string[]> = {
+  "/Users/you/Documents/Projects": [
+    "Clients", "Design", "Invoices", "Notes", "Photos", "Research", "Templates", "Videos",
+    "Clients/Acme", "Clients/Globex", "Clients/Initech", "Design/Icons", "Design/Mockups",
+    "Invoices/2025", "Invoices/2026", "Photos/2019", "Photos/2020", "Photos/2021", "Research/Papers",
+    "Templates/Letters", "Videos/Raw", "Videos/Edited", "Clients/Acme/Contracts", "Photos/2021/Holiday",
+  ].map((p) => `/Users/you/Documents/Projects/${p}`),
+  "/Users/you/Pictures/Wedding": ["Ceremony", "Guests", "Private", "Reception", "Ceremony/Rings", "Reception/Speeches"].map(
+    (p) => `/Users/you/Pictures/Wedding/${p}`,
+  ),
+};
+/** Folders in the sample trees that wear an icon of their own. */
+const mockTreeIcons = new Set<string>(["/Users/you/Pictures/Wedding/Guests"]);
+let mockStop = false;
+const lastPart = (path: string) => path.split("/").pop() || path;
+
+async function mockTreeRun(
+  root: string,
+  only: string[] | null,
+  onProgress: (p: TreeProgress) => void,
+  act: (path: string) => "changed" | "skipped" | string,
+): Promise<TreeRunResult> {
+  mockStop = false;
+  const plan = only ?? [root, ...(SAMPLE_TREES[root] ?? [])];
+  const result: TreeRunResult = { total: plan.length, changed: [], failed: [], skipped: 0, remaining: [], stopped: false };
+  onProgress({ done: 0, total: plan.length, name: lastPart(root) });
+  for (let i = 0; i < plan.length; i++) {
+    if (mockStop) {
+      result.stopped = true;
+      result.remaining = plan.slice(i);
+      break;
+    }
+    await sleep(140);
+    const path = plan[i];
+    const outcome = act(path);
+    if (outcome === "changed") result.changed.push(path);
+    else if (outcome === "skipped") result.skipped += 1;
+    else result.failed.push({ path, name: lastPart(path), reason: outcome });
+    onProgress({ done: i + 1, total: plan.length, name: lastPart(path) });
+  }
+  return result;
+}
 
 /** The next sample folder, for the preview's "choose a folder". */
 export function mockPickFolder(): string {
@@ -182,12 +240,93 @@ export async function mockFindUpdate(): Promise<AvailableUpdate | null> {
   };
 }
 
+/**
+ * The composer's folder layers in the browser preview: the same pictures the Rust side makes, as
+ * `folderskin-tools composer-layers` wrote them into docs/images/composer (served in dev only).
+ */
+const MOCK_TEMPLATE_URLS = {
+  back: "/docs/images/composer/back.png",
+  front: "/docs/images/composer/front.png",
+  middle: "/docs/images/composer/middle.png",
+  top: "/docs/images/composer/top.png",
+  outline: "/docs/images/composer/outline.png",
+};
+let mockTemplate: Promise<TemplateImages> | null = null;
+const templateImages = () => (mockTemplate ??= loadTemplate(MOCK_TEMPLATE_URLS));
+
+/** Designs "saved" in the browser preview, by skin id, so Edit design can be tried. */
+const mockDesigns = new Map<string, unknown>();
+
+function base64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+function loadImg(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("couldn't read that picture"));
+    img.src = src;
+  });
+}
+
+/** What the Rust side would render for a design: on the folder, or as it is for a free icon. */
+async function mockIcon(png: Uint8Array, shape: "folder" | "free", size: number): Promise<string> {
+  const img = await loadImg(`data:image/png;base64,${base64(png)}`);
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingQuality = "high";
+  if (shape === "folder") drawOnFolder(ctx, img, await templateImages(), size, document.createElement("canvas"));
+  else ctx.drawImage(img, 0, 0, size, size);
+  return c.toDataURL("image/png");
+}
+
+/** A made-up photo for "Choose a picture…" in the browser: a lake at sunset, no file needed. */
+function mockPhoto(): ComposerImage {
+  const c = document.createElement("canvas");
+  c.width = 1600;
+  c.height = 1000;
+  const g = c.getContext("2d")!;
+  const sky = g.createLinearGradient(0, 0, 0, 640);
+  sky.addColorStop(0, "#2b1f5c");
+  sky.addColorStop(0.55, "#e0628a");
+  sky.addColorStop(1, "#ffbf6b");
+  g.fillStyle = sky;
+  g.fillRect(0, 0, 1600, 640);
+  g.fillStyle = "#fff1c9";
+  g.beginPath();
+  g.arc(1040, 560, 120, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#3b2a57";
+  g.beginPath();
+  g.moveTo(0, 640);
+  g.bezierCurveTo(300, 420, 560, 560, 820, 500);
+  g.bezierCurveTo(1100, 440, 1320, 560, 1600, 470);
+  g.lineTo(1600, 1000);
+  g.lineTo(0, 1000);
+  g.fill();
+  const lake = g.createLinearGradient(0, 640, 0, 1000);
+  lake.addColorStop(0, "#f39a7d");
+  lake.addColorStop(1, "#40285f");
+  g.fillStyle = lake;
+  g.fillRect(0, 700, 1600, 300);
+  return { url: c.toDataURL("image/jpeg", 0.9), width: 1600, height: 1000, name: "Lake at sunset", alpha: false };
+}
+
 export const mockApi = {
   listSkins: async (): Promise<SkinList> => ({
     skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
     default_thumbnail: COLOUR_FOLDERS[0],
   }),
-  inspectPath: async (path: string): Promise<PathInfo> => ({ kind: "folder", name: path.split(/[\\/]/).pop() || path, path }),
+  inspectPath: async (path: string): Promise<PathInfo> => ({
+    kind: isImagePath(path) ? "image" : "folder",
+    name: path.split(/[\\/]/).pop() || path,
+    path,
+  }),
   importImage: async (path: string): Promise<Skin> => {
     await sleep(500);
     const name = (path.split(/[\\/]/).pop() || "Your picture").replace(/\.[^.]+$/, "");
@@ -204,6 +343,39 @@ export const mockApi = {
     mockIcons.set(folder, null);
   },
   platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
+  subfolderCount: async (folder: string): Promise<Subfolders> => {
+    await sleep(260);
+    if (folder === HUGE_TREE) return { count: 5000, more: true };
+    return { count: SAMPLE_TREES[folder]?.length ?? 0, more: false };
+  },
+  treeBytes: async (_skinId: string): Promise<number> => {
+    await sleep(200);
+    // What the app measured for a painted skin on macOS.
+    return 2_670_631;
+  },
+  applySkinTree: async (folder: string, skinId: string, only: string[] | null, onProgress: (p: TreeProgress) => void): Promise<TreeRunResult> => {
+    const thumb = library.find((s) => s.id === skinId)?.thumbnail ?? null;
+    const result = await mockTreeRun(folder, only, onProgress, (path) => {
+      if (path.endsWith("/Private")) return "you don't have permission to change it";
+      mockTreeIcons.add(path);
+      return "changed";
+    });
+    if (result.changed.includes(folder)) mockIcons.set(folder, thumb);
+    return result;
+  },
+  revertSkinTree: async (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void): Promise<TreeRunResult> => {
+    const result = await mockTreeRun(folder, only, onProgress, (path) => {
+      const has = mockTreeIcons.has(path) || (path === folder && mockIcons.get(folder) != null);
+      if (!only && !has) return "skipped";
+      mockTreeIcons.delete(path);
+      return "changed";
+    });
+    if (result.changed.includes(folder)) mockIcons.set(folder, null);
+    return result;
+  },
+  stopTreeRun: async () => {
+    mockStop = true;
+  },
   folderIcon: async (path: string): Promise<FolderIcon> => {
     await sleep(120);
     const custom = mockIcons.get(path) ?? null;
@@ -346,6 +518,45 @@ export const mockApi = {
     mockKeys.delete(provider);
   },
   aiTestKey: async () => {},
+  composerTemplate: async (): Promise<ComposerTemplate> => ({ size: 1024, ...MOCK_TEMPLATE_URLS, parts: FALLBACK_PARTS }),
+  composerSave: async (header: ComposerSaveHeader, png: Uint8Array): Promise<ComposerSaved> => {
+    await sleep(500);
+    const old = header.replaces ? library.find((s) => s.id === header.replaces) : undefined;
+    const skin: Skin = {
+      id: `user:c${Date.now().toString(16)}`,
+      name: cleanName(header.name) || "My design",
+      collection: "yours",
+      thumbnail: await mockIcon(png, header.shape, 512),
+      custom: true,
+      kind: "folder",
+      source: "composer",
+      created_at: old?.created_at ?? Date.now(),
+      tags: cleanTags(header.tags),
+    };
+    mockDesigns.set(skin.id, header.design);
+    if (old) {
+      library = library.map((s) => (s.id === old.id ? skin : s));
+      mockDesigns.delete(old.id);
+    } else keep([skin]);
+    return { skin, replaced: old ? old.id : null };
+  },
+  composerPreview: async (shape: "folder" | "free", sizes: number[], png: Uint8Array): Promise<string[]> =>
+    Promise.all(sizes.map((size) => mockIcon(png, shape, size))),
+  composerImage: async (_path: string): Promise<ComposerImage> => {
+    await sleep(250);
+    return mockPhoto();
+  },
+  composerSkinImage: async (skinId: string): Promise<ComposerImage> => {
+    const skin = library.find((s) => s.id === skinId);
+    if (!skin) throw "that skin isn't available any more";
+    const img = await loadImg(skin.thumbnail);
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext("2d")!.drawImage(img, 0, 0);
+    return { url: c.toDataURL("image/png"), width: c.width, height: c.height, name: skin.name, alpha: true };
+  },
+  composerDesign: async (skinId: string): Promise<unknown> => mockDesigns.get(skinId) ?? null,
   aiGenerate: async (_req: AiGenerateRequest): Promise<Skin> => {
     await sleep(4200);
     const name = _req.idea.split(/\s+/).slice(0, 4).join(" ");

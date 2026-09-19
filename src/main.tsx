@@ -11,6 +11,7 @@ import "./styles/shell.css";
 import "./styles/gallery.css";
 import "./styles/stage.css";
 import "./styles/studio.css";
+import "./styles/composer.css";
 import "./styles/community.css";
 import "./styles/onboarding.css";
 import "./styles/updates.css";

@@ -12,48 +12,68 @@
 //! clear the icon first, so every apply goes from no icon to the new one, which Finder does
 //! redraw (developer.apple.com/forums/thread/788252). After any change Finder is also told the
 //! folder and the folder around it changed.
+//!
+//! Building the image ([`prepare`]) is separate from attaching it ([`apply`]), so a whole tree
+//! of folders shares one image rather than encoding the same icon again for every folder.
+//!
+//! `setIcon` works off the main thread, but not on two threads at once: calls that overlap
+//! garble each other's `Icon\r` (a 37 KB icon came out as 286 bytes) or fail outright. An apply,
+//! a tree of them and a measurement can all be running together, so every change here takes one
+//! lock for the whole process.
 
 use super::ApplyError;
 use crate::compositor::IconSet;
+use objc2::rc::{autoreleasepool, Retained};
 use objc2::AnyThread;
 use objc2_app_kit::{NSBitmapImageRep, NSImage, NSWorkspace, NSWorkspaceIconCreationOptions};
 use objc2_foundation::{NSData, NSSize, NSString};
 use std::path::Path;
+use std::sync::Mutex;
 
 /// Point size of the image the reps hang off; the largest rep is the 1:1 one.
 const IMAGE_POINTS: f64 = 1024.0;
 /// Largest representation macOS has any use for in a folder icon.
 const MAX_REP: u32 = 1024;
 
-/// Attaches `icons` to `folder` as its custom Finder icon.
-pub fn apply(folder: &Path, icons: &IconSet) -> Result<(), ApplyError> {
-    let image = NSImage::initWithSize(NSImage::alloc(), NSSize::new(IMAGE_POINTS, IMAGE_POINTS));
+/// The icon as the one `NSImage` macOS wants: a representation per rendered size up to
+/// [`MAX_REP`].
+pub fn prepare(icons: &IconSet) -> Result<Retained<NSImage>, ApplyError> {
+    // The PNG round trip leaves temporaries in the current pool; drain them here rather than
+    // whenever the calling thread happens to end.
+    autoreleasepool(|_| {
+        let image =
+            NSImage::initWithSize(NSImage::alloc(), NSSize::new(IMAGE_POINTS, IMAGE_POINTS));
 
-    let mut reps = 0usize;
-    for &(size, _) in &icons.sizes {
-        if size > MAX_REP {
-            continue;
+        let mut reps = 0usize;
+        for &(size, _) in &icons.sizes {
+            if size > MAX_REP {
+                continue;
+            }
+            let png = icons
+                .png(size)
+                .ok_or_else(|| ApplyError::Platform(format!("the icon has no {size} px size")))?;
+            let data = NSData::with_bytes(&png);
+            let rep = NSBitmapImageRep::imageRepWithData(&data).ok_or_else(|| {
+                ApplyError::Platform(format!("macOS could not read the {size} px icon"))
+            })?;
+            // Without this the rep reports its own pixel size in points and AppKit treats the
+            // small reps as tiny images rather than as the small-size artwork.
+            rep.setSize(NSSize::new(f64::from(size), f64::from(size)));
+            image.addRepresentation(&rep);
+            reps += 1;
         }
-        let png = icons
-            .png(size)
-            .ok_or_else(|| ApplyError::Platform(format!("the icon has no {size} px size")))?;
-        let data = NSData::with_bytes(&png);
-        let rep = NSBitmapImageRep::imageRepWithData(&data).ok_or_else(|| {
-            ApplyError::Platform(format!("macOS could not read the {size} px icon"))
-        })?;
-        // Without this the rep reports its own pixel size in points and AppKit treats the
-        // small reps as tiny images rather than as the small-size artwork.
-        rep.setSize(NSSize::new(f64::from(size), f64::from(size)));
-        image.addRepresentation(&rep);
-        reps += 1;
-    }
-    if reps == 0 {
-        return Err(ApplyError::Platform(
-            "the rendered icon has no size macOS can use".into(),
-        ));
-    }
+        if reps == 0 {
+            return Err(ApplyError::Platform(
+                "the rendered icon has no size macOS can use".into(),
+            ));
+        }
+        Ok(image)
+    })
+}
 
-    set_icon(folder, Some(&image))
+/// Attaches a [`prepare`]d image to `folder` as its custom Finder icon.
+pub fn apply(folder: &Path, image: &NSImage) -> Result<(), ApplyError> {
+    set_icon(folder, Some(image))
 }
 
 /// Clears `folder`'s custom icon, putting the system folder icon back.
@@ -87,27 +107,70 @@ pub fn has_custom_icon(folder: &Path) -> bool {
 /// The extended attribute macOS keeps a file's or folder's Finder flags in.
 const FINDER_INFO: &std::ffi::CStr = c"com.apple.FinderInfo";
 
+/// Held for every change of a folder's icon: `setIcon` calls must not overlap.
+static SET_ICON: Mutex<()> = Mutex::new(());
+
 /// The one call that changes a folder's icon; `None` reverts it.
+///
+/// Each change holds [`SET_ICON`], and runs in its own autorelease pool: the icon data AppKit
+/// encodes for a folder is megabytes, and a tree of folders is changed one after another on one
+/// thread, which would otherwise hold every folder's copy until the thread ends.
 fn set_icon(folder: &Path, image: Option<&NSImage>) -> Result<(), ApplyError> {
-    let workspace = NSWorkspace::sharedWorkspace();
-    let path = NSString::from_str(&folder.to_string_lossy());
-    let options = NSWorkspaceIconCreationOptions::empty();
-    if image.is_some() {
-        // Clearing an icon that isn't there is harmless, and if clearing fails, so does the set.
-        workspace.setIcon_forFile_options(None, &path, options);
-    }
-    let ok = workspace.setIcon_forFile_options(image, &path, options);
-    if !ok {
-        return Err(ApplyError::Platform(
-            "macOS refused to change this folder's icon (is it writable?)".into(),
-        ));
-    }
-    workspace.noteFileSystemChanged_(&path);
-    if let Some(parent) = folder.parent() {
-        workspace.noteFileSystemChanged_(&NSString::from_str(&parent.to_string_lossy()));
-    }
-    Ok(())
+    // A panic while holding the lock leaves nothing half-done that the next caller could trip
+    // over, so a poisoned lock is simply taken.
+    let _one_at_a_time = SET_ICON
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    autoreleasepool(|_| {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let path = NSString::from_str(&folder.to_string_lossy());
+        let options = NSWorkspaceIconCreationOptions::empty();
+        if image.is_some() {
+            // Clearing an icon that isn't there is harmless, and if clearing fails, so does
+            // the set.
+            workspace.setIcon_forFile_options(None, &path, options);
+        }
+        let ok = workspace.setIcon_forFile_options(image, &path, options);
+        if !ok {
+            return Err(ApplyError::Platform(
+                "macOS refused to change this folder's icon (is it writable?)".into(),
+            ));
+        }
+        workspace.noteFileSystemChanged_(&path);
+        if let Some(parent) = folder.parent() {
+            workspace.noteFileSystemChanged_(&NSString::from_str(&parent.to_string_lossy()));
+        }
+        Ok(())
+    })
 }
+
+/// Bytes of the icon data macOS keeps for `folder`: the resource fork of its `Icon\r` file,
+/// which is where `setIcon` puts the whole image. `None` when there is no such file.
+pub(crate) fn icon_file_bytes(folder: &Path) -> Option<u64> {
+    let icon = folder.join("Icon\r");
+    // The fork reads as a file of its own under this name, on APFS and HFS+ alike.
+    if let Ok(meta) = std::fs::metadata(icon.join("..namedfork/rsrc")) {
+        return Some(meta.len());
+    }
+    // Otherwise the same bytes, seen as the extended attribute macOS maps the fork to.
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(icon.as_os_str().as_bytes()).ok()?;
+    // SAFETY: both names are NUL-terminated; a null buffer of size 0 only asks for the size.
+    let size = unsafe {
+        libc::getxattr(
+            path.as_ptr(),
+            RESOURCE_FORK.as_ptr(),
+            std::ptr::null_mut(),
+            0,
+            0,
+            libc::XATTR_NOFOLLOW,
+        )
+    };
+    u64::try_from(size).ok()
+}
+
+/// The extended attribute a file's resource fork is visible as.
+const RESOURCE_FORK: &std::ffi::CStr = c"com.apple.ResourceFork";
 
 #[cfg(test)]
 mod tests {
@@ -228,5 +291,31 @@ mod tests {
         assert!(!has_custom_icon(&folder));
 
         println!("GetFileInfo -a: before={before} after={after} reverted={reverted}");
+    }
+
+    #[test]
+    #[ignore = "touches real folders and needs a desktop session: cargo test -p folderskin-core -- --ignored prepared"]
+    fn one_prepared_icon_goes_on_several_folders_and_is_measured() {
+        use crate::apply::{apply_prepared, bytes_per_folder, prepare_icon};
+
+        let icon = prepare_icon(&solid_icons(&[16, 32, 64, 128, 256, 512, 1024])).unwrap();
+        let folders = [tempfile_dir(), tempfile_dir(), tempfile_dir()];
+        for folder in &folders {
+            apply_prepared(folder, &icon).unwrap();
+            assert!(has_custom_icon(folder));
+        }
+
+        let measured = bytes_per_folder(&icon).unwrap();
+        assert_eq!(
+            Some(measured),
+            icon_file_bytes(&folders[0]),
+            "the scratch folder's copy weighs what a real folder's does"
+        );
+
+        for folder in &folders {
+            revert_icon(folder).unwrap();
+            assert!(!has_custom_icon(folder));
+        }
+        println!("bytes per folder: {measured}");
     }
 }

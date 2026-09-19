@@ -7,7 +7,9 @@
 //! skins/
 //! ├── skins.json                 the index: {"version": 1, "skins": [...]}
 //! ├── 3f2a9c0b1d4e.png           a skin's picture, longest side at most 2048 px
-//! └── 3f2a9c0b1d4e.thumb-v2.png  its gallery thumbnail, 512 px, so a launch renders nothing
+//! ├── 3f2a9c0b1d4e.thumb-v2.png  its gallery thumbnail, 512 px, so a launch renders nothing
+//! └── 3f2a9c0b1d4e.design.json   a design from the composer: the document it was made from, so
+//!                                it can be edited again
 //! ```
 //!
 //! A skin's id is `user:` plus the first 12 hex digits of the SHA-256 of what the user brought in
@@ -16,11 +18,12 @@
 //!
 //! Files are written before the index entry that names them, and every file, the index included,
 //! is written atomically (a temp file, then a rename). A crash therefore leaves at worst an
-//! unreferenced picture or temp file, never an entry without one, and the next launch removes
-//! those ([`Store::open`]). Several skins saved together, such as a community pack, share one
-//! index write, so they are saved all together or not at all ([`Store::add_many`]). An index that
-//! cannot be read is set aside under another name rather than overwritten, and the store starts
-//! empty.
+//! unreferenced picture, design or temp file, never an entry without its picture, and the next
+//! launch removes those ([`Store::open`]). Several skins saved together, such as a community pack,
+//! share one index write, so they are saved all together or not at all ([`Store::add_many`]). A
+//! design saved over the one it was made from swaps the two in one index write too
+//! ([`Store::replace_design`]). An index that cannot be read is set aside under another name
+//! rather than overwritten, and the store starts empty.
 
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
@@ -69,6 +72,8 @@ pub enum SkinSource {
     Ai,
     /// A skin from a community pack.
     Community,
+    /// A design the user made in the composer.
+    Composer,
 }
 
 /// One saved skin, as the index records it.
@@ -171,7 +176,8 @@ impl SkinImage {
         }
     }
 
-    fn rgba(&self) -> &RgbaImage {
+    /// The picture itself: the flat artwork, or the finished folder.
+    pub fn rgba(&self) -> &RgbaImage {
         match self {
             SkinImage::Artwork(art) => &art.rgba,
             SkinImage::Folder(img) => img,
@@ -256,6 +262,11 @@ pub fn skin_id(content: &[u8]) -> String {
     format!("{ID_PREFIX}{}", crate::ai::hash12(content))
 }
 
+/// Whether `id` has the shape of a saved skin's id, whether or not that skin is saved.
+pub fn is_skin_id(id: &str) -> bool {
+    stem(id).is_some()
+}
+
 /// The file-name stem of a well-formed saved-skin id, or `None` for anything else. Ids reach
 /// the store from the webview, so this is what keeps them from naming other files.
 fn stem(id: &str) -> Option<&str> {
@@ -277,6 +288,18 @@ fn thumb_file(stem: &str) -> String {
     format!("{stem}.thumb-v{}.png", crate::commands::THUMB_CACHE_VERSION)
 }
 
+/// What follows the stem in the name of a composer design's document.
+const DESIGN_SUFFIX: &str = ".design.json";
+
+fn design_file(stem: &str) -> String {
+    format!("{stem}{DESIGN_SUFFIX}")
+}
+
+/// Why a design can't be saved over a skin that isn't one.
+pub const NOT_A_DESIGN: &str = "that skin isn't one of your designs";
+/// Why a design can't be saved over one that has gone.
+pub const DESIGN_GONE: &str = "that design isn't saved any more";
+
 /// The current time in Unix milliseconds.
 pub fn now_ms() -> u64 {
     SystemTime::now()
@@ -287,7 +310,7 @@ pub fn now_ms() -> u64 {
 
 /// Encodes a stored picture. Level 2 takes about a tenth of the time of the default level on a
 /// 2048 px photo for about a tenth more bytes, which keeps an import quick.
-fn encode_stored_png(img: &RgbaImage) -> Vec<u8> {
+pub(crate) fn encode_stored_png(img: &RgbaImage) -> Vec<u8> {
     let mut buf = Vec::new();
     PngEncoder::new_with_quality(&mut buf, CompressionType::Level(2), PngFilterType::Adaptive)
         .write_image(
@@ -353,8 +376,8 @@ impl Store {
     /// Opens the store in `dir`, which need not exist yet. Never fails: a missing index is an
     /// empty store, and one that cannot be read is set aside and logged.
     ///
-    /// Then it clears away what a crash or an unfinished write left behind: pictures and
-    /// thumbnails no entry names, and temp files ([`remove_leftovers`]). Only when the index was
+    /// Then it clears away what a crash or an unfinished write left behind: pictures, thumbnails
+    /// and designs no entry names, and temp files ([`remove_leftovers`]). Only when the index was
     /// read whole, or there is none, and no unreadable index was ever set aside here: otherwise a
     /// file the index doesn't name may belong to a skin it has lost, and is kept.
     pub fn open(dir: PathBuf) -> Store {
@@ -394,6 +417,26 @@ impl Store {
     /// Returns the entry and whether it is new. When a skin with the same id is already saved,
     /// that one comes back unchanged and nothing is written.
     pub fn add(&self, new: NewSkin, image: &SkinImage) -> Result<(SavedSkin, bool), String> {
+        self.add_with(new, image, None)
+    }
+
+    /// Saves a design from the composer the way [`Store::add`] saves a skin, with `design`, the
+    /// document it was made from, written first, beside its picture.
+    pub fn add_design(
+        &self,
+        new: NewSkin,
+        image: &SkinImage,
+        design: &[u8],
+    ) -> Result<(SavedSkin, bool), String> {
+        self.add_with(new, image, Some(design))
+    }
+
+    fn add_with(
+        &self,
+        new: NewSkin,
+        image: &SkinImage,
+        design: Option<&[u8]>,
+    ) -> Result<(SavedSkin, bool), String> {
         let stem = stem(&new.id)
             .ok_or_else(|| "that skin id isn't one FolderSkin made".to_string())?
             .to_string();
@@ -408,19 +451,9 @@ impl Store {
         if let Some(existing) = index.iter().find(|s| s.id == new.id) {
             return Ok((existing.clone(), false));
         }
-        let image_path = self.dir.join(image_file(&stem));
-        let thumb_path = self.dir.join(thumb_file(&stem));
-        let discard = || {
-            let _ = std::fs::remove_file(&image_path);
-            let _ = std::fs::remove_file(&thumb_path);
-        };
-        let written = std::fs::create_dir_all(&self.dir)
-            .and_then(|()| write_atomic(&image_path, &png))
-            .and_then(|()| write_atomic(&thumb_path, &thumb));
-        if let Err(e) = written {
-            discard();
-            return Err(save_error(e));
-        }
+        let written = self
+            .write_files(&stem, design, &png, &thumb)
+            .map_err(save_error)?;
 
         // Strictly increasing, so "newest first" is well defined even within one millisecond.
         let latest = index.iter().map(|s| s.created_at).max().unwrap_or(0);
@@ -428,10 +461,127 @@ impl Store {
         index.push(entry.clone());
         if let Err(e) = self.write_index(&index) {
             index.pop();
-            discard();
+            remove_written(&written);
             return Err(save_error(e));
         }
         Ok((entry, true))
+    }
+
+    /// Saves a design over the one it was made from, `old_id`, which must be a saved design.
+    ///
+    /// The new design takes the old one's place: its files are written first, then one index
+    /// write swaps the two entries, the new one keeping the old one's `created_at` so it stays
+    /// where it was in the library, and then the old one's files are removed. If anything fails,
+    /// the files this call wrote are removed again and the index is left as it was.
+    ///
+    /// Returns the entry and whether it is new. A design that hasn't changed (the same id) comes
+    /// back as it was saved, with only the name and tags it was given this time. One that is now
+    /// the same as another saved design removes the old one, and the other comes back unchanged.
+    pub fn replace_design(
+        &self,
+        old_id: &str,
+        new: NewSkin,
+        image: &SkinImage,
+        design: &[u8],
+    ) -> Result<(SavedSkin, bool), String> {
+        let new_stem = stem(&new.id)
+            .ok_or_else(|| "that skin id isn't one FolderSkin made".to_string())?
+            .to_string();
+        let old_stem = stem(old_id).ok_or_else(|| DESIGN_GONE.to_string())?;
+        if new.id == old_id {
+            return self.rename_design(old_id, &new);
+        }
+        // Checked before the slow part, so a refusal costs nothing, and again under the lock.
+        design_at(&self.lock(), old_id)?;
+        let image = image.bounded();
+        let png = encode_stored_png(image.rgba());
+        let thumb = image.preview_png(THUMB_SIZE);
+
+        let mut index = self.lock();
+        let pos = design_at(&index, old_id)?;
+        if let Some(existing) = index.iter().find(|s| s.id == new.id).cloned() {
+            let old = index.remove(pos);
+            if let Err(e) = self.write_index(&index) {
+                index.insert(pos, old);
+                return Err(save_error(e));
+            }
+            self.remove_files(old_stem);
+            return Ok((existing, false));
+        }
+        let written = self
+            .write_files(&new_stem, Some(design), &png, &thumb)
+            .map_err(save_error)?;
+        let entry = new.entry(&image, index[pos].created_at);
+        let old = std::mem::replace(&mut index[pos], entry.clone());
+        if let Err(e) = self.write_index(&index) {
+            index[pos] = old;
+            remove_written(&written);
+            return Err(save_error(e));
+        }
+        // Under the lock, so the old design can't be saved again before its files are gone.
+        self.remove_files(old_stem);
+        Ok((entry, true))
+    }
+
+    /// A saved design whose picture and document haven't changed, given the name and tags `new`
+    /// has. Only the index is written, and only when they differ.
+    fn rename_design(&self, id: &str, new: &NewSkin) -> Result<(SavedSkin, bool), String> {
+        let mut index = self.lock();
+        let pos = design_at(&index, id)?;
+        let before = index[pos].clone();
+        if let Some(name) = clean_name(&new.name) {
+            index[pos].name = name;
+        }
+        index[pos].tags = pack::clean_tags(&new.tags, pack::MAX_TAGS);
+        if index[pos] != before {
+            if let Err(e) = self.write_index(&index) {
+                index[pos] = before;
+                return Err(format!("couldn't save that skin's changes: {e}"));
+            }
+        }
+        Ok((index[pos].clone(), false))
+    }
+
+    /// The document a saved design was made from. `Ok(None)` when no saved skin has this id, or
+    /// the skin has none because it wasn't made in the composer.
+    pub fn design(&self, id: &str) -> Result<Option<Vec<u8>>, String> {
+        let (Some(entry), Some(stem)) = (self.get(id), stem(id)) else {
+            return Ok(None);
+        };
+        match std::fs::read(self.dir.join(design_file(stem))) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("couldn't read the design for {}: {e}", entry.name)),
+        }
+    }
+
+    /// Writes a skin's files, its design first when it has one, and returns their paths. When
+    /// one can't be written, the ones written before it are removed again.
+    fn write_files(
+        &self,
+        stem: &str,
+        design: Option<&[u8]>,
+        png: &[u8],
+        thumb: &[u8],
+    ) -> std::io::Result<Vec<PathBuf>> {
+        let files = design
+            .map(|bytes| (design_file(stem), bytes))
+            .into_iter()
+            .chain([(image_file(stem), png), (thumb_file(stem), thumb)]);
+        let mut written = Vec::with_capacity(3);
+        let wrote = std::fs::create_dir_all(&self.dir).and_then(|()| {
+            for (file, bytes) in files {
+                let path = self.dir.join(file);
+                write_atomic(&path, bytes)?;
+                written.push(path);
+            }
+            Ok(())
+        });
+        if let Err(e) = wrote {
+            remove_written(&written);
+            return Err(e);
+        }
+        Ok(written)
     }
 
     /// Saves several skins at once, all of them or none: every new picture and thumbnail is
@@ -617,8 +767,8 @@ impl Store {
         Ok(png)
     }
 
-    /// Removes a saved skin: its index entry first, then its picture and thumbnails. An id that
-    /// is well formed but not saved is already gone, which is not an error.
+    /// Removes a saved skin: its index entry first, then its picture, thumbnails and design. An
+    /// id that is well formed but not saved is already gone, which is not an error.
     pub fn delete(&self, id: &str) -> Result<(), String> {
         let stem = stem(id).ok_or_else(|| "FolderSkin doesn't know that skin".to_string())?;
         let mut index = self.lock();
@@ -661,11 +811,14 @@ impl Store {
         Ok(index[pos].clone())
     }
 
-    /// Deletes a skin's picture and every thumbnail it has had. Leftovers are only logged: the
-    /// index no longer names them, so they cannot come back.
+    /// Deletes a skin's picture, its design and every thumbnail it has had. Leftovers are only
+    /// logged: the index no longer names them, so they cannot come back.
     fn remove_files(&self, stem: &str) {
         let thumb_prefix = format!("{stem}.thumb");
-        let mut doomed = vec![self.dir.join(image_file(stem))];
+        let mut doomed = vec![
+            self.dir.join(image_file(stem)),
+            self.dir.join(design_file(stem)),
+        ];
         if let Ok(entries) = std::fs::read_dir(&self.dir) {
             doomed.extend(
                 entries
@@ -760,9 +913,9 @@ fn read_index(dir: &Path) -> (Vec<SavedSkin>, bool) {
     (skins, whole)
 }
 
-/// Removes the files a crash or an unfinished write left in `dir`, each logged: a picture or
-/// thumbnail of a skin `skins` doesn't list, and a temp file of [`write_atomic`]. Only files
-/// with exactly those shapes of name ([`is_leftover`]), and only ones last changed at least
+/// Removes the files a crash or an unfinished write left in `dir`, each logged: a picture,
+/// thumbnail or design of a skin `skins` doesn't list, and a temp file of [`write_atomic`]. Only
+/// files with exactly those shapes of name ([`is_leftover`]), and only ones last changed at least
 /// `min_age` ago. Nothing else in the folder is touched.
 fn remove_leftovers(dir: &Path, skins: &[SavedSkin], min_age: Duration) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -796,9 +949,10 @@ fn remove_leftovers(dir: &Path, skins: &[SavedSkin], min_age: Duration) {
     }
 }
 
-/// Whether `name` is a file the store writes that no skin in `listed` owns: `<stem>.png` or a
-/// `<stem>.thumb….png` thumbnail whose stem isn't listed, or a temp file of [`write_atomic`] for
-/// any file the store writes, `.<name>.folderskin-<pid>-<seq>.tmp`.
+/// Whether `name` is a file the store writes that no skin in `listed` owns: `<stem>.png`, a
+/// `<stem>.thumb….png` thumbnail or a `<stem>.design.json` design whose stem isn't listed, or a
+/// temp file of [`write_atomic`] for any file the store writes,
+/// `.<name>.folderskin-<pid>-<seq>.tmp`.
 fn is_leftover(name: &str, listed: &HashSet<&str>) -> bool {
     if let Some(temp) = name.strip_prefix('.').and_then(|n| n.strip_suffix(".tmp")) {
         let Some((target, tag)) = temp.rsplit_once(".folderskin-") else {
@@ -813,13 +967,27 @@ fn is_leftover(name: &str, listed: &HashSet<&str>) -> bool {
     skin_file_stem(name).is_some_and(|stem| !listed.contains(stem))
 }
 
-/// The stem of `<stem>.png` or `<stem>.thumb….png`, the names a skin's files have.
+/// The stem of `<stem>.png`, `<stem>.thumb….png` or `<stem>.design.json`, the names a skin's
+/// files have.
 fn skin_file_stem(name: &str) -> Option<&str> {
     let stem = name.get(..12).filter(|s| is_stem(s))?;
     let rest = &name[12..];
     let picture = rest == ".png";
     let thumbnail = rest.starts_with(".thumb") && rest.ends_with(".png");
-    (picture || thumbnail).then_some(stem)
+    let design = rest == DESIGN_SUFFIX;
+    (picture || thumbnail || design).then_some(stem)
+}
+
+/// Where the saved design `id` is in `index`, or why a design can't be saved over it.
+fn design_at(index: &[SavedSkin], id: &str) -> Result<usize, String> {
+    let pos = index
+        .iter()
+        .position(|s| s.id == id)
+        .ok_or_else(|| DESIGN_GONE.to_string())?;
+    if index[pos].source != SkinSource::Composer {
+        return Err(NOT_A_DESIGN.into());
+    }
+    Ok(pos)
 }
 
 /// Whether an index that could not be read was ever set aside in `dir`. Its skins' files are
@@ -1521,5 +1689,307 @@ mod tests {
         Store::open(dir.clone());
         assert!(!dir.join(orphan).exists());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A design document as the composer's webview sends it; the store only keeps the bytes.
+    const DESIGN: &[u8] = br#"{"version":1,"layers":[{"kind":"text","text":"Taxes 2026"}]}"#;
+
+    fn design_skin(id: &str, name: &str) -> NewSkin {
+        new_skin(id, name, SkinSource::Composer)
+    }
+
+    #[test]
+    fn a_design_is_saved_beside_its_skin_and_survives_a_restart() {
+        let dir = temp_dir("design-roundtrip");
+        let store = Store::open(dir.clone());
+        let id = skin_id(b"taxes");
+        let (entry, fresh) = store
+            .add_design(design_skin(&id, "Taxes"), &folder(), DESIGN)
+            .unwrap();
+        assert!(fresh);
+        assert_eq!(entry.source, SkinSource::Composer);
+        assert_eq!(entry.kind, SkinKind::Folder);
+        let file = dir.join(design_file(stem(&id).unwrap()));
+        assert_eq!(std::fs::read(&file).unwrap(), DESIGN);
+
+        // The same design saved again comes back as it was saved, and nothing is written.
+        let (again, fresh) = store
+            .add_design(design_skin(&id, "Another name"), &folder(), b"{}")
+            .unwrap();
+        assert!(!fresh);
+        assert_eq!(again, entry);
+        assert_eq!(std::fs::read(&file).unwrap(), DESIGN);
+        drop(store);
+
+        let store = Store::open(dir.clone());
+        assert_eq!(store.list(), vec![entry]);
+        assert_eq!(store.design(&id).unwrap().as_deref(), Some(DESIGN));
+        assert!(matches!(
+            store.load(&id).unwrap(),
+            Some(SkinImage::Folder(_))
+        ));
+
+        // A skin made anywhere else has no design, and neither has one that isn't saved.
+        let imported = skin_id(b"imported");
+        store
+            .add(
+                new_skin(&imported, "Imported", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        assert_eq!(store.design(&imported).unwrap(), None);
+        assert_eq!(store.design(&skin_id(b"never saved")).unwrap(), None);
+        assert_eq!(store.design("user:../skins").unwrap(), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn deleting_a_design_removes_its_document_too() {
+        let dir = temp_dir("design-delete");
+        let store = Store::open(dir.clone());
+        let id = skin_id(b"gone design");
+        store
+            .add_design(design_skin(&id, "Gone"), &folder(), DESIGN)
+            .unwrap();
+        store.delete(&id).unwrap();
+        let stem = stem(&id).unwrap();
+        let left: Vec<String> = names_in(&dir)
+            .into_iter()
+            .filter(|n| n.starts_with(stem))
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
+        assert_eq!(store.design(&id).unwrap(), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_design_saved_over_its_old_one_takes_its_place() {
+        let dir = temp_dir("design-replace");
+        let store = Store::open(dir.clone());
+        let (old, _) = store
+            .add_design(
+                design_skin(&skin_id(b"v1"), "Draft"),
+                &folder(),
+                b"{\"v\":1}",
+            )
+            .unwrap();
+        let (later, _) = store
+            .add(
+                new_skin(&skin_id(b"later"), "Later", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+
+        let mut new = design_skin(&skin_id(b"v2"), "Final");
+        new.tags = vec!["Work".into()];
+        let (entry, fresh) = store
+            .replace_design(&old.id, new, &folder(), b"{\"v\":2}")
+            .unwrap();
+        assert!(fresh);
+        assert_eq!(
+            entry.created_at, old.created_at,
+            "it keeps the old one's place"
+        );
+        assert_eq!(
+            (entry.name.as_str(), &entry.tags[..]),
+            ("Final", &["work".to_string()][..])
+        );
+        let newest_first: Vec<String> = store.list().into_iter().map(|s| s.id).collect();
+        assert_eq!(newest_first, [later.id.clone(), entry.id.clone()]);
+        let old_stem = stem(&old.id).unwrap();
+        let left: Vec<String> = names_in(&dir)
+            .into_iter()
+            .filter(|n| n.starts_with(old_stem))
+            .collect();
+        assert!(left.is_empty(), "the old design's files are gone: {left:?}");
+        assert_eq!(
+            store.design(&entry.id).unwrap().as_deref(),
+            Some(&b"{\"v\":2}"[..])
+        );
+        assert_eq!(store.design(&old.id).unwrap(), None);
+        assert_eq!(
+            Store::open(dir.clone()).list(),
+            store.list(),
+            "after a restart too"
+        );
+
+        // Saved again without a change to the design: only the name and tags it's given change.
+        let mut same = design_skin(&entry.id, "  Final   version ");
+        same.tags = vec!["work".into(), "Taxes".into()];
+        let (renamed, fresh) = store
+            .replace_design(&entry.id, same, &folder(), b"{\"v\":2}")
+            .unwrap();
+        assert!(!fresh);
+        assert_eq!(renamed.name, "Final version");
+        assert_eq!(renamed.tags, ["work", "taxes"]);
+        assert_eq!(renamed.created_at, entry.created_at);
+        assert_eq!(Store::open(dir.clone()).get(&entry.id), Some(renamed));
+
+        // Changed into a design saved already: that one stays as it is, and this one goes.
+        let (other, _) = store
+            .add_design(design_skin(&skin_id(b"other"), "Other"), &folder(), DESIGN)
+            .unwrap();
+        let (kept, fresh) = store
+            .replace_design(
+                &entry.id,
+                design_skin(&other.id, "Renamed"),
+                &folder(),
+                DESIGN,
+            )
+            .unwrap();
+        assert!(!fresh);
+        assert_eq!(kept, other);
+        assert!(store.get(&entry.id).is_none());
+        assert_eq!(store.design(&entry.id).unwrap(), None);
+        let ids: Vec<String> = Store::open(dir.clone())
+            .list()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, [other.id, later.id]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn only_a_saved_design_can_be_saved_over() {
+        let dir = temp_dir("design-refuse");
+        let store = Store::open(dir.clone());
+        let (photo, _) = store
+            .add(
+                new_skin(&skin_id(b"photo"), "Photo", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        let before = names_in(&dir);
+        let new = || design_skin(&skin_id(b"design"), "Design");
+
+        let refused = |old: &str, new: NewSkin| {
+            store
+                .replace_design(old, new, &folder(), DESIGN)
+                .unwrap_err()
+        };
+        assert_eq!(refused(&photo.id, new()), NOT_A_DESIGN);
+        assert_eq!(
+            refused(&photo.id, design_skin(&photo.id, "Photo")),
+            NOT_A_DESIGN,
+            "even when nothing about it changed"
+        );
+        for gone in [
+            skin_id(b"never saved"),
+            "user:../skins".into(),
+            "aurora".into(),
+        ] {
+            assert_eq!(refused(&gone, new()), DESIGN_GONE, "{gone}");
+        }
+        let err = refused(&photo.id, design_skin("user:../../etc", "Evil"));
+        assert!(err.contains("isn't one FolderSkin made"), "{err}");
+
+        assert_eq!(names_in(&dir), before, "nothing was written");
+        assert_eq!(store.list(), vec![photo]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_design_that_cannot_be_saved_over_its_old_one_leaves_that_one_be() {
+        let dir = temp_dir("design-replace-fail");
+        let store = Store::open(dir.clone());
+        let (old, _) = store
+            .add_design(
+                design_skin(&skin_id(b"old design"), "Old"),
+                &folder(),
+                DESIGN,
+            )
+            .unwrap();
+        let index = std::fs::read(dir.join(INDEX_FILE)).unwrap();
+        let new = || design_skin(&skin_id(b"new design"), "New");
+
+        // A folder where the new picture goes: its design is written, then the picture fails.
+        let blocker = image_file(stem(&new().id).unwrap());
+        std::fs::create_dir(dir.join(&blocker)).unwrap();
+        let expected = names_in(&dir);
+        let err = store
+            .replace_design(&old.id, new(), &folder(), b"{}")
+            .unwrap_err();
+        assert!(err.starts_with("couldn't save that skin"), "{err}");
+        assert_eq!(
+            names_in(&dir),
+            expected,
+            "the design it wrote is gone again"
+        );
+        std::fs::remove_dir(dir.join(&blocker)).unwrap();
+
+        // An index that can't be written: every new file goes, and the old design stays.
+        std::fs::remove_file(dir.join(INDEX_FILE)).unwrap();
+        std::fs::create_dir(dir.join(INDEX_FILE)).unwrap();
+        let expected = names_in(&dir);
+        let err = store
+            .replace_design(&old.id, new(), &folder(), b"{}")
+            .unwrap_err();
+        assert!(err.starts_with("couldn't save that skin"), "{err}");
+        assert_eq!(names_in(&dir), expected);
+        assert_eq!(store.list(), vec![old.clone()]);
+        assert_eq!(store.design(&old.id).unwrap().as_deref(), Some(DESIGN));
+        std::fs::remove_dir(dir.join(INDEX_FILE)).unwrap();
+        std::fs::write(dir.join(INDEX_FILE), &index).unwrap();
+
+        assert_eq!(Store::open(dir.clone()).list(), vec![old]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_orphaned_design_is_removed_on_open_and_nothing_else() {
+        let dir = temp_dir("design-leftovers");
+        let store = Store::open(dir.clone());
+        let (kept, _) = store
+            .add_design(
+                design_skin(&skin_id(b"kept design"), "Kept"),
+                &folder(),
+                DESIGN,
+            )
+            .unwrap();
+        drop(store);
+
+        let leftovers = [
+            "0123456789ab.design.json",
+            ".0123456789ab.design.json.folderskin-7-3.tmp",
+        ];
+        let others = [
+            "0123456789ab.design.json.bak",
+            "0123456789ab.design.jsonl",
+            "0123456789ab.design-v2.json",
+            "0123456789ab.designs.json",
+            "0123456789ab.json",
+            // Upper case, on a stem no leftover has: some disks ignore case in names.
+            "ABCDEF012345.design.json",
+            "design.json",
+            ".0123456789ab.design.json.folderskin-7.tmp",
+        ];
+        for name in leftovers.iter().chain(&others) {
+            std::fs::write(dir.join(name), b"{}").unwrap();
+        }
+        // Everything is an hour old, the kept design's own files included.
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            age(&entry.path(), HOUR);
+        }
+
+        let store = Store::open(dir.clone());
+        assert_eq!(store.list(), vec![kept.clone()]);
+        let names = names_in(&dir);
+        for gone in leftovers {
+            assert!(!names.contains(&gone.to_string()), "{gone} is still there");
+        }
+        for stays in others {
+            assert!(names.contains(&stays.to_string()), "{stays} was removed");
+        }
+        assert_eq!(store.design(&kept.id).unwrap().as_deref(), Some(DESIGN));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn only_well_formed_ids_are_skin_ids() {
+        assert!(is_skin_id(&skin_id(b"anything")));
+        for bad in ["user:0123456789AB", "user:../../etc/pw", "__default__", ""] {
+            assert!(!is_skin_id(bad), "{bad:?}");
+        }
     }
 }

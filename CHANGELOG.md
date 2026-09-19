@@ -4,6 +4,67 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Design your own**: a composer for making a skin yourself, offline. It starts from one of
+  sixteen templates (plain, a colour, a label, an emoji, a tab label, two-tone, glass, tinted
+  glass, stripes, gingham, polka dots, sunset, neon, a badge, a photo with a caption, a sticker).
+  From there it takes:
+  - any colour with transparency, and linear and radial gradients
+  - text in seventeen font styles, with spacing, curves and an outline
+  - emoji, thirteen shapes, and ten patterns including confetti and film grain
+  - your pictures (from a file, your skins, a drop or the clipboard) with adjustments
+  - shadows, glows, sticker edges, opacity and blend modes, on as many layers as you like, with
+    undo
+
+  The **Folder skeleton** switch shows the design on the folder or flat with the folder's edges,
+  and it can be seen on a light, dark or colourful desktop and at the sizes Finder draws.
+  **Free icon** makes the design the whole icon, any shape. **Save & apply** puts it on the chosen
+  folder, **Edit design** opens a saved design again, and any other skin can be remixed. See
+  [docs/COMPOSER.md](docs/COMPOSER.md).
+- `folderskin-tools composer-layers` writes the folder template's layers the composer draws a
+  design between.
+- **Include subfolders**: a switch under the chosen folder puts the skin on that folder and every
+  folder inside it, all levels down, and says how many that is before anything changes. Runs over
+  more than ten folders ask first, with roughly the space the icons take (each folder keeps its
+  own copy). A run shows how far it has got, can be stopped, and ends with what happened: how many
+  folders changed, which couldn't be and why, with **Carry on** after a stop and **Try again** for
+  failures. **Revert** takes off exactly what the run put on; with the switch on and no run to
+  undo, **Remove custom icons** clears the whole tree after asking. Hidden folders, app bundles and
+  other packages, symlinks and system locations are left alone, and a tree of more than 5,000
+  folders is refused. The composer's **Save & apply** follows the same switch.
+
+### Changed
+
+- The composer's **Layers** and the settings below them are each opened and closed from their
+  heading, and the bar between them is dragged (or nudged with the arrow keys) to share out the
+  height; how they were left is remembered. A layer can be deleted from its own row, and
+  **Delete all** clears the design, with **Undo** in the toast.
+- The sidebar's **Create** group holds **Design your own** and **Generate with AI**; **Community**
+  is under **Explore**.
+- A pack can be shared from designs made in the composer too.
+- A skin's ⋯ menu shows its name as a labelled field with a pencil, so it's clear it can be
+  renamed there. A double click on a name in the gallery opens it ready to type over, as F2 does.
+- Long names are cut short with an ellipsis everywhere they appear, with the full name on hover:
+  in the folder panel, gallery, dialogs, toasts, buttons and the composer.
+- Disabled buttons and switches show the not-allowed cursor.
+- The browser stand-ins used by `pnpm dev` are left out of release builds, and the AI view loads
+  the first time it's opened, which keeps the first screen's script under 500 kB.
+
+### Fixed
+
+- The emoji picker scrolled sideways. Every list, grid, panel and dialog in the app now shows a
+  scrollbar only while the pointer is over it, instead of a few of them.
+- Sliders showed the text cursor instead of the hand.
+- **You're up to date** is now plain text with the same green tick as everywhere else, rather than
+  green writing.
+- On macOS, two icon changes at once (an apply starting while another was still being written)
+  could garble each other's icon or fail. Changes now go one at a time.
+- F2 on a skin opened its menu without putting the cursor in the name field.
+- A button's icon no longer shrinks to a sliver beside a long label.
+
 ## 0.1.0 — 2026-09-19
 
 The first release.

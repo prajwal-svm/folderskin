@@ -192,6 +192,86 @@ describe("drop zone state machine", () => {
   });
 });
 
+describe("a folder and its subfolders", () => {
+  const projects = { path: "/Users/me/Projects", name: "Projects" };
+  const counted = (count: number, more = false): Action => ({ type: "subfoldersCounted", path: projects.path, subfolders: { count, more } });
+  const ready = () => run([{ type: "folderDropped", folder: projects }, { type: "skinSelected", skinId: "coral" }, counted(24)]);
+  const tree = (patch: Partial<NonNullable<State["run"]>> = {}): NonNullable<State["run"]> => ({
+    kind: "apply",
+    total: 25,
+    changed: ["/Users/me/Projects", "/Users/me/Projects/a"],
+    failed: [],
+    skipped: 0,
+    remaining: [],
+    stopped: false,
+    ...patch,
+  });
+
+  it("counts the subfolders of the folder on show, and no other", () => {
+    const s = run([{ type: "folderDropped", folder: projects }, { type: "subfoldersCounted", path: "/elsewhere", subfolders: { count: 3, more: false } }]);
+    expect(s.subfolders).toBeNull();
+    expect(reduce(s, counted(24)).subfolders).toEqual({ count: 24, more: false });
+  });
+
+  it("includes subfolders only when there are some, and not too many", () => {
+    const on = { type: "includeSubfolders", on: true } as const;
+    expect(reduce(ready(), on).includeSubfolders).toBe(true);
+    const none = run([{ type: "folderDropped", folder: projects }, counted(0)]);
+    expect(reduce(none, on).includeSubfolders).toBe(false);
+    const huge = run([{ type: "folderDropped", folder: projects }, counted(5000, true)]);
+    expect(reduce(huge, on).includeSubfolders).toBe(false);
+    // Not yet counted: nothing to include.
+    expect(reduce(run([{ type: "folderDropped", folder: projects }]), on).includeSubfolders).toBe(false);
+  });
+
+  it("starts every new folder with only itself included", () => {
+    const s = run([{ type: "includeSubfolders", on: true }, { type: "folderDropped", folder: readme }], ready());
+    expect(s.includeSubfolders).toBe(false);
+    expect(s.subfolders).toBeNull();
+    expect(s.run).toBeNull();
+  });
+
+  it("can't change what's included while a run is going", () => {
+    const applying = run([{ type: "includeSubfolders", on: true }, { type: "applyStarted" }], ready());
+    expect(reduce(applying, { type: "includeSubfolders", on: false }).includeSubfolders).toBe(true);
+  });
+
+  it("follows a run's progress and keeps what it did", () => {
+    const applying = run([{ type: "includeSubfolders", on: true }, { type: "applyStarted" }], ready());
+    const going = reduce(applying, { type: "treeProgress", progress: { done: 12, total: 25, name: "Photos" } });
+    expect(going.progress).toEqual({ done: 12, total: 25, name: "Photos" });
+    const done = reduce(going, { type: "applySucceeded", run: tree() });
+    expect(done.phase).toBe("applied");
+    expect(done.progress).toBeNull();
+    expect(done.run?.changed).toHaveLength(2);
+    // Progress means nothing outside a run.
+    expect(reduce(done, { type: "treeProgress", progress: { done: 1, total: 2, name: "x" } }).progress).toBeNull();
+  });
+
+  it("leaves the folder as it was when a run stopped before changing anything", () => {
+    const applying = run([{ type: "includeSubfolders", on: true }, { type: "applyStarted" }], ready());
+    const s = reduce(applying, { type: "applySucceeded", run: tree({ changed: [], stopped: true, remaining: ["/a"] }) });
+    expect(s.phase).toBe("ready");
+    expect(s.appliedSkinId).toBeNull();
+    expect(s.run?.stopped).toBe(true);
+  });
+
+  it("forgets a run's summary when another skin is picked, or when dismissed", () => {
+    const done = run([{ type: "applyStarted" }, { type: "applySucceeded", run: tree() }], ready());
+    expect(reduce(done, { type: "skinSelected", skinId: "coral" }).run).not.toBeNull();
+    expect(reduce(done, { type: "skinSelected", skinId: "mint" }).run).toBeNull();
+    expect(reduce(done, { type: "runDismissed" }).run).toBeNull();
+  });
+
+  it("reports a revert over the tree the same way", () => {
+    const done = run([{ type: "applyStarted" }, { type: "applySucceeded", run: tree() }, { type: "revertStarted" }], ready());
+    expect(done.phase).toBe("reverting");
+    const back = reduce(done, { type: "revertSucceeded", run: tree({ kind: "revert" }) });
+    expect(back.phase).toBe("folder");
+    expect(back.run?.kind).toBe("revert");
+  });
+});
+
 describe("favorites", () => {
   function fakeStore(): KeyValueStore & { data: Record<string, string> } {
     const data: Record<string, string> = {};

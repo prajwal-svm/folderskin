@@ -46,5 +46,5 @@ export function tagCounts(items: { tags?: string[] }[]): { tag: string; count: n
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
-/** Skins the user made: pictures they added and AI results. Community skins are everyone's. */
-export const isYours = (skin: Skin) => skin.source === "import" || skin.source === "ai";
+/** Skins the user made: pictures they added, AI results and their designs. Community skins are everyone's. */
+export const isYours = (skin: Skin) => skin.source === "import" || skin.source === "ai" || skin.source === "composer";

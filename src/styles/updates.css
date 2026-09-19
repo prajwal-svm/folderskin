@@ -15,10 +15,6 @@
   justify-content: center;
 }
 
-.update-btn.is-current {
-  color: var(--ok-ink);
-}
-
 .update-btn.is-failed {
   color: var(--danger);
 }

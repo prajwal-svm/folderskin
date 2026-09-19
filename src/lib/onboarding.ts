@@ -4,6 +4,7 @@
  * reads.
  */
 import type { PackProgress } from "./tauri";
+import { clip } from "./names";
 
 /** The pack a first launch starts with, when GitHub lists it. */
 export const DEFAULT_PACK = "classic-art";
@@ -92,7 +93,7 @@ export function toInstall<P extends PackLike>(packs: P[], picked: ReadonlySet<st
 
 /** The words on the main button of the packs step while nothing is installing. */
 export function continueLabel(next: PackLike[], anyAdded: boolean): string {
-  if (next.length === 1) return `Add ${next[0].name}`;
+  if (next.length === 1) return `Add ${clip(next[0].name, 24)}`;
   if (next.length > 1) return `Add ${next.length} packs`;
   return anyAdded ? "Continue" : "Continue without packs";
 }

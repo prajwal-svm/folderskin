@@ -26,6 +26,7 @@ import { CheckIcon } from "./icons/check";
 import { DownloadIcon } from "./icons/download";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
+import { clip } from "../lib/names";
 
 /** The middle folder of the intro, the one that lands on the logo. */
 const HERO = Math.floor(INTRO_SLOTS / 2);
@@ -395,9 +396,9 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
   const note = allSet
     ? `${addedSkins} ${addedSkins === 1 ? "skin is" : "skins are"} in your library.`
     : running && currentPack
-      ? `Adding ${currentPack.name}. This takes a few seconds.`
+      ? `Adding ${clip(currentPack.name)}. This takes a few seconds.`
       : failures.length
-        ? `${failures.map((f) => f.name).join(" and ")} couldn't be added${reason ? `: ${reason}.` : `. Try again, or add ${failures.length === 1 ? "it" : "them"} later from Community.`}`
+        ? `${failures.map((f) => clip(f.name)).join(" and ")} couldn't be added${reason ? `: ${reason}.` : `. Try again, or add ${failures.length === 1 ? "it" : "them"} later from Community.`}`
         : packs
           ? "You can add or remove packs any time from Community."
           : loadError
@@ -548,7 +549,9 @@ function PackCard({
         <span className="onboard-pack-tick" aria-hidden="true">
           {checked && <CheckIcon size={13} playOnMount />}
         </span>
-        <span className="onboard-pack-name">{pack.name}</span>
+        <span className="onboard-pack-name" title={pack.name}>
+          {pack.name}
+        </span>
         <span className="onboard-pack-by">
           {pack.count} {pack.count === 1 ? "skin" : "skins"} · @{pack.author} · {licenseLabel(pack.license)}
         </span>

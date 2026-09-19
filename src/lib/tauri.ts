@@ -1,6 +1,9 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
+import { frame } from "../composer/body";
+import type { Parts } from "../composer/parts";
+import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 
 /** A skin in the library: a picture the user added, an AI result, or one from a community pack. All are saved on disk. */
 export type Skin = {
@@ -13,7 +16,7 @@ export type Skin = {
   custom: boolean;
   /** "artwork" is wrapped onto FolderSkin's folder; "folder" is a finished folder used as-is. */
   kind?: "artwork" | "folder";
-  source?: "import" | "ai" | "community";
+  source?: "import" | "ai" | "community" | "composer";
   /** Unix ms when the user added it. */
   created_at?: number | null;
   /** What the gallery filters it by, cleaned the way `cleanTag` does. */
@@ -124,6 +127,33 @@ export type AiGenerateRequest = {
   tags: string[];
 };
 
+/** The folder template split into the layers the composer draws a design between, as PNG data URLs. */
+export type ComposerTemplate = {
+  /** Edge of every layer, in pixels. */
+  size: number;
+  back: string;
+  front: string;
+  middle: string;
+  top: string;
+  outline: string;
+  parts: Parts;
+};
+
+/** A picture for a composer layer: a file the user picked, or one of their skins. */
+export type ComposerImage = { url: string; width: number; height: number; name: string; alpha: boolean };
+
+/** What saving a design sends with its picture. `replaces` is the design being changed, if any. */
+export type ComposerSaveHeader = {
+  name: string;
+  tags: string[];
+  shape: "folder" | "free";
+  design: unknown;
+  replaces: string | null;
+};
+
+/** A saved design, and the id of the one it replaced. */
+export type ComposerSaved = { skin: Skin; replaced: string | null };
+
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
@@ -131,6 +161,20 @@ const tauriApi = {
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),
   revertSkin: (folder: string) => invoke<void>("revert_skin", { folder }),
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
+
+  // ---- a folder and every folder inside it ----
+  /** How many folders are inside `folder` (hidden ones, packages and links aside), up to 5,000. */
+  subfolderCount: (folder: string) => invoke<Subfolders>("subfolder_count", { folder }),
+  /** The disk space one folder's copy of this skin's icon takes. */
+  treeBytes: (skinId: string) => invoke<number>("tree_bytes", { skinId }),
+  /** Applies a skin to `folder` and every folder inside it, or to `only` those; progress on `onProgress`. */
+  applySkinTree: (folder: string, skinId: string, only: string[] | null, onProgress: (p: TreeProgress) => void) =>
+    invoke<TreeRunResult>("apply_skin_tree", { folder, skinId, only, onProgress: new Channel<TreeProgress>(onProgress) }),
+  /** Puts the default icon back on `only` those folders, or on every folder in the tree that has an icon of its own. */
+  revertSkinTree: (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void) =>
+    invoke<TreeRunResult>("revert_skin_tree", { folder, only, onProgress: new Channel<TreeProgress>(onProgress) }),
+  /** Stops a run over a tree after the folder it's on. */
+  stopTreeRun: () => invoke<void>("stop_tree_run"),
   /** The folder's current icon (the real OS icon where available), and whether it's a custom one. */
   folderIcon: (folder: string) => invoke<FolderIcon>("folder_icon", { folder }),
   /** The folder the skins are saved in. */
@@ -176,10 +220,28 @@ const tauriApi = {
   aiClearKey: (provider: string) => invoke<void>("ai_clear_key", { provider }),
   aiTestKey: (provider: string) => invoke<void>("ai_test_key", { provider }),
   aiGenerate: (req: AiGenerateRequest) => invoke<Skin>("ai_generate", { req }),
+
+  // ---- the composer ----
+  /** The folder template's layers, rendered once by the Rust compositor. */
+  composerTemplate: () => invoke<ComposerTemplate>("composer_template"),
+  /** Saves a design (its full-size picture and its document) as a skin, or changes one saved before. */
+  composerSave: (header: ComposerSaveHeader, png: Uint8Array) => invoke<ComposerSaved>("composer_save", frame(header, png)),
+  /** The design as the icon at each of `sizes`, as data URLs, drawn by the compositor. */
+  composerPreview: (shape: "folder" | "free", sizes: number[], png: Uint8Array) =>
+    invoke<string[]>("composer_preview", frame({ shape, sizes }, png)),
+  /** A picture file, read (and shrunk) for a picture layer. */
+  composerImage: (path: string) => invoke<ComposerImage>("composer_image", { path }),
+  /** A saved skin's own picture, for a picture layer or a remix. */
+  composerSkinImage: (skinId: string) => invoke<ComposerImage>("composer_skin_image", { skinId }),
+  /** The document of a saved design, to edit it again; null for a skin that wasn't made in the composer. */
+  composerDesign: (skinId: string) => invoke<unknown>("composer_design", { skinId }),
 };
 
-/** Typed wrappers over the Tauri commands exposed by `src-tauri/src/commands.rs`. */
-export const api: typeof tauriApi = isTauri() ? tauriApi : mockApi;
+/**
+ * Typed wrappers over the Tauri commands exposed by `src-tauri/src/commands.rs`. `pnpm dev` in a
+ * plain browser gets the stand-ins instead; a build leaves them out, since it only runs in the app.
+ */
+export const api: typeof tauriApi = import.meta.env.DEV && !isTauri() ? mockApi : tauriApi;
 
 /** Turns any thrown value from `invoke` into a sentence the drop zone can show. */
 export function errorMessage(err: unknown): string {

@@ -26,7 +26,7 @@ const CHECK_TIMEOUT_MS = 15_000;
 
 /** The newest version if it's newer than this one, null if this is it. Throws when it can't tell. */
 export async function findUpdate(): Promise<AvailableUpdate | null> {
-  if (!isTauri()) return mockFindUpdate();
+  if (import.meta.env.DEV && !isTauri()) return mockFindUpdate();
   const update = await check({ timeout: CHECK_TIMEOUT_MS });
   if (!update) return null;
   return {

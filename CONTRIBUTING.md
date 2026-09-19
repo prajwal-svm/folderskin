@@ -60,7 +60,9 @@ get a request for changes, not a silent merge.
 
 1. **One rendering path.** Every pixel comes from `folderskin_core::compositor`. Do not draw
    folder geometry in CSS, SVG or canvas, even for a thumbnail — the webview displays PNGs the
-   Rust side rendered.
+   Rust side rendered. The composer's canvas draws only the user's own art and stacks it between
+   the template layers Rust renders (`compositor::template_layers`); the icon it saves is the
+   compositor's.
 2. **No CSS outlines.** No `outline`, no focus ring, no selection outline anywhere in the UI.
    Show focus and selection with a background tint or a border colour change.
 3. **Geometry constants are the source of truth.** The numbers in

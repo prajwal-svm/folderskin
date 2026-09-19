@@ -2,6 +2,7 @@
  * The drop zone's state machine. Pure and synchronous: the React layer dispatches
  * actions around the async Tauri calls, so every transition here is unit-testable.
  */
+import type { Subfolders, TreeProgress, TreeRun } from "../lib/tree";
 
 export type Folder = { path: string; name: string };
 
@@ -27,6 +28,14 @@ export type State = {
    * goes on, so the switch to it can be seen.
    */
   arriving: boolean;
+  /** The folders inside the chosen one: null until they've been counted. */
+  subfolders: Subfolders | null;
+  /** Apply and revert reach every folder inside the chosen one too. */
+  includeSubfolders: boolean;
+  /** How far an apply or revert over the folder and its subfolders has got. */
+  progress: TreeProgress | null;
+  /** What the last run over the folder and its subfolders did, until the skin or folder changes. */
+  run: TreeRun | null;
 };
 
 export type Action =
@@ -35,12 +44,16 @@ export type Action =
   | { type: "arrived" }
   | { type: "skinSelected"; skinId: string }
   | { type: "skinCleared" }
+  | { type: "subfoldersCounted"; path: string; subfolders: Subfolders | null }
+  | { type: "includeSubfolders"; on: boolean }
   | { type: "applyStarted" }
-  | { type: "applySucceeded" }
+  | { type: "treeProgress"; progress: TreeProgress }
+  | { type: "applySucceeded"; run?: TreeRun }
   | { type: "applyFailed"; message: string }
   | { type: "revertStarted" }
-  | { type: "revertSucceeded" }
+  | { type: "revertSucceeded"; run?: TreeRun }
   | { type: "revertFailed"; message: string }
+  | { type: "runDismissed" }
   | { type: "invalidDrop"; message: string }
   | { type: "clearError" };
 
@@ -53,7 +66,13 @@ export const initialState: State = {
   error: null,
   drag: null,
   arriving: false,
+  subfolders: null,
+  includeSubfolders: false,
+  progress: null,
+  run: null,
 };
+
+const busy = (state: State) => state.phase === "applying" || state.phase === "reverting";
 
 function actionablePhase(state: State): Phase {
   if (!state.folder) return "idle";
@@ -68,15 +87,48 @@ export function reduce(state: State, action: Action): State {
 
     case "folderDropped": {
       const arriving = state.folder !== null && state.skinId !== null;
-      const next = { ...state, folder: action.folder, appliedSkinId: null, inFlightSkinId: null, error: null, drag: null, arriving };
+      // A new folder starts with only itself in play: its subfolders are counted afresh and
+      // including them is chosen again, so a whole tree is never changed by accident.
+      const next = {
+        ...state,
+        folder: action.folder,
+        appliedSkinId: null,
+        inFlightSkinId: null,
+        error: null,
+        drag: null,
+        arriving,
+        subfolders: null,
+        includeSubfolders: false,
+        progress: null,
+        run: null,
+      };
       return { ...next, phase: actionablePhase(next) };
     }
+
+    case "subfoldersCounted": {
+      if (state.folder?.path !== action.path) return state;
+      const none = !action.subfolders || action.subfolders.count === 0 || action.subfolders.more;
+      return { ...state, subfolders: action.subfolders, includeSubfolders: none ? false : state.includeSubfolders };
+    }
+
+    case "includeSubfolders": {
+      if (busy(state)) return state;
+      const s = state.subfolders;
+      if (action.on && (!s || s.count === 0 || s.more)) return state;
+      return { ...state, includeSubfolders: action.on };
+    }
+
+    case "treeProgress":
+      return busy(state) ? { ...state, progress: action.progress } : state;
+
+    case "runDismissed":
+      return state.run ? { ...state, run: null } : state;
 
     case "arrived":
       return state.arriving ? { ...state, arriving: false } : state;
 
     case "skinSelected": {
-      const next = { ...state, skinId: action.skinId, error: null, arriving: false };
+      const next = { ...state, skinId: action.skinId, error: null, arriving: false, run: state.skinId === action.skinId ? state.run : null };
       if (state.phase === "applying" || state.phase === "reverting") return next;
       return { ...next, phase: actionablePhase(next) };
     }
@@ -88,18 +140,26 @@ export function reduce(state: State, action: Action): State {
     }
 
     case "applyStarted":
-      if (!state.folder || !state.skinId || state.phase === "applying" || state.phase === "reverting") return state;
-      return { ...state, phase: "applying", inFlightSkinId: state.skinId, error: null, arriving: false };
+      if (!state.folder || !state.skinId || busy(state)) return state;
+      return { ...state, phase: "applying", inFlightSkinId: state.skinId, error: null, arriving: false, progress: null, run: null };
 
     case "applySucceeded": {
       if (state.phase !== "applying") return state;
-      const next = { ...state, appliedSkinId: state.inFlightSkinId, inFlightSkinId: null };
+      // A run that stopped before changing anything leaves the folder as it was.
+      const changedNothing = action.run !== undefined && action.run.changed.length === 0;
+      const next = {
+        ...state,
+        appliedSkinId: changedNothing ? state.appliedSkinId : state.inFlightSkinId,
+        inFlightSkinId: null,
+        progress: null,
+        run: action.run ?? null,
+      };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "applyFailed": {
       if (state.phase !== "applying") return state;
-      const next = { ...state, inFlightSkinId: null, error: action.message };
+      const next = { ...state, inFlightSkinId: null, error: action.message, progress: null };
       return { ...next, phase: actionablePhase(next) };
     }
 
@@ -107,19 +167,19 @@ export function reduce(state: State, action: Action): State {
     // show (on its own, or while it waits before a skin goes on).
     case "revertStarted":
       if (state.phase !== "applied" && state.phase !== "folder" && !(state.phase === "ready" && state.arriving)) return state;
-      return { ...state, phase: "reverting", error: null };
+      return { ...state, phase: "reverting", error: null, progress: null };
 
     case "revertSucceeded": {
       // The skin is put down too, so the folder is seen wearing its default icon again
       // instead of jumping straight back into a preview of the skin just removed.
       if (state.phase !== "reverting") return state;
-      const next = { ...state, appliedSkinId: null, skinId: null, arriving: false };
+      const next = { ...state, appliedSkinId: null, skinId: null, arriving: false, progress: null, run: action.run ?? null };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "revertFailed":
       if (state.phase !== "reverting") return state;
-      return { ...state, phase: actionablePhase(state), error: action.message };
+      return { ...state, phase: actionablePhase(state), error: action.message, progress: null };
 
     case "invalidDrop":
       return { ...state, drag: null, error: action.message };

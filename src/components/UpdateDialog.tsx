@@ -5,6 +5,7 @@ import { REPO_URL } from "../lib/packs";
 import { restartApp, type AvailableUpdate } from "../lib/updater";
 import type { UpdateStatus } from "../hooks/useUpdates";
 import { Modal } from "./Modal";
+import { OkBadge } from "./OkBadge";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { CheckIcon } from "./icons/check";
 import { DownloadIcon } from "./icons/download";
@@ -132,7 +133,7 @@ function ReleaseNotes({ markdown }: { markdown: string }) {
   const blocks = useMemo(() => parseNotes(markdown), [markdown]);
   if (blocks.length === 0) return <p className="field-note">No notes came with this version.</p>;
   return (
-    <div className="update-notes scroll-on-hover">
+    <div className="update-notes">
       {blocks.map((b, i) =>
         b.kind === "heading" ? (
           <h3 key={i} className="update-notes-heading">
@@ -178,7 +179,7 @@ export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus
     ) : s === "available" ? (
       <DownloadIcon size={15} />
     ) : s === "current" ? (
-      <CheckIcon size={15} />
+      <OkBadge size={16} playOnMount />
     ) : s === "failed" ? (
       <BadgeAlertIcon size={15} />
     ) : (

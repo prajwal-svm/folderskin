@@ -21,6 +21,7 @@ import { ListIcon } from "./icons/list";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
 import { SparklesIcon } from "./icons/sparkles";
+import { clip } from "../lib/names";
 
 type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string; run: () => void } }) => void;
 
@@ -116,12 +117,12 @@ export function CommunityView({
       const skins = await api.addPack(pack.id);
       mark(pack.id, true);
       onAdded(skins);
-      toast(`Added ${skins.length} skins from ${pack.name}`, {
+      toast(`Added ${skins.length} skins from ${clip(pack.name)}`, {
         tone: "ok",
         action: pack.tags[0] ? { label: "Show", run: () => onShowTag(pack.tags[0]) } : undefined,
       });
     } catch (e) {
-      toast(`Couldn't add ${pack.name}: ${errorMessage(e)}`, { tone: "danger" });
+      toast(`Couldn't add ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
       setBusy(null);
     }
@@ -134,12 +135,12 @@ export function CommunityView({
       if (removed.length) onRemoved(removed);
       onAdded(skins);
       mark(pack.id, true);
-      toast(`Updated ${pack.name}`, {
+      toast(`Updated ${clip(pack.name)}`, {
         tone: "ok",
         action: pack.tags[0] ? { label: "Show", run: () => onShowTag(pack.tags[0]) } : undefined,
       });
     } catch (e) {
-      toast(`Couldn't update ${pack.name}: ${errorMessage(e)}`, { tone: "danger" });
+      toast(`Couldn't update ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
       setBusy(null);
     }
@@ -151,9 +152,9 @@ export function CommunityView({
     try {
       onRemoved(await api.removePack(pack.id));
       mark(pack.id, false);
-      toast(`Removed ${pack.name}`, { tone: "ok" });
+      toast(`Removed ${clip(pack.name)}`, { tone: "ok" });
     } catch (e) {
-      toast(`Couldn't remove ${pack.name}: ${errorMessage(e)}`, { tone: "danger" });
+      toast(`Couldn't remove ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
       setBusy(null);
     }
@@ -180,7 +181,7 @@ export function CommunityView({
 
   return (
     <section className="community">
-      <div className="community-scroll scroll-on-hover">
+      <div className="community-scroll">
         <header className="community-head">
           <div className="community-intro">
             <h2 className="view-title">Community</h2>
@@ -380,7 +381,7 @@ export function CommunityView({
 
       {removing && (
         <Confirm
-          title={`Remove "${removing.name}"?`}
+          title={`Remove "${clip(removing.name)}"?`}
           text={`Its skins leave your library. Folders that already use them keep their icon.`}
           action="Remove"
           onCancel={() => setRemoving(null)}

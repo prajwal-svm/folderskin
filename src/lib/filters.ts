@@ -56,7 +56,7 @@ const ADDED = [
   { value: "older", label: "Older" },
 ];
 
-const SOURCES: Record<string, string> = { community: "Community packs", import: "Your pictures", ai: "Made with AI" };
+const SOURCES: Record<string, string> = { community: "Community packs", import: "Your pictures", ai: "Made with AI", composer: "Your designs" };
 
 type FacetDef = {
   id: FacetId;

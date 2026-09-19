@@ -2,7 +2,7 @@
 //! decoded ones in front of it, the skins that could not be saved, and the default folder's
 //! thumbnail.
 
-use crate::store::{NewSkin, SavedSkin, SkinImage, Store, THUMB_SIZE};
+use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinSource, Store, THUMB_SIZE};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -53,6 +53,8 @@ struct Unsaved {
     entry: SavedSkin,
     image: SkinImage,
     thumbnail_png: Vec<u8>,
+    /// A design's document, so the composer can open it again this session.
+    design: Option<Arc<Vec<u8>>>,
 }
 
 #[derive(Default)]
@@ -107,6 +109,14 @@ impl AppState {
             .ok_or_else(|| "that skin isn't available any more".to_string())?;
         lock(&self.0.recent).put(skin_id.to_string(), image.clone());
         Ok(image)
+    }
+
+    /// The entry of a skin saved (or kept for this session) under `id`.
+    pub fn entry(&self, id: &str) -> Option<SavedSkin> {
+        if let Some(u) = lock(&self.0.unsaved).get(id) {
+            return Some(u.entry.clone());
+        }
+        self.store()?.get(id)
     }
 
     /// A skin already saved (or kept for this session) under `id`, with its thumbnail PNG.
@@ -178,7 +188,18 @@ impl AppState {
     /// Keeps a skin that could not be saved for the rest of this session: it is listed, can be
     /// applied and deleted, and is gone when the app quits.
     pub fn keep_unsaved(&self, new: NewSkin, image: SkinImage) -> (SavedSkin, Vec<u8>) {
-        let entry = new.entry(&image, crate::store::now_ms());
+        self.keep(new, image, None, store::now_ms())
+    }
+
+    /// [`AppState::keep_unsaved`] with a design's document, added at `created_at`.
+    fn keep(
+        &self,
+        new: NewSkin,
+        image: SkinImage,
+        design: Option<Arc<Vec<u8>>>,
+        created_at: u64,
+    ) -> (SavedSkin, Vec<u8>) {
+        let entry = new.entry(&image, created_at);
         let thumbnail_png = image.preview_png(THUMB_SIZE);
         lock(&self.0.unsaved).insert(
             entry.id.clone(),
@@ -186,9 +207,100 @@ impl AppState {
                 entry: entry.clone(),
                 image,
                 thumbnail_png: thumbnail_png.clone(),
+                design,
             },
         );
         (entry, thumbnail_png)
+    }
+
+    /// Saves a design from the composer with the document it was made from
+    /// ([`Store::add_design`]), and keeps it decoded for the next apply. Returns its entry and
+    /// thumbnail PNG; a design saved before comes back as it was saved.
+    ///
+    /// Without a data folder it is kept for this session only, its document with it.
+    pub fn save_design(
+        &self,
+        new: NewSkin,
+        image: SkinImage,
+        design: Vec<u8>,
+    ) -> Result<(SavedSkin, Vec<u8>), String> {
+        let Some(store) = self.store() else {
+            if let Some(kept) = self.find_saved(&new.id) {
+                return Ok(kept);
+            }
+            return Ok(self.keep(new, image, Some(Arc::new(design)), store::now_ms()));
+        };
+        let (entry, fresh) = store.add_design(new, &image, &design)?;
+        lock(&self.0.unsaved).remove(&entry.id);
+        if fresh {
+            lock(&self.0.recent).put(entry.id.clone(), image);
+        }
+        let thumb = store.thumbnail_png(&entry)?;
+        Ok((entry, thumb))
+    }
+
+    /// Saves a design over the one it was made from, `old_id` ([`Store::replace_design`]): it
+    /// takes the old one's place in the library, and the old one goes, from memory too. Returns
+    /// the entry and thumbnail PNG of whichever design the library now has in its place.
+    ///
+    /// A design kept for this session only is swapped the same way, in memory.
+    pub fn replace_design(
+        &self,
+        old_id: &str,
+        new: NewSkin,
+        image: SkinImage,
+        design: Vec<u8>,
+    ) -> Result<(SavedSkin, Vec<u8>), String> {
+        let mut unsaved = lock(&self.0.unsaved);
+        if let Some(old) = unsaved.get_mut(old_id) {
+            if old.entry.source != SkinSource::Composer {
+                return Err(store::NOT_A_DESIGN.into());
+            }
+            if new.id == old_id {
+                if let Some(name) = store::clean_name(&new.name) {
+                    old.entry.name = name;
+                }
+                old.entry.tags =
+                    folderskin_core::pack::clean_tags(&new.tags, folderskin_core::pack::MAX_TAGS);
+                return Ok((old.entry.clone(), old.thumbnail_png.clone()));
+            }
+            let created_at = old.entry.created_at;
+            unsaved.remove(old_id);
+            drop(unsaved);
+            lock(&self.0.recent).remove(old_id);
+            if let Some(kept) = self.find_saved(&new.id) {
+                return Ok(kept);
+            }
+            return Ok(self.keep(new, image, Some(Arc::new(design)), created_at));
+        }
+        drop(unsaved);
+
+        let store = self.store().ok_or_else(|| store::DESIGN_GONE.to_string())?;
+        let (entry, fresh) = store.replace_design(old_id, new, &image, &design)?;
+        {
+            let mut recent = lock(&self.0.recent);
+            if entry.id != old_id {
+                recent.remove(old_id);
+            }
+            if fresh {
+                recent.put(entry.id.clone(), image);
+            }
+        }
+        lock(&self.0.unsaved).remove(&entry.id);
+        let thumb = store.thumbnail_png(&entry)?;
+        Ok((entry, thumb))
+    }
+
+    /// The document a design was made from, saved or kept for this session. `Ok(None)` for a
+    /// skin with none, or no skin at all.
+    pub fn design(&self, id: &str) -> Result<Option<Vec<u8>>, String> {
+        if let Some(u) = lock(&self.0.unsaved).get(id) {
+            return Ok(u.design.as_ref().map(|d| d.to_vec()));
+        }
+        match self.store() {
+            Some(store) => store.design(id),
+            None => Ok(None),
+        }
     }
 
     /// Every saved skin, plus any kept for this session only, newest first, each with its
@@ -459,6 +571,112 @@ mod tests {
         assert_eq!(ready.into_inner(), 2);
         assert_eq!(state.saved_skins().len(), 2);
         assert!(state.resolve(&ids[1]).is_ok());
+    }
+
+    fn design_skin(id: &str, name: &str) -> NewSkin {
+        NewSkin {
+            source: SkinSource::Composer,
+            name: name.into(),
+            pack: None,
+            ..pack_skin(id)
+        }
+    }
+
+    #[test]
+    fn without_a_store_a_design_and_its_document_last_for_the_session() {
+        let state = AppState::default();
+        let (draft_id, final_id) = (skin_id(b"draft"), skin_id(b"final"));
+        let (draft, thumb) = state
+            .save_design(design_skin(&draft_id, "Draft"), folder(1), b"[1]".to_vec())
+            .unwrap();
+        assert!(thumb.starts_with(b"\x89PNG"));
+        assert_eq!(
+            state.design(&draft_id).unwrap().as_deref(),
+            Some(&b"[1]"[..])
+        );
+        let (again, _) = state
+            .save_design(design_skin(&draft_id, "Again"), folder(1), b"[]".to_vec())
+            .unwrap();
+        assert_eq!(again, draft, "saved already, so it comes back as it was");
+
+        let (done, _) = state
+            .replace_design(
+                &draft_id,
+                design_skin(&final_id, "Final"),
+                folder(2),
+                b"[2]".to_vec(),
+            )
+            .unwrap();
+        assert_eq!(
+            done.created_at, draft.created_at,
+            "it keeps the draft's place"
+        );
+        assert_eq!(
+            state.design(&final_id).unwrap().as_deref(),
+            Some(&b"[2]"[..])
+        );
+        assert_eq!(state.design(&draft_id).unwrap(), None);
+        assert!(state.resolve(&draft_id).is_err());
+        let ids: Vec<String> = state.saved_skins().into_iter().map(|(e, _)| e.id).collect();
+        assert_eq!(ids, [final_id]);
+
+        // A picture that was imported isn't a design, and a design that's gone can't be saved over.
+        let photo = skin_id(b"photo");
+        state.keep_unsaved(
+            NewSkin {
+                source: SkinSource::Import,
+                pack: None,
+                ..pack_skin(&photo)
+            },
+            folder(3),
+        );
+        let over = |old: &str| {
+            state
+                .replace_design(
+                    old,
+                    design_skin(&skin_id(b"x"), "X"),
+                    folder(4),
+                    b"[]".to_vec(),
+                )
+                .unwrap_err()
+        };
+        assert_eq!(over(&photo), store::NOT_A_DESIGN);
+        assert_eq!(over(&draft_id), store::DESIGN_GONE);
+        assert_eq!(state.design(&photo).unwrap(), None);
+    }
+
+    #[test]
+    fn a_design_saved_over_its_old_one_takes_its_place_in_the_cache() {
+        let dir =
+            std::env::temp_dir().join(format!("folderskin-state-design-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let state = AppState::default();
+        state.open_store(dir.clone());
+        let (v1, v2) = (skin_id(b"cache v1"), skin_id(b"cache v2"));
+        state
+            .save_design(design_skin(&v1, "V1"), folder(1), b"[1]".to_vec())
+            .unwrap();
+        assert!(lock(&state.0.recent).skins.contains_key(&v1));
+
+        let (entry, thumb) = state
+            .replace_design(&v1, design_skin(&v2, "V2"), folder(2), b"[2]".to_vec())
+            .unwrap();
+        assert_eq!(entry.id, v2);
+        assert!(thumb.starts_with(b"\x89PNG"));
+        {
+            let recent = lock(&state.0.recent);
+            assert!(!recent.skins.contains_key(&v1), "the old design is dropped");
+            assert!(
+                recent.skins.contains_key(&v2),
+                "the new one is ready to apply"
+            );
+        }
+        assert_eq!(state.design(&v2).unwrap().as_deref(), Some(&b"[2]"[..]));
+        assert!(state.resolve(&v1).is_err());
+        assert!(matches!(state.resolve(&v2), Ok(SkinImage::Folder(_))));
+        assert_eq!(state.entry(&v2).map(|e| e.name).as_deref(), Some("V2"));
+        assert!(state.entry(&v1).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

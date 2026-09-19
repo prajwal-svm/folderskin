@@ -13,6 +13,7 @@ import { ArrowUpIcon } from "./icons/arrow-up";
 import { PaperclipIcon } from "./icons/paperclip";
 import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
+import { clip, trailOff } from "../lib/names";
 
 type Shape = "folder" | "skin";
 
@@ -227,7 +228,7 @@ export function Studio({
     );
   }
 
-  const placeholder = folderName ? `Describe a folder for ${folderName}…` : "Describe the folder you want…";
+  const placeholder = folderName ? trailOff(`Describe a folder for ${clip(folderName)}`) : "Describe the folder you want…";
 
   return (
     <section className={hasThread ? "studio has-thread" : "studio"}>
@@ -240,7 +241,7 @@ export function Studio({
             tryingOn={t.skin?.id === selectedId}
             onTryOn={(id) => {
               onTryOn(id);
-              toast(folderName ? `Trying it on ${folderName}` : "Picked. Now drop a folder on the right", { tone: "info" });
+              toast(folderName ? `Trying it on ${clip(folderName)}` : "Picked. Now drop a folder on the right", { tone: "info" });
             }}
             onAgain={() => void run(t.idea, t.shape)}
             onSettings={() => setSettingsOpen(true)}
@@ -422,7 +423,9 @@ function TurnCard({
           <img className="turn-img" src={turn.skin.thumbnail} alt="" draggable={false} />
           <div className="turn-meta">
             <div className="turn-title">
-              <p className="turn-name">{(live ?? turn.skin).name}</p>
+              <p className="turn-name" title={(live ?? turn.skin).name}>
+                {(live ?? turn.skin).name}
+              </p>
               {live && (
                 <button
                   type="button"
@@ -461,7 +464,7 @@ function TurnCard({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => turn.skin && onTryOn(turn.skin.id)}
               >
-                {tryingOn ? "Trying it on" : folderName ? `Try on ${folderName}` : "Try it on"}
+                {tryingOn ? "Trying it on" : folderName ? `Try on ${clip(folderName, 24)}` : "Try it on"}
               </button>
               <button type="button" className="btn btn-secondary" disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={onAgain}>
                 Make another

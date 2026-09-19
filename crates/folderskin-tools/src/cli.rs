@@ -38,6 +38,16 @@ pub enum Command {
         #[arg(long, default_value = "guide.png")]
         out: PathBuf,
     },
+    /// Write the layers the composer draws a design between: back.png, front.png, middle.png,
+    /// top.png and outline.png
+    ComposerLayers {
+        /// Folder to write them into; made if it isn't there
+        #[arg(long)]
+        out: PathBuf,
+        /// Edge of each layer in pixels (square)
+        #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(16..=4096))]
+        size: u32,
+    },
     /// Validate the app icon source (1024×1024 PNG with alpha) and print the command that builds the icon set
     AppIcon {
         #[arg(long = "in", default_value = "assets/logo/app-icon-1024.png")]
@@ -190,6 +200,29 @@ mod tests {
             vec!["folderskin-tools", "skin", "gen"],
         ] {
             assert!(Cli::try_parse_from(&gone).is_err(), "{gone:?}");
+        }
+    }
+
+    #[test]
+    fn parses_composer_layers_at_1024_unless_told_otherwise() {
+        let parse = |args: &[&str]| {
+            Cli::try_parse_from([&["folderskin-tools", "composer-layers"], args].concat())
+                .map(|cli| cli.command)
+        };
+        match parse(&["--out", "docs/images/composer"]).unwrap() {
+            Command::ComposerLayers { out, size } => {
+                assert_eq!(out, PathBuf::from("docs/images/composer"));
+                assert_eq!(size, 1024);
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse(&["--out", "/tmp/layers", "--size", "2048"]).unwrap() {
+            Command::ComposerLayers { size, .. } => assert_eq!(size, 2048),
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&[]).is_err(), "it needs a folder to write to");
+        for size in ["0", "8", "8192", "big"] {
+            assert!(parse(&["--out", "x", "--size", size]).is_err(), "{size}");
         }
     }
 

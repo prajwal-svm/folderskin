@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from
 import type { Skin } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
 import { fileBrowser } from "../lib/platform";
+import { applyLabel, folders, runSummary, tooMany } from "../lib/tree";
 import type { State } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
 import { ArrowDownIcon } from "./icons/arrow-down";
@@ -9,7 +10,10 @@ import { ArrowLeftIcon } from "./icons/arrow-left";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { LoaderIcon } from "./icons/loader";
 import { RotateCcwIcon } from "./icons/rotate-ccw";
+import { BadgeAlertIcon } from "./icons/badge-alert";
+import { XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
+import { clip, trailOff } from "../lib/names";
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 
@@ -40,6 +44,12 @@ export function FolderStage({
   onTryOn,
   onRevert,
   onReveal,
+  stopping,
+  onIncludeSubfolders,
+  onStop,
+  onCarryOn,
+  onTryAgain,
+  onDismissRun,
 }: {
   state: State;
   /** The skin selected in the library, if any. */
@@ -57,6 +67,15 @@ export function FolderStage({
   onTryOn: () => void;
   onRevert: () => void;
   onReveal: () => void;
+  /** Stop was pressed and the run is finishing the folder it's on. */
+  stopping: boolean;
+  onIncludeSubfolders: (on: boolean) => void;
+  onStop: () => void;
+  /** Carries on with the folders a stopped run didn't reach. */
+  onCarryOn: () => void;
+  /** Tries the folders a run couldn't change again. */
+  onTryAgain: () => void;
+  onDismissRun: () => void;
 }) {
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
@@ -85,11 +104,13 @@ export function FolderStage({
     return () => window.clearTimeout(t);
   }, [error]);
 
+  const tree = state.includeSubfolders || state.run !== null;
   const cls = [
     "island",
     "stage-island",
     `is-${phase}`,
     drag ? "is-drop-target" : "",
+    tree && folder && !drag ? "has-tree" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -107,6 +128,13 @@ export function FolderStage({
           title={folder ? "Choose a different folder" : undefined}
         >
           <span className="stage-halo" aria-hidden="true" />
+          {src && state.includeSubfolders && !drag && (
+            // The folders inside, stacked behind it, while they're included.
+            <span className="stage-stack" aria-hidden="true">
+              <img className="stage-stack-img is-far" src={src} alt="" draggable={false} />
+              <img className="stage-stack-img is-near" src={src} alt="" draggable={false} />
+            </span>
+          )}
           {src ? (
             <StageImage key={folder?.path ?? "none"} src={src} />
           ) : folder && !drag ? null : skin && !drag ? (
@@ -131,20 +159,30 @@ export function FolderStage({
 
         <StageCopy state={state} skin={skin} browseLabel={browseLabel} />
 
-        <StageActions
-          state={state}
-          skin={skin}
-          customIcon={customIcon}
-          fileBrowser={fileBrowser(os)}
-          onApply={onApply}
-          onTryOn={onTryOn}
-          onRevert={onRevert}
-          onReveal={onReveal}
-          onBrowse={onBrowse}
-        />
+        {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} />}
+
+        {state.run && !busy && !drag && (
+          <RunResult state={state} skinName={skin?.name ?? null} onCarryOn={onCarryOn} onTryAgain={onTryAgain} onDismiss={onDismissRun} />
+        )}
+
+        {busy && state.progress ? (
+          <RunProgress state={state} stopping={stopping} onStop={onStop} />
+        ) : (
+          <StageActions
+            state={state}
+            skin={skin}
+            customIcon={customIcon}
+            fileBrowser={fileBrowser(os)}
+            onApply={onApply}
+            onTryOn={onTryOn}
+            onRevert={onRevert}
+            onReveal={onReveal}
+            onBrowse={onBrowse}
+          />
+        )}
 
         <p className={error ? "stage-status is-error" : "stage-status"} role={error ? "alert" : undefined} aria-live="polite">
-          {error ?? statusLine(state, skin, fileBrowser(os), customIcon)}
+          {error ?? statusLine(state, skin, fileBrowser(os), customIcon, stopping)}
         </p>
       </div>
     </aside>
@@ -179,9 +217,9 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
         <h2 className="stage-title">{image ? "Let go to add this picture" : "Let go to pick this folder"}</h2>
         <p className="stage-sub">
           {image
-            ? `${drag.name || "It"} becomes a skin in Yours.`
+            ? `${drag.name ? clip(drag.name) : "It"} becomes a skin in Yours.`
             : drag.name
-              ? `${drag.name} will show up here, ready for a skin.`
+              ? `${clip(drag.name)} will show up here, ready for a skin.`
               : "It will show up here, ready for a skin."}
         </p>
       </div>
@@ -194,7 +232,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
         <h2 className="stage-title">{skin ? "Now drop a folder" : "Drop a folder here"}</h2>
         <p className="stage-sub">
           {skin
-            ? `${skin.name} is ready. Drop any folder here, or click to pick one from ${browseLabel}.`
+            ? `${clip(skin.name)} is ready. Drop any folder here, or click to pick one from ${browseLabel}.`
             : `Or click to pick one from ${browseLabel}.`}
         </p>
       </div>
@@ -208,8 +246,8 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
         <OkBadge size={16} playOnMount /> Applied
       </span>
     ) : (phase === "ready" && !state.arriving) || phase === "applying" ? (
-      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`}>
-        Trying on {skin?.name}
+      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`} title={skin?.name}>
+        <span className="chip-text">Trying on {skin?.name}</span>
       </span>
     ) : (
       <span className="chip stage-eyebrow" key="current">
@@ -255,6 +293,10 @@ function StageActions({
   if (drag || phase === "idle") return null;
 
   const noFocusSteal = (e: MouseEvent) => e.preventDefault();
+  const inside = state.includeSubfolders && state.subfolders ? state.subfolders.count : 0;
+  // An apply over the tree has run: finished (some may have failed), or stopped, which its
+  // summary offers to carry on. Either way what's next is showing or reverting it.
+  const treeDone = state.run?.kind === "apply";
   const nudge = (
     <p className="nudge">
       <span className="nudge-arrow">
@@ -281,7 +323,7 @@ function StageActions({
         )}
         <button type="button" className="btn btn-ghost" disabled={removing} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
           {removing ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-          {removing ? "Removing…" : "Remove custom icon"}
+          {removing ? "Removing…" : inside ? "Remove custom icons" : "Remove custom icon"}
         </button>
       </div>
     );
@@ -289,8 +331,20 @@ function StageActions({
 
   if (phase === "folder") return nudge;
 
-  if (phase === "applied" || phase === "reverting") {
-    return <DoneActions reverting={phase === "reverting"} fileBrowser={fileBrowser} onReveal={onReveal} onRevert={onRevert} />;
+  // Applied to the folder itself, but the folders inside it are now included too: offer those.
+  const moreToDo = phase === "applied" && inside > 0 && !treeDone;
+  if ((phase === "applied" || phase === "reverting") && !moreToDo) {
+    const reach = inside > 0 && state.run?.kind === "apply" ? state.run.changed.length : 0;
+    const count = reach.toLocaleString("en-US");
+    return (
+      <DoneActions
+        reverting={phase === "reverting"}
+        revertLabel={reach > 1 ? (state.run?.stopped ? `Revert these ${count}` : `Revert all ${count}`) : "Revert"}
+        fileBrowser={fileBrowser}
+        onReveal={onReveal}
+        onRevert={onRevert}
+      />
+    );
   }
 
   const applying = phase === "applying";
@@ -305,7 +359,7 @@ function StageActions({
         onClick={onApply}
       >
         {applying ? <LoaderIcon /> : <ArrowDownIcon />}
-        {applying ? "Applying…" : "Apply skin"}
+        {applying ? "Applying…" : inside ? applyLabel(inside) : "Apply skin"}
       </button>
       <button type="button" className="btn btn-ghost" disabled={applying} onMouseDown={noFocusSteal} onClick={onBrowse}>
         Choose a different folder
@@ -320,11 +374,13 @@ function StageActions({
  */
 function DoneActions({
   reverting,
+  revertLabel,
   fileBrowser,
   onReveal,
   onRevert,
 }: {
   reverting: boolean;
+  revertLabel: string;
   fileBrowser: string;
   onReveal: () => void;
   onRevert: () => void;
@@ -349,14 +405,152 @@ function DoneActions({
       </button>
       <button type="button" className="btn btn-ghost" disabled={reverting} aria-busy={reverting} onMouseDown={noFocusSteal} onClick={onRevert}>
         {reverting ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-        {reverting ? "Reverting…" : "Revert"}
+        {reverting ? "Reverting…" : revertLabel}
       </button>
     </div>
   );
 }
 
+/**
+ * "Include subfolders": the folder and every folder inside it get the skin, or lose their icons,
+ * together. It shows only for a folder with folders inside, says how many, and can't be used on
+ * more than a run can take.
+ */
+function SubfolderSwitch({ state, onChange }: { state: State; onChange: (on: boolean) => void }) {
+  const s = state.subfolders;
+  if (!s || s.count === 0 || !state.folder) return null;
+  const on = state.includeSubfolders;
+  const busy = state.phase === "applying" || state.phase === "reverting";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={busy || s.more}
+      className={on ? "stage-scope is-on" : "stage-scope"}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => onChange(!on)}
+    >
+      <span className="stage-scope-text">
+        <span className="stage-scope-title">Include subfolders</span>
+        <span className="stage-scope-sub">
+          {s.more ? tooMany("folders") : `${folders(s.count)} inside`}
+        </span>
+      </span>
+      <span className={on ? "switch is-on" : "switch"} aria-hidden="true">
+        <span className="knob" />
+      </span>
+    </button>
+  );
+}
+
+/** A run over the folder and its subfolders, under way: how far, which folder, and Stop. */
+function RunProgress({ state, stopping, onStop }: { state: State; stopping: boolean; onStop: () => void }) {
+  const p = state.progress;
+  if (!p) return null;
+  const share = p.total > 0 ? Math.min(100, (p.done / p.total) * 100) : 0;
+  const verb = state.phase === "applying" ? "Applying" : "Reverting";
+  return (
+    <div className="stage-actions stage-progress" role="status" aria-live="polite">
+      <p className="stage-progress-line">
+        <span className="stage-progress-title">{stopping ? "Stopping…" : `${verb}…`}</span>
+        <span className="stage-progress-count">
+          {p.done.toLocaleString("en-US")} of {p.total.toLocaleString("en-US")}
+        </span>
+      </p>
+      <span className="stage-progress-bar" aria-hidden="true">
+        <span style={{ width: `${share}%` }} />
+      </span>
+      <p className="stage-progress-name" title={p.name}>
+        {p.done === 0 ? `Starting with ${clip(p.name)}` : p.name}
+      </p>
+      <button type="button" className="btn btn-ghost" disabled={stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
+        {stopping ? <LoaderIcon size={15} /> : null}
+        {stopping ? "Finishing this folder…" : "Stop"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * What the last run over the tree did: all of it, some with the ones that failed listed (and a
+ * way to try them again), or where it stopped (and a way to carry on).
+ */
+function RunResult({
+  state,
+  skinName,
+  onCarryOn,
+  onTryAgain,
+  onDismiss,
+}: {
+  state: State;
+  skinName: string | null;
+  onCarryOn: () => void;
+  onTryAgain: () => void;
+  onDismiss: () => void;
+}) {
+  const run = state.run;
+  if (!run) return null;
+  const { title, detail, tone } = runSummary(run, skinName);
+  const failed = run.failed;
+  // Stopped before anything changed, the Apply button below does the same.
+  const carryOn = run.stopped && run.remaining.length > 0 && run.changed.length > 0;
+  return (
+    <div className={`stage-result is-${tone}`} role="status">
+      <div className="stage-result-head">
+        <span className="stage-result-icon" aria-hidden="true">
+          {tone === "ok" ? <OkBadge size={18} playOnMount /> : <BadgeAlertIcon size={17} />}
+        </span>
+        <p className="stage-result-title">{title}</p>
+        <button type="button" className="stage-result-x" aria-label="hide this summary" title="Hide" onClick={onDismiss}>
+          <XIcon size={13} />
+        </button>
+      </div>
+      {detail && <p className="stage-result-detail">{detail}</p>}
+      {failed.length > 0 && (
+        <details className="stage-result-failed">
+          <summary>
+            {failed.length === 1 ? "Which one" : `Which ${failed.length.toLocaleString("en-US")}`}
+          </summary>
+          <ul>
+            {failed.map((f) => (
+              <li key={f.path} title={f.path}>
+                <span className="stage-result-name">{f.name}</span>
+                <span className="stage-result-reason">{f.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {(carryOn || (!run.stopped && failed.length > 0)) && (
+        <div className="stage-result-actions">
+          {carryOn && (
+            <button type="button" className="chip-btn" onClick={onCarryOn}>
+              Carry on with the other {run.remaining.length.toLocaleString("en-US")}
+            </button>
+          )}
+          {!run.stopped && failed.length > 0 && (
+            <button type="button" className="chip-btn" onClick={onTryAgain}>
+              <RotateCcwIcon size={13} />
+              Try {failed.length === 1 ? "it" : "them"} again
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** One quiet line under the buttons: what just happened or what happens next. */
-function statusLine(state: State, skin: Skin | null, fileBrowser: string, customIcon: boolean): string {
+function statusLine(state: State, skin: Skin | null, fileBrowser: string, customIcon: boolean, stopping: boolean): string {
+  const inside = state.includeSubfolders && state.subfolders ? state.subfolders.count : 0;
+  if (state.progress && (state.phase === "applying" || state.phase === "reverting")) {
+    if (stopping) return "Folders already done stay that way.";
+    return state.phase === "applying" ? `${fileBrowser} catches up as it goes.` : "Putting the default icons back…";
+  }
+  if (inside > 0 && (state.phase === "ready" || (state.phase === "applied" && state.run === null))) {
+    return "Hidden folders and app bundles are skipped.";
+  }
   switch (state.phase) {
     case "idle":
       return state.drag ? "" : "Pictures work too. Drop one to turn it into a skin.";
@@ -365,7 +559,7 @@ function statusLine(state: State, skin: Skin | null, fileBrowser: string, custom
     case "ready":
       return state.arriving && customIcon ? "It has an icon of its own." : "Nothing changes on disk until you apply.";
     case "applying":
-      return `Writing ${skin?.name ?? "the skin"} into ${state.folder?.name}…`;
+      return trailOff(`Writing ${skin ? clip(skin.name) : "the skin"} into ${clip(state.folder?.name ?? "the folder")}`);
     case "applied":
       return `${fileBrowser} can take a second to catch up.`;
     case "reverting":

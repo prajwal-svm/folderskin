@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
+import { isYours } from "../lib/tags";
 import { StarIcon } from "./icons/star";
 
 /** Degrees the folder turns when the pointer is at the tile's edge. */
@@ -105,7 +106,8 @@ export function FolderThumb({
     if (onMenu && (e.key === "F2" || (e.key === "Enter" && selected))) {
       e.preventDefault();
       if (!selected) onSelect();
-      onMenu(more.current ?? e.currentTarget, true);
+      // F2 renames, but a pack's skin keeps the name it was shared under: open the menu as a click does.
+      onMenu(more.current ?? e.currentTarget, isYours(skin));
     } else if (onRemove && (e.key === "Delete" || e.key === "Backspace")) {
       e.preventDefault();
       onRemove();
@@ -133,7 +135,13 @@ export function FolderThumb({
         <span className="tile-art" ref={art}>
           <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} />
         </span>
-        <span className="tile-name">
+        <span
+          className="tile-name"
+          title={skin.name}
+          // A double click on the name renames it, as in Finder: the menu opens with the name ready to
+          // type over. Not for a pack's skin, whose name isn't the user's to change.
+          onDoubleClick={onMenu && isYours(skin) ? () => more.current && onMenu(more.current, true) : undefined}
+        >
           <span className="tile-name-text">{skin.name}</span>
         </span>
       </button>
@@ -159,7 +167,7 @@ export function FolderThumb({
           aria-label={`options for ${skin.name}`}
           aria-haspopup="dialog"
           aria-expanded={menuOpen}
-          title="Name, tags and details"
+          title={isYours(skin) ? "Rename, tags and details" : "Tags and details"}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();

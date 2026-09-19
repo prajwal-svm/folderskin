@@ -7,7 +7,10 @@
 //! `.directory` is a shared file — it can carry `Name`, `Comment`, sort order and more — so its
 //! contents come from pure functions that edit only our own lines. They compile on every OS and
 //! are unit-tested there, which is the only way this logic gets covered on a macOS dev machine.
+//! So is [`prepare`], which encodes the PNG once for any number of folders.
 
+use super::ApplyError;
+use crate::compositor::IconSet;
 use std::path::Path;
 
 /// The PNG FolderSkin writes into the folder for both mechanisms to point at.
@@ -23,6 +26,13 @@ pub const PNG_SIZE: u32 = 512;
 
 /// The desktop entry key that names the folder's icon. Desktop entry keys are case-sensitive.
 const ICON_KEY: &str = "Icon";
+
+/// The bytes of `.folderskin.png` for `icons`: its [`PNG_SIZE`] px size.
+pub fn prepare(icons: &IconSet) -> Result<Vec<u8>, ApplyError> {
+    icons
+        .png(PNG_SIZE)
+        .ok_or_else(|| ApplyError::Platform(format!("the rendered icon has no {PNG_SIZE} px size")))
+}
 
 /// A whole `.directory` that points at `icon_abs`.
 ///
@@ -198,24 +208,21 @@ pub use imp::{apply, has_custom_icon, revert};
 mod imp {
     use super::{
         directory_file_contents, directory_file_with_icon, directory_file_without_ours, is_ours,
-        would_revert, DIRECTORY_NAME, PNG_NAME, PNG_SIZE,
+        would_revert, DIRECTORY_NAME, PNG_NAME,
     };
     use crate::apply::paths::{read_text_if_present, write_atomic};
     use crate::apply::ApplyError;
-    use crate::compositor::IconSet;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
 
     /// GIO attribute Nautilus, Nemo and Caja read a per-folder icon from.
     const GIO_KEY: &str = "metadata::custom-icon";
 
-    /// Writes the PNG and `.directory`, then sets the GIO attribute if `gio` is installed.
-    pub fn apply(folder: &Path, icons: &IconSet) -> Result<(), ApplyError> {
-        let png = icons.png(PNG_SIZE).ok_or_else(|| {
-            ApplyError::Platform(format!("the rendered icon has no {PNG_SIZE} px size"))
-        })?;
+    /// Writes the PNG (the [`prepare`](super::prepare)d bytes) and `.directory`, then sets the
+    /// GIO attribute if `gio` is installed.
+    pub fn apply(folder: &Path, png: &[u8]) -> Result<(), ApplyError> {
         let png_path = folder.join(PNG_NAME);
-        write_atomic(&png_path, &png)?;
+        write_atomic(&png_path, png)?;
 
         let entry_path = folder.join(DIRECTORY_NAME);
         let contents = match read_text_if_present(&entry_path)? {

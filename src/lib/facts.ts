@@ -24,6 +24,10 @@ export function skinFacts(skin: Skin, locale?: string): [string, string][] {
     if (skin.license) facts.push(["Licence", licenseLabel(skin.license)]);
     facts.push(["Shape", skin.kind === "folder" ? "Finished folder" : "Picture on FolderSkin's folder"]);
     if (added) facts.push(["Added", added]);
+  } else if (skin.source === "composer") {
+    facts.push(["From", "Designed by you here"]);
+    facts.push(["Shape", "Finished folder"]);
+    if (added) facts.push(["Made", added]);
   } else if (skin.source === "import") {
     facts.push(["From", "A picture you added"]);
     facts.push(["Shape", skin.kind === "folder" ? "Finished folder, background removed" : "Picture on FolderSkin's folder"]);

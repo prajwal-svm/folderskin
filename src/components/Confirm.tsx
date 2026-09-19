@@ -2,7 +2,8 @@ import { Modal } from "./Modal";
 import { DeleteIcon } from "./icons/delete";
 
 /**
- * "Are you sure?" before something can't be undone, like deleting a skin or removing a pack.
+ * "Are you sure?" before something can't be undone, like deleting a skin or removing a pack, or
+ * before something big, like giving a whole tree of folders a skin (`tone: "primary"`).
  * Cancel comes first and gets the focus, so Return keeps things as they are.
  */
 export function Confirm({
@@ -10,6 +11,7 @@ export function Confirm({
   text,
   image,
   action,
+  tone = "danger",
   onCancel,
   onConfirm,
 }: {
@@ -19,6 +21,8 @@ export function Confirm({
   image?: string;
   /** The button that does it, such as "Delete". */
   action: string;
+  /** Danger for what can't be undone; primary for a big step that can be. */
+  tone?: "danger" | "primary";
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -32,8 +36,8 @@ export function Confirm({
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="btn btn-danger" onClick={onConfirm}>
-            <DeleteIcon size={15} />
+          <button type="button" className={tone === "danger" ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm}>
+            {tone === "danger" && <DeleteIcon size={15} />}
             {action}
           </button>
         </>

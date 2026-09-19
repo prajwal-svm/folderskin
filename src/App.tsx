@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
@@ -7,6 +7,8 @@ import { IMAGE_EXTENSIONS } from "./lib/files";
 import { browseLabel, fileBrowser } from "./lib/platform";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
+import { applyLabel, CONFIRM_ABOVE, folders, formatBytes, mergeRuns, runToast, type TreeProgress, type TreeRun } from "./lib/tree";
+import { throttle } from "./lib/throttle";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
@@ -21,7 +23,7 @@ import { FolderStage } from "./components/FolderStage";
 import { FilterMenu } from "./components/FilterMenu";
 import { AboutMenu } from "./components/AboutMenu";
 import { CommunityView } from "./components/CommunityView";
-import { Studio } from "./components/Studio";
+import type { ApplyOutcome, ComposerHandle, ComposerRequest } from "./components/composer/Composer";
 import { Confirm } from "./components/Confirm";
 import { SkinMenu } from "./components/SkinMenu";
 import { SharePack } from "./components/SharePack";
@@ -32,6 +34,7 @@ import { SearchIcon } from "./components/icons/search";
 import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
 import { ListFilterIcon } from "./components/icons/list-filter";
+import { clip } from "./lib/names";
 
 
 function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref) => void; toggle: () => void } {
@@ -66,6 +69,23 @@ function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref)
   }, []);
   return { theme, pref, setPref: choose, toggle };
 }
+
+/** The composer is loaded the first time it's opened, so the rest of the app starts without it. */
+const Composer = lazy(() => import("./components/composer/Composer").then((m) => ({ default: m.Composer })));
+/** The AI view likewise. */
+const Studio = lazy(() => import("./components/Studio").then((m) => ({ default: m.Studio })));
+
+/** A question before a big run over a folder and its subfolders, answered through `resolve`. */
+type TreeAsk = {
+  kind: "apply" | "remove";
+  folderName: string;
+  /** Folders inside the chosen one. */
+  inside: number;
+  skin: Pick<Skin, "id" | "name" | "thumbnail"> | null;
+  /** Disk space one folder's copy of the icon takes, once known. */
+  bytes: number | null;
+  resolve: (ok: boolean) => void;
+};
 
 /** How long a folder that replaced another shows its own icon before the selected skin goes on. */
 const ARRIVAL_MS = 900;
@@ -104,6 +124,15 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   /** Bumped when a key is saved or removed in Settings, so the studio reads the providers again. */
   const [keysVersion, setKeysVersion] = useState(0);
+  /** The composer, once it has been opened: it stays mounted so a design survives a visit elsewhere. */
+  const [composerOpened, setComposerOpened] = useState(false);
+  const composer = useRef<ComposerHandle>(null);
+  /** Stop was pressed on a run over a folder and its subfolders. */
+  const [stopping, setStopping] = useState(false);
+  const [treeAsk, setTreeAsk] = useState<TreeAsk | null>(null);
+  /** A skin the composer was asked to edit or remix. */
+  const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null);
+  const requestSeq = useRef(0);
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleThemePref } = useTheme();
   const { items: toastItems, push: toast, dismiss: dismissToast } = useToasts();
   const updates = useUpdates();
@@ -177,6 +206,12 @@ export default function App() {
           setFolderIcon(null);
           dispatch({ type: "folderDropped", folder: { path: info.path, name: info.name } });
           refreshFolderIcon(info.path);
+          // How many folders are inside, for "Include subfolders"; counted for this folder alone.
+          const at = info.path;
+          api
+            .subfolderCount(at)
+            .then((subfolders) => dispatch({ type: "subfoldersCounted", path: at, subfolders }))
+            .catch(() => dispatch({ type: "subfoldersCounted", path: at, subfolders: null }));
         } else if (info.kind === "image") {
           const skin = await api.importImage(info.path);
           addSkin(skin);
@@ -185,8 +220,8 @@ export default function App() {
           dispatch({ type: "skinSelected", skinId: skin.id });
           toast(
             skin.kind === "folder"
-              ? `${skin.name} is in Yours, background removed`
-              : `${skin.name} is in Yours, wrapped onto a folder`,
+              ? `${clip(skin.name)} is in Yours, background removed`
+              : `${clip(skin.name)} is in Yours, wrapped onto a folder`,
             { tone: "ok" },
           );
         } else {
@@ -199,8 +234,25 @@ export default function App() {
     [refreshFolderIcon, addSkin, toast],
   );
 
+  /** A drop on the composer: a picture becomes a layer of the design, a folder the one to apply it to. */
+  const dropOnComposer = useCallback(
+    async (path: string) => {
+      try {
+        const info = await api.inspectPath(path);
+        if (info.kind === "image") composer.current?.addImagePath(info.path);
+        else await takePath(path);
+      } catch (e) {
+        toast(errorMessage(e), { tone: "danger" });
+      }
+    },
+    [takePath, toast],
+  );
+
   useDragDrop(
-    useCallback((paths: string[]) => void (paths[0] && takePath(paths[0])), [takePath]),
+    useCallback(
+      (paths: string[]) => void (paths[0] && (view === "compose" ? dropOnComposer(paths[0]) : takePath(paths[0]))),
+      [takePath, dropOnComposer, view],
+    ),
     useCallback((info) => dispatch({ type: "drag", info }), []),
   );
 
@@ -216,7 +268,7 @@ export default function App() {
   }, [state.arriving, state.folder?.path, iconShown, customIcon]);
 
   const browseFolder = useCallback(async () => {
-    if (!isTauri()) return takePath(mockPickFolder());
+    if (import.meta.env.DEV && !isTauri()) return takePath(mockPickFolder());
     const picked = await open({ directory: true, multiple: false, title: "Choose a folder" }).catch(() => null);
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
@@ -231,30 +283,253 @@ export default function App() {
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
 
+  // The latest state and library, for work that carries on after an await.
+  const latestState = useRef(state);
+  latestState.current = state;
+  const latestSkins = useRef(skins);
+  latestSkins.current = skins;
+
+  /** Asks before a big run over a folder and its subfolders; resolves to the answer. */
+  const askTree = useCallback(
+    (ask: Omit<TreeAsk, "resolve" | "bytes">) =>
+      new Promise<boolean>((resolve) => {
+        setTreeAsk({ ...ask, bytes: null, resolve });
+        if (ask.kind === "apply" && ask.skin) {
+          api
+            .treeBytes(ask.skin.id)
+            .then((bytes) => setTreeAsk((a) => (a && a.resolve === resolve ? { ...a, bytes } : a)))
+            .catch(() => {});
+        }
+      }),
+    [],
+  );
+  const answerTree = (ok: boolean) => {
+    treeAsk?.resolve(ok);
+    setTreeAsk(null);
+  };
+
+  /**
+   * Applies a skin to the chosen folder and every folder inside it, or to `only` those (carrying on
+   * after a stop, or trying failures again, when `prev` is the run that left them). Resolves to
+   * the run, or to what went wrong when no folder could be changed.
+   */
+  const applyTree = useCallback(
+    async (skinId: string, only?: string[], prev?: TreeRun): Promise<TreeRun | { error: string }> => {
+      const folder = latestState.current.folder;
+      if (!folder) return { error: "Choose a folder first" };
+      setStopping(false);
+      dispatch({ type: "applyStarted" });
+      const progress = throttle<TreeProgress>((p) => dispatch({ type: "treeProgress", progress: p }));
+      try {
+        const result = await api.applySkinTree(folder.path, skinId, only ?? null, progress.push);
+        const run: TreeRun = prev ? mergeRuns(prev, { ...result, kind: "apply" }) : { ...result, kind: "apply" };
+        if (run.changed.length === 0 && !run.stopped) {
+          const error = `Couldn't apply the skin: ${run.failed[0]?.reason ?? "no folder could be changed"}`;
+          dispatch({ type: "applyFailed", message: error });
+          return { error };
+        }
+        dispatch({ type: "applySucceeded", run });
+        refreshFolderIcon(folder.path);
+        return run;
+      } catch (e) {
+        const error = `Couldn't apply the skin: ${errorMessage(e)}`;
+        dispatch({ type: "applyFailed", message: error });
+        return { error };
+      } finally {
+        progress.cancel();
+        setStopping(false);
+      }
+    },
+    [refreshFolderIcon],
+  );
+
+  /** Puts the default icon back on `only` those folders, or on every folder in the tree with an icon of its own. */
+  const revertTree = useCallback(
+    async (only: string[] | null, prev?: TreeRun): Promise<TreeRun | null> => {
+      const folder = latestState.current.folder;
+      if (!folder) return null;
+      setStopping(false);
+      dispatch({ type: "revertStarted" });
+      const progress = throttle<TreeProgress>((p) => dispatch({ type: "treeProgress", progress: p }));
+      try {
+        const result = await api.revertSkinTree(folder.path, only, progress.push);
+        const run: TreeRun = prev ? mergeRuns(prev, { ...result, kind: "revert" }) : { ...result, kind: "revert" };
+        dispatch({ type: "revertSucceeded", run });
+        refreshFolderIcon(folder.path);
+        return run;
+      } catch (e) {
+        dispatch({ type: "revertFailed", message: `Couldn't put the default icons back: ${errorMessage(e)}` });
+        return null;
+      } finally {
+        progress.cancel();
+        setStopping(false);
+      }
+    },
+    [refreshFolderIcon],
+  );
+
   const apply = useCallback(async () => {
-    if (!state.folder || !state.skinId) return;
+    const { folder, skinId, includeSubfolders, subfolders } = latestState.current;
+    if (!folder || !skinId) return;
+    const inside = includeSubfolders && subfolders ? subfolders.count : 0;
+    if (inside > 0) {
+      const skin = latestSkins.current.find((s) => s.id === skinId) ?? null;
+      if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, skin }))) return;
+      await applyTree(skinId);
+      return;
+    }
     dispatch({ type: "applyStarted" });
     try {
-      await api.applySkin(state.folder.path, state.skinId);
+      await api.applySkin(folder.path, skinId);
       dispatch({ type: "applySucceeded" });
-      refreshFolderIcon(state.folder.path);
+      refreshFolderIcon(folder.path);
     } catch (e) {
       dispatch({ type: "applyFailed", message: `Couldn't apply the skin: ${errorMessage(e)}` });
     }
-  }, [state.folder, state.skinId, refreshFolderIcon]);
+  }, [askTree, applyTree, refreshFolderIcon]);
+
+  // Where the user is, for runs that finish after they may have moved on.
+  const viewNow = useRef(view);
+  viewNow.current = view;
+  const carryOnNow = useRef<() => void>(() => {});
+
+  /**
+   * An apply over the tree, said in a toast for when the folder panel that sums it up isn't in
+   * view: a stopped run offers to carry on, one with failures to show which.
+   */
+  const treeOutcome = useCallback((run: TreeRun, folderName: string, skinName: string): ApplyOutcome => {
+    const carry = run.stopped && run.remaining.length > 0 && run.changed.length > 0;
+    return {
+      ok: true,
+      message: runToast(run, folderName, skinName),
+      tone: carry || run.failed.length > 0 ? "info" : "ok",
+      action: carry
+        ? { label: "Carry on", run: () => carryOnNow.current() }
+        : run.failed.length > 0
+          ? { label: "See which", run: () => setView("yours") }
+          : undefined,
+    };
+  }, []);
+
+  /** Carries a stopped run on to the folders it didn't reach. */
+  const carryOn = useCallback(async () => {
+    const { run, skinId, folder } = latestState.current;
+    if (!run?.stopped || run.remaining.length === 0 || !folder) return;
+    if (run.kind === "revert") {
+      void revertTree(run.remaining, run);
+      return;
+    }
+    if (!skinId) return;
+    const next = await applyTree(skinId, run.remaining, run);
+    // Carried on from the composer's toast: say how it ended there too.
+    if (viewNow.current !== "compose") return;
+    if ("error" in next) {
+      toast(next.error, { tone: "danger" });
+      return;
+    }
+    const said = treeOutcome(next, folder.name, latestSkins.current.find((s) => s.id === skinId)?.name ?? "the skin");
+    toast(said.message ?? "", { tone: said.tone, action: said.action });
+  }, [applyTree, revertTree, treeOutcome, toast]);
+  carryOnNow.current = () => void carryOn();
+
+  /** Tries the folders the last run couldn't change once more. */
+  const tryAgain = useCallback(() => {
+    const { run, skinId } = latestState.current;
+    if (!run || run.failed.length === 0) return;
+    const paths = run.failed.map((f) => f.path);
+    if (run.kind === "apply" && skinId) void applyTree(skinId, paths, run);
+    else if (run.kind === "revert") void revertTree(paths, run);
+  }, [applyTree, revertTree]);
+
+  const stopRun = useCallback(() => {
+    setStopping(true);
+    api.stopTreeRun().catch(() => {});
+  }, []);
+
+  // The composer's Save & apply: the same apply as the folder panel's, subfolders included when
+  // they are, for a skin it just saved. Resolves to what happened, for the composer to say.
+  const applyFromComposer = useCallback(
+    async (skin: Skin): Promise<ApplyOutcome> => {
+      const { folder, phase, includeSubfolders, subfolders } = latestState.current;
+      if (!folder || phase === "applying" || phase === "reverting") return { ok: false };
+      dispatch({ type: "skinSelected", skinId: skin.id });
+      const inside = includeSubfolders && subfolders ? subfolders.count : 0;
+      if (inside > 0) {
+        if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, skin }))) return { ok: false };
+        const run = await applyTree(skin.id);
+        return "error" in run ? { ok: false, message: run.error, tone: "danger" } : treeOutcome(run, folder.name, skin.name);
+      }
+      dispatch({ type: "applyStarted" });
+      try {
+        await api.applySkin(folder.path, skin.id);
+        dispatch({ type: "applySucceeded" });
+        refreshFolderIcon(folder.path);
+        return { ok: true };
+      } catch (e) {
+        const message = `Couldn't apply the skin: ${errorMessage(e)}`;
+        dispatch({ type: "applyFailed", message });
+        return { ok: false, message, tone: "danger" };
+      }
+    },
+    [askTree, applyTree, treeOutcome, refreshFolderIcon],
+  );
+
+  /** A design saved from the composer: a new skin, or one in place of the design it changed. */
+  const onComposerSaved = useCallback((skin: Skin, replaced: string | null) => {
+    setSkins((prev) => {
+      const rest = prev.filter((s) => s.id !== skin.id);
+      const at = replaced ? rest.findIndex((s) => s.id === replaced) : -1;
+      if (at < 0) return newestFirst([skin, ...rest]);
+      const next = [...rest];
+      next[at] = skin;
+      return newestFirst(next);
+    });
+    if (replaced && replaced !== skin.id) {
+      setFavorites((prev) => {
+        if (!prev.includes(replaced)) return prev;
+        const next = prev.map((id) => (id === replaced ? skin.id : id));
+        saveFavorites(next);
+        return next;
+      });
+    }
+    dispatch({ type: "skinSelected", skinId: skin.id });
+  }, []);
+
+  /** Opens a skin in the composer: a design to edit again, anything else to remix. */
+  const designSkin = useCallback((skin: Skin) => {
+    requestSeq.current += 1;
+    setComposerRequest({ kind: skin.source === "composer" ? "edit" : "remix", skin, nonce: requestSeq.current });
+    setComposerOpened(true);
+    setView("compose");
+  }, []);
+
+  useEffect(() => {
+    if (view === "compose") setComposerOpened(true);
+  }, [view]);
 
   const revert = useCallback(async () => {
-    if (!state.folder) return;
+    const { folder, includeSubfolders, subfolders, run, phase } = latestState.current;
+    if (!folder) return;
+    const inside = includeSubfolders && subfolders ? subfolders.count : 0;
+    if (inside > 0) {
+      // Undoing an apply over the tree takes off exactly what it put on. Anything else clears
+      // every icon in the tree, which asks first.
+      // A run stopped before it changed anything leaves only the folder's own earlier apply.
+      const undo = phase === "applied" && run?.kind === "apply" ? (run.changed.length > 0 ? run.changed : [folder.path]) : null;
+      if (!undo && !(await askTree({ kind: "remove", folderName: folder.name, inside, skin: null }))) return;
+      await revertTree(undo);
+      return;
+    }
     dispatch({ type: "revertStarted" });
     try {
-      await api.revertSkin(state.folder.path);
+      await api.revertSkin(folder.path);
       dispatch({ type: "revertSucceeded" });
-      refreshFolderIcon(state.folder.path);
-      toast(`${state.folder.name} has its default icon back`, { tone: "ok" });
+      refreshFolderIcon(folder.path);
+      toast(`${clip(folder.name)} has its default icon back`, { tone: "ok" });
     } catch (e) {
       dispatch({ type: "revertFailed", message: `Couldn't put the default icon back: ${errorMessage(e)}` });
     }
-  }, [state.folder, refreshFolderIcon, toast]);
+  }, [askTree, revertTree, refreshFolderIcon, toast]);
 
   const reveal = useCallback(() => {
     if (!state.folder) return;
@@ -286,11 +561,11 @@ export default function App() {
             saveFavorites(next);
             return next;
           });
-          toast(`Deleted ${skin.name}`, { tone: "ok" });
+          toast(`Deleted ${clip(skin.name)}`, { tone: "ok" });
         })
         .catch((e) => {
           setSkins((prev) => newestFirst([skin, ...prev.filter((s) => s.id !== skin.id)]));
-          toast(`Couldn't delete ${skin.name}: ${errorMessage(e)}`, { tone: "danger" });
+          toast(`Couldn't delete ${clip(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
         });
     },
     [state.skinId, toast],
@@ -308,7 +583,7 @@ export default function App() {
         .then(show)
         .catch((e) => {
           show({ name: skin.name, tags: skin.tags });
-          toast(`Couldn't save ${skin.name}: ${errorMessage(e)}`, { tone: "danger" });
+          toast(`Couldn't save ${clip(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
         });
     },
     [toast],
@@ -407,6 +682,7 @@ export default function App() {
               : null;
 
   const library = view === "skins" || view === "yours" || view === "faves";
+  const composing = view === "compose";
 
   return (
     <main className={`app os-${platform.os}`}>
@@ -439,6 +715,7 @@ export default function App() {
         onShowUpdate={updates.showDialog}
       />
 
+      {!composing && (
       <section
         className={state.drag?.kind === "image" ? "island island-main is-drop-target" : "island island-main"}
         aria-label="library"
@@ -465,7 +742,7 @@ export default function App() {
                 />
               }
             />
-            <div className="gallery-scroll scroll-on-hover">
+            <div className="gallery-scroll">
               <Gallery
                 skins={visible}
                 selectedId={state.skinId}
@@ -486,20 +763,58 @@ export default function App() {
           <CommunityView onShare={() => setSharing({})} onAdded={addSkins} onRemoved={dropSkins} onShowTag={showTag} toast={toast} />
         )}
         {view === "generate" && (
-          <Studio
-            folderName={state.folder?.name ?? null}
-            selectedId={state.skinId}
-            onGenerated={addSkin}
-            onTryOn={(id) => dispatch({ type: "skinSelected", skinId: id })}
-            onImport={pickPhoto}
-            skinOf={skinOf}
-            onMenu={openMenu}
-            keysVersion={keysVersion}
-            toast={toast}
-          />
+          <Suspense fallback={null}>
+            <Studio
+              folderName={state.folder?.name ?? null}
+              selectedId={state.skinId}
+              onGenerated={addSkin}
+              onTryOn={(id) => dispatch({ type: "skinSelected", skinId: id })}
+              onImport={pickPhoto}
+              skinOf={skinOf}
+              onMenu={openMenu}
+              keysVersion={keysVersion}
+              toast={toast}
+            />
+          </Suspense>
         )}
       </section>
+      )}
 
+      {(composerOpened || composing) && (
+        <Suspense
+          fallback={
+            composing ? (
+              <>
+                <section className="island island-main" aria-busy="true" />
+                <aside className="island" aria-busy="true" />
+              </>
+            ) : null
+          }
+        >
+        <Composer
+          ref={composer}
+          active={composing}
+          skins={skins}
+          folder={state.folder}
+          folderIcon={stageIcon}
+          applying={state.phase === "applying"}
+          drag={composing ? state.drag : null}
+          subfolders={state.subfolders}
+          includeSubfolders={state.includeSubfolders}
+          onIncludeSubfolders={(on) => dispatch({ type: "includeSubfolders", on })}
+          progress={state.progress}
+          stopping={stopping}
+          onStop={stopRun}
+          onChooseFolder={browseFolder}
+          onSaved={onComposerSaved}
+          onApply={applyFromComposer}
+          request={composerRequest}
+          toast={toast}
+        />
+        </Suspense>
+      )}
+
+      {!composing && (
       <FolderStage
         state={state}
         skin={selected}
@@ -513,11 +828,18 @@ export default function App() {
         onTryOn={() => dispatch({ type: "arrived" })}
         onRevert={revert}
         onReveal={reveal}
+        stopping={stopping}
+        onIncludeSubfolders={(on) => dispatch({ type: "includeSubfolders", on })}
+        onStop={stopRun}
+        onCarryOn={carryOn}
+        onTryAgain={tryAgain}
+        onDismissRun={() => dispatch({ type: "runDismissed" })}
       />
+      )}
 
       {confirmingDelete && (
         <Confirm
-          title={`Delete "${confirmingDelete.name}"?`}
+          title={`Delete "${clip(confirmingDelete.name)}"?`}
           text="This removes it from your library for good. Folders that already use it keep their icon."
           image={confirmingDelete.thumbnail}
           action="Delete"
@@ -533,6 +855,10 @@ export default function App() {
           focusName={menu.keyboard}
           suggestions={allTags}
           onSave={(name, tags) => saveEdit(menu.skin, name, tags)}
+          onDesign={() => {
+            setMenu(null);
+            designSkin(menu.skin);
+          }}
           onShare={
             isYours(menu.skin)
               ? () => {
@@ -546,6 +872,27 @@ export default function App() {
             askDelete(menu.skin);
           }}
           onClose={closeMenu}
+        />
+      )}
+      {treeAsk && (
+        <Confirm
+          title={
+            treeAsk.kind === "apply"
+              ? `Apply ${treeAsk.skin ? clip(treeAsk.skin.name) : "this skin"} to ${folders(treeAsk.inside + 1)}?`
+              : `Remove the custom icons from ${folders(treeAsk.inside + 1)}?`
+          }
+          text={
+            treeAsk.kind === "apply"
+              ? `${clip(treeAsk.folderName)} and the ${folders(treeAsk.inside)} inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon${
+                  treeAsk.bytes ? `, about ${formatBytes(treeAsk.bytes)}, so about ${formatBytes(treeAsk.bytes * (treeAsk.inside + 1))} in all` : ""
+                }. Revert takes them all off again.`
+              : `${clip(treeAsk.folderName)} and every folder inside it go back to the default folder icon, including icons they were given outside FolderSkin. Folders without one are left as they are.`
+          }
+          image={treeAsk.kind === "apply" ? treeAsk.skin?.thumbnail : undefined}
+          action={treeAsk.kind === "apply" ? applyLabel(treeAsk.inside) : "Remove the icons"}
+          tone={treeAsk.kind === "apply" ? "primary" : "danger"}
+          onCancel={() => answerTree(false)}
+          onConfirm={() => answerTree(true)}
         />
       )}
       {sharing && <SharePack yours={yours} only={sharing.only} fileBrowser={fileBrowser(platform.os)} onClose={closeSharing} />}

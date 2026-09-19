@@ -1,0 +1,1882 @@
+/*
+ * The composer: the canvas island (tools, stage, view bar) and the side island (name, layers,
+ * settings, save). Selection and focus are tints and colour changes, never outlines; only the
+ * things that float (popovers) cast a shadow.
+ */
+
+.island-main.cmp-main[hidden],
+.island.cmp-side[hidden] {
+  display: none;
+}
+
+/* ---------- tools ---------- */
+
+.cmp-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 60px;
+  padding: 0 10px 0 12px;
+}
+
+.cmp-tools {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* Tools read like a Mac toolbar: the icon, and its name small beneath it. */
+.cmp-tool {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 50px;
+  height: 46px;
+  padding: 0 7px;
+  border-radius: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-tool svg {
+  flex: none;
+  color: var(--ink-2);
+  transition: color var(--t-fast) ease;
+}
+
+.cmp-tool-label {
+  font-weight: 700;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--muted);
+  transition: color var(--t-fast) ease;
+}
+
+.cmp-tool:hover,
+.cmp-tool:focus-visible {
+  background: var(--nav-hover);
+}
+
+.cmp-tool:hover svg,
+.cmp-tool:focus-visible svg,
+.cmp-tool:hover .cmp-tool-label,
+.cmp-tool:focus-visible .cmp-tool-label {
+  color: var(--accent-ink);
+}
+
+.cmp-tool:active {
+  transform: scale(0.95);
+}
+
+.cmp-tool.is-open {
+  background: var(--accent-soft);
+}
+
+.cmp-tool.is-open svg,
+.cmp-tool.is-open .cmp-tool-label {
+  color: var(--accent-ink);
+}
+
+.cmp-history {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cmp-history .cmp-tool {
+  margin-left: 4px;
+}
+
+.cmp-icon-btn {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-icon-btn:hover:not(:disabled),
+.cmp-icon-btn:focus-visible:not(:disabled) {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.cmp-icon-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.cmp-icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.cmp-icon-btn.is-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.cmp-icon-btn.is-danger:hover:not(:disabled),
+.cmp-icon-btn.is-danger:focus-visible:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---------- stage ---------- */
+
+.cmp-stage-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 12px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.cmp-stage {
+  position: absolute;
+  inset: 0;
+  background: var(--well);
+  transition: background var(--t-slow) ease;
+}
+
+.cmp-stage[data-backdrop="window"] {
+  background: color-mix(in srgb, var(--well) 70%, var(--island));
+}
+
+.cmp-stage[data-backdrop="light"] {
+  background: #e7e9ec;
+}
+
+.cmp-stage[data-backdrop="dark"] {
+  background: #1b1b1f;
+}
+
+.cmp-stage[data-backdrop="colour"] {
+  background: radial-gradient(120% 90% at 10% 0%, #8fb5ff 0%, transparent 60%), radial-gradient(90% 90% at 100% 100%, #ff9ab8 0%, transparent 60%),
+    linear-gradient(135deg, #6f7dff, #b48cff 55%, #ffb199);
+}
+
+.cmp-canvas {
+  position: absolute;
+  pointer-events: none;
+}
+
+.cmp-overlay {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.cmp-stage-hint {
+  position: absolute;
+  margin: 0;
+  padding: 0 18%;
+  transform: translateY(-50%);
+  text-align: center;
+  font-weight: 700;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  pointer-events: none;
+  animation: fade-up var(--t-slow) var(--ease-out) both;
+}
+
+.cmp-stage[data-backdrop="dark"] .cmp-stage-hint,
+.cmp-stage[data-backdrop="colour"] .cmp-stage-hint {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* The selected layer is tinted, not framed; knobs sit on its corners and sides. */
+.cmp-sel,
+.cmp-hover {
+  position: absolute;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.cmp-sel {
+  background: rgba(58, 134, 255, 0.16);
+  animation: fade-in var(--t-fast) ease both;
+}
+
+.cmp-sel.is-locked {
+  background: rgba(128, 128, 140, 0.18);
+}
+
+.cmp-hover {
+  background: rgba(58, 134, 255, 0.08);
+}
+
+.cmp-knob {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #ffffff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: pop var(--t-base) var(--ease-spring) both;
+}
+
+.cmp-knob.is-rot {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.cmp-guide {
+  position: absolute;
+  background: #ff4d8d;
+  pointer-events: none;
+}
+
+.cmp-guide.is-x {
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+.cmp-guide.is-y {
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+.cmp-readout {
+  position: absolute;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: rgba(20, 20, 24, 0.86);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ---------- view bar under the stage ---------- */
+
+.cmp-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  padding: 8px 14px 10px;
+}
+
+.cmp-skeleton {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 12px 0 6px;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-skeleton:hover,
+.cmp-skeleton:focus-visible {
+  background: var(--nav-hover);
+}
+
+.cmp-backdrops {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cmp-backdrop {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  transition: transform var(--t-fast) var(--ease-out), border-color var(--t-fast) ease;
+}
+
+.cmp-backdrop:hover {
+  transform: scale(1.12);
+}
+
+.cmp-backdrop.is-window {
+  background: var(--island);
+}
+
+.cmp-backdrop.is-light {
+  background: #e7e9ec;
+}
+
+.cmp-backdrop.is-dark {
+  background: #1b1b1f;
+}
+
+.cmp-backdrop.is-colour {
+  background: linear-gradient(135deg, #6f7dff, #b48cff 55%, #ffb199);
+}
+
+.cmp-backdrop.is-on,
+.cmp-backdrop:focus-visible {
+  border-color: var(--accent);
+}
+
+.cmp-sizes {
+  margin-left: auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.cmp-size {
+  display: block;
+  animation: fade-in var(--t-base) ease both;
+}
+
+/* ---------- templates ---------- */
+
+.cmp-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 20px 22px;
+  background: var(--island);
+  overflow-y: auto;
+  animation: fade-in var(--t-base) ease both;
+}
+
+.cmp-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cmp-sheet-head > div {
+  flex: 1;
+}
+
+.cmp-sheet-title {
+  margin: 0;
+  font-weight: 800;
+  font-size: 21px;
+  letter-spacing: -0.03em;
+}
+
+.cmp-sheet-sub {
+  margin: 5px 0 0;
+  max-width: 440px;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cmp-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+}
+
+.cmp-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 6px 11px;
+  border-radius: 16px;
+  transition: background-color var(--t-fast) ease, transform var(--t-base) var(--ease-out);
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+.cmp-card:hover,
+.cmp-card:focus-visible {
+  background: var(--tile-selected);
+  transform: translateY(-2px);
+}
+
+.cmp-card:active {
+  transform: scale(0.97);
+}
+
+.cmp-card-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.cmp-card-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--island);
+  color: var(--accent-ink);
+  border: 1px solid var(--island-line);
+}
+
+.cmp-card-label {
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.cmp-design-thumb {
+  display: block;
+}
+
+/* ---------- side island ---------- */
+
+.cmp-side {
+  display: flex;
+  flex-direction: column;
+}
+
+.cmp-side-head {
+  flex: none;
+  padding: 14px 14px 8px;
+}
+
+.cmp-name {
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  margin-left: -8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.cmp-name::placeholder {
+  color: var(--hint);
+}
+
+.cmp-name:hover {
+  background: var(--well);
+}
+
+.cmp-name:focus {
+  background: var(--island);
+  border-color: var(--accent);
+}
+
+.cmp-side-sub {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cmp-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---------- the side's two panels: the layers, and the selected layer's settings ---------- */
+
+/* Each opens and closes from its heading, and one open alone takes all the room. Both open, the
+   layers keep the height the bar between them was dragged to (`is-sized`, the basis set inline),
+   giving way first when the window is short, and the settings take the rest. */
+.cmp-panel {
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cmp-panel.is-open {
+  flex: 1 1 0;
+}
+
+.cmp-panel.is-open.is-sized {
+  flex: 0 1 auto;
+}
+
+.cmp-panel.is-layers.is-open {
+  min-height: 84px;
+}
+
+.cmp-panel.is-settings.is-open {
+  min-height: 140px;
+}
+
+.cmp-panel + .cmp-panel {
+  border-top: 1px solid var(--line);
+}
+
+.cmp-panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px 4px 8px;
+}
+
+.cmp-panel-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 6px;
+  border-radius: 9px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-panel-toggle:hover,
+.cmp-panel-toggle:focus-visible {
+  background: var(--well);
+}
+
+.cmp-panel-chevron {
+  flex: none;
+  display: inline-flex;
+  color: var(--hint);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-panel:not(.is-open) .cmp-panel-chevron {
+  transform: rotate(-90deg);
+}
+
+.cmp-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.cmp-panel-toggle .count {
+  flex: none;
+}
+
+/* A heading's buttons keep out of the way until it's pointed at, as a layer row's do. Kept in the
+   tab order (opacity, not display), and shown whenever one of them has the keyboard. */
+.cmp-panel-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--t-fast) ease;
+}
+
+.cmp-panel-head:hover .cmp-panel-actions,
+.cmp-panel-actions:focus-within {
+  opacity: 1;
+}
+
+.cmp-panel-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px 0 7px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.cmp-panel-action.is-danger:hover,
+.cmp-panel-action.is-danger:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.cmp-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cmp-layers-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 10px 10px;
+}
+
+/* The bar between the panels: a hairline with a wide grip that turns the accent colour when it's
+   pointed at, held or focused. */
+.cmp-resizer {
+  flex: none;
+  position: relative;
+  z-index: 2;
+  height: 9px;
+  margin: -4px 0;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.cmp-resizer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 1px;
+  background: var(--line);
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-resizer-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 32px;
+  height: 5px;
+  border-radius: 5px;
+  background: var(--accent);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--t-fast) ease;
+}
+
+.cmp-resizer:hover::before,
+.cmp-resizer:focus-visible::before,
+.cmp-resizer.is-dragging::before {
+  background: var(--accent);
+}
+
+.cmp-resizer:hover .cmp-resizer-grip,
+.cmp-resizer:focus-visible .cmp-resizer-grip,
+.cmp-resizer.is-dragging .cmp-resizer-grip {
+  opacity: 1;
+}
+
+/* While the bar is held the whole window shows the resize cursor, wherever the pointer strays. */
+.is-resizing,
+.is-resizing * {
+  cursor: row-resize !important;
+}
+
+/* ---------- layers ---------- */
+
+.cmp-layers {
+  position: relative;
+}
+
+.cmp-layers-empty {
+  margin: 0 4px 4px;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cmp-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 4px 0 5px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 200ms var(--ease-out), background-color var(--t-fast) ease, opacity var(--t-fast) ease;
+}
+
+.cmp-layer:hover,
+.cmp-layer:focus-visible {
+  background: var(--nav-hover);
+}
+
+.cmp-layer.is-on {
+  background: var(--accent-soft);
+}
+
+.cmp-layer.is-hidden .cmp-thumb,
+.cmp-layer.is-hidden .cmp-layer-name {
+  opacity: 0.45;
+}
+
+.cmp-layer.is-lifted {
+  z-index: 2;
+  transition: background-color var(--t-fast) ease;
+  background: var(--accent-soft);
+  cursor: grabbing;
+}
+
+.cmp-thumb {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--well);
+  color: var(--ink-2);
+  overflow: visible;
+}
+
+.cmp-thumb.is-paint {
+  background: var(--g);
+  border: 1px solid var(--island-line);
+}
+
+.cmp-thumb.is-kind::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid var(--island);
+}
+
+.cmp-layer.is-on .cmp-thumb.is-kind::after {
+  border-color: var(--accent-soft);
+}
+
+.cmp-thumb.is-emoji {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* A picture is cropped to its square: a replaced element with visible overflow would paint past it. */
+.cmp-thumb.is-image {
+  object-fit: cover;
+  overflow: hidden;
+}
+
+.cmp-layer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+.cmp-layer-name-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: var(--island);
+  border: 1px solid var(--accent);
+  font-weight: 700;
+  font-size: 12.5px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cmp-layer-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hint);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.cmp-layer:hover .cmp-layer-btn,
+.cmp-layer.is-on .cmp-layer-btn,
+.cmp-layer-btn.is-set,
+.cmp-layer-btn:focus-visible {
+  opacity: 1;
+}
+
+.cmp-layer-btn.is-set {
+  color: var(--ink-2);
+}
+
+.cmp-layer-btn:hover,
+.cmp-layer-btn:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.cmp-layer-btn.is-danger:hover,
+.cmp-layer-btn.is-danger:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---------- inspector ---------- */
+
+.cmp-inspector {
+  display: flex;
+  flex-direction: column;
+}
+
+.cmp-section {
+  padding: 10px 14px 14px;
+}
+
+.cmp-section + .cmp-section {
+  border-top: 1px solid var(--line);
+}
+
+.cmp-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.cmp-section-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--hint);
+}
+
+.cmp-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.cmp-field {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.cmp-field.is-wide {
+  grid-template-columns: 1fr;
+}
+
+.cmp-field-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cmp-field-control {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cmp-field-hint {
+  grid-column: 2;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--hint);
+}
+
+.cmp-note {
+  margin: 0;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cmp-tips {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.cmp-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+/* sliders */
+
+.cmp-slider {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cmp-range {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+}
+
+.cmp-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--well-2) var(--fill));
+}
+
+.cmp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-range:hover::-webkit-slider-thumb,
+.cmp-range:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.18);
+}
+
+.cmp-range::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--well-2);
+}
+
+.cmp-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.cmp-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+}
+
+.cmp-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  width: 54px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--well);
+  border: 1px solid transparent;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.cmp-num:focus-within {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.cmp-num input {
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  font-weight: 700;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cmp-num-unit {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--hint);
+  margin-left: 1px;
+}
+
+/* number pairs: X Y, W H */
+
+.cmp-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.cmp-mini-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: var(--well);
+  border: 1px solid transparent;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.cmp-mini-field:focus-within {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.cmp-mini-field span {
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--hint);
+}
+
+.cmp-number {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  background: none;
+  font-weight: 700;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* segmented, toggles, chips */
+
+.cmp-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+}
+
+.cmp-seg-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.cmp-seg-btn:hover,
+.cmp-seg-btn:focus-visible {
+  color: var(--ink);
+}
+
+.cmp-seg-btn.is-on {
+  background: var(--island);
+  border-color: var(--island-line);
+  color: var(--ink);
+}
+
+.cmp-seg.is-small .cmp-seg-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.cmp-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.cmp-toggle:focus-visible .switch {
+  background: var(--accent-soft);
+}
+
+.cmp-toggle:focus-visible .switch.is-on {
+  background: var(--accent-hover);
+}
+
+.cmp-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cmp-actions-row.is-wrap {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cmp-actions-gap {
+  flex: 1;
+}
+
+.cmp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-chip:hover,
+.cmp-chip:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.cmp-chip:active {
+  transform: scale(0.96);
+}
+
+.cmp-reset {
+  font-size: 12px;
+}
+
+/* wells: colour, font, shape, pattern pickers */
+
+.cmp-well,
+.cmp-pick-btn,
+.cmp-select {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 6px;
+  border-radius: 10px;
+  background: var(--well);
+  border: 1px solid transparent;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-align: left;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.cmp-pick-btn {
+  justify-content: space-between;
+  padding: 0 8px 0 11px;
+}
+
+.cmp-pick-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-pick-btn svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.cmp-well:hover,
+.cmp-pick-btn:hover,
+.cmp-select:hover {
+  background: var(--well-2);
+}
+
+.cmp-well:focus-visible,
+.cmp-pick-btn:focus-visible,
+.cmp-select:focus-visible,
+.cmp-well[aria-expanded="true"],
+.cmp-pick-btn[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.cmp-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 28px 0 11px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 14px, calc(100% - 10px) 14px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.cmp-well.is-compact {
+  flex: none;
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+.cmp-well-chip {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#d8dbe0 0 25%, #ffffff 0 50%) 0 0 / 8px 8px;
+  border: 1px solid var(--island-line);
+}
+
+.cmp-well-chip.is-clear {
+  background: linear-gradient(135deg, transparent 45%, #e5484d 45%, #e5484d 55%, transparent 55%), #ffffff;
+}
+
+.cmp-well-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cmp-emoji-now {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.cmp-textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--well);
+  border: 1px solid transparent;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.cmp-textarea:focus {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+/* paint */
+
+.cmp-paint {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.cmp-paint > .cmp-seg {
+  align-self: flex-start;
+}
+
+.cmp-gradient-bar {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--g), repeating-conic-gradient(#d8dbe0 0 25%, #ffffff 0 50%) 0 0 / 8px 8px;
+  border: 1px solid var(--island-line);
+}
+
+.cmp-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cmp-stop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cmp-stop-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hint);
+}
+
+.cmp-stop-x:hover,
+.cmp-stop-x:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.cmp-add-stop {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px 0 7px;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--accent-ink);
+}
+
+.cmp-add-stop:hover,
+.cmp-add-stop:focus-visible {
+  background: var(--accent-soft);
+}
+
+.cmp-presets {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.cmp-preset {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: var(--g);
+  border: 2px solid transparent;
+  transition: transform var(--t-fast) var(--ease-out), border-color var(--t-fast) ease;
+}
+
+.cmp-preset:hover {
+  transform: scale(1.08);
+}
+
+.cmp-preset:focus-visible {
+  border-color: var(--accent);
+}
+
+/* ---------- popovers ---------- */
+
+.cmp-pop {
+  position: fixed;
+  z-index: 60;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in var(--t-base) var(--ease-spring) both;
+  transform-origin: top;
+}
+
+.cmp-pop.is-above {
+  transform-origin: bottom;
+}
+
+.cmp-search {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 10px;
+  background: var(--well);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 13px;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.cmp-search:focus {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.cmp-search::placeholder {
+  color: var(--hint);
+}
+
+.cmp-empty-note {
+  grid-column: 1 / -1;
+  margin: 8px 4px;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* colour picker */
+
+.cmp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cmp-sv {
+  position: relative;
+  height: 150px;
+  border-radius: 10px;
+  background: linear-gradient(to top, #000000, transparent), linear-gradient(to right, #ffffff, var(--hue));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.cmp-sv-knob,
+.cmp-strip-knob {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cmp-strip {
+  position: relative;
+  height: 12px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.cmp-strip-knob {
+  top: 50%;
+}
+
+.cmp-hue {
+  background: linear-gradient(to right, #ff0000, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000);
+}
+
+.cmp-alpha {
+  background: linear-gradient(to right, transparent, var(--c)), repeating-conic-gradient(#d8dbe0 0 25%, #ffffff 0 50%) 0 0 / 8px 8px;
+}
+
+.cmp-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cmp-picker-now {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#d8dbe0 0 25%, #ffffff 0 50%) 0 0 / 8px 8px;
+  border: 1px solid var(--island-line);
+}
+
+.cmp-hex {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 9px;
+  background: var(--well);
+  border: 1px solid transparent;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cmp-hex:focus {
+  border-color: var(--accent);
+  background: var(--island);
+}
+
+.cmp-picker-alpha {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cmp-picker-title {
+  margin: 2px 0 -3px;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--hint);
+}
+
+.cmp-swatches {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 5px;
+}
+
+.cmp-swatch {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#d8dbe0 0 25%, #ffffff 0 50%) 0 0 / 6px 6px;
+  border: 1px solid var(--island-line);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-swatch:hover,
+.cmp-swatch:focus-visible {
+  transform: scale(1.18);
+}
+
+.cmp-swatch.is-clear {
+  background: linear-gradient(135deg, transparent 44%, #e5484d 44%, #e5484d 56%, transparent 56%), #ffffff;
+}
+
+/* emoji */
+
+.cmp-emoji {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cmp-emoji-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.cmp-emoji-tab {
+  flex: 1;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: background-color var(--t-fast) ease, opacity var(--t-fast) ease;
+}
+
+.cmp-emoji-tab:hover,
+.cmp-emoji-tab:focus-visible {
+  opacity: 1;
+  background: var(--nav-hover);
+}
+
+.cmp-emoji-tab.is-on {
+  opacity: 1;
+  background: var(--accent-soft);
+}
+
+/* Columns that can shrink once the scrollbar takes its room, never a sideways scroll, and room at
+   the edges for an emoji that grows on hover. */
+.cmp-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  max-height: 248px;
+  padding: 3px;
+  margin: -3px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cmp-emoji-btn {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  font-size: 22px;
+  line-height: 1;
+  transition: background-color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-emoji-btn:hover,
+.cmp-emoji-btn:focus-visible {
+  background: var(--accent-soft);
+  transform: scale(1.12);
+}
+
+/* shapes, patterns */
+
+.cmp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.cmp-grid-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 2px 7px;
+  border-radius: 11px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-grid-btn:hover,
+.cmp-grid-btn:focus-visible {
+  background: var(--nav-hover);
+}
+
+.cmp-grid-btn.is-on {
+  background: var(--accent-soft);
+}
+
+.cmp-grid-label {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cmp-mini {
+  display: block;
+  border-radius: 8px;
+}
+
+/* fonts */
+
+.cmp-fonts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cmp-font {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--ink);
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-font:hover,
+.cmp-font:focus-visible {
+  background: var(--nav-hover);
+}
+
+.cmp-font.is-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.cmp-font-sample {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.cmp-font-other {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cmp-font-use {
+  height: 34px;
+  padding: 0 12px;
+}
+
+/* pictures */
+
+.cmp-picture-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cmp-skin-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  max-height: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.cmp-skin {
+  aspect-ratio: 1;
+  border-radius: 9px;
+  padding: 3px;
+  transition: background-color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.cmp-skin img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cmp-skin:hover,
+.cmp-skin:focus-visible {
+  background: var(--accent-soft);
+  transform: scale(1.05);
+}
+
+/* ---------- save ---------- */
+
+.cmp-save {
+  flex: none;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.cmp-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 12px;
+  background: var(--well);
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-target:hover:not(:disabled),
+.cmp-target:focus-visible {
+  background: var(--well-2);
+}
+
+.cmp-target img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.cmp-target > svg {
+  margin: 0 6px;
+  color: var(--muted);
+}
+
+.cmp-target-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cmp-target-label {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cmp-target-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 13.5px;
+}
+
+.cmp-target.is-empty .cmp-target-name {
+  color: var(--accent-ink);
+}
+
+.cmp-save-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+}
+
+.cmp-save-row.is-single {
+  grid-template-columns: 1fr;
+}
+
+.cmp-save-row .btn {
+  min-width: 0;
+}
+
+/* "Include subfolders" under the folder a design is applied to. */
+.cmp-subfolders {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 7px 10px 7px 12px;
+  border-radius: 12px;
+  background: var(--well);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12.5px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+/* never cut short: when the switch can't be turned on, this says why */
+.cmp-subfolders-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.cmp-subfolders:hover:not(:disabled),
+.cmp-subfolders:focus-visible {
+  background: var(--well-2);
+}
+
+.cmp-subfolders.is-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/* As the folder panel's row: on is not an excuse to stop answering the pointer and the keyboard. */
+.cmp-subfolders.is-on:hover:not(:disabled),
+.cmp-subfolders.is-on:focus-visible {
+  background: color-mix(in srgb, var(--accent) 22%, var(--island));
+  color: var(--accent-ink);
+}
+
+.cmp-subfolders:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Save & apply over a tree: the button fills up as the folders are done. */
+.cmp-progress-btn,
+.cmp-progress-btn:disabled {
+  opacity: 1;
+  background: linear-gradient(90deg, var(--accent-hover) var(--done), var(--accent) var(--done));
+  font-variant-numeric: tabular-nums;
+}

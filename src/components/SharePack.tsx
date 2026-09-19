@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
-import { cleanName } from "../lib/names";
+import { cleanName, clip } from "../lib/names";
 import { isGithubUser, LICENSES, loadSharingPrefs, MAX_PACK_SKINS, packSlug, PACKS_GUIDE_URL, saveSharingPrefs, UPLOAD_URL } from "../lib/packs";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
 import { Modal } from "./Modal";
@@ -124,7 +124,7 @@ export function SharePack({
   return (
     <Modal
       narrow
-      title={only ? `Share "${only.name}"` : "Share your skins"}
+      title={only ? `Share "${clip(only.name)}"` : "Share your skins"}
       sub={
         only
           ? "It goes up as a pack of one, free for anyone to add to FolderSkin."
@@ -146,7 +146,7 @@ export function SharePack({
       {only ? (
         <div className="share-one">
           <img src={only.thumbnail} alt="" draggable={false} />
-          <span>{only.name}</span>
+          <span title={only.name}>{only.name}</span>
         </div>
       ) : (
       <label className="field">

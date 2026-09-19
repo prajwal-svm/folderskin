@@ -3,12 +3,14 @@
 pub mod ai;
 pub mod commands;
 pub mod community;
+pub mod composer;
 pub mod folder_icon;
 pub mod keys;
 pub mod onboarding;
 pub mod pack_views;
 pub mod state;
 pub mod store;
+pub mod tree;
 pub mod window;
 
 use tauri::Manager;
@@ -40,8 +42,19 @@ pub fn run() {
             community::community_remove,
             community::import_pack,
             community::export_pack,
+            composer::composer_template,
+            composer::composer_save,
+            composer::composer_preview,
+            composer::composer_image,
+            composer::composer_skin_image,
+            composer::composer_design,
             commands::folder_icon,
             commands::platform_info,
+            tree::subfolder_count,
+            tree::tree_bytes,
+            tree::apply_skin_tree,
+            tree::revert_skin_tree,
+            tree::stop_tree_run,
             onboarding::onboarding_needed,
             onboarding::finish_onboarding,
             ai::ai_catalogue,

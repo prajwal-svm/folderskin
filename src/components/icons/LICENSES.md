@@ -10,9 +10,13 @@ The AI providers' logos in `../ProviderLogo.tsx` come from
 [lobe-icons](https://github.com/lobehub/lobe-icons) (`packages/static-svg`), trimmed to their
 paths. Each logo is its company's trademark and is shown only to name that provider.
 
-`star`, `image`, `list`, `list-filter` and `loader` use the shapes of the [Lucide](https://lucide.dev)
-icons of the same names (`loader` is Lucide's `loader-circle`); their animations are FolderSkin's
-own.
+`star`, `image`, `list`, `list-filter`, `loader` and `palette` use the shapes of the
+[Lucide](https://lucide.dev) icons of the same names (`loader` is Lucide's `loader-circle`); their
+animations are FolderSkin's own. `pencil` uses Lucide's shape too, and stays still. The composer's static icons in `composer.tsx` use the shapes of
+Lucide's `type`, `smile`, `shapes`, `waves`, `paint-bucket`, `undo-2`, `redo-2`, `layers`, `eye`,
+`eye-off`, `lock`, `lock-open`, `trash`, `flip-horizontal-2`, `flip-vertical-2`, `focus`, `plus`,
+`folder`, `shuffle`, `x`, `rotate-cw`, `layout-template`, `align-left`, `align-center`,
+`align-right`, `italic`, `case-upper`, `chevron-up` and `chevron-down`.
 
 The three projects' licences follow, as their terms require.
 

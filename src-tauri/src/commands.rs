@@ -39,7 +39,7 @@ pub struct SkinDto {
     pub custom: bool,
     /// "artwork" (wrapped onto the folder template) or "folder" (a finished folder image).
     pub kind: SkinKind,
-    /// "import", "ai" or "community".
+    /// "import", "ai", "community" or "composer".
     pub source: SkinSource,
     /// When the skin was added, in Unix milliseconds.
     pub created_at: u64,
@@ -211,7 +211,7 @@ fn cached_png(path: Option<&Path>, render: impl FnOnce() -> Vec<u8>) -> Vec<u8> 
 
 /// Decodes a picture the user picked, `bytes` being the file as read, downscaled so its longer
 /// side is at most [`MAX_STORED_SIDE`]. HEIC is converted by the OS first.
-fn decode_picture(path: &Path, bytes: &[u8]) -> Result<image::RgbaImage, String> {
+pub(crate) fn decode_picture(path: &Path, bytes: &[u8]) -> Result<image::RgbaImage, String> {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -346,8 +346,9 @@ pub async fn apply_skin(
     })
     .await
     .map_err(|e| e.to_string())??;
-    // NSWorkspace.setIcon is thread-safe and the PNG encodes are slow, so this stays off the
-    // main thread; the window keeps painting the "Applying…" state.
+    // NSWorkspace.setIcon works off the main thread (one call at a time; the core takes a lock
+    // for that) and the PNG encodes are slow, so this stays off it; the window keeps painting
+    // the "Applying…" state.
     tauri::async_runtime::spawn_blocking(move || {
         apply_icon(&folder, &icons).map_err(|e| e.to_string())
     })
@@ -585,6 +586,20 @@ mod tests {
         assert_eq!(json["made_with"], "xAI Grok · Grok Imagine");
         assert_eq!(json["idea"], "a fox");
         assert!(json["author"].is_null());
+    }
+
+    #[test]
+    fn every_source_is_named_the_way_the_webview_names_it() {
+        for (source, name) in [
+            (SkinSource::Import, "import"),
+            (SkinSource::Ai, "ai"),
+            (SkinSource::Community, "community"),
+            (SkinSource::Composer, "composer"),
+        ] {
+            assert_eq!(serde_json::to_value(source).unwrap(), name);
+            let read: SkinSource = serde_json::from_value(name.into()).unwrap();
+            assert_eq!(read, source);
+        }
     }
 
     #[test]

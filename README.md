@@ -16,7 +16,8 @@ Your wedding folder looks exactly like your tax folder. FolderSkin gives every f
 feels like what's inside it: a golden-hour film still for the wedding, a vintage travel poster for
 the trip, pop art for the vlog, soft pastels for the baby's first year. Drop a folder on the
 window, try skins on it, and apply the one you love. Pick from free community packs, use a photo
-of your own, or describe any style and let AI paint it.
+of your own, design one yourself from a colour, a word or an emoji, or describe any style and let
+AI paint it.
 
 <p>
   <a href="https://github.com/prajwal-svm/folderskin/releases/latest"><strong>Download free</strong></a>
@@ -45,7 +46,9 @@ Free · Open source · No account · No tracking
 | --- | --- |
 | Get your first skins | The first launch offers the community's packs, with Classic Art picked for you |
 | Give a folder a new look | Drop the folder on the window, click a skin, press **Apply skin** |
+| Do the folders inside it too | Turn on **Include subfolders** under the folder, then **Apply to** all of them |
 | Use a photo of your own | Drop the picture on the window, or press **Add your photo** |
+| Design your own | **Design your own**: start from a colour, a label, an emoji or a photo, change anything, then **Save & apply** |
 | Have an AI paint one | **Generate with AI**, with your own API key, or the prompt for Grok's or ChatGPT's chat under **No API key?** |
 | Get skins other people made | **Community**, then add a pack |
 | Share yours | A skin's ⋯ menu → **Share with community** |
@@ -55,7 +58,7 @@ Free · Open source · No account · No tracking
 ## What stays on your computer
 
 Everything except the few things that need the internet. There's no account, no paywall and no
-telemetry, and the macOS app is about 8.8 MB installed.
+telemetry, and the macOS app is about 8.9 MB installed.
 
 | Stays on your computer | Goes online |
 | --- | --- |
@@ -85,12 +88,20 @@ again.
 4. Press **Revert** to put the operating system's default icon back. A folder that already has a
    custom icon offers **Remove custom icon** as soon as you pick it.
 
+To give the folders inside it the same skin, turn on **Include subfolders** under the folder's
+name. It counts them first (all levels down, leaving out hidden folders and app bundles), and the
+button becomes **Apply to 25 folders**, or however many there are. More than ten asks before it
+starts. The folder panel shows each folder as it's done, **Stop** ends the run after the folder in
+hand, and the summary says what changed, which folders couldn't be and why, and offers to carry on
+or try those again. **Revert all** takes off exactly what the run put on.
+
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
 **Yours** and stays there until you delete it, which asks first. A finished folder on a flat
 magenta background, like the ones the chat prompt below produces, is cut out and used as it is;
 any other picture is wrapped onto FolderSkin's folder.
 
-Every skin you add has a ⋯ menu: rename it, give it tags (they become filters along the top),
+Every skin you add has a ⋯ menu: rename it (a double click on its name, or F2, jumps straight
+there), give it tags (they become filters along the top),
 see how it was made (the AI model and prompt, or the pack and who shared it), share it or delete
 it. AI results are tagged with their style, such as `airbrush`, as they arrive.
 
@@ -107,6 +118,29 @@ choose **Share with community**, or use **Community → Share your skins** for s
 saves a pack folder that passes the checks, and you drop it on GitHub as a pull request.
 [docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 50 skins a pack, pictures up
 to 1024 px and 2 MB, licensed CC0, CC BY 4.0 or MIT.
+
+## Design your own
+
+**Design your own**, in the sidebar, makes a skin from scratch, offline. Start from a plain colour,
+a label, an emoji, two tones, glass, stripes or a photo with a caption, then change all of it:
+
+- any colour with any transparency, and gradients
+- words in seventeen font styles, which can curve into an arch
+- emoji, thirteen shapes, and ten patterns down to film grain
+- your own pictures, with adjustments
+- shadows, glows and sticker edges
+
+The **Folder skeleton** switch shows the design on the folder or flat, and the icon beside it at
+the sizes Finder draws shows how it reads. Make a see-through glass folder, or choose **Free icon**
+for a sticker that isn't folder-shaped at all. **Save & apply** puts it on your folder, and
+**Edit design** in its ⋯ menu opens it again. [docs/COMPOSER.md](docs/COMPOSER.md) has the
+details.
+
+<details><summary>The composer</summary>
+
+![Designing a skin: a gingham folder with a strawberry sticker, its layers and settings beside it](docs/images/composer.webp)
+
+</details>
 
 ## Generate a skin with AI
 

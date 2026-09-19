@@ -1,14 +1,16 @@
 //! folderskin-tools: make and check community skin packs, render any picture as the folder the
-//! app makes of it, and apply or revert an icon from a terminal.
+//! app makes of it, write the composer's template layers, and apply or revert an icon from a
+//! terminal.
 
 use clap::Parser;
 use folderskin_core::apply::{apply_icon, revert_icon};
 use folderskin_core::compositor::{
     render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
+use folderskin_core::raster;
 use folderskin_tools::cli::{Cli, Command, PacksCommand};
 use folderskin_tools::skin::Skin;
-use folderskin_tools::{make, packs};
+use folderskin_tools::{composer, make, packs};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -55,6 +57,7 @@ fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         Command::Guide { out } => guide(&out),
+        Command::ComposerLayers { out, size } => composer_layers(&out, size),
         Command::AppIcon { input, out } => {
             let (w, h) = image::ImageReader::open(&input)
                 .and_then(|r| r.with_guessed_format())
@@ -232,6 +235,18 @@ fn packs_index(dir: &Path) -> Result<(), String> {
         ""
     };
     println!("{} indexed{unchanged}", report.totals());
+    Ok(())
+}
+
+/// Writes the layers the composer draws a design between into `out`, one PNG each.
+fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
+    std::fs::create_dir_all(out).map_err(|e| format!("couldn't make {}: {e}", out.display()))?;
+    for (file, layer) in composer::layer_files(size) {
+        let path = out.join(file);
+        std::fs::write(&path, raster::encode_png(&layer))
+            .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+        println!("wrote {} ({size}×{size})", path.display());
+    }
     Ok(())
 }
 
