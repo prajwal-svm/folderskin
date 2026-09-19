@@ -27,7 +27,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
 ];
 
 const THEMES: { id: ThemePref; label: string; Icon: typeof SunIcon }[] = [
-  { id: "system", label: "Match the system", Icon: MonitorCheckIcon },
+  { id: "system", label: "System", Icon: MonitorCheckIcon },
   { id: "light", label: "Light", Icon: SunIcon },
   { id: "dark", label: "Dark", Icon: MoonIcon },
 ];
