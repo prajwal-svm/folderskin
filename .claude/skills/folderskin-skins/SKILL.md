@@ -1,7 +1,7 @@
 ---
 name: folderskin-skins
 description: Makes and checks FolderSkin community skin packs. Turns a folder of pictures (renders from Grok Imagine, ChatGPT, Gemini or any image model, photos, paintings) into a pack under community/packs with `folderskin-tools packs make`, looks at every skin as the folder the app makes of it, cuts drifted pink or raspberry backdrops away with --flat-backdrop, names and orders the skins, validates the pack with `packs check`, and refreshes the index with `packs index`. Also previews any single picture as a folder icon with `render` and writes the safe-area template with `guide`. Use when the user says "make a pack", "make a pack from these", "turn these renders into a pack", "add a community pack", "share these as a pack", "check the packs", "update the pack index", "preview this picture as a folder", "how will this look on a folder" or "turn this photo into a folder icon", or asks where a picture's subject lands on the folder.
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Making FolderSkin community packs
@@ -38,6 +38,14 @@ folder icon.
 Skins are named after their files: `glass_folder-2.png` becomes "Glass folder 2". Look at each
 picture with the Read tool and rename meaningless files such as `grok-image-3.jpg` before making
 the pack, or fix the names in `pack.json` afterwards (1 to 60 characters).
+
+Don't trust that a batch's file names match its pictures. A zip saved by a batch job can put
+pictures under the wrong names, or mix in pictures from another batch: a "Scientists" zip once
+held city postcards filed as scientists. Make the pack into a scratch `--dir` with `--preview`
+first and look over the contact sheet, whose cells are in file-name order. When the pictures
+show real people, never name one from their face. Use text in the picture (a caption, a speech
+bubble), or ask the user. If the names can't be trusted, stop and tell the user rather than
+publishing.
 
 Order matters: the library shows a pack's skins in its own order, first skin first, and the
 pack's preview strip is its first four. `packs make` takes files in the order given and the
