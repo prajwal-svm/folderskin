@@ -344,7 +344,7 @@ inspector at all.
 Under 15 MB installed. The macOS app bundle (Apple Silicon) is the stripped release binary, the
 1.4 MB app icon and a 1 KB `Info.plist`. The binary carries the Rust code and the frontend,
 which Tauri embeds, including a 165 KB variable font (Manrope) and the first-launch welcome's
-330 KB of pictures. Once FolderSkin stopped shipping skins the binary measured 7.0 MB and the
+592 KB of pictures (folders from each community pack, and the logo). Once FolderSkin stopped shipping skins the binary measured 7.0 MB and the
 bundle 8.5 MB; with 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. The updater
 added 0.25 MB, to a 7.3 MB binary and an 8.8 MB bundle. `image` is built with `default-features = false` and
 only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one

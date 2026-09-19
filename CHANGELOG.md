@@ -17,8 +17,10 @@ First release. The date lands here when the `v0.1.0` tag is pushed.
 - Apply a folder icon on macOS, Windows and Linux from one rendering path in
   `folderskin-core`, so the gallery preview and the icon written to disk are the same
   pixels.
-- A first-launch welcome: five folders try on skin after skin, fold into one and land on the
-  logo, then the community's packs are offered with Classic Art picked for you. Each pack shows
+- A first-launch welcome: five folders try on skins from the community packs, mostly paintings
+  and pop-art portraits with no two neighbours from one pack, fold into one and land on the logo,
+  whose **Let's go** arrow nudges until it's pressed. Then the community's packs are offered with
+  Classic Art picked for you. Each pack shows
   its progress, nothing can be skipped or undone while one is being added, and a pack that fails
   can be tried again or left for later from Community. It shows once; a click or a key skips the
   animation, and reduced motion shows its last frame straight away.
