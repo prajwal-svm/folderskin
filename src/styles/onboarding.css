@@ -300,10 +300,12 @@
    the pointer is on the button it keeps going: out to the right and back in from the left. */
 .welcome-next svg {
   animation: welcome-nudge 2.8s var(--ease-out) 1.2s infinite;
+  animation-play-state: var(--loop-state);
 }
 
 .welcome-next:hover svg {
   animation: welcome-go 1.1s var(--ease-out) infinite;
+  animation-play-state: var(--loop-state);
 }
 
 @keyframes welcome-nudge {

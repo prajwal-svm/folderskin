@@ -447,6 +447,7 @@
   mask: url("/folder-mask.svg") center / contain no-repeat;
   -webkit-mask: url("/folder-mask.svg") center / contain no-repeat;
   animation: develop-light 1.8s linear infinite;
+  animation-play-state: var(--loop-state);
 }
 
 @keyframes develop-light {

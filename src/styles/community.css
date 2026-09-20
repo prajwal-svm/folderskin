@@ -121,6 +121,7 @@
   background: linear-gradient(90deg, var(--well-2), var(--island), var(--well-2));
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
+  animation-play-state: var(--loop-state);
 }
 
 @keyframes shimmer {

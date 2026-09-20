@@ -60,6 +60,7 @@
 .is-drop-target > .drop-glow {
   opacity: 1;
   animation: spin-angle 2.6s linear infinite;
+  animation-play-state: var(--loop-state);
 }
 
 /* ---------- the folder ---------- */
@@ -224,6 +225,7 @@
   stroke-width: 7;
   stroke-dasharray: 22 16;
   animation: march 2.4s linear infinite;
+  animation-play-state: var(--loop-state);
   transition: stroke var(--t-base) ease;
 }
 
@@ -301,6 +303,7 @@
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   animation: spin-angle 1s linear infinite, fade-in var(--t-base) ease both;
+  animation-play-state: var(--loop-state), running;
   pointer-events: none;
 }
 
@@ -467,6 +470,7 @@
   display: inline-flex;
   color: var(--accent-ink);
   animation: nudge 1.6s var(--ease-out) infinite;
+  animation-play-state: var(--loop-state);
 }
 
 @keyframes nudge {

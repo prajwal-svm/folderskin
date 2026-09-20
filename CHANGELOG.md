@@ -6,6 +6,18 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+## 0.1.3 — 2026-09-20
+
+### Fixed
+
+- **The library was empty until you clicked the window.** 0.1.2 paused every animation while the
+  window was behind another, to stop a decorative border repainting for nobody. Skins arrive with
+  an animation that starts them invisible, and pausing caught those too: a gallery first drawn
+  while the window was not in front stayed blank — the counts said 59 and the shelf showed
+  nothing — until the window was clicked. It hit hardest right after an update, which restarts
+  the app behind whatever you were doing. Animations that never end still pause; the ones things
+  arrive with always finish.
+
 ## 0.1.2 — 2026-09-20
 
 ### Added

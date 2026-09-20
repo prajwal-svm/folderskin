@@ -167,6 +167,7 @@
   width: 35%;
   transform: none;
   animation: update-travel 1.2s var(--ease-in) infinite alternate;
+  animation-play-state: var(--loop-state);
 }
 
 @keyframes update-travel {
