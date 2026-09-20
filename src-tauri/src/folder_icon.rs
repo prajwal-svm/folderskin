@@ -89,7 +89,7 @@ mod win {
     use std::path::{Path, PathBuf};
     use windows_sys::Win32::Graphics::Gdi::{
         CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, BITMAP, BITMAPINFO,
-        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         DestroyIcon, GetIconInfo, PrivateExtractIconsW, HICON, ICONINFO,
@@ -227,6 +227,30 @@ mod win {
         image::RgbaImage::from_raw(width, height, pixels)
     }
 
+    /// A `BITMAPINFO` with room for the colour table `GetDIBits` writes after the header.
+    ///
+    /// For any format of 8 bits per pixel or fewer, `GetDIBits` fills in a palette of
+    /// `2 ^ biBitCount` entries — two of them for the 1-bpp mask. `windows_sys` declares
+    /// `BITMAPINFO.bmiColors` as a single `RGBQUAD`, being the C struct translated literally, so
+    /// handing GDI one of those is a write four bytes past the end of it. The `.ico` files that
+    /// reach the mask path are the ones with no alpha channel, which is every 24-bit icon —
+    /// `imageres.dll` and anything old — so this is a path folders really take. Two entries is
+    /// all any depth this reads can ask for.
+    #[repr(C)]
+    struct DibInfo {
+        header: BITMAPINFOHEADER,
+        colours: [RGBQUAD; 2],
+    }
+
+    // The palette has to sit immediately after the header, which is how GDI appends one to a
+    // `BITMAPINFO`. If either struct ever gains padding this stops compiling rather than going
+    // quietly wrong again.
+    const _: () = assert!(
+        std::mem::size_of::<DibInfo>()
+            == std::mem::size_of::<BITMAPINFOHEADER>() + 2 * std::mem::size_of::<RGBQUAD>()
+    );
+    const _: () = assert!(std::mem::align_of::<DibInfo>() == std::mem::align_of::<BITMAPINFO>());
+
     /// `bitmap`'s pixels as a top-down DIB at `bits` bits per pixel.
     fn read_dib(
         bitmap: windows_sys::Win32::Graphics::Gdi::HBITMAP,
@@ -239,20 +263,24 @@ mod win {
         let stride = (width as usize * bits as usize).div_ceil(32) * 4;
         let mut buffer = vec![0u8; stride * height as usize];
 
-        let mut header: BITMAPINFO = unsafe { std::mem::zeroed() };
-        header.bmiHeader = BITMAPINFOHEADER {
-            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: width as i32,
-            // Negative: top-down, so the rows come in the order the image crate wants.
-            biHeight: -(height as i32),
-            biPlanes: 1,
-            biBitCount: bits,
-            biCompression: BI_RGB,
-            ..unsafe { std::mem::zeroed() }
+        let mut info = DibInfo {
+            header: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width as i32,
+                // Negative: top-down, so the rows come in the order the image crate wants.
+                biHeight: -(height as i32),
+                biPlanes: 1,
+                biBitCount: bits,
+                biCompression: BI_RGB,
+                ..unsafe { std::mem::zeroed() }
+            },
+            // GDI writes the palette here.
+            colours: unsafe { std::mem::zeroed() },
         };
 
-        // SAFETY: a memory DC is created and freed here, and `buffer` is exactly the size the
-        // header describes, so GetDIBits writes inside it.
+        // SAFETY: a memory DC is created and freed here; `buffer` is exactly the size the header
+        // describes, so GetDIBits writes inside it; and `info` is a BITMAPINFO followed by the
+        // colour table GDI appends to one, so the palette lands inside it too.
         let dc = unsafe { CreateCompatibleDC(std::ptr::null_mut()) };
         if dc.is_null() {
             return None;
@@ -264,7 +292,7 @@ mod win {
                 0,
                 height,
                 buffer.as_mut_ptr().cast(),
-                &mut header,
+                std::ptr::from_mut(&mut info).cast::<BITMAPINFO>(),
                 DIB_RGB_COLORS,
             )
         };
