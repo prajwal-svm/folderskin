@@ -162,8 +162,7 @@
 }
 
 .cmp-stage[data-backdrop="colour"] {
-  background: radial-gradient(120% 90% at 10% 0%, #8fb5ff 0%, transparent 60%), radial-gradient(90% 90% at 100% 100%, #ff9ab8 0%, transparent 60%),
-    linear-gradient(135deg, #6f7dff, #b48cff 55%, #ffb199);
+  background: var(--stage-colour);
 }
 
 .cmp-canvas {
@@ -327,7 +326,7 @@
 }
 
 .cmp-backdrop.is-colour {
-  background: linear-gradient(135deg, #6f7dff, #b48cff 55%, #ffb199);
+  background: var(--stage-colour);
 }
 
 .cmp-backdrop.is-on,
