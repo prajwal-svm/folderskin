@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "Sunset",
+  "author": "madhushreesv",
+  "license": "CC-BY-4.0",
+  "tags": [
+    "sunset"
+  ],
+  "skins": [
+    {
+      "file": "chatgpt-image-sep-20-2026-10-21-45-am.png",
+      "name": "ChatGPT Image Sep 20, 2026, 10_21_45 AM"
+    }
+  ]
+}
