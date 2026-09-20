@@ -380,7 +380,7 @@ mod win {
         /// ini, the file it names, and the icon inside it.
         #[test]
         fn a_folder_wearing_an_icon_gives_back_that_icons_pixels() {
-            use folderskin_core::apply::windows::{desktop_ini_contents, ico_file_name};
+            use folderskin_core::apply::windows::{desktop_ini_contents, ico_file_name, Before};
 
             let dir = std::env::temp_dir().join(format!("folderskin-wears-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
@@ -407,7 +407,7 @@ mod win {
             std::fs::write(dir.join(&name), &ico).unwrap();
             std::fs::write(
                 dir.join("desktop.ini"),
-                desktop_ini_contents(None, &name).as_bytes(),
+                desktop_ini_contents(None, &name, Before::default()).as_bytes(),
             )
             .unwrap();
 
@@ -421,7 +421,8 @@ mod win {
             // An ini that names a file which isn't there falls back rather than failing.
             std::fs::write(
                 dir.join("desktop.ini"),
-                desktop_ini_contents(None, "folderskin-ffffffffffffffff.ico").as_bytes(),
+                desktop_ini_contents(None, "folderskin-ffffffffffffffff.ico", Before::default())
+                    .as_bytes(),
             )
             .unwrap();
             assert_eq!(super::super::current_icon_png(&dir, 256), None);

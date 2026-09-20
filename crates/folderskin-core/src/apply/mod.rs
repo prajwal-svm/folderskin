@@ -259,6 +259,7 @@ pub(crate) fn tempfile_dir() -> TempDir {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows::Before;
 
     /// A flat-colour icon set at `sizes`.
     fn solid(sizes: &[u32]) -> IconSet {
@@ -443,7 +444,7 @@ mod tests {
     #[test]
     fn desktop_ini_is_created_with_marker_and_icon_resource() {
         let name = ico_name();
-        let s = windows::desktop_ini_contents(None, &name);
+        let s = windows::desktop_ini_contents(None, &name, Before::default());
         assert!(s.starts_with("[.ShellClassInfo]\r\n"));
         assert!(s.contains(&format!("IconResource={name},0\r\n")), "{s}");
         assert!(s.contains(windows::MARKER));
@@ -452,7 +453,7 @@ mod tests {
     #[test]
     fn desktop_ini_preserves_foreign_keys_and_replaces_icon_resource() {
         let existing = "[.ShellClassInfo]\r\nInfoTip=hello\r\nIconResource=other.ico,0\r\n";
-        let s = windows::desktop_ini_contents(Some(existing), &ico_name());
+        let s = windows::desktop_ini_contents(Some(existing), &ico_name(), Before::default());
         assert!(s.contains("InfoTip=hello"));
         assert!(!s.contains("other.ico"));
         assert_eq!(s.matches("IconResource=").count(), 1);
@@ -462,9 +463,9 @@ mod tests {
     /// replaced by the hashed one, and only one IconResource is left.
     #[test]
     fn desktop_ini_replaces_the_name_an_older_version_wrote() {
-        let old = windows::desktop_ini_contents(None, windows::ICO_NAME);
+        let old = windows::desktop_ini_contents(None, windows::ICO_NAME, Before::default());
         let name = ico_name();
-        let new = windows::desktop_ini_contents(Some(&old), &name);
+        let new = windows::desktop_ini_contents(Some(&old), &name, Before::default());
         assert!(new.contains(&format!("IconResource={name},0")), "{new}");
         assert!(!new.contains("IconResource=folderskin.ico"), "{new}");
         assert_eq!(new.matches("IconResource=").count(), 1);
@@ -474,11 +475,12 @@ mod tests {
 
     #[test]
     fn revert_removes_only_our_lines_or_whole_file() {
-        let ours = windows::desktop_ini_contents(None, &ico_name());
+        let ours = windows::desktop_ini_contents(None, &ico_name(), Before::default());
         assert_eq!(windows::desktop_ini_without_ours(&ours), None);
         let mixed = windows::desktop_ini_contents(
             Some("[.ShellClassInfo]\r\nInfoTip=keep\r\n"),
             &ico_name(),
+            Before::default(),
         );
         let left = windows::desktop_ini_without_ours(&mixed).unwrap();
         assert!(
@@ -491,12 +493,12 @@ mod tests {
     #[test]
     fn desktop_ini_keeps_other_sections_and_stays_idempotent() {
         let existing = "[.ShellClassInfo]\r\nInfoTip=hello\r\n[ViewState]\r\nMode=\r\nVid=\r\n";
-        let once = windows::desktop_ini_contents(Some(existing), &ico_name());
+        let once = windows::desktop_ini_contents(Some(existing), &ico_name(), Before::default());
         assert!(once.contains("[ViewState]\r\nMode=\r\nVid=\r\n"));
         // Our lines land at the end of the section we own, not at the end of the file.
         assert!(once.contains("InfoTip=hello\r\n; managed by FolderSkin\r\n"));
 
-        let twice = windows::desktop_ini_contents(Some(&once), &ico_name());
+        let twice = windows::desktop_ini_contents(Some(&once), &ico_name(), Before::default());
         assert_eq!(once, twice, "re-applying must not stack up our lines");
 
         let left = windows::desktop_ini_without_ours(&twice).unwrap();
@@ -505,7 +507,11 @@ mod tests {
 
     #[test]
     fn desktop_ini_adds_our_section_when_there_is_none() {
-        let s = windows::desktop_ini_contents(Some("[ViewState]\r\nMode=\r\n"), &ico_name());
+        let s = windows::desktop_ini_contents(
+            Some("[ViewState]\r\nMode=\r\n"),
+            &ico_name(),
+            Before::default(),
+        );
         assert!(s.starts_with("[.ShellClassInfo]\r\n"));
         assert!(s.contains("[ViewState]\r\nMode=\r\n"));
     }
@@ -514,7 +520,7 @@ mod tests {
     #[test]
     fn the_icon_a_folder_wears_is_read_back_out_of_its_ini() {
         let name = ico_name();
-        let ours = windows::desktop_ini_contents(None, &name);
+        let ours = windows::desktop_ini_contents(None, &name, Before::default());
         assert_eq!(windows::icon_resource_of(&ours), Some((name, 0)));
 
         // Someone else's icon, which is the case the app was showing the default folder for.
@@ -572,14 +578,81 @@ mod tests {
         let s = windows::desktop_ini_contents(
             Some("\u{feff}[.ShellClassInfo]\r\nInfoTip=hi\r\n"),
             &ico_name(),
+            Before::default(),
         );
         assert!(s.starts_with("\u{feff}[.ShellClassInfo]\r\n"));
         assert_eq!(s.matches("[.ShellClassInfo]").count(), 1);
     }
 
     #[test]
+    fn the_ini_records_what_the_folder_was_and_reads_it_back() {
+        for before in [
+            Before::default(),
+            Before {
+                readonly: true,
+                system: false,
+            },
+            Before {
+                readonly: false,
+                system: true,
+            },
+            Before {
+                readonly: true,
+                system: true,
+            },
+        ] {
+            let ini = windows::desktop_ini_contents(None, &ico_name(), before);
+            assert_eq!(windows::was_before(&ini), Some(before), "{ini}");
+        }
+    }
+
+    #[test]
+    fn re_applying_keeps_the_first_record_of_what_the_folder_was() {
+        // The folder was read-only before FolderSkin touched it. A second apply must not write
+        // down the marks FolderSkin itself put on in the meantime.
+        let was = Before {
+            readonly: true,
+            system: false,
+        };
+        let once = windows::desktop_ini_contents(None, &ico_name(), was);
+        let kept = windows::was_before(&once).unwrap();
+        let twice = windows::desktop_ini_contents(Some(&once), &ico_name(), kept);
+        assert_eq!(windows::was_before(&twice), Some(was));
+        assert_eq!(
+            twice.matches(windows::WAS_PREFIX).count(),
+            1,
+            "one record, not one per apply: {twice}"
+        );
+    }
+
+    #[test]
+    fn an_ini_from_before_the_record_existed_says_nothing() {
+        // What an older FolderSkin wrote. Revert falls back to clearing both marks, as it did.
+        let old = format!(
+            "[.ShellClassInfo]\r\n{}\r\nIconResource=folderskin.ico,0\r\n",
+            windows::MARKER
+        );
+        assert_eq!(windows::was_before(&old), None);
+    }
+
+    #[test]
+    fn the_record_goes_when_our_lines_do() {
+        let ini = windows::desktop_ini_contents(
+            Some("[.ShellClassInfo]\r\nInfoTip=keep\r\n"),
+            &ico_name(),
+            Before {
+                readonly: true,
+                system: true,
+            },
+        );
+        let left = windows::desktop_ini_without_ours(&ini).unwrap();
+        assert!(left.contains("InfoTip=keep"), "{left}");
+        assert!(!left.contains(windows::WAS_PREFIX), "{left}");
+    }
+
+    #[test]
     fn a_folder_counts_as_skinned_only_when_revert_would_change_it() {
-        let ours = windows::desktop_ini_contents(None, &ico_name());
+        let ours = windows::desktop_ini_contents(None, &ico_name(), Before::default());
         assert!(windows::would_revert(Some(&ours), false));
         assert!(windows::would_revert(None, true));
         let theirs = "[.ShellClassInfo]\r\nIconResource=theirs.ico,0\r\n";

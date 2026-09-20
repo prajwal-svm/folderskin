@@ -32,6 +32,65 @@ const ICO_HASH_HEX: usize = 16;
 pub const INI_NAME: &str = "desktop.ini";
 /// Comment line that identifies the lines FolderSkin owns.
 pub const MARKER: &str = "; managed by FolderSkin";
+/// Start of the comment line recording what the folder was before FolderSkin marked it.
+pub const WAS_PREFIX: &str = "; folder was: ";
+
+/// Which of the two attributes FolderSkin marks a folder with the folder already had of its own.
+///
+/// Marking a folder read-only and system is how Explorer is told to read `desktop.ini`, but a
+/// folder may have carried either bit before FolderSkin ever saw it — a read-only folder someone
+/// set deliberately is not unusual. Clearing both on revert would quietly take that away, so the
+/// apply writes down what it found and the revert puts it back. Recorded in the ini FolderSkin
+/// already owns rather than anywhere new, and read back by [`was_before`].
+///
+/// An ini with no such line was written by a version that did not record it; the revert then
+/// clears both, which is what that version would have done.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Before {
+    pub readonly: bool,
+    pub system: bool,
+}
+
+impl Before {
+    /// The comment line recording it.
+    fn line(self) -> String {
+        let what = match (self.readonly, self.system) {
+            (true, true) => "readonly,system",
+            (true, false) => "readonly",
+            (false, true) => "system",
+            (false, false) => "nothing",
+        };
+        format!("{WAS_PREFIX}{what}")
+    }
+}
+
+/// What a `desktop.ini` FolderSkin wrote records the folder as having been, if it says.
+pub fn was_before(desktop_ini: &str) -> Option<Before> {
+    let (_, body) = split_bom(desktop_ini);
+    let value = body
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(WAS_PREFIX))?
+        .trim()
+        .to_ascii_lowercase();
+    if value == "nothing" {
+        return Some(Before::default());
+    }
+    let mut before = Before::default();
+    for part in value.split(',') {
+        match part.trim() {
+            "readonly" => before.readonly = true,
+            "system" => before.system = true,
+            // A word we don't know: written by a later version, so say nothing rather than guess.
+            _ => return None,
+        }
+    }
+    Some(before)
+}
+
+/// True for a line of ours recording what the folder was.
+fn is_was_line(trimmed: &str) -> bool {
+    trimmed.starts_with(WAS_PREFIX)
+}
 /// The ini section Explorer reads folder appearance from.
 pub const SECTION: &str = "[.ShellClassInfo]";
 /// Sizes packed into the `.ico`; Explorer picks per view, so all of them are shipped.
@@ -107,11 +166,15 @@ pub fn prepare(icons: &IconSet) -> Result<Vec<u8>, ApplyError> {
 /// and our marker plus `IconResource` are (re)written at the end of `[.ShellClassInfo]`.
 /// Re-applying is idempotent: our old lines are dropped before the new ones go in. Line
 /// endings are CRLF, which is what every other writer of this file uses.
-pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str) -> String {
+pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str, before: Before) -> String {
     let icon_line = our_icon_line(ico_name);
+    let was_line = before.line();
 
     let Some(existing) = existing else {
-        return join_lines("", &[SECTION.to_string(), MARKER.to_string(), icon_line]);
+        return join_lines(
+            "",
+            &[SECTION.to_string(), MARKER.to_string(), was_line, icon_line],
+        );
     };
 
     let (bom, body) = split_bom(existing);
@@ -128,6 +191,7 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str) -> String {
             // section starts.
             if in_section && !inserted {
                 out.push(MARKER.to_string());
+                out.push(was_line.clone());
                 out.push(icon_line.clone());
                 inserted = true;
             }
@@ -139,7 +203,7 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str) -> String {
 
         // Drop our own marker wherever it sits, and any IconResource inside the section we
         // own — that key is exactly what we are replacing.
-        if trimmed == MARKER {
+        if trimmed == MARKER || is_was_line(trimmed) {
             continue;
         }
         if in_section
@@ -158,12 +222,13 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str) -> String {
 
     if in_section && !inserted {
         out.push(MARKER.to_string());
+        out.push(was_line.clone());
         out.push(icon_line.clone());
         inserted = true;
     }
     if !seen_section {
         // No [.ShellClassInfo] at all: ours leads the file, where Explorer expects it.
-        let mut head = vec![SECTION.to_string(), MARKER.to_string(), icon_line];
+        let mut head = vec![SECTION.to_string(), MARKER.to_string(), was_line, icon_line];
         head.append(&mut out);
         out = head;
         inserted = true;
@@ -191,7 +256,7 @@ pub fn desktop_ini_without_ours(existing: &str) -> Option<String> {
             out.push(line.to_string());
             continue;
         }
-        if trimmed == MARKER {
+        if trimmed == MARKER || is_was_line(trimmed) {
             continue;
         }
         if in_section && is_our_icon_resource(trimmed) {
@@ -325,14 +390,15 @@ pub use imp::{apply, has_custom_icon, refresh_shell_icons, revert};
 #[cfg(windows)]
 mod imp {
     use super::{
-        desktop_ini_contents, desktop_ini_without_ours, ico_file_name, is_our_ico_name,
-        would_revert, INI_NAME,
+        desktop_ini_contents, desktop_ini_without_ours, ico_file_name, is_our_ico_name, was_before,
+        would_revert, Before, INI_NAME,
     };
     use crate::apply::paths::{read_text_if_present, write_atomic};
     use crate::apply::ApplyError;
     use std::ffi::{c_void, OsStr};
     use std::os::windows::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
     use windows_sys::Win32::Storage::FileSystem::{
         GetFileAttributesW, SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
         FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_SYSTEM, INVALID_FILE_ATTRIBUTES,
@@ -374,9 +440,15 @@ mod imp {
 
         write_atomic(&ico, ico_bytes)?;
         let existing = read_text_if_present(&ini)?;
+        // What the folder was before FolderSkin marked it. On a re-apply the marks are already
+        // on, so what an earlier apply wrote down beats what the folder looks like now.
+        let before = existing
+            .as_deref()
+            .and_then(was_before)
+            .unwrap_or_else(|| marks_now(folder));
         write_atomic(
             &ini,
-            desktop_ini_contents(existing.as_deref(), &name).as_bytes(),
+            desktop_ini_contents(existing.as_deref(), &name, before).as_bytes(),
         )?;
 
         for stale in our_ico_files(folder) {
@@ -388,7 +460,7 @@ mod imp {
 
         hide(&ico)?;
         hide(&ini)?;
-        set_customized(folder, true)?;
+        set_customized(folder, true, before)?;
         notify(folder);
         Ok(())
     }
@@ -402,9 +474,14 @@ mod imp {
     /// Removes our ini lines and icon files, leaving anything else in the folder alone.
     pub fn revert(folder: &Path) -> Result<(), ApplyError> {
         let mut touched = false;
+        // Read while our lines are still in the file: they are what says whether the folder had
+        // either mark of its own. No record means a version that never wrote one, so both come
+        // off, which is what that version did.
+        let mut before = Before::default();
 
         let ini = folder.join(INI_NAME);
         if let Some(existing) = read_text_if_present(&ini)? {
+            before = was_before(&existing).unwrap_or_default();
             match desktop_ini_without_ours(&existing) {
                 None => {
                     clear_attributes(&ini);
@@ -432,7 +509,7 @@ mod imp {
             // Never skinned by us: change nothing, not even the read-only attribute.
             return Ok(());
         }
-        set_customized(folder, false)?;
+        set_customized(folder, false, before)?;
         notify(folder);
         Ok(())
     }
@@ -488,24 +565,49 @@ mod imp {
     ///
     /// The other attributes are kept as they were: this reads what is there and changes only
     /// these two bits, so a folder does not lose its archive bit or anything else to an apply.
-    fn set_customized(folder: &Path, on: bool) -> Result<(), ApplyError> {
-        const MARKS: u32 = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM;
-        let path_w = wide(folder.as_os_str());
-        // SAFETY: `path_w` is a NUL-terminated UTF-16 path that outlives the call.
-        let current = unsafe { GetFileAttributesW(path_w.as_ptr()) };
-        if current == INVALID_FILE_ATTRIBUTES {
+    fn set_customized(folder: &Path, on: bool, before: Before) -> Result<(), ApplyError> {
+        let Some(current) = attributes(folder) else {
             return Err(ApplyError::Io(std::io::Error::last_os_error()));
-        }
+        };
         let next = if on {
             current | MARKS
         } else {
-            current & !MARKS
+            // Off again, except for whatever the folder had of its own: taking a read-only bit
+            // off a folder someone set read-only themselves is not this program's business.
+            let mut next = current & !MARKS;
+            if before.readonly {
+                next |= FILE_ATTRIBUTE_READONLY;
+            }
+            if before.system {
+                next |= FILE_ATTRIBUTE_SYSTEM;
+            }
+            next
         };
         if next == current {
             return Ok(());
         }
         set_attributes(folder, next)
     }
+
+    /// The two marks the folder carries right now, for an apply with nothing written down yet.
+    fn marks_now(folder: &Path) -> Before {
+        let current = attributes(folder).unwrap_or(0);
+        Before {
+            readonly: current & FILE_ATTRIBUTE_READONLY != 0,
+            system: current & FILE_ATTRIBUTE_SYSTEM != 0,
+        }
+    }
+
+    /// `folder`'s attributes, or `None` when they can't be read.
+    fn attributes(folder: &Path) -> Option<u32> {
+        let path_w = wide(folder.as_os_str());
+        // SAFETY: `path_w` is a NUL-terminated UTF-16 path that outlives the call.
+        let current = unsafe { GetFileAttributesW(path_w.as_ptr()) };
+        (current != INVALID_FILE_ATTRIBUTES).then_some(current)
+    }
+
+    /// The two attributes that tell Explorer to read a folder's `desktop.ini`.
+    const MARKS: u32 = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM;
 
     /// Tells the shell the folder's icon changed, so open windows repaint without an F5.
     ///
@@ -599,22 +701,37 @@ mod imp {
     /// And it waits first. Sent the instant the last file is written, the refresh is processed
     /// before the shell has taken in the change, and the folder keeps its old icon until the
     /// *next* refresh — applying to one folder would repaint the folder skinned before it, one
-    /// operation behind for ever. [`SETTLE`] is the pause that stops that. It is spent on the
-    /// blocking thread the apply already runs on, after the folder itself is completely written,
-    /// so nothing the user waits on is any slower for it.
+    /// operation behind for ever. [`SETTLE`] is the pause that stops that.
+    ///
+    /// The pause is spent on a thread of its own and this returns at once, so the apply the user
+    /// is waiting on finishes when the folder is written rather than [`SETTLE`] later. Asking
+    /// again while one is waiting replaces it instead of adding to it: a run of applies ends in
+    /// one refresh, [`SETTLE`] after the last of them, not a flicker for each.
     pub fn refresh_shell_icons() {
-        std::thread::sleep(SETTLE);
-        // SAFETY: SHCNE_ASSOCCHANGED takes no items, so both are null, which is what the
-        // documentation asks for.
-        unsafe {
-            SHChangeNotify(
-                SHCNE_ASSOCCHANGED as i32,
-                SHCNF_IDLIST | SHCNF_FLUSH,
-                std::ptr::null(),
-                std::ptr::null(),
-            );
-        }
+        let mine = REFRESHES.fetch_add(1, Ordering::SeqCst) + 1;
+        std::thread::spawn(move || {
+            std::thread::sleep(SETTLE);
+            // Someone asked again while this one was waiting. Their settle has not run out yet,
+            // and it covers this change as well as theirs, so leave the single refresh to them.
+            if REFRESHES.load(Ordering::SeqCst) != mine {
+                return;
+            }
+            // SAFETY: SHCNE_ASSOCCHANGED takes no items, so both are null, which is what the
+            // documentation asks for.
+            unsafe {
+                SHChangeNotify(
+                    SHCNE_ASSOCCHANGED as i32,
+                    SHCNF_IDLIST | SHCNF_FLUSH,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                );
+            }
+        });
     }
+
+    /// Counts calls to [`refresh_shell_icons`], so each waiting refresh can tell whether it is
+    /// still the last one asked for.
+    static REFRESHES: AtomicU64 = AtomicU64::new(0);
 
     /// One `SHChangeNotify` naming `path` as an item id list, which is how the Desktop hears it.
     ///
