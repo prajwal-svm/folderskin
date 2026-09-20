@@ -10,8 +10,8 @@
 use crate::state::AppState;
 use folderskin_core::apply::tree::{subfolders, MAX_TREE};
 use folderskin_core::apply::{
-    apply_prepared, bytes_per_folder, has_custom_icon, prepare_icon, revert_icon, validate_folder,
-    ApplyError,
+    apply_prepared, bytes_per_folder, has_custom_icon, prepare_icon, refresh_shell_icons,
+    revert_icon, validate_folder, ApplyError,
 };
 use folderskin_core::compositor::ICON_SIZES;
 use serde::Serialize;
@@ -320,6 +320,10 @@ where
             total,
             name,
         });
+    }
+    if !run.changed.is_empty() {
+        // Once for the whole run, not once per folder: on Windows this refreshes every view.
+        refresh_shell_icons();
     }
     Ok(run)
 }

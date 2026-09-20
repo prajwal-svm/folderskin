@@ -173,6 +173,18 @@ pub fn revert_icon(folder: &Path) -> Result<(), ApplyError> {
     }
 }
 
+/// Asks the file manager to draw folder icons again, once a whole operation has finished.
+///
+/// Only Windows needs it, and only because the Desktop repaints for nothing else; see
+/// [`windows::refresh_shell_icons`] for what was tried first. It is deliberately called once per
+/// operation rather than once per folder, since it refreshes every view, so a run over a tree
+/// costs one refresh. macOS and Linux file managers act on the per-folder notifications the
+/// writers already send, and do nothing here.
+pub fn refresh_shell_icons() {
+    #[cfg(target_os = "windows")]
+    windows::refresh_shell_icons();
+}
+
 /// True when `folder` wears an icon of its own that [`revert_icon`] would take off: any custom
 /// icon on macOS, FolderSkin's on Windows, and FolderSkin's or a GIO custom icon on Linux. False
 /// for a folder FolderSkin wouldn't touch at all, since a revert there is refused.

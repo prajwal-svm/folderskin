@@ -320,7 +320,7 @@ fn join_lines(bom: &str, lines: &[String]) -> String {
 }
 
 #[cfg(windows)]
-pub use imp::{apply, has_custom_icon, revert};
+pub use imp::{apply, has_custom_icon, refresh_shell_icons, revert};
 
 #[cfg(windows)]
 mod imp {
@@ -334,12 +334,18 @@ mod imp {
     use std::os::windows::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
     use windows_sys::Win32::Storage::FileSystem::{
-        SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_SYSTEM,
+        GetFileAttributesW, SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
+        FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_SYSTEM, INVALID_FILE_ATTRIBUTES,
     };
     use windows_sys::Win32::UI::Shell::{
-        SHChangeNotify, SHCNE_ATTRIBUTES, SHCNE_UPDATEDIR, SHCNE_UPDATEITEM, SHCNF_FLUSH,
-        SHCNF_PATHW,
+        ILCreateFromPathW, ILFree, SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNE_ATTRIBUTES,
+        SHCNE_UPDATEDIR, SHCNE_UPDATEITEM, SHCNF_FLUSH, SHCNF_IDLIST, SHCNF_PATHW,
     };
+
+    /// How long [`refresh_shell_icons`] waits before asking the shell to redraw, so the change it
+    /// is meant to show has been taken in by the time it arrives. Found by measurement: sent with
+    /// no pause at all the refresh is always one operation behind.
+    const SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
 
     /// Writes the icon file (the [`prepare`](super::prepare)d bytes, under the name its contents
     /// give it) and a `desktop.ini` that points at it, then tells Explorer.
@@ -352,10 +358,16 @@ mod imp {
         let ico = folder.join(&name);
         let ini = folder.join(INI_NAME);
 
-        // Explorer only honours desktop.ini in a read-only folder, but that bit — and the
-        // hidden+system bits on the files themselves — make replacing our own files from an
-        // earlier apply fail, so everything is cleared first and set again at the end.
-        set_readonly(folder, false)?;
+        // The hidden+system bits on our own files from an earlier apply stop them being
+        // replaced, so those are cleared first and set again at the end.
+        //
+        // The folder's read-only bit is deliberately left alone. It is what makes Explorer read
+        // `desktop.ini` at all, and taking it off for the length of the write was a race we lost
+        // about half the time: writing these files makes the shell look at the folder again, and
+        // when it looked while the bit was off it saw a folder with no custom icon and cached
+        // that — so the apply finished correctly and the folder still showed the plain default.
+        // A directory's read-only attribute never blocked writing files inside it on Windows; it
+        // is only the marker, which is why clearing it bought nothing.
         clear_attributes(&ico);
         clear_attributes(&ini);
 
@@ -375,7 +387,7 @@ mod imp {
 
         hide(&ico)?;
         hide(&ini)?;
-        set_readonly(folder, true)?;
+        set_customized(folder, true)?;
         notify(folder);
         Ok(())
     }
@@ -419,7 +431,7 @@ mod imp {
             // Never skinned by us: change nothing, not even the read-only attribute.
             return Ok(());
         }
-        set_readonly(folder, false)?;
+        set_customized(folder, false)?;
         notify(folder);
         Ok(())
     }
@@ -465,39 +477,69 @@ mod imp {
         Ok(())
     }
 
-    /// Sets or clears the folder's read-only attribute, which is what makes Explorer look at
-    /// `desktop.ini` in the first place.
-    fn set_readonly(folder: &Path, readonly: bool) -> Result<(), ApplyError> {
-        let mut permissions = std::fs::metadata(folder)?.permissions();
-        permissions.set_readonly(readonly);
-        std::fs::set_permissions(folder, permissions)?;
-        Ok(())
+    /// Marks `folder` as one Explorer reads `desktop.ini` from, or takes the marks off again.
+    ///
+    /// Both bits go on. Windows' own guidance for customising a folder is to mark it **system**,
+    /// and that is the one that counts: with read-only alone a folder on the OneDrive-synced
+    /// Desktop kept drawing the plain folder however correctly the skin had been written, and no
+    /// amount of telling the shell about it helped. Read-only stays as well because it is what
+    /// FolderSkin has always set, so a folder skinned by an older version still reverts cleanly.
+    ///
+    /// The other attributes are kept as they were: this reads what is there and changes only
+    /// these two bits, so a folder does not lose its archive bit or anything else to an apply.
+    fn set_customized(folder: &Path, on: bool) -> Result<(), ApplyError> {
+        const MARKS: u32 = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM;
+        let path_w = wide(folder.as_os_str());
+        // SAFETY: `path_w` is a NUL-terminated UTF-16 path that outlives the call.
+        let current = unsafe { GetFileAttributesW(path_w.as_ptr()) };
+        if current == INVALID_FILE_ATTRIBUTES {
+            return Err(ApplyError::Io(std::io::Error::last_os_error()));
+        }
+        let next = if on {
+            current | MARKS
+        } else {
+            current & !MARKS
+        };
+        if next == current {
+            return Ok(());
+        }
+        set_attributes(folder, next)
     }
 
     /// Tells the shell the folder's icon changed, so open windows repaint without an F5.
     ///
-    /// The one that matters is the last: **the view that draws a folder's icon is the view
-    /// listing it, not a window showing what is inside it.** A folder on the Desktop is drawn by
-    /// the Desktop; a folder in Documents is drawn by the Documents window. Telling the shell
-    /// only about the folder itself, as this used to, left that view holding the icon it had
-    /// already drawn — the app wrote everything correctly, `SHGetFileInfo` resolved the new icon,
-    /// and the folder on screen did not change until it was refreshed by hand. That is the
-    /// "press F5" this app used to tell people about.
+    /// Two things had to be got right, and each was found by applying a skin to a folder that was
+    /// already on screen and watching whether the icon changed on its own.
     ///
-    /// The other two are the rest of what actually changed: applying sets the folder's read-only
-    /// attribute, which is the bit that makes Explorer read `desktop.ini` at all, and the folder
-    /// as an item now looks different.
+    /// **The view that draws a folder's icon is the view listing it**, not a window showing what
+    /// is inside it. A folder on the Desktop is drawn by the Desktop; a folder in Documents by the
+    /// Documents window. Naming only the folder, as this used to, left that view holding the icon
+    /// it had already drawn.
+    ///
+    /// **And the Desktop does not listen by path.** It watches the shell namespace, so a
+    /// `SHCNF_PATHW` notification never reaches it — which is why a folder on the Desktop kept its
+    /// old icon even once the parent was being told. The same notifications therefore go out a
+    /// second time as item id lists ([`notify_pidl`]). Ordinary Explorer windows take the path
+    /// form, the Desktop takes the id-list form, and sending both is what covers every view; a
+    /// view that hears about a change twice simply redraws once.
+    ///
+    /// The events are the three things that actually changed: the folder's read-only attribute
+    /// (the bit that makes Explorer read `desktop.ini` at all), the folder as an item, and the
+    /// listing it appears in.
     fn notify(folder: &Path) {
         notify_path(folder, SHCNE_ATTRIBUTES);
         notify_path(folder, SHCNE_UPDATEITEM);
         // Also the folder itself: its contents really did change, for a window that has it open.
         notify_path(folder, SHCNE_UPDATEDIR);
+        notify_pidl(folder, SHCNE_ATTRIBUTES);
+        notify_pidl(folder, SHCNE_UPDATEITEM);
         if let Some(parent) = folder.parent() {
             notify_path(parent, SHCNE_UPDATEDIR);
+            notify_pidl(parent, SHCNE_UPDATEDIR);
         }
     }
 
-    /// One `SHChangeNotify` about `path`.
+    /// One `SHChangeNotify` naming `path` as a path.
     fn notify_path(path: &Path, event: u32) {
         let path_w = wide(path.as_os_str());
         // SAFETY: SHCNF_PATHW promises the first item is a wide path, which `path_w` is and which
@@ -509,6 +551,65 @@ mod imp {
                 path_w.as_ptr().cast::<c_void>(),
                 std::ptr::null(),
             );
+        }
+    }
+
+    /// Asks the shell to draw folder icons again, everywhere.
+    ///
+    /// The Desktop is the reason this exists. It does not repaint for any notification about the
+    /// folder that changed: not by path, not by item id list, not `SHCNE_UPDATEITEM`,
+    /// `SHCNE_ATTRIBUTES`, `SHCNE_UPDATEDIR` on its parent, nor `SHCNE_UPDATEIMAGE` for the image
+    /// index the folder resolves to — each was tried against a folder sitting on the Desktop while
+    /// its skin changed, and the icon stayed as it was. `SHCNE_ASSOCCHANGED` is the one that
+    /// works, and it is what folder-icon tools have always used.
+    ///
+    /// It is blunt: the shell treats it as "file associations changed" and refreshes icons across
+    /// every view, which can show as a brief flicker. So it is *not* part of [`apply`] — the
+    /// caller sends it once when a whole operation has finished, rather than once per folder, so a
+    /// run over a thousand folders costs one refresh and not a thousand.
+    ///
+    /// And it waits first. Sent the instant the last file is written, the refresh is processed
+    /// before the shell has taken in the change, and the folder keeps its old icon until the
+    /// *next* refresh — applying to one folder would repaint the folder skinned before it, one
+    /// operation behind for ever. [`SETTLE`] is the pause that stops that. It is spent on the
+    /// blocking thread the apply already runs on, after the folder itself is completely written,
+    /// so nothing the user waits on is any slower for it.
+    pub fn refresh_shell_icons() {
+        std::thread::sleep(SETTLE);
+        // SAFETY: SHCNE_ASSOCCHANGED takes no items, so both are null, which is what the
+        // documentation asks for.
+        unsafe {
+            SHChangeNotify(
+                SHCNE_ASSOCCHANGED as i32,
+                SHCNF_IDLIST | SHCNF_FLUSH,
+                std::ptr::null(),
+                std::ptr::null(),
+            );
+        }
+    }
+
+    /// One `SHChangeNotify` naming `path` as an item id list, which is how the Desktop hears it.
+    ///
+    /// `ILCreateFromPath` rather than `SHParseDisplayName` because it needs no COM: this runs on
+    /// whichever blocking thread the apply landed on, and the folder is a plain filesystem path.
+    /// A path the shell cannot make an id list of is skipped — the path notification above has
+    /// already gone out, and failing to repaint is not worth failing an apply over.
+    fn notify_pidl(path: &Path, event: u32) {
+        let path_w = wide(path.as_os_str());
+        // SAFETY: `path_w` is a NUL-terminated wide path. The returned id list is owned by this
+        // function, handed to SHChangeNotify while it is alive, and freed exactly once.
+        unsafe {
+            let pidl = ILCreateFromPathW(path_w.as_ptr());
+            if pidl.is_null() {
+                return;
+            }
+            SHChangeNotify(
+                event as i32,
+                SHCNF_IDLIST | SHCNF_FLUSH,
+                pidl.cast::<c_void>(),
+                std::ptr::null(),
+            );
+            ILFree(pidl);
         }
     }
 }
