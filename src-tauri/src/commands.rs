@@ -6,7 +6,9 @@ use crate::state::AppState;
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinKind, SkinSource, MAX_STORED_SIDE};
 use base64::Engine;
 use folderskin_core::apply::paths::write_atomic;
-use folderskin_core::apply::{apply_icon, has_custom_icon, revert_icon, validate_folder};
+use folderskin_core::apply::{
+    apply_icon, has_custom_icon, refresh_shell_icons, revert_icon, validate_folder,
+};
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
 use folderskin_core::matte;
 use serde::Serialize;
@@ -350,7 +352,10 @@ pub async fn apply_skin(
     // for that) and the PNG encodes are slow, so this stays off it; the window keeps painting
     // the "Applying…" state.
     tauri::async_runtime::spawn_blocking(move || {
-        apply_icon(&folder, &icons).map_err(|e| e.to_string())
+        apply_icon(&folder, &icons).map_err(|e| e.to_string())?;
+        // Once the folder is written: on Windows the Desktop repaints for nothing narrower.
+        refresh_shell_icons();
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -411,9 +416,13 @@ pub async fn edit_skin(
 #[tauri::command]
 pub async fn revert_skin(folder: String) -> Result<(), String> {
     let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || revert_icon(&folder).map_err(|e| e.to_string()))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        revert_icon(&folder).map_err(|e| e.to_string())?;
+        refresh_shell_icons();
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// A folder's icon as it looks now, and whether it's one of its own that a revert would take off.
@@ -455,7 +464,7 @@ pub fn platform_info() -> PlatformInfo {
         "macos" => ("your Mac", "macOS keeps the icon inside the folder itself (a hidden Icon file). Revert removes it."),
         "windows" => (
             "your PC",
-            "Writes desktop.ini and folderskin.ico inside the folder. If Explorer keeps showing the old icon, press F5.",
+            "Writes desktop.ini and a folderskin icon file inside the folder, both hidden. Revert removes them.",
         ),
         _ => (
             "your computer",

@@ -48,6 +48,11 @@
       "hardenedRuntime": true,
       "entitlements": "entitlements.plist"
     },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
+    },
     "linux": {
       "deb": {
         "depends": []

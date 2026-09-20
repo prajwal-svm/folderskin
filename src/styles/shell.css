@@ -48,6 +48,79 @@
   padding-top: 20px;
 }
 
+/* ---------- the window's own controls (Windows only) ---------- */
+
+/*
+ * src-tauri/src/window.rs builds the Windows window undecorated, so the caption bar that used to
+ * sit above the islands is gone and the window needs its own controls and something to drag it
+ * by. The strip lies over the top of the folder island — the same box, so the buttons land in its
+ * top right corner — and is transparent, so the island's rounded corners still read as the edge
+ * of the window. `data-tauri-drag-region` moves the window; the buttons inside it don't carry the
+ * attribute, so they stay clickable.
+ */
+.winbar {
+  position: absolute;
+  z-index: 3;
+  top: var(--gap);
+  right: var(--gap);
+  width: clamp(320px, 29vw, 372px);
+  height: 32px;
+  display: flex;
+  align-items: stretch;
+  /* The strip itself is not a target: only the drag handle and the buttons in it are, so the
+     island keeps the rest of its top edge. */
+  pointer-events: none;
+}
+
+/* What is left of the strip beside the buttons: grab here to move the window. */
+.winbar-drag {
+  flex: 1;
+  pointer-events: auto;
+}
+
+.winctl {
+  display: flex;
+  pointer-events: auto;
+  /* Flush with the island's top right corner, inside its rounded edge. */
+  border-radius: 0 var(--r-island) 0 0;
+  overflow: hidden;
+}
+
+.winctl-btn {
+  width: 44px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.winctl-btn:hover,
+.winctl-btn:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+/* Windows paints its close button red on hover, and people aim for that. */
+.winctl-btn.is-close:hover,
+.winctl-btn.is-close:focus-visible {
+  background: var(--danger-solid);
+  color: #fff;
+}
+
+/*
+ * Room for the strip at the top of the folder island, so the controls never sit on the folder,
+ * the skin's name or a panel's header. Keyed off the <html> flag window.rs sets before the first
+ * paint rather than the .os-windows class, which only arrives once platform_info answers.
+ */
+html[data-os="windows"] .stage {
+  padding-top: 52px;
+}
+
+html[data-os="windows"] .cmp-side-head {
+  padding-top: 42px;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;

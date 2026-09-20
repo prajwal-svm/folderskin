@@ -45,8 +45,14 @@ aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sy
 tauri = { version = "2", features = ["macos-private-api", "test"] }
 
 [target.'cfg(windows)'.dependencies]
-# The machine GUID that ties the saved API keys to this computer (keys.rs).
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }
+# The machine GUID that ties the saved API keys to this computer (keys.rs), and the icon a folder
+# already wears, drawn from the file its desktop.ini names (folder_icon.rs).
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Registry",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

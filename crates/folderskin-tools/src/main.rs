@@ -3,7 +3,7 @@
 //! terminal.
 
 use clap::Parser;
-use folderskin_core::apply::{apply_icon, revert_icon};
+use folderskin_core::apply::{apply_icon, refresh_shell_icons, revert_icon};
 use folderskin_core::compositor::{
     render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
@@ -91,11 +91,13 @@ fn run(cli: Cli) -> Result<(), String> {
         } => {
             let skin = load_skin(&image, focus.unwrap_or((0.5, 0.5)))?;
             apply_icon(&folder, &skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
+            refresh_shell_icons();
             println!("applied to {}: {}", folder.display(), skin.describe());
             Ok(())
         }
         Command::Revert { folder } => {
             revert_icon(&folder).map_err(|e| e.to_string())?;
+            refresh_shell_icons();
             println!("reverted {}", folder.display());
             Ok(())
         }

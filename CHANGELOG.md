@@ -4,6 +4,35 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- **Windows: the folder panel shows a folder's real icon.** A folder dropped on the window
+  showed the plain default folder however it actually looked, and applying a skin left that same
+  plain folder on screen, so nothing seemed to have happened. The panel now draws the icon the
+  folder's own `desktop.ini` names, as it has always done on macOS.
+- **Windows: the folder itself changes as the skin is applied.** Applying a skin wrote
+  everything correctly but the folder on screen kept its old icon until the view was refreshed
+  by hand. Two causes, both needed fixing:
+  - `SHChangeNotify` only ever named the folder. The view that draws a folder's icon is the one
+    listing it — the Desktop, for a folder on the Desktop — so the parent is now told too.
+  - The icon file had a fixed name, and Explorer caches an icon against the path it came from.
+    It is now named after its contents (`folderskin-<hash>.ico`), so a different skin is a
+    different path. Applying the same skin twice still resolves to the same name and rewrites
+    one identical file; the icon file an earlier apply left is removed, and revert still
+    recognises the `folderskin.ico` that earlier versions wrote.
+- **The app no longer quits when something goes wrong.** Release builds aborted the process on
+  any panic, so a fault while applying a skin closed the window with nothing said. Commands
+  unwind instead, and a panic comes back as a message; it is also written to `panic.log` in the
+  app's log folder, which a release build had no console to print to.
+
+### Changed
+
+- **Windows: no system title bar.** The window is undecorated and its minimise, maximise and
+  close buttons sit in the folder island, so the app no longer wears a grey caption strip the
+  design has no room for. macOS and Linux are unchanged.
+
 ## 0.1.1 — 2026-09-19
 
 ### Added

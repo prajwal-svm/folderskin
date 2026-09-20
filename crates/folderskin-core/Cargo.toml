@@ -20,4 +20,6 @@ objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSGeome
 objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_Shell"] }
+# Win32_UI_Shell_Common is for ITEMIDLIST: the Desktop hears about a changed icon as an item id
+# list, not as a path (see the `notify` in apply/windows.rs).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
