@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type AiCatalogue } from "../lib/tauri";
+import { api, errorMessage, type AiCatalogue, type GithubAccount } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
-import { isGithubUser, LICENSES, loadSharingPrefs, PACKS_GUIDE_URL, REPO_URL, saveSharingPrefs, type SharingPrefs } from "../lib/packs";
+import { LICENSES, loadSharingPrefs, PACKS_GUIDE_URL, REPO_URL, saveSharingPrefs, type SharingPrefs } from "../lib/packs";
 import type { ThemePref } from "../state/theme";
 import type { ToastTone } from "../hooks/useToasts";
 import type { UpdateStatus } from "../hooks/useUpdates";
+import { GithubAvatar } from "./GithubAvatar";
+import { GithubConnect } from "./GithubConnect";
 import { Modal } from "./Modal";
 import { ProviderKeys } from "./ProviderKeys";
 import { UpdateButton } from "./UpdateDialog";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { DownloadIcon } from "./icons/download";
+import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { GithubIcon } from "./icons/github";
+import { InfoIcon } from "./icons/info";
 import { LoaderIcon } from "./icons/loader";
 import { MonitorCheckIcon } from "./icons/monitor-check";
 import { MoonIcon } from "./icons/moon";
@@ -147,7 +151,7 @@ function General({
           <div className="storage-text">
             <p className="storage-count">{savedCount === 1 ? "1 skin" : `${savedCount} skins`}</p>
             <p className="storage-path" title={folder ?? undefined}>
-              {folder ? prettyPath(folder) : folderError ? "Kept until you quit" : "…"}
+              {folder ? prettyPath(folder) : folderError ? "Kept until you quit" : ""}
             </p>
           </div>
           {folder && (
@@ -186,7 +190,7 @@ function AiKeys({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
   if (!catalogue)
     return (
       <p className="field-note">
-        <LoaderIcon /> Loading providers…
+        <LoaderIcon /> Loading providers
       </p>
     );
   return (
@@ -209,32 +213,93 @@ function AiKeys({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
   );
 }
 
+/** A question mark's worth of explanation, out of the way until someone wants it. */
+function Hint({ text }: { text: string }) {
+  return (
+    <button type="button" className="hint" aria-label={text}>
+      <InfoIcon size={13} />
+      <span className="hint-bubble" aria-hidden="true">
+        {text}
+      </span>
+    </button>
+  );
+}
+
 function Sharing() {
   const [prefs, setPrefs] = useState<SharingPrefs>(loadSharingPrefs);
   const update = (next: SharingPrefs) => {
     setPrefs(next);
     saveSharingPrefs(next);
   };
-  const bad = prefs.author !== "" && !isGithubUser(prefs.author);
+
+  const [account, setAccount] = useState<GithubAccount | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void api
+      .githubAccount()
+      .then((who) => {
+        if (live && who) setAccount(who);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const connected = useCallback(
+    (who: GithubAccount) => {
+      setAccount(who);
+      setConnecting(false);
+      update({ ...prefs, author: who.login });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prefs],
+  );
+
+  if (connecting) {
+    return <GithubConnect onConnected={connected} onCancel={() => setConnecting(false)} />;
+  }
 
   return (
     <>
-      <p className="field-note">
-        Shared skins go on GitHub, where anyone can add them to FolderSkin. These fill in the share dialog for you.
-      </p>
-      <label className="field">
-        <span className="field-label">Your GitHub user name</span>
-        <input
-          className="input"
-          value={prefs.author}
-          maxLength={39}
-          placeholder="octocat"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => update({ ...prefs, author: e.target.value.trim() })}
-        />
-        {bad && <span className="field-note is-error">A GitHub user name is letters, digits and single dashes.</span>}
-      </label>
+      <div className="field">
+        <span className="field-label field-label-row">
+          GitHub
+          <Hint text="Shared skins go on GitHub, where anyone can add them to FolderSkin. What's here fills in the share dialog for you." />
+        </span>
+        <div className="gh-account">
+          {account ? (
+            <>
+              <GithubAvatar account={account} />
+              <span className="gh-account-who">
+                <strong>{account.login}</strong>
+                {account.name && <span>{account.name}</span>}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  void api.githubSignOut().catch(() => {});
+                  setAccount(null);
+                }}
+              >
+                Disconnect
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="gh-account-who">
+                <strong>Connect to GitHub</strong>
+                <span>Connecting to GitHub helps you share your skins with the community.</span>
+              </span>
+              <button type="button" className="btn btn-primary" onClick={() => setConnecting(true)}>
+                <GithubIcon size={15} />
+                Connect
+              </button>
+            </>
+          )}
+        </div>
+      </div>
       <label className="field">
         <span className="field-label">Licence for what you share</span>
         <select className="input" value={prefs.license} onChange={(e) => update({ ...prefs, license: e.target.value })}>
@@ -244,10 +309,9 @@ function Sharing() {
             </option>
           ))}
         </select>
-        <span className="field-note">FolderSkin is MIT licensed, and shared skins use Creative Commons or MIT.</span>
       </label>
       <button type="button" className="link-btn settings-link" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
-        How sharing works
+        How sharing works <ExternalLinkIcon size={12} />
       </button>
     </>
   );

@@ -1,22 +1,54 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type Skin } from "../lib/tauri";
+import { api, errorMessage, type GithubAccount, type Published, type PublishProgress, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
-import { cleanName, clip } from "../lib/names";
-import { isGithubUser, LICENSES, loadSharingPrefs, MAX_PACK_SKINS, packSlug, PACKS_GUIDE_URL, saveSharingPrefs, UPLOAD_URL } from "../lib/packs";
+import { cleanName } from "../lib/names";
+import { LICENSES, loadSharingPrefs, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, packSlug, PACKS_GUIDE_URL, saveSharingPrefs, UPLOAD_URL } from "../lib/packs";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
+import { GithubAvatar } from "./GithubAvatar";
+import { GithubConnect } from "./GithubConnect";
 import { Modal } from "./Modal";
 import { TagInput } from "./TagInput";
+import { CheckIcon } from "./icons/check";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
+import { GithubIcon } from "./icons/github";
 import { LoaderIcon } from "./icons/loader";
 
+/** What FolderSkin is doing, in the words it says while doing it. */
+function progressLabel(p: PublishProgress): string {
+  switch (p.stage) {
+    case "checking":
+      return "Looking at what you can push to";
+    case "forking":
+      return "Making your own copy of FolderSkin";
+    case "branching":
+      return "Starting a branch for the pack";
+    case "uploading":
+      return `Sending pictures (${Math.min(p.done + 1, p.total)} of ${p.total})`;
+    case "opening":
+      return "Opening the pull request";
+  }
+}
+
+/** Where the dialog starts: the skin they asked to share, all of theirs, or a tag small enough. */
+function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; count: number }[]) {
+  if (only) return { ids: [only.id], name: only.name, tags: only.tags.slice(0, MAX_PACK_TAGS), filter: "" };
+  if (yours.length <= MAX_PACK_SKINS) return { ids: yours.map((s) => s.id), name: "", tags: [] as string[], filter: "" };
+  const first = tags.find((t) => t.count <= MAX_PACK_SKINS);
+  if (!first) return { ids: [] as string[], name: "", tags: [] as string[], filter: "" };
+  return { ids: yours.filter((s) => s.tags.includes(first.tag)).map((s) => s.id), name: tagLabel(first.tag), tags: [first.tag], filter: first.tag };
+}
+
 /**
- * Shares the user's own skins with everyone, in two steps. First: which skins (a whole set, or
- * just one, which goes up as a pack of one), the pack's name and tags, their GitHub name and a
- * licence. Then the folder is saved, already in the shape the pull-request checks want, and the
- * dialog says how to put it on GitHub.
+ * Shares the user's own skins with everyone. They choose which skins go in, name the pack, tag it
+ * and pick a licence, then press publish: FolderSkin signs them in to GitHub once, forks the
+ * repository if they can't push to it, and opens the pull request for them.
+ *
+ * A pack holds up to {@link MAX_PACK_SKINS} skins, so the picker is a grid of ticks rather than a
+ * single choice — sharing one skin and sharing twenty are the same dialog. Saving a folder is
+ * still here for anyone who would rather do the GitHub part themselves.
  */
 export function SharePack({
   yours,
@@ -25,45 +57,96 @@ export function SharePack({
   onClose,
 }: {
   yours: Skin[];
-  /** Share just this skin. */
+  /** Start with just this skin ticked. They can still tick more. */
   only?: Skin;
   fileBrowser: string;
   onClose: () => void;
 }) {
   const tags = useMemo(() => tagCounts(yours), [yours]);
-  const [which, setWhich] = useState(() =>
-    only || yours.length <= MAX_PACK_SKINS ? "" : (tags.find((t) => t.count <= MAX_PACK_SKINS)?.tag ?? ""),
-  );
-  const [name, setName] = useState(only ? only.name : which ? tagLabel(which) : "");
-  const [packTags, setPackTags] = useState<string[]>(only ? only.tags.slice(0, MAX_PACK_TAGS) : which ? [which] : []);
-  const [author, setAuthor] = useState(() => loadSharingPrefs().author);
+  const [start] = useState(() => opening(yours, only, tags));
+
+  /** Which skins go in. A pack holds several, so this is a set of ids, not one choice. */
+  const [picked, setPicked] = useState<string[]>(start.ids);
+  /** Narrows the grid below. It does not decide what is in the pack. */
+  const [filter, setFilter] = useState(start.filter);
+  const [name, setName] = useState(start.name);
+  const [packTags, setPackTags] = useState<string[]>(start.tags);
+
   const [license, setLicense] = useState<string>(() => loadSharingPrefs().license);
+  const [notes, setNotes] = useState("");
+  const [mine, setMine] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
-  const chosen = only ? [only] : which ? yours.filter((s) => s.tags.includes(which)) : yours;
+  const [account, setAccount] = useState<GithubAccount | null>(null);
+  /** Who the pack is credited to. GitHub says who that is; nothing here types it. */
+  const author = account?.login ?? "";
+  /** Set while they are approving a code, and says what to do once they have. */
+  const [connecting, setConnecting] = useState<null | "publish" | "sign-in">(null);
+  const [progress, setProgress] = useState<PublishProgress | null>(null);
+  const [published, setPublished] = useState<Published | null>(null);
+
+  // Whether they are already signed in decides what the publish button does, so it is worth
+  // knowing before they press it.
+  useEffect(() => {
+    let live = true;
+    void api
+      .githubAccount()
+      .then((who) => {
+        if (!live || !who) return;
+        setAccount(who);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const shown = filter ? yours.filter((s) => s.tags.includes(filter)) : yours;
+  const chosen = yours.filter((s) => picked.includes(s.id));
+  const allShown = shown.length > 0 && shown.every((s) => picked.includes(s.id));
   const clean = cleanName(name);
+  // Short enough for the one line beside the buttons: the field itself says the rest.
   const problem =
     yours.length === 0
-      ? "You have no skins of your own yet. Add a picture or make one with AI first."
-      : chosen.length > MAX_PACK_SKINS
-        ? `That's ${chosen.length} skins, and a pack holds ${MAX_PACK_SKINS}. Pick a tag to narrow it down.`
-        : !clean || !packSlug(clean)
-          ? "Give the pack a name with letters or digits in it."
-          : packTags.length === 0
-            ? "Add at least one tag. The first one names the pack in everyone's filters."
-            : !isGithubUser(author.trim())
-              ? "Add your GitHub user name, so people can credit you."
-              : null;
+      ? "No skins of your own yet"
+      : chosen.length === 0
+        ? "Tick at least one skin"
+        : chosen.length > MAX_PACK_SKINS
+          ? `${chosen.length} skins is over the ${MAX_PACK_SKINS} a pack holds`
+          : !clean || !packSlug(clean)
+            ? "Give the pack a name"
+            : packTags.length === 0
+              ? "Add at least one tag"
+              : !account
+                ? "Connect to GitHub first"
+                : null;
+  /** The thing FolderSkin can't check for them, which is why they are asked rather than told. */
+  const unconfirmed = !mine ? "Agree to the terms" : null;
 
-  const pick = (tag: string) => {
-    setWhich(tag);
-    if (tag) {
-      setPackTags((t) => [tag, ...t.filter((x) => x !== tag)].slice(0, MAX_PACK_TAGS));
-      if (!name.trim()) setName(tagLabel(tag));
-    }
+  const pack = () => ({
+    name: clean,
+    license,
+    tags: packTags,
+    skinIds: chosen.map((s) => s.id),
+    notes,
+    termsVersion: PACK_TERMS_VERSION,
+  });
+
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  const takeAll = () =>
+    setPicked((p) => (allShown ? p.filter((id) => !shown.some((s) => s.id === id)) : [...new Set([...p, ...shown.map((s) => s.id)])]));
+
+  const narrow = (tag: string) => {
+    setFilter(tag);
+    if (tag && !name.trim()) setName(tagLabel(tag));
   };
+
+  // Crediting a different account means signing in as it, not signing out of this one: cancelling
+  // half way leaves them where they were rather than logged out of a dialog they came here to use.
+  const useAnother = () => setConnecting("sign-in");
 
   const save = async () => {
     const folder = isTauri()
@@ -73,8 +156,8 @@ export function SharePack({
     setBusy(true);
     setError(null);
     try {
-      const path = await api.exportPack({ folder, name: clean, author: author.trim(), license, tags: packTags, skinIds: chosen.map((s) => s.id) });
-      saveSharingPrefs({ author: author.trim(), license });
+      const path = await api.exportPack({ folder, name: clean, author, license, tags: packTags, skinIds: chosen.map((s) => s.id) });
+      saveSharingPrefs({ author, license });
       setSaved(path);
     } catch (e) {
       setError(errorMessage(e));
@@ -83,6 +166,77 @@ export function SharePack({
     }
   };
 
+  const publish = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    setProgress({ stage: "checking" });
+    try {
+      const out = await api.publishPack(pack(), setProgress);
+      saveSharingPrefs({ author, license });
+      setPublished(out);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+    // `pack()` reads the current form, which is exactly what should be sent when it is pressed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [license, notes, packTags, clean, chosen]);
+
+  // Signing in from the author row only signs them in; signing in from the publish button carries
+  // on and publishes. A ref keeps the callback itself stable, so the code on screen survives.
+  const publishRef = useRef(publish);
+  publishRef.current = publish;
+  const wantedRef = useRef(connecting);
+  wantedRef.current = connecting;
+  const onConnected = useCallback((who: GithubAccount) => {
+    const go = wantedRef.current === "publish";
+    setAccount(who);
+    setConnecting(null);
+    if (go) void publishRef.current();
+  }, []);
+
+  // ---- it went up ----
+  if (published) {
+    return (
+      <Modal
+        narrow
+        title="Your pack is on its way"
+        sub={`Pull request #${published.number} is open on FolderSkin.`}
+        onClose={onClose}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              Done
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void openUrl(published.url).catch(() => {})}>
+              <ExternalLinkIcon />
+              See the pull request
+            </button>
+          </>
+        }
+      >
+        <p className="field-note">
+          Once a maintainer merges it, it appears in everyone's Community view.{" "}
+          <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
+            How packs work <ExternalLinkIcon size={12} />
+          </button>
+        </p>
+      </Modal>
+    );
+  }
+
+  // ---- signing in ----
+  if (connecting) {
+    return (
+      <Modal narrow title="Connect to GitHub" sub="So FolderSkin can open the pull request as you." onClose={onClose}>
+        <GithubConnect onConnected={onConnected} onCancel={() => setConnecting(null)} />
+      </Modal>
+    );
+  }
+
+  // ---- saved a folder the old way ----
   if (saved) {
     const id = saved.split(/[\\/]/).pop() ?? packSlug(clean);
     return (
@@ -114,84 +268,174 @@ export function SharePack({
         <p className="field-note">
           Once it's checked and merged, everyone can add it from Community.{" "}
           <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
-            How packs work
+            How packs work <ExternalLinkIcon size={12} />
           </button>
         </p>
       </Modal>
     );
   }
 
+  const stop = problem ?? unconfirmed;
   return (
     <Modal
-      narrow
-      title={only ? `Share "${clip(only.name)}"` : "Share your skins"}
-      sub={
-        only
-          ? "It goes up as a pack of one, free for anyone to add to FolderSkin."
-          : "Packs are free. They live on GitHub, and anyone can add one to FolderSkin."
-      }
+      className="modal-share"
+      title="Share a pack"
+      sub="Packs are free. They live on GitHub, and anyone can add one to FolderSkin."
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancel
+          {stop && !busy && (
+            <span className="modal-reason" title={stop}>
+              {stop}
+            </span>
+          )}
+          <button type="button" className="btn btn-ghost" disabled={busy || !account} onClick={() => void save()}>
+            Save a folder
           </button>
-          <button type="button" className="btn btn-primary" disabled={Boolean(problem) || busy} aria-busy={busy} onClick={() => void save()}>
-            {busy && <LoaderIcon />}
-            {busy ? "Saving…" : "Save pack…"}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={Boolean(stop) || busy}
+            aria-busy={busy}
+            onClick={() => (account ? void publish() : setConnecting("publish"))}
+          >
+            {busy ? <LoaderIcon /> : <GithubIcon size={15} />}
+            {busy ? "Publishing" : account ? "Publish" : "Connect and publish"}
           </button>
         </>
       }
     >
-      {only ? (
-        <div className="share-one">
-          <img src={only.thumbnail} alt="" draggable={false} />
-          <span title={only.name}>{only.name}</span>
+      <div className="share-grid">
+        <div className="share-col">
+          <div className="field share-pick-field">
+            <div className="share-pick-head">
+              <span className="field-label">Skins</span>
+              <span className="share-count">
+                {chosen.length} of {yours.length}
+              </span>
+              {shown.length > 1 && (
+                <button type="button" className="link-btn" onClick={takeAll}>
+                  {allShown ? "Clear" : "Select all"}
+                </button>
+              )}
+            </div>
+            {tags.length > 0 && yours.length > 1 && (
+              <select className="input" value={filter} onChange={(e) => narrow(e.target.value)} aria-label="which skins to show">
+                <option value="">All of yours ({yours.length})</option>
+                {tags.map((t) => (
+                  <option key={t.tag} value={t.tag}>
+                    Tagged {t.tag} ({t.count})
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="share-pick-box">
+              <div className="share-pick">
+                {shown.map((s) => {
+                const on = picked.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={on ? "share-pick-one is-on" : "share-pick-one"}
+                    aria-pressed={on}
+                    title={s.name}
+                    onClick={() => toggle(s.id)}
+                  >
+                    <img src={s.thumbnail} alt="" draggable={false} />
+                    <span className="share-pick-name">{s.name}</span>
+                    {on && (
+                      <span className="share-pick-tick" aria-hidden="true">
+                        <CheckIcon size={11} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+                {shown.length === 0 && <p className="field-note">Nothing here yet.</p>}
+              </div>
+            </div>
+          </div>
         </div>
-      ) : (
-      <label className="field">
-        <span className="field-label">Skins</span>
-        <select className="input" value={which} onChange={(e) => pick(e.target.value)}>
-          <option value="">All of yours ({yours.length})</option>
-          {tags.map((t) => (
-            <option key={t.tag} value={t.tag}>
-              Tagged {t.tag} ({t.count})
-            </option>
-          ))}
-        </select>
-        {chosen.length > 0 && (
-          <span className="share-thumbs" aria-hidden="true">
-            {chosen.slice(0, 8).map((s) => (
-              <img key={s.id} src={s.thumbnail} alt="" draggable={false} />
-            ))}
-            {chosen.length > 8 && <span className="share-more">+{chosen.length - 8}</span>}
-          </span>
-        )}
-      </label>
-      )}
-      <label className="field">
-        <span className="field-label">Pack name</span>
-        <input className="input" value={name} maxLength={40} placeholder="Neon nights" spellCheck={false} autoComplete="off" onChange={(e) => setName(e.target.value)} />
-      </label>
-      <div className="field">
-        <span className="field-label">Tags</span>
-        <TagInput value={packTags} onChange={setPackTags} suggestions={tags.map((t) => t.tag)} max={MAX_PACK_TAGS} label="add a tag for the pack" />
+
+        <div className="share-col">
+          <label className="field">
+            <span className="field-label">Pack name</span>
+            <input className="input" data-modal-focus value={name} maxLength={40} placeholder="Neon nights" spellCheck={false} autoComplete="off" onChange={(e) => setName(e.target.value)} />
+          </label>
+          <div className="field">
+            <span className="field-label">Tags</span>
+            <TagInput value={packTags} onChange={setPackTags} suggestions={tags.map((t) => t.tag)} max={MAX_PACK_TAGS} label="add a tag for the pack" />
+            <span className="field-note">The first one names the pack in everyone's filters.</span>
+          </div>
+          <label className="field">
+            <span className="field-label">Licence</span>
+            <select className="input" value={license} onChange={(e) => setLicense(e.target.value)}>
+              {LICENSES.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}: {l.note}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="field">
+            <span className="field-label">Author</span>
+            {account ? (
+              <div className="gh-account">
+                <GithubAvatar account={account} />
+                <span className="gh-account-who">
+                  <strong title={account.login}>{account.login}</strong>
+                </span>
+                <button type="button" className="link-btn" onClick={useAnother}>
+                  Use another
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-ghost gh-pick" onClick={() => setConnecting("sign-in")}>
+                <GithubIcon size={15} />
+                Connect to GitHub
+              </button>
+            )}
+          </div>
+          <label className="field">
+            <span className="field-label">Credits</span>
+            <textarea
+              className="input share-notes"
+              rows={2}
+              maxLength={400}
+              value={notes}
+              placeholder="Base photo by Jane Doe, CC0"
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </label>
+        </div>
       </div>
-      <label className="field">
-        <span className="field-label">Your GitHub user name</span>
-        <input className="input" value={author} maxLength={39} placeholder="octocat" spellCheck={false} autoComplete="off" onChange={(e) => setAuthor(e.target.value)} />
-      </label>
-      <label className="field">
-        <span className="field-label">Licence</span>
-        <select className="input" value={license} onChange={(e) => setLicense(e.target.value)}>
-          {LICENSES.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.label}: {l.note}
-            </option>
-          ))}
-        </select>
-      </label>
-      {(error ?? problem) && <p className={error ? "field-note is-error" : "field-note"}>{error ?? problem}</p>}
+
+      <div className="share-terms">
+        <ul className="share-terms-list">
+          <li>The pictures are yours, or CC0 and you've checked. Not taken from anywhere.</li>
+          <li>Nothing sexual, hateful, gory, or about self-harm. Nothing involving a child.</li>
+          <li>Nobody else's logo, characters or likeness without their say-so.</li>
+          <li>A maintainer can decline a pack, or remove it later.</li>
+        </ul>
+        <label className="share-confirm">
+          <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
+          <span>
+            I've read the pack terms and this pack follows them.{" "}
+            <button type="button" className="link-btn" onClick={() => void openUrl(PACK_TERMS_URL).catch(() => {})}>
+              Read them <ExternalLinkIcon size={12} />
+            </button>
+          </span>
+        </label>
+      </div>
+
+      {progress && (
+        <p className="gh-waiting">
+          <LoaderIcon />
+          {progressLabel(progress)}
+        </p>
+      )}
+      {error && !busy && <p className="field-note is-error">{error}</p>}
     </Modal>
   );
 }

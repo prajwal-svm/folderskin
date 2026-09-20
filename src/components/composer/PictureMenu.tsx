@@ -14,7 +14,7 @@ export function PictureMenu({ skins, onFile, onSkin }: { skins: Skin[]; onFile: 
     <div className="cmp-picture-menu">
       <button type="button" className="menu-item" onClick={onFile}>
         <FolderOpenIcon size={16} />
-        Choose a picture…
+        Choose a picture
       </button>
       <p className="cmp-note">Or drop one on the folder, or paste it with ⌘V.</p>
       {skins.length > 0 && (

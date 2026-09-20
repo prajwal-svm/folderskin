@@ -49,12 +49,12 @@ export function PackViewer({
   const primary = !pack.added ? (
     <button type="button" className="btn btn-primary" disabled={busy || blocked} aria-busy={busy} onClick={onAdd}>
       {busy ? <LoaderIcon /> : <DownloadIcon size={15} />}
-      {busy ? "Adding…" : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
+      {busy ? "Adding" : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
     </button>
   ) : pack.update ? (
     <button type="button" className="btn btn-primary" disabled={busy || blocked} aria-busy={busy} onClick={onUpdate}>
       {busy ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
-      {busy ? "Updating…" : "Update"}
+      {busy ? "Updating" : "Update"}
     </button>
   ) : (
     <span className="chip chip-ok">
@@ -107,7 +107,7 @@ export function PackViewer({
         <p className="field-note is-error">Couldn't open this pack: {error}.</p>
       ) : skins === null ? (
         <p className="community-note">
-          <LoaderIcon /> Downloading {pack.count} {pack.count === 1 ? "skin" : "skins"} to show them…
+          <LoaderIcon /> Downloading {pack.count} {pack.count === 1 ? "skin" : "skins"} to show them
         </p>
       ) : (
         <ul className="pack-skins">

@@ -228,7 +228,7 @@ export function Studio({
     );
   }
 
-  const placeholder = folderName ? trailOff(`Describe a folder for ${clip(folderName)}`) : "Describe the folder you want…";
+  const placeholder = folderName ? trailOff(`Describe a folder for ${clip(folderName)}`) : "Describe the folder you want";
 
   return (
     <section className={hasThread ? "studio has-thread" : "studio"}>
@@ -508,7 +508,7 @@ function Developing({ shape, started, where }: { shape: Shape; started: number; 
       </div>
       <div className="turn-meta">
         <p className="turn-name develop-step" key={step}>
-          {step}…
+          {step}
         </p>
         <p className="turn-where">
           {where} · {seconds}s

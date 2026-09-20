@@ -213,12 +213,12 @@ export function SkinMenu({
         {onShare && (
           <button type="button" className="menu-item" onClick={onShare}>
             <EarthIcon size={16} />
-            Share with community…
+            Share with community
           </button>
         )}
         <button type="button" className="menu-item is-danger" onClick={onDelete}>
           <DeleteIcon size={16} />
-          Delete…
+          Delete
         </button>
       </div>
     </div>,

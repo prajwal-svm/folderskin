@@ -403,7 +403,7 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
           ? "You can add or remove packs any time from Community."
           : loadError
             ? ""
-            : "Getting the packs from GitHub…";
+            : "Getting the packs from GitHub";
 
   return (
     <section className="packstep" aria-labelledby="packs-title" ref={section}>
@@ -493,7 +493,7 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
             </>
           ) : running ? (
             <>
-              <LoaderIcon /> Adding…
+              <LoaderIcon /> Adding
             </>
           ) : loadError ? (
             "Continue without packs"

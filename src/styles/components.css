@@ -620,6 +620,13 @@ select.input {
   width: min(400px, 100%);
 }
 
+/* Sharing asks for more at once than any other dialog: the skins, what the pack is, and the
+   terms underneath both. It gets a width of its own rather than stretching the shared one. */
+.modal-share {
+  width: min(780px, 100%);
+  max-height: min(820px, calc(100vh - 48px));
+}
+
 /* ---------- a skin's ⋯ menu: name, tags, what is known about it, share and delete ---------- */
 
 .skin-menu {
@@ -946,51 +953,7 @@ select.input {
 }
 
 /* sharing one skin: the skin itself instead of the picker */
-.share-one {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px 8px 8px;
-  border-radius: var(--r-card);
-  background: var(--well);
-  font-weight: 700;
-  font-size: 13.5px;
-}
-
-.share-one img {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-}
-
-.share-one span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* sharing a pack: the skins going in, then the steps on GitHub */
-.share-thumbs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-
-.share-thumbs img {
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
-}
-
-.share-more {
-  padding-left: 4px;
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .share-steps {
   display: flex;
   flex-direction: column;
@@ -1009,6 +972,425 @@ select.input {
 
 .field-note.is-error {
   color: var(--danger);
+}
+
+/* Connecting to GitHub: the code is the whole of the interaction, so it is the biggest thing on
+   the panel and sits where the eye lands first. */
+.gh-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gh-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 14px 18px;
+  border: 1px solid var(--island-line);
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.gh-code-value {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  /* The gap between halves of the code is what people read it in. */
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  user-select: all;
+}
+
+.gh-copy {
+  flex: none;
+}
+
+.gh-open {
+  width: 100%;
+  justify-content: center;
+}
+
+.gh-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.gh-cancel {
+  align-self: center;
+}
+
+.share-notes {
+  resize: none;
+  line-height: 1.45;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+/* The share dialog in two: the skins going in on the left, what the pack is on the right. The
+   terms run the full width underneath, because they are about the whole of it. One column when
+   the window is too narrow to hold both. */
+.share-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.share-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* The well runs the whole height of the other column, however few skins are in it: an empty
+   shelf says more can go there, where a box that shrinks to one tile just leaves a hole. */
+.share-pick-field {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .share-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Choosing what goes in. A pack holds several skins, so every one of theirs is a tick, and the
+   count above says how many are in without them counting the ticks. */
+.share-pick-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.share-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.share-pick-head .link-btn {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* The well itself: it stretches to whatever height the other column sets, and however many skins
+   are in it they never change that. The grid inside is taken out of flow so its rows can't be
+   measured into the row height — an eleventh skin scrolls, it doesn't grow the dialog. */
+.share-pick-box {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  border: 1px solid var(--island-line);
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.share-pick {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  /* Rows keep their own height and sit at the top: one skin is one tile, not one tall column. */
+  align-content: start;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.share-pick-one {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px 5px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.share-pick-one:hover {
+  background: var(--island);
+}
+
+.share-pick-one.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.share-pick-one img {
+  width: 100%;
+  max-width: 58px;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.share-pick-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.share-pick-one.is-on .share-pick-name {
+  color: var(--accent-ink);
+}
+
+.share-pick-tick {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Connecting from the author row, when they have not already. It stands where the account row
+   will, so it is shaped like one rather than like a line of text. */
+.gh-pick {
+  justify-content: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--island-line);
+  background: var(--well);
+}
+
+/* Who the pack will be credited to. A GitHub name can be long, so it is the part that gives. */
+.gh-signed-in {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.gh-signed-in strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.gh-signed-in .link-btn {
+  flex: none;
+  margin-left: auto;
+}
+
+/* What they are agreeing to, said plainly, above the one tick that agrees to it. It sits under
+   both columns: the terms cover the pack, not one half of the form. */
+.share-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--island-line);
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.share-terms-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 6px 24px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.share-terms-list li::marker {
+  color: var(--ink-3, var(--ink-2));
+}
+
+.share-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+/* Why the button beside it can't be pressed. It shares the footer with the buttons, so it is one
+   line and never more: anything longer belongs at the field it is about. */
+.modal-reason {
+  min-width: 0;
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gh-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 8px 8px 10px;
+  border: 1px solid var(--island-line);
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.gh-account .btn {
+  flex: none;
+}
+
+.gh-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.gh-avatar.is-letter {
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* A label with something to explain beside it. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The explanation itself, only while someone is asking for it. A tooltip floats, so it is one of
+   the few things allowed a shadow. */
+.hint {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  cursor: help;
+}
+
+.hint:hover {
+  color: var(--ink);
+}
+
+/* The panel around this scrolls, so it clips anything that leaves it: the bubble opens downward
+   and from the icon's left edge, where there is room, rather than centred above it. */
+.hint-bubble {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 60;
+  width: max-content;
+  max-width: min(250px, 50vw);
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--island);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition:
+    opacity var(--t-fast) var(--ease-out),
+    transform var(--t-fast) var(--ease-out),
+    visibility var(--t-fast);
+  pointer-events: none;
+}
+
+.hint:hover .hint-bubble,
+.hint:focus-visible .hint-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.gh-account-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.gh-account-who span {
+  color: var(--ink-2);
+}
+
+/* GitHub logins run to 39 characters. The name gives way rather than widening the dialog. */
+.gh-account-who strong,
+.gh-account-who span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gh-account .link-btn,
+.gh-account .btn {
+  flex: none;
+}
+
+/* A round tick, drawn rather than the platform's square one, and sitting on the text's centre
+   line so the two read as one row. */
+.share-confirm input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  background: var(--island);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.share-confirm input:hover {
+  border-color: var(--accent);
+}
+
+.share-confirm input:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  /* Lucide's `check`, as the tick inside it. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  background-size: 11px 11px;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 /* "are you sure?": the thing in question beside what will happen to it */
@@ -1059,6 +1441,9 @@ select.input {
 .modal-body {
   padding: 14px 22px 22px;
   overflow-y: auto;
+  /* `overflow-y: auto` alone turns the x axis into `auto` too, so one over-wide child gives the
+     dialog a sideways scrollbar. Nothing in here should ever scroll that way. */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 16px;

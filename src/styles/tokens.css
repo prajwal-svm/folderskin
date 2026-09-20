@@ -36,6 +36,9 @@
   --accent-ink: #2470eb;
   --accent-soft: #e3edff;
   --accent-wash: rgba(58, 134, 255, 0.1);
+  /* What the composer's "colour" backdrop is: the accent, deepened, so a skin is judged against
+     something saturated that doesn't compete with it. Dark enough for the white stage hint. */
+  --stage-colour: color-mix(in srgb, var(--accent) 65%, #081029);
   --accent-glow: rgba(58, 134, 255, 0.5);
   --on-accent: #ffffff;
 

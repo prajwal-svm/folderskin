@@ -1,0 +1,69 @@
+name: Downloads
+
+# The downloads badge counts installers people actually downloaded.
+#
+# Shields' own `github/downloads/.../total` counts every release asset, and the biggest of those
+# is `latest.json`: every running copy of FolderSkin fetches it to check for an update, so it
+# climbs on its own and swamps the real number. It read 59 when 10 installers had been downloaded.
+# Shields has no way to say "everything except that file" — asset names there are matched
+# literally, with no wildcards — so the total is worked out here and published as a shields
+# endpoint file the README points at.
+on:
+  schedule:
+    # Once a day. Download counts don't need to be live, and this keeps the history quiet.
+    - cron: "17 6 * * *"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  count:
+    name: Count the installers
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: downloads-badge
+      cancel-in-progress: false
+    steps:
+      # The default branch by name, never `github.ref`: on a `release: published` run that is the
+      # tag, and the commit below would try to move the tag instead of the branch.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Add up the installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # An installer is a file a person downloads and runs. That leaves out `latest.json`,
+          # the `.sig` signatures beside each asset, and `.app.tar.gz`, which only the macOS
+          # updater fetches — whoever gets that was counted when they took the DMG.
+          total=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq '.[].assets[] | select(.name | test("\\.(dmg|exe|msi|AppImage|deb|rpm)$")) | .download_count' \
+            | awk '{ n += $1 } END { print n + 0 }')
+          echo "Installers downloaded: $total"
+          mkdir -p .github/badges
+          printf '{\n  "schemaVersion": 1,\n  "label": "downloads",\n  "message": "%s",\n  "color": "3A86FF"\n}\n' "$total" > .github/badges/downloads.json
+
+      # A push made with the workflow's own token starts no other workflow, so this commit
+      # cannot start another run.
+      - name: Commit it if it changed
+        env:
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ -z "$(git status --porcelain -- .github/badges/downloads.json)" ]; then
+            echo "The downloads badge is up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- .github/badges/downloads.json
+          git commit -m "Update the downloads count"
+          git pull --rebase origin "$BRANCH"
+          git push origin "HEAD:$BRANCH"

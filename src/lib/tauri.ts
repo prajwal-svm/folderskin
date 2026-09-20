@@ -58,6 +58,27 @@ export type PackSkinPreview = {
   thumbnail: string;
 };
 
+/** Who is signed in to GitHub. */
+export type GithubAccount = { login: string; name: string | null; avatar_url: string };
+
+/** What someone types into github.com/login/device to let FolderSkin act for them. */
+export type DeviceCode = { user_code: string; verification_uri: string; expires_in: number };
+
+/** How far publishing has got. */
+export type PublishProgress =
+  | { stage: "checking" }
+  | { stage: "forking" }
+  | { stage: "branching" }
+  | { stage: "uploading"; done: number; total: number }
+  | { stage: "opening" };
+
+/** The pull request that was opened. */
+export type Published = { url: string; number: number; forked: boolean };
+
+/** A pack on its way to GitHub. The author isn't here: whoever is signed in is who it is
+ *  credited to, which GitHub tells us and nobody can mistype. */
+export type PackToPublish = { name: string; license: string; tags: string[]; skinIds: string[]; notes: string; termsVersion: number };
+
 /** How far adding a pack has got: pictures downloaded, then pictures saved. */
 export type PackProgress = { stage: "download" | "save"; done: number; total: number };
 
@@ -156,6 +177,18 @@ export type ComposerSaved = { skin: Skin; replaced: string | null };
 
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
+
+  // ---- publishing a pack to GitHub ----
+  /** Who is signed in, or null. A sign-in GitHub no longer accepts counts as none. */
+  githubAccount: () => invoke<GithubAccount | null>("github_account"),
+  /** Asks for a code to show. `githubWait` then resolves when it has been approved. */
+  githubConnect: () => invoke<DeviceCode>("github_connect"),
+  githubWait: () => invoke<GithubAccount>("github_wait"),
+  githubCancel: () => invoke<void>("github_cancel"),
+  githubSignOut: () => invoke<void>("github_sign_out"),
+  /** Opens a pull request that adds the pack to the community repository. */
+  publishPack: (pack: PackToPublish, onProgress: (p: PublishProgress) => void) =>
+    invoke<Published>("publish_pack", { pack, onProgress: new Channel<PublishProgress>(onProgress) }),
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
   importImage: (path: string) => invoke<Skin>("import_image", { path }),
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),

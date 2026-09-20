@@ -352,7 +352,7 @@ function ImageSection({ layer, onPatch, parts, onReplace }: { layer: ImageLayer;
             Uncrop
           </button>
           <button type="button" className="cmp-chip" onClick={(e) => onReplace(e.currentTarget)}>
-            Replace…
+            Replace
           </button>
         </div>
         <Slider label="Rounding" value={layer.radius} min={0} max={100} scale={100} unit="%" onChange={(radius) => onPatch({ radius }, `radius:${layer.id}`)} />

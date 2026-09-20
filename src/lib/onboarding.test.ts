@@ -125,9 +125,9 @@ describe("install progress", () => {
   });
 
   it("reads as a sentence", () => {
-    expect(installLine({ kind: "queued" })).toBe("Waiting…");
+    expect(installLine({ kind: "queued" })).toBe("Waiting");
     expect(installLine({ kind: "download", done: 3, total: 16 })).toBe("Downloading 3 of 16");
-    expect(installLine({ kind: "save", done: 1, total: 16 })).toBe("Adding to your library…");
+    expect(installLine({ kind: "save", done: 1, total: 16 })).toBe("Adding to your library");
     expect(installLine({ kind: "done", count: 1 })).toBe("Added 1 skin");
     expect(installLine({ kind: "done", count: 16 })).toBe("Added 16 skins");
     expect(installLine({ kind: "failed", error: "couldn't reach GitHub" })).toBe("Couldn't add it: couldn't reach GitHub");

@@ -5,6 +5,7 @@ pub mod commands;
 pub mod community;
 pub mod composer;
 pub mod folder_icon;
+pub mod github;
 pub mod keys;
 pub mod onboarding;
 pub mod pack_views;
@@ -25,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(state::AppState::default())
         .manage(keys::Keys::default())
+        .manage(github::Pending::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -42,6 +44,12 @@ pub fn run() {
             community::community_remove,
             community::import_pack,
             community::export_pack,
+            github::github_connect,
+            github::github_wait,
+            github::github_cancel,
+            github::github_account,
+            github::github_sign_out,
+            github::publish_pack,
             composer::composer_template,
             composer::composer_save,
             composer::composer_preview,

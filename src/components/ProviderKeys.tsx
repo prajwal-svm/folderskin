@@ -143,7 +143,7 @@ export function ProviderKeys({
             />
             <button type="button" className="btn btn-primary" disabled={busy || !draft.trim()} onClick={save}>
               {busy ? <LoaderIcon /> : null}
-              {busy ? "Checking…" : "Save and check"}
+              {busy ? "Checking" : "Save and check"}
             </button>
           </div>
         )}

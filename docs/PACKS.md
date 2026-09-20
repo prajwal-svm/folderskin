@@ -27,18 +27,28 @@ From the app:
 
 1. Tag the skins you want to share (⋯ → Tags). To share one skin, use ⋯ → **Share with
    community**. To share several, use **Community → Share your skins** and pick a tag.
-2. Fill in the pack's name, its tags, your GitHub user name and a licence, then press
-   **Save pack…**. FolderSkin writes a folder that already follows every rule below.
-3. Press **Open GitHub** and sign in. GitHub makes you a copy of the repository to add to.
-4. Drag the pack folder onto the page, then choose **Propose changes** and **Create pull
-   request**.
+2. Fill in the pack's name, its tags, your GitHub user name and a licence, say where the pictures
+   came from, and tick that they are yours to share.
+3. Press **Connect and publish**. The first time, FolderSkin shows a short code to copy and opens
+   <https://github.com/login/device>; approve it once and it remembers.
+4. That is the end of it. FolderSkin checks the pack against the contract below, makes you a copy
+   of the repository if you can't push to this one, puts the pack on a branch in a single commit,
+   and opens the pull request as you, with your answers in the description.
 
-The pull request runs the same checks the app runs. Once a maintainer merges it, a workflow
+The pull request runs the same checks the app just ran. Once a maintainer merges it, a workflow
 rebuilds `community/index.json` and the preview, and the pack appears in everyone's Community
 view.
 
-You can also make a pack by hand: follow the contract below and open a pull request that adds
-one folder under `community/packs/`.
+FolderSkin asks GitHub for `public_repo`, which is enough to fork a public repository, push to
+your own fork and open a pull request. It never asks to see a private repository. The sign-in is
+sealed on disk in FolderSkin's own folder, the same way API keys are ([keys.rs](../src-tauri/src/keys.rs)),
+and **Use another account** forgets it. To take the permission back entirely, remove FolderSkin
+under Settings → Applications on GitHub.
+
+**Save a folder** still does what it always did, for anyone who would rather handle GitHub
+themselves: it writes a folder that follows every rule below, ready to drag onto a pull request.
+You can also make a pack by hand: follow the contract and open a pull request that adds one folder
+under `community/packs/`.
 
 ## The contract
 

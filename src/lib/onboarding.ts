@@ -62,11 +62,11 @@ export function installFraction(state: InstallState | undefined): number {
 export function installLine(state: InstallState): string {
   switch (state.kind) {
     case "queued":
-      return "Waiting…";
+      return "Waiting";
     case "download":
-      return state.total ? `Downloading ${state.done} of ${state.total}` : "Downloading…";
+      return state.total ? `Downloading ${state.done} of ${state.total}` : "Downloading";
     case "save":
-      return "Adding to your library…";
+      return "Adding to your library";
     case "done":
       return `Added ${state.count} ${state.count === 1 ? "skin" : "skins"}`;
     case "failed":

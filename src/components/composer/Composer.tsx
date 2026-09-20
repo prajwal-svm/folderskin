@@ -303,7 +303,7 @@ export function Composer({
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: string; run: () => void } | null>(null);
   const [view, setView] = useState(loadView);
   const [previews, setPreviews] = useState<string[]>([]);
-  /** The Replace… button whose picture menu is open. */
+  /** The Replace button whose picture menu is open. */
   const [replaceAnchor, setReplaceAnchor] = useState<HTMLElement | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const clip = useRef<Layer | null>(null);
@@ -360,6 +360,23 @@ export function Composer({
     setSheet(false);
     assets.prune([next]);
   }, [assets]);
+
+  /** Throws the whole design away and starts on a blank folder: name, history and draft with it. */
+  const discard = useCallback(() => {
+    setConfirm({
+      title: "Discard this design?",
+      text: "It goes back to a blank folder. Anything not saved to Yours is gone.",
+      action: "Discard",
+      run: () => {
+        reset(emptyDoc("folder"), { editing: null, name: "", named: false });
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {
+          // The next autosave writes over it anyway.
+        }
+      },
+    });
+  }, [reset]);
 
   /** Asks before throwing away changes that aren't saved. */
   const guard = useCallback(
@@ -792,6 +809,16 @@ export function Composer({
               <LayoutTemplateIcon size={16} />
               <span className="cmp-tool-label">New</span>
             </button>
+            <button
+              type="button"
+              className="cmp-icon-btn is-danger"
+              aria-label="Discard this design"
+              title="Discard this design and start fresh"
+              disabled={doc.layers.length === 0 && !name && !editing}
+              onClick={discard}
+            >
+              <TrashIcon size={16} />
+            </button>
           </div>
         </div>
 
@@ -980,7 +1007,7 @@ export function Composer({
             <div className="cmp-save-row" role="status" aria-live="polite">
               <button type="button" className="btn btn-secondary" disabled={stopping} onClick={onStop}>
                 {stopping ? <LoaderIcon size={15} /> : null}
-                {stopping ? "Stopping…" : "Stop"}
+                {stopping ? "Stopping" : "Stop"}
               </button>
               <button type="button" className="btn btn-primary cmp-progress-btn" disabled aria-busy="true" style={{ "--done": `${progress.total ? (progress.done / progress.total) * 100 : 0}%` } as CSSProperties}>
                 <LoaderIcon size={15} />

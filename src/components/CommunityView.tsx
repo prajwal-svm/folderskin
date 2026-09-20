@@ -251,7 +251,7 @@ export function CommunityView({
 
         {packs === null ? (
           <p className="community-note">
-            <LoaderIcon /> Loading packs from GitHub…
+            <LoaderIcon /> Loading packs from GitHub
           </p>
         ) : error ? (
           <div className="empty">
@@ -321,7 +321,7 @@ export function CommunityView({
                           onClick={() => void update(p)}
                         >
                           {busy === p.id ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
-                          {busy === p.id ? "Updating…" : "Update"}
+                          {busy === p.id ? "Updating" : "Update"}
                         </button>
                       )}
                       {view === "list" ? (
@@ -330,7 +330,7 @@ export function CommunityView({
                         </button>
                       ) : busy === p.id ? null : (
                         // A card is narrow: the can alone, and gone while the pack updates so
-                        // "Updating…" doesn't push it onto a line of its own.
+                        // "Updating" doesn't push it onto a line of its own.
                         <button
                           type="button"
                           className="icon-btn pack-remove"
@@ -346,7 +346,7 @@ export function CommunityView({
                   ) : (
                     <button type="button" className="btn btn-primary" disabled={busy !== null} aria-busy={busy === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => void add(p)}>
                       {busy === p.id ? <LoaderIcon /> : <DownloadIcon size={15} />}
-                      {busy === p.id ? "Adding…" : "Add"}
+                      {busy === p.id ? "Adding" : "Add"}
                     </button>
                   )}
                 </div>

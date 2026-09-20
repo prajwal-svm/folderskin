@@ -12,6 +12,8 @@
  *
  * `?update` finds a made-up next version a few seconds after the app opens, as a release build
  * does; `?update=fail` stops its download halfway and `?update=offline` can't check at all.
+ *
+ * `?yours=8` starts with eight skins of your own, for the parts that need a library to work on.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
@@ -26,7 +28,10 @@ import type {
   ComposerTemplate,
   ExportPackRequest,
   FolderIcon,
+  GithubAccount,
   PackProgress,
+  PackToPublish,
+  PublishProgress,
   PackSkinPreview,
   PackUpdate,
   PathInfo,
@@ -76,8 +81,26 @@ const CLASSIC_ART = [
 ] as const;
 const COLOUR_NAMES = ["Blue", "Orange", "Purple", "Green"];
 
+/** `?yours=8` starts with that many skins of your own, so sharing can be tried without making any. */
+function seeded(): Skin[] {
+  const many = Number(new URLSearchParams(location.search).get("yours") ?? "0");
+  if (!Number.isFinite(many) || many < 1) return [];
+  const now = Date.now();
+  return Array.from({ length: Math.min(many, 40) }, (_, i) => ({
+    id: `user:seed${i}`,
+    name: CLASSIC_ART[i % CLASSIC_ART.length][1],
+    collection: "yours",
+    thumbnail: picture(i),
+    custom: true,
+    kind: "artwork" as const,
+    source: "import" as const,
+    created_at: now - i,
+    tags: i % 3 === 0 ? ["painting"] : ["photo"],
+  }));
+}
+
 /** Everything in the preview's library, newest first. */
-let library: Skin[] = [];
+let library: Skin[] = seeded();
 /** Sample packs added before their "new version": Colours gets one the first time it is added. */
 const mockStale = new Set<string>();
 /** Packs that have already failed once, so the next try works. */
@@ -285,7 +308,7 @@ async function mockIcon(png: Uint8Array, shape: "folder" | "free", size: number)
   return c.toDataURL("image/png");
 }
 
-/** A made-up photo for "Choose a picture…" in the browser: a lake at sunset, no file needed. */
+/** A made-up photo for "Choose a picture" in the browser: a lake at sunset, no file needed. */
 function mockPhoto(): ComposerImage {
   const c = document.createElement("canvas");
   c.width = 1600;
@@ -317,11 +340,43 @@ function mockPhoto(): ComposerImage {
   return { url: c.toDataURL("image/jpeg", 0.9), width: 1600, height: 1000, name: "Lake at sunset", alpha: false };
 }
 
+/** Who the mock is pretending is signed in. */
+const mockGithub: { account: GithubAccount | null } = { account: null };
+
 export const mockApi = {
   listSkins: async (): Promise<SkinList> => ({
     skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
     default_thumbnail: COLOUR_FOLDERS[0],
   }),
+  githubAccount: async () => mockGithub.account,
+  githubConnect: async () => {
+    mockGithub.account = null;
+    return { user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900 };
+  },
+  githubWait: async () => {
+    await new Promise((r) => setTimeout(r, 2500));
+    mockGithub.account = { login: "octocat", name: "The Octocat", avatar_url: "" };
+    return mockGithub.account;
+  },
+  githubCancel: async () => {},
+  githubSignOut: async () => {
+    mockGithub.account = null;
+  },
+  publishPack: async (pack: PackToPublish, onProgress: (p: PublishProgress) => void) => {
+    const steps: PublishProgress[] = [{ stage: "checking" }, { stage: "forking" }, { stage: "branching" }];
+    for (const step of steps) {
+      onProgress(step);
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    const total = pack.skinIds.length + 1;
+    for (let done = 0; done <= total; done++) {
+      onProgress({ stage: "uploading", done, total });
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    onProgress({ stage: "opening" });
+    await new Promise((r) => setTimeout(r, 600));
+    return { url: "https://github.com/prajwal-svm/folderskin/pull/42", number: 42, forked: true };
+  },
   inspectPath: async (path: string): Promise<PathInfo> => ({
     kind: isImagePath(path) ? "image" : "folder",
     name: path.split(/[\\/]/).pop() || path,

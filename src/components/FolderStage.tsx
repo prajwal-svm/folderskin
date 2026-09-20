@@ -323,7 +323,7 @@ function StageActions({
         )}
         <button type="button" className="btn btn-ghost" disabled={removing} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
           {removing ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-          {removing ? "Removing…" : inside ? "Remove custom icons" : "Remove custom icon"}
+          {removing ? "Removing" : inside ? "Remove custom icons" : "Remove custom icon"}
         </button>
       </div>
     );
@@ -359,7 +359,7 @@ function StageActions({
         onClick={onApply}
       >
         {applying ? <LoaderIcon /> : <ArrowDownIcon />}
-        {applying ? "Applying…" : inside ? applyLabel(inside) : "Apply skin"}
+        {applying ? "Applying" : inside ? applyLabel(inside) : "Apply skin"}
       </button>
       <button type="button" className="btn btn-ghost" disabled={applying} onMouseDown={noFocusSteal} onClick={onBrowse}>
         Choose a different folder
@@ -405,7 +405,7 @@ function DoneActions({
       </button>
       <button type="button" className="btn btn-ghost" disabled={reverting} aria-busy={reverting} onMouseDown={noFocusSteal} onClick={onRevert}>
         {reverting ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-        {reverting ? "Reverting…" : revertLabel}
+        {reverting ? "Reverting" : revertLabel}
       </button>
     </div>
   );
@@ -453,7 +453,7 @@ function RunProgress({ state, stopping, onStop }: { state: State; stopping: bool
   return (
     <div className="stage-actions stage-progress" role="status" aria-live="polite">
       <p className="stage-progress-line">
-        <span className="stage-progress-title">{stopping ? "Stopping…" : `${verb}…`}</span>
+        <span className="stage-progress-title">{stopping ? "Stopping" : verb}</span>
         <span className="stage-progress-count">
           {p.done.toLocaleString("en-US")} of {p.total.toLocaleString("en-US")}
         </span>
@@ -466,7 +466,7 @@ function RunProgress({ state, stopping, onStop }: { state: State; stopping: bool
       </p>
       <button type="button" className="btn btn-ghost" disabled={stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
         {stopping ? <LoaderIcon size={15} /> : null}
-        {stopping ? "Finishing this folder…" : "Stop"}
+        {stopping ? "Finishing this folder" : "Stop"}
       </button>
     </div>
   );
@@ -546,7 +546,7 @@ function statusLine(state: State, skin: Skin | null, fileBrowser: string, custom
   const inside = state.includeSubfolders && state.subfolders ? state.subfolders.count : 0;
   if (state.progress && (state.phase === "applying" || state.phase === "reverting")) {
     if (stopping) return "Folders already done stay that way.";
-    return state.phase === "applying" ? `${fileBrowser} catches up as it goes.` : "Putting the default icons back…";
+    return state.phase === "applying" ? `${fileBrowser} catches up as it goes.` : "Putting the default icons back";
   }
   if (inside > 0 && (state.phase === "ready" || (state.phase === "applied" && state.run === null))) {
     return "Hidden folders and app bundles are skipped.";
@@ -563,7 +563,7 @@ function statusLine(state: State, skin: Skin | null, fileBrowser: string, custom
     case "applied":
       return `${fileBrowser} can take a second to catch up.`;
     case "reverting":
-      return "Putting the default icon back…";
+      return "Putting the default icon back";
     default:
       return "";
   }

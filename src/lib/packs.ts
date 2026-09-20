@@ -7,6 +7,12 @@ export const UPLOAD_URL = `${REPO_URL}/upload/main/community/packs`;
 /** The pack contract and how to share one. */
 export const PACKS_GUIDE_URL = `${REPO_URL}/blob/main/docs/PACKS.md`;
 
+/** What someone agrees to before a pack goes up. */
+export const PACK_TERMS_URL = `${REPO_URL}/blob/main/docs/PACK-TERMS.md`;
+/** Goes up with the terms, and is recorded in the pull request, so what was agreed is never a
+ *  question of which version happened to be on main that day. */
+export const PACK_TERMS_VERSION = 1;
+
 /** Most skins in one pack; `folderskin_core::pack::MAX_SKINS` is the same. */
 export const MAX_PACK_SKINS = 50;
 

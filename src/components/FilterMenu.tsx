@@ -213,7 +213,7 @@ function FilterPopover({
         <section className="filter-sec" key={facet.id}>
           <p className="filter-label">
             {facet.label}
-            {facet.id === "colour" && reading && <span className="filter-note"> · still reading colours…</span>}
+            {facet.id === "colour" && reading && <span className="filter-note"> · still reading colours</span>}
           </p>
           {facet.id === "colour" ? (
             <div className="filter-swatches">

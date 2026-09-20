@@ -13,6 +13,7 @@ export function Modal({
   footer,
   wide,
   narrow,
+  className,
   closable = true,
 }: {
   title: string;
@@ -23,6 +24,8 @@ export function Modal({
   wide?: boolean;
   /** For short questions, like "are you sure?". */
   narrow?: boolean;
+  /** A width or treatment of its own, for a dialog that needs more room than the three sizes. */
+  className?: string;
   /** False while something runs that mustn't be left: no close button, and Escape and a click outside do nothing. */
   closable?: boolean;
 }) {
@@ -38,7 +41,11 @@ export function Modal({
 
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
-    const first = panel.current?.querySelector<HTMLElement>("input, textarea, select, button:not(.modal-close)");
+    // The field the dialog asks for, or else whatever comes first: a form whose first control is
+    // a filter shouldn't open with the filter focused.
+    const first =
+      panel.current?.querySelector<HTMLElement>("[data-modal-focus]") ??
+      panel.current?.querySelector<HTMLElement>("input, textarea, select, button:not(.modal-close)");
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -60,7 +67,7 @@ export function Modal({
         if (e.target === e.currentTarget && closable) onClose();
       }}
     >
-      <div className={wide ? "modal modal-wide" : narrow ? "modal modal-narrow" : "modal"} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+      <div className={[ "modal", wide && "modal-wide", narrow && "modal-narrow", className ].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
         <header className="modal-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 className="modal-title">{title}</h2>

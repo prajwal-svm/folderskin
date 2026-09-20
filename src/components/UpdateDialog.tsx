@@ -5,6 +5,7 @@ import { REPO_URL } from "../lib/packs";
 import { restartApp, type AvailableUpdate } from "../lib/updater";
 import type { UpdateStatus } from "../hooks/useUpdates";
 import { Modal } from "./Modal";
+import { ExternalLinkIcon } from "./icons/external-link";
 import { OkBadge } from "./OkBadge";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { CheckIcon } from "./icons/check";
@@ -79,7 +80,7 @@ export function UpdateDialog({ update, onClose }: { update: AvailableUpdate; onC
           <span>
             The update didn't finish, so nothing changed. Try again, or download it from the{" "}
             <button type="button" className="link-btn update-inline-link" onClick={() => void openUrl(`${REPO_URL}/releases/latest`).catch(() => {})}>
-              Releases page
+              Releases page <ExternalLinkIcon size={12} />
             </button>
             .
           </span>
@@ -103,11 +104,11 @@ function Progress({ phase }: { phase: Phase }) {
   const label =
     phase.kind === "downloading"
       ? fraction === null
-        ? "Downloading…"
-        : `Downloading… ${Math.round(fraction * 100)}%`
+        ? "Downloading"
+        : `Downloading ${Math.round(fraction * 100)}%`
       : phase.kind === "installing"
-        ? "Installing…"
-        : "Restarting…";
+        ? "Installing"
+        : "Restarting";
   return (
     <div className="update-progress" role="status">
       <span className="update-progress-label">
@@ -187,7 +188,7 @@ export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus
     );
   const label =
     s === "checking"
-      ? "Checking for updates…"
+      ? "Checking for updates"
       : s === "available"
         ? `Update to ${status.update.version}`
         : s === "current"

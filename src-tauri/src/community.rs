@@ -418,9 +418,72 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
     .map_err(|e| e.to_string())?
 }
 
+/// A pack's files: each name with its bytes.
+pub(crate) type PackFiles = Vec<(String, Vec<u8>)>;
+
+/// The files a pack is made of: every picture, then `pack.json`. The pack is checked here, so
+/// whatever comes back already passes the pull-request checks — whether it is written to a folder
+/// ([`export_pack`]) or sent straight to GitHub ([`crate::github::publish_pack`]).
+pub(crate) fn build_pack(
+    state: &AppState,
+    name: &str,
+    author: &str,
+    license: &str,
+    tags: &[String],
+    skin_ids: &[String],
+) -> Result<(String, PackFiles), String> {
+    let id = pack::slug(name);
+    if !pack::is_pack_id(&id) {
+        return Err("give the pack a name with letters or digits in it".into());
+    }
+    let pack_tags = pack::clean_tags(tags, pack::MAX_PACK_TAGS);
+    let mut skins = Vec::new();
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    for skin_id in skin_ids {
+        let (entry, _) = state
+            .find_saved(skin_id)
+            .ok_or_else(|| "one of those skins isn't saved any more".to_string())?;
+        if entry.source == SkinSource::Community {
+            return Err(format!(
+                "{} came from someone else's pack, so it can't go in yours",
+                entry.name
+            ));
+        }
+        let image = state.resolve(skin_id)?;
+        let (bytes, ext) = encode_for_pack(&image).map_err(|e| format!("{} {e}", entry.name))?;
+        let stem = unique_stem(&entry.name, files.len(), &files);
+        let file = format!("{stem}.{ext}");
+        let own: Vec<&String> = entry
+            .tags
+            .iter()
+            .filter(|t| !pack_tags.contains(t))
+            .collect();
+        skins.push(PackSkin {
+            file: file.clone(),
+            name: entry.name.clone(),
+            tags: pack::clean_tags(own, pack::MAX_SKIN_TAGS),
+        });
+        files.push((file, bytes));
+    }
+    let pack = Pack {
+        version: pack::PACK_VERSION,
+        name: name.trim().to_string(),
+        author: author.trim().to_string(),
+        license: license.to_string(),
+        tags: pack_tags,
+        skins,
+    };
+    let problems = pack.problems();
+    if !problems.is_empty() {
+        return Err(problems.join("; "));
+    }
+    let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())? + "\n";
+    files.push((pack::MANIFEST_FILE.to_string(), json.into_bytes()));
+    Ok((id, files))
+}
+
 /// Writes some of the user's own skins as a pack folder inside `folder`, ready to upload to
-/// GitHub, and returns the folder it made. The pack is checked like any other before anything
-/// is written, so what this makes passes the pull-request checks.
+/// GitHub, and returns the folder it made.
 #[tauri::command]
 pub async fn export_pack(
     state: State<'_, AppState>,
@@ -433,63 +496,17 @@ pub async fn export_pack(
 ) -> Result<String, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let id = pack::slug(&name);
-        if !pack::is_pack_id(&id) {
-            return Err("give the pack a name with letters or digits in it".into());
-        }
+        let (id, files) = build_pack(&state, &name, &author, &license, &tags, &skin_ids)?;
         let out = PathBuf::from(folder).join(&id);
         if out.exists() {
             return Err(format!("there's already a folder called {id} there"));
         }
-        let pack_tags = pack::clean_tags(&tags, pack::MAX_PACK_TAGS);
-        let mut skins = Vec::new();
-        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
-        for skin_id in &skin_ids {
-            let (entry, _) = state
-                .find_saved(skin_id)
-                .ok_or_else(|| "one of those skins isn't saved any more".to_string())?;
-            if entry.source == SkinSource::Community {
-                return Err(format!(
-                    "{} came from someone else's pack, so it can't go in yours",
-                    entry.name
-                ));
-            }
-            let image = state.resolve(skin_id)?;
-            let (bytes, ext) =
-                encode_for_pack(&image).map_err(|e| format!("{} {e}", entry.name))?;
-            let stem = unique_stem(&entry.name, files.len(), &files);
-            let file = format!("{stem}.{ext}");
-            let own: Vec<&String> = entry
-                .tags
-                .iter()
-                .filter(|t| !pack_tags.contains(t))
-                .collect();
-            skins.push(PackSkin {
-                file: file.clone(),
-                name: entry.name.clone(),
-                tags: pack::clean_tags(own, pack::MAX_SKIN_TAGS),
-            });
-            files.push((file, bytes));
-        }
-        let pack = Pack {
-            version: pack::PACK_VERSION,
-            name: name.trim().to_string(),
-            author: author.trim().to_string(),
-            license,
-            tags: pack_tags,
-            skins,
-        };
-        let problems = pack.problems();
-        if !problems.is_empty() {
-            return Err(problems.join("; "));
-        }
-        let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())? + "\n";
         let write = || -> std::io::Result<()> {
             std::fs::create_dir_all(&out)?;
             for (file, bytes) in &files {
                 std::fs::write(out.join(file), bytes)?;
             }
-            std::fs::write(out.join(pack::MANIFEST_FILE), json)
+            Ok(())
         };
         write().map_err(|e| {
             let _ = std::fs::remove_dir_all(&out);
