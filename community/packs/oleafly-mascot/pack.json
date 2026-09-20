@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "Oleafly-Mascot",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": [
+    "oleafly"
+  ],
+  "skins": [
+    {
+      "file": "oleafly-mascot.png",
+      "name": "Oleafly-Mascot"
+    }
+  ]
+}
