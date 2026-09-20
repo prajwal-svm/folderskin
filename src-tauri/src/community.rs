@@ -665,8 +665,8 @@ fn store_pack(
     let mut seen = HashSet::new();
     Ok(saved
         .iter()
-        .filter(|(entry, _)| seen.insert(entry.id.clone()))
-        .map(|(entry, thumb)| SkinDto::saved(entry, thumb))
+        .filter(|entry| seen.insert(entry.id.clone()))
+        .map(SkinDto::of)
         .collect())
 }
 
@@ -859,7 +859,7 @@ mod tests {
             update.skins[0].id, before[0].id,
             "the shared picture keeps its id"
         );
-        assert_eq!(state.saved_skins().len(), 2);
+        assert_eq!(state.saved_entries().len(), 2);
         assert_eq!(
             state.installed_packs().get("test-colours"),
             Some(&Some("v2".to_string()))
@@ -868,7 +868,7 @@ mod tests {
         // A version with a bad picture changes nothing.
         let broken = vec![png(512, 480, [1, 2, 3, 255]), png(100, 100, [1, 2, 3, 255])];
         assert!(replace_pack(&state, "test-colours", &pack, &broken, "v3".into()).is_err());
-        assert_eq!(state.saved_skins().len(), 2);
+        assert_eq!(state.saved_entries().len(), 2);
         assert_eq!(
             state.installed_packs().get("test-colours"),
             Some(&Some("v2".to_string()))
@@ -897,7 +897,7 @@ mod tests {
         let err =
             save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
         assert!(err.contains("rust.png"), "{err}");
-        assert!(state.saved_skins().is_empty(), "nothing was saved");
+        assert!(state.saved_entries().is_empty(), "nothing was saved");
     }
 
     #[test]
@@ -978,9 +978,9 @@ mod tests {
         let names: Vec<&str> = saved.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["First", "Second", "Third"]);
         let newest_first: Vec<String> = state
-            .saved_skins()
+            .saved_entries()
             .into_iter()
-            .map(|(entry, _)| entry.name)
+            .map(|entry| entry.name)
             .collect();
         assert_eq!(
             newest_first,
@@ -1020,7 +1020,7 @@ mod tests {
         .unwrap();
         assert_eq!(saved.len(), 1);
         assert_eq!(saved[0].name, "Teal");
-        assert_eq!(state.saved_skins().len(), 1);
+        assert_eq!(state.saved_entries().len(), 1);
     }
 
     #[test]
@@ -1038,7 +1038,7 @@ mod tests {
         let err =
             save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
         assert!(err.starts_with("couldn't save those skins"), "{err}");
-        assert!(state.saved_skins().is_empty());
+        assert!(state.saved_entries().is_empty());
         assert!(state.installed_packs().is_empty());
         let left: Vec<String> = std::fs::read_dir(&dir)
             .unwrap()

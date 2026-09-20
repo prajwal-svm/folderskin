@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { makeCanvas, ctx2d, type Assets } from "../../composer/assets";
+import { AWAY_MS, makeCanvas, ctx2d, type Assets } from "../../composer/assets";
 import { drawView, type TemplateImages, type View } from "../../composer/composite";
 import { CANVAS, centreOf, findLayer, isCovering, isPlaced, patchLayer, type Doc, type Layer, type Parts, type PlacedLayer } from "../../composer/doc";
 import {
@@ -64,6 +64,7 @@ export function ComposerStage({
   view,
   backdrop,
   version,
+  active,
   onOpen,
   hint,
 }: {
@@ -76,6 +77,9 @@ export function ComposerStage({
   onSettle: () => void;
   assets: Assets;
   template: TemplateImages | null;
+  /** False while the composer is open but not on screen: nothing is drawn, and the scratch
+   *  canvases are given back. */
+  active: boolean;
   parts: Parts;
   view: View;
   backdrop: Backdrop;
@@ -116,14 +120,19 @@ export function ComposerStage({
 
   // Draws on the next frame, once, however many changes came in before it.
   const frame = useRef(0);
+  const drawn = useRef(false);
   const latest = useRef({ doc, view, template, px });
   latest.current = { doc, view, template, px };
   useEffect(() => {
     cancelAnimationFrame(frame.current);
+    if (!active) return;
     frame.current = requestAnimationFrame(() => {
       const c = canvas.current;
       if (!c) return;
       const { doc: d, view: v, template: t, px: n } = latest.current;
+      // Given back while the composer was away and not back yet: the canvas still holds the last
+      // frame, which is a better thing to show than the design without its folder.
+      if (!t && drawn.current) return;
       if (c.width !== n) {
         c.width = n;
         c.height = n;
@@ -136,9 +145,25 @@ export function ComposerStage({
       }
       renderDoc(ctx2d(design.current), d, n, assets);
       drawView(ctx2d(c), design.current, t, n, v, scratch.current);
+      drawn.current = true;
     });
     return () => cancelAnimationFrame(frame.current);
-  }, [doc, view, template, px, version, assets]);
+  }, [doc, view, template, px, version, assets, active]);
+
+  // Two canvases the size of the stage, only ever drawn on between frames. Away from the composer
+  // they are the largest thing it holds, and the next draw makes them again.
+  useEffect(() => {
+    if (active) return;
+    const t = window.setTimeout(() => {
+      for (const ref of [design, scratch]) {
+        if (!ref.current) continue;
+        ref.current.width = 0;
+        ref.current.height = 0;
+        ref.current = null;
+      }
+    }, AWAY_MS);
+    return () => window.clearTimeout(t);
+  }, [active]);
 
   const toUnits = useCallback(
     (e: { clientX: number; clientY: number }): Point => {

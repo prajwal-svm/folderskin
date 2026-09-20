@@ -249,11 +249,11 @@ pub async fn ai_generate(
         };
         // The user has paid for this image, so a failed write keeps it for the session instead
         // of throwing it away.
-        let (entry, thumb) = state.save(new.clone(), image.clone()).unwrap_or_else(|e| {
+        let entry = state.save(new.clone(), image.clone()).unwrap_or_else(|e| {
             eprintln!("folderskin: keeping {} for this session only: {e}", new.id);
             state.keep_unsaved(new, image)
         });
-        Ok(SkinDto::saved(&entry, &thumb))
+        Ok(SkinDto::of(&entry))
     })
     .await
     .map_err(|e| e.to_string())?

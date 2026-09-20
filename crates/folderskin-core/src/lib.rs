@@ -10,4 +10,5 @@ pub mod geometry;
 pub mod ico;
 pub mod matte;
 pub mod pack;
+pub mod palette;
 pub mod raster;

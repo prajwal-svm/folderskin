@@ -7,7 +7,7 @@ import { cleanName, clip as clipName, MAX_NAME_CHARS } from "../../lib/names";
 import type { DragInfo, Folder } from "../../state/dropzone";
 import { applyLabel, folders as folderCount, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
 import type { ToastTone } from "../../hooks/useToasts";
-import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
+import { Assets, AWAY_MS, ctx2d, makeCanvas } from "../../composer/assets";
 import { canvasPng } from "../../composer/body";
 import { inkOn, luminance } from "../../composer/color";
 import { loadTemplate, type TemplateImages, type View } from "../../composer/composite";
@@ -272,20 +272,30 @@ export function Composer({
   }, [assets]);
 
   // The folder's layers, from Rust.
-  const [template, setTemplate] = useState<{ images: TemplateImages; parts: Parts } | null>(null);
+  const [template, setTemplate] = useState<{ images: TemplateImages | null; parts: Parts } | null>(null);
+  // Fetched when the composer first needs it, and again if its pictures were given back while it
+  // was away. `parts` are numbers and stay, so the stage's geometry never wavers.
+  const needsTemplate = !template?.images && (active || template === null);
+  const fetchingTemplate = useRef(false);
+  // The layers are the same every time, so a late answer is always worth keeping and there is no
+  // `live` flag to throw one away. Throwing one away meant asking again on the next render — and
+  // every render, since nothing had set them — which put a 20 MB fetch and five 2048 px decodes
+  // in front of anything that re-rendered the composer, a panel opening included.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   useEffect(() => {
-    let live = true;
+    if (!needsTemplate || fetchingTemplate.current) return;
+    fetchingTemplate.current = true;
     api
       .composerTemplate()
       .then(async (t) => {
-        const images = await loadTemplate(t);
-        if (live) setTemplate({ images, parts: t.parts });
+        setTemplate({ images: await loadTemplate(t), parts: t.parts });
       })
-      .catch((e) => toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" }));
-    return () => {
-      live = false;
-    };
-  }, [toast]);
+      .catch((e) => toastRef.current(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" }))
+      .finally(() => {
+        fetchingTemplate.current = false;
+      });
+  }, [needsTemplate]);
   const parts = template?.parts ?? FALLBACK_PARTS;
 
   const draft = useMemo(loadDraft, []);
@@ -306,6 +316,10 @@ export function Composer({
   /** The Replace… button whose picture menu is open. */
   const [replaceAnchor, setReplaceAnchor] = useState<HTMLElement | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const [panels, setPanels] = usePanels();
+  /** A layer's controls live in the lower panel; focusing a field a collapsed panel never
+   *  rendered does nothing, so open it before reaching for one. */
+  const openControls = useCallback(() => setPanels((p) => (p.settings ? p : { ...p, settings: true })), [setPanels]);
   const clip = useRef<Layer | null>(null);
 
   // A saved design that's gone from the library (deleted) is a new design again.
@@ -448,6 +462,7 @@ export function Composer({
 
   const addText = () => {
     add(makeText("Your words", front.x, front.y, ink));
+    openControls();
     window.setTimeout(() => {
       textRef.current?.focus();
       textRef.current?.select();
@@ -550,7 +565,6 @@ export function Composer({
   }, [commit, toast]);
 
   // ---- the side's panels ----
-  const [panels, setPanels] = usePanels();
   const layersPanel = useRef<HTMLElement>(null);
   const settingsPanel = useRef<HTMLElement>(null);
   const bothOpen = panels.layers && panels.settings;
@@ -733,6 +747,20 @@ export function Composer({
   const used = useMemo(() => colorsOf(doc), [doc]);
   const busy = saving !== null || applying;
 
+  // Leaving the composer keeps the design, its history and anything unsaved. What goes is what can
+  // be built again: the folder's pictures, every decoded layer picture and the small previews.
+  // Nothing is given back while a save or an apply is still running, and a step out and back
+  // inside AWAY_MS costs nothing.
+  useEffect(() => {
+    if (active || busy) return;
+    const t = window.setTimeout(() => {
+      assets.release();
+      setPreviews([]);
+      setTemplate((cur) => (cur?.images ? { ...cur, images: null } : cur));
+    }, AWAY_MS);
+    return () => window.clearTimeout(t);
+  }, [active, busy, assets]);
+
   const inside = folder && includeSubfolders && subfolders ? subfolders.count : 0;
   const primary = folder
     ? {
@@ -808,9 +836,11 @@ export function Composer({
             view={viewOf}
             backdrop={view.backdrop}
             version={version}
+            active={active}
             hint={doc.layers.length === 0 ? "An empty design is a see-through folder. Add a colour, words or a picture from the bar above." : null}
             onOpen={(layer) => {
               setSelectedId(layer.id);
+              openControls();
               window.setTimeout(() => {
                 if (layer.kind === "text") {
                   textRef.current?.focus();
@@ -956,7 +986,7 @@ export function Composer({
             {folder && folderIcon ? <img src={folderIcon} alt="" draggable={false} /> : <FolderIcon size={18} />}
             <span className="cmp-target-text">
               <span className="cmp-target-label">{folder ? "Apply to" : "No folder chosen"}</span>
-              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder…"}</span>
+              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder"}</span>
             </span>
           </button>
           {folder && subfolders && subfolders.count > 0 && (

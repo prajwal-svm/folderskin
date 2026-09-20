@@ -25,6 +25,13 @@ export function ctx2d(c: HTMLCanvasElement): CanvasRenderingContext2D {
   return ctx;
 }
 
+/**
+ * How long the composer stays away before it gives back what it can build again. Long enough that
+ * stepping out to the gallery and back costs nothing, short enough that a session spent elsewhere
+ * isn't holding a stage's worth of canvases.
+ */
+export const AWAY_MS = 20_000;
+
 type Picture = { img: HTMLImageElement; ready: boolean; failed: boolean; waiters: (() => void)[] };
 
 export class Assets {
@@ -162,6 +169,27 @@ export class Assets {
         return new Promise<void>((resolve) => p.waiters.push(resolve));
       });
     return Promise.all(waits).then(() => undefined);
+  }
+
+  /**
+   * Gives back everything that can be built again from the document: decoded pictures, their
+   * adjusted copies, grain tiles, measured text and spare canvases. The documents are untouched —
+   * a picture's own bytes live in the layer that uses it — so reopening rebuilds from them, one
+   * picture at a time, as the stage asks for each.
+   */
+  release() {
+    this.pictures.clear();
+    this.adjusted.clear();
+    this.grains.clear();
+    this.layouts.clear();
+    // Sized down first: an unreferenced canvas keeps its pixels until it is collected.
+    for (const c of this.scratchPool) {
+      c.width = 0;
+      c.height = 0;
+    }
+    this.scratchPool.length = 0;
+    this.measurer = null;
+    this.changed();
   }
 
   /** Drops pictures the document no longer uses. */

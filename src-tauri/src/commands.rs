@@ -9,6 +9,7 @@ use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::apply::{apply_icon, has_custom_icon, revert_icon, validate_folder};
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
 use folderskin_core::matte;
+use folderskin_core::palette::Palette;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
@@ -21,7 +22,7 @@ use tauri::{AppHandle, Manager, State};
 pub const THUMB_CACHE_VERSION: u32 = 2;
 const THUMB_SIZE: u32 = 512;
 /// The id the webview can give the plain default folder, which is not a skin.
-const DEFAULT_ID: &str = "__default__";
+pub(crate) const DEFAULT_ID: &str = "__default__";
 const IMAGE_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
 ];
@@ -34,6 +35,7 @@ pub struct SkinDto {
     pub name: String,
     /// Always "yours".
     pub collection: String,
+    /// Where its picture is served, not the picture itself (see [`crate::thumbs`]).
     pub thumbnail: String,
     /// Always true.
     pub custom: bool,
@@ -45,6 +47,10 @@ pub struct SkinDto {
     pub created_at: u64,
     /// What the gallery filters it by.
     pub tags: Vec<String>,
+    /// The colours the gallery's colour filter files it under, read from its thumbnail. `None`
+    /// until FolderSkin has read them, which is how it looked while the webview was still
+    /// reading a library it had not seen before.
+    pub palette: Option<Palette>,
     /// For a community skin, the pack it came from.
     pub pack: Option<String>,
     /// AI results: the provider and model that made it, as people call them.
@@ -59,17 +65,18 @@ pub struct SkinDto {
 
 impl SkinDto {
     /// A saved skin, as the gallery's "yours" collection shows it.
-    pub fn saved(entry: &SavedSkin, thumbnail_png: &[u8]) -> SkinDto {
+    pub fn of(entry: &SavedSkin) -> SkinDto {
         SkinDto {
             id: entry.id.clone(),
             name: entry.name.clone(),
             collection: "yours".into(),
-            thumbnail: data_url(thumbnail_png),
+            thumbnail: crate::thumbs::url(&entry.id),
             custom: true,
             kind: entry.kind,
             source: entry.source,
             created_at: entry.created_at,
             tags: entry.tags.clone(),
+            palette: entry.current_palette().cloned(),
             pack: entry.pack.clone(),
             made_with: made_with(entry),
             idea: entry.idea.clone(),
@@ -94,8 +101,11 @@ fn made_with(entry: &SavedSkin) -> Option<String> {
 #[derive(Serialize)]
 pub struct SkinListDto {
     pub skins: Vec<SkinDto>,
-    /// The plain default folder, drawn by the same compositor, as a PNG data URL.
+    /// Where the plain default folder, drawn by the same compositor, is served.
     pub default_thumbnail: String,
+    /// True while FolderSkin is still reading the colours of skins saved before it kept them, so
+    /// the colour filter can say that a colour missing from the list may yet turn up.
+    pub reading_palettes: bool,
 }
 
 #[derive(Serialize)]
@@ -175,20 +185,21 @@ pub fn data_url(png: &[u8]) -> String {
 
 /// Where the default folder's thumbnail is cached: the app cache directory, so a later launch
 /// skips the render. `None` when there is no cache directory to use.
-fn default_thumb_path(app: &AppHandle) -> Option<PathBuf> {
+fn default_thumb_path<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
     let dir = app.path().app_cache_dir().ok()?.join("thumbs");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir.join(format!("default.thumb-v{THUMB_CACHE_VERSION}.png")))
 }
 
-/// The plain default folder's thumbnail as a data URL: kept in memory once drawn, and on disk
-/// between launches.
-fn default_thumbnail(app: &AppHandle, state: &AppState) -> String {
+/// The plain default folder's thumbnail: kept in memory once drawn, and on disk between launches.
+pub(crate) fn default_thumbnail_png<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+) -> Vec<u8> {
     state.default_thumbnail(|| {
-        let png = cached_png(default_thumb_path(app).as_deref(), || {
+        cached_png(default_thumb_path(app).as_deref(), || {
             compositor::render_preview_png(&compositor::default_folder_artwork(), THUMB_SIZE)
-        });
-        data_url(&png)
+        })
     })
 }
 
@@ -261,17 +272,15 @@ fn heic_to_png(_path: &Path) -> Result<Vec<u8>, String> {
 
 // ---------- commands ----------
 
-/// The user's skins, newest first, and the plain default folder.
+/// The user's skins, newest first, and the plain default folder. Only what the gallery needs to
+/// lay itself out: the pictures follow, one address at a time, as it shows them ([`crate::thumbs`]).
 #[tauri::command]
-pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<SkinListDto, String> {
+pub async fn list_skins(state: State<'_, AppState>) -> Result<SkinListDto, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || SkinListDto {
-        skins: state
-            .saved_skins()
-            .iter()
-            .map(|(entry, png)| SkinDto::saved(entry, png))
-            .collect(),
-        default_thumbnail: default_thumbnail(&app, &state),
+        skins: state.saved_entries().iter().map(SkinDto::of).collect(),
+        default_thumbnail: crate::thumbs::url(DEFAULT_ID),
+        reading_palettes: state.reading_palettes(),
     })
     .await
     .map_err(|e| e.to_string())
@@ -304,8 +313,8 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
         let p = PathBuf::from(&path);
         let bytes = std::fs::read(&p).map_err(|_| "couldn't read that picture".to_string())?;
         let id = store::skin_id(&bytes);
-        if let Some((entry, thumb)) = state.find_saved(&id) {
-            return Ok(SkinDto::saved(&entry, &thumb));
+        if let Some((entry, _)) = state.find_saved(&id) {
+            return Ok(SkinDto::of(&entry));
         }
         let image = prepare_import(decode_picture(&p, &bytes)?)?;
         let new = NewSkin {
@@ -322,8 +331,7 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
             license: None,
             pack_hash: None,
         };
-        let (entry, thumb) = state.save(new, image)?;
-        Ok(SkinDto::saved(&entry, &thumb))
+        Ok(SkinDto::of(&state.save(new, image)?))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -437,7 +445,7 @@ pub async fn folder_icon(
         let p = PathBuf::from(&folder);
         let url = match crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
             Some(png) => data_url(&png),
-            None => default_thumbnail(&app, &state),
+            None => data_url(&default_thumbnail_png(&app, &state)),
         };
         FolderIconDto {
             url,
@@ -570,8 +578,13 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            palette: Some(folderskin_core::palette::Palette {
+                colours: vec![folderskin_core::palette::Colour::Blue],
+                tone: folderskin_core::palette::Tone::Dark,
+            }),
+            palette_version: Some(folderskin_core::palette::VERSION),
         };
-        let json = serde_json::to_value(SkinDto::saved(&entry, b"png")).unwrap();
+        let json = serde_json::to_value(SkinDto::of(&entry)).unwrap();
         assert_eq!(json["collection"], "yours");
         assert_eq!(json["custom"], true);
         assert_eq!(json["kind"], "folder");
@@ -579,10 +592,8 @@ mod tests {
         assert_eq!(json["created_at"], 1_790_000_000_000u64);
         assert_eq!(json["tags"], serde_json::json!(["woodblock"]));
         assert!(json["pack"].is_null());
-        assert!(json["thumbnail"]
-            .as_str()
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
+        assert_eq!(json["thumbnail"], crate::thumbs::url(&entry.id));
+        assert_eq!(json["palette"], serde_json::json!({"colours": ["blue"], "tone": "dark"}));
         assert_eq!(json["made_with"], "xAI Grok · Grok Imagine");
         assert_eq!(json["idea"], "a fox");
         assert!(json["author"].is_null());

@@ -172,12 +172,16 @@ pub struct ComposerImageDto {
 // ---------- commands ----------
 
 /// The template, drawn the first time the composer asks for it and kept until the app quits.
-static TEMPLATE: OnceLock<ComposerTemplateDto> = OnceLock::new();
+static TEMPLATE: OnceLock<Arc<ComposerTemplateDto>> = OnceLock::new();
 
 /// The folder template's layers at 2048 px, and where its parts are.
+///
+/// Drawn once and kept: five 2048 px PNGs as data URLs is about 20 MB, so it is shared rather
+/// than copied for each caller — asking twice used to mean a second 20 MB while the first was
+/// still being sent.
 #[tauri::command]
-pub async fn composer_template() -> Result<ComposerTemplateDto, String> {
-    tauri::async_runtime::spawn_blocking(|| TEMPLATE.get_or_init(draw_template).clone())
+pub async fn composer_template() -> Result<Arc<ComposerTemplateDto>, String> {
+    tauri::async_runtime::spawn_blocking(|| Arc::clone(TEMPLATE.get_or_init(|| Arc::new(draw_template()))))
         .await
         .map_err(|e| e.to_string())
 }
@@ -309,18 +313,12 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
         license: None,
         pack_hash: None,
     };
-    let (entry, thumb, replaced) = match header.replaces {
-        Some(old) => {
-            let (entry, thumb) = state.replace_design(&old, new, image, document)?;
-            (entry, thumb, Some(old))
-        }
-        None => {
-            let (entry, thumb) = state.save_design(new, image, document)?;
-            (entry, thumb, None)
-        }
+    let (entry, replaced) = match header.replaces {
+        Some(old) => (state.replace_design(&old, new, image, document)?, Some(old)),
+        None => (state.save_design(new, image, document)?, None),
     };
     Ok(ComposerSavedDto {
-        skin: SkinDto::saved(&entry, &thumb),
+        skin: SkinDto::of(&entry),
         replaced,
     })
 }
@@ -622,10 +620,7 @@ mod tests {
         assert_eq!(skin["kind"], "folder");
         assert_eq!(skin["name"], "Taxes 2026");
         assert_eq!(skin["tags"], json!(["taxes", "work"]));
-        assert!(skin["thumbnail"]
-            .as_str()
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
+        assert_eq!(skin["thumbnail"], crate::thumbs::url(&first.skin.id));
         // The folder, 2048 px, with the design on it and nothing past its outline.
         let SkinImage::Folder(icon) = state.resolve(&first.skin.id).unwrap() else {
             panic!("a design is saved as a finished folder");
@@ -665,7 +660,7 @@ mod tests {
         assert_eq!(renamed.skin.id, second.skin.id);
         assert_eq!(renamed.skin.name, "Taxes 2027");
         assert_eq!(renamed.replaced.as_deref(), Some(second.skin.id.as_str()));
-        assert_eq!(state.saved_skins().len(), 2, "this design and the free one");
+        assert_eq!(state.saved_entries().len(), 2, "this design and the free one");
 
         // What can't be saved over.
         for (replaces, want) in [

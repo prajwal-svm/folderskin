@@ -40,9 +40,9 @@ folderskin/
 
 Every pixel the user ever sees — a gallery thumbnail, the drop-zone preview, the icon
 written to disk — comes out of `folderskin_core::compositor::render_icon_set`. The webview
-never draws folder geometry; it displays PNGs the Rust side rendered and handed over as data
-URLs. A thumbnail is therefore a correct preview of the icon by construction, on every
-operating system, and there is no second implementation to keep in sync.
+never draws folder geometry; it displays PNGs the Rust side rendered. A thumbnail is therefore
+a correct preview of the icon by construction, on every operating system, and there is no
+second implementation to keep in sync.
 
 The compositor:
 
@@ -92,7 +92,7 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 
 | command | input | output |
 |---|---|---|
-| `list_skins` | – | the user's skins, newest first, each with a PNG data-URL thumbnail; plus the plain default folder |
+| `list_skins` | – | the user's skins, newest first, each with the address of its thumbnail; plus the plain default folder |
 | `inspect_path` | `path` | `{kind: "folder" \| "image" \| "other", name, path}` |
 | `import_image` | `path` | the picture saved as a skin, id `user:<hash>` (the saved one if it was imported before) |
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
@@ -156,21 +156,53 @@ error-code vocabulary to translate.
 Drag and drop uses Tauri's native `onDragDropEvent` rather than HTML5 drops, because an HTML5
 drop in a webview cannot expose a filesystem path. Browsing uses the dialog plugin.
 
+### Thumbnails travel as addresses
+
+Pictures are the one thing that does not cross as JSON. `list_skins` answers with the address of
+each thumbnail, and the webview fetches the ones it shows from the `skin` scheme registered in
+`src-tauri/src/thumbs.rs`:
+
+```
+skin://localhost/2/user%3A3f2a9c0b1d4e.png      macOS and Linux
+http://skin.localhost/2/user%3A3f2a9c0b1d4e.png Windows and Android
+```
+
+The `2` is `THUMB_CACHE_VERSION`, so a change to the compositor asks a different address instead
+of reading a stale picture out of the webview's cache. The handler answers from `unsaved` first,
+then from the store — the same cached `<stem>.thumb-v2.png` the gallery used to be sent — and
+reads it on a blocking thread, since a missing thumbnail is drawn on demand. `__default__` is the
+plain default folder.
+
+Why not send the pictures: a library of fifty skins is tens of megabytes of PNG, and as data URLs
+in one reply that is base64 (half as big again), parsed out of the JSON and decoded, all at once
+and all resident for as long as the gallery is. Addresses cost a hundred bytes each, so the reply
+is the same size whatever the library holds, the webview decodes only what is on screen, and it
+can evict the rest. A skin's id comes from its own pixels, so an address never answers
+differently and the replies say `immutable`. They carry no CORS header: the webview only shows
+these pictures, it never reads their pixels back.
+
+Listing does not read pictures at all any more: `AppState::saved_entries` `stat`s each skin's
+files to leave out one whose picture has gone, and nothing more.
+
 ## State and caching
 
 `AppState` (in `src-tauri/src/state.rs`) is an `Arc` over:
 
 - `store: OnceLock<Store>` — the saved skins on disk (below), opened in `setup` before the
   window exists.
-- `recent` — the twelve most recently used saved skins, decoded, least recently used out first.
-  It is only a cache: `apply_skin` reads a saved skin back from the store on a miss, so
-  evicting one loses nothing. A single import or AI result goes in as it is saved; a pack does
-  not (`AppState::save_many`), since sixteen new skins would push out every other one.
+- `recent` — recently used saved skins, decoded, least recently used out first once they pass
+  `RECENT_BUDGET` (64 MB). Bounded by bytes, not by count, because a skin's cost is its size: a
+  folder-shaped one is about 4 MB and a square photo at the largest size the store keeps is 16 MB,
+  so twelve of each meant 48 MB or 200 MB for the same limit. The skin just put in always stays,
+  however big. It is only a cache: `apply_skin` reads a saved skin back from the store on a miss,
+  so evicting one loses nothing but the time to decode it again. A single import or AI result goes
+  in as it is saved; a pack does not (`AppState::save_many`), since sixteen new skins would push
+  out every other one.
 - `unsaved` — skins that could not be written (no app data folder, or a failed write of an AI
   result, which is never thrown away). They last until the app quits.
-- `default_thumb: OnceLock<String>` — the plain default folder's thumbnail as a data URL, drawn
-  once. It is also cached as `thumbs/default.thumb-v2.png` in the app cache directory, so later
-  launches skip the render.
+- `default_thumb: OnceLock<Vec<u8>>` — the plain default folder's thumbnail PNG, drawn once. It
+  is also cached as `thumbs/default.thumb-v2.png` in the app cache directory, so later launches
+  skip the render.
 
 Packs looked through in Community are kept drawn in `pack-views/` in the app cache directory
 (`src-tauri/src/pack_views.rs`), one file per pack version, named after its hash. A file older
@@ -361,8 +393,12 @@ The library's filters are pure functions in `src/lib/filters.ts`: the sidebar's 
 filters (where a skin came from, its pack, colours, brightness, when it was added, the AI model,
 author and licence), then the tag tabs, the search and the sort order. A filter's counts are
 worked out with the other filters as they are, and a filter that can't narrow what's in view
-isn't offered. Colours and brightness come from each skin's own picture (`src/lib/palette.ts`),
-read a few at a time in the background and remembered by skin id.
+isn't offered. Colours and brightness are read from each skin's thumbnail in Rust
+(`folderskin_core::palette`) as it is saved, and kept in the index with the reading's version, so
+they arrive with the skin. A library saved before FolderSkin kept them has them read once on a
+background thread just after launch (`read_palettes_in_the_background`), which tells the gallery
+when they are there; until then a skin simply isn't offered under a colour, and the filter says it
+is still working them out.
 
 The composer keeps its design in a reducer too (`src/composer/history.ts`): every change is a new
 document, a drag is one step once the pointer lets go, and a run of changes to the same setting

@@ -5,17 +5,37 @@
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinSource, Store, THUMB_SIZE};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-/// How many decoded saved skins stay in memory (up to 16 MB each at 2048 px).
-const MAX_RECENT: usize = 12;
+/// How much memory decoded saved skins may take between applies. A skin is its pixels, four
+/// bytes each: artwork a folder's shape is about 4 MB, and a square photo kept at the largest
+/// size the store holds is 16 MB. Counting entries instead bounded the first at 48 MB and the
+/// second at 200 MB for the same twelve skins; counting bytes bounds both, and still keeps more
+/// ordinary skins than twelve.
+const RECENT_BUDGET: usize = 64 << 20;
 
-/// Saved skins decoded recently; the least recently used one goes first. Evicting one loses
-/// nothing, because the store still has it.
-#[derive(Default)]
+/// Saved skins decoded recently; the least recently used one goes first when they no longer fit
+/// in [`RECENT_BUDGET`]. Evicting one loses nothing, because the store still has it — only the
+/// time to read and decode it again on the next apply.
 pub struct Recent {
     tick: u64,
     skins: HashMap<String, (u64, SkinImage)>,
+    /// What the skins held here take, counted as each was put in. A skin shared with an apply
+    /// that is still running is counted here as well as there, which is the safe way round.
+    bytes: usize,
+    budget: usize,
+}
+
+impl Default for Recent {
+    fn default() -> Recent {
+        Recent {
+            tick: 0,
+            skins: HashMap::new(),
+            bytes: 0,
+            budget: RECENT_BUDGET,
+        }
+    }
 }
 
 impl Recent {
@@ -29,22 +49,36 @@ impl Recent {
     }
 
     fn put(&mut self, id: String, image: SkinImage) {
-        if self.skins.len() >= MAX_RECENT && !self.skins.contains_key(&id) {
+        self.tick += 1;
+        self.bytes += image.bytes();
+        if let Some((_, replaced)) = self.skins.insert(id, (self.tick, image)) {
+            self.bytes -= replaced.bytes();
+        }
+        // The skin just put in always stays, however big: it is the one the apply that asked for
+        // it is about to use.
+        while self.bytes > self.budget && self.skins.len() > 1 {
             let oldest = self
                 .skins
                 .iter()
                 .min_by_key(|(_, (used, _))| *used)
                 .map(|(id, _)| id.clone());
-            if let Some(oldest) = oldest {
-                self.skins.remove(&oldest);
-            }
+            let Some(oldest) = oldest else { break };
+            self.remove(&oldest);
         }
-        self.tick += 1;
-        self.skins.insert(id, (self.tick, image));
     }
 
     fn remove(&mut self, id: &str) {
-        self.skins.remove(id);
+        if let Some((_, gone)) = self.skins.remove(id) {
+            self.bytes -= gone.bytes();
+        }
+    }
+
+    #[cfg(test)]
+    fn with_budget(budget: usize) -> Recent {
+        Recent {
+            budget,
+            ..Recent::default()
+        }
     }
 }
 
@@ -65,8 +99,11 @@ pub struct Inner {
     recent: Mutex<Recent>,
     /// Skins that could not be saved: no data folder, or a failed write of an AI result.
     unsaved: Mutex<HashMap<String, Unsaved>>,
-    /// The plain default folder's thumbnail, as a PNG data URL, once it has been drawn.
-    default_thumb: OnceLock<String>,
+    /// The plain default folder's thumbnail PNG, once it has been drawn.
+    default_thumb: OnceLock<Vec<u8>>,
+    /// Set while the colours of skins saved before FolderSkin kept them are being read, so the
+    /// filter can say a colour it doesn't offer yet may still turn up.
+    reading_palettes: AtomicBool,
 }
 
 /// Cheap to clone; every command clones it before moving work to a blocking thread.
@@ -130,12 +167,12 @@ impl AppState {
         Some((entry, thumb))
     }
 
-    /// Saves a new skin and keeps it decoded for the next apply. Returns its entry and
-    /// thumbnail PNG; a skin whose id is already saved comes back as it was saved.
+    /// Saves a new skin and keeps it decoded for the next apply. Returns its entry; a skin whose
+    /// id is already saved comes back as it was saved.
     ///
     /// Without a data folder the skin is kept for this session only, as FolderSkin did before
     /// it had a store. A failed write is returned as an error for the caller to handle.
-    pub fn save(&self, new: NewSkin, image: SkinImage) -> Result<(SavedSkin, Vec<u8>), String> {
+    pub fn save(&self, new: NewSkin, image: SkinImage) -> Result<SavedSkin, String> {
         let Some(store) = self.store() else {
             return Ok(self.keep_unsaved(new, image));
         };
@@ -145,13 +182,12 @@ impl AppState {
         if fresh {
             lock(&self.0.recent).put(entry.id.clone(), image);
         }
-        let thumb = store.thumbnail_png(&entry)?;
-        Ok((entry, thumb))
+        Ok(entry)
     }
 
-    /// Saves new skins all together or not at all ([`Store::add_many`]) and returns each with its
-    /// thumbnail PNG, in the order given; one whose id is already saved comes back as it was
-    /// saved. The first is the newest, so the library lists them in the order given.
+    /// Saves new skins all together or not at all ([`Store::add_many`]) and returns their entries
+    /// in the order given; one whose id is already saved comes back as it was saved. The first is
+    /// the newest, so the library lists them in the order given.
     ///
     /// Unlike [`AppState::save`], it keeps none of them decoded: a pack of sixteen would push
     /// every other skin out of `recent`. Without a data folder each is kept for this session
@@ -161,7 +197,7 @@ impl AppState {
         &self,
         skins: Vec<(NewSkin, SkinImage)>,
         encoded: &(dyn Fn() + Sync),
-    ) -> Result<Vec<(SavedSkin, Vec<u8>)>, String> {
+    ) -> Result<Vec<SavedSkin>, String> {
         let Some(store) = self.store() else {
             return Ok(skins
                 .into_iter()
@@ -179,15 +215,12 @@ impl AppState {
             unsaved.remove(&skin.entry.id);
         }
         drop(unsaved);
-        Ok(added
-            .into_iter()
-            .map(|skin| (skin.entry, skin.thumbnail_png))
-            .collect())
+        Ok(added.into_iter().map(|skin| skin.entry).collect())
     }
 
     /// Keeps a skin that could not be saved for the rest of this session: it is listed, can be
     /// applied and deleted, and is gone when the app quits.
-    pub fn keep_unsaved(&self, new: NewSkin, image: SkinImage) -> (SavedSkin, Vec<u8>) {
+    pub fn keep_unsaved(&self, new: NewSkin, image: SkinImage) -> SavedSkin {
         self.keep(new, image, None, store::now_ms())
     }
 
@@ -198,19 +231,19 @@ impl AppState {
         image: SkinImage,
         design: Option<Arc<Vec<u8>>>,
         created_at: u64,
-    ) -> (SavedSkin, Vec<u8>) {
-        let entry = new.entry(&image, created_at);
-        let thumbnail_png = image.preview_png(THUMB_SIZE);
+    ) -> SavedSkin {
+        let (thumbnail_png, palette) = image.preview(THUMB_SIZE);
+        let entry = new.entry(&image, Some(palette), created_at);
         lock(&self.0.unsaved).insert(
             entry.id.clone(),
             Unsaved {
                 entry: entry.clone(),
                 image,
-                thumbnail_png: thumbnail_png.clone(),
+                thumbnail_png,
                 design,
             },
         );
-        (entry, thumbnail_png)
+        entry
     }
 
     /// Saves a design from the composer with the document it was made from
@@ -223,9 +256,9 @@ impl AppState {
         new: NewSkin,
         image: SkinImage,
         design: Vec<u8>,
-    ) -> Result<(SavedSkin, Vec<u8>), String> {
+    ) -> Result<SavedSkin, String> {
         let Some(store) = self.store() else {
-            if let Some(kept) = self.find_saved(&new.id) {
+            if let Some((kept, _)) = self.find_saved(&new.id) {
                 return Ok(kept);
             }
             return Ok(self.keep(new, image, Some(Arc::new(design)), store::now_ms()));
@@ -235,13 +268,12 @@ impl AppState {
         if fresh {
             lock(&self.0.recent).put(entry.id.clone(), image);
         }
-        let thumb = store.thumbnail_png(&entry)?;
-        Ok((entry, thumb))
+        Ok(entry)
     }
 
     /// Saves a design over the one it was made from, `old_id` ([`Store::replace_design`]): it
     /// takes the old one's place in the library, and the old one goes, from memory too. Returns
-    /// the entry and thumbnail PNG of whichever design the library now has in its place.
+    /// the entry of whichever design the library now has in its place.
     ///
     /// A design kept for this session only is swapped the same way, in memory.
     pub fn replace_design(
@@ -250,7 +282,7 @@ impl AppState {
         new: NewSkin,
         image: SkinImage,
         design: Vec<u8>,
-    ) -> Result<(SavedSkin, Vec<u8>), String> {
+    ) -> Result<SavedSkin, String> {
         let mut unsaved = lock(&self.0.unsaved);
         if let Some(old) = unsaved.get_mut(old_id) {
             if old.entry.source != SkinSource::Composer {
@@ -262,13 +294,13 @@ impl AppState {
                 }
                 old.entry.tags =
                     folderskin_core::pack::clean_tags(&new.tags, folderskin_core::pack::MAX_TAGS);
-                return Ok((old.entry.clone(), old.thumbnail_png.clone()));
+                return Ok(old.entry.clone());
             }
             let created_at = old.entry.created_at;
             unsaved.remove(old_id);
             drop(unsaved);
             lock(&self.0.recent).remove(old_id);
-            if let Some(kept) = self.find_saved(&new.id) {
+            if let Some((kept, _)) = self.find_saved(&new.id) {
                 return Ok(kept);
             }
             return Ok(self.keep(new, image, Some(Arc::new(design)), created_at));
@@ -287,8 +319,7 @@ impl AppState {
             }
         }
         lock(&self.0.unsaved).remove(&entry.id);
-        let thumb = store.thumbnail_png(&entry)?;
-        Ok((entry, thumb))
+        Ok(entry)
     }
 
     /// The document a design was made from, saved or kept for this session. `Ok(None)` for a
@@ -303,22 +334,30 @@ impl AppState {
         }
     }
 
-    /// Every saved skin, plus any kept for this session only, newest first, each with its
-    /// thumbnail PNG. A skin whose thumbnail cannot be produced is left out and logged.
-    pub fn saved_skins(&self) -> Vec<(SavedSkin, Vec<u8>)> {
-        let mut skins: Vec<(SavedSkin, Vec<u8>)> = lock(&self.0.unsaved)
+    /// Every saved skin, plus any kept for this session only, newest first. One with nothing left
+    /// to draw a thumbnail from is left out and logged: the gallery has no picture to show for it.
+    ///
+    /// The pictures themselves are not read here. The gallery is given the address each thumbnail
+    /// is served at ([`crate::thumbs`]) and asks for the ones it shows, so listing a library of
+    /// any size costs a directory's worth of `stat`s rather than every picture in it.
+    pub fn saved_entries(&self) -> Vec<SavedSkin> {
+        let mut skins: Vec<SavedSkin> = lock(&self.0.unsaved)
             .values()
-            .map(|u| (u.entry.clone(), u.thumbnail_png.clone()))
+            .map(|u| u.entry.clone())
             .collect();
         if let Some(store) = self.store() {
             for entry in store.list() {
-                match store.thumbnail_png(&entry) {
-                    Ok(png) => skins.push((entry, png)),
-                    Err(e) => eprintln!("folderskin: leaving {} out of the gallery: {e}", entry.id),
+                if store.has_thumbnail_source(&entry) {
+                    skins.push(entry);
+                } else {
+                    eprintln!(
+                        "folderskin: leaving {} out of the gallery: its picture has gone",
+                        entry.id
+                    );
                 }
             }
         }
-        skins.sort_by(|(a, _), (b, _)| {
+        skins.sort_by(|a, b| {
             b.created_at
                 .cmp(&a.created_at)
                 .then_with(|| a.id.cmp(&b.id))
@@ -344,10 +383,10 @@ impl AppState {
     /// Deletes every saved skin that came from the community pack `pack_id` and returns their ids.
     pub fn remove_pack(&self, pack_id: &str) -> Result<Vec<String>, String> {
         let ids: Vec<String> = self
-            .saved_skins()
+            .saved_entries()
             .into_iter()
-            .filter(|(entry, _)| entry.pack.as_deref() == Some(pack_id))
-            .map(|(entry, _)| entry.id)
+            .filter(|entry| entry.pack.as_deref() == Some(pack_id))
+            .map(|entry| entry.id)
             .collect();
         for id in &ids {
             self.delete(id)?;
@@ -388,9 +427,18 @@ impl AppState {
         }
     }
 
-    /// The plain default folder's thumbnail: `draw()`'s data URL the first time, and the same
-    /// one after that. Callers that ask while it is being drawn wait for it.
-    pub fn default_thumbnail(&self, draw: impl FnOnce() -> String) -> String {
+    /// Whether the colours of older skins are still being read ([`crate::read_palettes`]).
+    pub fn reading_palettes(&self) -> bool {
+        self.0.reading_palettes.load(Ordering::Relaxed)
+    }
+
+    pub fn set_reading_palettes(&self, reading: bool) {
+        self.0.reading_palettes.store(reading, Ordering::Relaxed);
+    }
+
+    /// The plain default folder's thumbnail: `draw()`'s picture the first time, and the same one
+    /// after that. Callers that ask while it is being drawn wait for it.
+    pub fn default_thumbnail(&self, draw: impl FnOnce() -> Vec<u8>) -> Vec<u8> {
         self.0.default_thumb.get_or_init(draw).clone()
     }
 }
@@ -429,21 +477,65 @@ mod tests {
         )))
     }
 
+    /// A skin of `side` px square, so a test can say what it costs: `side * side * 4` bytes.
+    fn sized(side: u32, shade: u8) -> SkinImage {
+        SkinImage::Folder(Arc::new(image::RgbaImage::from_pixel(
+            side,
+            side,
+            image::Rgba([shade, shade, shade, 255]),
+        )))
+    }
+
     #[test]
-    fn the_recent_cache_evicts_the_least_recently_used_skin() {
-        let mut recent = Recent::default();
-        for i in 0..MAX_RECENT {
-            recent.put(format!("user:{i}"), folder(i as u8));
+    fn the_recent_cache_evicts_the_least_recently_used_skin_to_stay_inside_its_budget() {
+        // Four skins' worth of room, so the fifth pushes one out.
+        let one = 64 * 64 * 4;
+        let mut recent = Recent::with_budget(one * 4);
+        for i in 0..4 {
+            recent.put(format!("user:{i}"), sized(64, i as u8));
         }
+        assert_eq!(recent.bytes, one * 4);
         assert!(recent.get("user:0").is_some(), "touch the oldest");
-        recent.put("user:new".into(), folder(99));
-        assert_eq!(recent.skins.len(), MAX_RECENT);
+
+        recent.put("user:new".into(), sized(64, 99));
+        assert_eq!(recent.skins.len(), 4, "still four, and still inside");
+        assert_eq!(recent.bytes, one * 4);
         assert!(recent.get("user:0").is_some(), "recently used, so kept");
         assert!(
             recent.get("user:1").is_none(),
             "least recently used, so evicted"
         );
         assert!(recent.get("user:new").is_some());
+    }
+
+    #[test]
+    fn one_big_skin_costs_what_several_small_ones_do() {
+        let small = 64 * 64 * 4;
+        let mut recent = Recent::with_budget(small * 4);
+        // A skin four times the side is sixteen times the pixels: over budget on its own, and
+        // kept anyway, because the apply that asked for it is about to use it.
+        recent.put("user:big".into(), sized(256, 1));
+        assert_eq!(recent.skins.len(), 1);
+        assert!(recent.get("user:big").is_some());
+        // The next one in pushes it straight back out.
+        recent.put("user:small".into(), sized(64, 2));
+        assert_eq!(recent.bytes, small);
+        assert!(recent.get("user:big").is_none());
+        assert!(recent.get("user:small").is_some());
+    }
+
+    #[test]
+    fn deleting_a_skin_gives_its_room_back() {
+        let one = 64 * 64 * 4;
+        let mut recent = Recent::with_budget(one * 4);
+        recent.put("user:a".into(), sized(64, 1));
+        recent.put("user:b".into(), sized(64, 2));
+        assert_eq!(recent.bytes, one * 2);
+        recent.remove("user:a");
+        assert_eq!(recent.bytes, one);
+        // Putting the same id in twice counts it once.
+        recent.put("user:b".into(), sized(64, 3));
+        assert_eq!(recent.bytes, one);
     }
 
     #[test]
@@ -464,15 +556,15 @@ mod tests {
             license: None,
             pack_hash: None,
         };
-        let (entry, thumb) = state.save(new, folder(10)).unwrap();
+        let entry = state.save(new, folder(10)).unwrap();
         assert_eq!(entry.id, id);
-        assert!(thumb.starts_with(b"\x89PNG"));
         assert!(state.resolve(&id).is_ok());
-        assert_eq!(state.saved_skins().len(), 1);
-        assert!(state.find_saved(&id).is_some());
+        assert_eq!(state.saved_entries().len(), 1);
+        let (_, thumb) = state.find_saved(&id).expect("its thumbnail is there to serve");
+        assert!(thumb.starts_with(b"\x89PNG"));
         state.delete(&id).unwrap();
         assert!(state.resolve(&id).is_err());
-        assert!(state.saved_skins().is_empty());
+        assert!(state.saved_entries().is_empty());
     }
 
     #[test]
@@ -502,7 +594,7 @@ mod tests {
         let state = AppState::default();
         state.open_store(dir.clone());
         assert!(matches!(state.resolve(&id), Ok(SkinImage::Folder(_))));
-        assert_eq!(state.saved_skins()[0].0.id, id);
+        assert_eq!(state.saved_entries()[0].id, id);
         state.delete(&id).unwrap();
         assert!(state.resolve(&id).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
@@ -538,9 +630,8 @@ mod tests {
 
         let batch = vec![(pack_skin(&a), folder(1)), (pack_skin(&b), folder(2))];
         let saved = state.save_many(batch, &|| {}).unwrap();
-        let ids: Vec<&str> = saved.iter().map(|(e, _)| e.id.as_str()).collect();
+        let ids: Vec<&str> = saved.iter().map(|e| e.id.as_str()).collect();
         assert_eq!(ids, [a.as_str(), b.as_str()]);
-        assert!(saved.iter().all(|(_, png)| png.starts_with(b"\x89PNG")));
         assert!(
             lock(&state.0.unsaved).is_empty(),
             "saved now, so the session-only copy goes"
@@ -550,7 +641,7 @@ mod tests {
             "a pack doesn't push every other skin out of the cache"
         );
         let newest_first: Vec<String> =
-            state.saved_skins().into_iter().map(|(e, _)| e.id).collect();
+            state.saved_entries().into_iter().map(|e| e.id).collect();
         assert_eq!(newest_first, [a.clone(), b.clone()]);
         assert!(matches!(state.resolve(&b), Ok(SkinImage::Folder(_))));
         std::fs::remove_dir_all(&dir).unwrap();
@@ -569,7 +660,7 @@ mod tests {
             .unwrap();
         assert_eq!(kept.len(), 2);
         assert_eq!(ready.into_inner(), 2);
-        assert_eq!(state.saved_skins().len(), 2);
+        assert_eq!(state.saved_entries().len(), 2);
         assert!(state.resolve(&ids[1]).is_ok());
     }
 
@@ -586,20 +677,19 @@ mod tests {
     fn without_a_store_a_design_and_its_document_last_for_the_session() {
         let state = AppState::default();
         let (draft_id, final_id) = (skin_id(b"draft"), skin_id(b"final"));
-        let (draft, thumb) = state
+        let draft = state
             .save_design(design_skin(&draft_id, "Draft"), folder(1), b"[1]".to_vec())
             .unwrap();
-        assert!(thumb.starts_with(b"\x89PNG"));
         assert_eq!(
             state.design(&draft_id).unwrap().as_deref(),
             Some(&b"[1]"[..])
         );
-        let (again, _) = state
+        let again = state
             .save_design(design_skin(&draft_id, "Again"), folder(1), b"[]".to_vec())
             .unwrap();
         assert_eq!(again, draft, "saved already, so it comes back as it was");
 
-        let (done, _) = state
+        let done = state
             .replace_design(
                 &draft_id,
                 design_skin(&final_id, "Final"),
@@ -617,7 +707,7 @@ mod tests {
         );
         assert_eq!(state.design(&draft_id).unwrap(), None);
         assert!(state.resolve(&draft_id).is_err());
-        let ids: Vec<String> = state.saved_skins().into_iter().map(|(e, _)| e.id).collect();
+        let ids: Vec<String> = state.saved_entries().into_iter().map(|e| e.id).collect();
         assert_eq!(ids, [final_id]);
 
         // A picture that was imported isn't a design, and a design that's gone can't be saved over.
@@ -658,11 +748,10 @@ mod tests {
             .unwrap();
         assert!(lock(&state.0.recent).skins.contains_key(&v1));
 
-        let (entry, thumb) = state
+        let entry = state
             .replace_design(&v1, design_skin(&v2, "V2"), folder(2), b"[2]".to_vec())
             .unwrap();
         assert_eq!(entry.id, v2);
-        assert!(thumb.starts_with(b"\x89PNG"));
         {
             let recent = lock(&state.0.recent);
             assert!(!recent.skins.contains_key(&v1), "the old design is dropped");

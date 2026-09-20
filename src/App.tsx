@@ -15,7 +15,6 @@ import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, ty
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
 import { useUpdates } from "./hooks/useUpdates";
-import { usePalettes } from "./hooks/usePalettes";
 import { Sidebar, type View } from "./components/Sidebar";
 import { GalleryToolbar, type TabCount } from "./components/GalleryToolbar";
 import { Gallery, type Empty } from "./components/Gallery";
@@ -114,6 +113,8 @@ export default function App() {
   const [sort, setSort] = useState<Sort>(() => loadSort());
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites());
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** FolderSkin is still working out the colours of skins saved before it kept them. */
+  const [readingPalettes, setReadingPalettes] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   /** The skin whose Delete was pressed, while "are you sure?" is open. */
   const [confirmingDelete, setConfirmingDelete] = useState<Skin | null>(null);
@@ -139,13 +140,20 @@ export default function App() {
 
   useEffect(() => {
     api.platformInfo().then(setPlatform).catch(() => {});
-    api
-      .listSkins()
-      .then((list) => {
-        setSkins(newestFirst(list.skins));
-        setDefaultThumb(list.default_thumbnail);
-      })
-      .catch((e) => setLoadError(errorMessage(e)));
+    const load = () =>
+      api
+        .listSkins()
+        .then((list) => {
+          setSkins(newestFirst(list.skins));
+          setDefaultThumb(list.default_thumbnail);
+          setReadingPalettes(list.reading_palettes);
+        })
+        .catch((e) => setLoadError(errorMessage(e)));
+    void load();
+    // A library saved before FolderSkin kept each skin's colours has them read just after launch;
+    // this is it saying they are there to show (lib.rs).
+    const listening = api.onPalettesRead(() => void load());
+    return () => void listening.then((stop) => stop()).catch(() => {});
   }, []);
 
   /** Puts skins in the library, or updates the ones already there. */
@@ -155,7 +163,13 @@ export default function App() {
   const addSkin = useCallback((skin: Skin) => addSkins([skin]), [addSkins]);
 
   const yours = useMemo(() => skins.filter(isYours), [skins]);
-  const { palettes, reading } = usePalettes(skins);
+  // The colours arrive with the skins. One whose colours FolderSkin hasn't read yet is simply not
+  // offered under a colour, exactly as it wasn't while the webview read them itself.
+  const palettes = useMemo(
+    () => new Map(skins.flatMap((s) => (s.palette ? ([[s.id, s.palette]] as const) : []))),
+    [skins],
+  );
+  const reading = readingPalettes;
 
   // The sidebar picks what is in view (everything, yours, favourites) and the filters narrow it;
   // the top bar then narrows it to one tag, its tabs being the tags left, most used first.

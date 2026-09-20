@@ -110,9 +110,10 @@
   width: 100%;
   aspect-ratio: 1;
   border-radius: var(--r-card);
-  /* FolderThumb eases the tilt toward the pointer each frame; only the press is a transition. */
+  /* FolderThumb eases the tilt toward the pointer each frame; only the press is a transition. It
+     also sets `will-change` while a tile is moving — never here, or every tile in the gallery
+     would hold a compositing layer at once. */
   transition: scale var(--t-fast) var(--ease-out);
-  will-change: transform;
 }
 
 .tile-hit:active .tile-art {

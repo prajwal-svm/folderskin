@@ -10,13 +10,16 @@ pub mod onboarding;
 pub mod pack_views;
 pub mod state;
 pub mod store;
+pub mod thumbs;
 pub mod tree;
 pub mod window;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub fn run() {
     tauri::Builder::default()
+        // The gallery's thumbnails are fetched from here rather than carried in its reply.
+        .register_asynchronous_uri_scheme_protocol(thumbs::SCHEME, thumbs::serve)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         // Updates: the newest GitHub release's latest.json, signed with the key whose public half
@@ -72,6 +75,7 @@ pub fn run() {
                     "folderskin: no app data folder ({e}); skins added now last until you quit"
                 ),
             }
+            read_palettes_in_the_background(app.handle());
             // API keys live here, encrypted, not in the keychain (see keys.rs).
             match app.path().app_config_dir() {
                 Ok(dir) => app.state::<keys::Keys>().open(&dir),
@@ -84,4 +88,29 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running FolderSkin");
+}
+
+/// Reads the colours of skins saved before FolderSkin kept them, off the startup path, and tells
+/// the gallery when there are some to show.
+///
+/// A skin saved now is read as it is saved (`Store::add`), so this only ever has work to do for a
+/// library from an older version or after the reading itself changes. The gallery works
+/// throughout: a skin with no colours yet simply isn't offered under a colour, exactly as it
+/// wasn't while the webview was still reading them.
+fn read_palettes_in_the_background(app: &tauri::AppHandle) {
+    let handle = app.clone();
+    let state = app.state::<state::AppState>().inner().clone();
+    // Set before the thread starts, so a gallery that asks first is told to expect them.
+    state.set_reading_palettes(true);
+    std::thread::spawn(move || {
+        if let Some(store) = state.store() {
+            store.read_missing_palettes();
+        }
+        state.set_reading_palettes(false);
+        // Always, even when there was nothing to read: the gallery waits on this to stop saying
+        // it is still working them out.
+        if let Err(e) = handle.emit("palettes-read", ()) {
+            eprintln!("folderskin: couldn't tell the gallery about the colours: {e}");
+        }
+    });
 }

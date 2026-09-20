@@ -1,5 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Palette } from "./palette";
 import { isTauri, mockApi } from "./devMock";
 import { frame } from "../composer/body";
 import type { Parts } from "../composer/parts";
@@ -11,7 +13,7 @@ export type Skin = {
   name: string;
   /** Always "yours": every skin is one the user added. */
   collection: string;
-  /** PNG data URL rendered by the Rust compositor (same pixels the app applies). */
+  /** Where the PNG the Rust compositor rendered is served (same pixels the app applies). */
   thumbnail: string;
   custom: boolean;
   /** "artwork" is wrapped onto FolderSkin's folder; "folder" is a finished folder used as-is. */
@@ -19,6 +21,9 @@ export type Skin = {
   source?: "import" | "ai" | "community" | "composer";
   /** Unix ms when the user added it. */
   created_at?: number | null;
+  /** The colours the gallery files it under, read from its picture by the Rust side. Absent
+   *  until FolderSkin has read them, which for an older library is the first moment after launch. */
+  palette?: Palette | null;
   /** What the gallery filters it by, cleaned the way `cleanTag` does. */
   tags: string[];
   /** For a community skin, the id of the pack it came from. */
@@ -87,7 +92,7 @@ export type FolderIcon = { url: string; custom: boolean };
 export type PlatformInfo = { os: string; browse_label: string; note: string };
 
 /** The saved skins, newest first, plus the plain default folder rendered through the same compositor. */
-export type SkinList = { skins: Skin[]; default_thumbnail: string };
+export type SkinList = { skins: Skin[]; default_thumbnail: string; reading_palettes: boolean };
 
 export type AiModel = {
   id: string;
@@ -156,6 +161,8 @@ export type ComposerSaved = { skin: Skin; replaced: string | null };
 
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
+  /** Calls back once FolderSkin has read the colours of skins saved before it kept them. */
+  onPalettesRead: (fn: () => void) => listen("palettes-read", () => fn()),
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
   importImage: (path: string) => invoke<Skin>("import_image", { path }),
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),

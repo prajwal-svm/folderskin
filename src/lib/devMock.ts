@@ -321,7 +321,9 @@ export const mockApi = {
   listSkins: async (): Promise<SkinList> => ({
     skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
     default_thumbnail: COLOUR_FOLDERS[0],
+    reading_palettes: false,
   }),
+  onPalettesRead: async (_fn: () => void) => async () => {},
   inspectPath: async (path: string): Promise<PathInfo> => ({
     kind: isImagePath(path) ? "image" : "folder",
     name: path.split(/[\\/]/).pop() || path,

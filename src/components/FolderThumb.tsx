@@ -74,6 +74,8 @@ export function FolderThumb({
         ? ""
         : `perspective(640px) rotateX(${(-v.y * TURN_X).toFixed(2)}deg) rotateY(${(v.x * TURN_Y).toFixed(2)}deg) ` +
           `translate3d(${(v.x * DRIFT).toFixed(2)}px, ${(v.y * DRIFT).toFixed(2)}px, 0) scale(${v.s.toFixed(4)})`;
+    // Settled, including after the pointer left: the tile can give its layer back.
+    if (rest) el.style.willChange = "";
   }, []);
 
   const aim = useCallback(
@@ -82,7 +84,13 @@ export function FolderThumb({
       v.tx = tx;
       v.ty = ty;
       v.ts = ts;
-      if (!v.frame) v.frame = requestAnimationFrame(step);
+      if (!v.frame) {
+        // A tile on its own layer costs GPU memory for as long as `will-change` is set, and a
+        // gallery would hold that for every tile at once. It goes on as a tile starts to move and
+        // comes off in `step` once it has settled.
+        if (art.current) art.current.style.willChange = "transform";
+        v.frame = requestAnimationFrame(step);
+      }
     },
     [step],
   );

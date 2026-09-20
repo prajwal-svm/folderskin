@@ -28,6 +28,7 @@
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
 use folderskin_core::pack;
+use folderskin_core::palette::{self, Palette};
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use serde::{Deserialize, Serialize};
@@ -116,6 +117,25 @@ pub struct SavedSkin {
     /// ([`folderskin_core::pack::pack_hash`]), to tell when it has an update.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack_hash: Option<String>,
+    /// The colours the gallery's filter files it under, read from the thumbnail when it was saved
+    /// ([`folderskin_core::palette`]). Absent for a skin saved before FolderSkin read them, and
+    /// `palette_version` says which reading gave it, so a changed algorithm reads again rather
+    /// than leaving a skin filed under colours this version would not have chosen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette: Option<Palette>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette_version: Option<u32>,
+}
+
+impl SavedSkin {
+    /// Its colours, when they were read the way this version reads them.
+    pub fn current_palette(&self) -> Option<&Palette> {
+        if self.palette_version == Some(palette::VERSION) {
+            self.palette.as_ref()
+        } else {
+            None
+        }
+    }
 }
 
 /// What the caller knows about a skin it wants saved. The store adds the kind and focus (from
@@ -138,7 +158,7 @@ pub struct NewSkin {
 
 impl NewSkin {
     /// The index entry this skin gets when it is added at `created_at`.
-    pub fn entry(self, image: &SkinImage, created_at: u64) -> SavedSkin {
+    pub fn entry(self, image: &SkinImage, palette: Option<Palette>, created_at: u64) -> SavedSkin {
         SavedSkin {
             id: self.id,
             name: self.name,
@@ -155,6 +175,8 @@ impl NewSkin {
             author: self.author,
             license: self.license,
             pack_hash: self.pack_hash,
+            palette_version: palette.as_ref().map(|_| palette::VERSION),
+            palette,
         }
     }
 }
@@ -174,6 +196,13 @@ impl SkinImage {
             SkinImage::Artwork(_) => SkinKind::Artwork,
             SkinImage::Folder(_) => SkinKind::Folder,
         }
+    }
+
+    /// What its pixels take in memory: four bytes each. This is what the cache of decoded skins
+    /// is bounded by, since a skin's cost is its size, not the fact of it.
+    pub fn bytes(&self) -> usize {
+        let img = self.rgba();
+        img.width() as usize * img.height() as usize * 4
     }
 
     /// The picture itself: the flat artwork, or the finished folder.
@@ -197,6 +226,25 @@ impl SkinImage {
             SkinImage::Artwork(art) => compositor::render_icon_set(art, sizes),
             SkinImage::Folder(img) => compositor::icon_set_from_image(img, sizes),
         }
+    }
+
+    /// The gallery thumbnail at `size` px and the colours read off it, from one render. The
+    /// colours cost an extra downsample of a master render that is happening anyway, which is
+    /// what makes reading them here cheaper than asking the webview to decode the thumbnail.
+    pub fn preview(&self, size: u32) -> (Vec<u8>, Palette) {
+        let sizes: Vec<u32> = if size == palette::SAMPLE {
+            vec![size]
+        } else {
+            vec![size, palette::SAMPLE]
+        };
+        let set = self.icon_set(&sizes);
+        let png = set.png(size).expect("the size that was just rendered");
+        let (_, sampled) = set
+            .sizes
+            .iter()
+            .find(|(s, _)| *s == palette::SAMPLE)
+            .expect("the sample size that was just rendered");
+        (png, palette::of_pixels(sampled.as_raw()))
     }
 
     /// PNG preview at `size` px, through the same render as the applied icon.
@@ -361,8 +409,8 @@ enum Step {
     Saved(Box<SavedSkin>, Vec<u8>),
     /// Nothing: it has the same id as the skin at this earlier position.
     Repeat(usize),
-    /// Write it: its encoded picture and thumbnail.
-    New(Vec<u8>, Vec<u8>),
+    /// Write it: its encoded picture and thumbnail, and the colours read off that thumbnail.
+    New(Vec<u8>, Vec<u8>, Palette),
 }
 
 /// The saved skins on disk. Safe to share between threads; every method locks for as short a
@@ -445,7 +493,7 @@ impl Store {
         }
         let image = image.bounded();
         let png = encode_stored_png(image.rgba());
-        let thumb = image.preview_png(THUMB_SIZE);
+        let (thumb, palette) = image.preview(THUMB_SIZE);
 
         let mut index = self.lock();
         if let Some(existing) = index.iter().find(|s| s.id == new.id) {
@@ -457,7 +505,7 @@ impl Store {
 
         // Strictly increasing, so "newest first" is well defined even within one millisecond.
         let latest = index.iter().map(|s| s.created_at).max().unwrap_or(0);
-        let entry = new.entry(&image, now_ms().max(latest + 1));
+        let entry = new.entry(&image, Some(palette), now_ms().max(latest + 1));
         index.push(entry.clone());
         if let Err(e) = self.write_index(&index) {
             index.pop();
@@ -495,7 +543,7 @@ impl Store {
         design_at(&self.lock(), old_id)?;
         let image = image.bounded();
         let png = encode_stored_png(image.rgba());
-        let thumb = image.preview_png(THUMB_SIZE);
+        let (thumb, palette) = image.preview(THUMB_SIZE);
 
         let mut index = self.lock();
         let pos = design_at(&index, old_id)?;
@@ -511,7 +559,7 @@ impl Store {
         let written = self
             .write_files(&new_stem, Some(design), &png, &thumb)
             .map_err(save_error)?;
-        let entry = new.entry(&image, index[pos].created_at);
+        let entry = new.entry(&image, Some(palette), index[pos].created_at);
         let old = std::mem::replace(&mut index[pos], entry.clone());
         if let Err(e) = self.write_index(&index) {
             index[pos] = old;
@@ -628,10 +676,8 @@ impl Store {
         let fresh: Vec<usize> = (0..skins.len()).filter(|&i| known[i].is_none()).collect();
         let mut files = crate::state::parallel_map(&fresh, |&i| {
             let image = skins[i].1.bounded();
-            let files = (
-                encode_stored_png(image.rgba()),
-                image.preview_png(THUMB_SIZE),
-            );
+            let (thumb, palette) = image.preview(THUMB_SIZE);
+            let files = (encode_stored_png(image.rgba()), thumb, palette);
             encoded();
             files
         })
@@ -640,15 +686,16 @@ impl Store {
             .into_iter()
             .map(|step| {
                 step.unwrap_or_else(|| {
-                    let (png, thumb) = files.next().expect("every new skin was encoded");
-                    Step::New(png, thumb)
+                    let (png, thumb, palette) =
+                        files.next().expect("every new skin was encoded");
+                    Step::New(png, thumb, palette)
                 })
             })
             .collect();
 
         let mut index = self.lock();
         for (step, (new, _)) in steps.iter_mut().zip(&skins) {
-            if let Step::New(_, thumb) = step {
+            if let Step::New(_, thumb, _) = step {
                 // Saved by another call since this one looked. The same id is the same picture,
                 // so the thumbnail just drawn is its thumbnail too.
                 if let Some(entry) = index.iter().find(|s| s.id == new.id) {
@@ -664,7 +711,7 @@ impl Store {
             let wrote = (|| -> std::io::Result<()> {
                 std::fs::create_dir_all(&self.dir)?;
                 for &i in &adding {
-                    let Step::New(png, thumb) = &steps[i] else {
+                    let Step::New(png, thumb, _) = &steps[i] else {
                         continue;
                     };
                     for (file, bytes) in
@@ -688,7 +735,11 @@ impl Store {
             let before = index.len();
             for (k, &i) in adding.iter().enumerate() {
                 let (new, image) = &skins[i];
-                index.push(new.clone().entry(image, newest - k as u64));
+                let palette = match &steps[i] {
+                    Step::New(_, _, palette) => Some(palette.clone()),
+                    _ => None,
+                };
+                index.push(new.clone().entry(image, palette, newest - k as u64));
             }
             if let Err(e) = self.write_index(&index) {
                 index.truncate(before);
@@ -712,7 +763,7 @@ impl Store {
                     fresh: false,
                     ..added[j].clone()
                 },
-                Step::New(_, thumbnail_png) => Added {
+                Step::New(_, thumbnail_png, _) => Added {
                     entry: new_entries.next().expect("an entry for every skin written"),
                     thumbnail_png,
                     fresh: true,
@@ -742,6 +793,59 @@ impl Store {
             }
             SkinKind::Folder => SkinImage::Folder(Arc::new(rgba)),
         }))
+    }
+
+    /// Reads the colours of every saved skin that has none by this version's reading, and writes
+    /// them into the index. Returns how many were read.
+    ///
+    /// Each one costs a PNG decode of its cached thumbnail, never a re-render of its picture, so
+    /// a whole library is a few seconds of one background thread — against the webview decoding
+    /// every picture in the library at startup, which is what this replaces. One whose thumbnail
+    /// cannot be read is left for next time rather than written down with no colours.
+    pub fn read_missing_palettes(&self) -> usize {
+        let todo: Vec<SavedSkin> = self
+            .lock()
+            .iter()
+            .filter(|s| s.current_palette().is_none())
+            .cloned()
+            .collect();
+        let read: Vec<(String, Palette)> = todo
+            .iter()
+            .filter_map(|entry| {
+                let png = self.thumbnail_png(entry).ok()?;
+                let img = image::load_from_memory(&png).ok()?.to_rgba8();
+                Some((entry.id.clone(), palette::of_picture(&img)))
+            })
+            .collect();
+        if read.is_empty() {
+            return 0;
+        }
+        let mut index = self.lock();
+        let mut done = 0;
+        for (id, colours) in read {
+            // It may have been deleted, or saved over, while the colours were being read.
+            if let Some(entry) = index.iter_mut().find(|e| e.id == id) {
+                entry.palette = Some(colours);
+                entry.palette_version = Some(palette::VERSION);
+                done += 1;
+            }
+        }
+        if done > 0 {
+            if let Err(e) = self.write_index(&index) {
+                eprintln!("folderskin: couldn't keep the colours just read: {e}");
+                return 0;
+            }
+        }
+        done
+    }
+
+    /// Whether a saved skin has anything left to show: the cached thumbnail, or the picture to
+    /// draw one from. Two `stat`s, so the gallery can leave out a skin whose files have gone
+    /// without reading every picture it lists.
+    pub fn has_thumbnail_source(&self, entry: &SavedSkin) -> bool {
+        stem(&entry.id).is_some_and(|stem| {
+            self.dir.join(thumb_file(stem)).exists() || self.dir.join(image_file(stem)).exists()
+        })
     }
 
     /// A saved skin's thumbnail PNG: the cached file, or a fresh render (which is then cached)
