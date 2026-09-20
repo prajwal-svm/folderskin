@@ -36,7 +36,11 @@ opt-level = "s"
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
+# No `panic = "abort"`. Commands do their work on blocking threads, and unwinding is what lets a
+# panic there come back as a failed command the window can put in a sentence — with abort, one
+# panic anywhere took the whole app down mid-apply, with nothing on screen to say why and no
+# console to print to (main.rs makes the release build a windows_subsystem binary). Unwinding
+# costs a little size; a GUI that vanishes while it is writing to the user's folders costs more.
 
 # Rendering at 2048 px in an unoptimised build takes seconds per icon; keep the pixel crates fast in dev.
 [profile.dev.package."*"]

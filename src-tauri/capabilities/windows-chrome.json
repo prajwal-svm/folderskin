@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/windows-schema.json",
+  "identifier": "windows-chrome",
+  "description": "The window's own minimise, maximise and close buttons. Windows only: its window is built undecorated (window.rs), so the webview draws the controls the system caption bar would have given it. macOS has its traffic lights and Linux its own decorations, so neither needs these.",
+  "platforms": ["windows"],
+  "windows": ["main"],
+  "permissions": [
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-close"
+  ]
+}

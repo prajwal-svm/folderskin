@@ -16,6 +16,44 @@ pub mod window;
 
 use tauri::Manager;
 
+/// Writes panics to `<app log dir>/panic.log`, and lets the default hook run as well.
+///
+/// A release build has no console to print to (`main.rs` makes it a `windows_subsystem` binary),
+/// so the message the default hook writes to stderr is lost exactly when it is wanted: in the
+/// build a user is running. The commands unwind rather than abort (see `panic = "abort"` in the
+/// workspace `Cargo.toml`), so a panic here surfaces as a failed command rather than a vanished
+/// window — this is what says where it came from. Appending, so a second one doesn't erase the
+/// first, and every step is allowed to fail: logging a panic must not cause one.
+fn log_panics_to(dir: std::path::PathBuf) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        use std::io::Write;
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let thread = std::thread::current();
+        let thread = thread.name().unwrap_or("unnamed").to_string();
+        let where_ = info
+            .location()
+            .map_or_else(|| "unknown".into(), |l| l.to_string());
+        if std::fs::create_dir_all(&dir).is_ok() {
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("panic.log"))
+            {
+                let _ = writeln!(
+                    file,
+                    "{at} v{} thread \"{thread}\" panicked at {where_}: {}",
+                    env!("CARGO_PKG_VERSION"),
+                    info.payload_as_str().unwrap_or("(no message)"),
+                );
+            }
+        }
+        previous(info);
+    }));
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -72,6 +110,10 @@ pub fn run() {
             ai::ai_generate,
         ])
         .setup(|app| {
+            // Before anything that could panic, so a crash report has somewhere to land.
+            if let Ok(dir) = app.path().app_log_dir() {
+                log_panics_to(dir);
+            }
             // Open the saved skins before the window exists, so the first list_skins sees them.
             // The onboarding's marker sits beside them (onboarding.rs).
             match app.path().app_data_dir() {

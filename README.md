@@ -205,7 +205,7 @@ platform. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the details.
 | OS | mechanism | files written inside the folder | caveat |
 |---|---|---|---|
 | macOS | `NSWorkspace.setIcon` | the invisible `Icon\r` file macOS maintains | none; Finder updates immediately |
-| Windows | `desktop.ini` + `folderskin.ico`, both hidden + system, folder marked read-only, then `SHChangeNotify` | `desktop.ini`, `folderskin.ico` | Explorer's icon cache may need `F5` |
+| Windows | `desktop.ini` + `folderskin-<hash>.ico`, both hidden + system, folder marked read-only, then `SHChangeNotify` on the folder and its parent | `desktop.ini`, `folderskin-<hash>.ico` | none; the folder repaints as the apply finishes |
 | Linux | `.directory` for KDE, plus `gio set metadata::custom-icon` for Nautilus, Nemo and Caja | `.directory`, `.folderskin.png` | some tiling and minimal file managers read neither |
 
 Revert removes only what FolderSkin wrote, and is safe to run twice. Cloud-synced folders

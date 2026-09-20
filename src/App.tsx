@@ -22,6 +22,7 @@ import { Gallery, type Empty } from "./components/Gallery";
 import { FolderStage } from "./components/FolderStage";
 import { FilterMenu } from "./components/FilterMenu";
 import { AboutMenu } from "./components/AboutMenu";
+import { WindowControls } from "./components/WindowControls";
 import { CommunityView } from "./components/CommunityView";
 import type { ApplyOutcome, ComposerHandle, ComposerRequest } from "./components/composer/Composer";
 import { Confirm } from "./components/Confirm";
@@ -147,6 +148,13 @@ export default function App() {
       })
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
+
+  // The stylesheet reserves room for the window's own controls on Windows (shell.css). window.rs
+  // sets the same flag before the first paint so there is no reflow; this is what makes it right
+  // whatever the webview did with that script.
+  useEffect(() => {
+    document.documentElement.dataset.os = platform.os;
+  }, [platform.os]);
 
   /** Puts skins in the library, or updates the ones already there. */
   const addSkins = useCallback((added: Skin[]) => {
@@ -683,6 +691,9 @@ export default function App() {
 
   const library = view === "skins" || view === "yours" || view === "faves";
   const composing = view === "compose";
+  // Windows has no system caption bar (window.rs builds the window undecorated), so the folder
+  // island carries the window's controls and a strip to drag it by.
+  const windowsChrome = platform.os === "windows";
 
   return (
     <main className={`app os-${platform.os}`}>
@@ -714,6 +725,14 @@ export default function App() {
         onCheckUpdates={updates.check}
         onShowUpdate={updates.showDialog}
       />
+      {windowsChrome && (
+        <div className="winbar">
+          {/* A sibling of the buttons, never their parent: a drag region swallows the mousedown of
+              anything inside it, which would leave the controls looking live but doing nothing. */}
+          <span className="winbar-drag" data-tauri-drag-region />
+          <WindowControls />
+        </div>
+      )}
 
       {!composing && (
       <section

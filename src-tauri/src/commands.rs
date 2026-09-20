@@ -455,7 +455,7 @@ pub fn platform_info() -> PlatformInfo {
         "macos" => ("your Mac", "macOS keeps the icon inside the folder itself (a hidden Icon file). Revert removes it."),
         "windows" => (
             "your PC",
-            "Writes desktop.ini and folderskin.ico inside the folder. If Explorer keeps showing the old icon, press F5.",
+            "Writes desktop.ini and a folderskin icon file inside the folder, both hidden. Revert removes them.",
         ),
         _ => (
             "your computer",
