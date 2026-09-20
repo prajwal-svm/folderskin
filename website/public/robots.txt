@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://prajwal-svm.github.io/folderskin/sitemap.xml

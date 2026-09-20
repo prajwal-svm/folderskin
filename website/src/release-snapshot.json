@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-09-20T07:54:21.363Z",
+  "stars": 6,
+  "release": {
+    "tag": "v0.1.1",
+    "assets": [
+      {
+        "name": "FolderSkin-0.1.1-1.aarch64.rpm",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin-0.1.1-1.aarch64.rpm",
+        "size": 4986984,
+        "os": "linux",
+        "architecture": "arm64",
+        "format": "rpm"
+      },
+      {
+        "name": "FolderSkin-0.1.1-1.x86_64.rpm",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin-0.1.1-1.x86_64.rpm",
+        "size": 5284856,
+        "os": "linux",
+        "architecture": "x64",
+        "format": "rpm"
+      },
+      {
+        "name": "FolderSkin_0.1.1_aarch64.AppImage",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_aarch64.AppImage",
+        "size": 80796168,
+        "os": "linux",
+        "architecture": "arm64",
+        "format": "appimage"
+      },
+      {
+        "name": "FolderSkin_0.1.1_amd64.AppImage",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_amd64.AppImage",
+        "size": 82770424,
+        "os": "linux",
+        "architecture": "x64",
+        "format": "appimage"
+      },
+      {
+        "name": "FolderSkin_0.1.1_amd64.deb",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_amd64.deb",
+        "size": 5283582,
+        "os": "linux",
+        "architecture": "x64",
+        "format": "deb"
+      },
+      {
+        "name": "FolderSkin_0.1.1_arm64.deb",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_arm64.deb",
+        "size": 4985538,
+        "os": "linux",
+        "architecture": "arm64",
+        "format": "deb"
+      },
+      {
+        "name": "FolderSkin_0.1.1_universal.dmg",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_universal.dmg",
+        "size": 12443687,
+        "os": "macos",
+        "architecture": "universal",
+        "format": "dmg"
+      },
+      {
+        "name": "FolderSkin_0.1.1_x64-setup.exe",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_x64-setup.exe",
+        "size": 3698704,
+        "os": "windows",
+        "architecture": "x64",
+        "format": "exe"
+      },
+      {
+        "name": "FolderSkin_0.1.1_x64_en-US.msi",
+        "browser_download_url": "https://github.com/prajwal-svm/folderskin/releases/download/v0.1.1/FolderSkin_0.1.1_x64_en-US.msi",
+        "size": 4800512,
+        "os": "windows",
+        "architecture": "x64",
+        "format": "msi"
+      }
+    ]
+  }
+}

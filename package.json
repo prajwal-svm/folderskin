@@ -11,7 +11,12 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "site:dev": "vite --config website/vite.config.mjs",
+    "site:build": "vite build --config website/vite.config.mjs",
+    "site:preview": "vite preview --config website/vite.config.mjs",
+    "site:test": "node --test website/src/*.test.js",
+    "site:refresh": "node website/scripts/snapshot.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
