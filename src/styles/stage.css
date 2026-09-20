@@ -52,11 +52,14 @@
   pointer-events: none;
   z-index: 3;
   transition: opacity var(--t-base) ease;
-  animation: spin-angle 2.6s linear infinite;
 }
 
+/* The border turns only while something is over the window. Leaving the animation on an
+   invisible element costs a conic-gradient repaint every frame, on every island, for nothing:
+   measured at about 40% of a core across the web content and GPU processes while idle. */
 .is-drop-target > .drop-glow {
   opacity: 1;
+  animation: spin-angle 2.6s linear infinite;
 }
 
 /* ---------- the folder ---------- */

@@ -216,6 +216,15 @@ p {
   }
 }
 
+/* Nothing animates while the window is behind another or hidden: every frame costs the same
+   whether or not anyone is looking, and this app spends most of its life in the background.
+   Paused rather than removed, so a spinner picks up where it left off. */
+html[data-awake="false"] *,
+html[data-awake="false"] *::before,
+html[data-awake="false"] *::after {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { LazyMotion, MotionConfig, domMin } from "motion/react";
 import Root from "./Root";
 import { lockDown } from "./lib/lockdown";
+import { watchAwake } from "./lib/awake";
 import { applyTheme, loadThemePref, resolveTheme } from "./state/theme";
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -18,6 +19,9 @@ import "./styles/updates.css";
 
 // The theme is known before anything draws, so a first launch's onboarding opens in it too.
 applyTheme(resolveTheme(loadThemePref()));
+
+// Animations stop while the window is behind another (lib/awake.ts).
+watchAwake();
 
 // No right-click menu or browser shortcuts in a release build (lib/lockdown.ts).
 if (import.meta.env.PROD) lockDown();

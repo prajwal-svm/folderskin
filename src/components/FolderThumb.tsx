@@ -133,7 +133,7 @@ export function FolderThumb({
         onKeyDown={keys}
       >
         <span className="tile-art" ref={art}>
-          <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} />
+          <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
         </span>
         <span
           className="tile-name"
