@@ -6,6 +6,31 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+## 0.1.2 — 2026-09-20
+
+### Added
+
+- **Share a pack straight to GitHub.** Sharing used to end with a folder on your desktop and a
+  set of instructions for doing the GitHub part yourself. FolderSkin now signs you in with
+  GitHub's device code — a short code, typed into a page, approved once — forks the repository
+  if you can't push to it, and opens the pull request for you. Saving a folder is still there
+  for anyone who would rather do it by hand. The sign-in also lives in Settings → Sharing.
+- **[docs/PACK-TERMS.md](docs/PACK-TERMS.md)**: what a pack may and may not contain, in eighteen
+  points you agree to before one goes up. The pull request records which version you agreed to.
+
+### Changed
+
+- **The share dialog is built around a pack holding several skins.** The skins are a grid of
+  ticks rather than a single choice, so sharing one and sharing twenty is the same dialog, and
+  you can add more to a pack you opened from one skin. What you are agreeing to runs the full
+  width underneath, because the terms cover the whole pack, and the author comes from GitHub
+  rather than being typed.
+- **Windows: no system title bar.** The window is undecorated and its minimise, maximise and
+  close buttons sit in the folder island, so the app no longer wears a grey caption strip the
+  design has no room for. macOS and Linux are unchanged.
+- Labels no longer trail off in an ellipsis anywhere in the app, and a link that opens a browser
+  carries the same mark wherever it appears.
+
 ### Fixed
 
 - **Windows: the folder panel shows a folder's real icon.** A folder dropped on the window
@@ -22,16 +47,26 @@ All notable changes to FolderSkin are recorded here. The format follows
     different path. Applying the same skin twice still resolves to the same name and rewrites
     one identical file; the icon file an earlier apply left is removed, and revert still
     recognises the `folderskin.ico` that earlier versions wrote.
+- **Windows: a folder keeps the attributes it came with.** Telling Explorer to read a folder's
+  `desktop.ini` means marking the folder read-only and system, and revert took both off again
+  whether or not the folder had them to start with. What the folder was is written down when it
+  is skinned and put back when it is reverted.
+- **Windows: applying a skin no longer waits on the shell.** The pause that lets the shell take
+  a change in before it is asked to redraw was spent on the thread the app was waiting for, so
+  every apply and revert took 600 ms longer than the work did. It happens out of the way now.
+- **Windows: reading a folder's icon could write past a buffer.** Asking GDI for the mask of an
+  icon with no alpha channel — every 24-bit icon, which is what `imageres.dll` and anything old
+  holds — had it write a two-entry colour table into room for one.
+- **Windows: the installer wears FolderSkin's icon**, not the NSIS default.
 - **The app no longer quits when something goes wrong.** Release builds aborted the process on
   any panic, so a fault while applying a skin closed the window with nothing said. Commands
   unwind instead, and a panic comes back as a message; it is also written to `panic.log` in the
   app's log folder, which a release build had no console to print to.
-
-### Changed
-
-- **Windows: no system title bar.** The window is undecorated and its minimise, maximise and
-  close buttons sit in the folder island, so the app no longer wears a grey caption strip the
-  design has no room for. macOS and Linux are unchanged.
+- **An invisible border was being animated.** The drop-target glow spins a conic gradient on
+  every island, and it ran the whole time the app was open on elements nothing could see: about
+  46% of a core and 130 MB of GPU layer buffers while the app sat idle. It turns only while
+  something is dragged over the window now, animation pauses while the window is hidden or
+  behind another, and gallery tiles decode only once they are in sight.
 
 ## 0.1.1 — 2026-09-19
 
