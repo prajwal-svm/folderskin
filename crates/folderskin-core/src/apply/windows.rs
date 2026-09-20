@@ -339,7 +339,8 @@ mod imp {
     };
     use windows_sys::Win32::UI::Shell::{
         ILCreateFromPathW, ILFree, SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNE_ATTRIBUTES,
-        SHCNE_UPDATEDIR, SHCNE_UPDATEITEM, SHCNF_FLUSH, SHCNF_IDLIST, SHCNF_PATHW,
+        SHCNE_RENAMEFOLDER, SHCNE_UPDATEDIR, SHCNE_UPDATEITEM, SHCNF_FLUSH, SHCNF_IDLIST,
+        SHCNF_PATHW,
     };
 
     /// How long [`refresh_shell_icons`] waits before asking the shell to redraw, so the change it
@@ -536,6 +537,33 @@ mod imp {
         if let Some(parent) = folder.parent() {
             notify_path(parent, SHCNE_UPDATEDIR);
             notify_pidl(parent, SHCNE_UPDATEDIR);
+        }
+        notify_renamed_in_place(folder);
+    }
+
+    /// Tells the shell the folder was renamed — to the name it already has.
+    ///
+    /// This is what makes the icon on the *desktop* change. The desktop's icon view keeps the
+    /// image it first drew for an item and re-reads it for nothing: not `SHCNE_UPDATEITEM`,
+    /// `SHCNE_ATTRIBUTES`, `SHCNE_UPDATEDIR` on its parent, nor `SHCNE_UPDATEIMAGE` for the image
+    /// the folder resolves to, by path or by id list. A rename is different in kind — the item is
+    /// dropped and made again, and the new item asks for its icon — so naming the folder as both
+    /// the old and the new path is a rename that moves nothing and refreshes everything.
+    ///
+    /// Ordinary Explorer windows are already following the notifications above by this point;
+    /// this is for the desktop, which is not an ordinary window.
+    fn notify_renamed_in_place(folder: &Path) {
+        let path_w = wide(folder.as_os_str());
+        let path_ptr = path_w.as_ptr().cast::<c_void>();
+        // SAFETY: SHCNF_PATHW promises both items are wide paths. They are the same buffer, which
+        // outlives the call: a rename from the folder's name to the folder's name.
+        unsafe {
+            SHChangeNotify(
+                SHCNE_RENAMEFOLDER as i32,
+                SHCNF_PATHW | SHCNF_FLUSH,
+                path_ptr,
+                path_ptr,
+            );
         }
     }
 
