@@ -114,10 +114,17 @@ async function checkChallenge(env: Env, request: Request, token: string, nonce: 
     throw fail(503, "challenge_unavailable", "The check couldn't be confirmed just now. Reload the page and try again.");
   }
   const host = new URL(request.url).hostname;
-  if (answer.success !== true || answer.action !== "verify" || answer.cdata !== nonce || answer.hostname !== host) {
+  // Cloudflare's always-passes test secret answers for a made-up page, so with it (in `wrangler
+  // dev`) only success is checked. It lets anyone through anyway, so this opens nothing new.
+  const testing = env.TURNSTILE_SECRET === TEST_SECRET;
+  const bound = answer.action === "verify" && answer.cdata === nonce && answer.hostname === host;
+  if (answer.success !== true || (!bound && !testing)) {
     throw fail(403, "challenge_failed", "The check didn't go through. Reload the page and try again.");
   }
 }
+
+/** Turnstile's documented test secret that always passes. */
+const TEST_SECRET = "1x0000000000000000000000000000000AA";
 
 /**
  * Records a new key under `wanted`, or under the first free `wanted-2`, `wanted-3`… if someone

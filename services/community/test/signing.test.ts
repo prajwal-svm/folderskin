@@ -98,6 +98,19 @@ describe("verifying a computer", () => {
     expect(await right.json()).toEqual({ handle: "brave-finch" });
   });
 
+  it("takes Cloudflare's always-passes test secret at its word, for wrangler dev", async () => {
+    const me = await device();
+    // The test secret answers for a made-up page: no action, cData or hostname of ours.
+    stubTurnstile({ action: "", cdata: "", hostname: "example.com" });
+    const link = await verifyLink(me, "local-dev");
+    const strict = await call(postJson("/v1/keys/verify", { ...link, token: `pass:${link.n}` }, me.ip));
+    expect(strict.status).toBe(403);
+    const testing = await call(postJson("/v1/keys/verify", { ...link, token: `pass:${link.n}` }, me.ip), {
+      TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",
+    });
+    expect(testing.status).toBe(201);
+  });
+
   it("uses each link once", async () => {
     const me = await device();
     stubTurnstile();
