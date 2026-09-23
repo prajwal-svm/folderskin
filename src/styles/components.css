@@ -1553,3 +1553,21 @@ select.input {
     transform: translateY(8px) scale(0.96);
   }
 }
+
+/* VirtualGrid: a scroll box, a spacer as tall as the whole grid, and only the cells on screen. */
+.vgrid {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.vgrid-space {
+  position: relative;
+}
+
+.vgrid-cell {
+  position: absolute;
+  top: 0;
+  left: 0;
+}

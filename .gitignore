@@ -14,3 +14,6 @@ coverage/
 *.tsbuildinfo
 test-results/
 playwright-report/
+__pycache__/
+.ruff_cache/
+fsgen-out/
