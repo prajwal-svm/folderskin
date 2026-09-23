@@ -1,10 +1,9 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { ctx2d, makeCanvas, type Assets } from "../../composer/assets";
-import { drawOnFolder, type TemplateImages } from "../../composer/composite";
-import type { Doc, Parts, Shape } from "../../composer/doc";
+import { drawFolderView, drawFreeView, type TemplateImages } from "../../composer/composite";
+import { emptyDoc, type Doc, type Parts, type Shape } from "../../composer/doc";
 import { renderDoc } from "../../composer/render";
 import { TEMPLATES, type Template } from "../../composer/templates";
-import { FolderGhost } from "../FolderGhost";
 import { Modal } from "../Modal";
 import { ImageIcon } from "../icons/image";
 import { LoaderIcon } from "../icons/loader";
@@ -22,14 +21,18 @@ export function DesignThumb({ doc, template, assets, size, version = 0 }: { doc:
     renderDoc(ctx2d(design), doc, px, assets);
     const ctx = ctx2d(c);
     ctx.clearRect(0, 0, px, px);
-    if (template && doc.shape === "folder") drawOnFolder(ctx, design, template, px, makeCanvas(px, px));
-    else ctx.drawImage(design, 0, 0);
+    // As the canvas shows it: what's see-through shows the folder's shape, or the icon's square.
+    if (template && doc.shape === "folder") drawFolderView(ctx, design, template, px, makeCanvas(px, px));
+    else drawFreeView(ctx, design, px);
   }, [doc, template, assets, size, version]);
   return <canvas ref={ref} className="cmp-design-thumb" style={{ width: size, height: size }} aria-hidden="true" />;
 }
 
 /** How a new design starts: empty, as a folder or a free icon, or from a template. */
 export type Start = { kind: "empty"; shape: Shape } | { kind: "template"; template: Template };
+
+const EMPTY_FOLDER = emptyDoc("folder");
+const EMPTY_FREE = emptyDoc("free");
 
 const EMPTY: { shape: Shape; label: string; note: string }[] = [
   { shape: "folder", label: "Empty folder", note: "Cut to FolderSkin's folder" },
@@ -72,11 +75,6 @@ export function NewDesign({
       sub="Start empty, or from a template. Everything on it can be changed: colours, words, icons, pictures, even the folder's shape."
       className="modal-new"
       onClose={onClose}
-      footer={
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
-          Keep editing
-        </button>
-      }
     >
       {dirty && (
         <div className="new-unsaved" role="note">
@@ -94,15 +92,9 @@ export function NewDesign({
         <div className="cmp-sheet-grid">
           {EMPTY.map((e) => (
             <button key={e.shape} type="button" className="cmp-card is-empty" onClick={() => onStart({ kind: "empty", shape: e.shape })}>
-              {/* An empty design draws nothing, so its card shows the shape it will fill instead. */}
-              <span className="cmp-card-art new-empty-art" aria-hidden="true">
-                {e.shape === "folder" ? (
-                  <FolderGhost tone="neutral" layer="line" />
-                ) : (
-                  <svg viewBox="0 0 100 100" className="new-free-art">
-                    <rect x="12" y="12" width="76" height="76" rx="18" />
-                  </svg>
-                )}
+              {/* Drawn as the canvas will show it: the folder, or the square, with nothing on it yet. */}
+              <span className="cmp-card-art" aria-hidden="true">
+                <DesignThumb doc={e.shape === "folder" ? EMPTY_FOLDER : EMPTY_FREE} template={template} assets={assets} size={104} version={version} />
               </span>
               <span className="cmp-card-label">{e.label}</span>
               <span className="cmp-card-note">{e.note}</span>
