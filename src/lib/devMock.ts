@@ -21,6 +21,9 @@ import { FALLBACK_PARTS } from "../composer/parts";
 import type {
   AiCatalogue,
   AiGenerateRequest,
+  ChatRefDto,
+  ChatSummaryDto,
+  LocalStatus,
   CommunityPack,
   ComposerImage,
   ComposerSaved,
@@ -42,6 +45,7 @@ import type {
   SkinList,
 } from "./tauri";
 import type { AvailableUpdate } from "./updater";
+import type { AiEvent } from "../state/chats";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import { cleanName } from "./names";
 import { isImagePath } from "./files";
@@ -52,6 +56,42 @@ const mockIconPacks = new Map<string, string>();
 
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
 const mockKeys = new Set<string>();
+
+/** AI runs stopped in the preview, by job. */
+const mockStopped = new Set<string>();
+
+const MOCK_LABELS: Record<string, string> = { openai: "OpenAI", xai: "xAI Grok", recraft: "Recraft", google: "Google Gemini", bfl: "Black Forest Labs", stability: "Stability AI", ideogram: "Ideogram" };
+
+/** Whether "this computer" is set up in the preview; `?localready` starts it set up. */
+const mockLocal = { ready: new URLSearchParams(location.search).has("localready") };
+
+function mockLocalStatus(): LocalStatus {
+  return {
+    ready: mockLocal.ready,
+    backend: "CUDA",
+    device: "NVIDIA GeForce RTX 3050 Ti, 4 GB",
+    download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
+    seconds_per_image: 18,
+    home: "C:\\Users\\you\\AppData\\Local\\folderskin-localgen",
+    note: null,
+  };
+}
+
+/** The preview's saved chats, in this browser's storage so they're there after a reload, as the app's are. */
+const CHATS_KEY = "folderskin.mock.chats";
+type MockChats = { index: ChatSummaryDto[]; chats: Record<string, unknown> };
+function mockChats(): MockChats {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHATS_KEY) ?? "null") as MockChats | null;
+    if (v && Array.isArray(v.index) && v.chats) return v;
+  } catch {
+    // A fresh start.
+  }
+  return { index: [], chats: {} };
+}
+function saveMockChats(store: MockChats) {
+  localStorage.setItem(CHATS_KEY, JSON.stringify(store));
+}
 
 /** A pack as the preview lists it, before whether it's added (or changed) is worked out. */
 type MockPack = Omit<CommunityPack, "added" | "update" | "hash">;
@@ -528,6 +568,20 @@ export const mockApi = {
   aiCatalogue: async (): Promise<AiCatalogue> => ({
     providers: [
       {
+        id: "local",
+        label: "This computer",
+        kind: "local",
+        models: [
+          { id: "auto", label: "Best for this computer", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "Free" },
+          { id: "klein", label: "FLUX.2 klein 4B", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "Free" },
+          { id: "zimage", label: "Z-Image Turbo", native_alpha: false, accepts_reference: false, sizes: ["1024x1024"], price_hint: "Free" },
+        ],
+        keys_url: "",
+        docs_url: "",
+        key_hint: "",
+        has_key: mockLocal.ready,
+      },
+      {
         id: "openai",
         label: "OpenAI",
         models: [
@@ -617,12 +671,123 @@ export const mockApi = {
     return { url: c.toDataURL("image/png"), width: c.width, height: c.height, name: skin.name, alpha: true };
   },
   composerDesign: async (skinId: string): Promise<unknown> => mockDesigns.get(skinId) ?? null,
-  aiGenerate: async (_req: AiGenerateRequest): Promise<Skin> => {
-    await sleep(4200);
-    const name = _req.idea.split(/\s+/).slice(0, 4).join(" ");
-    const skin: Skin = { id: `user:ai${Date.now()}`, name: name.charAt(0).toUpperCase() + name.slice(1), collection: "yours", thumbnail: picture(library.length + 1), custom: true, kind: _req.shape === "folder" ? "folder" : "artwork", source: "ai", created_at: Date.now(), tags: cleanTags(_req.tags), made_with: "OpenAI · GPT Image 2.5 Flare", idea: _req.idea };
+  aiGenerate: async (req: AiGenerateRequest, onEvent: (event: AiEvent) => void = () => {}): Promise<Skin> => {
+    const local = req.provider === "local";
+    const who = local ? "this computer" : (MOCK_LABELS[req.provider] ?? req.provider);
+    const job = req.job ?? "";
+    // Waits `ms`, or gives up the moment the run is stopped.
+    const wait = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        if (mockStopped.has(job)) throw { code: "stopped", message: "Stopped before it finished." };
+        await sleep(100);
+      }
+    };
+    const fail = new URLSearchParams(location.search).get("aifail");
+    if (local) {
+      if (!mockLocal.ready) throw { code: "local_not_ready", message: "Pictures can't be made on this computer until it's set up.", fix: ["Open the provider settings and choose Set up."] };
+      onEvent({ type: "stage", stage: "load", message: "Loading the model" });
+      onEvent({ type: "log", level: "info", message: "backend: CUDA (NVIDIA GeForce RTX 3050 Ti, 4 GB)" });
+      onEvent({ type: "log", level: "info", message: "model: FLUX.2 [klein] 4B, q4" });
+      await wait(500);
+      onEvent({ type: "stage", stage: "paint", message: "Painting" });
+      for (let step = 1; step <= 8; step++) {
+        await wait(260);
+        onEvent({ type: "progress", step, steps: 8 });
+        onEvent({ type: "log", level: "info", message: `step ${step}/8, 0.9 s/it` });
+      }
+      if (fail === "memory") throw { code: "out_of_memory", message: "The graphics card ran out of memory while painting.", fix: ["Close apps that use the graphics card, such as games or video editors.", "Choose the smaller model in the provider settings."], ask: 'claude "FolderSkin ran out of GPU memory generating a folder icon locally on an RTX 3050 Ti (4 GB). How do I fix it?"' };
+    } else {
+      onEvent({ type: "stage", stage: "send", message: `Sending your idea to ${who}` });
+      await wait(700);
+      if (fail === "key") throw `add your ${req.provider} API key first`;
+      if (fail === "refused") throw `${who} declined that prompt: it asks for something its safety system won't draw.`;
+      if (fail === "rate") throw `${who} is rate limiting you right now. Wait a moment and try again.`;
+      if (fail === "network") throw `couldn't reach ${who}: the connection was refused`;
+      onEvent({ type: "stage", stage: "paint", message: `${who} is painting it` });
+      await wait(1800);
+    }
+    if (req.shape === "folder") {
+      onEvent({ type: "stage", stage: "cut", message: "Cutting it out of the background" });
+      await wait(400);
+    }
+    onEvent({ type: "stage", stage: "save", message: "Saving it to Yours" });
+    await wait(200);
+    // As ai.rs names it: the first few words, never ending on a little one ("A lighthouse", not "A lighthouse at").
+    const words = req.idea.replace(/[,.;:!?]/g, " ").split(/\s+/).filter(Boolean).slice(0, 4);
+    while (words.length > 1 && /^(a|an|the|at|of|in|on|with|and|for|to|by)$/i.test(words[words.length - 1])) words.pop();
+    const name = words.join(" ");
+    const skin: Skin = {
+      id: `user:ai${Date.now().toString(16)}`,
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      collection: "yours",
+      thumbnail: picture(library.length + 1),
+      custom: true,
+      kind: req.shape === "folder" ? "folder" : "artwork",
+      source: "ai",
+      created_at: Date.now(),
+      tags: cleanTags(req.tags),
+      made_with: local ? "On this computer · FLUX.2 klein" : `${who} · ${req.model}`,
+      idea: req.idea,
+    };
     keep([skin]);
     return skin;
+  },
+  aiCancel: async (job: string): Promise<void> => {
+    mockStopped.add(job);
+  },
+  aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
+  aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {
+    const files: [string, number][] = [
+      ["stable-diffusion.cpp (CUDA)", 150_000_000],
+      ["FLUX.2 klein 4B, q4", 2_400_000_000],
+      ["Qwen3 4B text encoder, q4", 2_500_000_000],
+      ["FLUX.2 autoencoder", 330_000_000],
+    ];
+    onEvent({ type: "stage", stage: "download", message: "Downloading what this computer needs" });
+    for (const [file, total] of files) {
+      for (let i = 1; i <= 5; i++) {
+        await sleep(90);
+        onEvent({ type: "download", file, done: Math.round((total * i) / 5), total });
+      }
+      onEvent({ type: "log", level: "info", message: `checked ${file}` });
+    }
+    onEvent({ type: "stage", stage: "check", message: "Checking it runs" });
+    await sleep(400);
+    mockLocal.ready = true;
+    return mockLocalStatus();
+  },
+  chatsList: async (): Promise<ChatSummaryDto[]> => mockChats().index,
+  chatRead: async (id: string): Promise<unknown> => {
+    const chat = mockChats().chats[id];
+    if (!chat) throw "that chat isn't on this computer any more";
+    return chat;
+  },
+  chatSave: async (chat: unknown): Promise<ChatSummaryDto> => {
+    const c = chat as { id: string; title: string; created: number; updated: number; turns: { skinId?: string }[] };
+    const store = mockChats();
+    const summary: ChatSummaryDto = {
+      id: c.id,
+      title: c.title,
+      created: c.created,
+      updated: c.updated,
+      turns: c.turns.length,
+      cover: [...c.turns].reverse().find((t) => t.skinId)?.skinId ?? null,
+    };
+    store.chats[c.id] = chat;
+    store.index = [summary, ...store.index.filter((s) => s.id !== c.id)].sort((a, b) => b.updated - a.updated);
+    saveMockChats(store);
+    return summary;
+  },
+  chatDelete: async (id: string): Promise<void> => {
+    const store = mockChats();
+    delete store.chats[id];
+    store.index = store.index.filter((s) => s.id !== id);
+    saveMockChats(store);
+  },
+  chatKeepReference: async (_id: string, path: string): Promise<ChatRefDto> => {
+    await sleep(150);
+    const name = path.split(/[\\/]/).pop() || "picture.jpg";
+    return { id: Math.random().toString(16).slice(2, 14), name, path, thumb: picture(3) };
   },
   iconPackDownload: async (id: string, _release: string, _sha256: string, bytes: number, onProgress: (p: IconPackProgress) => void): Promise<void> => {
     if (offline()) {

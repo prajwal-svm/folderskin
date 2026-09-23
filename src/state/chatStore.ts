@@ -1,0 +1,290 @@
+import { useSyncExternalStore } from "react";
+import { api, errorMessage, type Skin } from "../lib/tauri";
+import { aiFailure } from "../lib/aiError";
+import {
+  addTurn,
+  applyEvent,
+  chatId,
+  newChat,
+  patchTurn,
+  persistable,
+  readChat,
+  renameChat,
+  settle,
+  upsertSummary,
+  type AiEvent,
+  type Chat,
+  type ChatFolder,
+  type ChatRef,
+  type ChatSummary,
+  type Shape,
+  type Turn,
+} from "./chats";
+
+/**
+ * The assistant's chats for the whole app: the history, the chat that's open, and every request
+ * still running, whichever chat it belongs to. It lives outside React so a picture being made
+ * carries on while the user looks at the library or another chat, and lands in its own chat when
+ * it's done. Each chat is saved (chats.rs) a moment after its requests change; what a request
+ * reports while it runs is shown but not saved.
+ */
+
+type State = {
+  /** The history has been read. */
+  ready: boolean;
+  list: ChatSummary[];
+  /** The chat on screen: saved once it has a request in it. */
+  active: Chat | null;
+  /** A chat that couldn't be opened or saved, said once. */
+  problem: string | null;
+};
+
+let state: State = { ready: false, list: [], active: null, problem: null };
+/** Every chat read or made this session, by id, as it is now. */
+const chats = new Map<string, Chat>();
+/** The job each running request was started as, by turn id, for Stop. */
+const jobs = new Map<string, string>();
+const listeners = new Set<() => void>();
+let started = false;
+
+function set(next: Partial<State>) {
+  state = { ...state, ...next };
+  for (const l of listeners) l();
+}
+
+// Several reports can arrive in one frame (a step and its log line); the screen follows once.
+let queued = false;
+function notifySoon() {
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    const active = state.active ? (chats.get(state.active.id) ?? state.active) : null;
+    set({ active });
+  });
+}
+
+/** Puts `chat` in place, on screen at once when it's the open one. */
+function put(chat: Chat, now = true) {
+  chats.set(chat.id, chat);
+  if (state.active?.id === chat.id) {
+    if (now) set({ active: chat });
+    else notifySoon();
+  }
+}
+
+const saving = new Map<string, number>();
+/** Saves `chat` a moment from now, once however many changes come before then. */
+function saveSoon(id: string) {
+  window.clearTimeout(saving.get(id));
+  saving.set(
+    id,
+    window.setTimeout(() => {
+      saving.delete(id);
+      const chat = chats.get(id);
+      if (!chat || chat.turns.length === 0) return;
+      api
+        .chatSave(persistable(chat))
+        .then((summary) => set({ list: upsertSummary(state.list, summary), problem: null }))
+        .catch((e) => set({ problem: `Chats aren't being saved: ${errorMessage(e)}` }));
+    }, 250),
+  );
+}
+
+async function load(id: string): Promise<Chat> {
+  const known = chats.get(id);
+  if (known) return known;
+  const chat = readChat(await api.chatRead(id));
+  if (!chat) throw new Error("that chat's file is damaged and can't be opened");
+  const settled = settle(chat, Date.now());
+  chats.set(id, settled);
+  return settled;
+}
+
+/** Reads the history and opens the latest chat, or a new one; once per session. */
+export function startChats() {
+  if (started) return;
+  started = true;
+  api
+    .chatsList()
+    .then(async (list) => {
+      set({ list });
+      if (list[0]) {
+        try {
+          set({ active: await load(list[0].id), ready: true });
+          return;
+        } catch {
+          // Open a new one instead; the history still lists it.
+        }
+      }
+      set({ active: newChat(chatId(Date.now()), Date.now()), ready: true });
+    })
+    .catch((e) => set({ ready: true, active: newChat(chatId(Date.now()), Date.now()), problem: `Earlier chats couldn't be read: ${errorMessage(e)}` }));
+}
+
+export async function openChat(id: string) {
+  if (state.active?.id === id) return;
+  try {
+    set({ active: await load(id) });
+  } catch (e) {
+    set({ problem: `Couldn't open that chat: ${errorMessage(e)}` });
+  }
+}
+
+/** A fresh chat, for `folder` if one is given. The open chat stays as it is if nothing's been asked in it yet. */
+export function startNewChat(folder: ChatFolder | null) {
+  const open = state.active;
+  if (open && open.turns.length === 0) {
+    put({ ...open, folder });
+    return;
+  }
+  const chat = newChat(chatId(Date.now()), Date.now(), folder);
+  chats.set(chat.id, chat);
+  set({ active: chat });
+}
+
+export function renameChatTo(id: string, title: string) {
+  const chat = chats.get(id);
+  if (!chat) return;
+  const next = renameChat(chat, title, Date.now());
+  put(next);
+  if (next.turns.length > 0) saveSoon(id);
+  else set({ list: state.list.map((s) => (s.id === id ? { ...s, title: next.title } : s)) });
+}
+
+export async function deleteChat(id: string) {
+  window.clearTimeout(saving.get(id));
+  try {
+    await api.chatDelete(id);
+  } catch (e) {
+    set({ problem: `Couldn't delete that chat: ${errorMessage(e)}` });
+    return;
+  }
+  chats.delete(id);
+  const list = state.list.filter((s) => s.id !== id);
+  set({ list });
+  if (state.active?.id !== id) return;
+  if (list[0]) await openChat(list[0].id);
+  else set({ active: newChat(chatId(Date.now()), Date.now()) });
+}
+
+/** The folder the open chat's pictures are for. */
+export function setChatFolder(folder: ChatFolder | null) {
+  const chat = state.active;
+  if (!chat || (chat.folder?.path ?? null) === (folder?.path ?? null)) return;
+  put({ ...chat, folder, updated: chat.turns.length ? Date.now() : chat.updated });
+  if (chat.turns.length) saveSoon(chat.id);
+}
+
+/** Copies a picture into the open chat, for its next request. */
+export async function keepReference(path: string): Promise<ChatRef> {
+  const chat = state.active;
+  if (!chat) throw new Error("no chat is open");
+  return api.chatKeepReference(chat.id, path);
+}
+
+export type Ask = {
+  idea: string;
+  shape: Shape;
+  provider: string;
+  model: string;
+  /** "OpenAI · GPT Image 2.5", as the request is made. */
+  where: string;
+  refs: ChatRef[];
+  tags: string[];
+  size: string | null;
+};
+
+/**
+ * Sends a request from the open chat. It runs to the end whatever happens on screen: `onSkin`
+ * gets the picture when it's made (App puts it in the library), and the chat it came from shows
+ * how it went.
+ */
+export function ask(req: Ask, onSkin: (skin: Skin) => void) {
+  const chat = state.active;
+  if (!chat) return;
+  const now = Date.now();
+  const turn: Turn = {
+    id: `t${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
+    idea: req.idea,
+    shape: req.shape,
+    provider: req.provider,
+    model: req.model,
+    where: req.where,
+    refs: req.refs,
+    status: "working",
+    started: now,
+  };
+  const chatIdNow = chat.id;
+  put(addTurn(chat, turn, now));
+  saveSoon(chatIdNow);
+  const job = `${chatIdNow}-${turn.id}`;
+  jobs.set(turn.id, job);
+
+  const update = (patch: (t: Turn) => Partial<Turn>, immediate: boolean) => {
+    const c = chats.get(chatIdNow);
+    const t = c?.turns.find((x) => x.id === turn.id);
+    if (!c || !t) return;
+    put(patchTurn(c, turn.id, patch(t), Date.now()), immediate);
+  };
+  const onEvent = (event: AiEvent) => update((t) => applyEvent(t, event), false);
+
+  api
+    .aiGenerate(
+      {
+        provider: req.provider,
+        model: req.model,
+        idea: req.idea,
+        shape: req.shape,
+        size: req.size,
+        reference_path: req.refs[0]?.path ?? null,
+        reference_paths: req.refs.map((r) => r.path),
+        tags: req.tags,
+        job,
+      },
+      onEvent,
+    )
+    .then((skin) => {
+      update(() => ({ status: "done", skinId: skin.id, finished: Date.now(), stage: undefined, step: undefined, download: undefined }), true);
+      onSkin(skin);
+    })
+    .catch((e) => {
+      const error = aiFailure(e);
+      const stopped = error.code === "stopped";
+      update(() => ({ status: stopped ? "stopped" : "error", error: stopped ? undefined : error, finished: Date.now(), stage: undefined, step: undefined, download: undefined }), true);
+    })
+    .finally(() => {
+      jobs.delete(turn.id);
+      saveSoon(chatIdNow);
+    });
+}
+
+/** Stops a running request. It says "Stopping" until the run has actually let go. */
+export function stop(turnId: string) {
+  const job = jobs.get(turnId);
+  if (!job) return;
+  const chatIdNow = job.split("-")[0];
+  const c = chats.get(chatIdNow);
+  if (c) put(patchTurn(c, turnId, { stage: "Stopping", step: undefined, download: undefined }, Date.now()));
+  api.aiCancel(job).catch(() => {
+    // Older builds can't stop a run; it finishes, and its picture is kept.
+  });
+}
+
+/** Whether any request is running, in any chat. */
+export function anyRunning(): boolean {
+  return jobs.size > 0;
+}
+
+export function dismissProblem() {
+  set({ problem: null });
+}
+
+function subscribe(l: () => void) {
+  listeners.add(l);
+  return () => listeners.delete(l);
+}
+
+export function useChats(): State {
+  return useSyncExternalStore(subscribe, () => state);
+}

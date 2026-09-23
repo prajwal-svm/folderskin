@@ -4,6 +4,7 @@ import { isTauri, mockApi } from "./devMock";
 import { frame } from "../composer/body";
 import type { Parts } from "../composer/parts";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
+import type { AiEvent } from "../state/chats";
 
 /** A skin in the library: a picture the user added, an AI result, or one from a community pack. All are saved on disk. */
 export type Skin = {
@@ -122,6 +123,8 @@ export type AiModel = {
 export type AiProvider = {
   id: string;
   label: string;
+  /** "local" runs on this computer and needs no key; the rest use the user's own key. */
+  kind?: "key" | "local";
   models: AiModel[];
   keys_url: string;
   docs_url: string;
@@ -144,9 +147,37 @@ export type AiGenerateRequest = {
   size: string | null;
   /** Optional reference picture already on disk. */
   reference_path: string | null;
+  /** Every reference picture, for the models that take more than one. */
+  reference_paths?: string[];
   /** Tags for the result, such as the style the idea asks for. */
   tags: string[];
+  /** Names this run, so aiCancel can stop it. */
+  job?: string;
 };
+
+/** Whether pictures can be made on this computer, and what it takes (the local engine). */
+export type LocalStatus = {
+  /** The runtime and a model are here and checked. */
+  ready: boolean;
+  /** How it runs here: CUDA, Vulkan, Metal, MLX or CPU. */
+  backend: string;
+  /** What it runs on, as people know it ("NVIDIA GeForce RTX 3050 Ti, 4 GB"). */
+  device: string;
+  /** What's still to download before it's ready; 0 once it is. */
+  download_bytes: number;
+  /** Roughly how long one picture takes here, when known. */
+  seconds_per_image: number | null;
+  /** Where the runtime and models are kept. */
+  home: string;
+  /** Anything worth knowing before setting up, such as too little memory for the best model. */
+  note: string | null;
+};
+
+/** A saved conversation with the assistant, as the history lists it (chats.rs). */
+export type ChatSummaryDto = { id: string; title: string; created: number; updated: number; turns: number; cover: string | null };
+
+/** A reference picture kept for a chat: a shrunk copy in the chat's own folder, and a thumbnail. */
+export type ChatRefDto = { id: string; name: string; path: string; thumb: string };
 
 /** The folder template split into the layers the composer draws a design between, as PNG data URLs. */
 export type ComposerTemplate = {
@@ -256,7 +287,22 @@ const tauriApi = {
   aiSetKey: (provider: string, key: string) => invoke<void>("ai_set_key", { provider, key }),
   aiClearKey: (provider: string) => invoke<void>("ai_clear_key", { provider }),
   aiTestKey: (provider: string) => invoke<void>("ai_test_key", { provider }),
-  aiGenerate: (req: AiGenerateRequest) => invoke<Skin>("ai_generate", { req }),
+  /** Makes a picture and saves it as a skin, telling `onEvent` how it's going as it goes. */
+  aiGenerate: (req: AiGenerateRequest, onEvent: (event: AiEvent) => void = () => {}) =>
+    invoke<Skin>("ai_generate", { req, onEvent: new Channel<AiEvent>(onEvent) }),
+  /** Stops the run named `job`: its request is dropped, or its local model stopped. */
+  aiCancel: (job: string) => invoke<void>("ai_cancel", { job }),
+  /** Whether pictures can be made on this computer, and what setting that up takes. */
+  aiLocalStatus: () => invoke<LocalStatus>("ai_local_status"),
+  /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes. */
+  aiLocalSetup: (onEvent: (event: AiEvent) => void) => invoke<LocalStatus>("ai_local_setup", { onEvent: new Channel<AiEvent>(onEvent) }),
+
+  // ---- the assistant's saved chats (chats.rs) ----
+  chatsList: () => invoke<ChatSummaryDto[]>("chats_list"),
+  chatRead: (id: string) => invoke<unknown>("chat_read", { id }),
+  chatSave: (chat: unknown) => invoke<ChatSummaryDto>("chat_save", { chat }),
+  chatDelete: (id: string) => invoke<void>("chat_delete", { id }),
+  chatKeepReference: (id: string, path: string) => invoke<ChatRefDto>("chat_keep_reference", { id, path }),
 
   // ---- icon packs ----
   /** Downloads a pack from its release and keeps it, if it is exactly `bytes` long with SHA-256 `sha256`. */
@@ -295,5 +341,7 @@ export const api: typeof tauriApi = import.meta.env.DEV && !isTauri() ? mockApi 
 export function errorMessage(err: unknown): string {
   if (typeof err === "string") return err;
   if (err instanceof Error) return err.message;
+  // A structured error (the AI commands' {code, message}) says itself in its message.
+  if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") return (err as { message: string }).message;
   return "something went wrong";
 }
