@@ -12,3 +12,5 @@ docs/superpowers/
 .claude/worktrees/
 coverage/
 *.tsbuildinfo
+test-results/
+playwright-report/
