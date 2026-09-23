@@ -326,8 +326,12 @@ MODELS = {
     "zimage": Model("zimage", "Z-Image-Turbo", "Apache-2.0", takes_pictures=False, steps=8, mlx_steps=9),
     "klein": Model("klein", "FLUX.2 [klein] 4B", "Apache-2.0", takes_pictures=True, steps=4, mlx_steps=4),
 }
-# mflux names; it downloads and quantizes the weights itself.
-MLX_ZIMAGE_4BIT = "filipstrand/Z-Image-Turbo-mflux-4bit"
+# mflux downloads weights itself. At q8 it quantizes the upstream Apache weights as it loads them;
+# at q4 it takes these pre-quantized copies of the same weights (the older filipstrand/ copy of
+# Z-Image is tagged with another licence than its upstream's, so not that one).
+MFLUX_VERSION = "0.20.0"
+MLX_Q4 = {"zimage": ("mflux-community/z-image-turbo-mflux-q4", "z-image-turbo"),
+          "klein": ("mflux-community/flux2-klein-4b-mflux-q4", "flux2-klein-4b")}
 
 
 def fetch(url: str, dest: Path, size: int, sha256: str | None) -> None:
@@ -417,7 +421,8 @@ def install_mlx() -> None:
         return
     if not shutil.which("uv"):
         sys.exit("install uv first (https://docs.astral.sh/uv/), then run setup again")
-    subprocess.run(["uv", "tool", "install", "--upgrade", "mflux"], check=True)
+    # Pinned like everything else: mflux shipped five releases in six weeks of 2026.
+    subprocess.run(["uv", "tool", "install", f"mflux=={MFLUX_VERSION}"], check=True)
     say("installed mflux; it downloads each model the first time it runs it")
 
 
@@ -429,7 +434,8 @@ def install_mlx() -> None:
 STYLES = {
     "pop-art": "a bold pop art illustration: thick black outlines, flat saturated primary colours, Ben-Day halftone dots",
     "anime": "a hand-painted anime film still: soft watercolour skies, lush greenery, gentle warm light, clean cel-shaded shapes, nostalgic and whimsical",
-    "oil": "a classical oil painting on canvas: rich glazes, visible impasto brushstrokes, dramatic chiaroscuro light, a museum masterpiece",
+    # Not "on canvas" or "a museum masterpiece": those paint the painting in its frame, on a wall.
+    "oil": "a classical oil painting: thick oil paint with visible impasto brushstrokes, rich glazes, dramatic chiaroscuro light",
     "sketch": "a black and white graphite pencil sketch on textured paper: confident linework, fine hatching and cross-hatching, pure monochrome",
     "woodblock": "an ukiyo-e woodblock print: bold black outlines, flat indigo and vermilion colour blocks, washi paper grain",
     "travel-poster": "a vintage travel poster: flat colour shapes, a limited palette, grainy lithograph print texture",
@@ -447,6 +453,10 @@ STYLES = {
 # Artwork lands on the folder's back panel whole, and on its front panel less a band at the top
 # and bottom; the top eighth is the tab and the strip beside the paper (docs/SKINS.md). So: fill the
 # frame, keep the subject in the middle, keep the top quiet.
+#
+# The one negation stays on evidence. Against "the painted scene continues past all four edges",
+# klein framed the same 1 picture in 6 (pop art and oil, three seeds each) either way, but the
+# positive wording signed 2 of the 3 oils and this one none. trim_border catches the frames.
 ARTWORK = (
     "{style_lead}{idea}. The painted scene bleeds off all four edges of the image: no white border, "
     "no margin, no frame line and no paper edge anywhere around it. The main subject is large and sits "
@@ -549,6 +559,11 @@ def run_sdcpp(job: Job, runner: Runner, prompt: str, pictures: list[Path], out: 
         "--sampling-method", "euler",
         "-W", str(WIDTH), "-H", str(HEIGHT),
         "-s", str(job.seed),
+        # The prompt stays out of the PNG: the .json beside it keeps it, and a picture shared
+        # on its own shouldn't carry it.
+        "--disable-image-metadata",
+        # Flash attention on every backend. sd.cpp's docs say it slows the non-CUDA ones, but
+        # without it klein at 1024 x 960 ran out of memory on a 4 GB card under Vulkan.
         "--diffusion-fa",
         "-o", str(out),
     ]
@@ -568,14 +583,13 @@ def run_mlx(job: Job, tier: str, prompt: str, pictures: list[Path], out: Path) -
     model = job.model()
     common = ["--prompt", prompt, "--width", str(WIDTH), "--height", str(HEIGHT),
               "--seed", str(job.seed), "--steps", str(model.mlx_steps), "--output", str(out)]
+    repo, base = MLX_Q4[model.id]
+    weights = ["--model", base, "-q", "8"] if tier == "q8" else ["--model", repo, "--base-model", base]
     if model.id == "zimage":
-        q = ["-q", "8"] if tier == "q8" else ["--model", MLX_ZIMAGE_4BIT]
-        return ["mflux-generate-z-image-turbo", *q, *common]
-    q = ["-q", "8" if tier == "q8" else "4"]
+        return ["mflux-generate-z-image-turbo", *weights, *common]
     if pictures:
-        return ["mflux-generate-flux2-edit", "--model", "flux2-klein-4b", *q,
-                "--image-paths", *map(str, pictures), *common]
-    return ["mflux-generate-flux2", "--model", "flux2-klein-4b", *q, *common]
+        return ["mflux-generate-flux2-edit", *weights, "--image-paths", *map(str, pictures), *common]
+    return ["mflux-generate-flux2", *weights, *common]
 
 
 def file_sha256(path: Path) -> str:
