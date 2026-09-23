@@ -100,6 +100,8 @@ pub struct SearchDto {
     pub all: usize,
     pub packs: Vec<PackDto>,
     pub skins: Vec<SkinHitDto>,
+    /// The packs `skins` are in, so one can be opened wherever it is in the list.
+    pub hit_packs: Vec<PackDto>,
     /// Tags of the packs the words match, most used first.
     pub facets: Vec<Facet>,
     /// True when nothing could be reached and these are the packs from the last visit.
@@ -259,7 +261,19 @@ fn search(
 ) -> Result<SearchDto, String> {
     let results = source.search(query)?;
     let tree = source.is_tree();
+    let mut hit_ids: Vec<String> = Vec::new();
+    for hit in &results.skins {
+        if !hit_ids.contains(&hit.pack) {
+            hit_ids.push(hit.pack.clone());
+        }
+    }
+    let hit_packs = source
+        .packs(&hit_ids)?
+        .into_iter()
+        .map(|row| PackDto::new(row, installed))
+        .collect();
     Ok(SearchDto {
+        hit_packs,
         total: results.total,
         all: results.all,
         packs: results
@@ -1716,6 +1730,8 @@ mod tests {
                 thumbnail: previews::skin_url("blues", &hashes["blues"], 0),
             }]
         );
+        let hit_packs: Vec<&str> = found.hit_packs.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(hit_packs, ["blues"], "the pack to open it in");
         assert!(dir
             .join(format!("catalog-{}.sqlite", head.generation))
             .is_file());
