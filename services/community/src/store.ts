@@ -14,7 +14,7 @@ import { now } from "./bytes";
 import type { Env } from "./env";
 import { fail } from "./http";
 import { PACK_VERSION } from "./limits";
-import { record } from "./notify";
+import { alert, record } from "./notify";
 import { REASONS, explain, isReason } from "./terms";
 import { slug, type Flag, type Manifest } from "./text";
 
@@ -37,6 +37,10 @@ export type Submission = {
   reasons: string;
   note: string;
   pack_id: string | null;
+  /** The handle pack.json credits, as it was when the pack was approved. */
+  author: string | null;
+  /** The folder in community/packs it was pulled into, once it has been. */
+  folder: string | null;
   ip_hash: string;
   created_at: number;
   finalized_at: number | null;
@@ -97,7 +101,10 @@ export function authorView(s: Submission) {
     license: s.license,
     created_at: s.created_at,
     decided_at: s.decided_at,
-    pack_id: s.status === "approved" ? s.pack_id : null,
+    // The name it has in the community once it is there, which is the folder it was pulled into.
+    pack_id: s.status === "approved" ? (s.folder ?? s.pack_id) : null,
+    // In community/packs already, where only the maintainer can take it out again.
+    pulled: s.exported_at !== null,
     reasons: explain(reasonsOf(s)),
     note: s.note,
   };
@@ -133,13 +140,18 @@ export function packJson(s: Submission, handle: string): string {
   return `${JSON.stringify(pack, null, 2)}\n`;
 }
 
-/** A folder name for an approved pack: its name as a slug, numbered when another approved pack has it. */
+/**
+ * A folder name for an approved pack: its name as a slug, numbered when another approved pack has
+ * it, here or as the folder it was pulled into.
+ */
 async function freePackId(env: Env, name: string): Promise<string> {
   const base = slug(name) || "pack";
   for (let n = 1; n <= 99; n++) {
     const suffix = n === 1 ? "" : `-${n}`;
     const id = `${base.slice(0, 40 - suffix.length).replace(/-+$/, "")}${suffix}`;
-    const taken = await env.DB.prepare("SELECT 1 FROM submissions WHERE pack_id = ?1 AND status = 'approved'").bind(id).first();
+    const taken = await env.DB.prepare("SELECT 1 FROM submissions WHERE status = 'approved' AND (pack_id = ?1 OR folder = ?1)")
+      .bind(id)
+      .first();
     if (!taken) return id;
   }
   throw fail(409, "name_taken", "Every folder name for that pack is taken. Rename it and approve it again.");
@@ -162,7 +174,7 @@ export async function approve(env: Env, id: string, note: string): Promise<{ pac
   if (!WAITING.includes(s.status)) throw notWaiting();
   const author = await env.DB.prepare("SELECT handle FROM keys WHERE key = ?1").bind(s.key).first<{ handle: string }>();
   if (!author) throw notFound();
-  const packId = await claimPackId(env, s, note);
+  const packId = await claimPackId(env, s, author.handle, note);
   try {
     for (const item of await loadItems(env, id)) {
       const held = await env.HOLD.get(`hold/${id}/${item.sha256}`);
@@ -179,7 +191,7 @@ export async function approve(env: Env, id: string, note: string): Promise<{ pac
     });
   } catch (e) {
     // Back to waiting, with nothing left half-published.
-    await env.DB.prepare("UPDATE submissions SET status = ?2, pack_id = NULL, decided_at = NULL WHERE id = ?1")
+    await env.DB.prepare("UPDATE submissions SET status = ?2, pack_id = NULL, author = NULL, decided_at = NULL WHERE id = ?1")
       .bind(id, s.status)
       .run();
     await removeAll(env.PUBLIC, `packs/${packId}/`);
@@ -195,16 +207,20 @@ export async function approve(env: Env, id: string, note: string): Promise<{ pac
   return { pack_id: packId };
 }
 
-/** Marks the pack approved under a free folder name, trying the next name if another approval took this one. */
-async function claimPackId(env: Env, s: Submission, note: string): Promise<string> {
+/**
+ * Marks the pack approved under a free folder name, trying the next name if another approval took
+ * this one. The handle pack.json credits is kept with it, so the pack is exported under the name it
+ * was published with even if the author changes theirs later.
+ */
+async function claimPackId(env: Env, s: Submission, handle: string, note: string): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const packId = await freePackId(env, s.name);
     try {
       const done = await env.DB.prepare(
-        `UPDATE submissions SET status = 'approved', pack_id = ?2, decided_at = ?3, reasons = '[]', note = ?4
+        `UPDATE submissions SET status = 'approved', pack_id = ?2, author = ?3, decided_at = ?4, reasons = '[]', note = ?5
          WHERE id = ?1 AND status IN ('pending', 'flagged')`,
       )
-        .bind(s.id, packId, now(), note)
+        .bind(s.id, packId, handle, now(), note)
         .run();
       if (done.meta.changes !== 1) throw notWaiting();
       return packId;
@@ -266,9 +282,15 @@ export async function reject(env: Env, id: string, reasons: string[], note: stri
 
 /**
  * Takes a pack down: out of the public bucket at once, whether it was approved or still waiting.
- * A pack already pulled into the repository has to be removed there too, which the answer says.
+ * A pack already pulled into the repository has to be removed there too, from the folder the
+ * answer names.
  */
-export async function takedown(env: Env, id: string, reasons: string[], note: string): Promise<{ pack_id: string | null; exported: boolean }> {
+export async function takedown(
+  env: Env,
+  id: string,
+  reasons: string[],
+  note: string,
+): Promise<{ pack_id: string | null; exported: boolean; folder: string | null }> {
   const s = await loadSubmission(env, id);
   if (!s) throw notFound();
   const done = await env.DB.prepare(
@@ -281,12 +303,19 @@ export async function takedown(env: Env, id: string, reasons: string[], note: st
   if (s.pack_id && s.status === "approved") await removeAll(env.PUBLIC, `packs/${s.pack_id}/`);
   await removeAll(env.HOLD, `hold/${id}/`);
   await consequences(env, s, reasons);
-  await record(env, "takedown", id, `${reasons.join(",")}${s.exported_at ? " (pulled into the repository)" : ""}`, "high");
-  return { pack_id: s.status === "approved" ? s.pack_id : null, exported: s.exported_at !== null };
+  const folder = s.exported_at ? repoFolder(s) : null;
+  await record(env, "takedown", id, `${reasons.join(",")}${folder ? ` (remove community/packs/${folder} too)` : ""}`, "high");
+  return { pack_id: s.status === "approved" ? s.pack_id : null, exported: folder !== null, folder };
 }
 
-/** The author's own withdrawal. A pack pulled into the repository already is noted for the digest. */
-export async function withdraw(env: Env, s: Submission): Promise<void> {
+/** The folder a pulled pack has in community/packs. */
+const repoFolder = (s: Submission) => s.folder ?? s.pack_id ?? "";
+
+/**
+ * The author's own withdrawal. A pack pulled into the repository already stays in the app until
+ * the maintainer takes it out there, so they are told at once rather than in the digest.
+ */
+export async function withdraw(env: Env, s: Submission, ctx: ExecutionContext): Promise<void> {
   const done = await env.DB.prepare(
     `UPDATE submissions SET status = 'withdrawn', decided_at = ?2
      WHERE id = ?1 AND status IN ('open', 'pending', 'flagged', 'approved')`,
@@ -296,6 +325,21 @@ export async function withdraw(env: Env, s: Submission): Promise<void> {
   if (done.meta.changes !== 1) throw fail(409, "not_live", "That pack can't be withdrawn now.");
   if (s.pack_id && s.status === "approved") await removeAll(env.PUBLIC, `packs/${s.pack_id}/`);
   await removeAll(env.HOLD, `hold/${s.id}/`);
-  const pulled = s.exported_at ? `; it was pulled into the repository as ${s.pack_id}, so remove it there too` : "";
-  await record(env, "withdrawn", s.id, `withdrawn by its author${pulled}`);
+  const folder = s.exported_at ? repoFolder(s) : null;
+  await record(env, "withdrawn", s.id, `withdrawn by its author${folder ? `; remove community/packs/${folder} too` : ""}`);
+  if (folder) {
+    ctx.waitUntil(
+      alert(
+        env,
+        {
+          title: `Withdrawn: "${s.name}" needs taking out of the repository`,
+          lines: [
+            `Its author withdrew it. It was pulled into the repository as community/packs/${folder}, so it stays in the app until that folder is removed.`,
+            "Remove the folder, run folderskin-tools packs index, and commit.",
+          ],
+        },
+        "flagged",
+      ),
+    );
+  }
 }

@@ -72,7 +72,7 @@ describe("the maintainer's endpoints", () => {
     expect(new Uint8Array(await file.arrayBuffer())).toEqual(list[1].bytes);
     expect((await admin("GET", `/v1/admin/exports/${id}/files/..%2Fpack.json`)).status).toBe(404);
 
-    expect(await (await admin("POST", `/v1/admin/exports/${id}/done`, {})).json()).toEqual({ exported: true });
+    expect(await (await admin("POST", `/v1/admin/exports/${id}/done`, {})).json()).toEqual({ exported: true, folder: "night-prints" });
     const after = (await (await admin("GET", "/v1/admin/exports")).json()) as { packs: { id: string }[] };
     expect(after.packs.some((p) => p.id === id)).toBe(false);
 
@@ -129,8 +129,61 @@ describe("the maintainer's endpoints", () => {
     await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
     expect((await env.PUBLIC.list({ prefix: "packs/soon-gone/" })).objects).toHaveLength(2);
     const down = await admin("POST", `/v1/admin/submissions/${id}/takedown`, { reasons: ["brand"] });
-    expect(await down.json()).toEqual({ status: "taken_down", pack_id: "soon-gone", exported: false });
+    expect(await down.json()).toEqual({ status: "taken_down", pack_id: "soon-gone", exported: false, folder: null });
     expect((await env.PUBLIC.list({ prefix: "packs/soon-gone/" })).objects).toEqual([]);
+  });
+
+  it("export a pack credited as it was approved, even after its author changes their name", async () => {
+    const who = await author("first-name");
+    const id = await submit(who, pictures(1, 50), { name: "Renamed later" });
+    await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
+    const renamed = await call(await signed(who, "POST", "/v1/me", { handle: "second-name" }));
+    expect(await renamed.json()).toEqual({ handle: "second-name" });
+
+    const exported = (await (await admin("GET", "/v1/admin/exports")).json()) as { packs: { id: string; handle: string }[] };
+    expect(exported.packs.find((p) => p.id === id)).toMatchObject({ handle: "first-name" });
+    const manifest = (await (await admin("GET", `/v1/admin/exports/${id}/pack.json`)).json()) as { author: string };
+    expect(manifest.author).toBe("first-name");
+  });
+
+  it("go by the folder a pack was pulled into when a pack from GitHub had its name", async () => {
+    const who = await author("clash-author");
+    const id = await submit(who, pictures(1, 51), { name: "Sky moods" });
+    expect(await (await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" })).json()).toMatchObject({ pack_id: "sky-moods" });
+    const bad = await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "../sky-moods" });
+    expect((await errorOf(bad)).code).toBe("bad_folder");
+    // `pull` found community/packs/sky-moods taken by a pack from GitHub, and wrote sky-moods-2.
+    const done = await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "sky-moods-2" });
+    expect(await done.json()).toEqual({ exported: true, folder: "sky-moods-2" });
+    expect((await mine(who))[0]).toMatchObject({ id, status: "approved", pack_id: "sky-moods-2", pulled: true });
+
+    // A report about the pack from GitHub isn't about this one; one about its own folder is.
+    const repo = "https://github.com/prajwal-svm/folderskin/tree/main/community/packs";
+    const aboutOf = async (target: string) => {
+      expect((await call(postJson("/v1/reports", { target, reason: "copyright" }))).status).toBe(201);
+      return (await env.DB.prepare("SELECT submission FROM reports WHERE target = ?1").bind(target).first<{ submission: string | null }>())?.submission;
+    };
+    expect(await aboutOf(`${repo}/sky-moods`)).toBeNull();
+    expect(await aboutOf(`${repo}/sky-moods-2/`)).toBe(id);
+
+    const down = await admin("POST", `/v1/admin/submissions/${id}/takedown`, { reasons: ["brand"] });
+    expect(await down.json()).toEqual({ status: "taken_down", pack_id: "sky-moods", exported: true, folder: "sky-moods-2" });
+  });
+
+  it("tell the maintainer at once when a pack already in the repository is withdrawn", async () => {
+    const who = await author("changed-mind");
+    const id = await submit(who, pictures(1, 52), { name: "Second thoughts" });
+    await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
+    await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "second-thoughts" });
+
+    const hook = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
+    const gone = await call(await signed(who, "DELETE", `/v1/packs/${id}`), { NOTIFY_WEBHOOK_URL: "https://ntfy.sh/folderskin-topic" });
+    expect(await gone.json()).toEqual({ status: "withdrawn" });
+    expect(hook).toHaveBeenCalledTimes(1);
+    const text = String(hook.mock.calls[0][1]?.body);
+    expect(text).toContain('Withdrawn: "Second thoughts" needs taking out of the repository');
+    expect(text).toContain("community/packs/second-thoughts");
+    expect((await mine(who))[0]).toMatchObject({ id, status: "withdrawn", pulled: true });
   });
 
   it("pause and resume sharing with the kill switch", async () => {

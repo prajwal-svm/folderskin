@@ -116,6 +116,8 @@ export type ReviewInfo = {
   license: string;
   source: string;
   notes: string;
+  /** Where it is in community/packs, once it has been pulled there. */
+  folder: string | null;
   flags: { code: string; severity: string; detail: string }[];
   sheets: number;
   reports: { reason: string; details: string }[];
@@ -129,6 +131,7 @@ function details(info: ReviewInfo, token: string): string {
     ? `<ul class="flags">${info.reports.map((r) => `<li>${e(r.reason)}: ${e(r.details || "no details")}</li>`).join("")}</ul>`
     : "none";
   const sheets = Array.from({ length: info.sheets }, (_, n) => `<img class="sheet" alt="Contact sheet ${n + 1}" src="/l/${e(token)}/sheets/${n}">`).join("");
+  const pulled = info.folder ? `<dt>Pulled into</dt><dd>community/packs/${e(info.folder)}</dd>` : "";
   return `<div class="card"><dl>
 <dt>Pack</dt><dd>${e(info.name)}</dd>
 <dt>By</dt><dd>${e(info.handle)} (${e(info.tier)})</dd>
@@ -137,7 +140,7 @@ function details(info: ReviewInfo, token: string): string {
 <dt>Licence</dt><dd>${e(info.license)}</dd>
 <dt>Source</dt><dd>${e(info.source)}</dd>
 <dt>Credits</dt><dd class="lines">${e(info.notes || "none given")}</dd>
-<dt>Flags</dt><dd>${flags}</dd>
+${pulled}<dt>Flags</dt><dd>${flags}</dd>
 <dt>Reports</dt><dd>${reports}</dd>
 </dl></div>${sheets}`;
 }

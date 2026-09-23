@@ -35,7 +35,13 @@ CREATE TABLE submissions (
   flags TEXT NOT NULL DEFAULT '[]',
   reasons TEXT NOT NULL DEFAULT '[]',
   note TEXT NOT NULL DEFAULT '',
+  -- Once approved: its folder name in the public bucket, and the handle pack.json credits. The
+  -- handle is kept as it was then, since the author may change theirs later.
   pack_id TEXT,
+  author TEXT,
+  -- The folder `folderskin-tools community pull` wrote it to in community/packs: pack_id, unless
+  -- a pack from GitHub had that name already.
+  folder TEXT,
   ip_hash TEXT NOT NULL DEFAULT '',
   -- A hash of what was declared, so sending the same pack again resumes this upload.
   fingerprint TEXT NOT NULL DEFAULT '',
@@ -48,6 +54,7 @@ CREATE INDEX submissions_by_key ON submissions (key, created_at DESC);
 CREATE INDEX submissions_by_status ON submissions (status, finalized_at);
 -- Two approved packs never share a folder name.
 CREATE UNIQUE INDEX packs_by_id ON submissions (pack_id) WHERE status = 'approved';
+CREATE INDEX packs_by_folder ON submissions (folder) WHERE folder IS NOT NULL;
 
 -- The pictures a submission declared, and whether each has arrived.
 CREATE TABLE items (

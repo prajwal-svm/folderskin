@@ -15,7 +15,7 @@ import { makeLink } from "./links";
 import { alert, record } from "./notify";
 import { takeAll } from "./quota";
 import { SUBMISSION_ID } from "./store";
-import { hasText, isGithubUser } from "./text";
+import { hasText, isPackId } from "./text";
 
 export const REPORT_REASONS = ["csam", "ncii", "copyright", "terms", "other"] as const;
 type ReportReason = (typeof REPORT_REASONS)[number];
@@ -29,17 +29,24 @@ const WORDS: Record<ReportReason, string> = {
   other: "something else",
 };
 
-/** The submission a report is about, when `target` names one: its id, or an approved pack's folder name. */
+/**
+ * The submission a report is about, when `target` names one: its id, or an approved pack's folder
+ * name. A pack pulled into community/packs goes by the folder it was written to there, which is
+ * the name people see; a folder of that name that isn't one of these belongs to a pack from GitHub.
+ */
 async function resolve(env: Env, target: string): Promise<string | null> {
   const id = target.match(/sub_[a-z2-7]{20}/)?.[0];
   if (id && SUBMISSION_ID.test(id)) {
     const row = await env.DB.prepare("SELECT id FROM submissions WHERE id = ?1").bind(id).first<{ id: string }>();
     if (row) return row.id;
   }
-  const packId = target.trim().toLowerCase().replace(/^.*\//, "");
-  if (isGithubUser(packId)) {
-    const row = await env.DB.prepare("SELECT id FROM submissions WHERE pack_id = ?1 AND status = 'approved'")
-      .bind(packId)
+  const folder = target.trim().toLowerCase().replace(/\/+$/, "").replace(/^.*\//, "");
+  if (isPackId(folder)) {
+    const row = await env.DB.prepare(
+      `SELECT id FROM submissions WHERE status = 'approved' AND (folder = ?1 OR (folder IS NULL AND pack_id = ?1))
+       ORDER BY folder IS NULL LIMIT 1`,
+    )
+      .bind(folder)
       .first<{ id: string }>();
     if (row) return row.id;
   }

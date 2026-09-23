@@ -38,6 +38,7 @@ async function info(env: Env, id: string): Promise<ReviewInfo | null> {
     license: s.license,
     source: s.source,
     notes: s.notes,
+    folder: s.exported_at ? (s.folder ?? s.pack_id) : null,
     flags: flagsOf(s),
     sheets: s.sheets,
     reports: results,
@@ -103,8 +104,8 @@ export async function actOnLink(request: Request, env: Env, token: string): Prom
         await reject(env, link.subject, reasons, "");
         return html(messagePage("Turned down", "The author sees the reason in FolderSkin, and the pictures are deleted."));
       case "takedown": {
-        const { exported } = await takedown(env, link.subject, reasons, "");
-        const repo = exported ? " It was pulled into the repository already, so remove it there too." : "";
+        const { folder } = await takedown(env, link.subject, reasons, "");
+        const repo = folder ? ` It was pulled into the repository already, so remove community/packs/${folder} there too.` : "";
         return html(messagePage("Taken down", `It's gone from FolderSkin's storage.${repo}`));
       }
       case "pause":

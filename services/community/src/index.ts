@@ -38,7 +38,7 @@ const ROUTES: Route[] = [
   ["PUT", new RegExp(`^/v1/submissions/${ID}/items/([0-9a-f]{64})$`), (req, env, _, [id, sha]) => submissions.putItem(req, env, id, sha)],
   ["PUT", new RegExp(`^/v1/submissions/${ID}/sheets/([0-3])$`), (req, env, _, [id, n]) => submissions.putSheet(req, env, id, Number(n))],
   ["POST", new RegExp(`^/v1/submissions/${ID}/finalize$`), (req, env, ctx, [id]) => submissions.finalize(req, env, ctx, id)],
-  ["DELETE", new RegExp(`^/v1/packs/${ID}$`), (req, env, _, [id]) => submissions.remove(req, env, id)],
+  ["DELETE", new RegExp(`^/v1/packs/${ID}$`), (req, env, ctx, [id]) => submissions.remove(req, env, ctx, id)],
   ["POST", /^\/v1\/reports$/, (req, env, ctx) => report(req, env, ctx)],
 
   ["GET", /^\/v1\/admin\/queue$/, (req, env) => admin.queue(req, env)],

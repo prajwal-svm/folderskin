@@ -4,8 +4,9 @@
  *
  * - urgent: a report of abuse, or a pack the checks flagged as sexual, hateful or involving a
  *   child. Both channels at once, at the webhook's highest priority.
- * - flagged: a pack whose words or pictures a check caught (profanity, say). The webhook at once,
- *   at normal priority, so it can be looked at before it waits a day.
+ * - flagged: a pack whose words or pictures a check caught (profanity, say), or a published pack
+ *   its author withdrew that has to come out of the repository. The webhook at once, at normal
+ *   priority, so it can be dealt with before it waits a day.
  * - digest: everything else, once a day from the cron trigger, by both channels.
  *
  * Every notice is also written to `events`. The webhook's address is a secret (it carries a

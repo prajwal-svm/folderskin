@@ -13,7 +13,7 @@
  *   GET  /v1/admin/exports                            approved packs not yet pulled into the repository
  *   GET  /v1/admin/exports/<id>/pack.json             …and each one's files, for `community pull`
  *   GET  /v1/admin/exports/<id>/files/<file>
- *   POST /v1/admin/exports/<id>/done
+ *   POST /v1/admin/exports/<id>/done                  {"folder"}: the folder it was written to
  */
 import { isKey, requireAdmin, verifySigned } from "./auth";
 import { now } from "./bytes";
@@ -33,7 +33,7 @@ import {
   takedown,
   type Submission,
 } from "./store";
-import { hasText, isPictureFileName } from "./text";
+import { hasText, isPackId, isPictureFileName } from "./text";
 
 async function admin(request: Request, env: Env, maxBody = 0) {
   return verifySigned(request, env, maxBody, (key) => requireAdmin(env, key));
@@ -66,6 +66,7 @@ function summary(s: Submission & { handle?: string; tier?: string; reports?: num
     created_at: s.created_at,
     finalized_at: s.finalized_at,
     pack_id: s.pack_id,
+    folder: s.folder,
   };
 }
 
@@ -193,11 +194,13 @@ export async function pause(request: Request, env: Env): Promise<Response> {
 
 export async function exportList(request: Request, env: Env): Promise<Response> {
   await admin(request, env);
+  // The handle pack.json was written with at approval, not the author's name now: `pull` checks
+  // that the two agree.
   const { results } = await env.DB.prepare(
-    `SELECT s.id, s.pack_id, s.name, s.license, s.decided_at, k.handle
-     FROM submissions s JOIN keys k ON k.key = s.key
-     WHERE s.status = 'approved' AND s.exported_at IS NULL
-     ORDER BY s.decided_at ASC LIMIT 50`,
+    `SELECT id, pack_id, name, license, decided_at, author AS handle
+     FROM submissions
+     WHERE status = 'approved' AND exported_at IS NULL
+     ORDER BY decided_at ASC LIMIT 50`,
   ).all<{ id: string; pack_id: string; name: string; license: string; decided_at: number; handle: string }>();
   const packs = [];
   for (const row of results) {
@@ -228,10 +231,22 @@ export async function exportFile(request: Request, env: Env, id: string, file: s
   return stream(env.PUBLIC, `packs/${s.pack_id}/${file}`);
 }
 
+/**
+ * Records that a pack is in community/packs now, and under which folder: `pull` numbers the name
+ * when a pack from GitHub has it already, and reports, takedowns and the author all have to go by
+ * the folder it is really in.
+ */
 export async function exportDone(request: Request, env: Env, id: string): Promise<Response> {
-  await admin(request, env, MAX_JSON_BYTES);
+  const signed = await admin(request, env, MAX_JSON_BYTES);
+  const { folder } = parseJson(signed.body);
   const s = await approvedPack(env, id);
-  await env.DB.prepare("UPDATE submissions SET exported_at = ?2 WHERE id = ?1").bind(id, now()).run();
-  await record(env, "exported", id, s.pack_id);
-  return json({ exported: true });
+  // An older folderskin-tools says nothing, and only ever wrote the pack under its own name.
+  let written = s.pack_id;
+  if (folder !== undefined) {
+    if (!isPackId(folder)) throw fail(400, "bad_folder", "A folder name is lower-case letters and digits joined by single dashes.");
+    written = folder;
+  }
+  await env.DB.prepare("UPDATE submissions SET exported_at = ?2, folder = ?3 WHERE id = ?1").bind(id, now(), written).run();
+  await record(env, "exported", id, written);
+  return json({ exported: true, folder: written });
 }

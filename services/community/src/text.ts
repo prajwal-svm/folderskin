@@ -102,6 +102,11 @@ export function handleProblem(name: unknown): string | null {
   return null;
 }
 
+/** A pack's folder name (`pack::is_pack_id`): lower-case letters and digits in words joined by single dashes, at most 40 characters. */
+export function isPackId(id: unknown): id is string {
+  return typeof id === "string" && id.length <= 40 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(id) && !isWindowsDeviceName(id);
+}
+
 /** The folder name a pack gets from its name (`pack::slug`). */
 export function slug(name: string): string {
   let out = "";

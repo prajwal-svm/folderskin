@@ -365,13 +365,13 @@ export async function list(request: Request, env: Env): Promise<Response> {
 }
 
 /** The author takes a pack back: out of the queue, or out of the public bucket if it was approved. */
-export async function remove(request: Request, env: Env, id: string): Promise<Response> {
+export async function remove(request: Request, env: Env, ctx: ExecutionContext, id: string): Promise<Response> {
   // A banned key can still take its own packs down.
   const { signer: s } = await verifySigned(request, env, 0, async (key) => {
     const s = await loadSubmission(env, id);
     if (!s || s.key !== key) throw fail(404, "not_found", "There's no such pack.");
     return s;
   });
-  await withdraw(env, s);
+  await withdraw(env, s, ctx);
   return json({ status: "withdrawn" });
 }
