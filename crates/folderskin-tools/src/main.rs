@@ -194,10 +194,12 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             let answer = runtime
                 .block_on(client.takedown(&id, &reasons, &note))
                 .map_err(|e| e.to_string())?;
-            if answer["exported"].as_bool() == Some(true) {
+            // The folder it was pulled into, which isn't its name at the service when a pack from
+            // GitHub had that name first.
+            if let Some(folder) = answer["folder"].as_str() {
                 println!(
-                    "It was pulled into the repository already: remove community/packs/{} there too.",
-                    answer["pack_id"].as_str().unwrap_or("?")
+                    "It was pulled into the repository already: remove community/packs/{folder} \
+                     there too, then run `folderskin-tools packs index`."
                 );
             }
             show(answer);
@@ -345,9 +347,9 @@ impl pull::Exports for ServiceExports {
             .block_on(self.client.export_file(id, file))
             .map_err(|e| e.to_string())
     }
-    fn done(&mut self, id: &str) -> Result<(), String> {
+    fn done(&mut self, id: &str, folder: &str) -> Result<(), String> {
         self.runtime
-            .block_on(self.client.export_done(id))
+            .block_on(self.client.export_done(id, folder))
             .map_err(|e| e.to_string())
     }
 }

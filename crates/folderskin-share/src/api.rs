@@ -101,6 +101,10 @@ pub struct Submission {
     /// The pack's folder name once it is approved.
     #[serde(default)]
     pub pack_id: Option<String>,
+    /// Whether it has been pulled into community/packs, from where only the maintainer can take
+    /// it out again.
+    #[serde(default)]
+    pub pulled: bool,
     #[serde(default)]
     pub reasons: Vec<Reason>,
     /// The maintainer's own words, when they left some.
@@ -122,6 +126,7 @@ pub struct Export {
     pub pack_id: String,
     pub name: String,
     pub license: String,
+    /// The handle its pack.json credits, as it was when the pack was approved.
     pub handle: String,
     pub files: Vec<ExportFile>,
 }

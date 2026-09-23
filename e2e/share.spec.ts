@@ -68,9 +68,11 @@ test("a verified computer sends straight away, and sees why a pack was turned do
   const approved = mine.getByRole("listitem").filter({ hasText: "Night prints" });
   await expect(approved.getByText("published as night-prints")).toBeVisible();
   await approved.getByRole("button", { name: "Withdraw" }).click();
-  await expect(approved.getByText(/leaves the community for everyone/)).toBeVisible();
+  // It's in the community packs already, which only the maintainer can take it out of.
+  await expect(approved.getByText(/leaves the community for everyone once FolderSkin's maintainer has taken it out/)).toBeVisible();
   await approved.getByRole("button", { name: "Withdraw it" }).click();
   await expect(approved.getByText("Withdrawn")).toBeVisible();
+  await expect(approved.getByText(/maintainer has been told to take it out/)).toBeVisible();
 
   await mine.getByRole("button", { name: "Back to sharing" }).click();
   await fillPack(dialog);

@@ -5,8 +5,8 @@
 //! and a `pack.json`, credited to the handle of the computer that sent it. Every file is checked
 //! against the size and SHA-256 the service recorded when it was uploaded, and the finished folder
 //! against the same rules `packs check` holds every pack to, before it takes its place. Only then
-//! is the service told the pack has been pulled, so a pack that fails comes back next time.
-//! From there it is an ordinary change to review, commit and index.
+//! is the service told the pack has been pulled, and under which folder, so a pack that fails
+//! comes back next time. From there it is an ordinary change to review, commit and index.
 
 use crate::packs;
 use folderskin_core::pack::{self, Pack, MANIFEST_FILE};
@@ -19,8 +19,8 @@ pub trait Exports {
     fn list(&mut self) -> Result<Vec<Export>, String>;
     fn manifest(&mut self, id: &str) -> Result<Vec<u8>, String>;
     fn file(&mut self, id: &str, file: &str) -> Result<Vec<u8>, String>;
-    /// Tells the service the pack is in the repository now.
-    fn done(&mut self, id: &str) -> Result<(), String>;
+    /// Tells the service the pack is in the repository now, in `folder`.
+    fn done(&mut self, id: &str, folder: &str) -> Result<(), String>;
 }
 
 /// A pack that was written.
@@ -28,6 +28,9 @@ pub trait Exports {
 pub struct Pulled {
     /// The submission it came from.
     pub id: String,
+    /// Its folder name in community/packs: the service's name for it, numbered when a pack from
+    /// GitHub had that name already.
+    pub pack_id: String,
     pub folder: PathBuf,
     pub name: String,
     pub author: String,
@@ -51,7 +54,7 @@ pub fn pull(source: &mut dyn Exports, packs_dir: &Path) -> Result<Report, String
             Ok(pulled) => {
                 // A pack written but not marked done would be written again next time, under a
                 // new folder name; say so rather than leave it to be found.
-                if let Err(e) = source.done(&export.id) {
+                if let Err(e) = source.done(&export.id, &pulled.pack_id) {
                     report.problems.push(format!(
                         "{}: written to {}, but the service wasn't told ({e}); delete the folder \
                          before pulling again",
@@ -112,6 +115,7 @@ fn pull_one(source: &mut dyn Exports, export: &Export, packs_dir: &Path) -> Resu
     Ok(Pulled {
         id: export.id.clone(),
         folder: packs_dir.join(&name),
+        pack_id: name,
         name: pack.name,
         author: pack.author,
         skins: pack.skins.len(),
@@ -148,7 +152,7 @@ mod tests {
         exports: Vec<Export>,
         manifests: HashMap<String, Vec<u8>>,
         files: HashMap<(String, String), Vec<u8>>,
-        done: Vec<String>,
+        done: Vec<(String, String)>,
     }
 
     impl Exports for Fake {
@@ -164,8 +168,8 @@ mod tests {
                 .cloned()
                 .ok_or("gone".into())
         }
-        fn done(&mut self, id: &str) -> Result<(), String> {
-            self.done.push(id.to_string());
+        fn done(&mut self, id: &str, folder: &str) -> Result<(), String> {
+            self.done.push((id.to_string(), folder.to_string()));
             Ok(())
         }
     }
@@ -233,7 +237,13 @@ mod tests {
         assert!(report.problems.is_empty(), "{:?}", report.problems);
         assert_eq!(report.pulled.len(), 1);
         assert_eq!(report.pulled[0].author, "sunny-otter");
-        assert_eq!(source.done, ["sub_aaaaaaaaaaaaaaaaaaaa"]);
+        assert_eq!(
+            source.done,
+            [(
+                "sub_aaaaaaaaaaaaaaaaaaaa".to_string(),
+                "sky-moods".to_string()
+            )]
+        );
 
         let checked = packs::check(&dir).unwrap();
         assert!(checked.problems.is_empty(), "{:?}", checked.problems);
@@ -257,6 +267,14 @@ mod tests {
         assert_eq!(
             report.pulled[0].folder,
             dir.join(packs::PACKS_DIR).join("sky-moods-2")
+        );
+        // The service is told where it really went, so reports and takedowns name that folder.
+        assert_eq!(
+            source.done,
+            [(
+                "sub_bbbbbbbbbbbbbbbbbbbb".to_string(),
+                "sky-moods-2".to_string()
+            )]
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

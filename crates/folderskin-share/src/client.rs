@@ -435,11 +435,18 @@ impl Client {
         self.request(Method::GET, &path, None, true, MAX_FILE).await
     }
 
-    pub async fn export_done(&self, id: &str) -> Result<(), Error> {
+    /// Tells the service a pack is in community/packs now, in `folder`: the name it gave the pack,
+    /// or a numbered one when a pack from GitHub had that name already.
+    pub async fn export_done(&self, id: &str, folder: &str) -> Result<(), Error> {
         let path = format!("/v1/admin/exports/{}/done", segment(id)?);
-        self.json::<Value>(Method::POST, &path, Some(json!({})), true)
-            .await
-            .map(drop)
+        self.json::<Value>(
+            Method::POST,
+            &path,
+            Some(json!({ "folder": segment(folder)? })),
+            true,
+        )
+        .await
+        .map(drop)
     }
 }
 

@@ -381,6 +381,7 @@ function seedShared() {
       created_at: now - 3 * day,
       decided_at: now - 2 * day,
       pack_id: null,
+      pulled: false,
       reasons: [{ code: "brand", term: 13, message: "The pictures use someone else's logo, trade mark or characters." }],
       note: "The cat in the third picture is a cartoon character that belongs to a studio.",
     },
@@ -393,6 +394,7 @@ function seedShared() {
       created_at: now - 9 * day,
       decided_at: now - 7 * day,
       pack_id: "night-prints",
+      pulled: true,
       reasons: [],
       note: "",
     },
@@ -744,6 +746,7 @@ export const mockApi = {
       created_at: Math.floor(Date.now() / 1000),
       decided_at: null,
       pack_id: null,
+      pulled: false,
       reasons: [],
       note: "",
     });

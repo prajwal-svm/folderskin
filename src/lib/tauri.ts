@@ -222,6 +222,8 @@ export type MySubmission = {
   decided_at: number | null;
   /** The pack's folder name once approved. */
   pack_id: string | null;
+  /** Whether it is in the community packs already, from where only the maintainer can take it out. */
+  pulled: boolean;
   /** Why it was turned down or taken down: a rule in the pack terms, and a sentence. */
   reasons: { code: string; term: number; message: string }[];
   /** The maintainer's own words, when they left some. */
