@@ -37,6 +37,8 @@ CREATE TABLE submissions (
   note TEXT NOT NULL DEFAULT '',
   pack_id TEXT,
   ip_hash TEXT NOT NULL DEFAULT '',
+  -- A hash of what was declared, so sending the same pack again resumes this upload.
+  fingerprint TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   finalized_at INTEGER,
   decided_at INTEGER,

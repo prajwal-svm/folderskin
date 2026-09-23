@@ -14,7 +14,7 @@
  * its name promises, its dimensions from its header and no animation. Nothing is decoded here.
  */
 import { requireAccount, verifySigned, type Account } from "./auth";
-import { now, randomId } from "./bytes";
+import { dayOf, now, randomId, sha256Hex } from "./bytes";
 import type { Env } from "./env";
 import { fail, json, parseJson } from "./http";
 import { CONTENT_TYPES, formatOf, inspect, PictureError } from "./images";
@@ -36,8 +36,8 @@ import {
 } from "./limits";
 import { makeLink } from "./links";
 import { alert, record } from "./notify";
-import { globalDailyPictures, maxWaiting, queueFull, requireAccepting, takeAll } from "./quota";
-import { authorView, loadItems, loadSubmission, SHA256, withdraw, type Submission } from "./store";
+import { giveBack, globalDailyPictures, maxWaiting, queueFull, requireAccepting, takeAll } from "./quota";
+import { authorView, loadItems, loadSubmission, removeAll, SHA256, withdraw, type Submission } from "./store";
 import { hasText, isLicense, readManifest, textFlags, type Flag } from "./text";
 import { triage } from "./triage";
 
@@ -102,10 +102,23 @@ export async function create(request: Request, env: Env): Promise<Response> {
     .first();
   if (blocked) throw fail(400, "blocked", "One of these pictures was turned down before for what it shows, so it can't be shared.");
 
+  // Sending the same pack again, after a dropped connection or a closed laptop, picks up where it
+  // stopped rather than starting over and counting against the day twice.
+  const fingerprint = await sha256Hex(JSON.stringify([manifest, body.license, body.source, notes, items]));
+  const unfinished = await env.DB.prepare("SELECT id, sheets FROM submissions WHERE key = ?1 AND status = 'open' AND fingerprint = ?2")
+    .bind(account.key, fingerprint)
+    .first<{ id: string; sheets: number }>();
+  if (unfinished) {
+    const { results } = await env.DB.prepare("SELECT sha256 FROM items WHERE submission = ?1 AND received = 0 ORDER BY rowid")
+      .bind(unfinished.id)
+      .all<{ sha256: string }>();
+    return json({ submission_id: unfinished.id, need: results.map((r) => r.sha256), sheets: unfinished.sheets });
+  }
+  // Only one pack is on its way at a time: a different one gives up whatever was left unfinished.
+  await giveUpUnfinished(env, account.key);
+
   const limits = TIERS[account.tier];
-  const waiting = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM submissions WHERE key = ?1 AND status IN ('open', 'pending', 'flagged')",
-  )
+  const waiting = await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions WHERE key = ?1 AND status IN ('pending', 'flagged')")
     .bind(account.key)
     .first<{ n: number }>();
   if ((waiting?.n ?? 0) >= limits.waiting) {
@@ -148,9 +161,9 @@ export async function create(request: Request, env: Env): Promise<Response> {
   const sheets = Math.ceil(pictures / PICTURES_PER_SHEET);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO submissions (id, key, status, name, license, source, terms_version, manifest, notes, items, sheets, ip_hash, created_at)
-       VALUES (?1, ?2, 'open', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
-    ).bind(id, account.key, manifest.name, body.license, body.source, TERMS_VERSION, JSON.stringify(manifest), notes, pictures, sheets, network, at),
+      `INSERT INTO submissions (id, key, status, name, license, source, terms_version, manifest, notes, items, sheets, ip_hash, fingerprint, created_at)
+       VALUES (?1, ?2, 'open', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+    ).bind(id, account.key, manifest.name, body.license, body.source, TERMS_VERSION, JSON.stringify(manifest), notes, pictures, sheets, network, fingerprint, at),
     ...items.map((i) =>
       env.DB.prepare("INSERT INTO items (submission, sha256, file, bytes, width, height) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(
         id,
@@ -163,6 +176,33 @@ export async function create(request: Request, env: Env): Promise<Response> {
     ),
   ]);
   return json({ submission_id: id, need: items.map((i) => i.sha256), sheets }, 201);
+}
+
+/**
+ * Gives up a key's unfinished uploads when it starts a different pack. The pictures that never
+ * arrived go back to the day's quotas; the ones that did arrive still count, so starting over and
+ * over can't upload without limit.
+ */
+async function giveUpUnfinished(env: Env, key: string): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT s.id, s.ip_hash, s.created_at, COUNT(i.sha256) - COALESCE(SUM(i.received), 0) AS missing
+     FROM submissions s LEFT JOIN items i ON i.submission = s.id
+     WHERE s.key = ?1 AND s.status = 'open' GROUP BY s.id`,
+  )
+    .bind(key)
+    .all<{ id: string; ip_hash: string; created_at: number; missing: number }>();
+  const today = dayOf(now());
+  for (const s of results) {
+    const done = await env.DB.prepare("UPDATE submissions SET status = 'expired' WHERE id = ?1 AND status = 'open'").bind(s.id).run();
+    if (done.meta.changes !== 1) continue;
+    await removeAll(env.HOLD, `hold/${s.id}/`);
+    const day = dayOf(s.created_at);
+    if (day === today && s.missing > 0) {
+      await giveBack(env, day, "key:pictures", key, s.missing);
+      await giveBack(env, day, "net:pictures", s.ip_hash, s.missing);
+      await giveBack(env, day, "global", "pictures", s.missing);
+    }
+  }
 }
 
 /** The author's open submission `id`; anyone else's, or one that isn't open, is an error. */

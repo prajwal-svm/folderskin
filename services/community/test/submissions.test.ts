@@ -125,6 +125,32 @@ describe("sending a pack", () => {
     expect(await mine(other)).toEqual([]);
   });
 
+  it("picks up where it stopped when the same pack is sent again", async () => {
+    const who = await author("patchy-wifi");
+    const list = pictures(3, 14);
+    const first = await open(who, list);
+    const sha = first.need[0];
+    expect((await call(await signed(who, "PUT", `/v1/submissions/${first.submission_id}/items/${sha}`, list[0].bytes))).status).toBe(200);
+
+    const later = { ts: Math.floor(Date.now() / 1000) + 1 };
+    const again = await call(await signed(who, "POST", "/v1/submissions", await describePack(list), later));
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ submission_id: first.submission_id, need: first.need.slice(1), sheets: 1 });
+  });
+
+  it("gives up an unfinished upload for a different pack, and gives back the pictures that never came", async () => {
+    const who = await author("changed-mind");
+    const first = await open(who, pictures(3, 15));
+    const later = { ts: Math.floor(Date.now() / 1000) + 1 };
+    const second = await call(await signed(who, "POST", "/v1/submissions", await describePack(pictures(2, 16)), later));
+    expect(second.status).toBe(201);
+    const list = await mine(who);
+    expect(list.find((s) => s.id === first.submission_id)).toMatchObject({ status: "expired" });
+    // Three pictures were declared and none arrived, so only the second pack's two count today.
+    const me = (await (await call(await signed(who, "GET", "/v1/me"))).json()) as { today: { pictures: number; submissions: number } };
+    expect(me.today).toEqual({ pictures: 2, submissions: 2 });
+  });
+
   it("can be withdrawn by its author, pictures and all", async () => {
     const who = await author("second-thoughts");
     const id = await submit(who, pictures(2, 5));

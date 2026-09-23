@@ -6,8 +6,8 @@
 
 /** What a device key may do in a day, and how many of its packs can wait for review at once. */
 export const TIERS = {
-  /** A newly verified computer: one full pack a day, and one waiting at a time. */
-  probation: { submissions: 1, pictures: 50, waiting: 1 },
+  /** A newly verified computer: one pack waiting at a time, with room in the day to try again. */
+  probation: { submissions: 2, pictures: 100, waiting: 1 },
   /** Once a pack of theirs has been approved. */
   active: { submissions: 3, pictures: 150, waiting: 3 },
   /** Set by the maintainer for people they know. */
