@@ -6,13 +6,15 @@ pub mod community;
 pub mod composer;
 pub mod folder_icon;
 pub mod github;
-pub mod keys;
 pub mod onboarding;
 pub mod pack_views;
 pub mod state;
 pub mod store;
 pub mod tree;
 pub mod window;
+
+/// The saved API keys, sealed on disk; a crate of their own so the command line opens them too.
+pub use folderskin_keys as keys;
 
 use tauri::Manager;
 

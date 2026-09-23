@@ -1,4 +1,5 @@
-//! API keys for the AI assistant, encrypted in FolderSkin's own folder.
+//! API keys for the AI assistant, encrypted in FolderSkin's own folder. The app and the
+//! `folderskin` command line open the same file, so a key saved in one works in the other.
 //!
 //! Not the system keychain. macOS ties a keychain item to the code signature of the app that
 //! saved it, and every rebuild or update of an unsigned or ad-hoc signed build (which is what
@@ -22,6 +23,11 @@
 //! (damaged, its secret gone, sealed on another computer) is set aside rather than overwritten,
 //! and its keys have to be entered again. Keys never go back to the webview: it only learns
 //! whether one is saved.
+//!
+//! The app keeps the file open for as long as it runs while the command line saves keys into it,
+//! so a file that changed since it was last read is read again before a key is looked up or
+//! changed. Otherwise the app would write back the keys it read at start-up and drop the one the
+//! command line had just saved.
 
 use aws_lc_rs::aead::{Aad, Nonce, RandomizedNonceKey, AES_256_GCM};
 use aws_lc_rs::hkdf::{Salt, HKDF_SHA256};
@@ -32,6 +38,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::SystemTime;
 
 const FILE: &str = "keys.json";
 const SECRET_FILE: &str = "keys.secret";
@@ -69,6 +76,8 @@ struct Inner {
     /// This computer's id, when it could be read; part of the encryption key.
     machine: Option<String>,
     keys: KeyMap,
+    /// When the file last changed as far as this process knows, from reading or saving it.
+    seen: Option<SystemTime>,
 }
 
 /// The saved API keys, one per provider id.
@@ -89,29 +98,27 @@ impl Keys {
         tighten(&path);
         tighten(&dir.join(SECRET_FILE));
         let mut inner = self.lock();
+        inner.seen = modified(&path);
         inner.path = Some(path);
         inner.machine = machine;
         inner.keys = keys;
         if plain {
-            // Keys saved before they were encrypted: seal them now, so no plain copy stays.
-            if let Err(e) = save(&inner) {
-                eprintln!("folderskin: couldn't encrypt the saved API keys: {e}");
-            }
+            seal_plain(&mut inner);
         }
     }
 
     pub fn get(&self, provider: &str) -> Option<String> {
-        self.lock().keys.get(provider).cloned()
+        self.fresh().keys.get(provider).cloned()
     }
 
     pub fn has(&self, provider: &str) -> bool {
-        self.lock().keys.contains_key(provider)
+        self.fresh().keys.contains_key(provider)
     }
 
     pub fn set(&self, provider: &str, key: &str) -> Result<(), String> {
-        let mut inner = self.lock();
+        let mut inner = self.fresh();
         let before = inner.keys.insert(provider.to_string(), key.to_string());
-        if let Err(e) = save(&inner) {
+        if let Err(e) = store(&mut inner) {
             match before {
                 Some(old) => inner.keys.insert(provider.to_string(), old),
                 None => inner.keys.remove(provider),
@@ -122,11 +129,11 @@ impl Keys {
     }
 
     pub fn clear(&self, provider: &str) -> Result<(), String> {
-        let mut inner = self.lock();
+        let mut inner = self.fresh();
         let Some(old) = inner.keys.remove(provider) else {
             return Ok(());
         };
-        if let Err(e) = save(&inner) {
+        if let Err(e) = store(&mut inner) {
             inner.keys.insert(provider.to_string(), old);
             return Err(format!("couldn't remove the key: {e}"));
         }
@@ -137,6 +144,45 @@ impl Keys {
         self.0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The keys, read again first when another process changed the file since this one last read
+    /// or wrote it.
+    fn fresh(&self) -> std::sync::MutexGuard<'_, Inner> {
+        let mut inner = self.lock();
+        let Some(path) = inner.path.clone() else {
+            return inner;
+        };
+        if modified(&path) != inner.seen {
+            let (keys, plain) = read(&path, inner.machine.as_deref());
+            inner.keys = keys;
+            inner.seen = modified(&path);
+            if plain {
+                seal_plain(&mut inner);
+            }
+        }
+        inner
+    }
+}
+
+/// When `path` last changed, or `None` when it isn't there.
+fn modified(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Saves the keys and remembers the file as this process left it.
+fn store(inner: &mut Inner) -> std::io::Result<()> {
+    save(inner)?;
+    if let Some(path) = &inner.path {
+        inner.seen = modified(path);
+    }
+    Ok(())
+}
+
+/// Keys saved before they were encrypted: seal them now, so no plain copy stays.
+fn seal_plain(inner: &mut Inner) {
+    if let Err(e) = store(inner) {
+        eprintln!("folderskin: couldn't encrypt the saved API keys: {e}");
     }
 }
 
@@ -269,13 +315,20 @@ fn set_aside(path: &Path, why: &str) {
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
-    let aside = path.with_file_name(format!("{stem}-unreadable-{}{ext}", crate::store::now_ms()));
+    let aside = path.with_file_name(format!("{stem}-unreadable-{}{ext}", now_ms()));
     eprintln!(
         "folderskin: {} can't be opened ({why}); moved it to {}",
         path.display(),
         aside.display()
     );
     let _ = std::fs::rename(path, &aside);
+}
+
+/// Milliseconds since the Unix epoch, to tell set-aside files apart.
+fn now_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis())
 }
 
 /// Something that identifies this computer and survives restarts: the hardware UUID on macOS,
@@ -574,6 +627,32 @@ mod tests {
         let keys = opened(&dir, Some(HERE));
         assert!(!keys.has("openai"));
         assert_eq!(set_aside_files(&dir), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_key_saved_by_another_process_is_kept_and_seen() {
+        // The app opens the file at start-up; the command line saves a key into it later.
+        let dir = temp_dir("shared");
+        let app = opened(&dir, Some(HERE));
+        app.set("openai", "sk-app").unwrap();
+        let cli = opened(&dir, Some(HERE));
+        // Filesystems with coarse timestamps: make sure the second save is a later change.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        cli.set("xai", "xai-cli").unwrap();
+
+        assert_eq!(app.get("xai").as_deref(), Some("xai-cli"), "seen at once");
+        app.set("recraft", "rc-app").unwrap();
+        let again = opened(&dir, Some(HERE));
+        for provider in ["openai", "xai", "recraft"] {
+            assert!(again.has(provider), "{provider} survived both writers");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        cli.clear("openai").unwrap();
+        assert!(
+            !app.has("openai"),
+            "a key cleared elsewhere is gone here too"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

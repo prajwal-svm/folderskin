@@ -5,6 +5,7 @@ members = [
     "crates/folderskin-core",
     "crates/folderskin-tools",
     "src-tauri",
+    "crates/folderskin-keys",
 ]
 
 [workspace.package]
