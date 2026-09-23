@@ -1284,6 +1284,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "folderskin-share"
+version = "0.1.3"
+dependencies = [
+ "aws-lc-rs",
+ "base64 0.22.1",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "folderskin-tools"
 version = "0.1.3"
 dependencies = [

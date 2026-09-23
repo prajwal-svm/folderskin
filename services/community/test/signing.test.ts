@@ -1,9 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { verifySignature } from "../src/auth";
+import { sha256Hex } from "../src/bytes";
 import { BASE, call, device, errorOf, freshIp, postJson, signed, stubTurnstile, verify, verifyLink } from "./helpers";
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("signed requests", () => {
+  it("check out against the app's own signature (crates/folderskin-share, sign.rs)", async () => {
+    // The key, message and signature the Rust side's test makes; Ed25519 is deterministic.
+    const key = "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw";
+    const signature = "Xza0u6d4ddc5BZclGh7ne85lgkeu1yHSYmjK1F8BYFHfGu_YHYCBAdtvSYmZdv36Do9UhY0Fwq9PLAsFJf4jCg";
+    const message = `PUT|/v1/submissions/sub_aaaaaaaaaaaaaaaaaaaa/sheets/0|1790000000|${await sha256Hex("abc")}`;
+    expect(await verifySignature(key, signature, message)).toBe(true);
+    expect(await verifySignature(key, signature, message.replace("1790000000", "1790000001"))).toBe(false);
+  });
+
   it("are taken from the key that signed them", async () => {
     const me = await device();
     const handle = await verify(me, "sunny-otter");
