@@ -16,4 +16,7 @@ path = "src/main.rs"
 folderskin-core.workspace = true
 image.workspace = true
 serde_json.workspace = true
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
+# `community`: signed requests to the community service, run to completion on a small runtime.
+folderskin-share = { path = "../folderskin-share" }
+tokio = { version = "1", default-features = false, features = ["rt", "time"] }

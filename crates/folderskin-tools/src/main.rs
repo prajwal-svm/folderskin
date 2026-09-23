@@ -8,9 +8,10 @@ use folderskin_core::compositor::{
     self, render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
 use folderskin_core::raster;
-use folderskin_tools::cli::{Cli, Command, PacksCommand};
+use folderskin_share::{Client, DeviceKey};
+use folderskin_tools::cli::{Cli, Command, CommunityCommand, PacksCommand, Service};
 use folderskin_tools::skin::Skin;
-use folderskin_tools::{composer, make, packs};
+use folderskin_tools::{composer, make, packs, pull};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -137,6 +138,217 @@ fn run(cli: Cli) -> Result<(), String> {
                 packs_make(&pictures, &opts, preview.as_deref())
             }
         },
+        Command::Community { command } => community(command),
+    }
+}
+
+// ---------- the community service ----------
+
+/// The maintainer's side of the community service: each command is one signed request, except
+/// `keygen`, which makes the key they are signed with, and `pull`.
+fn community(command: CommunityCommand) -> Result<(), String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?;
+    let show = |value: serde_json::Value| {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value).unwrap_or_default()
+        )
+    };
+    match command {
+        CommunityCommand::Keygen { out } => keygen(&out),
+        CommunityCommand::Queue { status, service } => {
+            let client = service_client(&service)?;
+            let queue = runtime
+                .block_on(client.queue(&status))
+                .map_err(|e| e.to_string())?;
+            print_queue(&queue);
+            Ok(())
+        }
+        CommunityCommand::Decide {
+            id,
+            decision,
+            reasons,
+            note,
+            service,
+        } => {
+            if decision == "reject" && reasons.is_empty() {
+                return Err("say why with --reason, using a code from docs/PACK-TERMS.md".into());
+            }
+            let client = service_client(&service)?;
+            let answer = runtime
+                .block_on(client.decide(&id, &decision, &reasons, &note))
+                .map_err(|e| e.to_string())?;
+            show(answer);
+            Ok(())
+        }
+        CommunityCommand::Takedown {
+            id,
+            reasons,
+            note,
+            service,
+        } => {
+            let client = service_client(&service)?;
+            let answer = runtime
+                .block_on(client.takedown(&id, &reasons, &note))
+                .map_err(|e| e.to_string())?;
+            if answer["exported"].as_bool() == Some(true) {
+                println!(
+                    "It was pulled into the repository already: remove community/packs/{} there too.",
+                    answer["pack_id"].as_str().unwrap_or("?")
+                );
+            }
+            show(answer);
+            Ok(())
+        }
+        CommunityCommand::Pause { message, service } => {
+            let client = service_client(&service)?;
+            show(
+                runtime
+                    .block_on(client.pause(true, &message))
+                    .map_err(|e| e.to_string())?,
+            );
+            Ok(())
+        }
+        CommunityCommand::Resume { service } => {
+            let client = service_client(&service)?;
+            show(
+                runtime
+                    .block_on(client.pause(false, ""))
+                    .map_err(|e| e.to_string())?,
+            );
+            Ok(())
+        }
+        CommunityCommand::Pull { out, service } => {
+            let client = service_client(&service)?;
+            let mut source = ServiceExports { runtime, client };
+            let report = pull::pull(&mut source, &out)?;
+            for pulled in &report.pulled {
+                println!(
+                    "wrote {}: \"{}\" by {}, {} skins",
+                    pulled.folder.display(),
+                    pulled.name,
+                    pulled.author,
+                    pulled.skins
+                );
+            }
+            for problem in &report.problems {
+                println!("{problem}");
+            }
+            if report.pulled.is_empty() && report.problems.is_empty() {
+                println!("no approved packs are waiting to be pulled");
+            } else if !report.pulled.is_empty() {
+                println!("Check them over, then run `folderskin-tools packs index` and commit.");
+            }
+            if report.problems.is_empty() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{} packs couldn't be pulled",
+                    report.problems.len()
+                ))
+            }
+        }
+    }
+}
+
+/// A client signing with the maintainer's key from `service.key`.
+fn service_client(service: &Service) -> Result<Client, String> {
+    let text = std::fs::read_to_string(&service.key)
+        .map_err(|e| format!("couldn't read {}: {e}", service.key.display()))?;
+    let key = DeviceKey::from_recovery_file(&text).map_err(|e| e.to_string())?;
+    Client::new(&service.api, key).map_err(|e| e.to_string())
+}
+
+/// Makes the maintainer's signing key, never over an existing file, readable by its owner only.
+fn keygen(out: &Path) -> Result<(), String> {
+    use std::io::Write;
+    let key = DeviceKey::generate().map_err(|e| e.to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(out)
+        .map_err(|e| format!("couldn't write {}: {e}", out.display()))?;
+    file.write_all(key.recovery_file().as_bytes())
+        .map_err(|e| format!("couldn't write {}: {e}", out.display()))?;
+    println!(
+        "wrote {}. Keep it private: whoever has it can approve packs.\n\
+         Put its public key in ADMIN_KEYS in services/community/wrangler.toml:\n  {}",
+        out.display(),
+        key.public()
+    );
+    Ok(())
+}
+
+/// One line per pack in the review queue, flagged ones first as the service sorts them.
+fn print_queue(queue: &serde_json::Value) {
+    let empty = Vec::new();
+    let list = queue["submissions"].as_array().unwrap_or(&empty);
+    if list.is_empty() {
+        println!("nothing is waiting");
+        return;
+    }
+    for s in list {
+        let flags: Vec<&str> = s["flags"]
+            .as_array()
+            .unwrap_or(&empty)
+            .iter()
+            .filter_map(|f| f["code"].as_str())
+            .collect();
+        println!(
+            "{}  {:8}  \"{}\" by {} ({}), {} pictures{}{}",
+            s["id"].as_str().unwrap_or("?"),
+            s["status"].as_str().unwrap_or("?"),
+            s["name"].as_str().unwrap_or("?"),
+            s["handle"].as_str().unwrap_or("?"),
+            s["tier"].as_str().unwrap_or("?"),
+            s["pictures"].as_u64().unwrap_or(0),
+            if flags.is_empty() {
+                String::new()
+            } else {
+                format!(", flags: {}", flags.join(" "))
+            },
+            match s["reports"].as_u64() {
+                Some(0) | None => String::new(),
+                Some(n) => format!(", {n} reports"),
+            }
+        );
+    }
+}
+
+/// The service as the source of approved packs for `pull`.
+struct ServiceExports {
+    runtime: tokio::runtime::Runtime,
+    client: Client,
+}
+
+impl pull::Exports for ServiceExports {
+    fn list(&mut self) -> Result<Vec<folderskin_share::api::Export>, String> {
+        self.runtime
+            .block_on(self.client.exports())
+            .map_err(|e| e.to_string())
+    }
+    fn manifest(&mut self, id: &str) -> Result<Vec<u8>, String> {
+        self.runtime
+            .block_on(self.client.export_manifest(id))
+            .map_err(|e| e.to_string())
+    }
+    fn file(&mut self, id: &str, file: &str) -> Result<Vec<u8>, String> {
+        self.runtime
+            .block_on(self.client.export_file(id, file))
+            .map_err(|e| e.to_string())
+    }
+    fn done(&mut self, id: &str) -> Result<(), String> {
+        self.runtime
+            .block_on(self.client.export_done(id))
+            .map_err(|e| e.to_string())
     }
 }
 

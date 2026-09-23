@@ -6,4 +6,5 @@ pub mod cli;
 pub mod composer;
 pub mod make;
 pub mod packs;
+pub mod pull;
 pub mod skin;
