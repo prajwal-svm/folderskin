@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openApp, openView } from "./app";
 
+// One after another in one worker: each makes ten thousand packs, and five of them at once
+// starved the rest of the suite (the composer's first load) and the timing below of the CPU.
+test.describe.configure({ mode: "default" });
+
 /** Opens Community with the sample packs and `packs` made-up ones, once the first answer is in. */
 async function openCommunity(page: Page, packs = 10_000) {
   await openApp(page, { query: `packs=${packs}` });
@@ -17,6 +21,12 @@ test("typing searches ten thousand packs in under 300 ms, and only what's on scr
   await openCommunity(page);
   await expect(page.locator(".community-count")).toHaveText("10,004 packs");
   expect(await page.locator(".pack").count()).toBeLessThan(40);
+
+  // One search first, as someone looking around would: the first also compiles the search code.
+  await search(page).fill("lant");
+  await expect(page.locator(".community-count")).toContainText("match “lant”");
+  await search(page).fill("");
+  await expect(page.locator(".community-count")).toHaveText("10,004 packs");
 
   // From the last key to the answer on screen, timed in the page itself.
   await page.evaluate(() => {
@@ -44,7 +54,7 @@ test("typing searches ten thousand packs in under 300 ms, and only what's on scr
     return (w.shownAt ?? 0) - (w.typedAt ?? 0);
   });
   test.info().annotations.push({ type: "last key to results", description: `${Math.round(ms)} ms` });
-  expect(ms).toBeLessThan(300);
+  expect(ms, `the answer took ${Math.round(ms)} ms after the last key`).toBeLessThan(300);
   await expect(page.locator(".community-count")).toContainText("match “harbour”");
   await expect(cards(page).first().locator(".pack-name")).toContainText(/harbour/i);
 
