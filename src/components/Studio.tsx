@@ -280,7 +280,7 @@ export function Studio({
           {reference && (
             <div className="composer-ref">
               <PaperclipIcon size={13} />
-              <span title={reference}>{baseName(reference)}</span>
+              <span data-tip={reference} data-tip-overflow>{baseName(reference)}</span>
               <button type="button" className="link-btn" onClick={() => setReference(null)}>
                 Remove
               </button>
@@ -300,7 +300,7 @@ export function Studio({
                   role="radio"
                   aria-checked={shape === id}
                   className={shape === id ? "seg-btn is-active" : "seg-btn"}
-                  title={
+                  data-tip={
                     id === "folder"
                       ? "The model paints the whole folder, like a poster. Shapes can vary a little."
                       : "The model paints flat art; FolderSkin wraps it onto its own folder."
@@ -313,22 +313,22 @@ export function Studio({
               ))}
             </div>
             {model?.accepts_reference && (
-              <button type="button" className="icon-btn" title="Add a reference picture" aria-label="add a reference picture" onClick={pickReference}>
+              <button type="button" className="icon-btn" data-tip="Add a reference picture" aria-label="add a reference picture" onClick={pickReference}>
                 <PaperclipIcon />
               </button>
             )}
             <span className="composer-spacer" />
-            <button type="button" className="model-pill" onClick={() => setSettingsOpen(true)} title="Provider, model and key">
+            <button type="button" className="model-pill" onClick={() => setSettingsOpen(true)} data-tip="Provider, model and key">
               <span
                 className={provider?.has_key ? "model-dot is-ready" : "model-dot"}
-                title={provider?.has_key ? "Key saved" : "No key yet"}
+                data-tip={provider?.has_key ? "Key saved" : "No key yet"}
                 aria-hidden="true"
               />
               {provider && <ProviderLogo id={provider.id} size={14} />}
               <span className="model-pill-text">{provider ? `${provider.label} · ${model?.label ?? ""}` : "Choose a provider"}</span>
               <SlidersHorizontalIcon size={14} />
             </button>
-            <button type="submit" className="send-btn" disabled={!canSend} aria-label="generate" title="Generate (Enter)">
+            <button type="submit" className="send-btn" disabled={!canSend} aria-label="generate" data-tip="Generate (Enter)">
               <ArrowUpIcon size={17} />
             </button>
           </div>
@@ -343,7 +343,7 @@ export function Studio({
                   type="button"
                   aria-pressed={chosen === s.id}
                   className={chosen === s.id ? "style-chip is-active" : "style-chip"}
-                  title={chosen === s.id ? "Click again for another idea in this style" : `Fill in a ${s.label.toLowerCase()} idea`}
+                  data-tip={chosen === s.id ? "Click again for another idea in this style" : `Fill in a ${s.label.toLowerCase()} idea`}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => choose(s.id)}
                 >
@@ -423,7 +423,7 @@ function TurnCard({
           <img className="turn-img" src={turn.skin.thumbnail} alt="" draggable={false} />
           <div className="turn-meta">
             <div className="turn-title">
-              <p className="turn-name" title={(live ?? turn.skin).name}>
+              <p className="turn-name" data-tip={(live ?? turn.skin).name} data-tip-overflow>
                 {(live ?? turn.skin).name}
               </p>
               {live && (
@@ -432,7 +432,7 @@ function TurnCard({
                   className="icon-btn turn-more"
                   aria-label={`options for ${live.name}`}
                   aria-haspopup="dialog"
-                  title="Name, tags and details"
+                  data-tip="Name, tags and details"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={(e) => onMenu(live, e.currentTarget)}
                 >

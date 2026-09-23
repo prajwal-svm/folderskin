@@ -73,7 +73,7 @@ export function AboutMenu({
           </p>
           <p className="about-line">Free and open source · MIT</p>
         </div>
-        <button type="button" className="icon-btn about-source has-tip" aria-label="View Source" data-tip="View Source" onClick={() => open(REPO_URL)}>
+        <button type="button" className="icon-btn about-source" aria-label="View Source" data-tip="View source" onClick={() => open(REPO_URL)}>
           <GithubIcon size={18} />
         </button>
       </div>

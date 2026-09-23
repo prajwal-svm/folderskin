@@ -118,7 +118,7 @@ export function NewDesign({
               <span className="cmp-card-art">
                 <DesignThumb doc={doc} template={template} assets={assets} size={104} version={version} />
                 {t.photo && (
-                  <span className="cmp-card-badge" aria-hidden="true" title="Asks for a picture">
+                  <span className="cmp-card-badge" aria-hidden="true" data-tip="Asks for a picture">
                     <ImageIcon size={13} />
                   </span>
                 )}

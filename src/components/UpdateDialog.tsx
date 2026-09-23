@@ -204,7 +204,7 @@ export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus
         type="button"
         className={`about-link update-btn is-${s}`}
         aria-disabled={s === "checking" || undefined}
-        title={s === "current" ? "Check again" : undefined}
+        data-tip={s === "current" ? "Check again" : undefined}
         onClick={s === "checking" ? undefined : s === "available" ? onShow : onCheck}
       >
         {icon}

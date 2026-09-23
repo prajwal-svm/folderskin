@@ -35,7 +35,7 @@ export function WindowControls() {
   const win = () => getCurrentWindow();
   return (
     <div className="winctl" role="group" aria-label="window">
-      <button type="button" className="winctl-btn" aria-label="Minimise" title="Minimise" onClick={() => void win().minimize()}>
+      <button type="button" className="winctl-btn" aria-label="Minimise" data-tip="Minimise" onClick={() => void win().minimize()}>
         <svg {...GLYPH}>
           <path d="M0 5.5h10" stroke="currentColor" strokeWidth="1" />
         </svg>
@@ -44,7 +44,7 @@ export function WindowControls() {
         type="button"
         className="winctl-btn"
         aria-label={maximized ? "Restore" : "Maximise"}
-        title={maximized ? "Restore" : "Maximise"}
+        data-tip={maximized ? "Restore" : "Maximise"}
         onClick={() => void win().toggleMaximize()}
       >
         {maximized ? (
@@ -58,7 +58,7 @@ export function WindowControls() {
           </svg>
         )}
       </button>
-      <button type="button" className="winctl-btn is-close" aria-label="Close" title="Close" onClick={() => void win().close()}>
+      <button type="button" className="winctl-btn is-close" aria-label="Close" data-tip="Close" onClick={() => void win().close()}>
         <svg {...GLYPH}>
           <path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" strokeWidth="1" />
         </svg>

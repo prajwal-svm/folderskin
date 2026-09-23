@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { LazyMotion, MotionConfig, domMin } from "motion/react";
 import Root from "./Root";
+import { TipLayer } from "./components/Tooltip";
 import { lockDown } from "./lib/lockdown";
 import { watchAwake } from "./lib/awake";
 import { applyTheme, loadThemePref, resolveTheme } from "./state/theme";
@@ -34,6 +35,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <LazyMotion features={domMin} strict>
       <MotionConfig reducedMotion="user">
         <Root />
+        <TipLayer />
       </MotionConfig>
     </LazyMotion>
   </React.StrictMode>,

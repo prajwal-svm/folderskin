@@ -137,7 +137,7 @@ export function FolderThumb({
         </span>
         <span
           className="tile-name"
-          title={skin.name}
+          data-tip={skin.name} data-tip-overflow
           // A double click on the name renames it, as in Finder: the menu opens with the name ready to
           // type over. Not for a pack's skin, whose name isn't the user's to change.
           onDoubleClick={onMenu && isYours(skin) ? () => more.current && onMenu(more.current, true) : undefined}
@@ -150,7 +150,7 @@ export function FolderThumb({
         className="tile-star"
         aria-label={favorite ? `remove ${skin.name} from favourites` : `add ${skin.name} to favourites`}
         aria-pressed={favorite}
-        title={favorite ? "Remove from favourites" : "Add to favourites"}
+        data-tip={favorite ? "Remove from favourites" : "Add to favourites"}
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           e.stopPropagation();
@@ -167,7 +167,7 @@ export function FolderThumb({
           aria-label={`options for ${skin.name}`}
           aria-haspopup="dialog"
           aria-expanded={menuOpen}
-          title={isYours(skin) ? "Rename, tags and details" : "Tags and details"}
+          data-tip={isYours(skin) ? "Rename, tags and details" : "Tags and details"}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();

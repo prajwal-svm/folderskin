@@ -93,7 +93,7 @@ export function GalleryToolbar({
           </button>
         ))}
       </div>
-      <label className={query ? "search has-query" : "search"} title={placeholder}>
+      <label className={query ? "search has-query" : "search"}>
         <SearchIcon size={15} />
         <input
           ref={search}

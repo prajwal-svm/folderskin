@@ -549,7 +549,7 @@ function PackCard({
         <span className="onboard-pack-tick" aria-hidden="true">
           {checked && <CheckIcon size={13} playOnMount />}
         </span>
-        <span className="onboard-pack-name" title={pack.name}>
+        <span className="onboard-pack-name" data-tip={pack.name} data-tip-overflow>
           {pack.name}
         </span>
         <span className="onboard-pack-by">
@@ -566,7 +566,7 @@ function PackCard({
           </>
         ) : state?.kind === "failed" ? (
           <span className="onboard-pack-failed">
-            <span title={state.error}>Couldn't add it</span>
+            <span data-tip={state.error}>Couldn't add it</span>
             <button type="button" className="link-btn onboard-retry" disabled={running} onClick={onRetry}>
               <RefreshCwIcon size={13} />
               Try again

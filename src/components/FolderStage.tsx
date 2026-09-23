@@ -125,7 +125,7 @@ export function FolderStage({
           onClick={busy ? undefined : onBrowse}
           onMouseDown={(e) => e.preventDefault()}
           aria-label={folder ? `choose a different folder than ${folder.name}` : `choose a folder from ${browseLabel}`}
-          title={folder ? "Choose a different folder" : undefined}
+          data-tip={folder ? "Choose a different folder" : undefined}
         >
           <span className="stage-halo" aria-hidden="true" />
           {src && state.includeSubfolders && !drag && (
@@ -246,7 +246,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
         <OkBadge size={16} playOnMount /> Applied
       </span>
     ) : (phase === "ready" && !state.arriving) || phase === "applying" ? (
-      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`} title={skin?.name}>
+      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`} data-tip={skin?.name} data-tip-overflow>
         <span className="chip-text">Trying on {skin?.name}</span>
       </span>
     ) : (
@@ -258,10 +258,10 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
   return (
     <div className="stage-copy" key={`folder:${folder.path}`}>
       {eyebrow}
-      <h2 className="stage-title" title={folder.name}>
+      <h2 className="stage-title" data-tip={folder.name} data-tip-overflow>
         {folder.name}
       </h2>
-      <p className="stage-path" title={folder.path}>
+      <p className="stage-path" data-tip={folder.path} data-tip-overflow>
         {prettyPath(folder.path)}
       </p>
     </div>
@@ -461,7 +461,7 @@ function RunProgress({ state, stopping, onStop }: { state: State; stopping: bool
       <span className="stage-progress-bar" aria-hidden="true">
         <span style={{ width: `${share}%` }} />
       </span>
-      <p className="stage-progress-name" title={p.name}>
+      <p className="stage-progress-name" data-tip={p.name} data-tip-overflow>
         {p.done === 0 ? `Starting with ${clip(p.name)}` : p.name}
       </p>
       <button type="button" className="btn btn-ghost" disabled={stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
@@ -502,7 +502,7 @@ function RunResult({
           {tone === "ok" ? <OkBadge size={18} playOnMount /> : <BadgeAlertIcon size={17} />}
         </span>
         <p className="stage-result-title">{title}</p>
-        <button type="button" className="stage-result-x" aria-label="hide this summary" title="Hide" onClick={onDismiss}>
+        <button type="button" className="stage-result-x" aria-label="hide this summary" data-tip="Hide" onClick={onDismiss}>
           <XIcon size={13} />
         </button>
       </div>
@@ -514,7 +514,7 @@ function RunResult({
           </summary>
           <ul>
             {failed.map((f) => (
-              <li key={f.path} title={f.path}>
+              <li key={f.path} data-tip={f.path} data-tip-overflow>
                 <span className="stage-result-name">{f.name}</span>
                 <span className="stage-result-reason">{f.reason}</span>
               </li>

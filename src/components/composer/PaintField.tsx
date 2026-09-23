@@ -106,7 +106,7 @@ export function PaintField({ value, onChange, used, label = "Colour" }: { value:
             type="button"
             role="listitem"
             className="cmp-preset"
-            title={g.label}
+            data-tip={g.label}
             aria-label={`${g.label} gradient`}
             style={{ "--g": paintCss(g.paint) } as CSSProperties}
             onClick={() => onChange(JSON.parse(JSON.stringify(g.paint)) as Paint)}

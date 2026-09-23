@@ -63,7 +63,7 @@ export function FilterMenu({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={count ? `Filters, ${count} on` : "Filters"}
-        title="Filters"
+        data-tip="Filters"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
       >
@@ -261,7 +261,7 @@ function Swatch({ option, on, onClick }: { option: { value: string; label: strin
       type="button"
       aria-pressed={on}
       aria-label={`${option.label}, ${option.count}`}
-      title={`${option.label} · ${option.count}`}
+      data-tip={`${option.label} · ${option.count}`}
       className={[on ? "swatch is-on" : "swatch", light ? "is-light" : ""].filter(Boolean).join(" ")}
       style={{ "--swatch": option.swatch } as CSSProperties}
       disabled={!on && option.count === 0}
