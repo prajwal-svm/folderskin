@@ -66,7 +66,7 @@ test.describe("layer names and words", () => {
     await expect(side(page).locator(".cmp-layer-label").first()).toHaveText("Title");
     await expect(side(page).locator(".cmp-layer-content").first()).toHaveText("“Projects”");
     await side(page).locator(".cmp-layer", { hasText: "Title" }).click();
-    await expect(side(page).getByLabel("text on the folder")).toHaveValue("Projects");
+    await expect(side(page).getByLabel("text on the folder", { exact: true })).toHaveValue("Projects");
   });
 
   test("leaving a name as it was changes nothing", async ({ page }) => {
@@ -89,7 +89,7 @@ test.describe("layer names and words", () => {
     await name.fill("Heading");
     await name.press("Enter");
     await expect(layerNames(page).first()).toHaveText("Heading");
-    await side(page).getByLabel("text on the folder").fill("Archive");
+    await side(page).getByLabel("text on the folder", { exact: true }).fill("Archive");
     await expect(layerNames(page).first()).toHaveText("Heading");
     await expect(side(page).locator(".cmp-layer-content").first()).toHaveText("“Archive”");
   });
@@ -124,20 +124,62 @@ test.describe("the icon library", () => {
     await expect(side(page).getByLabel("search icons")).toHaveValue("folder");
   });
 
-  test("replaces an icon in place", async ({ page }) => {
+  test("swaps the selected icon rather than piling another on top", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
     await composer(page).getByRole("button", { name: "Icon" }).click();
     await side(page).getByLabel("search icons").fill("camera");
     await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    // The new icon is selected, so the library now works on it: the preview says so.
+    await side(page).getByLabel("search icons").fill("aperture");
+    await side(page).getByRole("button", { name: "Aperture", exact: true }).hover();
+    await expect(side(page).locator(".icon-preview-sub")).toHaveText("Click to swap it for Camera");
+    await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
-    await side(page).locator(".cmp-layer", { hasText: "Camera" }).click();
+    await expect(layerNames(page)).toHaveText(["Aperture", "Background"]);
+  });
+
+  test("adds another with Alt held, and Replace opens the library on the selected icon", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click({ modifiers: ["Alt"] });
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Camera", "Camera", "Background"]);
+    await side(page).locator(".cmp-layer").nth(1).click();
     await side(page).getByRole("button", { name: "Replace", exact: true }).click();
-    await expect(side(page).getByText(/Replacing/)).toBeVisible();
+    await expect(side(page).getByLabel("search icons")).toBeVisible();
     await side(page).getByLabel("search icons").fill("aperture");
     await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
-    // Back in the layers, the same layer wearing the new icon.
-    await expect(layerNames(page)).toHaveText(["Aperture", "Background"]);
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Camera", "Aperture", "Background"]);
+  });
+
+  test("its look switch changes the selected icon on the folder", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    await side(page).getByRole("radio", { name: "Flat" }).click();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(side(page).getByRole("radio", { name: "Flat" })).toHaveAttribute("aria-checked", "true");
+    // Undo takes the look back, as it would any change to the design.
+    await page.keyboard.press("Control+z");
+    await expect(side(page).getByRole("radio", { name: "Pressed in" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("shows each pack with its logo and no licence small print", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByRole("button", { name: /icon pack: Lucide/ }).click();
+    const packs = page.getByRole("list", { name: "icon packs" });
+    await expect(packs.locator(".pack-logo svg")).toHaveCount(10);
+    await expect(packs).not.toContainText(/ISC|MIT|licen[cs]e/i);
+    await expect(side(page).locator(".icon-library")).not.toContainText(/ISC|MIT|licen[cs]e/i);
   });
 
   test("downloads another pack and switches to it", async ({ page }) => {
@@ -158,6 +200,83 @@ test.describe("the icon library", () => {
     await expect(side(page).locator(".icon-cell").first()).toBeVisible();
     // Two thousand icons in the pack; a few hundred at most in the page.
     expect(await side(page).locator(".icon-cell").count()).toBeLessThan(400);
+  });
+});
+
+test.describe("the canvas and its panels", () => {
+  test("the folder skeleton is the design's shape, and undoable", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    const skeleton = composer(page).getByRole("switch", { name: "folder skeleton" });
+    await expect(skeleton).toHaveAttribute("aria-checked", "true");
+    await skeleton.click();
+    await expect(skeleton).toHaveAttribute("aria-checked", "false");
+    // There is no second control for the same thing in the panel.
+    await expect(side(page).getByRole("radio", { name: /on the folder|free icon/i })).toHaveCount(0);
+    await page.keyboard.press("Control+z");
+    await expect(skeleton).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("the second panel is Attributes, with tips behind the info button", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await expect(side(page).locator(".cmp-panel-title")).toHaveText(["Layers", "Attributes"]);
+    await expect(side(page).getByText(/Tips/)).toHaveCount(0);
+    await composer(page).getByRole("button", { name: "tips and shortcuts" }).click();
+    await expect(page.getByRole("dialog", { name: "Tips and shortcuts" })).toContainText("Click the folder to change its colour.");
+    await page.keyboard.press("Escape");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    await expect(side(page).locator(".cmp-panel-title")).toHaveText(["Layers", "Attributes"]);
+  });
+
+  test("a layer's delete shows on hover with a tooltip, and there's no Delete all", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await expect(side(page).getByText("Delete all")).toHaveCount(0);
+    const row = side(page).locator(".cmp-layer", { hasText: "Background" });
+    const del = row.getByRole("button", { name: "delete Background" });
+    await expect(del).toHaveCSS("opacity", "0");
+    await row.hover();
+    await expect(del).toHaveCSS("opacity", "1");
+    await del.hover();
+    await expect(page.getByRole("tooltip")).toHaveText("Delete layer");
+    await del.click();
+    await expect(layerNames(page)).toHaveText(["Projects"]);
+  });
+
+  test("blend is chosen from the app's own dropdown", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    await side(page).getByRole("button", { name: /^blend: Normal/ }).click();
+    const list = page.getByRole("listbox", { name: "blend" });
+    await expect(list.getByRole("option", { name: "Normal" })).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(side(page).getByRole("button", { name: /^blend: Multiply/ })).toBeVisible();
+    await expect(page.locator("select")).toHaveCount(0);
+  });
+
+  test("tools that don't fit go into More", async ({ page }) => {
+    await page.setViewportSize({ width: 1040, height: 700 });
+    await openApp(page);
+    await startFrom(page, "Label");
+    const tools = composer(page).getByRole("toolbar", { name: "add to the design" });
+    await tools.getByRole("button", { name: "more tools" }).click();
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitem", { name: "Colour" })).toBeVisible();
+    // Each tool is in the toolbar or in the menu, never both, and never cut in half.
+    const inline = await tools.locator(":scope > .cmp-tool:not([aria-label='more tools'])").allInnerTexts();
+    const inMenu = await menu.getByRole("menuitem").allInnerTexts();
+    expect([...inline, ...inMenu].map((t) => t.trim()).sort()).toEqual(["Colour", "Emoji", "Icon", "Pattern", "Picture", "Shape", "Text"]);
+    const bar = await tools.boundingBox();
+    for (const b of await tools.locator(":scope > .cmp-tool").all()) {
+      const box = await b.boundingBox();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(bar!.x + bar!.width + 0.5);
+    }
+    // Colour from the menu does what the tool does: the folder's colour layer is selected.
+    await menu.getByRole("menuitem", { name: "Colour" }).click();
+    await expect(side(page).locator(".cmp-layer.is-on .cmp-layer-label")).toHaveText("Background");
   });
 });
 
