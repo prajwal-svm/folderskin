@@ -16,7 +16,7 @@ const DAY = 86400;
 export async function daily(env: Env, at = now()): Promise<void> {
   await tidy(env, at);
   const notice = await digest(env, at);
-  if (notice) await alert(env, notice, false);
+  if (notice) await alert(env, notice, "digest");
 }
 
 /** Expires uploads nobody finished, and forgets what no longer needs remembering. */
@@ -79,10 +79,11 @@ export async function digest(env: Env, at = now()): Promise<Notice | null> {
   const neurons = (await env.DB.prepare("SELECT n FROM counters WHERE day = ?1 AND scope = 'global' AND id = 'neurons'")
     .bind(dayOf(at - DAY))
     .first<{ n: number }>())?.n;
-  const days = (seconds: number) => Math.max(0, Math.floor((at - seconds) / DAY));
+  const since = await count("SELECT MIN(finalized_at) AS n FROM submissions WHERE status IN ('pending', 'flagged')");
+  const waited = Math.max(0, Math.floor((at - since) / DAY));
   const lines = [
     `Waiting for review: ${waiting}${flagged ? ` (${flagged} flagged)` : ""}.`,
-    ...(oldest.results[0] ? [`The oldest has waited ${days(oldest.results[0].finalized_at)} days.`] : []),
+    ...(waiting > 0 ? [`The oldest has waited ${waited === 1 ? "a day" : `${waited} days`}.`] : []),
     `Reports in the last day: ${reports}.`,
     `Approved but not pulled into the repository yet: ${unpulled}.`,
     ...(env.AI ? [`Triage used ${neurons ?? 0} of ${envNumber(env.AI_DAILY_NEURONS, 9000)} neurons yesterday.`] : []),

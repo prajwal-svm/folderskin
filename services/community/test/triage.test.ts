@@ -65,10 +65,10 @@ describe("triage", () => {
 });
 
 describe("notifications", () => {
-  const notice = { title: "Urgent: \"Pack\" was flagged", lines: ["one", "two"], links: [{ label: "Review it", url: "https://community.test/l/x" }] };
+  const notice = { title: "Urgent: \"Pack\" needs a look", lines: ["one", "two"], links: [{ label: "Review it", url: "https://community.test/l/x" }] };
 
   it("read as plain text with the links at the end", () => {
-    expect(noticeText(notice)).toBe('Urgent: "Pack" was flagged\n\none\ntwo\n\nReview it: https://community.test/l/x');
+    expect(noticeText(notice)).toBe('Urgent: "Pack" needs a look\n\none\ntwo\n\nReview it: https://community.test/l/x');
   });
 
   it("take the shape each webhook expects, and mention nobody on Discord", () => {

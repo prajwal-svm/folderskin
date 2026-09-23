@@ -1,11 +1,15 @@
 /**
- * Telling the maintainer. Anything urgent (a report of abuse, a pack the checks flagged as
- * sexual, hateful or involving a child) goes out at once, to a webhook (Discord, Slack, Telegram
- * or ntfy) and by email to the maintainer's own verified address; everything else waits for the
- * daily digest the cron trigger sends. Every notice is also written to `events`.
+ * Telling the maintainer, by a webhook (Discord, Slack, Telegram or ntfy) and by email to their
+ * own verified address:
  *
- * The webhook's address is a secret (it carries a token), so it is never logged, and nothing here
- * fetches an address that came from a request.
+ * - urgent: a report of abuse, or a pack the checks flagged as sexual, hateful or involving a
+ *   child. Both channels at once, at the webhook's highest priority.
+ * - flagged: a pack whose words or pictures a check caught (profanity, say). The webhook at once,
+ *   at normal priority, so it can be looked at before it waits a day.
+ * - digest: everything else, once a day from the cron trigger, by both channels.
+ *
+ * Every notice is also written to `events`. The webhook's address is a secret (it carries a
+ * token), so it is never logged, and nothing here fetches an address that came from a request.
  */
 import { now } from "./bytes";
 import type { Env } from "./env";
@@ -29,9 +33,11 @@ export async function record(env: Env, kind: string, subject: string, detail: st
   }
 }
 
-/** Sends a notice now, by every channel that is set up. Never throws. */
-export async function alert(env: Env, notice: Notice, urgent = true): Promise<void> {
-  await Promise.all([sendWebhook(env, notice, urgent), sendEmail(env, notice)]);
+export type Level = "urgent" | "flagged" | "digest";
+
+/** Sends a notice now, by the channels its level goes to (see the top of this file). Never throws. */
+export async function alert(env: Env, notice: Notice, level: Level = "urgent"): Promise<void> {
+  await Promise.all([sendWebhook(env, notice, level === "urgent"), level === "flagged" ? undefined : sendEmail(env, notice)]);
 }
 
 export function noticeText(notice: Notice): string {

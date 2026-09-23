@@ -177,10 +177,22 @@ describe("quotas", () => {
 });
 
 describe("the words in a pack", () => {
-  it("flag it for the maintainer at once when they hit the blocklist", async () => {
+  /** A stand-in for the send_email binding that keeps what it was given. */
+  const mailer = () => {
+    const sent: { subject: string; to: unknown }[] = [];
+    return { sent, MAILER: { send: async (message: { subject: string; to: unknown }) => void sent.push(message) } as unknown as SendEmail };
+  };
+  const mail = { MAIL_TO: "maintainer@example.org", MAIL_FROM: "community@example.org" };
+
+  it("flag it for the maintainer at once, by webhook and email, when they hit the blocklist", async () => {
     const who = await author("edgy-name");
     const hook = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
-    const id = await submit(who, pictures(1, 11), { name: "Hentai dreams", tags: ["anime"] }, { NOTIFY_WEBHOOK_URL: "https://discord.com/api/webhooks/1/secret" });
+    const { sent: emails, MAILER } = mailer();
+    const id = await submit(who, pictures(1, 11), { name: "Hentai dreams", tags: ["anime"] }, {
+      NOTIFY_WEBHOOK_URL: "https://discord.com/api/webhooks/1/secret",
+      MAILER,
+      ...mail,
+    });
     const row = await env.DB.prepare("SELECT status, flags FROM submissions WHERE id = ?1").bind(id).first<{ status: string; flags: string }>();
     expect(row?.status).toBe("flagged");
     expect(JSON.parse(row!.flags)).toContainEqual({ code: "text:blocklist", severity: "high", detail: '"hentai" in the pack name' });
@@ -188,9 +200,29 @@ describe("the words in a pack", () => {
     const [url, init] = hook.mock.calls[0];
     expect(url).toBe("https://discord.com/api/webhooks/1/secret");
     const sent = JSON.parse(String(init?.body)) as { content: string };
-    expect(sent.content).toContain('Urgent: "Hentai dreams" was flagged');
+    expect(sent.content).toContain('Urgent: "Hentai dreams" needs a look');
     expect(sent.content).toMatch(/Review it: https:\/\/community\.test\/l\/review\./);
+    expect(emails).toMatchObject([{ subject: 'Urgent: "Hentai dreams" needs a look', to: "maintainer@example.org" }]);
     // The author sees it waiting, like any other.
     expect((await mine(who))[0]).toMatchObject({ status: "in_review" });
+  });
+
+  it("send profanity to the webhook at once, quietly, and leave the email for the digest", async () => {
+    const who = await author("salty-sailor");
+    const hook = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
+    const { sent: emails, MAILER } = mailer();
+    await submit(who, pictures(1, 12), { name: "Damn fine shit", tags: ["boats"] }, { NOTIFY_WEBHOOK_URL: "https://ntfy.sh/folderskin-topic", MAILER, ...mail });
+    expect(hook).toHaveBeenCalledTimes(1);
+    const init = hook.mock.calls[0][1];
+    expect((init?.headers as Record<string, string>).Priority).toBe("3");
+    expect(String(init?.body)).toContain('Flagged: "Damn fine shit" needs a look');
+    expect(emails).toEqual([]);
+  });
+
+  it("send nothing at once for a pack nothing caught", async () => {
+    const who = await author("quiet-painter");
+    const hook = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
+    await submit(who, pictures(1, 13), { name: "Harbour at dawn", tags: ["boats"] }, { NOTIFY_WEBHOOK_URL: "https://ntfy.sh/folderskin-topic" });
+    expect(hook).not.toHaveBeenCalled();
   });
 });

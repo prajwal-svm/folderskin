@@ -281,20 +281,25 @@ export async function finalize(request: Request, env: Env, ctx: ExecutionContext
     .run();
   if (done.meta.changes !== 1) throw fail(409, "closed", "That pack has already been sent for review.");
 
-  const urgent = flags.filter((f) => f.severity === "high");
-  await record(env, "submitted", id, `${s.name} by ${account.handle}: ${s.items} pictures, ${flags.length} flags`, urgent.length ? "high" : "normal");
-  if (urgent.length > 0) {
+  const urgent = findings.some((f) => f.severity === "high");
+  await record(env, "submitted", id, `${s.name} by ${account.handle}: ${s.items} pictures, ${flags.length} flags`, urgent ? "high" : "normal");
+  // A flagged pack is worth a look before the digest: at once, and loudly when it's urgent.
+  if (findings.length > 0) {
     const review = await makeLink(env, "review", id);
     ctx.waitUntil(
-      alert(env, {
-        title: `Urgent: "${s.name}" was flagged`,
-        lines: [
-          `${s.items} pictures by ${account.handle} (${account.tier}).`,
-          ...urgent.map((f) => `${f.code}: ${f.detail}`),
-          "It is not public. Look before anyone else can.",
-        ],
-        links: review ? [{ label: "Review it", url: review }] : [],
-      }),
+      alert(
+        env,
+        {
+          title: `${urgent ? "Urgent" : "Flagged"}: "${s.name}" needs a look`,
+          lines: [
+            `${s.items} pictures by ${account.handle} (${account.tier}).`,
+            ...findings.map((f) => `${f.code}: ${f.detail}`),
+            "It is not public. Look before anyone else can.",
+          ],
+          links: review ? [{ label: "Review it", url: review }] : [],
+        },
+        urgent ? "urgent" : "flagged",
+      ),
     );
   }
   return json({ status: "in_review" });
