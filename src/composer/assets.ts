@@ -34,6 +34,7 @@ export class Assets {
   private grains = new Map<string, HTMLCanvasElement>();
   private layouts = new Map<string, TextLayout>();
   private scratchPool: HTMLCanvasElement[] = [];
+  private paths = new Map<string, Path2D>();
   private listeners = new Set<() => void>();
   private measurer: CanvasRenderingContext2D | null = null;
 
@@ -126,6 +127,18 @@ export class Assets {
       this.layouts.set(key, hit);
     }
     return hit;
+  }
+
+  /** An icon path, parsed once: the stage draws every icon every frame. */
+  path(d: string): Path2D {
+    let p = this.paths.get(d);
+    if (!p) {
+      p = new Path2D(d);
+      // Enough for a few designs' icons; a pack browsed by the thousand doesn't come through here.
+      if (this.paths.size > 2000) this.paths.clear();
+      this.paths.set(d, p);
+    }
+    return p;
   }
 
   /** Forgets text layouts, for when a font has finished loading and measures differently. */

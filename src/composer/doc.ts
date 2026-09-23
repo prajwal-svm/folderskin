@@ -198,8 +198,52 @@ export type ImageLayer = Common &
     fx: ImageFx;
   };
 
-export type Layer = FillLayer | PatternLayer | TextLayer | EmojiLayer | ShapeLayer | ImageLayer;
-export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer;
+/**
+ * How an icon sits on the folder. "emboss" presses it into the folder the way macOS draws the
+ * symbol on a folder: a shade of the folder's own colour, with a lit lower lip and a shadowed top
+ * edge. "flat" paints it in one colour; "original" keeps the colour its pack gives it (a brand's).
+ */
+export type IconLook = "emboss" | "flat" | "original";
+export const ICON_LOOKS: { id: IconLook; label: string }[] = [
+  { id: "emboss", label: "Pressed in" },
+  { id: "flat", label: "Flat" },
+  { id: "original", label: "Original" },
+];
+
+/**
+ * An icon from an icon pack. Its drawing (path data in its pack's square grid) is kept in the
+ * layer, so a design opens again even after the pack is removed from this computer.
+ */
+export type IconLayer = Common &
+  Placed & {
+    kind: "icon";
+    /** The pack and the icon's name in it, to name the layer and find the icon again. */
+    pack: string;
+    icon: string;
+    paths: string[];
+    /** Line icons: which of the paths are filled shapes rather than lines. */
+    filled: number[];
+    style: "stroke" | "fill";
+    /** The side of the square grid the paths are drawn in: 24 for most packs. */
+    viewBox: number;
+    /** A line icon's line width, in grid units. */
+    strokeWidth: number;
+    evenOdd: boolean;
+    /** The side of its box on the canvas. */
+    size: number;
+    look: IconLook;
+    /** The flat look's colour, and the pressed-in look's when it doesn't follow the folder. */
+    paint: Paint;
+    /** The pressed-in look takes its colour from the folder's own, as macOS does. */
+    auto: boolean;
+    /** How deep the pressed-in look is, 0 to 100. */
+    depth: number;
+    /** The colour the pack gives this icon, such as a brand's, for the original look. */
+    brand?: string;
+  };
+
+export type Layer = FillLayer | PatternLayer | TextLayer | EmojiLayer | ShapeLayer | ImageLayer | IconLayer;
+export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer | IconLayer;
 export type LayerKind = Layer["kind"];
 
 export type Doc = { version: 1; shape: Shape; layers: Layer[] };
@@ -286,6 +330,48 @@ export function makeImage(src: string, iw: number, ih: number, box: { x: number;
   return { ...common(), ...placed(box.x, box.y), kind: "image", src, iw, ih, w: box.w, h: box.h, radius: 0, fx: { ...NO_FX } };
 }
 
+/** An icon from a pack as a pack stores it. */
+export type IconDrawing = {
+  pack: string;
+  icon: string;
+  paths: string[];
+  filled?: number[];
+  style: "stroke" | "fill";
+  viewBox: number;
+  strokeWidth: number;
+  evenOdd?: boolean;
+  brand?: string;
+};
+
+/** A new icon layer, pressed into the folder unless `look` says otherwise. */
+export function makeIcon(drawing: IconDrawing, x: number, y: number, look: IconLook = "emboss", color = "#ffffff"): IconLayer {
+  return {
+    ...common(),
+    ...placed(x, y),
+    kind: "icon",
+    pack: drawing.pack,
+    icon: drawing.icon,
+    paths: [...drawing.paths],
+    filled: [...(drawing.filled ?? [])],
+    style: drawing.style,
+    viewBox: drawing.viewBox,
+    strokeWidth: drawing.strokeWidth,
+    evenOdd: drawing.evenOdd === true,
+    size: 340,
+    look: look === "original" && !drawing.brand ? "flat" : look,
+    paint: solid(color),
+    auto: true,
+    depth: 60,
+    ...(drawing.brand ? { brand: drawing.brand } : {}),
+  };
+}
+
+/** The icon's name as people say it: "arrow-big-up" is "Arrow big up". */
+export function iconName(icon: string): string {
+  const words = icon.replace(/[-_]+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Icon";
+}
+
 /** Where a picture goes: covering the whole folder, or a picture with its own shape (a logo, a cut-out) sitting on the front. */
 export function imageBox(iw: number, ih: number, parts: Parts, cover: boolean): { x: number; y: number; w: number; h: number } {
   const aspect = iw / Math.max(1, ih);
@@ -306,7 +392,7 @@ export function imageBox(iw: number, ih: number, parts: Parts, cover: boolean): 
 // ---------- reading a layer ----------
 
 export const isPlaced = (layer: Layer): layer is PlacedLayer =>
-  layer.kind === "text" || layer.kind === "emoji" || layer.kind === "shape" || layer.kind === "image";
+  layer.kind === "text" || layer.kind === "emoji" || layer.kind === "shape" || layer.kind === "image" || layer.kind === "icon";
 
 /** Whether a layer covers the whole canvas (it has no box of its own). */
 export const isCovering = (layer: Layer): layer is FillLayer | PatternLayer => layer.kind === "fill" || layer.kind === "pattern";
@@ -328,12 +414,25 @@ export function layerLabel(layer: Layer, index = 1): string {
       return words.length === 0 ? "Text" : words.length > 22 ? `${words.slice(0, 21).join("")}…` : words.join("");
     }
     case "emoji":
-      return "Emoji";
+      return `${layer.char} Emoji`;
     case "shape":
       return shapeLabel(layer.shape);
     case "image":
       return "Picture";
+    case "icon":
+      return iconName(layer.icon);
   }
+}
+
+/**
+ * What a layer shows on the folder, when that's words: a text layer's first line. The layers
+ * list shows it beside a name the user gave the layer, so the two are never mistaken for each
+ * other.
+ */
+export function layerContent(layer: Layer): string | null {
+  if (layer.kind !== "text") return null;
+  const line = layer.text.split("\n").find((l) => l.trim())?.trim() ?? "";
+  return line || null;
 }
 
 /** The colour a paint mostly shows: a solid colour, or a gradient's middle stop. */
@@ -590,10 +689,43 @@ function readLayer(v: unknown): Layer | null {
         fx: readFx(v.fx),
       };
     }
+    case "icon": {
+      const paths = Array.isArray(v.paths) ? v.paths.filter((p): p is string => typeof p === "string" && PATH_DATA.test(p) && p.length <= MAX_PATH) : [];
+      if (paths.length === 0 || paths.length > MAX_PATHS || paths.join("").length > MAX_ICON) return null;
+      const viewBox = num(v.viewBox, 24, 1, 1024);
+      const filled = Array.isArray(v.filled) ? v.filled.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < paths.length) : [];
+      const brand = typeof v.brand === "string" ? normalizeColor(v.brand, "") : "";
+      return {
+        ...base,
+        ...where(),
+        kind: "icon",
+        pack: text(v.pack, "icons", 40),
+        icon: text(v.icon, "icon", 80),
+        paths,
+        filled: [...new Set(filled)],
+        style: v.style === "fill" ? "fill" : "stroke",
+        viewBox,
+        strokeWidth: num(v.strokeWidth, 2, 0, viewBox / 4),
+        evenOdd: bool(v.evenOdd),
+        size: num(v.size, 340, 4, 3000),
+        look: oneOf(v.look, ICON_LOOK_IDS, "emboss"),
+        paint: readPaint(v.paint, solid("#ffffff")),
+        auto: v.auto !== false,
+        depth: num(v.depth, 60, 0, 100),
+        ...(brand ? { brand } : {}),
+      };
+    }
     default:
       return null;
   }
 }
+
+/** Path data and nothing else: commands, numbers, separators. */
+const PATH_DATA = /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]+$/;
+const MAX_PATH = 40_000;
+const MAX_PATHS = 64;
+const MAX_ICON = 120_000;
+const ICON_LOOK_IDS = ICON_LOOKS.map((l) => l.id);
 
 /**
  * A design read from disk or storage, made safe to draw: unknown layers are dropped, numbers

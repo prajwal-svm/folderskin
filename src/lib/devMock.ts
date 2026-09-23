@@ -29,6 +29,8 @@ import type {
   ExportPackRequest,
   FolderIcon,
   GithubAccount,
+  IconPackProgress,
+  InstalledIconPack,
   PackProgress,
   PackToPublish,
   PublishProgress,
@@ -44,6 +46,9 @@ import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import { cleanName } from "./names";
 import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
+
+/** Icon packs "downloaded" in the browser preview, for this page's life. */
+const mockIconPacks = new Map<string, string>();
 
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
 const mockKeys = new Set<string>();
@@ -618,5 +623,32 @@ export const mockApi = {
     const skin: Skin = { id: `user:ai${Date.now()}`, name: name.charAt(0).toUpperCase() + name.slice(1), collection: "yours", thumbnail: picture(library.length + 1), custom: true, kind: _req.shape === "folder" ? "folder" : "artwork", source: "ai", created_at: Date.now(), tags: cleanTags(_req.tags), made_with: "OpenAI · GPT Image 2.5 Flare", idea: _req.idea };
     keep([skin]);
     return skin;
+  },
+  iconPackDownload: async (id: string, _release: string, _sha256: string, bytes: number, onProgress: (p: IconPackProgress) => void): Promise<void> => {
+    if (offline()) {
+      await sleep(400);
+      throw "couldn't download the icon pack. Check your connection and try again";
+    }
+    // The real pack when scripts/icon-packs.mjs --all has built it (Vite serves dist-icons/ in
+    // dev); otherwise Lucide under the pack's name, so the whole flow works without a build.
+    let text = await fetch(`/dist-icons/${id}.json`).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+    if (!text || !text.startsWith("{")) {
+      const lucide = (await import("../composer/icons/lucide.json")).default as Record<string, unknown>;
+      text = JSON.stringify({ ...lucide, id, name: id });
+    }
+    for (let i = 1; i <= 8; i++) {
+      await sleep(90);
+      onProgress({ done: Math.round((bytes * i) / 8), total: bytes });
+    }
+    mockIconPacks.set(id, text);
+  },
+  iconPacksInstalled: async (): Promise<InstalledIconPack[]> => [...mockIconPacks.entries()].map(([id, text]) => ({ id, sha256: "", bytes: text.length })),
+  iconPackRead: async (id: string): Promise<string> => {
+    const text = mockIconPacks.get(id);
+    if (!text) throw "that icon pack isn't downloaded";
+    return text;
+  },
+  iconPackRemove: async (id: string): Promise<void> => {
+    mockIconPacks.delete(id);
   },
 };

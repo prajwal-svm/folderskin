@@ -31,18 +31,18 @@ const SNAP_PX = 6;
 
 export type Backdrop = "window" | "light" | "dark" | "colour";
 
-const handlesFor = (l: PlacedLayer): Handle[] => (l.kind === "text" || l.kind === "emoji" ? [...CORNERS, "rot"] : [...ALL_SIDES, "rot"]);
+const handlesFor = (l: PlacedLayer): Handle[] => (l.kind === "text" || l.kind === "emoji" || l.kind === "icon" ? [...CORNERS, "rot"] : [...ALL_SIDES, "rot"]);
 
 type Drag =
   | { kind: "move"; id: string; doc0: Doc; start: Point; orig: Point; box0: Box; targets: Targets; moved: boolean; sx: number; sy: number }
   | { kind: "resize"; id: string; doc0: Doc; handle: Exclude<Handle, "rot">; box0: Box; layer0: PlacedLayer }
   | { kind: "rotate"; id: string; doc0: Doc; start: Point; box0: Box };
 
-/** The layer's new fields for a resized box. Text and emoji keep their shape and change size. */
+/** The layer's new fields for a resized box. Text, emoji and icons keep their shape and change size. */
 function resized(layer: PlacedLayer, box0: Box, box: Box): Record<string, number> {
   const place = { x: box.x, y: box.y };
   if (layer.kind === "text") return { ...place, size: Math.max(4, (layer.size * box.h) / box0.h) };
-  if (layer.kind === "emoji") return { ...place, size: Math.max(4, box.w) };
+  if (layer.kind === "emoji" || layer.kind === "icon") return { ...place, size: Math.max(4, box.w) };
   return { ...place, w: box.w, h: box.h };
 }
 
@@ -235,7 +235,7 @@ export function ComposerStage({
       const l = d.layer0;
       const corner = d.handle.length === 2;
       const keepAspect =
-        l.kind === "text" || l.kind === "emoji" ? true : l.kind === "image" ? corner !== e.shiftKey : corner && e.shiftKey;
+        l.kind === "text" || l.kind === "emoji" || l.kind === "icon" ? true : l.kind === "image" ? corner !== e.shiftKey : corner && e.shiftKey;
       const box = resizeBox(d.box0, d.handle, p, { keepAspect, fromCenter: e.altKey });
       onPreview(patchLayer(d.doc0, d.id, resized(l, d.box0, box)));
       setReadout({ text: `${Math.round(box.w)} × ${Math.round(box.h)}`, ...at });

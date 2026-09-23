@@ -175,6 +175,10 @@ export type ComposerSaveHeader = {
 /** A saved design, and the id of the one it replaced. */
 export type ComposerSaved = { skin: Skin; replaced: string | null };
 
+/** How far an icon pack's download has got, in bytes. */
+export type IconPackProgress = { done: number; total: number };
+export type InstalledIconPack = { id: string; sha256: string; bytes: number };
+
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
 
@@ -253,6 +257,17 @@ const tauriApi = {
   aiClearKey: (provider: string) => invoke<void>("ai_clear_key", { provider }),
   aiTestKey: (provider: string) => invoke<void>("ai_test_key", { provider }),
   aiGenerate: (req: AiGenerateRequest) => invoke<Skin>("ai_generate", { req }),
+
+  // ---- icon packs ----
+  /** Downloads a pack from its release and keeps it, if it is exactly `bytes` long with SHA-256 `sha256`. */
+  iconPackDownload: (id: string, release: string, sha256: string, bytes: number, onProgress: (p: IconPackProgress) => void) =>
+    invoke<void>("icon_pack_download", { id, release, sha256, bytes, onProgress: new Channel<IconPackProgress>(onProgress) }),
+  /** The packs downloaded on this computer. */
+  iconPacksInstalled: () => invoke<InstalledIconPack[]>("icon_packs_installed"),
+  /** A downloaded pack's JSON. */
+  iconPackRead: (id: string) => invoke<string>("icon_pack_read", { id }),
+  /** Forgets a downloaded pack; designs using its icons keep them. */
+  iconPackRemove: (id: string) => invoke<void>("icon_pack_remove", { id }),
 
   // ---- the composer ----
   /** The folder template's layers, rendered once by the Rust compositor. */

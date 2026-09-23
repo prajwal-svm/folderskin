@@ -6,6 +6,7 @@ pub mod community;
 pub mod composer;
 pub mod folder_icon;
 pub mod github;
+pub mod icons;
 pub mod keys;
 pub mod onboarding;
 pub mod pack_views;
@@ -108,6 +109,10 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_test_key,
             ai::ai_generate,
+            icons::icon_pack_download,
+            icons::icon_packs_installed,
+            icons::icon_pack_read,
+            icons::icon_pack_remove,
         ])
         .setup(|app| {
             // Before anything that could panic, so a crash report has somewhere to land.
