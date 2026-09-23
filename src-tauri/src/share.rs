@@ -376,7 +376,8 @@ fn prepare(files: crate::community::PackFiles, request: &ShareRequest) -> Result
             },
             license: request.license.clone(),
             source: request.source.clone(),
-            notes: request.notes.trim().to_string(),
+            // Credits can run over a few lines; the service keeps the breaks as \n.
+            notes: request.notes.replace("\r\n", "\n").trim().to_string(),
             terms_version: request.terms_version,
             items,
         },
@@ -551,7 +552,7 @@ mod tests {
             license: "CC-BY-4.0".into(),
             tags: vec!["woodblock".into()],
             skin_ids: vec![],
-            notes: "  Drawn by me.  ".into(),
+            notes: "  Drawn by me.\r\nFrame by Jane Doe, CC0.  ".into(),
             source: "own".into(),
             terms_version: 1,
         }
@@ -582,7 +583,7 @@ mod tests {
         assert_eq!(s.manifest.name, "Night prints");
         assert_eq!(s.manifest.skins[0].tags, ["fish"]);
         assert_eq!(s.license, "CC-BY-4.0");
-        assert_eq!(s.notes, "Drawn by me.");
+        assert_eq!(s.notes, "Drawn by me.\nFrame by Jane Doe, CC0.");
         assert_eq!(
             s.items[0],
             Item {

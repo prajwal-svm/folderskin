@@ -38,7 +38,7 @@ import { makeLink } from "./links";
 import { alert, record } from "./notify";
 import { giveBack, globalDailyPictures, maxWaiting, queueFull, requireAccepting, takeAll } from "./quota";
 import { authorView, loadItems, loadSubmission, removeAll, SHA256, withdraw, type Submission } from "./store";
-import { hasText, isLicense, readManifest, textFlags, type Flag } from "./text";
+import { hasHidden, isLicense, readManifest, textFlags, type Flag } from "./text";
 import { triage } from "./triage";
 
 type DeclaredItem = { file: string; sha256: string; bytes: number; width: number; height: number };
@@ -84,8 +84,18 @@ export async function create(request: Request, env: Env): Promise<Response> {
   if (typeof body.source !== "string" || !(SOURCES as readonly string[]).includes(body.source)) {
     throw fail(400, "bad_source", "Say where the pictures came from.");
   }
-  const notes = typeof body.notes === "string" ? body.notes.trim() : "";
-  if (notes && !hasText(notes, MAX_NOTES_CHARS)) throw fail(400, "bad_notes", `Keep the credits to ${MAX_NOTES_CHARS} characters of plain text.`);
+  // Credits can run over a few lines, as the share dialog's box lets them: the breaks are kept.
+  const notes =
+    typeof body.notes === "string"
+      ? body.notes
+          .replace(/\r\n?/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim()
+      : "";
+  if ([...notes].length > MAX_NOTES_CHARS) throw fail(400, "bad_notes", `Keep the credits to ${MAX_NOTES_CHARS} characters.`);
+  if (hasHidden(notes, { lines: true })) {
+    throw fail(400, "bad_notes", "The credits have a character in them that doesn't show, such as a text direction mark. Take it out and try again.");
+  }
   const items = readItems(
     body.items,
     manifest.skins.map((s) => s.file),

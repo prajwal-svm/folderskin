@@ -27,6 +27,7 @@ button.danger { background: var(--bad); color: #fff; border-color: transparent; 
 dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem .9rem; margin: 0; }
 dt { color: var(--muted); }
 dd { margin: 0; overflow-wrap: anywhere; }
+dd.lines { white-space: pre-line; }
 ul.flags { padding-left: 1.2rem; margin: .3rem 0; }
 `;
 
@@ -135,7 +136,7 @@ function details(info: ReviewInfo, token: string): string {
 <dt>Pictures</dt><dd>${info.pictures}</dd>
 <dt>Licence</dt><dd>${e(info.license)}</dd>
 <dt>Source</dt><dd>${e(info.source)}</dd>
-<dt>Credits</dt><dd>${e(info.notes || "none given")}</dd>
+<dt>Credits</dt><dd class="lines">${e(info.notes || "none given")}</dd>
 <dt>Flags</dt><dd>${flags}</dd>
 <dt>Reports</dt><dd>${reports}</dd>
 </dl></div>${sheets}`;

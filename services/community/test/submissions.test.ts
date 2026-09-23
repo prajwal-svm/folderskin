@@ -152,6 +152,30 @@ describe("sending a pack", () => {
     expect(me.today).toEqual({ pictures: 2, submissions: 2 });
   });
 
+  it("keeps credits written over more than one line", async () => {
+    const who = await author("two-liner");
+    const body = { ...(await describePack(pictures(1, 60))), notes: "Base photo by Jane Doe, CC0\r\nFrame drawn by me\n\n\n\nThanks!" };
+    const response = await call(await signed(who, "POST", "/v1/submissions", body));
+    expect(response.status).toBe(201);
+    const { submission_id: id } = (await response.json()) as { submission_id: string };
+    const row = await env.DB.prepare("SELECT notes FROM submissions WHERE id = ?1").bind(id).first<{ notes: string }>();
+    expect(row?.notes).toBe("Base photo by Jane Doe, CC0\nFrame drawn by me\n\nThanks!");
+  });
+
+  it("says what is wrong with credits it can't take", async () => {
+    const who = await author("hidden-marks");
+    const flipped = { ...(await describePack(pictures(1, 61))), notes: "Photo by \u202eeoD enaJ" };
+    expect(await errorOf(await call(await signed(who, "POST", "/v1/submissions", flipped)))).toEqual({
+      code: "bad_notes",
+      message: "The credits have a character in them that doesn't show, such as a text direction mark. Take it out and try again.",
+    });
+    const long = { ...(await describePack(pictures(1, 61))), notes: "a".repeat(401) };
+    expect(await errorOf(await call(await signed(who, "POST", "/v1/submissions", long)))).toEqual({
+      code: "bad_notes",
+      message: "Keep the credits to 400 characters.",
+    });
+  });
+
   it("can be withdrawn by its author, pictures and all", async () => {
     const who = await author("second-thoughts");
     const id = await submit(who, pictures(2, 5));

@@ -31,6 +31,11 @@ export function hasText(value: unknown, max: number): value is string {
   return s.length > 0 && [...s].length <= max && !HIDDEN.test(s);
 }
 
+/** Whether `text` has a character that doesn't show; with `lines`, a line break (\n) doesn't count as one. */
+export function hasHidden(text: string, { lines = false } = {}): boolean {
+  return HIDDEN.test(lines ? text.replace(/\n/g, "") : text);
+}
+
 /** A tag as FolderSkin keeps it (`pack::clean_tag`): lower case, letters, digits, single spaces and dashes. */
 export function cleanTag(tag: string): string | null {
   const kept = [...tag].filter((c) => /[\p{Alphabetic}\p{N}-]/u.test(c) || /\s/u.test(c)).join("").toLowerCase();
