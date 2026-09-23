@@ -255,10 +255,14 @@ fn encode_folder(cut: &RgbaImage, opts: &MakeOptions) -> Result<(Vec<u8>, &'stat
 
 /// `img` as a WebP from `cwebp`: lossy colour at `quality`, lossless alpha, so the folder's edge
 /// stays clean.
-fn run_cwebp(cwebp: &Path, img: &RgbaImage, quality: u8) -> Result<Vec<u8>, String> {
+pub(crate) fn run_cwebp(cwebp: &Path, img: &RgbaImage, quality: u8) -> Result<Vec<u8>, String> {
+    // The catalog encodes on several threads at once, so the clock alone could name two files
+    // the same.
+    static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let stem = format!(
-        "folderskin-make-{}-{quality}-{}",
+        "folderskin-make-{}-{quality}-{}-{}",
         std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())

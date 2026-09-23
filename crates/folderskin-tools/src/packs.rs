@@ -390,7 +390,11 @@ fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, String> {
 }
 
 /// Writes `bytes` to `path` unless it holds them already.
-fn write_if_changed(path: &Path, bytes: &[u8], changes: &mut Changes) -> Result<(), String> {
+pub(crate) fn write_if_changed(
+    path: &Path,
+    bytes: &[u8],
+    changes: &mut Changes,
+) -> Result<(), String> {
     if std::fs::read(path).is_ok_and(|old| old == bytes) {
         return Ok(());
     }

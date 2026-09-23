@@ -143,6 +143,20 @@ pub enum PacksCommand {
         #[arg(long, default_value = "community")]
         dir: PathBuf,
     },
+    /// Check every pack, then write the tree the app searches: a SQLite catalog, thumbnails,
+    /// preview strips, pictures and manifests named after their contents, and head.json last
+    /// (deterministic; only what changed is written)
+    Catalog {
+        /// The community folder, holding packs/ and, if there is one, featured.json
+        #[arg(long, default_value = "community")]
+        dir: PathBuf,
+        /// Where the tree goes
+        #[arg(long, default_value = "community/v2")]
+        out: PathBuf,
+        /// Another https:// folder serving the same tree, which the app tries first; repeatable
+        #[arg(long = "mirror", value_name = "URL")]
+        mirrors: Vec<String>,
+    },
 }
 
 pub fn parse_focus(s: &str) -> Result<(f32, f32), String> {
@@ -299,6 +313,40 @@ mod tests {
             Command::Packs {
                 command: PacksCommand::Index { dir },
             } => assert_eq!(dir, PathBuf::from("/tmp/c")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_packs_catalog_into_community_v2_by_default() {
+        match Cli::parse_from(["folderskin-tools", "packs", "catalog"]).command {
+            Command::Packs {
+                command: PacksCommand::Catalog { dir, out, mirrors },
+            } => {
+                assert_eq!(dir, PathBuf::from("community"));
+                assert_eq!(out, PathBuf::from("community/v2"));
+                assert!(mirrors.is_empty());
+            }
+            other => panic!("{other:?}"),
+        }
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "packs",
+            "catalog",
+            "--out",
+            "/tmp/v2",
+            "--mirror",
+            "https://a.example/v2",
+            "--mirror",
+            "https://b.example/v2",
+        ]);
+        match cli.command {
+            Command::Packs {
+                command: PacksCommand::Catalog { out, mirrors, .. },
+            } => {
+                assert_eq!(out, PathBuf::from("/tmp/v2"));
+                assert_eq!(mirrors, ["https://a.example/v2", "https://b.example/v2"]);
+            }
             other => panic!("{other:?}"),
         }
     }
