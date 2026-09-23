@@ -260,6 +260,7 @@ export function CommunityView({
           rowHeight={s.view === "gallery" ? galleryRow : listRow}
           getKey={(pack, i) => pack?.id ?? `place-${i}`}
           renderItem={renderPack}
+          role="region"
           aria-label="community packs"
           empty={
             <div className="empty">
