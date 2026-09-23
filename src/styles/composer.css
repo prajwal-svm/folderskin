@@ -2175,26 +2175,65 @@
   padding: 4px 14px 12px;
 }
 
-/* Under the grid: the icon pointed at, and what a click on it does. */
+/* Under the grid: the icon being tried and Add to canvas, or the selected one and Done. */
 .icon-status {
   flex: none;
-  min-height: 34px;
-  margin: 0;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 10px;
+  border-radius: var(--r-control);
+  background: var(--well);
+}
+
+.icon-status-glyph {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--island);
+  color: var(--ink);
+}
+
+.icon-status-text {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 1px;
   font-weight: 600;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 11.5px;
+  line-height: 1.35;
   color: var(--muted);
 }
 
-.icon-status strong {
+.icon-status-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 800;
   font-size: 12.5px;
   color: var(--ink);
-  overflow-wrap: anywhere;
+}
+
+.icon-status .btn {
+  flex: none;
+}
+
+/* The icon being tried from the library: outlined as not added yet. */
+.cmp-pending {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.icon-cell[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 .icon-controls {

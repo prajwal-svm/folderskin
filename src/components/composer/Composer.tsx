@@ -49,6 +49,7 @@ import {
   type IconLook,
   type Layer,
   type Parts,
+  type PlacedLayer,
   type PatternKind,
   type ShapeKind,
 } from "../../composer/doc";
@@ -66,7 +67,7 @@ import { PictureMenu } from "./PictureMenu";
 import { EmojiPicker, PatternGrid, ShapeGrid } from "./pickers";
 import { Popover } from "./Popover";
 import { NewDesign, type Start } from "./NewDesign";
-import { IconLibrary } from "./IconLibrary";
+import { IconLibrary, PREVIEW_ID } from "./IconLibrary";
 import { Segmented } from "./controls";
 import { ImageIcon } from "../icons/image";
 import { LoaderIcon } from "../icons/loader";
@@ -691,36 +692,66 @@ export function Composer({
     setSide("icons");
   }, []);
 
-  /**
-   * The icon layer the library works on: the selected one, or else the design's top icon, so
-   * trying icons swaps the one there instead of piling a second on top of it.
-   */
-  const iconTarget: IconLayer | null =
-    selected?.kind === "icon" ? selected : (([...doc.layers].reverse().find((l) => l.kind === "icon" && !l.hidden) as IconLayer | undefined) ?? null);
-  /** The design with the icon pointed at in the library, shown on the canvas until the pointer moves on. */
+  /** The icon the library swaps: the selected one, when it's an icon. With none, the library adds. */
+  const iconTarget: IconLayer | null = selected?.kind === "icon" ? selected : null;
+  /** The design with the icon being tried in it, shown on the canvas until it's kept or let go. */
   const [iconPreview, setIconPreview] = useState<Doc | null>(null);
 
   /**
-   * An icon picked in the library. With an icon selected it takes that one's place, at the same
-   * size and with the same look, so trying one icon after another never piles them up; with
-   * nothing selected, or `asNew`, it's added to the front's middle. Either way the library stays
-   * open for the next one.
+   * Where the next icon goes: the front's middle, or else the first spot beside it that nothing on
+   * the front already covers, so icons added one after another sit side by side rather than on top
+   * of each other. The first is the size of a folder's symbol, the ones after a little smaller.
    */
-  const pickIcon = (drawing: IconDrawing, asNew: boolean) => {
-    const d = latestDoc.current;
-    const target = iconTarget && !asNew ? findLayer(d, iconTarget.id) : null;
-    if (target?.kind === "icon") {
-      commit(
-        mapLayer(d, target.id, (l) =>
-          l.kind === "icon"
-            ? { ...l, pack: drawing.pack, icon: drawing.icon, paths: [...drawing.paths], filled: [...(drawing.filled ?? [])], style: drawing.style, viewBox: drawing.viewBox, strokeWidth: drawing.strokeWidth, evenOdd: drawing.evenOdd === true, brand: drawing.brand, look: l.look === "original" && !drawing.brand ? "flat" : l.look }
-            : l,
-        ),
-      );
-      setSelectedId(target.id);
-      return;
+  const iconSpot = useMemo(() => {
+    const taken = doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && (l.kind === "icon" || l.kind === "emoji" || l.kind === "text")).map((l) => boxOf(l, assets));
+    const firstIcon = !doc.layers.some((l) => l.kind === "icon");
+    const size = firstIcon ? 340 : 240;
+    // Far enough from the middle to clear the biggest thing already there, with a gap.
+    const widest = taken.reduce((m, b) => Math.max(m, b.w, b.h), size);
+    const step = widest / 2 + size / 2 + 28;
+    const [fx0, fy0, fx1, fy1] = parts.front;
+    const fits = (x: number, y: number) => x - size / 2 >= fx0 + 24 && x + size / 2 <= fx1 - 24 && y - size / 2 >= fy0 + 24 && y + size / 2 <= fy1 - 24;
+    const free = (x: number, y: number) => taken.every((b) => Math.abs(b.x - x) * 2 >= b.w + size || Math.abs(b.y - y) * 2 >= b.h + size);
+    const around = [
+      [0, 0],
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ];
+    for (const [dx, dy] of around) {
+      const x = front.x + dx * step;
+      const y = front.y + dy * step;
+      if (fits(x, y) && free(x, y)) return { x, y, size, color: ink };
     }
-    add(makeIcon(drawing, front.x, front.y, iconLook, ink));
+    // Nowhere free: stepped down and across from the middle, one step per icon already there.
+    const n = doc.layers.filter((l) => l.kind === "icon").length;
+    return { x: front.x + (n % 5) * 36, y: front.y + (n % 5) * 36, size, color: ink };
+  }, [doc.layers, assets, parts.front, front.x, front.y, ink]);
+
+  /** An icon added from the library, in its free spot. Nothing is selected, so the next click tries another. */
+  const addIcon = (drawing: IconDrawing) => {
+    const layer = makeIcon(drawing, iconSpot.x, iconSpot.y, iconLook, iconSpot.color, iconSpot.size);
+    commit(addLayer(latestDoc.current, layer));
+    setSelectedId(null);
+  };
+
+  /** An icon put in the selected one's place, at its size and with its look. */
+  const swapIcon = (drawing: IconDrawing) => {
+    const d = latestDoc.current;
+    const target = iconTarget ? findLayer(d, iconTarget.id) : null;
+    if (target?.kind !== "icon") return;
+    commit(
+      mapLayer(d, target.id, (l) =>
+        l.kind === "icon"
+          ? { ...l, pack: drawing.pack, icon: drawing.icon, paths: [...drawing.paths], filled: [...(drawing.filled ?? [])], style: drawing.style, viewBox: drawing.viewBox, strokeWidth: drawing.strokeWidth, evenOdd: drawing.evenOdd === true, brand: drawing.brand, look: l.look === "original" && !drawing.brand ? "flat" : l.look }
+          : l,
+      ),
+    );
   };
 
   /** A look chosen in the library: the selected icon's, at once, and the next new one's. */
@@ -1056,6 +1087,7 @@ export function Composer({
         <div className="cmp-stage-wrap">
           <ComposerStage
             doc={side === "icons" && iconPreview ? iconPreview : doc}
+            pendingId={side === "icons" && iconPreview ? PREVIEW_ID : null}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onPreview={(d) => dispatch({ type: "preview", doc: d })}
@@ -1154,12 +1186,14 @@ export function Composer({
           <div className="cmp-icons-view" hidden={side !== "icons"}>
             <IconLibrary
               doc={doc}
-              parts={parts}
               target={iconTarget}
+              spot={iconSpot}
               onPreview={setIconPreview}
               look={iconTarget ? iconTarget.look : iconLook}
               onLook={chooseLook}
-              onPick={pickIcon}
+              onAdd={addIcon}
+              onSwap={swapIcon}
+              onDone={() => setSelectedId(null)}
               onError={(message) => toast(message, { tone: "danger" })}
             />
           </div>

@@ -66,9 +66,12 @@ export function ComposerStage({
   version,
   onOpen,
   hint,
+  pendingId = null,
 }: {
   doc: Doc;
   selectedId: string | null;
+  /** A layer shown only to be tried (the icon library's), outlined as not added yet and not pickable. */
+  pendingId?: string | null;
   onSelect: (id: string | null) => void;
   /** A change while the pointer is still down. */
   onPreview: (doc: Doc) => void;
@@ -148,7 +151,11 @@ export function ComposerStage({
     [left, top, size],
   );
 
-  const placed = useMemo(() => doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden), [doc]);
+  const placed = useMemo(() => doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && l.id !== pendingId), [doc, pendingId]);
+  const pending = useMemo(() => {
+    const l = pendingId ? doc.layers.find((x) => x.id === pendingId) : undefined;
+    return l && isPlaced(l) ? l : null;
+  }, [doc, pendingId]);
 
   /** The topmost layer under a point that can be picked on the canvas. */
   const layerAt = useCallback(
@@ -288,6 +295,7 @@ export function ComposerStage({
         }}
       >
         {hovered && <div className="cmp-hover" style={boxStyle(boxOf(hovered, assets))} />}
+        {pending && <div className="cmp-pending" style={boxStyle(boxOf(pending, assets))} aria-hidden="true" />}
         {selBox && selected && isPlaced(selected) && (
           <>
             <div className={selected.locked ? "cmp-sel is-locked" : "cmp-sel"} style={boxStyle(selBox)} />

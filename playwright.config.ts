@@ -7,13 +7,16 @@ const port = Number(process.env.E2E_PORT ?? 14210);
 
 export default defineConfig({
   testDir: "e2e",
-  timeout: 30_000,
+  // A cold dev server compiles the app on the first visit, which a busy machine can take a while
+  // over; the tests' own waits are short.
+  timeout: 45_000,
   expect: { timeout: 7_000 },
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
     baseURL: `http://localhost:${port}`,
+    navigationTimeout: 40_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

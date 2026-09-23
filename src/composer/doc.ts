@@ -344,7 +344,7 @@ export type IconDrawing = {
 };
 
 /** A new icon layer, pressed into the folder unless `look` says otherwise. */
-export function makeIcon(drawing: IconDrawing, x: number, y: number, look: IconLook = "emboss", color = "#ffffff"): IconLayer {
+export function makeIcon(drawing: IconDrawing, x: number, y: number, look: IconLook = "emboss", color = "#ffffff", size = 340): IconLayer {
   return {
     ...common(),
     ...placed(x, y),
@@ -357,7 +357,7 @@ export function makeIcon(drawing: IconDrawing, x: number, y: number, look: IconL
     viewBox: drawing.viewBox,
     strokeWidth: drawing.strokeWidth,
     evenOdd: drawing.evenOdd === true,
-    size: 340,
+    size,
     look: look === "original" && !drawing.brand ? "flat" : look,
     paint: solid(color),
     auto: true,

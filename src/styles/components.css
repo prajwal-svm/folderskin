@@ -97,6 +97,13 @@
   font-size: 12.5px;
 }
 
+.btn-xs {
+  height: 28px;
+  gap: 5px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+
 .btn-block {
   width: 100%;
 }

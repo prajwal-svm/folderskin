@@ -96,17 +96,19 @@ test.describe("layer names and words", () => {
 });
 
 test.describe("the icon library", () => {
-  test("finds an icon, previews it and adds it pressed into the folder", async ({ page }) => {
+  test("tries an icon on the folder, and adds it pressed in with Add to canvas", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
     await composer(page).getByRole("button", { name: "Icon" }).click();
     const search = side(page).getByLabel("search icons");
     await expect(search).toHaveAttribute("placeholder", /Search [\d,]+ icons/);
     await search.fill("camera");
-    const cell = side(page).getByRole("button", { name: "Camera", exact: true });
-    await cell.hover();
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    // Tried, outlined on the canvas as not added yet, and named with Add under the grid.
+    await expect(composer(page).locator(".cmp-pending")).toBeVisible();
     await expect(side(page).locator(".icon-status strong")).toHaveText("Camera");
-    await cell.click();
+    await side(page).getByRole("button", { name: "Add to canvas" }).click();
+    await expect(composer(page).locator(".cmp-pending")).toHaveCount(0);
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await expect(layerNames(page)).toHaveText(["Camera", "Background"]);
     await side(page).locator(".cmp-layer", { hasText: "Camera" }).click();
@@ -124,20 +126,36 @@ test.describe("the icon library", () => {
     await expect(side(page).getByLabel("search icons")).toHaveValue("folder");
   });
 
-  test("swaps the selected icon rather than piling another on top", async ({ page }) => {
+  test("trying another icon changes only the one being tried", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
     await composer(page).getByRole("button", { name: "Icon" }).click();
     await side(page).getByLabel("search icons").fill("camera");
     await side(page).getByRole("button", { name: "Camera", exact: true }).click();
-    // The new icon is selected, so the library now works on it: the preview says so.
     await side(page).getByLabel("search icons").fill("aperture");
-    await page.mouse.move(5, 5);
-    await side(page).getByRole("button", { name: "Aperture", exact: true }).hover();
-    await expect(side(page).locator(".icon-status span")).toHaveText(/^Click to swap it for Camera/);
     await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
+    await side(page).getByRole("button", { name: "Add to canvas" }).click();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await expect(layerNames(page)).toHaveText(["Aperture", "Background"]);
+  });
+
+  test("adds several icons, side by side rather than on top of each other", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    for (const name of ["Camera", "Aperture", "Anchor"]) {
+      await side(page).getByLabel("search icons").fill(name.toLowerCase());
+      // A double-click adds straight away.
+      await side(page).getByRole("button", { name, exact: true }).dblclick();
+    }
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Anchor", "Aperture", "Camera", "Background"]);
+    const spots = new Set<string>();
+    for (const name of ["Camera", "Aperture", "Anchor"]) {
+      await side(page).locator(".cmp-layer", { hasText: name }).click();
+      spots.add(`${await side(page).getByLabel("X", { exact: true }).inputValue()},${await side(page).getByLabel("Y", { exact: true }).inputValue()}`);
+    }
+    expect(spots.size).toBe(3);
   });
 
   test("tries the icon pointed at on the canvas itself, and puts it back after", async ({ page }) => {
@@ -158,35 +176,24 @@ test.describe("the icon library", () => {
     await expect(layerNames(page)).toHaveText(["Background"]);
   });
 
-  test("with nothing selected, swaps the design's icon rather than adding a second", async ({ page }) => {
+  test("with an icon selected, a click swaps it, and Done goes back to adding", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
     await composer(page).getByRole("button", { name: "Icon" }).click();
     await side(page).getByLabel("search icons").fill("camera");
-    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
-    await page.keyboard.press("Escape");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).dblclick();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Camera" }).click();
+    await side(page).getByRole("button", { name: "Replace", exact: true }).click();
+    await expect(side(page).locator(".icon-status")).toContainText("Click an icon to put it in its place.");
     await side(page).getByLabel("search icons").fill("aperture");
     await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
+    await side(page).getByRole("button", { name: "Done", exact: true }).click();
+    // Back to adding: a click tries an icon rather than swapping.
+    await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
+    await expect(side(page).getByRole("button", { name: "Add to canvas" })).toBeVisible();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await expect(layerNames(page)).toHaveText(["Aperture", "Background"]);
-  });
-
-  test("adds another with Alt held, and Replace opens the library on the selected icon", async ({ page }) => {
-    await openApp(page);
-    await startFrom(page, "Plain");
-    await composer(page).getByRole("button", { name: "Icon" }).click();
-    await side(page).getByLabel("search icons").fill("camera");
-    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
-    await side(page).getByRole("button", { name: "Camera", exact: true }).click({ modifiers: ["Alt"] });
-    await side(page).getByRole("radio", { name: /^Layers/ }).click();
-    await expect(layerNames(page)).toHaveText(["Camera", "Camera", "Background"]);
-    await side(page).locator(".cmp-layer").nth(1).click();
-    await side(page).getByRole("button", { name: "Replace", exact: true }).click();
-    await expect(side(page).getByLabel("search icons")).toBeVisible();
-    await side(page).getByLabel("search icons").fill("aperture");
-    await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
-    await side(page).getByRole("radio", { name: /^Layers/ }).click();
-    await expect(layerNames(page)).toHaveText(["Camera", "Aperture", "Background"]);
   });
 
   test("its look switch changes the selected icon on the folder", async ({ page }) => {
@@ -194,7 +201,10 @@ test.describe("the icon library", () => {
     await startFrom(page, "Plain");
     await composer(page).getByRole("button", { name: "Icon" }).click();
     await side(page).getByLabel("search icons").fill("camera");
-    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    await side(page).getByRole("button", { name: "Camera", exact: true }).dblclick();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Camera" }).click();
+    await side(page).getByRole("radio", { name: "Icons" }).click();
     await side(page).getByRole("radio", { name: "Flat" }).click();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await expect(side(page).getByRole("radio", { name: "Flat" })).toHaveAttribute("aria-checked", "true");

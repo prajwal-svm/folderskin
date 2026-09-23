@@ -1,12 +1,11 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { centreOf, ICON_LOOKS, iconName, makeIcon, type Doc, type IconDrawing, type IconLayer, type IconLook, type Parts } from "../../composer/doc";
+import { ICON_LOOKS, iconName, makeIcon, type Doc, type IconDrawing, type IconLayer, type IconLook } from "../../composer/doc";
 import { ICON_PACKS, type IconPackInfo } from "../../composer/icons/catalog";
 import { drawingOf, searchIcons, type IconDef, type IconPack } from "../../composer/icons/index";
 import { availablePacks, BUILTIN_PACK, downloadPack, loadPack, packInfo, removePack, type LoadedPack } from "../../composer/icons/load";
 import { errorMessage } from "../../lib/tauri";
-import { localOs } from "../../lib/platform";
 import { VirtualGrid, type VirtualGridHandle } from "../VirtualGrid";
-import { ChevronDownIcon, TickIcon, TrashIcon } from "../icons/composer";
+import { ChevronDownIcon, PlusIcon, TickIcon, TrashIcon } from "../icons/composer";
 import { DownloadIcon } from "../icons/download";
 import { LoaderIcon } from "../icons/loader";
 import { SearchIcon } from "../icons/search";
@@ -53,6 +52,24 @@ export const IconGlyph = memo(function IconGlyph({ pack, icon, size }: { pack: I
     </svg>
   );
 });
+
+/** The id of the icon being tried on the canvas, so the canvas can outline it as not added yet. */
+export const PREVIEW_ID = "preview";
+
+/** An icon layer drawn small, for the bar under the grid. */
+function LayerGlyph({ layer }: { layer: IconLayer }) {
+  return (
+    <svg viewBox={`0 0 ${layer.viewBox} ${layer.viewBox}`} width={18} height={18}>
+      {layer.paths.map((d, i) =>
+        layer.style === "fill" || layer.filled.includes(i) ? (
+          <path key={i} d={d} fill="currentColor" fillRule={layer.evenOdd ? "evenodd" : "nonzero"} />
+        ) : (
+          <path key={i} d={d} fill="none" stroke="currentColor" strokeWidth={layer.strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        ),
+      )}
+    </svg>
+  );
+}
 
 /** The packs, each with its logo and how many icons it has: choose one, download one, or remove one. */
 function PackList({
@@ -128,32 +145,44 @@ function PackList({
 
 /**
  * The icon library in the composer's side island: every icon of the chosen pack, searchable,
- * drawn only as far as the grid is scrolled. The icon under the pointer (or the keyboard) is shown
- * on the canvas itself, live, before anything changes. With an icon on the design the library works
- * on it (the selected one, or else the top one): a click swaps it for the one clicked, so trying
- * icons never piles them up, ⌥-click adds another instead, and the look switch changes it in
- * place. Lucide comes with the app; the other packs are a download away.
+ * drawn only as far as the grid is scrolled. It works one of two ways, by what's selected:
+ *
+ * - Nothing selected, it adds. A click puts the icon on the canvas to try, outlined as not added
+ *   yet; another click tries another in its place; Add to canvas (or a double-click, or Enter)
+ *   keeps it, in a free spot, and the next click starts another. Adding one never changes one
+ *   that's there.
+ * - An icon selected, it swaps: a click puts the icon clicked in its place, undoably, and Done
+ *   goes back to adding.
+ *
+ * The icon under the pointer is shown on the canvas live either way, and the look switch sets
+ * the selected icon's look or the next one's. Lucide comes with the app; the other packs are a
+ * download away.
  */
 export function IconLibrary({
   doc,
-  parts,
   target,
+  spot,
   look,
   onLook,
-  onPick,
+  onAdd,
+  onSwap,
+  onDone,
   onPreview,
   onError,
 }: {
   doc: Doc;
-  parts: Parts;
-  /** The icon a pick replaces (the selected one, or the design's top one); null adds a new one. */
+  /** The selected icon, which a click swaps; null while adding. */
   target: IconLayer | null;
+  /** Where the next icon added goes, how big and in what colour: a free spot on the front. */
+  spot: { x: number; y: number; size: number; color: string };
   /** The selected icon's look, or the next new one's. */
   look: IconLook;
   onLook: (look: IconLook) => void;
-  /** An icon was picked: `asNew` adds it even with an icon selected. */
-  onPick: (drawing: IconDrawing, asNew: boolean) => void;
-  /** The design as a click would leave it, for the canvas to show; null when nothing is pointed at. */
+  onAdd: (drawing: IconDrawing) => void;
+  onSwap: (drawing: IconDrawing) => void;
+  /** Stops swapping the selected icon, to add others. */
+  onDone: () => void;
+  /** The design as the canvas should show it (the icon being tried in it); null for the design as it is. */
   onPreview: (doc: Doc | null) => void;
   onError: (message: string) => void;
 }) {
@@ -167,6 +196,8 @@ export function IconLibrary({
   const [active, setActive] = useState(0);
   /** The arrow keys are moving through the grid, so the icon they're on is the one shown. */
   const [keyed, setKeyed] = useState(false);
+  /** The icon being tried, while adding: on the canvas, outlined, until it's added or another is tried. */
+  const [candidate, setCandidate] = useState<IconDef | null>(null);
   const [packsAnchor, setPacksAnchor] = useState<HTMLElement | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const grid = useRef<VirtualGridHandle>(null);
@@ -202,7 +233,12 @@ export function IconLibrary({
     rememberPack(id);
     setPacksAnchor(null);
     setHover(null);
+    setCandidate(null);
   };
+
+  // Selecting an icon on the canvas switches to swapping it; whatever was being tried goes.
+  const targetId = target?.id ?? null;
+  useEffect(() => setCandidate(null), [targetId]);
 
   const download = async (info: IconPackInfo) => {
     setProgress((p) => ({ ...p, [info.id]: 0 }));
@@ -227,17 +263,27 @@ export function IconLibrary({
     }
   };
 
-  const pick = useCallback(
-    (icon: IconDef, asNew: boolean) => {
-      if (pack) onPick(drawingOf(pack, icon), asNew);
+  /** Keeps `icon`: adds it (the one being tried, or straight away) or puts it in the selected one's place. */
+  const keep = useCallback(
+    (icon: IconDef) => {
+      if (!pack) return;
+      if (target) onSwap(drawingOf(pack, icon));
+      else {
+        onAdd(drawingOf(pack, icon));
+        setCandidate(null);
+      }
     },
-    [pack, onPick],
+    [pack, target, onAdd, onSwap],
   );
 
-  // The design as a click would leave it: the icon pointed at in the target's place, or added to the
-  // front's middle. Never both, so the canvas shows exactly what a click does.
-  const front = centreOf(parts.front);
-  const shown = hover ?? (keyed ? (results[active] ?? null) : null);
+  const click = (icon: IconDef) => {
+    if (target) keep(icon);
+    else setCandidate(icon);
+  };
+
+  // What the canvas shows: the icon under the pointer (or the keyboard), else the one being tried,
+  // in the selected icon's place or in the free spot. Always exactly what keeping it would do.
+  const shown = hover ?? (keyed ? (results[active] ?? null) : null) ?? (target ? null : candidate);
   const preview = useMemo<Doc | null>(() => {
     if (!pack || !shown) return null;
     const drawing = drawingOf(pack, shown);
@@ -251,8 +297,8 @@ export function IconLibrary({
         ),
       };
     }
-    return { ...doc, layers: [...doc.layers, { ...makeIcon(drawing, front.x, front.y, look), id: "preview" }] };
-  }, [doc, pack, shown, target, look, front.x, front.y]);
+    return { ...doc, layers: [...doc.layers, { ...makeIcon(drawing, spot.x, spot.y, look, spot.color, spot.size), id: PREVIEW_ID }] };
+  }, [doc, pack, shown, target, look, spot.x, spot.y, spot.size, spot.color]);
   useEffect(() => onPreview(preview), [preview, onPreview]);
   useEffect(() => () => onPreview(null), [onPreview]);
 
@@ -268,27 +314,23 @@ export function IconLibrary({
       setKeyed(true);
       grid.current?.scrollToIndex(next);
       requestAnimationFrame(() => grid.current?.element()?.querySelector<HTMLElement>(`[data-index="${next}"] button`)?.focus());
-    } else if (e.key === "Enter" || e.key === " ") {
+    } else if (e.key === "Enter") {
       e.preventDefault();
-      pick(results[active], e.altKey);
+      keep(results[active]);
+    } else if (e.key === " ") {
+      e.preventDefault();
+      click(results[active]);
+    } else if (e.key === "Escape" && candidate) {
+      e.stopPropagation();
+      setCandidate(null);
     }
   };
 
   const info = packInfo(usable);
   const looks = ICON_LOOKS.filter((l) => l.id !== "original" || target?.brand || pack?.brands);
-  // A line under the grid names the icon pointed at (the cells have no tooltips of their own) and
-  // says what a click does; the canvas shows it.
-  const same = target !== null && shown !== null && target.pack === pack?.id && target.icon === shown.n;
-  const alt = localOs() === "macos" ? "⌥" : "Alt";
-  const status = !shown
-    ? target
-      ? `Point at an icon to try it in place of ${iconName(target.icon)}.`
-      : "Point at an icon to try it on your folder."
-    : same
-      ? "It's on your folder now."
-      : target
-        ? `Click to swap it for ${iconName(target.icon)}, ${alt}-click to add another.`
-        : "Click to add it to the front.";
+  // The bar under the grid: while swapping, which icon and Done; while adding, the icon being tried
+  // and Add to canvas, or the icon pointed at (the cells have no tooltips of their own).
+  const named = candidate ?? hover;
   return (
     <div className="icon-library">
       <div className="icon-controls">
@@ -358,10 +400,14 @@ export function IconLibrary({
                 aria-label={iconName(icon.n)}
                 onPointerEnter={() => setHover(icon)}
                 onPointerLeave={() => setHover((h) => (h === icon ? null : h))}
+                aria-pressed={!target && candidate === icon}
                 onFocus={() => setActive(i)}
-                onClick={(e) => {
+                onClick={() => {
                   setActive(i);
-                  pick(icon, e.altKey);
+                  click(icon);
+                }}
+                onDoubleClick={() => {
+                  if (!target) keep(icon);
                 }}
               >
                 <IconGlyph pack={pack} icon={icon} size={22} />
@@ -370,10 +416,42 @@ export function IconLibrary({
           />
         </div>
       )}
-      <p className="icon-status" aria-live="polite">
-        {shown && <strong>{iconName(shown.n)}</strong>}
-        <span>{status}</span>
-      </p>
+      <div className="icon-status" aria-live="polite">
+        {target ? (
+          <>
+            <span className="icon-status-glyph" aria-hidden="true">
+              <LayerGlyph layer={target} />
+            </span>
+            <span className="icon-status-text">
+              <strong>{iconName(target.icon)}</strong>
+              <span>Click an icon to put it in its place.</span>
+            </span>
+            <button type="button" className="btn btn-secondary btn-xs" data-tip="Stop swapping, to add icons" onClick={onDone}>
+              Done
+            </button>
+          </>
+        ) : named && pack ? (
+          <>
+            <span className="icon-status-glyph" aria-hidden="true">
+              <IconGlyph pack={pack} icon={named} size={18} />
+            </span>
+            <span className="icon-status-text">
+              <strong>{iconName(named.n)}</strong>
+              <span>{candidate ? "On your folder to try. Add it to keep it." : "Click to try it on your folder."}</span>
+            </span>
+            {candidate && (
+              <button type="button" className="btn btn-primary btn-xs" data-tip={`Add ${iconName(candidate.n)} to the design`} data-tip-kbd="Enter" onClick={() => keep(candidate)}>
+                <PlusIcon size={13} />
+                Add to canvas
+              </button>
+            )}
+          </>
+        ) : (
+          <span className="icon-status-text">
+            <span>Click an icon to try it on your folder. A double-click adds it.</span>
+          </span>
+        )}
+      </div>
       {packsAnchor && (
         <Popover anchor={packsAnchor} onClose={() => setPacksAnchor(null)} width={280} label="Icon packs">
           <PackList current={usable} available={available} progress={progress} onChoose={choosePack} onDownload={(p) => void download(p)} onRemove={(p) => void remove(p)} />
