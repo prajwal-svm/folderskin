@@ -29,6 +29,7 @@ import {
   layerLabel,
   makeEmoji,
   makeFill,
+  makeIcon,
   makeImage,
   makePattern,
   makeShape,
@@ -43,14 +44,16 @@ import {
   solid,
   suggestName,
   type Doc,
+  type IconDrawing,
+  type IconLook,
   type Layer,
   type Parts,
   type PatternKind,
   type ShapeKind,
 } from "../../composer/doc";
 import { canRedo, canUndo, historyReducer, startHistory } from "../../composer/history";
-import { renderDoc } from "../../composer/render";
-import { TEMPLATES, type Picture, type Template } from "../../composer/templates";
+import { boxOf, renderDoc } from "../../composer/render";
+import { TEMPLATES, type Picture } from "../../composer/templates";
 import { Confirm } from "../Confirm";
 import { ComposerInspector, type Patch } from "./ComposerInspector";
 import { ComposerLayers } from "./ComposerLayers";
@@ -62,7 +65,9 @@ import { ComposerStage, type Backdrop } from "./ComposerStage";
 import { PictureMenu } from "./PictureMenu";
 import { EmojiPicker, PatternGrid, ShapeGrid } from "./pickers";
 import { Popover } from "./Popover";
-import { TemplateSheet } from "./TemplateSheet";
+import { NewDesign, type Start } from "./NewDesign";
+import { IconLibrary } from "./IconLibrary";
+import { Segmented } from "./controls";
 import { ImageIcon } from "../icons/image";
 import { LoaderIcon } from "../icons/loader";
 import {
@@ -75,6 +80,7 @@ import {
   TrashIcon,
   ShapesIcon,
   SmileIcon,
+  StickerIcon,
   TypeIcon,
   UndoIcon,
   WavesIcon,
@@ -124,7 +130,7 @@ function colorsOf(doc: Doc): string[] {
     for (const s of p.stops ?? []) out.add(s.color);
   };
   for (const l of doc.layers) {
-    if (l.kind === "fill" || l.kind === "text" || l.kind === "shape") paint(l.paint);
+    if (l.kind === "fill" || l.kind === "text" || l.kind === "shape" || l.kind === "icon") paint(l.paint);
     if (l.kind === "pattern") out.add(l.color);
     if ((l.kind === "text" || l.kind === "shape") && l.stroke) out.add(l.stroke.color);
     if (isPlaced(l) && l.edge) out.add(l.edge.color);
@@ -295,7 +301,8 @@ export function Composer({
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
   const dirty = doc !== baseline;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [sheet, setSheet] = useState(!draft);
+  /** The "Start a new design" dialog: on the first visit, and whenever New is pressed. */
+  const [starting, setStarting] = useState(!draft);
   const [name, setName] = useState(draft?.name ?? "");
   const [nameTouched, setNameTouched] = useState(draft?.nameTouched ?? false);
   const [editing, setEditing] = useState<Editing | null>(draft?.editing ?? null);
@@ -303,6 +310,15 @@ export function Composer({
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: string; run: () => void } | null>(null);
   const [view, setView] = useState(loadView);
   const [previews, setPreviews] = useState<string[]>([]);
+  /** What the side island shows: the layers and their settings, or the icon library. */
+  const [side, setSide] = useState<"layers" | "icons">("layers");
+  /** The icon layer the library is picking a replacement for, when it opened from Replace. */
+  const [replaceId, setReplaceId] = useState<string | null>(null);
+  /** The library stays mounted once opened, so its search and scroll survive a look at the layers. */
+  const [iconsOpened, setIconsOpened] = useState(false);
+  useEffect(() => {
+    if (side === "icons") setIconsOpened(true);
+  }, [side]);
   /** The Replace button whose picture menu is open. */
   const [replaceAnchor, setReplaceAnchor] = useState<HTMLElement | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -357,26 +373,20 @@ export function Composer({
     setEditing(opts.editing);
     setName(opts.name);
     setNameTouched(opts.named);
-    setSheet(false);
+    setStarting(false);
+    // The old design's icons mustn't show while the new one's are drawn.
+    setPreviews([]);
     assets.prune([next]);
   }, [assets]);
 
-  /** Throws the whole design away and starts on a blank folder: name, history and draft with it. */
-  const discard = useCallback(() => {
-    setConfirm({
-      title: "Discard this design?",
-      text: "It goes back to a blank folder. Anything not saved to Yours is gone.",
-      action: "Discard",
-      run: () => {
-        reset(emptyDoc("folder"), { editing: null, name: "", named: false });
-        try {
-          localStorage.removeItem(DRAFT_KEY);
-        } catch {
-          // The next autosave writes over it anyway.
-        }
-      },
-    });
-  }, [reset]);
+  /** Forgets the stored draft, for a fresh start that shouldn't come back after a restart. */
+  const forgetDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // The next autosave writes over it anyway.
+    }
+  }, []);
 
   /** Asks before throwing away changes that aren't saved. */
   const guard = useCallback(
@@ -404,18 +414,28 @@ export function Composer({
     }
   }, [toast]);
 
-  const startFrom = useCallback(
-    (t: Template) =>
-      guard(`Starting from ${t.label}`, async () => {
-        let picture: Picture | undefined;
-        if (t.photo) {
-          const img = await choosePicture();
-          if (!img) return;
-          picture = asPicture(img);
-        }
-        reset(t.make(parts, picture), { editing: null, name: "", named: false });
-      }),
-    [choosePicture, guard, parts, reset],
+  /**
+   * Starts again from the dialog's choice. The dialog has already said the design in progress
+   * goes if it isn't saved, so nothing asks a second time.
+   */
+  const start = useCallback(
+    async (choice: Start) => {
+      if (choice.kind === "empty") {
+        reset(emptyDoc(choice.shape), { editing: null, name: "", named: false });
+        forgetDraft();
+        return;
+      }
+      let picture: Picture | undefined;
+      if (choice.template.photo) {
+        const img = await choosePicture();
+        // No picture chosen: stay in the dialog to pick again.
+        if (!img) return;
+        picture = asPicture(img);
+      }
+      reset(choice.template.make(parts, picture), { editing: null, name: "", named: false });
+      forgetDraft();
+    },
+    [choosePicture, forgetDraft, parts, reset],
   );
 
   // Edit a saved design, or remix any skin, when the app asks.
@@ -458,7 +478,6 @@ export function Composer({
     (layer: Layer, index?: number) => {
       commit(addLayer(latestDoc.current, layer, index));
       setSelectedId(layer.id);
-      setSheet(false);
     },
     [commit],
   );
@@ -501,6 +520,33 @@ export function Composer({
       toast(`Couldn't use ${clipName(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
     }
   };
+  /** Shows the icon library; with an icon layer's id, to pick its replacement. */
+  const openIcons = useCallback((replacing: string | null) => {
+    setReplaceId(replacing);
+    setSide("icons");
+  }, []);
+
+  const pickIcon = (drawing: IconDrawing, look: IconLook) => {
+    const d = latestDoc.current;
+    const target = replaceId ? findLayer(d, replaceId) : null;
+    if (target?.kind === "icon") {
+      // Another icon in the same place, at the same size and with the same look.
+      commit(
+        mapLayer(d, target.id, (l) =>
+          l.kind === "icon"
+            ? { ...l, pack: drawing.pack, icon: drawing.icon, paths: [...drawing.paths], filled: [...(drawing.filled ?? [])], style: drawing.style, viewBox: drawing.viewBox, strokeWidth: drawing.strokeWidth, evenOdd: drawing.evenOdd === true, brand: drawing.brand, look: l.look === "original" && !drawing.brand ? "flat" : l.look }
+            : l,
+        ),
+      );
+      setSelectedId(target.id);
+      setReplaceId(null);
+      setSide("layers");
+      return;
+    }
+    // Added to the front's middle, and the library stays open for the next one.
+    add(makeIcon(drawing, front.x, front.y, look, ink));
+  };
+
   const replacePicture = (id: string, img: ComposerImage) => {
     commit(
       mapLayer(latestDoc.current, id, (l) =>
@@ -601,6 +647,8 @@ export function Composer({
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       if (typingIn(e.target)) return;
+      // A dialog is open over the design: nothing here may change what's behind it.
+      if (document.querySelector(".modal-backdrop")) return;
       if (mod && k === "z") {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
@@ -611,12 +659,12 @@ export function Composer({
         dispatch({ type: "redo" });
         return;
       }
-      if (mod && k === "v" && clip.current && !document.querySelector(".modal-backdrop")) {
+      if (mod && k === "v" && clip.current) {
         window.clearTimeout(pasteLater);
         pasteLater = window.setTimeout(pasteLayer, 120);
         return;
       }
-      if (document.querySelector(".cmp-pop, .modal-backdrop")) return;
+      if (document.querySelector(".cmp-pop")) return;
       const d = latestDoc.current;
       const sel = findLayer(d, selectedId);
       if (e.key === "Escape" && sel) {
@@ -673,7 +721,7 @@ export function Composer({
 
   // ---- the icon at its real sizes, from Rust ----
   useEffect(() => {
-    if (!active || sheet) return;
+    if (!active || starting) return;
     let live = true;
     const t = window.setTimeout(async () => {
       try {
@@ -691,7 +739,7 @@ export function Composer({
       live = false;
       window.clearTimeout(t);
     };
-  }, [doc, active, sheet, assets, version]);
+  }, [doc, active, starting, assets, version]);
 
   // ---- saving ----
   const suggested = suggestName(doc);
@@ -775,6 +823,7 @@ export function Composer({
         <div className="cmp-toolbar">
           <div className="cmp-tools" role="toolbar" aria-label="add to the design">
             <Tool label="Text" icon={<TypeIcon size={16} />} onClick={addText} />
+            <Tool label="Icon" icon={<StickerIcon size={16} />} onClick={() => openIcons(null)} />
             <Tool label="Emoji" icon={<SmileIcon size={16} />} width={320} popover={(close) => <EmojiPicker onPick={(c) => (addEmoji(c), close())} />} />
             <Tool label="Shape" icon={<ShapesIcon size={16} />} popover={(close) => <ShapeGrid onPick={(s) => (addShape(s), close())} />} />
             <Tool
@@ -805,19 +854,9 @@ export function Composer({
             <button type="button" className="cmp-icon-btn" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={!canRedo(history)} onClick={() => dispatch({ type: "redo" })}>
               <RedoIcon size={16} />
             </button>
-            <button type="button" className="cmp-tool is-quiet" title="Start a new design from a template" onClick={() => setSheet(true)}>
+            <button type="button" className="cmp-tool is-quiet" title="Start a new design: empty, or from a template" onClick={() => setStarting(true)}>
               <LayoutTemplateIcon size={16} />
               <span className="cmp-tool-label">New</span>
-            </button>
-            <button
-              type="button"
-              className="cmp-icon-btn is-danger"
-              aria-label="Discard this design"
-              title="Discard this design and start fresh"
-              disabled={doc.layers.length === 0 && !name && !editing}
-              onClick={discard}
-            >
-              <TrashIcon size={16} />
             </button>
           </div>
         </div>
@@ -844,9 +883,9 @@ export function Composer({
                   textRef.current?.select();
                 } else if (layer.kind === "emoji") document.querySelector<HTMLButtonElement>(".cmp-pick-btn.is-emoji")?.click();
               }, 30);
+              if (layer.kind === "icon") openIcons(layer.id);
             }}
           />
-          {sheet && <TemplateSheet parts={parts} template={template?.images ?? null} assets={assets} onPick={startFrom} onClose={() => setSheet(false)} />}
         </div>
 
         <div className="cmp-bar">
@@ -903,81 +942,123 @@ export function Composer({
             }}
           />
           <p className="cmp-side-sub">{editing ? (dirty ? "Changed since it was saved" : "Saved in Yours") : "Not saved yet"}</p>
+          <div className="cmp-side-tabs">
+            <Segmented<"layers" | "icons">
+              label="side panel"
+              value={side}
+              onChange={(v) => {
+                setSide(v);
+                if (v === "layers") setReplaceId(null);
+              }}
+              options={[
+                { value: "layers", label: `Layers · ${doc.layers.length}` },
+                { value: "icons", label: "Icons" },
+              ]}
+            />
+          </div>
         </div>
-        <Panel
-          title="Layers"
-          badge={<span className="count">{doc.layers.length}</span>}
-          actions={
-            doc.layers.length > 0 ? (
-              <button type="button" className="cmp-panel-action is-danger" title="Delete every layer" onClick={removeAll}>
-                <DeleteIcon size={14} />
-                Delete all
-              </button>
-            ) : undefined
-          }
-          open={panels.layers}
-          onToggle={() => setPanels((p) => ({ ...p, layers: !p.layers }))}
-          className={bothOpen ? "is-layers is-sized" : "is-layers"}
-          style={bothOpen ? { flexBasis: panels.height } : undefined}
-          panelRef={layersPanel}
-        >
-          <div className="cmp-layers-scroll">
-            <ComposerLayers
+        {iconsOpened && (
+          <div className="cmp-icons-view" hidden={side !== "icons"}>
+            <IconLibrary
               doc={doc}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onToggle={(id, field) => commit(mapLayer(doc, id, (l) => ({ ...l, [field]: !l[field] }) as Layer))}
-              onRename={(id, value) => commit(mapLayer(doc, id, (l) => ({ ...l, name: value || undefined }) as Layer))}
-              onMove={(id, to) => commit(moveLayer(doc, id, to))}
-              onDelete={removeById}
-            />
-          </div>
-        </Panel>
-        {bothOpen && (
-          <Resizer
-            measure={measureLayers}
-            onHeight={(height) => setPanels((p) => ({ ...p, height }))}
-            onReset={() => setPanels((p) => ({ ...p, height: LAYERS_HEIGHT }))}
-          />
-        )}
-        <Panel
-          title={selected ? layerLabel(selected, index) : "Design"}
-          actions={
-            selected ? (
-              <>
-                <IconButton label="Bring forward" onClick={() => commit(bringForward(doc, selected.id))} disabled={index >= doc.layers.length - 1}>
-                  <ChevronUpIcon size={15} />
-                </IconButton>
-                <IconButton label="Send backward" onClick={() => commit(sendBackward(doc, selected.id))} disabled={index <= 0}>
-                  <ChevronDownIcon size={15} />
-                </IconButton>
-                <IconButton label="Duplicate" onClick={duplicate}>
-                  <CopyIcon size={14} />
-                </IconButton>
-                <IconButton label="Delete" onClick={remove} className="is-danger">
-                  <TrashIcon size={14} />
-                </IconButton>
-              </>
-            ) : undefined
-          }
-          open={panels.settings}
-          onToggle={() => setPanels((p) => ({ ...p, settings: !p.settings }))}
-          className="is-settings"
-          panelRef={settingsPanel}
-        >
-          <div className="cmp-side-scroll" key={selectedId ?? "design"}>
-            <ComposerInspector
-              doc={doc}
-              layer={selected}
-              onPatch={patch}
-              onShape={(shape) => commit({ ...doc, shape })}
               parts={parts}
-              used={used}
-              textRef={textRef}
-              onReplaceImage={(anchor) => setReplaceAnchor(anchor)}
+              template={template?.images ?? null}
+              assets={assets}
+              version={version}
+              replacing={(() => {
+                const r = replaceId ? findLayer(doc, replaceId) : null;
+                return r?.kind === "icon" ? r : null;
+              })()}
+              onPick={pickIcon}
+              onCancelReplace={() => {
+                setReplaceId(null);
+                setSide("layers");
+              }}
+              onError={(message) => toast(message, { tone: "danger" })}
             />
           </div>
-        </Panel>
+        )}
+        {side === "layers" && (
+          <>
+            <Panel
+              title="Layers"
+              badge={<span className="count">{doc.layers.length}</span>}
+              actions={
+                doc.layers.length > 0 ? (
+                  <button type="button" className="cmp-panel-action is-danger" title="Delete every layer" onClick={removeAll}>
+                    <DeleteIcon size={14} />
+                    Delete all
+                  </button>
+                ) : undefined
+              }
+              open={panels.layers}
+              onToggle={() => setPanels((p) => ({ ...p, layers: !p.layers }))}
+              className={bothOpen ? "is-layers is-sized" : "is-layers"}
+              style={bothOpen ? { flexBasis: panels.height } : undefined}
+              panelRef={layersPanel}
+            >
+              <div className="cmp-layers-scroll">
+                <ComposerLayers
+                  doc={doc}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onToggle={(id, field) => commit(mapLayer(doc, id, (l) => ({ ...l, [field]: !l[field] }) as Layer))}
+                  onRename={(id, value) => commit(mapLayer(doc, id, (l) => ({ ...l, name: value || undefined }) as Layer))}
+                  onMove={(id, to) => commit(moveLayer(doc, id, to))}
+                  onDelete={removeById}
+                />
+              </div>
+            </Panel>
+            {bothOpen && (
+              <Resizer
+                measure={measureLayers}
+                onHeight={(height) => setPanels((p) => ({ ...p, height }))}
+                onReset={() => setPanels((p) => ({ ...p, height: LAYERS_HEIGHT }))}
+              />
+            )}
+            <Panel
+              title={selected ? layerLabel(selected, index) : "Design"}
+              actions={
+                selected ? (
+                  <>
+                    <IconButton label="Bring forward" onClick={() => commit(bringForward(doc, selected.id))} disabled={index >= doc.layers.length - 1}>
+                      <ChevronUpIcon size={15} />
+                    </IconButton>
+                    <IconButton label="Send backward" onClick={() => commit(sendBackward(doc, selected.id))} disabled={index <= 0}>
+                      <ChevronDownIcon size={15} />
+                    </IconButton>
+                    <IconButton label="Duplicate" onClick={duplicate}>
+                      <CopyIcon size={14} />
+                    </IconButton>
+                    <IconButton label="Delete" onClick={remove} className="is-danger">
+                      <TrashIcon size={14} />
+                    </IconButton>
+                  </>
+                ) : undefined
+              }
+              open={panels.settings}
+              onToggle={() => setPanels((p) => ({ ...p, settings: !p.settings }))}
+              className="is-settings"
+              panelRef={settingsPanel}
+            >
+              <div className="cmp-side-scroll" key={selectedId ?? "design"}>
+                <ComposerInspector
+                  doc={doc}
+                  layer={selected}
+                  onPatch={patch}
+                  onShape={(shape) => commit({ ...doc, shape })}
+                  parts={parts}
+                  used={used}
+                  textRef={textRef}
+                  onReplaceImage={(anchor) => setReplaceAnchor(anchor)}
+                  onReplaceIcon={() => openIcons(selected?.id ?? null)}
+                  index={index}
+                  size={selected && isPlaced(selected) ? boxOf(selected, assets) : null}
+                />
+              </div>
+            </Panel>
+          </>
+        )}
         <div className="cmp-save">
           <button type="button" className={folder ? "cmp-target" : "cmp-target is-empty"} onClick={onChooseFolder} disabled={busy} title="Choose the folder to apply it to">
             {folder && folderIcon ? <img src={folderIcon} alt="" draggable={false} /> : <FolderIcon size={18} />}
@@ -1045,6 +1126,19 @@ export function Composer({
             }}
           />
         </Popover>
+      )}
+      {active && starting && (
+        <NewDesign
+          parts={parts}
+          template={template?.images ?? null}
+          assets={assets}
+          version={version}
+          dirty={dirty && doc.layers.length > 0}
+          saving={saving !== null}
+          onStart={(choice) => void start(choice)}
+          onSaveFirst={() => void save("save")}
+          onClose={() => setStarting(false)}
+        />
       )}
       {confirm && (
         <Confirm

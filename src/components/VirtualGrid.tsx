@@ -6,6 +6,8 @@ export type VirtualGridHandle = {
   scrollToIndex: (index: number) => void;
   /** The scrolling element itself. */
   element: () => HTMLDivElement | null;
+  /** How many columns fit now, for arrow keys that move a row at a time. */
+  columns: () => number;
 };
 
 type Props<T> = {
@@ -72,6 +74,7 @@ function VirtualGridInner<T>(
         if (top !== el.scrollTop) el.scrollTop = top;
       },
       element: () => scroller.current,
+      columns: () => layout.columns,
     }),
     [layout, items.length, padding],
   );
@@ -83,6 +86,7 @@ function VirtualGridInner<T>(
       <div
         key={getKey(items[i], i)}
         className="vgrid-cell"
+        data-index={i}
         style={{ transform: `translate(${x + padding}px, ${y + padding}px)`, width: layout.cellWidth, height: layout.rowHeight }}
       >
         {renderItem(items[i], i, layout.cellWidth)}
