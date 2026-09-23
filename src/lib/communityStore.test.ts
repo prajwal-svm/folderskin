@@ -16,6 +16,10 @@ vi.mock("./tauri", () => ({
       onProgress({ stage: "download", done: 1, total: 2 });
       return [];
     },
+    updatePack: async (_id: string, onProgress: (p: PackProgress) => void) => {
+      onProgress({ stage: "save", done: 2, total: 2 });
+      return { removed: ["old"], skins: [] };
+    },
     communityRefresh: async () => ({ updates: 0, packs: 0 }),
   },
   errorMessage: (e: unknown) => String(e),
@@ -116,13 +120,20 @@ describe("the Community store", () => {
     const onAdded = vi.fn();
     const toast = vi.fn();
     store.bind({ onAdded, onRemoved: vi.fn(), onShowTag: vi.fn(), toast });
-    const heard: (PackProgress | null)[] = [];
-    store.subscribe(() => heard.push(store.get().progress));
+    const heard: [string | null, PackProgress | null][] = [];
+    store.subscribe(() => heard.push([store.get().task, store.get().progress]));
     await store.add(pack("p0"));
-    expect(heard).toContainEqual({ stage: "download", done: 1, total: 2 });
-    expect(store.get().busy).toBeNull();
+    expect(heard).toContainEqual(["add", { stage: "download", done: 1, total: 2 }]);
+    expect([store.get().busy, store.get().task]).toEqual([null, null]);
     expect(onAdded).toHaveBeenCalledOnce();
     expect(toast.mock.calls[0][0]).toBe("Added 0 skins from p0");
+
+    const onRemoved = vi.fn();
+    store.bind({ onAdded, onRemoved, onShowTag: vi.fn(), toast });
+    await store.update(pack("p0"));
+    expect(heard).toContainEqual(["update", { stage: "save", done: 2, total: 2 }]);
+    expect(onRemoved).toHaveBeenCalledWith(["old"]);
+    expect(toast.mock.calls[1][0]).toBe("Updated p0");
   });
 
   it("says how far adding has got", () => {
@@ -132,5 +143,6 @@ describe("the Community store", () => {
     expect(progressLabel({ stage: "download", done: 3, total: 16 })).toBe("Downloading 3 of 16");
     expect(progressLabel({ stage: "save", done: 20, total: 16 })).toBe("Saving 16 of 16");
     expect(progressLabel(null)).toBe("Adding");
+    expect(progressLabel(null, "Updating")).toBe("Updating");
   });
 });

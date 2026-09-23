@@ -6,7 +6,7 @@ import { api, errorMessage, type CommunityPack, type CommunitySort, type PackPro
 import { isTauri } from "../lib/devMock";
 import { licenseLabel, PACKS_GUIDE_URL } from "../lib/packs";
 import { tagLabel } from "../lib/tags";
-import { community, progressLabel, progressShare, useCommunity, type PackView, type Shown } from "../lib/communityStore";
+import { community, progressLabel, progressShare, useCommunity, type PackTask, type PackView, type Shown } from "../lib/communityStore";
 import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
@@ -122,7 +122,7 @@ export function CommunityView({
         <PackCard
           pack={pack}
           view={s.view}
-          busy={s.busy === pack.id}
+          task={s.busy === pack.id ? s.task : null}
           blocked={s.busy !== null && s.busy !== pack.id}
           progress={s.busy === pack.id ? s.progress : null}
           tag={s.tag}
@@ -131,7 +131,7 @@ export function CommunityView({
       ) : (
         <PackPlaceholder index={index} view={s.view} />
       ),
-    [s.view, s.busy, s.progress, s.tag],
+    [s.view, s.busy, s.task, s.progress, s.tag],
   );
 
   const viewing = s.viewing;
@@ -277,6 +277,7 @@ export function CommunityView({
           pack={viewing.pack}
           focus={viewing.focus}
           busy={s.busy === viewing.pack.id}
+          removing={s.busy === viewing.pack.id && s.task === "remove"}
           progress={s.busy === viewing.pack.id ? s.progress : null}
           blocked={s.busy !== null && s.busy !== viewing.pack.id}
           onAdd={() => void community.add(viewing.pack)}
@@ -317,7 +318,7 @@ function status(shown: Shown | null, error: string | null): string {
 const PackCard = memo(function PackCard({
   pack,
   view,
-  busy,
+  task,
   blocked,
   progress,
   tag,
@@ -325,9 +326,9 @@ const PackCard = memo(function PackCard({
 }: {
   pack: CommunityPack;
   view: PackView;
-  /** This pack is being added, updated or removed. */
-  busy: boolean;
-  /** Another pack is. */
+  /** What is being done to this pack, if anything. */
+  task: PackTask | null;
+  /** Something is being done to another pack. */
   blocked: boolean;
   progress: PackProgress | null;
   /** The tag the list is filtered by. */
@@ -335,6 +336,7 @@ const PackCard = memo(function PackCard({
   onRemove: (pack: CommunityPack) => void;
 }) {
   const gallery = view === "gallery";
+  const busy = task !== null;
   return (
     <article className="pack" aria-label={pack.name}>
       <button
@@ -374,8 +376,8 @@ const PackCard = memo(function PackCard({
         </div>
       </div>
       <div className="pack-action">
-        {busy && !pack.added ? (
-          <AddProgress name={pack.name} progress={progress} />
+        {task === "add" || task === "update" ? (
+          <PackWorking name={pack.name} task={task} progress={progress} />
         ) : (
           <>
             <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => community.open(pack)}>
@@ -390,21 +392,23 @@ const PackCard = memo(function PackCard({
                     className="btn btn-primary"
                     title="A newer version of this pack is out"
                     disabled={busy || blocked}
-                    aria-busy={busy}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void community.update(pack)}
                   >
-                    {busy ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
-                    {busy ? "Updating" : "Update"}
+                    <RefreshCwIcon size={15} />
+                    Update
                   </button>
                 )}
                 {!gallery ? (
-                  <button type="button" className="btn btn-ghost" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => onRemove(pack)}>
-                    Remove
+                  <button type="button" className="btn btn-ghost" disabled={busy} aria-busy={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => onRemove(pack)}>
+                    {busy ? "Removing" : "Remove"}
                   </button>
-                ) : busy ? null : (
-                  // A card is narrow: the can alone, and gone while the pack updates so
-                  // "Updating" doesn't push it onto a line of its own.
+                ) : busy ? (
+                  <span className="icon-btn pack-remove" role="status" aria-label={`removing ${pack.name}`}>
+                    <LoaderIcon size={16} />
+                  </span>
+                ) : (
+                  // A card is narrow: the can alone, round like the buttons beside it.
                   <button
                     type="button"
                     className="icon-btn pack-remove"
@@ -430,23 +434,25 @@ const PackCard = memo(function PackCard({
   );
 });
 
-/** How far adding a pack has got, in place of its buttons. */
-function AddProgress({ name, progress }: { name: string; progress: PackProgress | null }) {
+/** How far adding or updating a pack has got, in place of its buttons. */
+function PackWorking({ name, task, progress }: { name: string; task: "add" | "update"; progress: PackProgress | null }) {
   const share = progressShare(progress);
+  const verb = task === "add" ? "Adding" : "Updating";
+  const label = progressLabel(progress, verb);
   return (
     <div
       className="pack-progress"
       role="progressbar"
-      aria-label={`Adding ${name}`}
+      aria-label={`${verb} ${name}`}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(share * 100)}
-      aria-valuetext={progressLabel(progress)}
+      aria-valuetext={label}
       style={{ "--done": share } as CSSProperties}
     >
       <span className="pack-progress-text">
         <LoaderIcon size={14} />
-        {progressLabel(progress)}
+        {label}
       </span>
     </div>
   );

@@ -111,16 +111,26 @@ test("a pack opens to look through, and a skin that matched opens it at that ski
   await expect(viewer.locator(".pack-skin.is-focus")).toBeInViewport();
 });
 
-test("adding a pack shows how far it has got on its card, then marks it added", async ({ page }) => {
+test("adding and updating a pack show how far they have got on its card", async ({ page }) => {
   await openCommunity(page, 0);
   const card = cards(page).filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) });
   await card.getByRole("button", { name: "Add", exact: true }).click();
-  const progress = card.getByRole("progressbar", { name: "Adding Colours" });
-  await expect(progress).toBeVisible();
-  await expect(progress).toHaveAttribute("aria-valuetext", /^(Downloading|Saving) \d+ of 8$/);
+  const adding = card.getByRole("progressbar", { name: "Adding Colours" });
+  await expect(adding).toBeVisible();
+  await expect(adding).toHaveAttribute("aria-valuetext", /^(Downloading|Saving) \d+ of 8$/);
   await expect(card.getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
-  await expect(progress).toHaveCount(0);
+  await expect(adding).toHaveCount(0);
   await expect(page.getByText(/Added 8 skins from Colours/)).toBeVisible();
+
+  // The preview publishes a newer Colours as soon as it is added; Refresh finds it.
+  await page.getByRole("button", { name: "refresh packs" }).click();
+  await expect(page.getByText("1 of your packs has an update")).toBeVisible();
+  await card.getByRole("button", { name: "Update", exact: true }).click();
+  const updating = card.getByRole("progressbar", { name: "Updating Colours" });
+  await expect(updating).toBeVisible();
+  await expect(updating).toHaveAttribute("aria-valuetext", /^(Updating|(Downloading|Saving) \d+ of 8)$/);
+  await expect(page.getByText("Updated Colours")).toBeVisible({ timeout: 10_000 });
+  await expect(card.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
 });
 
 test("leaving Community and coming back finds it as it was, without searching again", async ({ page }) => {

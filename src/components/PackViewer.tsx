@@ -19,6 +19,7 @@ export function PackViewer({
   pack,
   focus = null,
   busy,
+  removing = false,
   progress = null,
   blocked,
   onAdd,
@@ -31,7 +32,9 @@ export function PackViewer({
   focus?: number | null;
   /** This pack is being added, updated or removed. */
   busy: boolean;
-  /** How far adding it has got. */
+  /** It is being removed, rather than added or updated. */
+  removing?: boolean;
+  /** How far adding or updating it has got. */
   progress?: PackProgress | null;
   /** Another pack is. */
   blocked: boolean;
@@ -59,23 +62,32 @@ export function PackViewer({
     if (skins && focus !== null) focused.current?.scrollIntoView({ block: "center" });
   }, [skins, focus]);
 
-  const adding = busy && !pack.added;
+  // While it's added or updated, the button fills as the pictures arrive.
+  const working = busy && !removing;
+  const filling = (working ? { "--done": progressShare(progress) } : undefined) as CSSProperties | undefined;
   const primary = !pack.added ? (
     <button
       type="button"
-      className={adding ? "btn btn-primary pack-adding" : "btn btn-primary"}
+      className={working ? "btn btn-primary pack-adding" : "btn btn-primary"}
       disabled={busy || blocked}
-      aria-busy={busy}
-      style={adding ? ({ "--done": progressShare(progress) } as CSSProperties) : undefined}
+      aria-busy={working}
+      style={filling}
       onClick={onAdd}
     >
-      {busy ? <LoaderIcon /> : <DownloadIcon size={15} />}
-      {busy ? progressLabel(progress) : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
+      {working ? <LoaderIcon /> : <DownloadIcon size={15} />}
+      {working ? progressLabel(progress) : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
     </button>
   ) : pack.update ? (
-    <button type="button" className="btn btn-primary" disabled={busy || blocked} aria-busy={busy} onClick={onUpdate}>
-      {busy ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
-      {busy ? "Updating" : "Update"}
+    <button
+      type="button"
+      className={working ? "btn btn-primary pack-adding" : "btn btn-primary"}
+      disabled={busy || blocked}
+      aria-busy={working}
+      style={filling}
+      onClick={onUpdate}
+    >
+      {working ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
+      {working ? progressLabel(progress, "Updating") : "Update"}
     </button>
   ) : (
     <span className="chip chip-ok">

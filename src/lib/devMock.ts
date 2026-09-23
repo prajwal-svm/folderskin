@@ -559,10 +559,14 @@ export const mockApi = {
     if (!pack) throw "that isn't a pack";
     return packPictures(pack).map((p) => ({ ...p, tags: pack.tags }));
   },
-  updatePack: async (packId: string): Promise<PackUpdate> => {
-    await sleep(1200);
+  updatePack: async (packId: string, onProgress?: (progress: PackProgress) => void): Promise<PackUpdate> => {
     const pack = findPack(packId);
     if (!pack) throw "that isn't a pack";
+    for (let done = 0; done <= pack.count; done++) {
+      onProgress?.({ stage: "download", done, total: pack.count });
+      await sleep(1200 / Math.max(pack.count, 1));
+    }
+    onProgress?.({ stage: "save", done: pack.count, total: pack.count });
     mockStale.delete(packId);
     mockStale.add(`${packId}-updated`);
     const skins = mockPackSkins(pack);

@@ -21,6 +21,9 @@ export const SEARCH_DELAY_MS = 100;
 /** How the packs are shown: cards with bigger folders, or rows with their details. */
 export type PackView = "gallery" | "list";
 
+/** What is being done to a pack. */
+export type PackTask = "add" | "update" | "remove";
+
 /** One search's answer, as far as it has been paged in. */
 export type Shown = {
   /** What it answers. */
@@ -52,8 +55,9 @@ export type CommunityState = {
   /** Why the last search failed, when it did. */
   error: string | null;
   refreshing: boolean;
-  /** The pack being added, updated or removed, and how far adding it has got. */
+  /** The pack being added, updated or removed, which of those, and how far it has got. */
   busy: string | null;
+  task: PackTask | null;
   progress: PackProgress | null;
   /** The pack open in the viewer, and the skin to show it at. */
   viewing: { pack: CommunityPack; focus: number | null } | null;
@@ -81,6 +85,7 @@ const INITIAL: CommunityState = {
   error: null,
   refreshing: false,
   busy: null,
+  task: null,
   progress: null,
   viewing: null,
   scrollTop: 0,
@@ -214,26 +219,24 @@ export class CommunityStore {
 
   async add(pack: CommunityPack) {
     if (this.state.busy) return;
-    this.set({ busy: pack.id, progress: null });
+    this.set({ busy: pack.id, task: "add", progress: null });
     try {
-      const skins = await api.addPack(pack.id, (progress) => {
-        if (this.state.busy === pack.id) this.set({ progress });
-      });
+      const skins = await api.addPack(pack.id, this.hear(pack.id));
       this.mark(pack.id, true);
       this.handlers?.onAdded(skins);
       this.handlers?.toast(`Added ${skins.length} skins from ${clip(pack.name)}`, { tone: "ok", action: this.show(pack) });
     } catch (e) {
       this.handlers?.toast(`Couldn't add ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
-      this.set({ busy: null, progress: null });
+      this.set({ busy: null, task: null, progress: null });
     }
   }
 
   async update(pack: CommunityPack) {
     if (this.state.busy) return;
-    this.set({ busy: pack.id, progress: null });
+    this.set({ busy: pack.id, task: "update", progress: null });
     try {
-      const { removed, skins } = await api.updatePack(pack.id);
+      const { removed, skins } = await api.updatePack(pack.id, this.hear(pack.id));
       if (removed.length) this.handlers?.onRemoved(removed);
       this.handlers?.onAdded(skins);
       this.mark(pack.id, true);
@@ -241,13 +244,13 @@ export class CommunityStore {
     } catch (e) {
       this.handlers?.toast(`Couldn't update ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
-      this.set({ busy: null, progress: null });
+      this.set({ busy: null, task: null, progress: null });
     }
   }
 
   async remove(pack: CommunityPack) {
     if (this.state.busy) return;
-    this.set({ busy: pack.id });
+    this.set({ busy: pack.id, task: "remove" });
     try {
       this.handlers?.onRemoved(await api.removePack(pack.id));
       this.mark(pack.id, false);
@@ -255,8 +258,15 @@ export class CommunityStore {
     } catch (e) {
       this.handlers?.toast(`Couldn't remove ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
-      this.set({ busy: null });
+      this.set({ busy: null, task: null });
     }
+  }
+
+  /** Passes on how far work on pack `id` has got, while it is still the pack being worked on. */
+  private hear(id: string) {
+    return (progress: PackProgress) => {
+      if (this.state.busy === id) this.set({ progress });
+    };
   }
 
   /** Asks for the packs again past every cache, then shows the list afresh. */
@@ -299,8 +309,8 @@ export function progressShare(p: PackProgress | null): number {
   return p.stage === "download" ? part * 0.85 : 0.85 + part * 0.15;
 }
 
-/** "Downloading 3 of 16", "Saving 16 of 16", or "Adding" before anything is heard. */
-export function progressLabel(p: PackProgress | null): string {
-  if (!p) return "Adding";
+/** "Downloading 3 of 16", "Saving 16 of 16", or `before` ("Adding", "Updating") until anything is heard. */
+export function progressLabel(p: PackProgress | null, before = "Adding"): string {
+  if (!p) return before;
   return `${p.stage === "download" ? "Downloading" : "Saving"} ${Math.min(p.done, p.total)} of ${p.total}`;
 }

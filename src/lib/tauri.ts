@@ -262,8 +262,9 @@ const tauriApi = {
   /** Downloads and draws a pack to look through, or shows it as drawn before when this version
    *  (`hash`) was looked at in the last week. */
   packSkins: (packId: string, hash: string) => invoke<PackSkinPreview[]>("community_pack_skins", { packId, hash }),
-  /** Swaps an added pack's skins for the version on GitHub now. */
-  updatePack: (packId: string) => invoke<PackUpdate>("community_update", { packId }),
+  /** Swaps an added pack's skins for the version published now. `onProgress` hears how far it has got. */
+  updatePack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
+    invoke<PackUpdate>("community_update", { packId, onProgress: new Channel<PackProgress>(onProgress) }),
   /** Deletes a pack's skins; resolves to their ids. */
   removePack: (packId: string) => invoke<string[]>("community_remove", { packId }),
   /** Adds a pack from a folder on this computer. */

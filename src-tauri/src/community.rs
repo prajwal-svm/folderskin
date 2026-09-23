@@ -468,19 +468,24 @@ async fn pack_skins(
 
 /// Replaces an added pack's skins with the version published now. The new version is
 /// downloaded and checked before the old skins go, so a failed update leaves the pack as it was.
+/// `on_progress` hears how far it has got, as [`community_add`]'s does.
 #[tauri::command]
 pub async fn community_update(
     app: AppHandle,
     state: State<'_, AppState>,
     community: State<'_, Community>,
     pack_id: String,
+    on_progress: Channel<PackProgress>,
 ) -> Result<PackUpdateDto, String> {
+    let progress = move |p: PackProgress| {
+        let _ = on_progress.send(p);
+    };
     community.init_cache(&app);
     let source = community.current(&base_url()).await?;
-    let (pack, hash, pictures) = download_pack(&source, &pack_id, &no_progress).await?;
+    let (pack, hash, pictures) = download_pack(&source, &pack_id, &progress).await?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        replace_pack(&state, &pack_id, &pack, &pictures, hash)
+        replace_pack(&state, &pack_id, &pack, &pictures, hash, &progress)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -867,17 +872,19 @@ fn save_pack(
 
 /// Swaps pack `pack_id`'s saved skins for this version of it. The new pictures are checked
 /// before the old skins are removed. A picture both versions share keeps its id, so a favourite
-/// of it stays.
+/// of it stays. `progress` hears `save` as [`save_pack`] reports it.
 fn replace_pack(
     state: &AppState,
     pack_id: &str,
     pack: &Pack,
     pictures: &[Vec<u8>],
     hash: String,
+    progress: &(dyn Fn(PackProgress) + Sync),
 ) -> Result<PackUpdateDto, String> {
+    progress(PackProgress::save(0, pictures.len()));
     let ready = prepare_pack(pack, pictures)?;
     let before = state.remove_pack(pack_id)?;
-    let skins = store_pack(state, pack_id, pack, ready, Some(hash), &no_progress)?;
+    let skins = store_pack(state, pack_id, pack, ready, Some(hash), progress)?;
     let removed = before
         .into_iter()
         .filter(|id| !skins.iter().any(|s| &s.id == id))
@@ -1133,7 +1140,14 @@ mod tests {
         .unwrap();
 
         let new = vec![teal, png(512, 480, [90, 60, 160, 255])];
-        let update = replace_pack(&state, "test-colours", &pack, &new, "v2".into()).unwrap();
+        let heard = Mutex::new(Vec::new());
+        let update = replace_pack(&state, "test-colours", &pack, &new, "v2".into(), &|p| {
+            lock(&heard).push(p)
+        })
+        .unwrap();
+        let heard = heard.into_inner().unwrap();
+        assert_eq!(heard.first(), Some(&PackProgress::save(0, 2)));
+        assert_eq!(heard.last(), Some(&PackProgress::save(2, 2)), "{heard:?}");
         assert_eq!(
             update.removed,
             [before[1].id.clone()],
@@ -1152,7 +1166,15 @@ mod tests {
 
         // A version with a bad picture changes nothing.
         let broken = vec![png(512, 480, [1, 2, 3, 255]), png(100, 100, [1, 2, 3, 255])];
-        assert!(replace_pack(&state, "test-colours", &pack, &broken, "v3".into()).is_err());
+        assert!(replace_pack(
+            &state,
+            "test-colours",
+            &pack,
+            &broken,
+            "v3".into(),
+            &no_progress
+        )
+        .is_err());
         assert_eq!(state.saved_skins().len(), 2);
         assert_eq!(
             state.installed_packs().get("test-colours"),
