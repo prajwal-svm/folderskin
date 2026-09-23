@@ -143,14 +143,17 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 
 ## Rules
 
-- Both models are Apache-2.0 and so are their outputs, so a result can go in a pack under CC0-1.0,
-  CC-BY-4.0 or MIT. Do not add models whose licence is non-commercial or restricted (Qwen-Image
-  2.1, FLUX.2 [dev], klein 9B, Kontext dev, Krea 2, Ideogram 4) to this script: their pictures
-  cannot go in a pack.
-- Nothing is filtered: that is the point of running it locally, and it makes the person running it
-  responsible for what it paints. Pictures for a pack still follow `docs/PACK-TERMS.md`: no
-  brand, logo or character that belongs to someone else, and no living artist or studio named as
-  the style. The presets describe a look without naming anyone; keep it that way.
+- Both models are Apache-2.0, which puts no condition on what they paint, so a result can go in a
+  pack under CC0-1.0, CC-BY-4.0 or MIT. Do not add models whose licence is non-commercial or
+  restricted (Qwen-Image 2.1, FLUX.2 [dev], klein 9B, Kontext dev, Krea 2, Ideogram 4) to this
+  script: their pictures cannot go in a pack. An ungated mirror of such a model is still under its
+  licence.
+- Nothing filters a prompt or a picture, and a brand or a named product paints as asked; that
+  makes the person running it responsible for what it paints. (klein's weights were fine-tuned by
+  their makers against sexual imagery of minors and non-consensual imagery; nothing else is held
+  back.) Pictures for a pack still follow `docs/PACK-TERMS.md`: no brand, logo or character that
+  belongs to someone else, and no living artist or studio named as the style. The presets describe
+  a look without naming anyone; keep it that way.
 - Keep the `.json` beside each picture until the pack is made: it is the picture's provenance
   (model, licence, prompt, seed and the SHA-256 of each reference).
 - Never commit renders, models or the runtime.
