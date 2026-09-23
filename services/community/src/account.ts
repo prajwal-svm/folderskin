@@ -11,14 +11,24 @@
  * with Cloudflare and must carry the same nonce, the nonce is spent, and the key is recorded as
  * verified under the handle. The app meanwhile asks GET /v1/me until it says so.
  */
-import { isKey, requireAccount, verifySignature, verifySigned } from "./auth";
-import { now } from "./bytes";
+import { anyone, isKey, requireAccount, verifySignature, verifySigned } from "./auth";
+import { dayOf, now } from "./bytes";
 import type { Env } from "./env";
 import { fail, json, parseJson, readBody } from "./http";
 import { networkHash } from "./ip";
-import { HANDLE_CHANGES_PER_DAY, LICENSES, MAX_JSON_BYTES, MAX_SKINS, PER_NETWORK, TERMS_VERSION, TIERS, VERIFY_LINK_SECONDS } from "./limits";
+import {
+  CLOCK_SKEW_SECONDS,
+  HANDLE_CHANGES_PER_DAY,
+  LICENSES,
+  MAX_JSON_BYTES,
+  MAX_SKINS,
+  PER_NETWORK,
+  TERMS_VERSION,
+  TIERS,
+  VERIFY_LINK_SECONDS,
+} from "./limits";
 import type { Tier } from "./limits";
-import { pauseState, requireAccepting, takeAll, used } from "./quota";
+import { giveBack, pauseState, requireAccepting, takeAll, used, type Take } from "./quota";
 import { handleProblem } from "./text";
 
 const NONCE = /^[A-Za-z0-9_-]{22,43}$/;
@@ -56,33 +66,38 @@ export async function verifyKey(request: Request, env: Env): Promise<Response> {
   if (problem) throw fail(400, "bad_handle", problem);
   const at = now();
   const made = Number(t);
-  if (made > at + 300 || at - made > VERIFY_LINK_SECONDS) {
-    throw fail(400, "link_expired", "This link has run out. Start again from FolderSkin.");
+  // The app sets its clock by the service's before it signs a link, so a link from the future
+  // means the computer's clock is out and the app is too old to correct it.
+  if (made > at + CLOCK_SKEW_SECONDS) {
+    throw fail(400, "clock", "Your computer's clock is more than five minutes out. Set it to the right time and start again from FolderSkin.");
   }
+  if (at - made > VERIFY_LINK_SECONDS) throw fail(400, "link_expired", "This link has run out. Start again from FolderSkin.");
   if (!(await verifySignature(k, s, `verify|${k}|${n}|${t}|${handle}`))) {
     throw fail(400, "bad_link", "This link wasn't made by FolderSkin on your computer. Start again from FolderSkin.");
   }
   await requireAccepting(env);
   const network = await networkHash(env, request, at);
-  await takeAll(
-    env,
-    [
-      {
-        scope: "net:verify",
-        id: network,
-        amount: 1,
-        limit: PER_NETWORK.verifications,
-        error: fail(429, "quota", "Too many computers on your network were verified today. Please try again tomorrow."),
-      },
-    ],
-    at,
-  );
+  const quota: Take = {
+    scope: "net:verify",
+    id: network,
+    amount: 1,
+    limit: PER_NETWORK.verifications,
+    error: fail(429, "quota", "Too many computers on your network were verified today. Please try again tomorrow."),
+  };
+  // Only a verification that goes through counts against the network, so a failed check, a
+  // reloaded page or someone else on a shared network trying and failing can't use up the day.
+  // A network that has had its fill is turned away before Cloudflare is asked, though.
+  if ((await used(env, quota.scope, quota.id, at)) >= quota.limit) throw quota.error;
   await checkChallenge(env, request, token, n);
+  await takeAll(env, [quota], at);
   // Spent only now, so a challenge that failed can be tried again from the same link.
   const spent = await env.DB.prepare("INSERT INTO seen (id, expires) VALUES (?1, ?2) ON CONFLICT (id) DO NOTHING")
     .bind(`verify:${n}`, made + VERIFY_LINK_SECONDS + 600)
     .run();
-  if (spent.meta.changes !== 1) throw fail(409, "link_used", "This link has been used already. Start again from FolderSkin.");
+  if (spent.meta.changes !== 1) {
+    await giveBack(env, dayOf(at), quota.scope, quota.id, quota.amount);
+    throw fail(409, "link_used", "This link has been used already. Start again from FolderSkin.");
+  }
 
   const existing = await env.DB.prepare("SELECT handle, tier FROM keys WHERE key = ?1").bind(k).first<{ handle: string; tier: Tier }>();
   if (existing) {
@@ -148,7 +163,7 @@ async function claimHandle(env: Env, key: string, wanted: string, at: number): P
 
 /** Who this computer is to the service, and what it has left today. Unverified keys get `verified: false`. */
 export async function me(request: Request, env: Env): Promise<Response> {
-  const { key } = await verifySigned(request, env, 0);
+  const { key } = await verifySigned(request, env, 0, anyone);
   const account = await env.DB.prepare("SELECT handle, tier FROM keys WHERE key = ?1").bind(key).first<{ handle: string; tier: Tier }>();
   const pause = await pauseState(env);
   if (!account) return json({ verified: false, accepting: !pause.paused });
@@ -168,8 +183,8 @@ export async function me(request: Request, env: Env): Promise<Response> {
 
 /** Changes the name this computer's packs are credited to. Packs already published keep the old one. */
 export async function rename(request: Request, env: Env): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_JSON_BYTES);
-  const account = await requireAccount(env, signed.key);
+  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireAccount(env, key));
+  const account = signed.signer;
   const { handle } = parseJson(signed.body);
   const problem = handleProblem(handle);
   if (problem) throw fail(400, "bad_handle", problem);

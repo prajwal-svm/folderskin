@@ -48,10 +48,21 @@ export async function verifySignature(key: string, sig: string, message: string)
 }
 
 /**
- * The request's signer, once its signature, its time and (for anything but a read) its freshness
- * have been checked. The body is read here, up to `maxBody` bytes, since the signature covers it.
+ * The request's signer, once its signature, its time, who it is and (for anything but a read) its
+ * freshness have been checked. The body is read here, up to `maxBody` bytes, since the signature
+ * covers it.
+ *
+ * `allow` says whether the signer may use this endpoint at all (a verified computer, say, or the
+ * maintainer), and hands back what it looked up. It runs before the request is remembered: anyone
+ * can make a key and sign with it, so a key that is turned away anyway mustn't cost a database
+ * write, or junk requests could spend the day's writes and stop sharing for everyone.
  */
-export async function verifySigned(request: Request, env: Env, maxBody: number): Promise<SignedRequest> {
+export async function verifySigned<T>(
+  request: Request,
+  env: Env,
+  maxBody: number,
+  allow: (key: string) => Promise<T> | T,
+): Promise<SignedRequest & { signer: T }> {
   const key = request.headers.get("X-FS-Key") ?? "";
   const sig = request.headers.get("X-FS-Sig") ?? "";
   const tsText = request.headers.get("X-FS-Ts") ?? "";
@@ -74,6 +85,7 @@ export async function verifySigned(request: Request, env: Env, maxBody: number):
   if (!(await verifySignature(key, sig, message))) {
     throw fail(401, "bad_signature", "That request wasn't signed by this computer's key.");
   }
+  const signer = await allow(key);
   if (request.method !== "GET" && request.method !== "HEAD") {
     // What was signed is remembered rather than the signature, so a second signature over the
     // same request (Ed25519 allows none, but nothing here depends on that) is still a repeat.
@@ -83,8 +95,11 @@ export async function verifySigned(request: Request, env: Env, maxBody: number):
       .run();
     if (fresh.meta.changes !== 1) throw fail(409, "replayed", "That request was already received.");
   }
-  return { key, body, digest };
+  return { key, body, digest, signer };
 }
+
+/** For `verifySigned` on reads of a key's own data, which any key may ask for. */
+export const anyone = () => undefined;
 
 /** The verified computer behind `key`. Unknown and banned keys go no further. */
 export async function requireAccount(env: Env, key: string): Promise<Account> {
@@ -106,7 +121,7 @@ export function isAdmin(env: Env, key: string): boolean {
     .some((k) => k.length > 0 && k === key);
 }
 
-export function requireAdmin(env: Env, signed: SignedRequest): void {
+export function requireAdmin(env: Env, key: string): void {
   // The same answer as a route that doesn't exist: the admin surface isn't advertised.
-  if (!isAdmin(env, signed.key)) throw fail(404, "not_found", "There's nothing here.");
+  if (!isAdmin(env, key)) throw fail(404, "not_found", "There's nothing here.");
 }

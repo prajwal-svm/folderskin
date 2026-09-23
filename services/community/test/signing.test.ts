@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifySignature } from "../src/auth";
 import { sha256Hex } from "../src/bytes";
@@ -60,6 +61,25 @@ describe("signed requests", () => {
     expect(response.status).toBe(401);
     expect((await errorOf(response)).code).toBe("clock");
     expect(Number(response.headers.get("X-FS-Time"))).toBeGreaterThan(late + 3000);
+  });
+
+  it("from a key that isn't allowed are turned away without a database write", async () => {
+    const stranger = await device();
+    const ts = Math.floor(Date.now() / 1000);
+    for (const [method, path, status] of [
+      ["POST", "/v1/submissions", 403],
+      ["POST", "/v1/me", 403],
+      ["POST", "/v1/admin/pause", 404],
+      ["DELETE", "/v1/packs/sub_aaaaaaaaaaaaaaaaaaaa", 404],
+    ] as const) {
+      const body = method === "DELETE" ? undefined : { junk: path };
+      const response = await call(await signed(stranger, method, path, body, { ts }));
+      expect(response.status, path).toBe(status);
+      // What verifySigned would have remembered the request by, had it been let through.
+      const message = `${method}|${path}|${ts}|${await sha256Hex(body === undefined ? new Uint8Array(0) : JSON.stringify(body))}`;
+      const seen = await env.DB.prepare("SELECT 1 FROM seen WHERE id = ?1").bind(`req:${await sha256Hex(`${stranger.key}|${message}`)}`).first();
+      expect(seen, path).toBeNull();
+    }
   });
 
   it("from a computer that hasn't been verified can't send a pack", async () => {
@@ -133,6 +153,17 @@ describe("verifying a computer", () => {
     expect((await errorOf(stale)).code).toBe("link_expired");
   });
 
+  it("says the clock is out, rather than that the link ran out, for a link from the future", async () => {
+    const me = await device();
+    stubTurnstile();
+    const ahead = await verifyLink(me, "fast-clock", { ts: Math.floor(Date.now() / 1000) + 600 });
+    const response = await call(postJson("/v1/keys/verify", { ...ahead, token: `pass:${ahead.n}` }, me.ip));
+    expect(await errorOf(response)).toEqual({
+      code: "clock",
+      message: "Your computer's clock is more than five minutes out. Set it to the right time and start again from FolderSkin.",
+    });
+  });
+
   it("gives a taken name a number rather than turning the person away", async () => {
     const first = await device();
     const second = await device();
@@ -159,6 +190,26 @@ describe("verifying a computer", () => {
       statuses.push((await call(postJson("/v1/keys/verify", { ...link, token: `pass:${link.n}` }, ip))).status);
     }
     expect(statuses).toEqual([201, 201, 201, 201, 201, 429]);
+  });
+
+  it("counts only verifications that go through against the network's day", async () => {
+    const ip = freshIp();
+    stubTurnstile();
+    const first = await device(ip);
+    const link = await verifyLink(first, "shared-office");
+    // Someone on the same network failing the check over and over uses up nothing.
+    for (let i = 0; i < 6; i++) {
+      expect((await errorOf(await call(postJson("/v1/keys/verify", { ...link, token: "fail" }, ip)))).code).toBe("challenge_failed");
+    }
+    expect((await call(postJson("/v1/keys/verify", { ...link, token: `pass:${link.n}` }, ip))).status).toBe(201);
+    // Nor does the page posting the same link again when it is reloaded afterwards.
+    expect((await call(postJson("/v1/keys/verify", { ...link, token: `pass:${link.n}` }, ip))).status).toBe(409);
+    const statuses: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const next = await verifyLink(await device(ip), `office-desk-${i}`);
+      statuses.push((await call(postJson("/v1/keys/verify", { ...next, token: `pass:${next.n}` }, ip))).status);
+    }
+    expect(statuses).toEqual([201, 201, 201, 201, 429]);
   });
 
   it("never stores the address a request came from", async () => {

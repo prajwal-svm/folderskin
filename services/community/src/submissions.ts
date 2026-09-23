@@ -13,7 +13,7 @@
  * Every picture is checked by its bytes before it is stored: the hash the pack declared, the format
  * its name promises, its dimensions from its header and no animation. Nothing is decoded here.
  */
-import { requireAccount, verifySigned, type Account } from "./auth";
+import { anyone, requireAccount, verifySigned, type Account } from "./auth";
 import { dayOf, now, randomId, sha256Hex } from "./bytes";
 import type { Env } from "./env";
 import { fail, json, parseJson } from "./http";
@@ -69,8 +69,8 @@ function readItems(value: unknown, files: string[]): DeclaredItem[] {
 
 /** Opens a submission, once the pack, the quotas and the review queue all allow it. */
 export async function create(request: Request, env: Env): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_JSON_BYTES);
-  const account = await requireAccount(env, signed.key);
+  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireAccount(env, key));
+  const account = signed.signer;
   await requireAccepting(env);
   const body = parseJson(signed.body);
 
@@ -216,9 +216,8 @@ async function ownOpen(env: Env, id: string, account: Account): Promise<Submissi
 
 /** Stores one picture of an open submission, once it is exactly the picture the pack declared. */
 export async function putItem(request: Request, env: Env, id: string, sha: string): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_PICTURE_BYTES);
-  const account = await requireAccount(env, signed.key);
-  await ownOpen(env, id, account);
+  const signed = await verifySigned(request, env, MAX_PICTURE_BYTES, (key) => requireAccount(env, key));
+  await ownOpen(env, id, signed.signer);
   const item = await env.DB.prepare("SELECT file, bytes, width, height, received FROM items WHERE submission = ?1 AND sha256 = ?2")
     .bind(id, sha)
     .first<{ file: string; bytes: number; width: number; height: number; received: number }>();
@@ -251,9 +250,8 @@ export async function putItem(request: Request, env: Env, id: string, sha: strin
 
 /** Stores contact sheet `n`: the pictures small, side by side, for the triage and for a review on a phone. */
 export async function putSheet(request: Request, env: Env, id: string, n: number): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_SHEET_BYTES);
-  const account = await requireAccount(env, signed.key);
-  const s = await ownOpen(env, id, account);
+  const signed = await verifySigned(request, env, MAX_SHEET_BYTES, (key) => requireAccount(env, key));
+  const s = await ownOpen(env, id, signed.signer);
   if (!Number.isInteger(n) || n < 0 || n >= s.sheets) throw fail(404, "not_found", "This pack doesn't have that many sheets.");
   let sheet;
   try {
@@ -281,8 +279,8 @@ export async function putSheet(request: Request, env: Env, id: string, n: number
  * once if anything urgent turned up.
  */
 export async function finalize(request: Request, env: Env, ctx: ExecutionContext, id: string): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_JSON_BYTES);
-  const account = await requireAccount(env, signed.key);
+  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireAccount(env, key));
+  const account = signed.signer;
   const s = await ownOpen(env, id, account);
   const missing = (await loadItems(env, id)).filter((i) => !i.received);
   if (missing.length > 0) {
@@ -347,7 +345,7 @@ export async function finalize(request: Request, env: Env, ctx: ExecutionContext
 
 /** The author's own packs, newest first. */
 export async function list(request: Request, env: Env): Promise<Response> {
-  const signed = await verifySigned(request, env, 0);
+  const signed = await verifySigned(request, env, 0, anyone);
   const account = await env.DB.prepare("SELECT key FROM keys WHERE key = ?1").bind(signed.key).first();
   if (!account) return json({ submissions: [] });
   const { results } = await env.DB.prepare("SELECT * FROM submissions WHERE key = ?1 ORDER BY created_at DESC LIMIT 100")
@@ -358,10 +356,12 @@ export async function list(request: Request, env: Env): Promise<Response> {
 
 /** The author takes a pack back: out of the queue, or out of the public bucket if it was approved. */
 export async function remove(request: Request, env: Env, id: string): Promise<Response> {
-  const signed = await verifySigned(request, env, 0);
   // A banned key can still take its own packs down.
-  const s = await loadSubmission(env, id);
-  if (!s || s.key !== signed.key) throw fail(404, "not_found", "There's no such pack.");
+  const { signer: s } = await verifySigned(request, env, 0, async (key) => {
+    const s = await loadSubmission(env, id);
+    if (!s || s.key !== key) throw fail(404, "not_found", "There's no such pack.");
+    return s;
+  });
   await withdraw(env, s);
   return json({ status: "withdrawn" });
 }

@@ -36,9 +36,7 @@ import {
 import { hasText, isPictureFileName } from "./text";
 
 async function admin(request: Request, env: Env, maxBody = 0) {
-  const signed = await verifySigned(request, env, maxBody);
-  requireAdmin(env, signed);
-  return signed;
+  return verifySigned(request, env, maxBody, (key) => requireAdmin(env, key));
 }
 
 async function needSubmission(env: Env, id: string): Promise<Submission> {
