@@ -1,6 +1,6 @@
 ---
 name: folderskin-localgen
-description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. Z-Image-Turbo for text to picture and FLUX.2 [klein] 4B for reference pictures and whole-folder skins, both Apache-2.0, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon). Sets the machine up with `fsgen.py setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
+description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. Z-Image-Turbo for text to picture and FLUX.2 [klein] 4B for reference pictures and whole-folder skins, both Apache-2.0, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon). Sets the machine up with `fsgen.py setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
 version: 1.0.0
 ---
 
@@ -96,6 +96,23 @@ uv run .claude/skills/folderskin-localgen/scripts/fsgen.py batch briefs.json --o
 Reference paths are relative to the JSON file. `name` names the file (numbered when `n` is more
 than one); `model` picks the artwork model per brief. The run ends with `previews/_sheet.png`.
 
+### Or theme a whole drive
+
+`theme` paints every folder under a root from the folder's own name, all in one style, and with
+`--apply` puts each picture on its folder through the app's own code:
+
+```sh
+uv run .claude/skills/folderskin-localgen/scripts/fsgen.py theme "D:/Projects" --style risograph
+uv run .claude/skills/folderskin-localgen/scripts/fsgen.py theme "D:/Projects" --style risograph --apply
+```
+
+Run it without `--apply` first and look at `previews/_sheet.png`; a second run skips folders that
+already have a picture, so it only applies. It uses klein (about 28 s a folder on a 4 GB laptop
+GPU: a hundred folders is under an hour) and leaves out hidden folders, `$` folders and tool
+folders such as `node_modules`. `--depth 2` goes a level deeper. `folderskin-tools revert
+"<folder>"` takes an icon off again. A name that is an idea rather than a thing ("Taxes 2025")
+tends to come back as lettering; paint that one with `gen` and a subject of your own.
+
 ## Step 4: look at every result
 
 Open `previews/_sheet.png`, then any picture that looks doubtful at full size in `previews/`.
@@ -146,6 +163,7 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 | `fsgen.py setup [--backend …] [--tier …] [--runtime latest]` | download the runtime and the models |
 | `fsgen.py gen "idea" [--style S] [--shape artwork\|folder] [--ref P]… [-n N] [--seed S] [--model auto\|zimage\|klein] [--out DIR]` | paint pictures from one idea |
 | `fsgen.py batch briefs.json [--out DIR]` | paint every brief in a file |
+| `fsgen.py theme <root> [--style S] [--depth N] [--apply]` | paint every folder under a root from its name |
 | `fsgen.py pack <pictures…> --id … --name … --tags … --author …` | `packs make`, with cwebp |
 | `fsgen.py styles` | list the style presets |
 | `cargo run -p folderskin-tools -- template --out t.png --mask m.png` | the blank folder a model repaints, and its silhouette |

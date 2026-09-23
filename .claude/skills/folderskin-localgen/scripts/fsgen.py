@@ -931,6 +931,54 @@ def cmd_batch(args: argparse.Namespace) -> None:
     print(f"{len(made)} pictures in {out_dir}")
 
 
+def folders_under(root: Path, depth: int) -> list[Path]:
+    """Folders to theme, `depth` levels down, leaving out hidden, system and tool folders."""
+    skip = {"node_modules", "target", "__pycache__", "venv", ".git"}
+    found, level = [], [root]
+    for _ in range(depth):
+        level = sorted(d for parent in level for d in parent.iterdir()
+                       if d.is_dir() and not d.name.startswith((".", "$")) and d.name not in skip)
+        found += level
+    return found
+
+
+def cmd_theme(args: argparse.Namespace) -> None:
+    """Every folder under a root painted from its own name, in one style, and applied if asked.
+
+    The style holds a drive together; each folder gets the next seed, since one seed for all of
+    them painted every folder the same picture. A folder that already has a picture in --out is
+    skipped, so an overnight run that stopped carries on where it was.
+    """
+    runner = runner_for(args)
+    root = Path(args.root).resolve()
+    if not root.is_dir():
+        sys.exit(f"{root} isn't a folder")
+    out_dir = Path(args.out).resolve() if args.out else Path("fsgen-out", f"theme-{slug(root.name)}").resolve()
+    seed = args.seed if args.seed is not None else secrets.randbelow(2**31)
+    folders = folders_under(root, args.depth)
+    say(f"{len(folders)} folders under {root}, style {args.style!r}, seed {seed}")
+    names: set[str] = set()
+    for i, folder in enumerate(folders):
+        name = slug(str(folder.relative_to(root)), 60)
+        while name in names:
+            name += "-x"
+        names.add(name)
+        picture = out_dir / f"{name}.png"
+        if not picture.is_file():
+            # The name bare, and never the word "folder": quoted, a model letters it (and misspells
+            # it); told "folder", it paints a folder.
+            idea = f"one clear, recognisable object or scene that stands for {folder.name}"
+            generate(Job(idea, args.style, args.shape, (), seed + i, name, args.model), runner, out_dir, preview=True)
+        if args.apply:
+            res = subprocess.run([str(tools_binary()), "apply", str(folder), "--image", str(picture)],
+                                 capture_output=True, text=True)
+            say((res.stdout or res.stderr).strip())
+    previews = [out_dir / "previews" / f"{n}.png" for n in sorted(names)]
+    contact_sheet([p for p in previews if p.is_file()], out_dir / "previews" / "_sheet.png")
+    if not args.apply:
+        say("nothing applied; look at the sheet, then run again with --apply (revert with folderskin-tools revert)")
+
+
 def cmd_styles(_: argparse.Namespace) -> None:
     for key, text in STYLES.items():
         print(f"{key:14} {text}")
@@ -976,6 +1024,19 @@ def main() -> None:
     p.add_argument("--style", default="none", help="style for briefs that don't name one")
     p.add_argument("--out", default="fsgen-out")
     p.set_defaults(fn=cmd_batch)
+
+    p = sub.add_parser("theme", help="paint every folder under a root from its name, in one style")
+    common(p)
+    p.add_argument("root")
+    p.add_argument("--style", default="none", help="a key from `styles`, or your own words")
+    p.add_argument("--shape", default="artwork", choices=["artwork", "folder"])
+    p.add_argument("--model", default="klein", choices=["auto", *MODELS],
+                   help="klein by default: twice as fast, and a drive has many folders")
+    p.add_argument("--depth", type=int, default=1, help="how many levels of folders below the root")
+    p.add_argument("--seed", type=int, help="the first folder's seed; the next folder gets the next one")
+    p.add_argument("--apply", action="store_true", help="put each picture on its folder, as the app would")
+    p.add_argument("--out", help="where the pictures go (default fsgen-out/theme-<root>)")
+    p.set_defaults(fn=cmd_theme)
 
     p = sub.add_parser("pack", help="make a pack from the pictures: folderskin-tools packs make, with cwebp",
                        description="Everything after `pack` goes to `folderskin-tools packs make`.")
