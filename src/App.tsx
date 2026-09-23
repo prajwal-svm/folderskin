@@ -1012,6 +1012,7 @@ export default function App() {
         onCarryOn={carryOn}
         onTryAgain={tryAgain}
         onDismissRun={() => dispatch({ type: "runDismissed" })}
+        pickHint={aiView ? "Preview a picture from the chat" : undefined}
       />
       </div>
       )}

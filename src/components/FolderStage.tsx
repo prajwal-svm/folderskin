@@ -50,6 +50,7 @@ export function FolderStage({
   onCarryOn,
   onTryAgain,
   onDismissRun,
+  pickHint = "Pick a skin to try it on",
 }: {
   state: State;
   /** The skin selected in the library, if any. */
@@ -76,6 +77,8 @@ export function FolderStage({
   /** Tries the folders a run couldn't change again. */
   onTryAgain: () => void;
   onDismissRun: () => void;
+  /** What to do to see a skin on the folder, where there's none on it yet. */
+  pickHint?: string;
 }) {
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
@@ -178,6 +181,7 @@ export function FolderStage({
             onRevert={onRevert}
             onReveal={onReveal}
             onBrowse={onBrowse}
+            pickHint={pickHint}
           />
         )}
 
@@ -278,6 +282,7 @@ function StageActions({
   onRevert,
   onReveal,
   onBrowse,
+  pickHint,
 }: {
   state: State;
   skin: Skin | null;
@@ -288,6 +293,7 @@ function StageActions({
   onRevert: () => void;
   onReveal: () => void;
   onBrowse: () => void;
+  pickHint: string;
 }) {
   const { phase, drag } = state;
   if (drag || phase === "idle") return null;
@@ -302,7 +308,7 @@ function StageActions({
       <span className="nudge-arrow">
         <ArrowLeftIcon />
       </span>
-      Pick a skin to try it on
+      {pickHint}
     </p>
   );
 
