@@ -6,6 +6,9 @@ license.workspace = true
 description = "Bring-your-own-key image generation for FolderSkin"
 
 [dependencies]
+# What an answer becomes: a keyed-out folder or artwork cropped for the template.
+folderskin-core.workspace = true
+image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

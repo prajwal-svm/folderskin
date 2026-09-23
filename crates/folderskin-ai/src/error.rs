@@ -40,6 +40,16 @@ pub enum AiError {
 
     #[error("{provider} took too long to finish the image. Try again, or pick a faster model.")]
     Timeout { provider: String },
+
+    #[error("the provider returned something that is not an image")]
+    NotAnImage,
+
+    /// A keyed whole-folder render came back without its flat backdrop.
+    #[error(
+        "the model drew a scene instead of a folder on a plain backdrop. Try again, or switch to \
+         Artwork, which does not need one."
+    )]
+    NoBackdrop,
 }
 
 impl AiError {
