@@ -16,6 +16,7 @@ import "./styles/composer.css";
 import "./styles/community.css";
 import "./styles/onboarding.css";
 import "./styles/updates.css";
+import "./styles/share.css";
 
 // The theme is known before anything draws, so a first launch's onboarding opens in it too.
 applyTheme(resolveTheme(loadThemePref()));

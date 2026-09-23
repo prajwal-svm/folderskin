@@ -1,0 +1,132 @@
+/* ---------- sharing a pack without GitHub (SharePack, ShareVerify, MySubmissions) ---------- */
+
+/* "Author" with the choice of how to share beside it: the choice is who the pack is credited to,
+   so it sits on the field it changes rather than above the whole form. */
+.share-author-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.share-route .seg-btn.is-active {
+  background: var(--island);
+  box-shadow: 0 0 0 1px var(--island-line);
+}
+
+.share-route .seg-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Why it can't be used right now, where the name would go. */
+.share-unavailable {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--island-line);
+  border-radius: var(--r-card);
+  background: var(--well);
+  color: var(--ink-2);
+}
+
+/* What happens to a pack sent this way, said before anything is sent: four short lines, the
+   first words of each in bold so the whole of it can be taken in at a glance. */
+.share-direct {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px 24px;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  list-style: none;
+  border-radius: var(--r-card);
+  background: var(--accent-wash);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.share-direct strong {
+  color: var(--ink);
+}
+
+.share-verify-lead {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* ---------- your submissions ---------- */
+
+.modal-share-subs {
+  width: min(580px, 100%);
+}
+
+.share-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--island-line);
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.share-sub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* A pack's name runs to 40 characters; it gives way before the status does. */
+.share-sub-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.share-sub-meta,
+.share-sub-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.share-sub-note {
+  font-style: italic;
+}
+
+.share-sub-reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.share-sub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.share-sub-actions .field-note {
+  margin-right: auto;
+}

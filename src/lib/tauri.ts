@@ -175,6 +175,59 @@ export type ComposerSaveHeader = {
 /** A saved design, and the id of the one it replaced. */
 export type ComposerSaved = { skin: Skin; replaced: string | null };
 
+/** Whether sharing without GitHub can be used here, and who this computer is to the service. */
+export type ShareStatus = {
+  /** False when this build has no service, it can't be reached, it's paused, or this computer can't share. */
+  available: boolean;
+  /** Why not, as a sentence. */
+  reason: string | null;
+  verified: boolean;
+  /** The name packs from this computer are credited to, once verified. */
+  handle: string | null;
+  /** Whether this computer has a sharing key yet, which is what a recovery file saves. */
+  has_key: boolean;
+};
+
+/** A pack on its way to the review queue. Like {@link PackToPublish}, the author isn't here: it's the verified handle. */
+export type PackToShare = {
+  name: string;
+  license: string;
+  tags: string[];
+  skinIds: string[];
+  notes: string;
+  /** Where the pictures came from: own, ai, mixed or licensed. */
+  source: string;
+  termsVersion: number;
+};
+
+/** How far sending a pack for review has got. */
+export type ShareProgress =
+  | { stage: "preparing" }
+  | { stage: "checking" }
+  | { stage: "uploading"; done: number; total: number }
+  | { stage: "finishing" };
+
+/** A pack in the review queue. */
+export type SharedPack = { submission_id: string; name: string; pictures: number };
+
+/** One of this computer's packs, and where it is. */
+export type MySubmission = {
+  id: string;
+  name: string;
+  status: "uploading" | "in_review" | "approved" | "rejected" | "withdrawn" | "taken_down" | "expired";
+  pictures: number;
+  license: string;
+  /** Unix seconds. */
+  created_at: number;
+  decided_at: number | null;
+  /** The pack's folder name once approved. */
+  pack_id: string | null;
+  /** Why it was turned down or taken down: a rule in the pack terms, and a sentence. */
+  reasons: { code: string; term: number; message: string }[];
+  /** The maintainer's own words, when they left some. */
+  note: string;
+};
+
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
 
@@ -268,6 +321,26 @@ const tauriApi = {
   composerSkinImage: (skinId: string) => invoke<ComposerImage>("composer_skin_image", { skinId }),
   /** The document of a saved design, to edit it again; null for a skin that wasn't made in the composer. */
   composerDesign: (skinId: string) => invoke<unknown>("composer_design", { skinId }),
+
+  // ---- sharing a pack without GitHub (src-tauri/src/share.rs) ----
+  /** Whether it can be used here, and who this computer is to the service. */
+  shareStatus: () => invoke<ShareStatus>("share_status"),
+  /** The signed page that verifies this computer under `handle`, to open in the browser. */
+  shareVerify: (handle: string) => invoke<string>("share_verify", { handle }),
+  /** Resolves once the service says the browser check is done. */
+  shareWait: () => invoke<ShareStatus>("share_wait"),
+  shareCancel: () => invoke<void>("share_cancel"),
+  /** Saves this computer's sharing key to a recovery file at `path`. */
+  shareSaveKey: (path: string) => invoke<void>("share_save_key", { path }),
+  /** Takes the key in a recovery file as this computer's. */
+  shareLoadKey: (path: string) => invoke<ShareStatus>("share_load_key", { path }),
+  /** Sends a pack to the review queue. */
+  shareSubmit: (pack: PackToShare, onProgress: (p: ShareProgress) => void) =>
+    invoke<SharedPack>("share_submit", { pack, onProgress: new Channel<ShareProgress>(onProgress) }),
+  /** This computer's packs, newest first. */
+  shareSubmissions: () => invoke<MySubmission[]>("share_submissions"),
+  /** Takes one back, out of the queue or out of the community. */
+  shareWithdraw: (id: string) => invoke<void>("share_withdraw", { id }),
 };
 
 /**
