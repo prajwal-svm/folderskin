@@ -53,6 +53,7 @@ const ROUTES: Route[] = [
   ["GET", new RegExp(`^/v1/admin/exports/${ID}/pack\\.json$`), (req, env, _, [id]) => admin.exportManifest(req, env, id)],
   ["GET", new RegExp(`^/v1/admin/exports/${ID}/files/([A-Za-z0-9._-]{1,64})$`), (req, env, _, [id, file]) => admin.exportFile(req, env, id, file)],
   ["POST", new RegExp(`^/v1/admin/exports/${ID}/done$`), (req, env, _, [id]) => admin.exportDone(req, env, id)],
+  ["GET", /^\/v1\/admin\/reports$/, (req, env) => admin.reports(req, env)],
 
   ["GET", /^\/l\/([A-Za-z0-9._-]{1,300})\/sheets\/([0-3])$/, (_, env, __, [token, n]) => linkSheet(env, token, Number(n))],
   ["GET", /^\/l\/([A-Za-z0-9._-]{1,300})$/, (_, env, __, [token]) => showLink(env, token)],

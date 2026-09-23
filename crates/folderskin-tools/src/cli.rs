@@ -149,6 +149,14 @@ pub enum CommunityCommand {
         #[command(flatten)]
         service: Service,
     },
+    /// List the reports people sent, newest first, with how to reach whoever sent each one
+    Reports {
+        /// How many days back to look, up to 180
+        #[arg(long, default_value_t = 7, value_parser = clap::value_parser!(u32).range(1..=180))]
+        days: u32,
+        #[command(flatten)]
+        service: Service,
+    },
     /// Stop taking new packs and verifications: the kill switch
     Pause {
         /// Said to anyone who tries to share while it's paused
@@ -434,6 +442,13 @@ mod tests {
             parse(&["takedown", "sub_x"]).is_err(),
             "a takedown says why"
         );
+        match parse(&["reports"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Reports { days, .. },
+            } => assert_eq!(days, 7),
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&["reports", "--days", "0"]).is_err());
         assert!(Cli::try_parse_from(["folderskin-tools", "community", "keygen"]).is_err());
     }
 

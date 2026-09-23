@@ -448,6 +448,12 @@ impl Client {
         .await
         .map(drop)
     }
+
+    /// Reports from the last `days` days, newest first, with the reporters' contact details.
+    pub async fn reports(&self, days: u32) -> Result<Value, Error> {
+        let path = format!("/v1/admin/reports?days={days}");
+        self.json(Method::GET, &path, None, true).await
+    }
 }
 
 /// The error in a failed answer: the service's own sentence when it sent one.

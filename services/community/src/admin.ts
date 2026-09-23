@@ -14,6 +14,7 @@
  *   GET  /v1/admin/exports/<id>/pack.json             …and each one's files, for `community pull`
  *   GET  /v1/admin/exports/<id>/files/<file>
  *   POST /v1/admin/exports/<id>/done                  {"folder"}: the folder it was written to
+ *   GET  /v1/admin/reports?days=<n>                   reports from the last n days (7 unless said)
  */
 import { isKey, requireAdmin, verifySigned } from "./auth";
 import { now } from "./bytes";
@@ -99,7 +100,7 @@ export async function detail(request: Request, env: Env, id: string): Promise<Re
   const s = await needSubmission(env, id);
   const account = await env.DB.prepare("SELECT handle, tier, approved, rejected FROM keys WHERE key = ?1").bind(s.key).first();
   const { results: reports } = await env.DB.prepare(
-    "SELECT id, reason, details, created_at FROM reports WHERE submission = ?1 ORDER BY created_at DESC",
+    "SELECT id, reason, target, details, contact, created_at FROM reports WHERE submission = ?1 ORDER BY created_at DESC",
   )
     .bind(id)
     .all();
@@ -249,4 +250,20 @@ export async function exportDone(request: Request, env: Env, id: string): Promis
   await env.DB.prepare("UPDATE submissions SET exported_at = ?2, folder = ?3 WHERE id = ?1").bind(id, now(), written).run();
   await record(env, "exported", id, written);
   return json({ exported: true, folder: written });
+}
+
+/** Reports from the last few days, newest first, with how to reach whoever sent each one. */
+export async function reports(request: Request, env: Env): Promise<Response> {
+  await admin(request, env);
+  const asked = new URL(request.url).searchParams.get("days");
+  const days = asked === null ? 7 : Number(asked);
+  if (!Number.isInteger(days) || days < 1 || days > 180) throw fail(400, "bad_days", "Ask for 1 to 180 days of reports.");
+  const { results } = await env.DB.prepare(
+    `SELECT r.id, r.reason, r.target, r.details, r.contact, r.created_at, r.submission, s.name, s.status
+     FROM reports r LEFT JOIN submissions s ON s.id = r.submission
+     WHERE r.created_at >= ?1 ORDER BY r.created_at DESC LIMIT 200`,
+  )
+    .bind(now() - days * 86400)
+    .all();
+  return json({ reports: results });
 }

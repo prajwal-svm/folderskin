@@ -205,6 +205,14 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             show(answer);
             Ok(())
         }
+        CommunityCommand::Reports { days, service } => {
+            let client = service_client(&service)?;
+            let reports = runtime
+                .block_on(client.reports(days))
+                .map_err(|e| e.to_string())?;
+            print_reports(&reports, days);
+            Ok(())
+        }
         CommunityCommand::Pause { message, service } => {
             let client = service_client(&service)?;
             show(
@@ -322,6 +330,68 @@ fn print_queue(queue: &serde_json::Value) {
                 Some(n) => format!(", {n} reports"),
             }
         );
+    }
+}
+
+/// Each report: when, why and what about, then the reporter's words and how to reach them.
+fn print_reports(reports: &serde_json::Value, days: u32) {
+    let empty = Vec::new();
+    let list = reports["reports"].as_array().unwrap_or(&empty);
+    if list.is_empty() {
+        println!(
+            "no reports in the last {}",
+            if days == 1 {
+                "day".to_string()
+            } else {
+                format!("{days} days")
+            }
+        );
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    for r in list {
+        let text = |field: &str| r[field].as_str().unwrap_or("").trim().to_string();
+        let about = match r["submission"].as_str() {
+            Some(id) => format!(
+                " (\"{}\", {id}, {})",
+                text("name"),
+                r["status"].as_str().unwrap_or("?")
+            ),
+            None => String::new(),
+        };
+        println!(
+            "{}  {}  {}: {}{about}",
+            text("id"),
+            ago(now.saturating_sub(r["created_at"].as_u64().unwrap_or(now))),
+            text("reason"),
+            text("target"),
+        );
+        let details = text("details");
+        if !details.is_empty() {
+            for line in details.lines() {
+                println!("    {line}");
+            }
+        }
+        let contact = text("contact");
+        if !contact.is_empty() {
+            println!("    reach them at: {contact}");
+        }
+    }
+}
+
+/// "3 hours ago", for a report `seconds` old.
+fn ago(seconds: u64) -> String {
+    let (n, unit) = match seconds {
+        s if s < 3600 => (s / 60, "minute"),
+        s if s < 86_400 => (s / 3600, "hour"),
+        s => (s / 86_400, "day"),
+    };
+    match n {
+        0 => "just now".into(),
+        1 => format!("1 {unit} ago"),
+        n => format!("{n} {unit}s ago"),
     }
 }
 

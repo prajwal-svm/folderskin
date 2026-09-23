@@ -60,6 +60,14 @@ export async function digest(env: Env, at = now()): Promise<Notice | null> {
   )
     .bind(at - DAY)
     .all<{ kind: string; subject: string; detail: string }>();
+  // Each of the day's reports by what it is about, since one about a pack on GitHub or one naming a
+  // pack loosely matches nothing here and would otherwise only be counted. The details and how to
+  // reach the reporter stay with `folderskin-tools community reports`, out of the chat channel.
+  const { results: reported } = await env.DB.prepare(
+    "SELECT reason, target, submission FROM reports WHERE created_at >= ?1 ORDER BY created_at DESC, rowid DESC LIMIT 10",
+  )
+    .bind(at - DAY)
+    .all<{ reason: string; target: string; submission: string | null }>();
   const pause = await pauseState(env);
   if (waiting === 0 && reports === 0 && unpulled === 0 && events.length === 0 && !pause.paused) return null;
 
@@ -85,6 +93,9 @@ export async function digest(env: Env, at = now()): Promise<Notice | null> {
     `Waiting for review: ${waiting}${flagged ? ` (${flagged} flagged)` : ""}.`,
     ...(waiting > 0 ? [`The oldest has waited ${waited === 1 ? "a day" : `${waited} days`}.`] : []),
     `Reports in the last day: ${reports}.`,
+    ...reported.map((r) => `Report, ${r.reason}: ${r.target.slice(0, 200)}${r.submission ? ` (${r.submission})` : ""}`),
+    ...(reports > reported.length ? [`…and ${reports - reported.length} more reports.`] : []),
+    ...(reports > 0 ? ["folderskin-tools community reports shows their details and how to reach whoever sent them."] : []),
     `Approved but not pulled into the repository yet: ${unpulled}.`,
     ...(env.AI ? [`Triage used ${neurons ?? 0} of ${envNumber(env.AI_DAILY_NEURONS, 9000)} neurons yesterday.`] : []),
     ...events.map((e) => `${e.kind}: ${e.subject} ${e.detail}`.trim()),

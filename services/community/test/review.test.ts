@@ -292,6 +292,22 @@ describe("reports", () => {
     expect(statuses.filter((s) => s === 201)).toHaveLength(10);
     expect(statuses.at(-1)).toBe(429);
   });
+
+  it("list reports for the maintainer, with how to reach whoever sent each one", async () => {
+    const report = { target: "The otters pack", reason: "copyright", details: "These are my photos.", contact: "reporter@example.org" };
+    expect((await call(postJson("/v1/reports", report))).status).toBe(201);
+    const listed = (await (await admin("GET", "/v1/admin/reports?days=1")).json()) as {
+      reports: { target: string; submission: string | null; details: string; contact: string }[];
+    };
+    expect(listed.reports.find((r) => r.target === "The otters pack")).toMatchObject({
+      submission: null,
+      details: "These are my photos.",
+      contact: "reporter@example.org",
+    });
+    expect((await errorOf(await admin("GET", "/v1/admin/reports?days=999"))).code).toBe("bad_days");
+    const stranger = await author("nosy-neighbour");
+    expect((await call(await signed(stranger, "GET", "/v1/admin/reports"), asAdmin())).status).toBe(404);
+  });
 });
 
 describe("the daily run", () => {
@@ -301,6 +317,14 @@ describe("the daily run", () => {
     const { submission_id: id } = (await created.json()) as { submission_id: string };
     await daily(testEnv(), Math.floor(Date.now() / 1000) + 2 * 86400);
     expect((await mine(who))[0]).toMatchObject({ id, status: "expired" });
+  });
+
+  it("lists each of the day's reports in the digest, even one about a pack the service doesn't hold", async () => {
+    await call(postJson("/v1/reports", { target: "The otters pack on GitHub", reason: "copyright", contact: "someone@example.org" }));
+    const notice = await digest(testEnv());
+    expect(notice?.lines).toContain("Report, copyright: The otters pack on GitHub");
+    // How to reach the reporter stays out of the chat channel.
+    expect(notice?.lines.join("\n")).not.toContain("someone@example.org");
   });
 
   it("sends a digest with a review link for each pack waiting", async () => {
