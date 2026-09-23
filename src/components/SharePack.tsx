@@ -116,8 +116,8 @@ export function SharePack({
   /** The name packs will be credited to, typed before this computer is verified. */
   const [handle, setHandle] = useState(loadHandle);
   const [source, setSource] = useState<PictureSource | "">("");
-  /** Set while the check runs in the browser, and says what to do once it's passed. */
-  const [verifying, setVerifying] = useState<null | "send" | "verify">(null);
+  /** Set while the check runs in the browser; the pack is sent once it's passed. */
+  const [verifying, setVerifying] = useState(false);
   const [sending, setSending] = useState<ShareProgress | null>(null);
   const [sent, setSent] = useState<SharedPack | null>(null);
   const [showMine, setShowMine] = useState(false);
@@ -282,24 +282,21 @@ export function SharePack({
     }
   }, [license, notes, packTags, clean, chosen, source]);
 
-  // Verifying from the name row only verifies; verifying from the send button carries on and sends,
-  // the same way connecting to GitHub does above.
+  // Verifying carries on and sends, the way connecting to GitHub carries on and publishes. A ref
+  // keeps the callback itself stable, so the check open in the browser isn't started over.
   const sendRef = useRef(send);
   sendRef.current = send;
-  const verifyWantedRef = useRef(verifying);
-  verifyWantedRef.current = verifying;
   const onVerified = useCallback((status: ShareStatus) => {
-    const go = verifyWantedRef.current === "send";
     setDirect(status);
-    setVerifying(null);
+    setVerifying(false);
     if (status.handle) saveHandle(status.handle);
-    if (go && status.verified) void sendRef.current();
+    if (status.verified) void sendRef.current();
   }, []);
 
-  const startVerify = (then: "send" | "verify") => {
+  const verifyAndSend = () => {
     setError(null);
     saveHandle(handle);
-    setVerifying(then);
+    setVerifying(true);
   };
 
   /** Saves this computer's key, so the same name can share from another computer or after a reinstall. */
@@ -368,7 +365,7 @@ export function SharePack({
   if (verifying) {
     return (
       <Modal narrow title="Verify this computer" sub="So only people, not scripts, can send packs for review." onClose={onClose}>
-        <ShareVerify handle={handle} onVerified={onVerified} onCancel={() => setVerifying(null)} />
+        <ShareVerify handle={handle} onVerified={onVerified} onCancel={() => setVerifying(false)} />
       </Modal>
     );
   }
@@ -511,7 +508,7 @@ export function SharePack({
               className="btn btn-primary"
               disabled={Boolean(stop) || busy}
               aria-busy={busy}
-              onClick={() => (verified ? void send() : startVerify("send"))}
+              onClick={() => (verified ? void send() : verifyAndSend())}
             >
               {busy ? <LoaderIcon /> : <EarthIcon size={15} />}
               {busy ? "Sending" : verified ? "Send for review" : "Verify and send"}
