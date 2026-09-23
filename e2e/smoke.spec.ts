@@ -9,7 +9,9 @@ test("the library opens with the user's own skins", async ({ page }) => {
 test("every view in the sidebar opens", async ({ page }) => {
   await openApp(page);
   await openView(page, /design your own/i);
-  await expect(page.getByRole("heading", { name: /design a skin/i })).toBeVisible();
+  // The first visit asks how to start; the app behind the dialog waits until it's answered.
+  await expect(page.getByRole("heading", { name: /start a new design/i })).toBeVisible();
+  await page.keyboard.press("Escape");
   await openView(page, /generate with ai/i);
   await expect(page.getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
   await openView(page, /community/i);
