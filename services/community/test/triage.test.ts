@@ -71,11 +71,12 @@ describe("notifications", () => {
     expect(noticeText(notice)).toBe('Urgent: "Pack" needs a look\n\none\ntwo\n\nReview it: https://community.test/l/x');
   });
 
-  it("take the shape each webhook expects, and mention nobody on Discord", () => {
+  it("take the shape each webhook expects, mention nobody and fetch no link", () => {
     const discord = JSON.parse(String(webhookRequest("discord", notice, true).body));
-    expect(discord).toEqual({ content: noticeText(notice), allowed_mentions: { parse: [] } });
+    expect(discord).toEqual({ content: noticeText(notice), allowed_mentions: { parse: [] }, flags: 4 });
     const slack = JSON.parse(String(webhookRequest("slack", { ...notice, title: "<!channel> look" }, true).body));
     expect(slack.text).toContain("&lt;!channel&gt; look");
+    expect(slack).toMatchObject({ unfurl_links: false, unfurl_media: false });
     const telegram = JSON.parse(String(webhookRequest("telegram", notice, true).body));
     expect(telegram).toMatchObject({ disable_web_page_preview: true });
     const ntfy = webhookRequest("ntfy", { ...notice, title: "Café ☕ report" }, false);

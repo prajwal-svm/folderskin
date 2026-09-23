@@ -57,16 +57,27 @@ function webhookKind(env: Env, url: URL): Kind {
   return "ntfy";
 }
 
-/** The request each kind of webhook expects. Telegram's chat id goes in the webhook address's query. */
+/**
+ * The request each kind of webhook expects. Telegram's chat id goes in the webhook address's query.
+ *
+ * A notice carries anyone's words (a pack's name, what a report is about), and a report of abuse
+ * may well name the picture's address, so no chat app is let fetch a link to show it: the
+ * maintainer opens what they choose to.
+ */
 export function webhookRequest(kind: Kind, notice: Notice, urgent: boolean): RequestInit {
   const text = noticeText(notice);
   switch (kind) {
     case "discord":
-      return json({ content: text.slice(0, 1900), allowed_mentions: { parse: [] } });
+      // Flag 4 is SUPPRESS_EMBEDS.
+      return json({ content: text.slice(0, 1900), allowed_mentions: { parse: [] }, flags: 4 });
     case "slack":
-      // Slack reads <!channel> and <@someone> in a message as mentions, and a pack's name or a
-      // report's details are anyone's words, so its three special characters are escaped.
-      return json({ text: text.slice(0, 3900).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") });
+      // Slack reads <!channel> and <@someone> in a message as mentions, so its three special
+      // characters are escaped.
+      return json({
+        text: text.slice(0, 3900).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+        unfurl_links: false,
+        unfurl_media: false,
+      });
     case "telegram":
       return json({ text: text.slice(0, 4000), disable_web_page_preview: true });
     case "ntfy": {
