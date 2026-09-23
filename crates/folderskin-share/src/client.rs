@@ -177,8 +177,20 @@ impl Client {
         ts
     }
 
+    /// [`Client::verify_url`], signed by the service's clock rather than this computer's.
+    ///
+    /// The link is checked in the browser, where there is no second try with a corrected time, so
+    /// the service is asked who this computer is first: when the clock here is out, that answer
+    /// sets it (see [`Client::me`]), and a computer whose clock is wrong still gets a link the
+    /// service takes.
+    pub async fn verify_link(&self, handle: &str) -> Result<String, Error> {
+        self.me().await?;
+        self.verify_url(handle)
+    }
+
     /// The page that verifies this computer, signed so the service knows the key asked for it.
-    /// It opens in the browser, since the check can't run inside the app.
+    /// It opens in the browser, since the check can't run inside the app. Signed with the time as
+    /// this client knows it; [`Client::verify_link`] makes sure that is the service's.
     pub fn verify_url(&self, handle: &str) -> Result<String, Error> {
         if !crate::is_handle(handle) {
             return Err(Error::Service {
@@ -737,6 +749,29 @@ mod tests {
         );
         assert!(sign::verify(&get("k"), message.as_bytes(), &get("s")));
         assert!(client.verify_url("no").is_err());
+    }
+
+    #[test]
+    fn the_verify_link_carries_the_services_time_when_this_computers_clock_is_out() {
+        // Ten minutes fast here, so the service is ten minutes behind.
+        let theirs = Client::local_now() - 600;
+        let (base, _seen) = serve(vec![
+            (
+                401,
+                vec![("X-FS-Time", theirs.to_string())],
+                r#"{"error": {"code": "clock", "message": "Your computer's clock is more than five minutes out."}}"#.into(),
+            ),
+            (200, vec![], r#"{"verified": false}"#.into()),
+        ]);
+        let client = Client::new(&base, DeviceKey::generate().unwrap()).unwrap();
+        let url = run(client.verify_link("sunny-otter")).unwrap();
+        let t: u64 = url
+            .split(['?', '&'])
+            .find_map(|kv| kv.strip_prefix("t="))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(t.abs_diff(theirs) < 60, "signed with the service's time");
     }
 
     #[test]

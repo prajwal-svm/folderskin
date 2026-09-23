@@ -184,7 +184,8 @@ pub async fn share_status(keys: State<'_, Keys>) -> Result<ShareStatus, String> 
 pub struct Waiting(AtomicBool);
 
 /// The signed page that verifies this computer under `handle`, for the dialog to open in the
-/// browser. Makes the computer's key the first time.
+/// browser. Makes the computer's key the first time. The link is signed by the service's clock,
+/// so a computer whose own clock is out can still be verified.
 #[tauri::command]
 pub async fn share_verify(keys: State<'_, Keys>, handle: String) -> Result<String, String> {
     let handle = handle.trim();
@@ -194,7 +195,7 @@ pub async fn share_verify(keys: State<'_, Keys>, handle: String) -> Result<Strin
                 .into(),
         );
     }
-    client(key(&keys)?)?.verify_url(handle).map_err(said)
+    client(key(&keys)?)?.verify_link(handle).await.map_err(said)
 }
 
 /// Waits until the service says this computer is verified, asking every few seconds. Resolves
