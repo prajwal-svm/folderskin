@@ -1,12 +1,91 @@
 /* The window: a sidebar straight on the glass, then two islands (library, folder). */
 
+/* The sidebar's and the right island's widths come from App.tsx (state/layout.ts), which fits
+   them to the window; these are the same values before it has. */
 .app {
+  --left-w: 228px;
+  --right-w: clamp(320px, 29vw, 372px);
   position: relative;
   height: 100%;
   display: grid;
-  grid-template-columns: 228px minmax(0, 1fr) clamp(320px, 29vw, 372px);
+  grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
   gap: var(--gap);
   padding: var(--gap) var(--gap) var(--gap) 0;
+}
+
+/* Folded, the sidebar is an island like the others, with the window's edge around it. */
+.app.is-rail {
+  padding-left: var(--gap);
+}
+
+/* Folding or opening the sidebar slides the columns; dragging an edge or resizing the window
+   doesn't wait for a transition. */
+.app.is-folding {
+  transition:
+    grid-template-columns var(--t-slow) var(--ease-out),
+    padding var(--t-slow) var(--ease-out);
+}
+
+/* ---------- the edges between islands ---------- */
+
+/* A strip over the gap between two islands, a little wider than it for an easy grab. It draws
+   nothing until it's pointed at: then a thin line down the gap, solid while it's held. */
+.island-resizer {
+  position: absolute;
+  z-index: 4;
+  top: var(--gap);
+  bottom: var(--gap);
+  width: calc(var(--gap) + 4px);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.island-resizer.is-left {
+  left: calc(var(--left-w) - 2px);
+}
+
+.app.is-rail .island-resizer.is-left {
+  left: calc(var(--gap) + var(--left-w) - 2px);
+}
+
+.island-resizer.is-right {
+  right: calc(var(--gap) + var(--right-w) - 2px);
+}
+
+.island-resizer::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease;
+}
+
+.island-resizer:hover::after {
+  opacity: 0.4;
+  transition-delay: 120ms;
+}
+
+.island-resizer:focus-visible::after,
+.is-resizing-islands .island-resizer:active::after {
+  opacity: 1;
+  transition-delay: 0ms;
+}
+
+.app.is-folding .island-resizer {
+  visibility: hidden;
+}
+
+.is-resizing-islands,
+.is-resizing-islands * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .island {
@@ -30,6 +109,7 @@
 .sidebar {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   padding: 0 2px 0 12px;
 }
@@ -40,6 +120,79 @@
   align-items: center;
   padding: 0 10px; /* the mark lines up with the nav icons, the name with the nav labels */
   flex: none;
+}
+
+/* ---------- the sidebar folded: an island of icons ---------- */
+
+.sidebar.is-rail {
+  align-items: center;
+  padding: 10px 0 8px;
+  border-radius: var(--r-island);
+  background: var(--island);
+  border: 1px solid var(--island-line);
+  transition: background-color var(--t-base) ease;
+}
+
+/* It runs the window's full height. In the Mac app the traffic lights sit over the window's top
+   left corner, so they sit inside the island's top, above the logo; in full screen they're gone
+   and so is the room (App.tsx sets data-fullscreen). */
+html[data-glass]:not([data-fullscreen]) .sidebar.is-rail {
+  padding-top: 38px;
+}
+
+.sidebar.is-rail .sidebar-top,
+.os-macos .sidebar.is-rail .sidebar-top {
+  height: auto;
+  padding: 2px 0 12px;
+}
+
+.sidebar.is-rail .brand-lockup {
+  flex: none;
+  justify-content: center;
+}
+
+.sidebar.is-rail .cta {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0 0 12px;
+  border-radius: 12px;
+}
+
+.sidebar.is-rail .sidebar-scroll {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sidebar.is-rail .nav-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Where the group names were, a short rule between the groups. */
+.sidebar.is-rail .nav-group + .nav-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  background: linear-gradient(var(--line), var(--line)) top center / 24px 1px no-repeat;
+}
+
+.sidebar.is-rail .nav-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidebar.is-rail .sidebar-bottom {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* below the traffic lights, with the same room above the logo as below it */
@@ -63,7 +216,7 @@
   z-index: 3;
   top: var(--gap);
   right: var(--gap);
-  width: clamp(320px, 29vw, 372px);
+  width: var(--right-w);
   height: 32px;
   display: flex;
   align-items: stretch;
@@ -446,4 +599,9 @@ html[data-os="windows"] .cmp-side-head {
   line-height: 1.5;
   color: var(--muted);
   max-width: 540px;
+}
+
+/* On the rail's white island the open page is tinted, as a selected thing is everywhere else. */
+.sidebar.is-rail .nav-btn.is-active {
+  background: var(--accent-soft);
 }

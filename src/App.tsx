@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
@@ -12,6 +13,8 @@ import { throttle } from "./lib/throttle";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
+import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RIGHT, saveLayout, type Layout } from "./state/layout";
+import { IslandResizer } from "./components/IslandResizer";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
 import { useUpdates } from "./hooks/useUpdates";
@@ -91,6 +94,48 @@ type TreeAsk = {
 /** How long a folder that replaced another shows its own icon before the selected skin goes on. */
 const ARRIVAL_MS = 900;
 
+/** How long the sidebar takes to fold or open (the grid's transition in shell.css). */
+const FOLD_MS = 320;
+
+/**
+ * The window's columns as the user left them, and the window's width, which they're fitted to.
+ * Saved a moment after each change; folding or opening the sidebar animates, dragging doesn't.
+ */
+function useLayout() {
+  const [layout, setLayout] = useState<Layout>(loadLayout);
+  const [width, setWidth] = useState(() => window.innerWidth);
+  const [folding, setFolding] = useState(false);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  useEffect(() => {
+    const t = window.setTimeout(() => saveLayout(layout), 250);
+    return () => window.clearTimeout(t);
+  }, [layout]);
+  useEffect(() => {
+    if (!folding) return;
+    const t = window.setTimeout(() => setFolding(false), FOLD_MS + 40);
+    return () => window.clearTimeout(t);
+  }, [folding]);
+  const toggleRail = useCallback(() => {
+    setFolding(true);
+    setLayout((l) => ({ ...l, rail: !l.rail }));
+  }, []);
+  // A drag that folds or opens the sidebar animates too, rather than jumping.
+  const latest = useRef(layout);
+  latest.current = layout;
+  const resizeSidebar = useCallback((to: number) => {
+    const next = dragSidebar(latest.current, to);
+    if (next === latest.current) return;
+    if (next.rail !== latest.current.rail) setFolding(true);
+    latest.current = next;
+    setLayout(next);
+  }, []);
+  return { layout, setLayout, width, folding, toggleRail, resizeSidebar };
+}
+
 /** Newest first. A pack keeps its own order: the app gives its first skin the newest time. */
 function newestFirst(list: Skin[]): Skin[] {
   return [...list].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
@@ -135,6 +180,18 @@ export default function App() {
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null);
   const requestSeq = useRef(0);
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleThemePref } = useTheme();
+  const { layout, setLayout, width: windowWidth, folding, toggleRail, resizeSidebar } = useLayout();
+
+  // ⌘\ (Ctrl+\ elsewhere) folds the sidebar and opens it again, as its button's tooltip says.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "\\" || document.querySelector(".modal-backdrop")) return;
+      e.preventDefault();
+      toggleRail();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleRail]);
   const { items: toastItems, push: toast, dismiss: dismissToast } = useToasts();
   const updates = useUpdates();
 
@@ -154,6 +211,25 @@ export default function App() {
   // whatever the webview did with that script.
   useEffect(() => {
     document.documentElement.dataset.os = platform.os;
+  }, [platform.os]);
+
+  // In full screen the Mac's traffic lights are gone, and so is the room the folded sidebar keeps
+  // for them at its top (shell.css).
+  useEffect(() => {
+    if (!isTauri() || platform.os !== "macos") return;
+    const win = getCurrentWindow();
+    let live = true;
+    const check = () =>
+      void win
+        .isFullscreen()
+        .then((full) => live && document.documentElement.toggleAttribute("data-fullscreen", full))
+        .catch(() => {});
+    check();
+    const off = win.onResized(check);
+    return () => {
+      live = false;
+      void off.then((stop) => stop());
+    };
   }, [platform.os]);
 
   /** Puts skins in the library, or updates the ones already there. */
@@ -694,9 +770,33 @@ export default function App() {
   // Windows has no system caption bar (window.rs builds the window undecorated), so the folder
   // island carries the window's controls and a strip to drag it by.
   const windowsChrome = platform.os === "windows";
+  const cols = columns(layout, windowWidth, true);
 
   return (
-    <main className={`app os-${platform.os}`}>
+    <main
+      className={`app os-${platform.os}${layout.rail ? " is-rail" : ""}${folding ? " is-folding" : ""}`}
+      style={{ "--left-w": `${cols.left}px`, "--right-w": `${cols.right}px` } as CSSProperties}
+    >
+      <IslandResizer
+        label="sidebar width"
+        className="is-left"
+        width={cols.left}
+        min={LEFT.min}
+        max={LEFT.max}
+        grows="right"
+        onWidth={resizeSidebar}
+        onReset={() => setLayout((l) => ({ ...l, rail: false, left: DEFAULT_LAYOUT.left }))}
+      />
+      <IslandResizer
+        label={composing ? "layers and settings width" : "folder panel width"}
+        className="is-right"
+        width={cols.right}
+        min={RIGHT.min}
+        max={RIGHT.max}
+        grows="left"
+        onWidth={(to) => setLayout((l) => dragRight(l, to, windowWidth))}
+        onReset={() => setLayout((l) => ({ ...l, right: null }))}
+      />
       <Sidebar
         view={view}
         onView={(v) => {
@@ -715,6 +815,8 @@ export default function App() {
         updateReady={updates.status.state === "available"}
         onSettings={() => setSettingsTab("general")}
         settingsOpen={settingsTab !== null}
+        rail={layout.rail}
+        onToggleRail={toggleRail}
       />
       <AboutMenu
         note={platform.note}
