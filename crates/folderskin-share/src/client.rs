@@ -93,16 +93,15 @@ impl std::fmt::Debug for Client {
     }
 }
 
-/// Whether `base` is an address a key's signatures may be sent to: https, or plain http to this
-/// computer itself for `wrangler dev`.
-fn allowed(base: &str) -> bool {
-    let local = ["http://localhost", "http://127.0.0.1", "http://[::1]"];
-    base.starts_with("https://")
-        || local.iter().any(|l| {
-            base.strip_prefix(l).is_some_and(|rest| {
-                rest.is_empty() || rest.starts_with(':') || rest.starts_with('/')
-            })
-        })
+/// Whether `url` is an address a key's signatures may be sent to: https, or plain http to this
+/// computer itself for `wrangler dev`. Decided from the parsed address, so `http://localhost@elsewhere`
+/// (a user name of "localhost" on another host) is seen for what it is; and with no user name or
+/// password at all, which a service address never needs.
+fn allowed(url: &reqwest::Url) -> bool {
+    // The parser has already lower-cased the host and written IPv4 and IPv6 addresses out in full.
+    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    let secure = url.scheme() == "https" || (url.scheme() == "http" && local);
+    secure && url.username().is_empty() && url.password().is_none()
 }
 
 /// A piece of a path, from the service or the user, before it goes into a URL: ids, hashes and
@@ -120,15 +119,16 @@ fn segment(value: &str) -> Result<&str, Error> {
 impl Client {
     /// A client for the service at `base` (no trailing slash needed), signing as `key`.
     pub fn new(base: &str, key: DeviceKey) -> Result<Client, Error> {
-        let base = base.trim().trim_end_matches('/').to_string();
-        let url = reqwest::Url::parse(&base).map_err(|_| Error::BadAddress)?;
-        if !allowed(&base)
+        let url = reqwest::Url::parse(base.trim()).map_err(|_| Error::BadAddress)?;
+        if !allowed(&url)
             || url.host_str().is_none_or(str::is_empty)
             || url.query().is_some()
             || url.fragment().is_some()
         {
             return Err(Error::BadAddress);
         }
+        // Requests go to the address as it was parsed and checked, not as it was typed.
+        let base = url.as_str().trim_end_matches('/').to_string();
         let prefix = url.path().trim_end_matches('/').to_string();
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
@@ -669,10 +669,20 @@ mod tests {
         let key = || DeviceKey::generate().unwrap();
         assert!(Client::new("https://community.example.org/", key()).is_ok());
         assert!(Client::new("http://localhost:8787", key()).is_ok());
+        assert_eq!(
+            Client::new("http://LOCALHOST:8787/", key()).unwrap().base(),
+            "http://localhost:8787"
+        );
         assert!(Client::new("http://127.0.0.1", key()).is_ok());
+        assert!(Client::new("http://[::1]:8787/", key()).is_ok());
         for bad in [
             "http://community.example.org",
             "http://localhost.evil.test",
+            // A user name (and password) of "localhost" on somebody else's host.
+            "http://localhost:80@evil.example",
+            "http://127.0.0.1:1@evil.example/",
+            "http://localhost@evil.example",
+            "https://someone:secret@community.example.org",
             "ftp://x",
             "",
         ] {
