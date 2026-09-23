@@ -1,6 +1,4 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import type { Assets } from "../../composer/assets";
-import type { TemplateImages } from "../../composer/composite";
 import { centreOf, ICON_LOOKS, iconName, makeIcon, type Doc, type IconDrawing, type IconLayer, type IconLook, type Parts } from "../../composer/doc";
 import { ICON_PACKS, type IconPackInfo } from "../../composer/icons/catalog";
 import { drawingOf, searchIcons, type IconDef, type IconPack } from "../../composer/icons/index";
@@ -15,7 +13,6 @@ import { SearchIcon } from "../icons/search";
 import { Segmented } from "./controls";
 import { PackLogo } from "./PackLogo";
 import { Popover } from "./Popover";
-import { DesignThumb } from "./NewDesign";
 
 const PACK_KEY = "folderskin.composer.iconPack";
 /** The narrowest an icon cell gets; the grid fits as many as the side has room for. */
@@ -131,36 +128,33 @@ function PackList({
 
 /**
  * The icon library in the composer's side island: every icon of the chosen pack, searchable,
- * drawn only as far as the grid is scrolled, and a preview of the design with the icon under the
- * pointer on it before anything changes. With an icon selected on the canvas the library works on
- * it: a click swaps it for the one clicked (⌥-click adds another instead), the preview shows the
- * swap, and the look switch changes it in place. Lucide comes with the app; the other packs are a
- * download away.
+ * drawn only as far as the grid is scrolled. The icon under the pointer (or the keyboard) is shown
+ * on the canvas itself, live, before anything changes. With an icon on the design the library works
+ * on it (the selected one, or else the top one): a click swaps it for the one clicked, so trying
+ * icons never piles them up, ⌥-click adds another instead, and the look switch changes it in
+ * place. Lucide comes with the app; the other packs are a download away.
  */
 export function IconLibrary({
   doc,
   parts,
-  template,
-  assets,
-  version,
   target,
   look,
   onLook,
   onPick,
+  onPreview,
   onError,
 }: {
   doc: Doc;
   parts: Parts;
-  template: TemplateImages | null;
-  assets: Assets;
-  version: number;
-  /** The icon selected on the canvas, which a pick replaces; null adds a new one. */
+  /** The icon a pick replaces (the selected one, or the design's top one); null adds a new one. */
   target: IconLayer | null;
   /** The selected icon's look, or the next new one's. */
   look: IconLook;
   onLook: (look: IconLook) => void;
   /** An icon was picked: `asNew` adds it even with an icon selected. */
   onPick: (drawing: IconDrawing, asNew: boolean) => void;
+  /** The design as a click would leave it, for the canvas to show; null when nothing is pointed at. */
+  onPreview: (doc: Doc | null) => void;
   onError: (message: string) => void;
 }) {
   const [packId, setPackId] = useState(rememberedPack);
@@ -171,6 +165,8 @@ export function IconLibrary({
   const deferred = useDeferredValue(query);
   const [hover, setHover] = useState<IconDef | null>(null);
   const [active, setActive] = useState(0);
+  /** The arrow keys are moving through the grid, so the icon they're on is the one shown. */
+  const [keyed, setKeyed] = useState(false);
   const [packsAnchor, setPacksAnchor] = useState<HTMLElement | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const grid = useRef<VirtualGridHandle>(null);
@@ -238,12 +234,12 @@ export function IconLibrary({
     [pack, onPick],
   );
 
-  // The design as it would be: the icon under the pointer in the selected one's place, or added to
-  // the front's middle. Never both, so the preview shows exactly what a click does.
+  // The design as a click would leave it: the icon pointed at in the target's place, or added to the
+  // front's middle. Never both, so the canvas shows exactly what a click does.
   const front = centreOf(parts.front);
-  const shown = hover ?? results[active] ?? null;
-  const preview = useMemo<Doc>(() => {
-    if (!pack || !shown) return doc;
+  const shown = hover ?? (keyed ? (results[active] ?? null) : null);
+  const preview = useMemo<Doc | null>(() => {
+    if (!pack || !shown) return null;
     const drawing = drawingOf(pack, shown);
     if (target) {
       return {
@@ -257,6 +253,8 @@ export function IconLibrary({
     }
     return { ...doc, layers: [...doc.layers, { ...makeIcon(drawing, front.x, front.y, look), id: "preview" }] };
   }, [doc, pack, shown, target, look, front.x, front.y]);
+  useEffect(() => onPreview(preview), [preview, onPreview]);
+  useEffect(() => () => onPreview(null), [onPreview]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (results.length === 0) return;
@@ -267,6 +265,7 @@ export function IconLibrary({
       const next = Math.max(0, Math.min(results.length - 1, active + step));
       setActive(next);
       setHover(null);
+      setKeyed(true);
       grid.current?.scrollToIndex(next);
       requestAnimationFrame(() => grid.current?.element()?.querySelector<HTMLElement>(`[data-index="${next}"] button`)?.focus());
     } else if (e.key === "Enter" || e.key === " ") {
@@ -277,20 +276,21 @@ export function IconLibrary({
 
   const info = packInfo(usable);
   const looks = ICON_LOOKS.filter((l) => l.id !== "original" || target?.brand || pack?.brands);
-  // The preview card names the icon under the pointer (the cells have no tooltips of their own)
-  // and says what a click on it does.
+  // A line under the grid names the icon pointed at (the cells have no tooltips of their own) and
+  // says what a click does; the canvas shows it.
   const same = target !== null && shown !== null && target.pack === pack?.id && target.icon === shown.n;
-  const action = same ? "It's on your folder now" : target ? `Click to swap it for ${iconName(target.icon)}` : "Click to add it to the front";
+  const alt = localOs() === "macos" ? "⌥" : "Alt";
+  const status = !shown
+    ? target
+      ? `Point at an icon to try it in place of ${iconName(target.icon)}.`
+      : "Point at an icon to try it on your folder."
+    : same
+      ? "It's on your folder now."
+      : target
+        ? `Click to swap it for ${iconName(target.icon)}, ${alt}-click to add another.`
+        : "Click to add it to the front.";
   return (
     <div className="icon-library">
-      <div className="icon-preview">
-        <DesignThumb doc={preview} template={template} assets={assets} size={112} version={version} />
-        <div className="icon-preview-text">
-          <span className="icon-preview-name">{shown ? iconName(shown.n) : "Pick an icon"}</span>
-          <span className="icon-preview-sub">{shown ? action : "Point at one to see it on your folder."}</span>
-          {target && shown && !same && <span className="icon-preview-hint">{localOs() === "macos" ? "⌥" : "Alt"}-click adds another</span>}
-        </div>
-      </div>
       <div className="icon-controls">
         <button
           type="button"
@@ -337,7 +337,7 @@ export function IconLibrary({
           <LoaderIcon size={15} /> Opening {info?.name ?? "the icons"}…
         </p>
       ) : (
-        <div className="icon-grid-wrap" onKeyDown={onKey}>
+        <div className="icon-grid-wrap" onKeyDown={onKey} onPointerMove={() => keyed && setKeyed(false)}>
           <VirtualGrid
             ref={grid}
             items={results}
@@ -370,6 +370,10 @@ export function IconLibrary({
           />
         </div>
       )}
+      <p className="icon-status" aria-live="polite">
+        {shown && <strong>{iconName(shown.n)}</strong>}
+        <span>{status}</span>
+      </p>
       {packsAnchor && (
         <Popover anchor={packsAnchor} onClose={() => setPacksAnchor(null)} width={280} label="Icon packs">
           <PackList current={usable} available={available} progress={progress} onChoose={choosePack} onDownload={(p) => void download(p)} onRemove={(p) => void remove(p)} />

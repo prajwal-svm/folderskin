@@ -105,7 +105,7 @@ test.describe("the icon library", () => {
     await search.fill("camera");
     const cell = side(page).getByRole("button", { name: "Camera", exact: true });
     await cell.hover();
-    await expect(side(page).locator(".icon-preview-name")).toHaveText("Camera");
+    await expect(side(page).locator(".icon-status strong")).toHaveText("Camera");
     await cell.click();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await expect(layerNames(page)).toHaveText(["Camera", "Background"]);
@@ -132,8 +132,40 @@ test.describe("the icon library", () => {
     await side(page).getByRole("button", { name: "Camera", exact: true }).click();
     // The new icon is selected, so the library now works on it: the preview says so.
     await side(page).getByLabel("search icons").fill("aperture");
+    await page.mouse.move(5, 5);
     await side(page).getByRole("button", { name: "Aperture", exact: true }).hover();
-    await expect(side(page).locator(".icon-preview-sub")).toHaveText("Click to swap it for Camera");
+    await expect(side(page).locator(".icon-status span")).toHaveText(/^Click to swap it for Camera/);
+    await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Aperture", "Background"]);
+  });
+
+  test("tries the icon pointed at on the canvas itself, and puts it back after", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    const picture = () => canvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
+    await page.waitForTimeout(400);
+    const before = await picture();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).hover();
+    await expect.poll(picture).not.toBe(before);
+    await page.mouse.move(5, 5);
+    await expect.poll(picture).toBe(before);
+    // Nothing was added by looking.
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Background"]);
+  });
+
+  test("with nothing selected, swaps the design's icon rather than adding a second", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await side(page).getByLabel("search icons").fill("aperture");
     await side(page).getByRole("button", { name: "Aperture", exact: true }).click();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await expect(layerNames(page)).toHaveText(["Aperture", "Background"]);

@@ -691,8 +691,14 @@ export function Composer({
     setSide("icons");
   }, []);
 
-  /** The icon layer the library works on: the selected one, when it's an icon. */
-  const iconTarget: IconLayer | null = selected?.kind === "icon" ? selected : null;
+  /**
+   * The icon layer the library works on: the selected one, or else the design's top icon, so
+   * trying icons swaps the one there instead of piling a second on top of it.
+   */
+  const iconTarget: IconLayer | null =
+    selected?.kind === "icon" ? selected : (([...doc.layers].reverse().find((l) => l.kind === "icon" && !l.hidden) as IconLayer | undefined) ?? null);
+  /** The design with the icon pointed at in the library, shown on the canvas until the pointer moves on. */
+  const [iconPreview, setIconPreview] = useState<Doc | null>(null);
 
   /**
    * An icon picked in the library. With an icon selected it takes that one's place, at the same
@@ -711,6 +717,7 @@ export function Composer({
             : l,
         ),
       );
+      setSelectedId(target.id);
       return;
     }
     add(makeIcon(drawing, front.x, front.y, iconLook, ink));
@@ -1048,7 +1055,7 @@ export function Composer({
 
         <div className="cmp-stage-wrap">
           <ComposerStage
-            doc={doc}
+            doc={side === "icons" && iconPreview ? iconPreview : doc}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onPreview={(d) => dispatch({ type: "preview", doc: d })}
@@ -1148,10 +1155,8 @@ export function Composer({
             <IconLibrary
               doc={doc}
               parts={parts}
-              template={template?.images ?? null}
-              assets={assets}
-              version={version}
               target={iconTarget}
+              onPreview={setIconPreview}
               look={iconTarget ? iconTarget.look : iconLook}
               onLook={chooseLook}
               onPick={pickIcon}

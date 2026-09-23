@@ -151,12 +151,22 @@ html[data-glass]:not([data-fullscreen]) .sidebar.is-rail {
   justify-content: center;
 }
 
+/* Folded, the photo button is one icon among the others, not a big blue one. */
 .sidebar.is-rail .cta {
   width: 40px;
   height: 40px;
   padding: 0;
-  margin: 0 0 12px;
-  border-radius: 12px;
+  margin: 0 0 8px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.sidebar.is-rail .cta:hover,
+.sidebar.is-rail .cta:focus-visible {
+  background: var(--nav-hover);
+  color: var(--accent-ink);
 }
 
 .sidebar.is-rail .sidebar-scroll {
