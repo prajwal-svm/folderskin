@@ -41,6 +41,7 @@ export type State = {
 export type Action =
   | { type: "drag"; info: DragInfo | null }
   | { type: "folderDropped"; folder: Folder }
+  | { type: "folderCleared" }
   | { type: "arrived" }
   | { type: "skinSelected"; skinId: string }
   | { type: "skinCleared" }
@@ -183,6 +184,11 @@ export function reduce(state: State, action: Action): State {
 
     case "invalidDrop":
       return { ...state, drag: null, error: action.message };
+
+    // No folder any more (the AI chat stopped using one); the skin picked stays picked.
+    case "folderCleared":
+      if (busy(state)) return state;
+      return { ...initialState, skinId: state.skinId };
 
     case "clearError":
       return { ...state, error: null };

@@ -289,3 +289,46 @@ export const InfoCircleIcon = icon(
   </>,
   "InfoCircleIcon",
 );
+
+export const HistoryIcon = icon(
+  <>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M12 7v5l4 2" />
+  </>,
+  "HistoryIcon",
+);
+
+export const SquarePenIcon = icon(
+  <>
+    <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+  </>,
+  "SquarePenIcon",
+);
+
+export const StopIcon = icon(<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" />, "StopIcon");
+
+export const CpuIcon = icon(
+  <>
+    <rect width="16" height="16" x="4" y="4" rx="2" />
+    <rect width="6" height="6" x="9" y="9" rx="1" />
+    <path d="M15 2v2" />
+    <path d="M15 20v2" />
+    <path d="M2 15h2" />
+    <path d="M2 9h2" />
+    <path d="M20 15h2" />
+    <path d="M20 9h2" />
+    <path d="M9 2v2" />
+    <path d="M9 20v2" />
+  </>,
+  "CpuIcon",
+);
+
+export const TerminalIcon = icon(
+  <>
+    <path d="m4 17 6-6-6-6" />
+    <path d="M12 19h8" />
+  </>,
+  "TerminalIcon",
+);

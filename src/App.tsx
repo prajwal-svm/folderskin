@@ -28,6 +28,7 @@ import { AboutMenu } from "./components/AboutMenu";
 import { WindowControls } from "./components/WindowControls";
 import { CommunityView } from "./components/CommunityView";
 import type { ApplyOutcome, ComposerHandle, ComposerRequest } from "./components/composer/Composer";
+import type { StudioHandle } from "./components/studio/Studio";
 import { Confirm } from "./components/Confirm";
 import { SkinMenu } from "./components/SkinMenu";
 import { SharePack } from "./components/SharePack";
@@ -77,7 +78,7 @@ function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref)
 /** The composer is loaded the first time it's opened, so the rest of the app starts without it. */
 const Composer = lazy(() => import("./components/composer/Composer").then((m) => ({ default: m.Composer })));
 /** The AI view likewise. */
-const Studio = lazy(() => import("./components/Studio").then((m) => ({ default: m.Studio })));
+const Studio = lazy(() => import("./components/studio/Studio").then((m) => ({ default: m.Studio })));
 
 /** A question before a big run over a folder and its subfolders, answered through `resolve`. */
 type TreeAsk = {
@@ -172,6 +173,10 @@ export default function App() {
   const [keysVersion, setKeysVersion] = useState(0);
   /** The composer, once it has been opened: it stays mounted so a design survives a visit elsewhere. */
   const [composerOpened, setComposerOpened] = useState(false);
+  /** The AI chat likewise, so its scroll, words and pictures wait for the user to come back. */
+  const [studioOpened, setStudioOpened] = useState(false);
+  /** The folder panel hidden from the AI chat by choice, though a folder is chosen. */
+  const [aiPanelHidden, setAiPanelHidden] = useState(false);
   const composer = useRef<ComposerHandle>(null);
   /** Stop was pressed on a run over a folder and its subfolders. */
   const [stopping, setStopping] = useState(false);
@@ -332,10 +337,26 @@ export default function App() {
     [takePath, toast],
   );
 
+  /** A drop on the AI view: a picture is one to paint from, a folder the one the pictures are for. */
+  const studio = useRef<StudioHandle>(null);
+  const dropOnStudio = useCallback(
+    async (path: string) => {
+      try {
+        const info = await api.inspectPath(path);
+        if (info.kind === "image") studio.current?.addReference(info.path);
+        else await takePath(path);
+      } catch (e) {
+        toast(errorMessage(e), { tone: "danger" });
+      }
+    },
+    [takePath, toast],
+  );
+
   useDragDrop(
     useCallback(
-      (paths: string[]) => void (paths[0] && (view === "compose" ? dropOnComposer(paths[0]) : takePath(paths[0]))),
-      [takePath, dropOnComposer, view],
+      (paths: string[]) =>
+        void (paths[0] && (view === "compose" ? dropOnComposer(paths[0]) : view === "generate" ? dropOnStudio(paths[0]) : takePath(paths[0]))),
+      [takePath, dropOnComposer, dropOnStudio, view],
     ),
     useCallback((info) => dispatch({ type: "drag", info }), []),
   );
@@ -589,6 +610,7 @@ export default function App() {
 
   useEffect(() => {
     if (view === "compose") setComposerOpened(true);
+    if (view === "generate") setStudioOpened(true);
   }, [view]);
 
   const revert = useCallback(async () => {
@@ -770,12 +792,29 @@ export default function App() {
   // Windows has no system caption bar (window.rs builds the window undecorated), so the folder
   // island carries the window's controls and a strip to drag it by.
   const windowsChrome = platform.os === "windows";
-  const cols = columns(layout, windowWidth, true);
+  // The AI chat has the window to itself until there's a folder to show: one chosen (and not hidden
+  // on purpose), or one being dragged in, which needs somewhere to land.
+  const aiView = view === "generate";
+  const rightShown = !aiView || state.drag?.kind === "folder" || (state.folder !== null && !aiPanelHidden);
+  const cols = columns(layout, windowWidth, rightShown);
+  // The panel slides in and out rather than jumping; dragging an edge or resizing the window doesn't wait.
+  const [sliding, setSliding] = useState(false);
+  const lastShown = useRef(rightShown);
+  useEffect(() => {
+    if (lastShown.current === rightShown) return;
+    lastShown.current = rightShown;
+    setSliding(true);
+    const t = window.setTimeout(() => setSliding(false), 460);
+    return () => window.clearTimeout(t);
+  }, [rightShown]);
+  // A newly chosen folder is shown, even in the AI chat after its panel was hidden.
+  useEffect(() => setAiPanelHidden(false), [state.folder?.path]);
+  const full = columns(layout, windowWidth, true);
 
   return (
     <main
-      className={`app os-${platform.os}${layout.rail ? " is-rail" : ""}${folding ? " is-folding" : ""}`}
-      style={{ "--left-w": `${cols.left}px`, "--right-w": `${cols.right}px` } as CSSProperties}
+      className={`app os-${platform.os}${layout.rail ? " is-rail" : ""}${folding || sliding ? " is-folding" : ""}${rightShown ? "" : " is-right-off"}`}
+      style={{ "--left-w": `${cols.left}px`, "--right-w": `${cols.right}px`, "--right-full": `${full.right}px` } as CSSProperties}
     >
       <IslandResizer
         label="sidebar width"
@@ -787,6 +826,7 @@ export default function App() {
         onWidth={resizeSidebar}
         onReset={() => setLayout((l) => ({ ...l, rail: false, left: DEFAULT_LAYOUT.left }))}
       />
+      {rightShown && (
       <IslandResizer
         label={composing ? "layers and settings width" : "folder panel width"}
         className="is-right"
@@ -797,6 +837,7 @@ export default function App() {
         onWidth={(to) => setLayout((l) => dragRight(l, to, windowWidth))}
         onReset={() => setLayout((l) => ({ ...l, right: null }))}
       />
+      )}
       <Sidebar
         view={view}
         onView={(v) => {
@@ -883,17 +924,30 @@ export default function App() {
         {view === "community" && (
           <CommunityView onShare={() => setSharing({})} onAdded={addSkins} onRemoved={dropSkins} onShowTag={showTag} toast={toast} />
         )}
-        {view === "generate" && (
+        {(studioOpened || aiView) && (
           <Suspense fallback={null}>
             <Studio
-              folderName={state.folder?.name ?? null}
-              selectedId={state.skinId}
+              ref={studio}
+              active={aiView}
+              os={platform.os}
+              folder={state.folder}
+              shownId={state.skinId}
+              appliedId={state.appliedSkinId}
+              panelShown={rightShown}
+              onTogglePanel={() => setAiPanelHidden(rightShown)}
+              onChooseFolder={browseFolder}
+              onUseFolder={(path) => {
+                if (path) void takePath(path);
+                else dispatch({ type: "folderCleared" });
+              }}
+              onPreview={(id) => dispatch({ type: "skinSelected", skinId: id })}
+              onApply={applyFromComposer}
               onGenerated={addSkin}
-              onTryOn={(id) => dispatch({ type: "skinSelected", skinId: id })}
               onImport={pickPhoto}
               skinOf={skinOf}
               onMenu={openMenu}
               keysVersion={keysVersion}
+              dragImage={aiView && state.drag?.kind === "image"}
               toast={toast}
             />
           </Suspense>
@@ -936,6 +990,9 @@ export default function App() {
       )}
 
       {!composing && (
+      // The folder island keeps its width while its column opens and closes, so it slides in
+      // from the window's edge rather than squeezing.
+      <div className="right-slot" inert={!rightShown} aria-hidden={!rightShown}>
       <FolderStage
         state={state}
         skin={selected}
@@ -956,6 +1013,7 @@ export default function App() {
         onTryAgain={tryAgain}
         onDismissRun={() => dispatch({ type: "runDismissed" })}
       />
+      </div>
       )}
 
       {confirmingDelete && (

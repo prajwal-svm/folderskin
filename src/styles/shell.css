@@ -18,6 +18,31 @@
   padding-left: var(--gap);
 }
 
+/* No folder panel (the AI chat before a folder is chosen): the centre runs to the window's edge. */
+.app.is-right-off {
+  padding-right: 0;
+}
+
+/* The folder panel's column. The island inside keeps its full width while the column opens and
+   closes, so it slides in from the window's edge instead of squeezing. */
+.right-slot {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--r-island);
+}
+
+.right-slot > .island {
+  flex: none;
+  width: var(--right-full, 100%);
+  min-width: 100%;
+}
+
+.app.is-right-off .winbar {
+  width: 132px;
+}
+
 /* Folding or opening the sidebar slides the columns; dragging an edge or resizing the window
    doesn't wait for a transition. */
 .app.is-folding {

@@ -26,8 +26,8 @@ export function StudioSettings({
 }) {
   return (
     <Modal
-      title="Provider and key"
-      sub="FolderSkin has no server. Requests go from your computer to the provider you pick, billed to your account."
+      title="Where pictures are made"
+      sub="FolderSkin has no server. Pictures are made on this computer, or by the provider you pick with your own key and billed to your account."
       onClose={onClose}
       footer={
         <button type="button" className="btn btn-primary" onClick={onClose}>

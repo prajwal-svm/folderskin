@@ -5,6 +5,8 @@ import { isTauri } from "../lib/devMock";
 import type { ToastTone } from "../hooks/useToasts";
 import { OkBadge } from "./OkBadge";
 import { ProviderLogo } from "./ProviderLogo";
+import { LocalSetup } from "./studio/LocalSetup";
+import { CpuIcon } from "./icons/composer";
 import { Select } from "./Select";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
@@ -44,16 +46,33 @@ export function ProviderKeys({
     setNote(null);
     try {
       await api.aiSetKey(provider.id, draft.trim());
-      await api.aiTestKey(provider.id);
-      setDraft("");
-      toast(`${provider.label} accepted the key`, { tone: "ok" });
-      onChanged();
     } catch (e) {
       setNote({ text: errorMessage(e), bad: true });
+      setBusy(false);
+      return;
+    }
+    // It's saved whatever the check says next, so everything that shows keys hears of it now.
+    setDraft("");
+    onChanged();
+    try {
+      await api.aiTestKey(provider.id);
+      toast(`${provider.label} accepted the key`, { tone: "ok" });
+    } catch (e) {
+      setNote({ text: `Saved, but ${provider.label} didn't accept it: ${errorMessage(e)}`, bad: true });
     } finally {
       setBusy(false);
     }
   }, [provider, draft, onChanged, toast]);
+
+  const copy = useCallback(
+    (text: string, what: string) => {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => toast(`${what} is copied`, { tone: "ok" }))
+        .catch(() => toast("Couldn't copy it", { tone: "danger" }));
+    },
+    [toast],
+  );
 
   const forget = useCallback(async () => {
     if (!provider) return;
@@ -89,13 +108,13 @@ export function ProviderKeys({
             }}
           >
             <span className="provider-name">
-              <ProviderLogo id={p.id} size={18} />
+              {p.kind === "local" ? <CpuIcon size={18} /> : <ProviderLogo id={p.id} size={18} />}
               {p.label}
             </span>
             {p.has_key ? (
-              <OkBadge size={17} playOnMount label="Key saved" />
+              <OkBadge size={17} playOnMount label={p.kind === "local" ? "Set up" : "Key saved"} />
             ) : (
-              <span className="provider-state">No key</span>
+              <span className="provider-state">{p.kind === "local" ? "Free" : "No key"}</span>
             )}
           </button>
         ))}
@@ -112,13 +131,25 @@ export function ProviderKeys({
             options={provider.models.map((m) => ({ value: m.id, label: `${m.label} (${m.price_hint})` }))}
           />
           <span className="field-note">
-            {model?.native_alpha
-              ? "Returns a transparent background by itself."
-              : "No transparency, so FolderSkin paints on magenta and cuts it out."}
+            {provider.kind === "local"
+              ? model?.id === "auto"
+                ? "The best model this computer can run well."
+                : model?.accepts_reference
+                  ? "Can paint from reference pictures."
+                  : "Fastest; paints from words only."
+              : model?.native_alpha
+                ? "Returns a transparent background by itself."
+                : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out."}
           </span>
         </div>
       )}
 
+      {provider.kind === "local" ? (
+        <div className="field">
+          <span className="field-label">On this computer</span>
+          <LocalSetup onChanged={onChanged} copy={copy} />
+        </div>
+      ) : (
       <div className="field">
         <span className="field-label">{provider.label} API key</span>
         {provider.has_key ? (
@@ -158,9 +189,14 @@ export function ProviderKeys({
           </button>
         </div>
       </div>
+      )}
 
       <p className="field-note">
-        {isTauri() ? "Your API keys are securely stored on this device." : "In this browser preview, keys last until you reload."}
+        {provider.kind === "local"
+          ? "Pictures made on this computer never leave it, and cost nothing."
+          : isTauri()
+            ? "Your API keys are securely stored on this device."
+            : "In this browser preview, keys last until you reload."}
       </p>
     </>
   );

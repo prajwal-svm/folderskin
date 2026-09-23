@@ -90,6 +90,13 @@
   font-size: 14.5px;
 }
 
+.btn-sm {
+  height: 32px;
+  gap: 6px;
+  padding: 0 13px;
+  font-size: 12.5px;
+}
+
 .btn-block {
   width: 100%;
 }
