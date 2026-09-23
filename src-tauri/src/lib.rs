@@ -9,6 +9,7 @@ pub mod github;
 pub mod keys;
 pub mod onboarding;
 pub mod pack_views;
+pub mod share;
 pub mod state;
 pub mod store;
 pub mod tree;
@@ -65,6 +66,7 @@ pub fn run() {
         .manage(state::AppState::default())
         .manage(keys::Keys::default())
         .manage(github::Pending::default())
+        .manage(share::Waiting::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -108,6 +110,15 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_test_key,
             ai::ai_generate,
+            share::share_status,
+            share::share_verify,
+            share::share_wait,
+            share::share_cancel,
+            share::share_save_key,
+            share::share_load_key,
+            share::share_submit,
+            share::share_submissions,
+            share::share_withdraw,
         ])
         .setup(|app| {
             // Before anything that could panic, so a crash report has somewhere to land.

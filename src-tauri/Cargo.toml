@@ -24,6 +24,8 @@ tauri-plugin-process = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["system-proxy"] }
 folderskin-core.workspace = true
 folderskin-ai = { path = "../crates/folderskin-ai" }
+# Sharing without GitHub: the computer's key and signed requests to the community service.
+folderskin-share = { path = "../crates/folderskin-share" }
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
