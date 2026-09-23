@@ -14,6 +14,9 @@
  * does; `?update=fail` stops its download halfway and `?update=offline` can't check at all.
  *
  * `?yours=8` starts with eight skins of your own, for the parts that need a library to work on.
+ *
+ * `?packs=10000` adds that many made-up packs to Community (mockCommunity.ts), searched the way
+ * the app searches its catalog, to see and test the view at the size it is built for.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
@@ -22,6 +25,8 @@ import type {
   AiCatalogue,
   AiGenerateRequest,
   CommunityPack,
+  CommunityQuery,
+  CommunitySearch,
   ComposerImage,
   ComposerSaved,
   ComposerSaveHeader,
@@ -44,12 +49,14 @@ import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import { cleanName } from "./names";
 import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
+import { madeUpPacks, MockCatalog, type MockPack as CatalogPack } from "./mockCommunity";
 
 /** Keys "saved" in the browser preview, so the assistant can be walked through end to end. */
 const mockKeys = new Set<string>();
 
-/** A pack as the preview lists it, before whether it's added (or changed) is worked out. */
-type MockPack = Omit<CommunityPack, "added" | "update" | "hash">;
+/** A pack as the preview lists it, before whether it's added (or changed) is worked out. Made-up
+ *  packs also carry their skins' names. */
+type MockPack = Omit<CommunityPack, "added" | "update" | "hash" | "bytes" | "preview"> & { skins?: string[] };
 
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
 const MOCK_PACKS: MockPack[] = [
@@ -126,9 +133,55 @@ function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
   return Array.from({ length: pack.count }, (_, i) => {
     if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: `/community/packs/classic-art/${CLASSIC_ART[i][0]}.webp` };
     if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
-    return { name: `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
+    return { name: pack.skins?.[i] ?? `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
   });
 }
+
+/** The real preview strips, which the made-up packs borrow in turn. */
+const REAL_PREVIEWS = ["classic-art", "colours", "greek-art", "scientists-pop-art", "soft-rainbow"].map((id) => `/community/previews/${id}.png`);
+/** When the sample packs were published, newest first. */
+const SAMPLE_DATES: Record<string, number> = { "classic-art": 1_780_000_000, colours: 1_770_000_000, "night-prints": 1_760_000_000, "chrome-dreams": 1_750_000_000 };
+
+let mockCatalogue: MockCatalog | null = null;
+/** Whether the preview's catalog has been "downloaded" yet: the first search waits for it, as in the app. */
+let mockCatalogueLoaded = false;
+
+/** The preview's catalog: the sample packs, then `?packs=N` made-up ones, made the first time it is asked for. */
+function communityCatalog(): MockCatalog {
+  if (mockCatalogue) return mockCatalogue;
+  const many = Math.min(Math.max(Number(new URLSearchParams(location.search).get("packs") ?? "0") || 0, 0), 50_000);
+  const samples: CatalogPack[] = listed().map((p) => ({
+    ...p,
+    hash: "",
+    bytes: p.count * 180_000,
+    added: SAMPLE_DATES[p.id] ?? 0,
+    skins: packPictures(p).map((s) => s.name),
+    preview: `/community/previews/${PREVIEW_OF[p.id] ?? "colours"}.png`,
+  }));
+  mockCatalogue = new MockCatalog([...samples, ...madeUpPacks(many, REAL_PREVIEWS)], ["classic-art", "colours"]);
+  return mockCatalogue;
+}
+
+/** A catalog pack as the webview gets it, marked against the library. */
+function communityPack(p: CatalogPack): CommunityPack {
+  const added = packAdded(p.id);
+  return {
+    id: p.id,
+    name: p.name,
+    author: p.author,
+    license: p.license,
+    tags: p.tags,
+    count: p.count,
+    bytes: p.bytes,
+    hash: p.hash,
+    preview: p.preview,
+    added,
+    update: added && mockStale.has(p.id),
+  };
+}
+
+/** Any pack the preview knows, sample or made up. */
+const findPack = (id: string): MockPack | undefined => MOCK_PACKS.find((p) => p.id === id) ?? communityCatalog().find(id);
 
 function mockPackSkins(pack: MockPack): Skin[] {
   const now = Date.now();
@@ -444,11 +497,38 @@ export const mockApi = {
   communityPacks: async (_fresh = false): Promise<CommunityPack[]> => {
     await sleep(500);
     if (offline()) throw OFFLINE;
-    return listed().map((p) => ({ ...p, hash: "", added: packAdded(p.id), update: packAdded(p.id) && mockStale.has(p.id) }));
+    const catalog = communityCatalog();
+    return listed().map((p) => communityPack(catalog.find(p.id)!));
   },
-  communityPreview: async (packId: string) => `/community/previews/${PREVIEW_OF[packId] ?? "colours"}.png`,
+  communitySearch: async (query: CommunityQuery): Promise<CommunitySearch> => {
+    // Counted where the end-to-end tests can read it, to see that coming back to Community
+    // didn't search again.
+    const counted = window as { mockCommunitySearches?: number };
+    counted.mockCommunitySearches = (counted.mockCommunitySearches ?? 0) + 1;
+    // The first search waits for the catalog, as the app's does; after that about an IPC round trip.
+    await sleep(mockCatalogueLoaded ? 8 : 450);
+    if (offline()) throw OFFLINE;
+    mockCatalogueLoaded = true;
+    const found = communityCatalog().search(query);
+    const hitPacks = [...new Map(found.skins.map((h) => [h.pack.id, h.pack])).values()];
+    return {
+      total: found.total,
+      all: found.all,
+      packs: found.packs.map(communityPack),
+      skins: found.skins.map((h) => ({ pack: h.pack.id, pack_name: h.pack.name, name: h.name, index: h.index, thumbnail: packPictures(h.pack)[h.index].thumbnail })),
+      hit_packs: hitPacks.map(communityPack),
+      facets: found.facets,
+      offline: false,
+    };
+  },
+  communityRefresh: async (): Promise<{ updates: number; packs: number }> => {
+    await sleep(600);
+    if (offline()) throw OFFLINE;
+    const packs = communityCatalog().packs;
+    return { updates: packs.filter((p) => packAdded(p.id) && mockStale.has(p.id)).length, packs: packs.length };
+  },
   addPack: async (packId: string, onProgress?: (progress: PackProgress) => void): Promise<Skin[]> => {
-    const pack = MOCK_PACKS.find((p) => p.id === packId);
+    const pack = findPack(packId);
     if (!pack) throw "that isn't a pack";
     const total = pack.count;
     if (offline()) throw OFFLINE;
@@ -475,13 +555,13 @@ export const mockApi = {
     // Like the app's cache: slow the first time, straight away after.
     if (!mockViewed.has(packId)) await sleep(900);
     mockViewed.add(packId);
-    const pack = MOCK_PACKS.find((p) => p.id === packId);
+    const pack = findPack(packId);
     if (!pack) throw "that isn't a pack";
     return packPictures(pack).map((p) => ({ ...p, tags: pack.tags }));
   },
   updatePack: async (packId: string): Promise<PackUpdate> => {
     await sleep(1200);
-    const pack = MOCK_PACKS.find((p) => p.id === packId);
+    const pack = findPack(packId);
     if (!pack) throw "that isn't a pack";
     mockStale.delete(packId);
     mockStale.add(`${packId}-updated`);

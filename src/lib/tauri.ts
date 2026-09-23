@@ -42,11 +42,15 @@ export type CommunityPack = {
   license: string;
   tags: string[];
   count: number;
-  /** The version on GitHub now; empty when the list doesn't say. */
+  /** What adding it downloads, in bytes; 0 when the list doesn't say. */
+  bytes: number;
+  /** The version published now; empty when the list doesn't say. */
   hash: string;
+  /** The address of its preview strip: its first few skins as folders, side by side. */
+  preview: string;
   /** True when its skins are in the library. */
   added: boolean;
-  /** True when it was added and GitHub has a different version of it now. */
+  /** True when it was added and a different version of it is published now. */
   update: boolean;
 };
 
@@ -54,8 +58,34 @@ export type CommunityPack = {
 export type PackSkinPreview = {
   name: string;
   tags: string[];
-  /** The skin as the folder it makes, as a data URL. */
+  /** The skin as the folder it makes: a data URL, or the address of its thumbnail. */
   thumbnail: string;
+};
+
+/** The orders the Community list comes in. "best" is the best match for the words typed, or,
+ *  with nothing typed, the featured packs and then the newest. */
+export type CommunitySort = "best" | "newest" | "name" | "skins";
+
+/** What to search the community packs for. */
+export type CommunityQuery = { q: string; tag: string; sort: CommunitySort; offset: number; limit: number };
+
+/** A skin whose name matches a search, with the pack it's in. */
+export type SkinHit = { pack: string; pack_name: string; name: string; index: number; thumbnail: string };
+
+/** One page of a search, and what goes with it. */
+export type CommunitySearch = {
+  /** Packs matching the words and the tag. */
+  total: number;
+  /** Packs matching the words, whatever their tag: what "All" counts. */
+  all: number;
+  packs: CommunityPack[];
+  skins: SkinHit[];
+  /** The packs `skins` are in, so one can be opened wherever it is in the list. */
+  hit_packs: CommunityPack[];
+  /** The tags of the packs the words match, most used first. */
+  facets: { tag: string; count: number }[];
+  /** True when nothing could be reached and these are the packs from the last visit. */
+  offline: boolean;
 };
 
 /** Who is signed in to GitHub. */
@@ -219,10 +249,12 @@ const tauriApi = {
     invoke<{ name: string; tags: string[] }>("edit_skin", { skinId, name, tags }),
 
   // ---- community packs (from the repository on GitHub) ----
-  /** The packs on GitHub; `fresh` skips every cache, for Refresh. */
+  /** The packs the first launch offers: the featured ones, or the first few. `fresh` skips every cache. */
   communityPacks: (fresh = false) => invoke<CommunityPack[]>("community_packs", { fresh }),
-  /** A pack's preview strip as a data URL, downloaded again when `fresh`. */
-  communityPreview: (packId: string, fresh = false) => invoke<string>("community_preview", { packId, fresh }),
+  /** One page of the packs matching a search, searched on this computer once the catalog is in. */
+  communitySearch: (query: CommunityQuery) => invoke<CommunitySearch>("community_search", { ...query }),
+  /** Asks for the packs again past every cache; resolves to how many of the library's packs have an update. */
+  communityRefresh: () => invoke<{ updates: number; packs: number }>("community_refresh"),
   /** Downloads a pack and saves all of its skins or none; resolves to them. `onProgress` hears how far it has got. */
   addPack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
     invoke<Skin[]>("community_add", { packId, onProgress: new Channel<PackProgress>(onProgress) }),

@@ -1,72 +1,68 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import { api } from "../lib/tauri";
 
-/** Previews downloaded this session, so showing a pack again doesn't load it again. */
-const previews = new Map<string, string>();
-/** Previews on their way, so asking twice while one downloads makes one request. */
-const pending = new Map<string, Promise<string>>();
+/** Previews already decoded this session, so a card drawn again shows its picture at once. */
+const ready = new Set<string>();
+/** How long a card has to stay before its preview is asked for: one that only flashes past in
+ *  a fast scroll asks for nothing. */
+const SETTLE_MS = 90;
 
-/** Forgets every preview, for Refresh: the next ones come from GitHub again. */
-export function clearPreviews(): void {
-  previews.clear();
-  pending.clear();
+/** Loads a preview into the browser's cache and resolves once it can be drawn. */
+function load(src: string, image = new Image()): Promise<void> {
+  image.decoding = "async";
+  image.src = src;
+  return image.decode().then(() => {
+    ready.add(src);
+  });
 }
 
-/** A pack's preview as a data URL, from this session's copy unless `fresh`. */
-function loadPreview(id: string, fresh: boolean): Promise<string> {
-  const have = previews.get(id);
-  if (have && !fresh) return Promise.resolve(have);
-  const waiting = pending.get(id);
-  if (waiting && !fresh) return waiting;
-  const request = api
-    .communityPreview(id, fresh)
-    .then((url) => {
-      previews.set(id, url);
-      return url;
-    })
-    .finally(() => {
-      if (pending.get(id) === request) pending.delete(id);
-    });
-  pending.set(id, request);
-  return request;
-}
-
-/** Starts downloading a pack's preview, so it's there when the pack is shown. */
-export function prefetchPreview(id: string): void {
-  loadPreview(id, false).catch(() => {});
+/** Starts loading a pack's preview, so it's there when the pack is shown. */
+export function prefetchPreview(src: string): void {
+  if (src && !ready.has(src)) load(src).catch(() => {});
 }
 
 /**
- * A pack's preview: its first few skins as folders, loaded once per session. As a strip it shows
- * the picture as it is; as a `grid` it cuts it into its folders and lays them out two by two.
+ * A pack's preview: its first few skins as folders, from the address the list gives. As a strip
+ * it shows the picture as it is; as a `grid` it cuts it into its folders and lays them out two
+ * by two. Until it has loaded it shimmers, and it is only asked for once the card has settled on
+ * screen.
  */
-export function PackPreview({ id, count, grid, fresh = false }: { id: string; count: number; grid: boolean; fresh?: boolean }) {
-  const [src, setSrc] = useState(() => previews.get(id) ?? null);
+export function PackPreview({ src, count, grid }: { src: string; count: number; grid: boolean }) {
+  const [shown, setShown] = useState(() => ready.has(src));
   useEffect(() => {
-    if (src) return;
+    if (ready.has(src)) {
+      setShown(true);
+      return;
+    }
+    setShown(false);
+    if (!src) return;
     let live = true;
-    loadPreview(id, fresh)
-      .then((url) => {
-        if (live) setSrc(url);
-      })
-      .catch(() => {});
+    const image = new Image();
+    const timer = setTimeout(() => {
+      load(src, image)
+        .then(() => live && setShown(true))
+        .catch(() => {});
+    }, SETTLE_MS);
     return () => {
       live = false;
+      clearTimeout(timer);
+      // Scrolled away before it came: dropping the source lets the browser give up on it.
+      if (!ready.has(src)) image.src = "";
     };
-  }, [id, src, fresh]);
+  }, [src]);
+
   if (grid) {
     // The strip holds up to four folders side by side, one per cell here.
-    const shown = Math.max(1, Math.min(count, 4));
+    const cells = Math.max(1, Math.min(count, 4));
     return (
       <span className="pack-preview">
-        {src ? (
+        {shown ? (
           <span className="pack-quad" style={{ "--strip": `url("${src}")` } as CSSProperties}>
-            {Array.from({ length: shown }, (_, i) => (
+            {Array.from({ length: cells }, (_, i) => (
               <span
                 key={i}
                 style={{
-                  backgroundSize: `${shown * 100}% 100%`,
-                  backgroundPositionX: shown === 1 ? "0%" : `${(i / (shown - 1)) * 100}%`,
+                  backgroundSize: `${cells * 100}% 100%`,
+                  backgroundPositionX: cells === 1 ? "0%" : `${(i / (cells - 1)) * 100}%`,
                 }}
               />
             ))}
@@ -77,5 +73,5 @@ export function PackPreview({ id, count, grid, fresh = false }: { id: string; co
       </span>
     );
   }
-  return <span className="pack-preview">{src ? <img src={src} alt="" draggable={false} /> : <span className="pack-preview-blank" />}</span>;
+  return <span className="pack-preview">{shown ? <img src={src} alt="" draggable={false} /> : <span className="pack-preview-blank" />}</span>;
 }

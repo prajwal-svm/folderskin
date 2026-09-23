@@ -283,7 +283,7 @@ function usePackSetup() {
         if (!live.current) return;
         setPacks(list);
         setPicked(new Set(defaultPicks(list)));
-        list.slice(0, 8).forEach((p) => prefetchPreview(p.id));
+        list.slice(0, 8).forEach((p) => prefetchPreview(p.preview));
       })
       .catch((e) => {
         if (live.current) setLoadError(errorMessage(e));
@@ -545,7 +545,7 @@ function PackCard({
         disabled={locked || done}
         onClick={onToggle}
       >
-        <PackPreview id={pack.id} count={pack.count} grid />
+        <PackPreview src={pack.preview} count={pack.count} grid />
         <span className="onboard-pack-tick" aria-hidden="true">
           {checked && <CheckIcon size={13} playOnMount />}
         </span>
