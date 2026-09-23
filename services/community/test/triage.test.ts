@@ -74,6 +74,8 @@ describe("notifications", () => {
   it("take the shape each webhook expects, and mention nobody on Discord", () => {
     const discord = JSON.parse(String(webhookRequest("discord", notice, true).body));
     expect(discord).toEqual({ content: noticeText(notice), allowed_mentions: { parse: [] } });
+    const slack = JSON.parse(String(webhookRequest("slack", { ...notice, title: "<!channel> look" }, true).body));
+    expect(slack.text).toContain("&lt;!channel&gt; look");
     const telegram = JSON.parse(String(webhookRequest("telegram", notice, true).body));
     expect(telegram).toMatchObject({ disable_web_page_preview: true });
     const ntfy = webhookRequest("ntfy", { ...notice, title: "Café ☕ report" }, false);

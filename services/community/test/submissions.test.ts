@@ -36,11 +36,12 @@ describe("sending a pack", () => {
       const put = await call(await signed(who, "PUT", `/v1/submissions/${opened.submission_id}/items/${sha}`, p.bytes));
       expect(put.status).toBe(200);
     }
-    // Early: the sheet hasn't arrived, but finalising still works and notes it for the maintainer.
+    // Early: the sheet hasn't arrived, but finalising still works and notes it for the maintainer,
+    // without calling the pack flagged for it.
     const done = await call(await signed(who, "POST", `/v1/submissions/${opened.submission_id}/finalize`, {}));
     expect(await done.json()).toEqual({ status: "in_review" });
     const row = await env.DB.prepare("SELECT status, flags FROM submissions WHERE id = ?1").bind(opened.submission_id).first<{ status: string; flags: string }>();
-    expect(row?.status).toBe("flagged");
+    expect(row?.status).toBe("pending");
     expect(JSON.parse(row!.flags)).toEqual([{ code: "sheet:missing", severity: "normal", detail: "not every contact sheet arrived" }]);
     expect((await mine(who))[0]).toMatchObject({ status: "in_review", reasons: [] });
   });

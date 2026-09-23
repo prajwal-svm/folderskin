@@ -63,7 +63,9 @@ export function webhookRequest(kind: Kind, notice: Notice, urgent: boolean): Req
     case "discord":
       return json({ content: text.slice(0, 1900), allowed_mentions: { parse: [] } });
     case "slack":
-      return json({ text: text.slice(0, 3900) });
+      // Slack reads <!channel> and <@someone> in a message as mentions, and a pack's name or a
+      // report's details are anyone's words, so its three special characters are escaped.
+      return json({ text: text.slice(0, 3900).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") });
     case "telegram":
       return json({ text: text.slice(0, 4000), disable_web_page_preview: true });
     case "ntfy": {

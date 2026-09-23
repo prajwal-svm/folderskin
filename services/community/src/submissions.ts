@@ -313,8 +313,8 @@ export async function finalize(request: Request, env: Env, ctx: ExecutionContext
   flags.push(...looked.flags);
   if (!looked.looked && env.AI) flags.push({ code: "ai:skipped", severity: "normal", detail: "the triage model didn't look at every sheet" });
 
-  // Only real findings make a pack "flagged"; a skipped look just leaves a note for the maintainer.
-  const findings = flags.filter((f) => f.code !== "ai:skipped");
+  // Only real findings make a pack "flagged"; a look that couldn't happen just leaves a note.
+  const findings = flags.filter((f) => f.code !== "ai:skipped" && f.code !== "sheet:missing");
   const status = findings.length > 0 ? "flagged" : "pending";
   const done = await env.DB.prepare("UPDATE submissions SET status = ?2, flags = ?3, finalized_at = ?4 WHERE id = ?1 AND status = 'open'")
     .bind(id, status, JSON.stringify(flags), now())
