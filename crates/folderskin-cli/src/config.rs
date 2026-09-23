@@ -1,0 +1,282 @@
+//! The command line's own defaults, in `cli.json` beside the app's settings, and the keys it
+//! shares with the app.
+
+use crate::cli::ConfigKey;
+use crate::error::CliError;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+/// The app's identifier, which names its config folder.
+const APP_ID: &str = "app.folderskin.desktop";
+const FILE: &str = "cli.json";
+
+/// The app's config folder, where Tauri keeps it: `%APPDATA%\app.folderskin.desktop` on
+/// Windows, `~/Library/Application Support/app.folderskin.desktop` on macOS and
+/// `~/.config/app.folderskin.desktop` on Linux. `FOLDERSKIN_CONFIG_DIR` moves it.
+pub fn config_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("FOLDERSKIN_CONFIG_DIR").filter(|d| !d.is_empty()) {
+        return Some(PathBuf::from(dir));
+    }
+    dirs::config_dir().map(|d| d.join(APP_ID))
+}
+
+pub fn config_file() -> Option<PathBuf> {
+    config_dir().map(|d| d.join(FILE))
+}
+
+/// The defaults someone chose. Anything not set is decided from the computer each time.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+}
+
+pub const LOCAL: &str = "local";
+const LOCAL_MODELS: [&str; 3] = ["auto", "zimage", "klein"];
+
+impl Config {
+    /// The saved defaults, or none when nothing was saved yet.
+    pub fn load() -> Result<Config, CliError> {
+        let Some(path) = config_file() else {
+            return Ok(Config::default());
+        };
+        match std::fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| {
+                CliError::fixable(
+                    "config_unreadable",
+                    "The command line's settings can't be read.",
+                    format!("{} isn't valid: {e}.", path.display()),
+                )
+                .fix("Fix the file, or start again with: folderskin ai config unset provider (and the same for model, tier and backend)")
+                .fix(format!("Or delete {}", path.display()))
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+            Err(e) => Err(CliError::io("read the settings", &path, &e)),
+        }
+    }
+
+    pub fn save(&self) -> Result<PathBuf, CliError> {
+        let path = config_file().ok_or_else(|| {
+            CliError::environment(
+                "no_config_folder",
+                "There is nowhere to keep settings.",
+                "This account has no configuration folder.",
+            )
+            .fix("Set FOLDERSKIN_CONFIG_DIR to a folder you can write to.")
+        })?;
+        let dir = path.parent().map(PathBuf::from).unwrap_or_default();
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| CliError::io("make the settings folder", &dir, &e))?;
+        let text = serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".into()) + "\n";
+        // Written beside and moved into place, so a crash never leaves half a file.
+        let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, text)
+            .and_then(|()| std::fs::rename(&tmp, &path))
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&tmp);
+                CliError::io("save the settings", &path, &e)
+            })?;
+        Ok(path)
+    }
+
+    pub fn get(&self, key: ConfigKey) -> Option<&str> {
+        match key {
+            ConfigKey::Provider => self.provider.as_deref(),
+            ConfigKey::Model => self.model.as_deref(),
+            ConfigKey::Tier => self.tier.as_deref(),
+            ConfigKey::Backend => self.backend.as_deref(),
+        }
+    }
+
+    /// Sets `key` after checking `value` makes sense for it.
+    pub fn set(&mut self, key: ConfigKey, value: &str) -> Result<(), CliError> {
+        let value = value.trim().to_lowercase();
+        let bad = |allowed: &str| {
+            CliError::fixable(
+                "config_value",
+                format!("{value:?} isn't a {} FolderSkin knows.", key.id()),
+                format!("It can be {allowed}."),
+            )
+        };
+        match key {
+            ConfigKey::Provider => {
+                if value != LOCAL && folderskin_ai::provider(&value).is_none() {
+                    return Err(bad(&format!("{LOCAL} or {}", provider_ids().join(", ")))
+                        .fix("See them all: folderskin ai models"));
+                }
+                if self.provider.as_deref() != Some(value.as_str()) && self.model.is_some() {
+                    // A model belongs to a provider; the old one's model means nothing here.
+                    self.model = None;
+                }
+                self.provider = Some(value);
+            }
+            ConfigKey::Model => {
+                let provider = self.provider.clone().unwrap_or_else(|| LOCAL.into());
+                let known = model_ids(&provider);
+                if !known.iter().any(|m| *m == value) {
+                    return Err(bad(&format!("for {provider}, one of {}", known.join(", ")))
+                        .fix("Set the provider first if you meant another one: folderskin ai config set provider <id>"));
+                }
+                self.model = Some(value);
+            }
+            ConfigKey::Tier => {
+                if !["auto", "q8", "q4"].contains(&value.as_str()) {
+                    return Err(bad("auto, q8 or q4"));
+                }
+                self.tier = Some(value);
+            }
+            ConfigKey::Backend => {
+                let known = ["auto", "cuda", "vulkan", "metal", "cpu", "mlx"];
+                if !known.contains(&value.as_str()) {
+                    return Err(bad(&known.join(", ")));
+                }
+                self.backend = Some(value);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn unset(&mut self, key: ConfigKey) {
+        match key {
+            ConfigKey::Provider => {
+                self.provider = None;
+                self.model = None;
+            }
+            ConfigKey::Model => self.model = None,
+            ConfigKey::Tier => self.tier = None,
+            ConfigKey::Backend => self.backend = None,
+        }
+    }
+
+    /// The model configured for `provider`, if the configured model belongs to it.
+    pub fn model_for(&self, provider: &str) -> Option<&str> {
+        let configured = self.provider.as_deref().unwrap_or(LOCAL);
+        (configured == provider)
+            .then_some(self.model.as_deref())
+            .flatten()
+    }
+}
+
+/// Every provider a key works with.
+pub fn provider_ids() -> Vec<&'static str> {
+    folderskin_ai::providers().iter().map(|p| p.id).collect()
+}
+
+/// The models `provider` offers.
+pub fn model_ids(provider: &str) -> Vec<&'static str> {
+    if provider == LOCAL {
+        return LOCAL_MODELS.to_vec();
+    }
+    folderskin_ai::provider(provider)
+        .map(|p| p.models.iter().map(|m| m.id).collect())
+        .unwrap_or_default()
+}
+
+/// The key store the app uses, opened on its folder.
+pub fn keys() -> folderskin_keys::Keys {
+    let keys = folderskin_keys::Keys::default();
+    if let Some(dir) = config_dir() {
+        keys.open(&dir);
+    }
+    keys
+}
+
+/// The environment variable that holds a key for `provider`: `FOLDERSKIN_OPENAI_KEY`.
+pub fn key_variable(provider: &str) -> String {
+    let id: String = provider
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    format!("FOLDERSKIN_{id}_KEY")
+}
+
+/// Where a key came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeySource {
+    Environment,
+    Saved,
+}
+
+/// The key for `provider`: from its environment variable first, then the saved keys.
+pub fn key_for(provider: &str, keys: &folderskin_keys::Keys) -> Option<(String, KeySource)> {
+    if let Ok(key) = std::env::var(key_variable(provider)) {
+        if !key.trim().is_empty() {
+            return Some((key.trim().to_string(), KeySource::Environment));
+        }
+    }
+    keys.get(provider).map(|k| (k, KeySource::Saved))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn values_are_checked_before_they_are_kept() {
+        let mut c = Config::default();
+        c.set(ConfigKey::Tier, "Q4").unwrap();
+        assert_eq!(c.tier.as_deref(), Some("q4"));
+        assert!(c.set(ConfigKey::Tier, "q5").is_err());
+        assert!(c.set(ConfigKey::Backend, "rocm").is_err());
+        c.set(ConfigKey::Backend, "vulkan").unwrap();
+        let err = c.set(ConfigKey::Provider, "midjourney").unwrap_err();
+        assert!(err.why.contains("openai"), "{err:?}");
+        c.set(ConfigKey::Model, "klein").unwrap();
+        assert!(
+            c.set(ConfigKey::Model, "gpt-image-1").is_err(),
+            "not a local model"
+        );
+    }
+
+    #[test]
+    fn a_model_belongs_to_its_provider() {
+        let mut c = Config::default();
+        c.set(ConfigKey::Provider, "openai").unwrap();
+        c.set(ConfigKey::Model, "gpt-image-1").unwrap();
+        assert_eq!(c.model_for("openai"), Some("gpt-image-1"));
+        assert_eq!(
+            c.model_for(LOCAL),
+            None,
+            "another provider doesn't inherit it"
+        );
+        c.set(ConfigKey::Provider, "xai").unwrap();
+        assert_eq!(
+            c.model, None,
+            "changing provider forgets the old one's model"
+        );
+        c.unset(ConfigKey::Provider);
+        assert_eq!(c, Config::default());
+    }
+
+    #[test]
+    fn it_round_trips_as_json_leaving_out_what_isnt_set() {
+        let mut c = Config::default();
+        c.set(ConfigKey::Provider, "local").unwrap();
+        c.set(ConfigKey::Model, "zimage").unwrap();
+        let text = serde_json::to_string(&c).unwrap();
+        assert_eq!(text, r#"{"provider":"local","model":"zimage"}"#);
+        assert_eq!(serde_json::from_str::<Config>(&text).unwrap(), c);
+        assert_eq!(
+            serde_json::from_str::<Config>("{}").unwrap(),
+            Config::default()
+        );
+    }
+
+    #[test]
+    fn key_variables_are_named_after_the_provider() {
+        assert_eq!(key_variable("openai"), "FOLDERSKIN_OPENAI_KEY");
+        assert_eq!(key_variable("x-ai"), "FOLDERSKIN_X_AI_KEY");
+    }
+}
