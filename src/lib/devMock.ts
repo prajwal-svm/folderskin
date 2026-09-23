@@ -442,7 +442,13 @@ export const mockApi = {
     await sleep(400);
     mockIcons.set(folder, null);
   },
-  platformInfo: async (): Promise<PlatformInfo> => ({ os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" }),
+  // `?os=windows` or `?os=linux` draws the preview as that OS (Windows' own window buttons, and so on).
+  platformInfo: async (): Promise<PlatformInfo> => {
+    const os = new URLSearchParams(location.search).get("os");
+    if (os === "windows") return { os, browse_label: "your PC", note: "browser preview: nothing is written to disk" };
+    if (os === "linux") return { os, browse_label: "your computer", note: "browser preview: nothing is written to disk" };
+    return { os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" };
+  },
   subfolderCount: async (folder: string): Promise<Subfolders> => {
     await sleep(260);
     if (folder === HUGE_TREE) return { count: 5000, more: true };

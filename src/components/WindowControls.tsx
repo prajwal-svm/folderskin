@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isTauri } from "../lib/devMock";
 
 const GLYPH = { width: 10, height: 10, viewBox: "0 0 10 10", "aria-hidden": true, focusable: false } as const;
 
@@ -20,6 +21,8 @@ export function WindowControls() {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
+    // The browser preview (?os=windows) draws the buttons but has no window behind them.
+    if (!isTauri()) return;
     const win = getCurrentWindow();
     let live = true;
     const sync = () => void win.isMaximized().then((m) => live && setMaximized(m)).catch(() => {});
@@ -32,7 +35,7 @@ export function WindowControls() {
     };
   }, []);
 
-  const win = () => getCurrentWindow();
+  const win = () => (isTauri() ? getCurrentWindow() : { minimize: async () => {}, toggleMaximize: async () => {}, close: async () => {} });
   return (
     <div className="winctl" role="group" aria-label="window">
       <button type="button" className="winctl-btn" aria-label="Minimise" data-tip="Minimise" onClick={() => void win().minimize()}>
