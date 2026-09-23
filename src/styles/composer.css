@@ -707,8 +707,8 @@
   padding: 2px 10px 10px;
 }
 
-/* The bar between the panels: a hairline with a wide grip that turns the accent colour when it's
-   pointed at, held or focused. */
+/* The bar between the panels: the hairline that divides them, with a wide grip that shows a small
+   grey thumb when it's pointed at, held or focused. */
 .cmp-resizer {
   flex: none;
   position: relative;
@@ -734,25 +734,23 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 32px;
-  height: 5px;
-  border-radius: 5px;
-  background: var(--accent);
+  width: 36px;
+  height: 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 20%, transparent);
   opacity: 0;
   transform: translate(-50%, -50%);
-  transition: opacity var(--t-fast) ease;
-}
-
-.cmp-resizer:hover::before,
-.cmp-resizer:focus-visible::before,
-.cmp-resizer.is-dragging::before {
-  background: var(--accent);
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease;
 }
 
 .cmp-resizer:hover .cmp-resizer-grip,
 .cmp-resizer:focus-visible .cmp-resizer-grip,
 .cmp-resizer.is-dragging .cmp-resizer-grip {
   opacity: 1;
+}
+
+.cmp-resizer.is-dragging .cmp-resizer-grip {
+  background: color-mix(in srgb, var(--ink) 36%, transparent);
 }
 
 /* While the bar is held the whole window shows the resize cursor, wherever the pointer strays. */

@@ -15,7 +15,7 @@ async function withKey(page: Page, query = "") {
   await settings(page).getByPlaceholder(/Paste your key/).fill("sk-test");
   await settings(page).getByRole("button", { name: /Save and check/ }).click();
   await expect(settings(page).getByText(/Saved on this device|Saved in this browser preview/)).toBeVisible();
-  await settings(page).getByRole("button", { name: "Done" }).click();
+  await settings(page).getByRole("button", { name: "close" }).click();
 }
 
 async function sendIdea(page: Page, idea: string) {
@@ -132,7 +132,7 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Set up this computer" }).click();
     await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
     await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
-    await settings(page).getByRole("button", { name: "Done" }).click();
+    await settings(page).getByRole("button", { name: "close" }).click();
     await expect(chat(page).locator(".studio-foot")).toContainText("nothing leaves this computer");
     await sendIdea(page, "a paper boat");
     const card = chat(page).locator("article.turn").last();

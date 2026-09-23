@@ -29,11 +29,6 @@ export function StudioSettings({
       title="Where pictures are made"
       sub="FolderSkin has no server. Pictures are made on this computer, or by the provider you pick with your own key and billed to your account."
       onClose={onClose}
-      footer={
-        <button type="button" className="btn btn-primary" onClick={onClose}>
-          Done
-        </button>
-      }
     >
       <ProviderKeys
         catalogue={catalogue}

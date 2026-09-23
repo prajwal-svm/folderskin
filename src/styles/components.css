@@ -1471,6 +1471,10 @@ select.input {
 .modal-body {
   padding: 14px 22px 22px;
   overflow-y: auto;
+  /* What scrolls up under the title fades out rather than being cut off by an edge. The fade is
+     no taller than the body's top padding, so nothing is faded until it's scrolled. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
   /* `overflow-y: auto` alone turns the x axis into `auto` too, so one over-wide child gives the
      dialog a sideways scrollbar. Nothing in here should ever scroll that way. */
   overflow-x: hidden;

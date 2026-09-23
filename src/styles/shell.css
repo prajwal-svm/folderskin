@@ -54,7 +54,8 @@
 /* ---------- the edges between islands ---------- */
 
 /* A strip over the gap between two islands, a little wider than it for an easy grab. It draws
-   nothing until it's pointed at: then a thin line down the gap, solid while it's held. */
+   nothing until it's pointed at: then a small grey thumb in the middle of the gap, darker while
+   it's held. The gap itself stays the window's own grey. */
 .island-resizer {
   position: absolute;
   z-index: 4;
@@ -80,26 +81,25 @@
 .island-resizer::after {
   content: "";
   position: absolute;
-  top: 18px;
-  bottom: 18px;
+  top: 50%;
   left: 50%;
-  width: 2px;
-  margin-left: -1px;
-  border-radius: 2px;
-  background: var(--accent);
+  width: 4px;
+  height: 36px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 20%, transparent);
   opacity: 0;
-  transition: opacity var(--t-fast) ease;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease;
 }
 
-.island-resizer:hover::after {
-  opacity: 0.4;
-  transition-delay: 120ms;
+.island-resizer:hover::after,
+.island-resizer:focus-visible::after {
+  opacity: 1;
 }
 
-.island-resizer:focus-visible::after,
 .is-resizing-islands .island-resizer:active::after {
   opacity: 1;
-  transition-delay: 0ms;
+  background: color-mix(in srgb, var(--ink) 36%, transparent);
 }
 
 .app.is-folding .island-resizer {
