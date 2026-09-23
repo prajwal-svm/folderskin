@@ -425,7 +425,7 @@ async fn published_pack(
         .into_iter()
         .next()
         .ok_or_else(|| "that pack isn't listed any more; try Refresh".to_string())?;
-    previews::manifest(source, files, pack_id, &row.hash).await
+    previews::manifest(source, files, &row).await
 }
 
 /// [`community_pack_skins`] with the pack read from the copy of `community/` at `base`, and the
@@ -1616,10 +1616,9 @@ mod tests {
                 );
             }
             serve(format!("/v2/{}", tree::strip_path(&hash)), webp(&hash));
-            serve(
-                format!("/v2/{}", tree::manifest_path(id, &hash)),
-                serde_json::to_vec(&published).unwrap(),
-            );
+            let manifest = serde_json::to_vec(&published).unwrap();
+            let manifest_sha = tree::sha256_hex(&manifest);
+            serve(format!("/v2/{}", tree::manifest_path(id, &hash)), manifest);
             records.push(folderskin_catalog::PackRecord {
                 id: id.to_string(),
                 name: name.to_string(),
@@ -1627,6 +1626,7 @@ mod tests {
                 license: "CC0-1.0".into(),
                 tags: published.tags.clone(),
                 hash: hash.clone(),
+                manifest: manifest_sha,
                 added: 0,
                 count: skins.len(),
                 bytes: 0,
@@ -1860,6 +1860,28 @@ mod tests {
         assert_eq!(err, "navy.png arrived damaged; try again");
         let err = block_on(download_pack(&source, "greens", &no_progress)).unwrap_err();
         assert!(err.contains("isn't listed"), "{err}");
+
+        // A manifest that isn't the one the catalog names, however well formed, is refused too:
+        // otherwise a host could point it at pictures of its own choosing.
+        let (files, _, hashes) = tree_files(&packs);
+        let manifest = format!("/v2/{}", tree::manifest_path("blues", &hashes["blues"]));
+        let swapped: Served = files
+            .into_iter()
+            .map(|(path, body, delay)| {
+                if path == manifest {
+                    let text = String::from_utf8(body)
+                        .unwrap()
+                        .replace("\"Navy\"", "\"Ink\"");
+                    (path, text.into_bytes(), delay)
+                } else {
+                    (path, body, delay)
+                }
+            })
+            .collect();
+        let (base, _) = serve(swapped);
+        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let err = block_on(download_pack(&source, "blues", &no_progress)).unwrap_err();
+        assert_eq!(err, "that pack's list arrived damaged; try again");
     }
 
     #[test]

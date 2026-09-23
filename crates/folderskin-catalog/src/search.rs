@@ -68,6 +68,8 @@ pub struct PackRow {
     pub bytes: u64,
     pub hash: String,
     pub added: i64,
+    /// SHA-256 of its published manifest, in hex; empty when it has none.
+    pub manifest: String,
 }
 
 /// A skin whose name matches, with the pack it is in.
@@ -416,9 +418,9 @@ fn used<'a>(sql: &str, bind: Binds<'a>) -> Vec<(&'a str, &'a dyn ToSql)> {
 }
 
 const PACK_COLUMNS: &str =
-    "p.id, p.name, p.author, p.license, p.tags, p.count, p.bytes, p.hash, p.added";
+    "p.id, p.name, p.author, p.license, p.tags, p.count, p.bytes, p.hash, p.added, p.manifest";
 /// How many columns [`PACK_COLUMNS`] is, so a column after them can be read.
-const PACK_COLUMN_COUNT: usize = 9;
+const PACK_COLUMN_COUNT: usize = 10;
 
 /// The packs whose index rows match `:q`, each with how well: bm25 weighs a word in the name
 /// most, then the tags, the author, and a skin's name.
@@ -457,6 +459,7 @@ fn pack_row(r: &rusqlite::Row) -> rusqlite::Result<PackRow> {
         bytes: r.get::<_, i64>(6)? as u64,
         hash: r.get(7)?,
         added: r.get(8)?,
+        manifest: r.get(9)?,
     })
 }
 

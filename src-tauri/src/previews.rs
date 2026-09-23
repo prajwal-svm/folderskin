@@ -13,6 +13,7 @@
 
 use crate::catalog::{Community, Source};
 use folderskin_catalog::tree::{self, PublishedPack};
+use folderskin_catalog::PackRow;
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::pack;
 use std::path::PathBuf;
@@ -191,7 +192,14 @@ async fn download(
         },
         Asked::Thumb { sha256 } if source.is_tree() => tree::thumb_path(sha256),
         Asked::Skin { id, hash, position } if source.is_tree() => {
-            let published = manifest(source, files, id, hash)
+            // Only the version the catalog lists now can be checked, and it's the only one asked for.
+            let row = source
+                .packs(std::slice::from_ref(id))
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .into_iter()
+                .find(|row| &row.hash == hash)
+                .ok_or(StatusCode::NOT_FOUND)?;
+            let published = manifest(source, files, &row)
                 .await
                 .map_err(|_| StatusCode::BAD_GATEWAY)?;
             let skin = published
@@ -215,21 +223,26 @@ async fn download(
         })
 }
 
-/// Pack `id`'s manifest at version `hash`, kept in the disk cache: it is named after the pack's
-/// contents, so a kept one is never out of date.
+/// The manifest of the pack the catalog lists as `row`, kept in the disk cache: it is named after
+/// the pack's contents, so a kept one is never out of date. It has to be the file the catalog
+/// names by its SHA-256, which is what makes a picture checked against it trustworthy too.
 pub async fn manifest(
     source: &Source,
     files: Option<&DiskCache>,
-    id: &str,
-    hash: &str,
+    row: &PackRow,
 ) -> Result<PublishedPack, String> {
+    let (id, hash) = (row.id.as_str(), row.hash.as_str());
     let key = format!("pack-{id}-{hash}");
-    let bytes = match cached(files, Some(&key)).await {
+    let whole = |bytes: &[u8]| row.manifest.is_empty() || tree::sha256_hex(bytes) == row.manifest;
+    let bytes = match cached(files, Some(&key)).await.filter(|b| whole(b)) {
         Some(bytes) => bytes,
         None => {
             let bytes = source
                 .get(&tree::manifest_path(id, hash), tree::MAX_MANIFEST_BYTES)
                 .await?;
+            if !whole(&bytes) {
+                return Err("that pack's list arrived damaged; try again".into());
+            }
             if let Some(files) = files {
                 let (files, bytes) = (files.clone(), bytes.clone());
                 let _ = tauri::async_runtime::spawn_blocking(move || files.put(&key, &bytes)).await;

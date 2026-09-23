@@ -357,6 +357,7 @@ pub fn from_index(bytes: &[u8], base: &str, offline: bool) -> Result<Source, Str
             author: p.author,
             license: p.license,
             hash: p.hash,
+            manifest: String::new(),
             added: 0,
             count: p.count,
             bytes: 0,

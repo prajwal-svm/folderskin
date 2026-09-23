@@ -30,6 +30,10 @@ pub struct PackRecord {
     pub tags: Vec<String>,
     /// [`folderskin_core::pack::pack_hash`] of the pack.
     pub hash: String,
+    /// SHA-256 of its published manifest, in hex; empty when it has none (a catalog made from
+    /// `index.json`). With it, what the app fetches is checked all the way down from head.json:
+    /// the catalog by head.json, the manifest by the catalog, each picture by the manifest.
+    pub manifest: String,
     /// When the pack was first published, in Unix seconds; 0 when nobody knows.
     pub added: i64,
     /// How many skins it has. Kept apart from `skins` because a catalog made from `index.json`
@@ -55,6 +59,7 @@ CREATE TABLE packs (
     count INTEGER NOT NULL,
     bytes INTEGER NOT NULL,
     hash TEXT NOT NULL,
+    manifest TEXT NOT NULL,
     added INTEGER NOT NULL
 );
 CREATE INDEX packs_by_name ON packs (sort_name, n);
@@ -106,8 +111,8 @@ fn write_sorted(conn: &Connection, packs: &[&PackRecord]) -> rusqlite::Result<()
     conn.execute_batch(SCHEMA)?;
     {
         let mut pack = conn.prepare(
-            "INSERT INTO packs (n, id, name, sort_name, author, license, tags, count, bytes, hash, added)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO packs (n, id, name, sort_name, author, license, tags, count, bytes, hash, manifest, added)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         )?;
         let mut pack_fts = conn.prepare(
             "INSERT INTO packs_fts (rowid, name, author, tags, skins) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -133,6 +138,7 @@ fn write_sorted(conn: &Connection, packs: &[&PackRecord]) -> rusqlite::Result<()
                 p.count as i64,
                 p.bytes as i64,
                 p.hash,
+                p.manifest,
                 p.added,
             ])?;
             let skin_names: Vec<&str> = p.skin_names.iter().map(|s| s.trim()).collect();

@@ -210,6 +210,7 @@ fn publish_pack(
         license: entry.license,
         tags: entry.tags,
         hash,
+        manifest: tree::sha256_hex(json.as_bytes()),
         added: opts.dates.get(id).copied().unwrap_or(0),
         count: entry.count,
         bytes: bytes_total,
@@ -664,6 +665,11 @@ mod tests {
         );
         let manifest =
             std::fs::read(c.out().join(tree::manifest_path("reds", &reds.hash))).unwrap();
+        assert_eq!(
+            reds.manifest,
+            tree::sha256_hex(&manifest),
+            "the catalog vouches for it"
+        );
         let published = PublishedPack::parse(&manifest).unwrap();
         assert_eq!(published.skins[1].name, "Brick");
         for skin in &published.skins {
