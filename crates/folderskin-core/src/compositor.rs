@@ -494,6 +494,13 @@ const TEMPLATE_MARGIN: f32 = 0.03;
 /// the model makes up. It is the normal render with grey artwork, scaled so the folder fills the
 /// frame less a 3% margin, and centred.
 pub fn blank_template(width: u32, height: u32, backdrop: [u8; 3]) -> image::RgbaImage {
+    crate::matte::flatten(&blank_template_cutout(width, height), backdrop)
+}
+
+/// [`blank_template`] before it goes on its backdrop: the same grey folder in the same place, on
+/// transparency. Its alpha is the folder's exact silhouette in that frame, which is the mask for
+/// a model that paints only inside the folder.
+pub fn blank_template_cutout(width: u32, height: u32) -> image::RgbaImage {
     let art = Artwork {
         rgba: image::RgbaImage::from_pixel(8, 8, image::Rgba(TEMPLATE_GREY)),
         focus: (0.5, 0.5),
@@ -510,7 +517,7 @@ pub fn blank_template(width: u32, height: u32, backdrop: [u8; 3]) -> image::Rgba
     let top = (height as f32 / 2.0 - (y0 + y1) / 2.0 * s).round() as i64;
     let mut frame = image::RgbaImage::new(width, height);
     image::imageops::replace(&mut frame, &icon, left, top);
-    crate::matte::flatten(&frame, backdrop)
+    frame
 }
 
 #[cfg(test)]
@@ -809,6 +816,28 @@ mod tests {
             "{paper:?}"
         );
         assert_eq!(at(700.0, 60.0), magenta, "beside the tab");
+    }
+
+    #[test]
+    fn the_cutout_is_the_blank_template_before_its_backdrop() {
+        let (w, h) = (1024, 960);
+        let cut = blank_template_cutout(w, h);
+        assert_eq!(cut.dimensions(), (w, h));
+        assert_eq!(
+            cut.get_pixel(0, 0).0[3],
+            0,
+            "transparent outside the folder"
+        );
+        assert_eq!(
+            cut.get_pixel(w / 2, h * 2 / 3).0[3],
+            255,
+            "opaque inside it"
+        );
+        assert_eq!(
+            crate::matte::flatten(&cut, [255, 0, 255]),
+            blank_template(w, h, [255, 0, 255]),
+            "the mask a model is given lines up with the template it is shown, pixel for pixel"
+        );
     }
 
     #[test]

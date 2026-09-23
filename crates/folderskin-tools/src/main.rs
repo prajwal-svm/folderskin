@@ -5,7 +5,7 @@
 use clap::Parser;
 use folderskin_core::apply::{apply_icon, refresh_shell_icons, revert_icon};
 use folderskin_core::compositor::{
-    render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
+    self, render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
 use folderskin_core::raster;
 use folderskin_tools::cli::{Cli, Command, PacksCommand};
@@ -57,6 +57,13 @@ fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         Command::Guide { out } => guide(&out),
+        Command::Template {
+            out,
+            width,
+            height,
+            backdrop,
+            mask,
+        } => template(&out, (width, height), &backdrop, mask.as_deref()),
         Command::ComposerLayers { out, size } => composer_layers(&out, size),
         Command::AppIcon { input, out } => {
             let (w, h) = image::ImageReader::open(&input)
@@ -142,13 +149,55 @@ fn load_picture(path: &Path) -> Result<RgbaImage, String> {
 }
 
 fn solid_image(hex: &str) -> Result<RgbaImage, String> {
-    let v = u32::from_str_radix(hex.trim_start_matches('#'), 16)
-        .map_err(|_| format!("{hex:?} is not RRGGBB"))?;
+    let [r, g, b] = rgb(hex)?;
     Ok(RgbaImage::from_pixel(
         SKIN_WIDTH,
         SKIN_HEIGHT,
-        image::Rgba([(v >> 16) as u8, (v >> 8) as u8, v as u8, 255]),
+        image::Rgba([r, g, b, 255]),
     ))
+}
+
+/// `RRGGBB`, with or without a leading `#`.
+fn rgb(hex: &str) -> Result<[u8; 3], String> {
+    let digits = hex.trim_start_matches('#');
+    let v = u32::from_str_radix(digits, 16)
+        .ok()
+        .filter(|_| digits.len() == 6)
+        .ok_or_else(|| format!("{hex:?} is not RRGGBB"))?;
+    Ok([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+}
+
+/// The blank folder an image model repaints, and optionally its silhouette as a mask: white where
+/// the folder is, black around it, anti-aliased along the edge.
+fn template(
+    out: &Path,
+    (width, height): (u32, u32),
+    backdrop: &str,
+    mask: Option<&Path>,
+) -> Result<(), String> {
+    let backdrop = rgb(backdrop)?;
+    let cut = compositor::blank_template_cutout(width, height);
+    let write = |path: &Path, img: &RgbaImage| {
+        std::fs::write(path, raster::encode_png(img))
+            .map_err(|e| format!("couldn't write {}: {e}", path.display()))
+    };
+    write(out, &folderskin_core::matte::flatten(&cut, backdrop))?;
+    println!(
+        "wrote {} ({width}×{height}): the blank folder",
+        out.display()
+    );
+    if let Some(path) = mask {
+        let silhouette = RgbaImage::from_fn(width, height, |x, y| {
+            let a = cut.get_pixel(x, y).0[3];
+            image::Rgba([a, a, a, 255])
+        });
+        write(path, &silhouette)?;
+        println!(
+            "wrote {} ({width}×{height}): its silhouette",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// A picture as the app takes it: a finished folder, or artwork around `focus`.
@@ -323,5 +372,29 @@ mod tests {
         assert_eq!(img.dimensions(), (SKIN_WIDTH, SKIN_HEIGHT));
         assert_eq!(img.get_pixel(500, 400).0, [0x2A, 0x9D, 0x8F, 255]);
         assert!(solid_image("teal").is_err());
+        assert_eq!(rgb("FF00FF").unwrap(), [255, 0, 255]);
+        for bad in ["FFF", "FF00FF00", "#GG00FF", ""] {
+            assert!(rgb(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_template_and_its_mask_line_up() {
+        let dir = std::env::temp_dir().join(format!("fs-template-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (out, mask) = (dir.join("t.png"), dir.join("m.png"));
+        template(&out, (512, 480), "FF00FF", Some(&mask)).unwrap();
+        let t = image::open(&out).unwrap().to_rgba8();
+        let m = image::open(&mask).unwrap().to_rgba8();
+        assert_eq!((t.dimensions(), m.dimensions()), ((512, 480), (512, 480)));
+        assert_eq!(t.get_pixel(0, 0).0, [255, 0, 255, 255], "magenta around it");
+        assert_eq!(m.get_pixel(0, 0).0, [0, 0, 0, 255], "black around it");
+        assert_eq!(
+            m.get_pixel(256, 320).0,
+            [255, 255, 255, 255],
+            "white inside"
+        );
+        assert!(t.get_pixel(256, 320).0[1] > 150, "grey inside, not magenta");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

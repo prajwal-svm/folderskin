@@ -38,6 +38,22 @@ pub enum Command {
         #[arg(long, default_value = "guide.png")]
         out: PathBuf,
     },
+    /// Write the blank folder an image model repaints (FolderSkin's folder in flat grey, centred
+    /// on a flat backdrop), and optionally its silhouette as a mask: white inside the folder
+    Template {
+        #[arg(long, default_value = "template.png")]
+        out: PathBuf,
+        #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(64..=4096))]
+        width: u32,
+        #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(64..=4096))]
+        height: u32,
+        /// The colour around the folder
+        #[arg(long, default_value = "FF00FF", value_name = "RRGGBB")]
+        backdrop: String,
+        /// Also write the folder's silhouette here, white on black, lined up with the template
+        #[arg(long, value_name = "PNG")]
+        mask: Option<PathBuf>,
+    },
     /// Write the layers the composer draws a design between: back.png, front.png, middle.png,
     /// top.png and outline.png
     ComposerLayers {
@@ -201,6 +217,48 @@ mod tests {
         ] {
             assert!(Cli::try_parse_from(&gone).is_err(), "{gone:?}");
         }
+    }
+
+    #[test]
+    fn parses_template_on_magenta_at_1024_unless_told_otherwise() {
+        match Cli::parse_from(["folderskin-tools", "template"]).command {
+            Command::Template {
+                out,
+                width,
+                height,
+                backdrop,
+                mask,
+            } => {
+                assert_eq!(out, PathBuf::from("template.png"));
+                assert_eq!((width, height), (1024, 1024));
+                assert_eq!(backdrop, "FF00FF");
+                assert_eq!(mask, None);
+            }
+            other => panic!("{other:?}"),
+        }
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "template",
+            "--width",
+            "1024",
+            "--height",
+            "960",
+            "--mask",
+            "m.png",
+        ]);
+        match cli.command {
+            Command::Template {
+                width,
+                height,
+                mask,
+                ..
+            } => {
+                assert_eq!((width, height), (1024, 960));
+                assert_eq!(mask, Some(PathBuf::from("m.png")));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(Cli::try_parse_from(["folderskin-tools", "template", "--width", "8"]).is_err());
     }
 
     #[test]
