@@ -10,16 +10,20 @@ import { EarthIcon } from "./icons/earth";
 import { PaletteIcon } from "./icons/palette";
 import { PencilIcon } from "./icons/pencil";
 
-const WIDTH = 300;
+/** Wide enough for a whole name, tags and facts without cutting any of them short. */
+const WIDTH = 360;
 const MARGIN = 12;
+
+const widthNow = () => Math.min(WIDTH, window.innerWidth - 2 * MARGIN);
 
 /**
  * Everything about one skin in the library, opened from its ⋯ button (or F2, or a double click
  * on its name): its name (the user's own skins only) and tags, which save as they change, what is known about it (the model and prompt behind an AI result, or the
  * pack and person behind a community skin), and sharing and deleting it.
  *
- * It floats in its own layer beside the button that opened it, above when there is no room
- * below, and closes on Escape, a click elsewhere or a scroll underneath.
+ * It floats in its own layer, centred on the skin it's about, below the button that opened it or
+ * above when there is no room below, and closes on Escape, a click elsewhere or a scroll
+ * underneath. Nothing in it is cut short: a long name or prompt wraps instead.
  */
 export function SkinMenu({
   skin,
@@ -48,9 +52,9 @@ export function SkinMenu({
   onClose: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  const nameField = useRef<HTMLInputElement>(null);
+  const nameField = useRef<HTMLTextAreaElement>(null);
   const nameId = useId();
-  const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; above: boolean; width: number } | null>(null);
   const canRename = isYours(skin);
   const [name, setName] = useState(skin.name);
   const [tags, setTags] = useState(skin.tags);
@@ -62,11 +66,14 @@ export function SkinMenu({
   useLayoutEffect(() => {
     const place = () => {
       const a = anchor.getBoundingClientRect();
+      // Centred on the skin (its tile, or its card in the assistant), not hung off the ⋯ in its corner.
+      const on = (anchor.closest(".tile, .turn") ?? anchor).getBoundingClientRect();
+      const width = widthNow();
       const height = panel.current?.offsetHeight ?? 0;
-      const left = Math.min(Math.max(MARGIN, a.left), window.innerWidth - WIDTH - MARGIN);
+      const left = Math.min(Math.max(MARGIN, on.left + on.width / 2 - width / 2), window.innerWidth - width - MARGIN);
       const below = a.bottom + 6;
       const fits = below + height <= window.innerHeight - MARGIN;
-      setPos({ left, top: fits ? below : Math.max(MARGIN, a.top - 6 - height), above: !fits });
+      setPos({ left, top: fits ? below : Math.max(MARGIN, a.top - 6 - height), above: !fits, width });
     };
     place();
     // It grows as tags are added, which can push it past the bottom of the window.
@@ -134,6 +141,14 @@ export function SkinMenu({
     flush.current = saveName;
   });
 
+  // The name field grows with the name as it wraps, so a long one is shown whole.
+  useLayoutEffect(() => {
+    const el = nameField.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [name, pos?.width]);
+
   const saveTags = (next: string[]) => {
     setTags(next);
     const clean = cleanName(name);
@@ -150,7 +165,7 @@ export function SkinMenu({
       aria-label={`${skin.name}: name, tags and details`}
       tabIndex={-1}
       ref={panel}
-      style={pos ? { left: pos.left, top: pos.top, width: WIDTH } : { visibility: "hidden", width: WIDTH }}
+      style={pos ? { left: pos.left, top: pos.top, width: pos.width } : { visibility: "hidden", width: widthNow() }}
     >
       <div className="skin-menu-block">
         {canRename ? (
@@ -159,16 +174,17 @@ export function SkinMenu({
               Name
             </label>
             <div className="skin-menu-field">
-              <input
+              <textarea
                 ref={nameField}
                 id={nameId}
                 className="skin-menu-name"
                 value={name}
+                rows={1}
                 maxLength={MAX_NAME_CHARS}
-                title={name}
                 spellCheck={false}
                 autoComplete="off"
-                onChange={(e) => setName(e.target.value)}
+                // A name is one line: pasted line breaks become spaces.
+                onChange={(e) => setName(e.target.value.replace(/[\r\n]+/g, " "))}
                 onBlur={saveName}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -186,9 +202,7 @@ export function SkinMenu({
         ) : (
           /* A pack's skin keeps the name it was shared under: it is how the pack lists it, and
              how anyone else who adds the pack sees it. Tags below are still the user's own. */
-          <p className="skin-menu-title" title={skin.name}>
-            {skin.name}
-          </p>
+          <p className="skin-menu-title">{skin.name}</p>
         )}
       </div>
       <div className="skin-menu-block">
@@ -200,7 +214,7 @@ export function SkinMenu({
           {facts.map(([label, value]) => (
             <div className="skin-fact" key={label}>
               <dt>{label}</dt>
-              <dd title={value}>{value}</dd>
+              <dd>{value}</dd>
             </div>
           ))}
         </dl>

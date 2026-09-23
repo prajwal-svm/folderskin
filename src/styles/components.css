@@ -642,11 +642,11 @@ select.input {
   background: var(--island);
   box-shadow: var(--shadow-pop);
   animation: pop-in var(--t-base) var(--ease-spring) both;
-  transform-origin: left top;
+  transform-origin: center top;
 }
 
 .skin-menu.is-above {
-  transform-origin: left bottom;
+  transform-origin: center bottom;
 }
 
 /* the name reads as the menu's title and turns into a field when pointed at */
@@ -656,10 +656,9 @@ select.input {
   padding: 0 2px;
   font-weight: 800;
   font-size: 15px;
+  line-height: 1.3;
   letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -670,9 +669,15 @@ select.input {
 
 /* A field at rest too, like the tag field below it, so the name reads as one to change. */
 .skin-menu-name {
+  display: block;
   width: 100%;
-  height: 36px;
-  padding: 0 32px 0 10px;
+  min-height: 36px;
+  padding: 8px 32px 8px 10px;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  font-family: inherit;
   border-radius: var(--r-control);
   border: 1px solid transparent;
   background: var(--well);
@@ -680,7 +685,6 @@ select.input {
   font-weight: 750;
   font-size: 14px;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
   cursor: text;
   user-select: text;
   -webkit-user-select: text;
@@ -698,7 +702,7 @@ select.input {
 
 .skin-menu-pencil {
   position: absolute;
-  top: 50%;
+  top: 18px;
   right: 11px;
   display: flex;
   color: var(--hint);
@@ -721,7 +725,8 @@ select.input {
 .skin-facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 12px;
+  align-items: center;
+  gap: 7px 14px;
   padding: 10px 12px;
   border-radius: 10px;
   background: var(--well);
@@ -740,11 +745,8 @@ select.input {
 
 .skin-fact dd {
   min-width: 0;
+  margin: 0;
   color: var(--ink-2);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
 }
 
