@@ -11,7 +11,6 @@ import {
   patternLabel,
   shapeLabel,
   type Blend,
-  type Doc,
   type IconLayer,
   type IconLook,
   type ImageFx,
@@ -20,7 +19,6 @@ import {
   type Parts,
   type PatternLayer,
   type PlacedLayer,
-  type Shape,
   type ShapeLayer,
   type TextLayer,
 } from "../../composer/doc";
@@ -31,6 +29,7 @@ import { Field, IconButton, Section, Segmented, Slider, Toggle } from "./control
 import { PaintField } from "./PaintField";
 import { EmojiPicker, FontPicker, PatternGrid, ShapeGrid } from "./pickers";
 import { Popover } from "./Popover";
+import { Select } from "../Select";
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -39,6 +38,7 @@ import {
   ChevronDownIcon,
   FlipHIcon,
   FlipVIcon,
+  InfoCircleIcon,
   ItalicIcon,
   ShuffleIcon,
 } from "../icons/composer";
@@ -127,13 +127,13 @@ function Arrange({ layer, onPatch, parts, size }: { layer: PlacedLayer; onPatch:
           <FlipVIcon size={15} />
         </IconButton>
         <span className="cmp-actions-gap" />
-        <button type="button" className="cmp-chip" title="Put it in the middle of the folder's front" onClick={() => onPatch({ x: front.x, y: front.y })}>
+        <button type="button" className="cmp-chip" data-tip="Put it in the middle of the folder's front" onClick={() => onPatch({ x: front.x, y: front.y })}>
           Front
         </button>
-        <button type="button" className="cmp-chip" title="Put it on the folder's tab" onClick={() => onPatch({ x: tab.x, y: tab.y })}>
+        <button type="button" className="cmp-chip" data-tip="Put it on the folder's tab" onClick={() => onPatch({ x: tab.x, y: tab.y })}>
           Tab
         </button>
-        <button type="button" className="cmp-chip" title="Centre it across" onClick={() => onPatch({ x: 512 })}>
+        <button type="button" className="cmp-chip" data-tip="Centre it across" onClick={() => onPatch({ x: 512 })}>
           Centre
         </button>
       </div>
@@ -195,13 +195,7 @@ function Effects({ layer, onPatch, used }: { layer: Layer; onPatch: (p: Patch, k
     <Section title="Look">
       <Slider label="Opacity" value={layer.opacity} min={0} max={100} scale={100} unit="%" onChange={(opacity) => onPatch({ opacity }, `opacity:${layer.id}`)} />
       <Field label="Blend">
-        <select className="cmp-select" value={layer.blend} aria-label="blend" onChange={(e) => onPatch({ blend: e.target.value as Blend })}>
-          {BLENDS.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.label}
-            </option>
-          ))}
-        </select>
+        <Select<Blend> label="blend" value={layer.blend} onChange={(blend) => onPatch({ blend })} options={BLENDS.map((b) => ({ value: b.id, label: b.label }))} />
       </Field>
       {placed && (
         <>
@@ -264,13 +258,7 @@ function TextSection({ layer, onPatch, used, textRef }: { layer: TextLayer; onPa
           </PopButton>
         </Field>
         <Field label="Weight">
-          <select className="cmp-select" value={layer.weight} aria-label="weight" onChange={(e) => onPatch({ weight: Number(e.target.value) })}>
-            {WEIGHTS.map((w) => (
-              <option key={w.value} value={w.value}>
-                {w.label}
-              </option>
-            ))}
-          </select>
+          <Select<number> label="weight" value={layer.weight} onChange={(weight) => onPatch({ weight })} options={WEIGHTS.map((w) => ({ value: w.value, label: w.label }))} />
         </Field>
         <div className="cmp-actions-row">
           <Segmented
@@ -382,21 +370,21 @@ function ImageSection({ layer, onPatch, parts, onReplace }: { layer: ImageLayer;
     <>
       <Section title="Picture">
         <div className="cmp-actions-row is-wrap">
-          <button type="button" className="cmp-chip" onClick={() => fit(true)} title="Cover the whole folder with it">
+          <button type="button" className="cmp-chip" onClick={() => fit(true)} data-tip="Cover the whole folder with it">
             Cover folder
           </button>
-          <button type="button" className="cmp-chip" onClick={() => fit(false)} title="Fit it on the front, whole">
+          <button type="button" className="cmp-chip" onClick={() => fit(false)} data-tip="Fit it on the front, whole">
             Fit on front
           </button>
           <button
             type="button"
             className="cmp-chip"
             onClick={() => onPatch({ w: layer.iw * (layer.h / layer.ih), h: layer.h })}
-            title="Undo any cropping from the sides"
+            data-tip="Undo any cropping from the sides"
           >
             Uncrop
           </button>
-          <button type="button" className="cmp-chip" onClick={(e) => onReplace(e.currentTarget)}>
+          <button type="button" className="cmp-chip" onClick={(e) => onReplace(e.currentTarget)} data-tip="Use another picture in its place">
             Replace
           </button>
         </div>
@@ -471,6 +459,11 @@ function PatternSection({ layer, onPatch, used }: { layer: PatternLayer; onPatch
  * text layer shows on the folder, so which one is being changed is never in doubt. Left empty, the
  * layer is named after what it is (a text layer after its words).
  */
+const NAME_NOTE = {
+  text: "Names the layer in the layers list only. The words on the folder are under Text on the folder.",
+  other: "Names the layer in the layers list only.",
+};
+
 function LayerName({ layer, index, onPatch }: { layer: Layer; index: number; onPatch: (p: Patch) => void }) {
   const auto = layerLabel({ ...layer, name: undefined } as Layer, index);
   const [draft, setDraft] = useState(layer.name ?? "");
@@ -481,30 +474,34 @@ function LayerName({ layer, index, onPatch }: { layer: Layer; index: number; onP
     if (next !== (layer.name ?? "")) onPatch({ name: next || undefined });
     setDraft(next);
   };
+  const note = layer.kind === "text" ? NAME_NOTE.text : NAME_NOTE.other;
   return (
-    <div className="cmp-layer-naming">
-      <label className="cmp-field">
-        <span className="cmp-field-label">Layer name</span>
-        <input
-          className="cmp-input"
-          value={draft}
-          placeholder={auto}
-          maxLength={40}
-          spellCheck={false}
-          aria-label="layer name"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") {
-              e.stopPropagation();
-              setDraft(layer.name ?? "");
-            }
-          }}
-        />
-      </label>
-      <p className="cmp-note">{layer.kind === "text" ? "Only names it in the layers list. The words on the folder are below." : "Only names it in the layers list."}</p>
-    </div>
+    <section className="cmp-section cmp-layer-naming">
+      <Field label="Layer name">
+        <span className="cmp-input-wrap">
+          <input
+            className="cmp-input"
+            value={draft}
+            placeholder={auto}
+            maxLength={40}
+            spellCheck={false}
+            aria-label="layer name"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                setDraft(layer.name ?? "");
+              }
+            }}
+          />
+          <span className="cmp-input-info" tabIndex={0} role="note" aria-label={note} data-tip={note}>
+            <InfoCircleIcon size={14} />
+          </span>
+        </span>
+      </Field>
+    </section>
   );
 }
 
@@ -514,7 +511,7 @@ function IconSection({ layer, onPatch, used, onReplace }: { layer: IconLayer; on
     <Section title="Icon">
       <div className="cmp-icon-now">
         <span className="cmp-icon-now-name">{iconName(layer.icon)}</span>
-        <button type="button" className="cmp-chip" onClick={onReplace} title="Pick another icon from the icon library">
+        <button type="button" className="cmp-chip" onClick={onReplace} data-tip="Pick another icon from the icon library">
           Replace
         </button>
       </div>
@@ -551,10 +548,8 @@ function IconSection({ layer, onPatch, used, onReplace }: { layer: IconLayer; on
  * carries the layer's name and its buttons (restack, duplicate, delete).
  */
 export function ComposerInspector({
-  doc,
   layer,
   onPatch,
-  onShape,
   parts,
   used,
   textRef,
@@ -563,10 +558,8 @@ export function ComposerInspector({
   index,
   size,
 }: {
-  doc: Doc;
   layer: Layer | null;
   onPatch: (patch: Patch, key?: string) => void;
-  onShape: (shape: Shape) => void;
   parts: Parts;
   used: string[];
   textRef: RefObject<HTMLTextAreaElement | null>;
@@ -578,35 +571,7 @@ export function ComposerInspector({
   size: { w: number; h: number } | null;
 }) {
   if (!layer) {
-    return (
-      <div className="cmp-inspector">
-        <Section title="Shape">
-          <Segmented
-            label="what it becomes"
-            value={doc.shape}
-            onChange={onShape}
-            options={[
-              { value: "folder", label: "On the folder" },
-              { value: "free", label: "Free icon" },
-            ]}
-          />
-          <p className="cmp-note">
-            {doc.shape === "folder"
-              ? "Your design is cut to FolderSkin's folder, with its tab, paper and edges. See-through parts stay see-through."
-              : "Your design is the whole icon, any shape you like: a sticker, a badge, a big emoji."}
-          </p>
-        </Section>
-        <Section title="Tips">
-          <ul className="cmp-tips">
-            <li>Click the folder to change its colour.</li>
-            <li>Double-click words to edit them, an emoji to swap it, or an icon to pick another.</li>
-            <li>Drag a corner to resize, the round knob to turn. Hold ⇧ for even steps.</li>
-            <li>Hold ⌘ while dragging to stop things snapping into place.</li>
-            <li>Drop or paste a picture straight onto the folder.</li>
-          </ul>
-        </Section>
-      </div>
-    );
+    return <p className="cmp-inspector-empty">Select a layer, on the folder or in the list above, to change it here.</p>;
   }
   return (
     <div className="cmp-inspector">

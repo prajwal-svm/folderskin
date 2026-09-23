@@ -20,16 +20,44 @@
   padding: 0 10px 0 12px;
 }
 
+/* The tools that fit, then ⋯ with the rest (Tools in Composer.tsx); never one cut in half. */
 .cmp-tools {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 1px;
+  overflow: hidden;
+}
+
+/* An unseen copy of every tool, measured to know how many fit. */
+.cmp-tools-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 1px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cmp-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmp-pop-title {
+  margin: 0 0 8px;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ink);
 }
 
 /* Tools read like a Mac toolbar: the icon, and its name small beneath it. */
 .cmp-tool {
+  flex: none;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -278,9 +306,11 @@
 }
 
 .cmp-skeleton {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 9px;
+  white-space: nowrap;
   height: 34px;
   padding: 0 12px 0 6px;
   border-radius: var(--r-pill);
@@ -888,8 +918,10 @@
   transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
+/* A row's lock, eye and delete show while it's pointed at or reached by the keyboard; a lock or
+   eye that's switched on stays, since it says something about the layer. */
 .cmp-layer:hover .cmp-layer-btn,
-.cmp-layer.is-on .cmp-layer-btn,
+.cmp-layer:focus-visible .cmp-layer-btn,
 .cmp-layer-btn.is-set,
 .cmp-layer-btn:focus-visible {
   opacity: 1;
@@ -982,6 +1014,16 @@
   margin: 0;
   font-weight: 600;
   font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* With nothing selected, the attributes panel says how to get something in it. */
+.cmp-inspector-empty {
+  margin: 0;
+  padding: 12px 18px 16px;
+  font-weight: 600;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -1976,16 +2018,98 @@
   border-color: var(--accent);
 }
 
-.cmp-layer-naming {
+/* A field with an (i) at its end that says what the field is for, in a tooltip. */
+.cmp-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
 }
 
-.cmp-layer-naming .cmp-note {
-  margin: 0;
+.cmp-input-wrap .cmp-input {
+  padding-right: 32px;
+}
+
+.cmp-input-info {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--hint);
+  transform: translateY(-50%);
+  cursor: help;
+  transition: color var(--t-fast) ease;
+}
+
+.cmp-input-info:hover,
+.cmp-input-info:focus-visible {
+  color: var(--accent-ink);
+}
+
+/* ---------- the app's own dropdown (Select.tsx) ---------- */
+
+.cmp-select-btn {
+  cursor: pointer;
+}
+
+/* In a form (Settings, the AI provider dialog), the size of the fields around it. */
+.cmp-select-btn.is-field {
+  flex: none;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-control);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.cmp-select-pop {
+  padding: 6px;
+}
+
+.cmp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cmp-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-weight: 650;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-option.is-active {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.cmp-option[aria-selected="true"] {
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.cmp-option svg {
+  flex: none;
+  color: var(--accent-ink);
+}
+
+.cmp-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .cmp-icon-now {
@@ -2053,28 +2177,6 @@
   padding: 4px 14px 12px;
 }
 
-.icon-replacing {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
-  border-radius: var(--r-control);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-weight: 650;
-  font-size: 12.5px;
-}
-
-.icon-replacing span {
-  flex: 1;
-  min-width: 0;
-}
-
-.icon-replacing strong {
-  font-weight: 800;
-}
-
 .icon-preview {
   flex: none;
   display: flex;
@@ -2107,22 +2209,61 @@
   color: var(--muted);
 }
 
+.icon-preview-hint {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--hint);
+}
+
 .icon-controls {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.icon-pack-btn {
-  justify-content: space-between;
-  padding: 0 10px;
+.icon-controls .cmp-seg {
+  flex: none;
+}
+
+/* The pack's logo, its name (cut short with an ellipsis when the side is narrow) and a chevron. */
+.icon-pack-btn.cmp-pick-btn {
+  flex: 1 1 120px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 8px 0 5px;
   cursor: pointer;
 }
 
-.icon-pack-btn-name {
+.icon-pack-btn > span:not(.pack-logo) {
+  flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+}
+
+.icon-pack-btn .pack-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--island);
+}
+
+/* A pack's mark on a small tile, in the pack list and its button. */
+.pack-logo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--well);
+  color: var(--ink);
+  overflow: visible;
+}
+
+.pack-logo-initial {
+  font-weight: 800;
+  font-size: 13px;
 }
 
 .icon-search {
@@ -2189,28 +2330,25 @@
   color: var(--muted);
 }
 
-.icon-credit {
-  flex: none;
-  margin: 0;
-  font-weight: 600;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--hint);
-}
-
 .icon-packs {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 4px;
+  margin: -6px;
 }
 
 .icon-pack {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px 2px 0;
-  border-radius: 10px;
+  gap: 4px;
+  padding-right: 6px;
+  border-radius: 12px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.icon-pack:hover,
+.icon-pack:focus-within {
+  background: var(--nav-hover);
 }
 
 .icon-pack.is-current {
@@ -2221,33 +2359,41 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 7px 10px;
-  border-radius: 10px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 12px;
   text-align: left;
-}
-
-.icon-pack-main:not(:disabled):hover {
-  background: var(--nav-hover);
 }
 
 .icon-pack-main:disabled {
   cursor: default;
 }
 
-.icon-pack-name {
+.icon-pack-main > svg {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent-ink);
+}
+
+.icon-pack-main:disabled .pack-logo {
+  opacity: 0.55;
+}
+
+.icon-pack-text {
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.icon-pack-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 750;
   font-size: 13px;
   color: var(--ink);
-}
-
-.icon-pack-tag {
-  font-size: 10.5px;
 }
 
 .icon-pack-meta {
@@ -2256,20 +2402,53 @@
   color: var(--muted);
 }
 
+/* Download: a small pill with the size it costs, or how far it has got. */
 .icon-pack-get {
-  height: 30px;
-  padding: 0 12px;
-  font-size: 12px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
+.icon-pack-get:hover:not(:disabled),
+.icon-pack-get:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.icon-pack-get:disabled {
+  cursor: default;
+}
+
+/* Remove shows while its row is pointed at, like a layer's delete. */
 .icon-pack-remove {
-  font-size: 12px;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--hint);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
-.icon-packs-note {
-  margin: 6px 10px 4px;
-  font-weight: 600;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--hint);
+.icon-pack:hover .icon-pack-remove,
+.icon-pack-remove:focus-visible {
+  opacity: 1;
+}
+
+.icon-pack-remove:hover,
+.icon-pack-remove:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
 }

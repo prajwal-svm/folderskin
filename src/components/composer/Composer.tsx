@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
+import { fileBrowser, keys, localOs } from "../../lib/platform";
 import { cleanName, clip as clipName, MAX_NAME_CHARS } from "../../lib/names";
 import type { DragInfo, Folder } from "../../state/dropzone";
 import { applyLabel, folders as folderCount, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
@@ -26,7 +27,6 @@ import {
   imageBox,
   indexOf,
   isPlaced,
-  layerLabel,
   makeEmoji,
   makeFill,
   makeIcon,
@@ -45,6 +45,7 @@ import {
   suggestName,
   type Doc,
   type IconDrawing,
+  type IconLayer,
   type IconLook,
   type Layer,
   type Parts,
@@ -60,7 +61,6 @@ import { ComposerLayers } from "./ComposerLayers";
 import { IconButton } from "./controls";
 import { LAYERS_HEIGHT, MIN_LAYERS, MIN_SETTINGS, Panel, Resizer, usePanels } from "./SidePanels";
 import { CopyIcon } from "../icons/copy";
-import { DeleteIcon } from "../icons/delete";
 import { ComposerStage, type Backdrop } from "./ComposerStage";
 import { PictureMenu } from "./PictureMenu";
 import { EmojiPicker, PatternGrid, ShapeGrid } from "./pickers";
@@ -74,6 +74,8 @@ import {
   FolderIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  EllipsisIcon,
+  InfoCircleIcon,
   LayoutTemplateIcon,
   PaintBucketIcon,
   RedoIcon,
@@ -96,6 +98,20 @@ type Draft = { doc: Doc; name: string; nameTouched: boolean; editing: Editing | 
 
 const DRAFT_KEY = "folderskin.composer.draft.v1";
 const VIEW_KEY = "folderskin.composer.view";
+/** Undo's and redo's shortcuts, for their tooltips. */
+const MOD_KEYS = { undo: keys("Z"), redo: localOs() === "macos" ? keys("Z", { shift: true }) : keys("Y") };
+const fileBrowserName = () => fileBrowser(localOs());
+
+/** How new icons look, as last chosen in the icon library. */
+const LOOK_KEY = "folderskin.composer.iconLook";
+
+function loadLook(): IconLook {
+  try {
+    return localStorage.getItem(LOOK_KEY) === "flat" ? "flat" : "emboss";
+  } catch {
+    return "emboss";
+  }
+}
 /** The size the saved design is drawn at: the compositor's master size, so nothing is scaled up. */
 const SAVE_PX = 2048;
 const PREVIEW_SIZES = [128, 64, 32];
@@ -112,13 +128,13 @@ function loadDraft(): Draft | null {
   }
 }
 
-function loadView(): { skeleton: boolean; backdrop: Backdrop } {
+function loadView(): { backdrop: Backdrop } {
   try {
-    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") as { skeleton?: unknown; backdrop?: unknown };
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") as { backdrop?: unknown };
     const backdrops: Backdrop[] = ["window", "light", "dark", "colour"];
-    return { skeleton: v.skeleton !== false, backdrop: backdrops.includes(v.backdrop as Backdrop) ? (v.backdrop as Backdrop) : "window" };
+    return { backdrop: backdrops.includes(v.backdrop as Backdrop) ? (v.backdrop as Backdrop) : "window" };
   } catch {
-    return { skeleton: true, backdrop: "window" };
+    return { backdrop: "window" };
   }
 }
 
@@ -170,8 +186,12 @@ function readPicture(file: Blob): Promise<ComposerImage> {
 
 const asPicture = (img: ComposerImage): Picture => ({ src: img.url, width: img.width, height: img.height, alpha: img.alpha });
 
-function Tool({ label, icon, onClick, popover, width = 300 }: { label: string; icon: ReactNode; onClick?: () => void; popover?: (close: () => void) => ReactNode; width?: number }) {
+/** One of the toolbar's tools: an action, or a panel of choices (emoji, shapes) that opens under it. */
+type ToolDef = { label: string; icon: ReactNode; hint: string; onClick?: () => void; popover?: (close: () => void) => ReactNode; width?: number };
+
+function Tool({ tool }: { tool: ToolDef }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const { label, icon, hint, onClick, popover, width = 300 } = tool;
   return (
     <>
       <button
@@ -179,7 +199,8 @@ function Tool({ label, icon, onClick, popover, width = 300 }: { label: string; i
         className={anchor ? "cmp-tool is-open" : "cmp-tool"}
         aria-haspopup={popover ? "dialog" : undefined}
         aria-expanded={popover ? anchor !== null : undefined}
-        title={label}
+        data-tip={hint}
+        data-tip-side="bottom"
         onClick={(e) => (popover ? setAnchor(anchor ? null : e.currentTarget) : onClick?.())}
       >
         {icon}
@@ -188,6 +209,150 @@ function Tool({ label, icon, onClick, popover, width = 300 }: { label: string; i
       {anchor && popover && (
         <Popover anchor={anchor} onClose={() => setAnchor(null)} width={width} label={label}>
           {popover(() => setAnchor(null))}
+        </Popover>
+      )}
+    </>
+  );
+}
+
+/** The ⋯ at the end of a toolbar too narrow for every tool: the rest, in a menu. A tool with a panel opens it in the same place. */
+function MoreTools({ tools }: { tools: ToolDef[] }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [inner, setInner] = useState<ToolDef | null>(null);
+  const close = () => {
+    setAnchor(null);
+    setInner(null);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={anchor ? "cmp-tool is-open" : "cmp-tool"}
+        aria-haspopup="menu"
+        aria-expanded={anchor !== null}
+        aria-label="more tools"
+        data-tip={tools.map((t) => t.label).join(", ")}
+        data-tip-side="bottom"
+        onClick={(e) => (anchor ? close() : setAnchor(e.currentTarget))}
+      >
+        <EllipsisIcon size={16} />
+        <span className="cmp-tool-label">More</span>
+      </button>
+      {anchor && (
+        <Popover anchor={anchor} onClose={close} width={inner ? (inner.width ?? 300) : 200} label={inner ? inner.label : "More tools"} align="end">
+          {inner?.popover ? (
+            inner.popover(close)
+          ) : (
+            <div className="cmp-menu" role="menu">
+              {tools.map((t) => (
+                <button
+                  key={t.label}
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => {
+                    if (t.popover) setInner(t);
+                    else {
+                      close();
+                      t.onClick?.();
+                    }
+                  }}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Popover>
+      )}
+    </>
+  );
+}
+
+/** Room the ⋯ takes, and the space between tools (composer.css). */
+const MORE_WIDTH = 50;
+const TOOL_GAP = 1;
+
+/**
+ * The tools that fit, then ⋯ with the rest. Each tool's width is measured once from an unseen copy
+ * of the row, so the row can be fitted to its room as the window changes without a tool ever
+ * being drawn half cut off.
+ */
+function Tools({ tools }: { tools: ToolDef[] }) {
+  const row = useRef<HTMLDivElement>(null);
+  const ruler = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(tools.length);
+  useLayoutEffect(() => {
+    const el = row.current;
+    if (!el || !ruler.current) return;
+    const measure = () => {
+      // Read each time: the tools' own widths change once the app's font has loaded.
+      const widths = [...(ruler.current?.children ?? [])].map((c) => (c as HTMLElement).offsetWidth);
+      const room = el.clientWidth;
+      const total = widths.reduce((s, w) => s + w, 0) + TOOL_GAP * (widths.length - 1);
+      if (total <= room) return setFit(widths.length);
+      let used = MORE_WIDTH;
+      let n = 0;
+      while (n < widths.length && used + widths[n] + TOOL_GAP <= room) used += widths[n++] + TOOL_GAP;
+      setFit(n);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    ro.observe(ruler.current);
+    return () => ro.disconnect();
+  }, [tools.length]);
+  const shown = tools.slice(0, fit);
+  const rest = tools.slice(fit);
+  return (
+    <div className="cmp-tools" role="toolbar" aria-label="add to the design" ref={row}>
+      {shown.map((t) => (
+        <Tool key={t.label} tool={t} />
+      ))}
+      {rest.length > 0 && <MoreTools tools={rest} />}
+      <div className="cmp-tools-ruler" ref={ruler} aria-hidden="true">
+        {tools.map((t) => (
+          <span key={t.label} className="cmp-tool">
+            {t.icon}
+            <span className="cmp-tool-label">{t.label}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** How to get around the canvas, behind the info button rather than taking room in the panel. */
+function TipsButton() {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        className={anchor ? "cmp-icon-btn is-on" : "cmp-icon-btn"}
+        aria-label="tips and shortcuts"
+        aria-haspopup="dialog"
+        aria-expanded={anchor !== null}
+        data-tip="Tips and shortcuts"
+        data-tip-side="bottom"
+        onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
+      >
+        <InfoCircleIcon size={16} />
+      </button>
+      {anchor && (
+        <Popover anchor={anchor} onClose={() => setAnchor(null)} width={300} label="Tips and shortcuts" align="end">
+          <p className="cmp-pop-title">Tips and shortcuts</p>
+          <ul className="cmp-tips">
+            <li>Click the folder to change its colour.</li>
+            <li>Double-click words to edit them, an emoji to swap it, or an icon to pick another.</li>
+            <li>Drag a corner to resize, the round knob to turn. Hold ⇧ for even steps.</li>
+            <li>Hold {localOs() === "macos" ? "⌘" : "Ctrl"} while dragging to stop things snapping into place.</li>
+            <li>Drop or paste a picture straight onto the folder.</li>
+            <li>
+              {keys("Z")} undoes, {keys("D")} duplicates, Delete removes the selected layer.
+            </li>
+          </ul>
         </Popover>
       )}
     </>
@@ -312,8 +477,8 @@ export function Composer({
   const [previews, setPreviews] = useState<string[]>([]);
   /** What the side island shows: the layers and their settings, or the icon library. */
   const [side, setSide] = useState<"layers" | "icons">("layers");
-  /** The icon layer the library is picking a replacement for, when it opened from Replace. */
-  const [replaceId, setReplaceId] = useState<string | null>(null);
+  /** How the next icon added looks; the selected icon's own look is shown and changed in its place. */
+  const [iconLook, setIconLook] = useState<IconLook>(loadLook);
   /** The library stays mounted once opened, so its search and scroll survive a look at the layers. */
   const [iconsOpened, setIconsOpened] = useState(false);
   useEffect(() => {
@@ -520,17 +685,25 @@ export function Composer({
       toast(`Couldn't use ${clipName(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
     }
   };
-  /** Shows the icon library; with an icon layer's id, to pick its replacement. */
-  const openIcons = useCallback((replacing: string | null) => {
-    setReplaceId(replacing);
+  /** Shows the icon library, for icon layer `id` when there is one: the library then works on it. */
+  const openIcons = useCallback((id: string | null) => {
+    if (id) setSelectedId(id);
     setSide("icons");
   }, []);
 
-  const pickIcon = (drawing: IconDrawing, look: IconLook) => {
+  /** The icon layer the library works on: the selected one, when it's an icon. */
+  const iconTarget: IconLayer | null = selected?.kind === "icon" ? selected : null;
+
+  /**
+   * An icon picked in the library. With an icon selected it takes that one's place, at the same
+   * size and with the same look, so trying one icon after another never piles them up; with
+   * nothing selected, or `asNew`, it's added to the front's middle. Either way the library stays
+   * open for the next one.
+   */
+  const pickIcon = (drawing: IconDrawing, asNew: boolean) => {
     const d = latestDoc.current;
-    const target = replaceId ? findLayer(d, replaceId) : null;
+    const target = iconTarget && !asNew ? findLayer(d, iconTarget.id) : null;
     if (target?.kind === "icon") {
-      // Another icon in the same place, at the same size and with the same look.
       commit(
         mapLayer(d, target.id, (l) =>
           l.kind === "icon"
@@ -538,13 +711,21 @@ export function Composer({
             : l,
         ),
       );
-      setSelectedId(target.id);
-      setReplaceId(null);
-      setSide("layers");
       return;
     }
-    // Added to the front's middle, and the library stays open for the next one.
-    add(makeIcon(drawing, front.x, front.y, look, ink));
+    add(makeIcon(drawing, front.x, front.y, iconLook, ink));
+  };
+
+  /** A look chosen in the library: the selected icon's, at once, and the next new one's. */
+  const chooseLook = (look: IconLook) => {
+    if (iconTarget && iconTarget.look !== look) commit(patchLayer(latestDoc.current, iconTarget.id, { look }));
+    if (look === "original") return;
+    setIconLook(look);
+    try {
+      localStorage.setItem(LOOK_KEY, look);
+    } catch {
+      // Only a preference.
+    }
   };
 
   const replacePicture = (id: string, img: ComposerImage) => {
@@ -593,24 +774,6 @@ export function Composer({
   const remove = useCallback(() => {
     if (selectedId) removeById(selectedId);
   }, [selectedId, removeById]);
-
-  /** Every layer at once. The toast's Undo puts them back while nothing else has changed since. */
-  const removeAll = useCallback(() => {
-    const d = latestDoc.current;
-    const count = d.layers.length;
-    if (count === 0) return;
-    const emptied: Doc = { ...d, layers: [] };
-    commit(emptied);
-    setSelectedId(null);
-    toast(`Deleted ${count} ${count === 1 ? "layer" : "layers"}`, {
-      action: {
-        label: "Undo",
-        run: () => {
-          if (latestDoc.current === emptied) dispatch({ type: "undo" });
-        },
-      },
-    });
-  }, [commit, toast]);
 
   // ---- the side's panels ----
   const [panels, setPanels] = usePanels();
@@ -793,7 +956,35 @@ export function Composer({
   );
 
   // ---- views ----
-  const viewOf: View = { shape: doc.shape, skeleton: view.skeleton, guide: "rgba(58,134,255,0.95)" };
+  // The folder skeleton is the design's shape: on, it's drawn on FolderSkin's folder; off, it's a
+  // free icon, the whole picture.
+  const viewOf: View = { shape: doc.shape, skeleton: doc.shape === "folder", guide: "rgba(58,134,255,0.95)" };
+  const tools: ToolDef[] = [
+    { label: "Text", hint: "Add words", icon: <TypeIcon size={16} />, onClick: addText },
+    { label: "Icon", hint: "Add an icon from the icon library", icon: <StickerIcon size={16} />, onClick: () => openIcons(null) },
+    { label: "Emoji", hint: "Add an emoji", icon: <SmileIcon size={16} />, width: 320, popover: (close) => <EmojiPicker onPick={(c) => (addEmoji(c), close())} /> },
+    { label: "Shape", hint: "Add a shape", icon: <ShapesIcon size={16} />, popover: (close) => <ShapeGrid onPick={(s) => (addShape(s), close())} /> },
+    {
+      label: "Picture",
+      hint: "Add a picture",
+      icon: <ImageIcon size={16} />,
+      popover: (close) => (
+        <PictureMenu
+          skins={skins}
+          onFile={() => {
+            close();
+            void addPictureFile();
+          }}
+          onSkin={(s) => {
+            close();
+            void addSkinPicture(s);
+          }}
+        />
+      ),
+    },
+    { label: "Pattern", hint: "Add a pattern", icon: <WavesIcon size={16} />, popover: (close) => <PatternGrid onPick={(p) => (addPattern(p), close())} /> },
+    { label: "Colour", hint: "Colour the folder", icon: <PaintBucketIcon size={16} />, onClick: addBackground },
+  ];
   const index = selected ? indexOf(doc, selected.id) : -1;
   const used = useMemo(() => colorsOf(doc), [doc]);
   const busy = saving !== null || applying;
@@ -821,40 +1012,34 @@ export function Composer({
       <section className={drag?.kind === "image" ? "island island-main cmp-main is-drop-target" : "island island-main cmp-main"} aria-label="composer" hidden={!active}>
         <span className="drop-glow" aria-hidden="true" />
         <div className="cmp-toolbar">
-          <div className="cmp-tools" role="toolbar" aria-label="add to the design">
-            <Tool label="Text" icon={<TypeIcon size={16} />} onClick={addText} />
-            <Tool label="Icon" icon={<StickerIcon size={16} />} onClick={() => openIcons(null)} />
-            <Tool label="Emoji" icon={<SmileIcon size={16} />} width={320} popover={(close) => <EmojiPicker onPick={(c) => (addEmoji(c), close())} />} />
-            <Tool label="Shape" icon={<ShapesIcon size={16} />} popover={(close) => <ShapeGrid onPick={(s) => (addShape(s), close())} />} />
-            <Tool
-              label="Picture"
-              icon={<ImageIcon size={16} />}
-              width={300}
-              popover={(close) => (
-                <PictureMenu
-                  skins={skins}
-                  onFile={() => {
-                    close();
-                    void addPictureFile();
-                  }}
-                  onSkin={(s) => {
-                    close();
-                    void addSkinPicture(s);
-                  }}
-                />
-              )}
-            />
-            <Tool label="Pattern" icon={<WavesIcon size={16} />} popover={(close) => <PatternGrid onPick={(p) => (addPattern(p), close())} />} />
-            <Tool label="Colour" icon={<PaintBucketIcon size={16} />} onClick={addBackground} />
-          </div>
+          <Tools tools={tools} />
           <div className="cmp-history">
-            <button type="button" className="cmp-icon-btn" aria-label="Undo" title="Undo (⌘Z)" disabled={!canUndo(history)} onClick={() => dispatch({ type: "undo" })}>
+            <TipsButton />
+            <button
+              type="button"
+              className="cmp-icon-btn"
+              aria-label="Undo"
+              data-tip="Undo"
+              data-tip-kbd={MOD_KEYS.undo}
+              data-tip-side="bottom"
+              disabled={!canUndo(history)}
+              onClick={() => dispatch({ type: "undo" })}
+            >
               <UndoIcon size={16} />
             </button>
-            <button type="button" className="cmp-icon-btn" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={!canRedo(history)} onClick={() => dispatch({ type: "redo" })}>
+            <button
+              type="button"
+              className="cmp-icon-btn"
+              aria-label="Redo"
+              data-tip="Redo"
+              data-tip-kbd={MOD_KEYS.redo}
+              data-tip-side="bottom"
+              disabled={!canRedo(history)}
+              onClick={() => dispatch({ type: "redo" })}
+            >
               <RedoIcon size={16} />
             </button>
-            <button type="button" className="cmp-tool is-quiet" title="Start a new design: empty, or from a template" onClick={() => setStarting(true)}>
+            <button type="button" className="cmp-tool is-quiet" data-tip="Start a new design: empty, or from a template" data-tip-side="bottom" onClick={() => setStarting(true)}>
               <LayoutTemplateIcon size={16} />
               <span className="cmp-tool-label">New</span>
             </button>
@@ -892,13 +1077,17 @@ export function Composer({
           <button
             type="button"
             role="switch"
-            aria-checked={view.skeleton}
+            aria-checked={doc.shape === "folder"}
             aria-label="folder skeleton"
             className="cmp-skeleton"
-            title={doc.shape === "folder" ? "See the design on the folder, or flat with the folder's edges" : "Show a folder behind the icon, for size"}
-            onClick={() => setView((v) => ({ ...v, skeleton: !v.skeleton }))}
+            data-tip={
+              doc.shape === "folder"
+                ? "On: your design is cut to FolderSkin's folder, with its tab, paper and edges. Off: it's the whole icon, any shape you like."
+                : "Off: your design is the whole icon, any shape you like. On: it's cut to FolderSkin's folder, with its tab, paper and edges."
+            }
+            onClick={() => commit({ ...latestDoc.current, shape: doc.shape === "folder" ? "free" : "folder" })}
           >
-            <span className={view.skeleton ? "switch is-on" : "switch"} aria-hidden="true">
+            <span className={doc.shape === "folder" ? "switch is-on" : "switch"} aria-hidden="true">
               <span className="knob" />
             </span>
             Folder skeleton
@@ -911,13 +1100,13 @@ export function Composer({
                 role="radio"
                 aria-checked={view.backdrop === b.id}
                 aria-label={b.label}
-                title={b.label}
+                data-tip={b.label}
                 className={view.backdrop === b.id ? `cmp-backdrop is-${b.id} is-on` : `cmp-backdrop is-${b.id}`}
                 onClick={() => setView((v) => ({ ...v, backdrop: b.id }))}
               />
             ))}
           </div>
-          <div className="cmp-sizes" aria-label="the icon at its real sizes" title="How it looks in Finder at 64, 32 and 16 points">
+          <div className="cmp-sizes" aria-label="the icon at its real sizes" data-tip={`How it looks in ${fileBrowserName()} at 64, 32 and 16 points`}>
             {previews.map((src, i) => {
               const pt = PREVIEW_SIZES[i] / 2;
               return <img key={i} src={src} alt="" width={pt} height={pt} draggable={false} className="cmp-size" />;
@@ -946,10 +1135,7 @@ export function Composer({
             <Segmented<"layers" | "icons">
               label="side panel"
               value={side}
-              onChange={(v) => {
-                setSide(v);
-                if (v === "layers") setReplaceId(null);
-              }}
+              onChange={setSide}
               options={[
                 { value: "layers", label: `Layers · ${doc.layers.length}` },
                 { value: "icons", label: "Icons" },
@@ -965,15 +1151,10 @@ export function Composer({
               template={template?.images ?? null}
               assets={assets}
               version={version}
-              replacing={(() => {
-                const r = replaceId ? findLayer(doc, replaceId) : null;
-                return r?.kind === "icon" ? r : null;
-              })()}
+              target={iconTarget}
+              look={iconTarget ? iconTarget.look : iconLook}
+              onLook={chooseLook}
               onPick={pickIcon}
-              onCancelReplace={() => {
-                setReplaceId(null);
-                setSide("layers");
-              }}
               onError={(message) => toast(message, { tone: "danger" })}
             />
           </div>
@@ -983,14 +1164,6 @@ export function Composer({
             <Panel
               title="Layers"
               badge={<span className="count">{doc.layers.length}</span>}
-              actions={
-                doc.layers.length > 0 ? (
-                  <button type="button" className="cmp-panel-action is-danger" title="Delete every layer" onClick={removeAll}>
-                    <DeleteIcon size={14} />
-                    Delete all
-                  </button>
-                ) : undefined
-              }
               open={panels.layers}
               onToggle={() => setPanels((p) => ({ ...p, layers: !p.layers }))}
               className={bothOpen ? "is-layers is-sized" : "is-layers"}
@@ -1017,7 +1190,7 @@ export function Composer({
               />
             )}
             <Panel
-              title={selected ? layerLabel(selected, index) : "Design"}
+              title="Attributes"
               actions={
                 selected ? (
                   <>
@@ -1043,10 +1216,8 @@ export function Composer({
             >
               <div className="cmp-side-scroll" key={selectedId ?? "design"}>
                 <ComposerInspector
-                  doc={doc}
                   layer={selected}
                   onPatch={patch}
-                  onShape={(shape) => commit({ ...doc, shape })}
                   parts={parts}
                   used={used}
                   textRef={textRef}
@@ -1060,7 +1231,7 @@ export function Composer({
           </>
         )}
         <div className="cmp-save">
-          <button type="button" className={folder ? "cmp-target" : "cmp-target is-empty"} onClick={onChooseFolder} disabled={busy} title="Choose the folder to apply it to">
+          <button type="button" className={folder ? "cmp-target" : "cmp-target is-empty"} onClick={onChooseFolder} disabled={busy} data-tip={folder ? "Choose another folder to apply it to" : "Choose the folder to apply it to"}>
             {folder && folderIcon ? <img src={folderIcon} alt="" draggable={false} /> : <FolderIcon size={18} />}
             <span className="cmp-target-text">
               <span className="cmp-target-label">{folder ? "Apply to" : "No folder chosen"}</span>

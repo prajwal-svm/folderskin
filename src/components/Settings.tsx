@@ -10,6 +10,7 @@ import { GithubAvatar } from "./GithubAvatar";
 import { GithubConnect } from "./GithubConnect";
 import { Modal } from "./Modal";
 import { ProviderKeys } from "./ProviderKeys";
+import { Select } from "./Select";
 import { UpdateButton } from "./UpdateDialog";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { DownloadIcon } from "./icons/download";
@@ -150,7 +151,7 @@ function General({
           </span>
           <div className="storage-text">
             <p className="storage-count">{savedCount === 1 ? "1 skin" : `${savedCount} skins`}</p>
-            <p className="storage-path" title={folder ?? undefined}>
+            <p className="storage-path" data-tip={folder ?? undefined} data-tip-overflow>
               {folder ? prettyPath(folder) : folderError ? "Kept until you quit" : ""}
             </p>
           </div>
@@ -300,16 +301,16 @@ function Sharing() {
           )}
         </div>
       </div>
-      <label className="field">
+      <div className="field">
         <span className="field-label">Licence for what you share</span>
-        <select className="input" value={prefs.license} onChange={(e) => update({ ...prefs, license: e.target.value })}>
-          {LICENSES.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.label}: {l.note}
-            </option>
-          ))}
-        </select>
-      </label>
+        <Select
+          label="licence for what you share"
+          className="is-field"
+          value={prefs.license}
+          onChange={(license) => update({ ...prefs, license })}
+          options={LICENSES.map((l) => ({ value: l.id, label: `${l.label}: ${l.note}` }))}
+        />
+      </div>
       <button type="button" className="link-btn settings-link" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
         How sharing works <ExternalLinkIcon size={12} />
       </button>

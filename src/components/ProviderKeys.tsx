@@ -5,6 +5,7 @@ import { isTauri } from "../lib/devMock";
 import type { ToastTone } from "../hooks/useToasts";
 import { OkBadge } from "./OkBadge";
 import { ProviderLogo } from "./ProviderLogo";
+import { Select } from "./Select";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
 
@@ -101,21 +102,21 @@ export function ProviderKeys({
       </div>
 
       {onModel && (
-      <label className="field">
-        <span className="field-label">Model</span>
-        <select className="input" value={model?.id ?? ""} onChange={(e) => onModel(e.target.value)}>
-          {provider.models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label} ({m.price_hint})
-            </option>
-          ))}
-        </select>
-        <span className="field-note">
-          {model?.native_alpha
-            ? "Returns a transparent background by itself."
-            : "No transparency, so FolderSkin paints on magenta and cuts it out."}
-        </span>
-      </label>
+        <div className="field">
+          <span className="field-label">Model</span>
+          <Select
+            label="model"
+            className="is-field"
+            value={model?.id ?? ""}
+            onChange={onModel}
+            options={provider.models.map((m) => ({ value: m.id, label: `${m.label} (${m.price_hint})` }))}
+          />
+          <span className="field-note">
+            {model?.native_alpha
+              ? "Returns a transparent background by itself."
+              : "No transparency, so FolderSkin paints on magenta and cuts it out."}
+          </span>
+        </div>
       )}
 
       <div className="field">

@@ -176,7 +176,6 @@ export function ComposerLayers({
                 maxLength={40}
                 aria-label="layer name"
                 aria-description={RENAME_HINT}
-                title={RENAME_HINT}
                 onFocus={(e) => e.currentTarget.select()}
                 onBlur={(e) => {
                   // Only a real change is one: leaving the field as it was adds no undo step, and
@@ -196,7 +195,7 @@ export function ComposerLayers({
                 }}
               />
             ) : (
-              <span className="cmp-layer-name" title={content ? `${label}: "${content}" on the folder` : label}>
+              <span className="cmp-layer-name">
                 <span className="cmp-layer-label">{label}</span>
                 {content && <span className="cmp-layer-content">“{content}”</span>}
               </span>
@@ -205,7 +204,7 @@ export function ComposerLayers({
               type="button"
               className={layer.locked ? "cmp-layer-btn is-set" : "cmp-layer-btn"}
               aria-label={layer.locked ? `unlock ${label}` : `lock ${label}`}
-              title={layer.locked ? "Unlock" : "Lock, so it can't be moved on the canvas"}
+              data-tip={layer.locked ? "Unlock" : "Lock, so it can't be moved on the canvas"}
               onClick={() => onToggle(layer.id, "locked")}
             >
               {layer.locked ? <LockIcon size={13} /> : <LockOpenIcon size={13} />}
@@ -214,12 +213,12 @@ export function ComposerLayers({
               type="button"
               className={layer.hidden ? "cmp-layer-btn is-set" : "cmp-layer-btn"}
               aria-label={layer.hidden ? `show ${label}` : `hide ${label}`}
-              title={layer.hidden ? "Show" : "Hide"}
+              data-tip={layer.hidden ? "Show" : "Hide"}
               onClick={() => onToggle(layer.id, "hidden")}
             >
               {layer.hidden ? <EyeOffIcon size={14} /> : <EyeOpenIcon size={14} />}
             </button>
-            <button type="button" className="cmp-layer-btn is-danger" aria-label={`delete ${label}`} title="Delete" onClick={() => onDelete(layer.id)}>
+            <button type="button" className="cmp-layer-btn is-danger" aria-label={`delete ${label}`} data-tip="Delete layer" onClick={() => onDelete(layer.id)}>
               <TrashIcon size={13} />
             </button>
           </div>
