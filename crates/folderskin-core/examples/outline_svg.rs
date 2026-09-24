@@ -1,13 +1,14 @@
 //! Prints the folder template's shapes as SVG path data on the 1024 canvas.
 //!
 //! The app's empty drop target (`src/components/FolderGhost.tsx`) is drawn from this output, so
-//! it keeps the exact silhouette the compositor renders. Rerun after changing `geometry.rs`:
+//! it keeps the exact silhouette the compositor renders, FolderSkin's own folder and Windows'.
+//! Rerun after changing `geometry.rs` or `geometry_windows.rs`:
 //!
 //! ```sh
 //! cargo run -q -p folderskin-core --example outline_svg
 //! ```
 
-use folderskin_core::geometry as g;
+use folderskin_core::{geometry as g, geometry_windows as w};
 use tiny_skia::{Path, PathSegment};
 
 fn svg(path: &Path) -> String {
@@ -47,4 +48,6 @@ fn main() {
     println!("back:  {}", svg(&g::back_panel_path(1.0)));
     println!("paper: {}", svg(&g::paper_path(1.0)));
     println!("front: {}", svg(&g::front_panel_path(1.0)));
+    println!("windows back:  {}", svg(&w::back_panel_path(1.0)));
+    println!("windows front: {}", svg(&w::front_panel_path(1.0)));
 }

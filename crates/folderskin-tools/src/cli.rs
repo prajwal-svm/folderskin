@@ -55,7 +55,7 @@ pub enum Command {
         mask: Option<PathBuf>,
     },
     /// Write the layers the composer draws a design between: back.png, front.png, middle.png,
-    /// top.png and outline.png
+    /// top.png and outline.png, and the same for Windows' folder in windows/
     ComposerLayers {
         /// Folder to write them into; made if it isn't there
         #[arg(long)]

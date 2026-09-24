@@ -18,6 +18,9 @@ export type Parts = {
   tab: [number, number, number, number];
 };
 
+/** Which folder a design is drawn on: FolderSkin's own, as Finder shows it, or Windows'. */
+export type FolderStyle = "mac" | "windows";
+
 /** The same numbers as `crates/folderskin-core/src/geometry.rs`, for tests and the browser preview. */
 export const FALLBACK_PARTS: Parts = {
   canvas: 1024,
@@ -28,5 +31,18 @@ export const FALLBACK_PARTS: Parts = {
   paper: [74.5, 131.3, 949.5, 973.5],
   tab: [61, 36.5, 441.7, 97],
 };
+
+/** Windows' folder, the same numbers as `crates/folderskin-core/src/geometry_windows.rs`. It has no paper: `paper` is where its back panel's body shows. */
+export const WINDOWS_PARTS: Parts = {
+  canvas: 1024,
+  folder: [64, 136, 960, 840],
+  front: [64, 248, 960, 840],
+  front_radius: 36,
+  back: [64, 136, 960, 840],
+  paper: [64, 232, 960, 840],
+  tab: [64, 136, 464, 232],
+};
+
+export const fallbackParts = (style: FolderStyle): Parts => (style === "windows" ? WINDOWS_PARTS : FALLBACK_PARTS);
 
 export const centreOf = ([x0, y0, x1, y1]: [number, number, number, number]) => ({ x: (x0 + x1) / 2, y: (y0 + y1) / 2 });

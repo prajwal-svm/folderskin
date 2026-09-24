@@ -2,7 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
 import { frame } from "../composer/body";
-import type { Parts } from "../composer/parts";
+import type { FolderStyle, Parts } from "../composer/parts";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import type { AiEvent } from "../state/chats";
 
@@ -199,6 +199,7 @@ export type ComposerSaveHeader = {
   name: string;
   tags: string[];
   shape: "folder" | "free";
+  style: FolderStyle;
   design: unknown;
   replaces: string | null;
 };
@@ -317,12 +318,12 @@ const tauriApi = {
 
   // ---- the composer ----
   /** The folder template's layers, rendered once by the Rust compositor. */
-  composerTemplate: () => invoke<ComposerTemplate>("composer_template"),
+  composerTemplate: (style: FolderStyle) => invoke<ComposerTemplate>("composer_template", { style }),
   /** Saves a design (its full-size picture and its document) as a skin, or changes one saved before. */
   composerSave: (header: ComposerSaveHeader, png: Uint8Array) => invoke<ComposerSaved>("composer_save", frame(header, png)),
   /** The design as the icon at each of `sizes`, as data URLs, drawn by the compositor. */
-  composerPreview: (shape: "folder" | "free", sizes: number[], png: Uint8Array) =>
-    invoke<string[]>("composer_preview", frame({ shape, sizes }, png)),
+  composerPreview: (shape: "folder" | "free", style: FolderStyle, sizes: number[], png: Uint8Array) =>
+    invoke<string[]>("composer_preview", frame({ shape, style, sizes }, png)),
   /** A picture file, read (and shrunk) for a picture layer. */
   composerImage: (path: string) => invoke<ComposerImage>("composer_image", { path }),
   /** A saved skin's own picture, for a picture layer or a remix. */

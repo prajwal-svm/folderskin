@@ -22,11 +22,13 @@ import {
   moveLayer,
   parseDoc,
   patchLayer,
+  refit,
   removeLayer,
   sendBackward,
   sendToBack,
   solid,
   suggestName,
+  WINDOWS_PARTS,
   type Doc,
 } from "./doc";
 
@@ -130,7 +132,13 @@ describe("reading a design back", () => {
     expect(parseDoc(null)).toBeNull();
     expect(parseDoc({ layers: "x" })).toBeNull();
     expect(parseDoc({ version: 99, layers: [] })).toBeNull();
-    expect(parseDoc({ layers: [] })).toEqual({ version: 1, shape: "folder", layers: [] });
+    expect(parseDoc({ layers: [] })).toEqual({ version: 1, shape: "folder", style: "mac", layers: [] });
+  });
+
+  it("keeps which folder a design is on, a Mac's unless it says Windows'", () => {
+    expect(parseDoc({ style: "windows", layers: [] })?.style).toBe("windows");
+    expect(parseDoc({ style: "linux", layers: [] })?.style).toBe("mac");
+    expect(parseDoc(JSON.parse(JSON.stringify(emptyDoc("folder", "windows"))))).toEqual(emptyDoc("folder", "windows"));
   });
 
   it("drops what it can't draw and keeps numbers sensible", () => {
@@ -154,5 +162,67 @@ describe("reading a design back", () => {
     expect(a).toMatchObject({ shape: "rect" });
     expect(b).toMatchObject({ shape: "star", points: 40 });
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe("moving a design between the Mac's folder and Windows'", () => {
+  const onMac = () => {
+    const tab = FALLBACK_PARTS.tab;
+    const front = FALLBACK_PARTS.front;
+    let d = emptyDoc("folder", "mac");
+    d = addLayer(d, makeFill(solid("#ff0000")));
+    d = addLayer(d, makeImage("data:image/png;base64,AAAA", 1600, 1000, imageBox(1600, 1000, FALLBACK_PARTS, true)));
+    d = addLayer(d, { ...makeText("IDEAS", (tab[0] + tab[2]) / 2, (tab[1] + tab[3]) / 2, "#ffffff"), size: 44 });
+    d = addLayer(d, { ...makeEmoji("💡", (front[0] + front[2]) / 2, (front[1] + front[3]) / 2), size: 380 });
+    return d;
+  };
+
+  it("keeps what's on the tab on the tab and what's in the middle of the front there", () => {
+    const d = refit(onMac(), FALLBACK_PARTS, WINDOWS_PARTS, "windows");
+    expect(d.style).toBe("windows");
+    const [, , text, emoji] = d.layers;
+    const tab = WINDOWS_PARTS.tab;
+    const front = WINDOWS_PARTS.front;
+    // Across the folder in step with its width, so near the tab's middle; down it in step with the tab.
+    expect(text).toMatchObject({ y: (tab[1] + tab[3]) / 2 });
+    expect(Math.abs(text.kind === "text" ? text.x - (tab[0] + tab[2]) / 2 : 99)).toBeLessThan(20);
+    expect(emoji).toMatchObject({ x: (front[0] + front[2]) / 2, y: (front[1] + front[3]) / 2 });
+    // Windows' folder is smaller, so they are too.
+    expect(text.kind === "text" && text.size).toBeLessThan(44);
+    expect(emoji.kind === "emoji" && emoji.size).toBeLessThan(380);
+  });
+
+  it("leaves what covers the canvas alone, and a picture that covered the folder still covers it", () => {
+    const mac = onMac();
+    const d = refit(mac, FALLBACK_PARTS, WINDOWS_PARTS, "windows");
+    expect(d.layers[0]).toBe(mac.layers[0]);
+    const pic = d.layers[1];
+    if (pic.kind !== "image") throw new Error("not the picture");
+    const [x0, y0, x1, y1] = WINDOWS_PARTS.folder;
+    expect(pic.x - pic.w / 2).toBeLessThanOrEqual(x0);
+    expect(pic.x + pic.w / 2).toBeGreaterThanOrEqual(x1);
+    expect(pic.y - pic.h / 2).toBeLessThanOrEqual(y0);
+    expect(pic.y + pic.h / 2).toBeGreaterThanOrEqual(y1);
+    const back = refit(d, WINDOWS_PARTS, FALLBACK_PARTS, "mac").layers[1];
+    if (back.kind !== "image") throw new Error("not the picture");
+    const [mx0, my0, mx1, my1] = FALLBACK_PARTS.folder;
+    expect(back.x - back.w / 2).toBeLessThanOrEqual(mx0 + 0.5);
+    expect(back.x + back.w / 2).toBeGreaterThanOrEqual(mx1 - 0.5);
+    expect(back.y - back.h / 2).toBeLessThanOrEqual(my0 + 0.5);
+    expect(back.y + back.h / 2).toBeGreaterThanOrEqual(my1 - 0.5);
+  });
+
+  it("comes back to about where it was", () => {
+    const d = onMac();
+    const there = refit(d, FALLBACK_PARTS, WINDOWS_PARTS, "windows");
+    const back = refit(there, WINDOWS_PARTS, FALLBACK_PARTS, "mac");
+    for (const i of [2, 3]) {
+      const a = d.layers[i];
+      const b = back.layers[i];
+      if ((a.kind !== "text" && a.kind !== "emoji") || a.kind !== b.kind) throw new Error("not the same layer");
+      expect(Math.abs(b.x - a.x)).toBeLessThan(0.5);
+      expect(Math.abs(b.y - a.y)).toBeLessThan(0.5);
+      expect(Math.abs(b.size - a.size)).toBeLessThan(0.5);
+    }
   });
 });

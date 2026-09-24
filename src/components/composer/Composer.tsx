@@ -22,7 +22,7 @@ import {
   coveringTop,
   duplicateLayer,
   emptyDoc,
-  FALLBACK_PARTS,
+  fallbackParts,
   findLayer,
   imageBox,
   indexOf,
@@ -38,12 +38,14 @@ import {
   moveLayer,
   parseDoc,
   patchLayer,
+  refit,
   removeLayer,
   sendBackward,
   sendToBack,
   solid,
   suggestName,
   type Doc,
+  type FolderStyle,
   type IconDrawing,
   type IconLayer,
   type IconLook,
@@ -443,26 +445,34 @@ export function Composer({
     return () => fonts.removeEventListener?.("loadingdone", changed);
   }, [assets]);
 
-  // The folder's layers, from Rust.
-  const [template, setTemplate] = useState<{ images: TemplateImages; parts: Parts } | null>(null);
+  const draft = useMemo(loadDraft, []);
+  const [history, dispatch] = useReducer(historyReducer, undefined, () => {
+    // A first design is on the folder this computer shows.
+    const style: FolderStyle = localOs() === "windows" ? "windows" : "mac";
+    return startHistory(draft?.doc ?? { ...TEMPLATES[0].make(fallbackParts(style)), style });
+  });
+  const doc = history.present;
+
+  // Each folder's layers, from Rust, the first time a design is on that folder.
+  const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts }>>>({});
+  const asked = useRef(new Set<FolderStyle>());
   useEffect(() => {
-    let live = true;
+    const style = doc.style;
+    if (asked.current.has(style)) return;
+    asked.current.add(style);
     api
-      .composerTemplate()
+      .composerTemplate(style)
       .then(async (t) => {
         const images = await loadTemplate(t);
-        if (live) setTemplate({ images, parts: t.parts });
+        setTemplates((all) => ({ ...all, [style]: { images, parts: t.parts } }));
       })
-      .catch((e) => toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" }));
-    return () => {
-      live = false;
-    };
-  }, [toast]);
-  const parts = template?.parts ?? FALLBACK_PARTS;
-
-  const draft = useMemo(loadDraft, []);
-  const [history, dispatch] = useReducer(historyReducer, undefined, () => startHistory(draft?.doc ?? TEMPLATES[0].make(FALLBACK_PARTS)));
-  const doc = history.present;
+      .catch((e) => {
+        asked.current.delete(style);
+        toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
+      });
+  }, [doc.style, toast]);
+  const template = templates[doc.style] ?? null;
+  const parts = template?.parts ?? fallbackParts(doc.style);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
   const dirty = doc !== baseline;
@@ -586,8 +596,10 @@ export function Composer({
    */
   const start = useCallback(
     async (choice: Start) => {
+      // A new design stays on the folder the last one was on.
+      const style = latestDoc.current.style;
       if (choice.kind === "empty") {
-        reset(emptyDoc(choice.shape), { editing: null, name: "", named: false });
+        reset(emptyDoc(choice.shape, style), { editing: null, name: "", named: false });
         forgetDraft();
         return;
       }
@@ -598,7 +610,7 @@ export function Composer({
         if (!img) return;
         picture = asPicture(img);
       }
-      reset(choice.template.make(parts, picture), { editing: null, name: "", named: false });
+      reset({ ...choice.template.make(parts, picture), style }, { editing: null, name: "", named: false });
       forgetDraft();
     },
     [choosePicture, forgetDraft, parts, reset],
@@ -621,9 +633,9 @@ export function Composer({
         if (skin.kind === "folder") {
           // A finished folder keeps its own shape: it becomes a free icon with the picture fitted in, as the app applies it.
           const k = Math.min(1024 / img.width, 1024 / img.height);
-          next = { ...emptyDoc("free"), layers: [makeImage(img.url, img.width, img.height, { x: 512, y: 512, w: img.width * k, h: img.height * k })] };
+          next = { ...emptyDoc("free", latestDoc.current.style), layers: [makeImage(img.url, img.width, img.height, { x: 512, y: 512, w: img.width * k, h: img.height * k })] };
         } else {
-          next = { ...emptyDoc("folder"), layers: [makeImage(img.url, img.width, img.height, imageBox(img.width, img.height, parts, true))] };
+          next = { ...emptyDoc("folder", latestDoc.current.style), layers: [makeImage(img.url, img.width, img.height, imageBox(img.width, img.height, parts, true))] };
         }
         reset(next, { editing: null, name: `${skin.name} remix`, named: true });
       } catch (e) {
@@ -930,7 +942,7 @@ export function Composer({
         const c = makeCanvas(512, 512);
         renderDoc(ctx2d(c), doc, 512, assets);
         const png = await canvasPng(c);
-        const urls = await api.composerPreview(doc.shape, PREVIEW_SIZES, png);
+        const urls = await api.composerPreview(doc.shape, doc.style, PREVIEW_SIZES, png);
         if (live) setPreviews(urls);
       } catch {
         // The previews are extra; the stage still shows the design.
@@ -967,7 +979,7 @@ export function Composer({
         renderDoc(ctx2d(c), d, SAVE_PX, assets);
         const png = await canvasPng(c);
         const replaces = mode === "copy" ? null : (editing?.skinId ?? null);
-        const res = await api.composerSave({ name: finalName, tags: mode === "copy" ? [] : (editing?.tags ?? []), shape: d.shape, design: d, replaces }, png);
+        const res = await api.composerSave({ name: finalName, tags: mode === "copy" ? [] : (editing?.tags ?? []), shape: d.shape, style: d.style, design: d, replaces }, png);
         onSaved(res.skin, res.replaced);
         setEditing({ skinId: res.skin.id, tags: res.skin.tags });
         setName(res.skin.name);
@@ -994,8 +1006,18 @@ export function Composer({
   );
 
   // ---- views ----
-  // The folder skeleton is the design's shape: on, it's drawn on FolderSkin's folder; off, it's a
-  // free icon, the whole picture.
+  /** The last move between the folders, so switching straight back puts the design back exactly. */
+  const lastRestyle = useRef<{ from: Doc; to: Doc } | null>(null);
+  const restyle = (style: FolderStyle) => {
+    const d = latestDoc.current;
+    if (d.style === style) return;
+    const back = lastRestyle.current;
+    const moved = back && back.to === d && back.from.style === style ? back.from : refit(d, fallbackParts(d.style), fallbackParts(style), style);
+    lastRestyle.current = { from: d, to: moved };
+    commit(moved);
+  };
+  // The folder skeleton is the design's shape: on, it's drawn on the folder, a Mac's or Windows';
+  // off, it's a free icon, the whole picture.
   const viewOf: View = { shape: doc.shape, skeleton: doc.shape === "folder", guide: "rgba(58,134,255,0.95)" };
   const tools: ToolDef[] = [
     { label: "Text", hint: "Add words", icon: <TypeIcon size={16} />, onClick: addText },
@@ -1121,8 +1143,8 @@ export function Composer({
             className="cmp-skeleton"
             data-tip={
               doc.shape === "folder"
-                ? "On: your design is cut to FolderSkin's folder, with its tab, paper and edges. Off: it's the whole icon, any shape you like."
-                : "Off: your design is the whole icon, any shape you like. On: it's cut to FolderSkin's folder, with its tab, paper and edges."
+                ? "On: your design is cut to the folder, with its tab and edges. Off: it's the whole icon, any shape you like."
+                : "Off: your design is the whole icon, any shape you like. On: it's cut to the folder, with its tab and edges."
             }
             onClick={() => commit({ ...latestDoc.current, shape: doc.shape === "folder" ? "free" : "folder" })}
           >
@@ -1131,6 +1153,18 @@ export function Composer({
             </span>
             Folder skeleton
           </button>
+          {doc.shape === "folder" && (
+            <Segmented
+              small
+              label="which folder"
+              value={doc.style}
+              onChange={restyle}
+              options={[
+                { value: "mac", label: "Mac", title: "The folder a Mac shows" },
+                { value: "windows", label: "Windows", title: "The folder Windows shows" },
+              ]}
+            />
+          )}
           <div className="cmp-backdrops" role="radiogroup" aria-label="what's behind the folder">
             {BACKDROPS.map((b) => (
               <button

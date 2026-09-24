@@ -17,7 +17,7 @@
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
-import { FALLBACK_PARTS } from "../composer/parts";
+import { fallbackParts, type FolderStyle } from "../composer/parts";
 import type {
   AiCatalogue,
   AiGenerateRequest,
@@ -312,15 +312,15 @@ export async function mockFindUpdate(): Promise<AvailableUpdate | null> {
  * The composer's folder layers in the browser preview: the same pictures the Rust side makes, as
  * `folderskin-tools composer-layers` wrote them into docs/images/composer (served in dev only).
  */
-const MOCK_TEMPLATE_URLS = {
-  back: "/docs/images/composer/back.png",
-  front: "/docs/images/composer/front.png",
-  middle: "/docs/images/composer/middle.png",
-  top: "/docs/images/composer/top.png",
-  outline: "/docs/images/composer/outline.png",
+const mockTemplateUrls = (style: FolderStyle) => {
+  const dir = style === "windows" ? "/docs/images/composer/windows" : "/docs/images/composer";
+  return { back: `${dir}/back.png`, front: `${dir}/front.png`, middle: `${dir}/middle.png`, top: `${dir}/top.png`, outline: `${dir}/outline.png` };
 };
-let mockTemplate: Promise<TemplateImages> | null = null;
-const templateImages = () => (mockTemplate ??= loadTemplate(MOCK_TEMPLATE_URLS));
+const mockTemplates = new Map<FolderStyle, Promise<TemplateImages>>();
+const templateImages = (style: FolderStyle) => {
+  if (!mockTemplates.has(style)) mockTemplates.set(style, loadTemplate(mockTemplateUrls(style)));
+  return mockTemplates.get(style)!;
+};
 
 /** Designs "saved" in the browser preview, by skin id, so Edit design can be tried. */
 const mockDesigns = new Map<string, unknown>();
@@ -341,14 +341,14 @@ function loadImg(src: string): Promise<HTMLImageElement> {
 }
 
 /** What the Rust side would render for a design: on the folder, or as it is for a free icon. */
-async function mockIcon(png: Uint8Array, shape: "folder" | "free", size: number): Promise<string> {
+async function mockIcon(png: Uint8Array, shape: "folder" | "free", style: FolderStyle, size: number): Promise<string> {
   const img = await loadImg(`data:image/png;base64,${base64(png)}`);
   const c = document.createElement("canvas");
   c.width = size;
   c.height = size;
   const ctx = c.getContext("2d")!;
   ctx.imageSmoothingQuality = "high";
-  if (shape === "folder") drawOnFolder(ctx, img, await templateImages(), size, document.createElement("canvas"));
+  if (shape === "folder") drawOnFolder(ctx, img, await templateImages(style), size, document.createElement("canvas"));
   else ctx.drawImage(img, 0, 0, size, size);
   return c.toDataURL("image/png");
 }
@@ -638,7 +638,7 @@ export const mockApi = {
     mockKeys.delete(provider);
   },
   aiTestKey: async () => {},
-  composerTemplate: async (): Promise<ComposerTemplate> => ({ size: 1024, ...MOCK_TEMPLATE_URLS, parts: FALLBACK_PARTS }),
+  composerTemplate: async (style: FolderStyle): Promise<ComposerTemplate> => ({ size: 1024, ...mockTemplateUrls(style), parts: fallbackParts(style) }),
   composerSave: async (header: ComposerSaveHeader, png: Uint8Array): Promise<ComposerSaved> => {
     await sleep(500);
     const old = header.replaces ? library.find((s) => s.id === header.replaces) : undefined;
@@ -646,7 +646,7 @@ export const mockApi = {
       id: `user:c${Date.now().toString(16)}`,
       name: cleanName(header.name) || "My design",
       collection: "yours",
-      thumbnail: await mockIcon(png, header.shape, 512),
+      thumbnail: await mockIcon(png, header.shape, header.style, 512),
       custom: true,
       kind: "folder",
       source: "composer",
@@ -660,8 +660,8 @@ export const mockApi = {
     } else keep([skin]);
     return { skin, replaced: old ? old.id : null };
   },
-  composerPreview: async (shape: "folder" | "free", sizes: number[], png: Uint8Array): Promise<string[]> =>
-    Promise.all(sizes.map((size) => mockIcon(png, shape, size))),
+  composerPreview: async (shape: "folder" | "free", style: FolderStyle, sizes: number[], png: Uint8Array): Promise<string[]> =>
+    Promise.all(sizes.map((size) => mockIcon(png, shape, style, size))),
   composerImage: async (_path: string): Promise<ComposerImage> => {
     await sleep(250);
     return mockPhoto();

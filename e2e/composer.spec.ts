@@ -259,6 +259,34 @@ test.describe("the canvas and its panels", () => {
     await expect(skeleton).toHaveAttribute("aria-checked", "true");
   });
 
+  test("switches between a Mac's folder and Windows', and straight back puts the design back exactly", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Tab label");
+    const which = composer(page).getByRole("radiogroup", { name: "which folder" });
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    const picture = () => canvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
+    const at = async () => [await side(page).getByLabel("X", { exact: true }).inputValue(), await side(page).getByLabel("Y", { exact: true }).inputValue()];
+    await which.getByRole("radio", { name: "Mac" }).click();
+    await side(page).locator(".cmp-layer", { hasText: "IDEAS" }).click();
+    const onMac = await at();
+    await page.waitForTimeout(400);
+    const macPicture = await picture();
+
+    await which.getByRole("radio", { name: "Windows" }).click();
+    await expect(which.getByRole("radio", { name: "Windows" })).toHaveAttribute("aria-checked", "true");
+    await expect.poll(picture).not.toBe(macPicture);
+    // The tab is somewhere else on Windows' folder, and the words went with it.
+    expect(await at()).not.toEqual(onMac);
+    await which.getByRole("radio", { name: "Mac" }).click();
+    expect(await at()).toEqual(onMac);
+
+    await page.keyboard.press("Control+z");
+    await expect(which.getByRole("radio", { name: "Windows" })).toHaveAttribute("aria-checked", "true");
+    // A free icon has no folder to choose.
+    await composer(page).getByRole("switch", { name: "folder skeleton" }).click();
+    await expect(which).toHaveCount(0);
+  });
+
   test("the second panel is Attributes, with tips behind the info button", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Label");

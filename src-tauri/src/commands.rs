@@ -21,6 +21,15 @@ use tauri::{AppHandle, Manager, State};
 /// Bump when the compositor's output changes so cached thumbnails, the default folder's and the
 /// saved skins' alike, are re-rendered.
 pub const THUMB_CACHE_VERSION: u32 = 2;
+
+/// What a cached thumbnail's name carries: [`THUMB_CACHE_VERSION`], and the folder it's drawn on
+/// when that isn't FolderSkin's own, so a Mac-shaped one cached earlier isn't shown on Windows.
+pub fn thumb_tag() -> String {
+    match compositor::Style::native() {
+        compositor::Style::Mac => format!("v{THUMB_CACHE_VERSION}"),
+        style => format!("v{THUMB_CACHE_VERSION}-{}", style.id()),
+    }
+}
 const THUMB_SIZE: u32 = 512;
 /// The id the webview can give the plain default folder, which is not a skin.
 const DEFAULT_ID: &str = "__default__";
@@ -180,7 +189,7 @@ pub fn data_url(png: &[u8]) -> String {
 fn default_thumb_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_cache_dir().ok()?.join("thumbs");
     std::fs::create_dir_all(&dir).ok()?;
-    Some(dir.join(format!("default.thumb-v{THUMB_CACHE_VERSION}.png")))
+    Some(dir.join(format!("default.thumb-{}.png", thumb_tag())))
 }
 
 /// The plain default folder's thumbnail as a data URL: kept in memory once drawn, and on disk
@@ -188,7 +197,12 @@ fn default_thumb_path(app: &AppHandle) -> Option<PathBuf> {
 fn default_thumbnail(app: &AppHandle, state: &AppState) -> String {
     state.default_thumbnail(|| {
         let png = cached_png(default_thumb_path(app).as_deref(), || {
-            compositor::render_preview_png(&compositor::default_folder_artwork(), THUMB_SIZE)
+            let style = compositor::Style::native();
+            compositor::render_preview_png_in(
+                &compositor::default_folder_artwork_in(style),
+                THUMB_SIZE,
+                style,
+            )
         });
         data_url(&png)
     })

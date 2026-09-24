@@ -10,11 +10,65 @@
 //! [`template_layers`] draws the same template in the layers a design sits between, so the
 //! composer's live preview is made of the same pixels too.
 
-use crate::{fit, geometry as g, raster};
+use crate::{fit, geometry as g, geometry_windows as w, raster};
 use tiny_skia::{
     BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Mask, Paint, Path, Pattern,
     Pixmap, Shader, SpreadMode, Stroke, Transform,
 };
+
+/// Which folder the template is: FolderSkin's own, the one Finder shows on a Mac, or the one
+/// Windows draws. The same skin goes on either; each has its own panels, rims and shading.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Style {
+    #[default]
+    Mac,
+    Windows,
+}
+
+impl Style {
+    /// The folder this computer's own file browser draws.
+    pub fn native() -> Style {
+        if cfg!(windows) {
+            Style::Windows
+        } else {
+            Style::Mac
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Style::Mac => "mac",
+            Style::Windows => "windows",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Style> {
+        match id {
+            "mac" => Some(Style::Mac),
+            "windows" => Some(Style::Windows),
+            _ => None,
+        }
+    }
+
+    /// Where artwork is cover-fitted to: the whole back panel, tab included, and the front.
+    fn fit_boxes(self) -> (g::Rect, g::Rect) {
+        match self {
+            Style::Mac => (g::BACK_BBOX, g::FRONT),
+            Style::Windows => (w::BACK_BBOX, w::FRONT),
+        }
+    }
+}
+
+/// The Windows folder's shading: its back panel a shade darker than its front (the tab and the
+/// strip above the front read as the folder's inside), a soft shadow where the front meets it, a
+/// bright line along the front's top edge and a darker lip along its bottom.
+const WIN_BACK_SHADE: u8 = 30;
+const WIN_SHADOW: [u8; 4] = [0, 0, 0, 30];
+const WIN_SHADOW_BAND: f32 = 20.0;
+const WIN_HIGHLIGHT: [u8; 4] = [255, 255, 255, 120];
+const WIN_HIGHLIGHT_BAND: f32 = 8.0;
+const WIN_LIP: [u8; 4] = [0, 0, 0, 44];
+const WIN_LIP_BAND: f32 = 10.0;
 
 /// Source artwork plus the focus point (0..1, 0..1) that cover-fit crops keep centred.
 pub struct Artwork {
@@ -142,20 +196,33 @@ struct Template {
     size: u32,
     /// Pixels per canvas unit.
     scale: f32,
+    style: Style,
     back: Path,
-    paper: Path,
+    /// The sheet between the panels; Windows' folder has none.
+    paper: Option<Path>,
     front: Path,
 }
 
 impl Template {
-    fn new(size: u32) -> Template {
+    fn new(size: u32, style: Style) -> Template {
         let scale = size as f32 / g::CANVAS;
-        Template {
-            size,
-            scale,
-            back: g::back_panel_path(scale),
-            paper: g::paper_path(scale),
-            front: g::front_panel_path(scale),
+        match style {
+            Style::Mac => Template {
+                size,
+                scale,
+                style,
+                back: g::back_panel_path(scale),
+                paper: Some(g::paper_path(scale)),
+                front: g::front_panel_path(scale),
+            },
+            Style::Windows => Template {
+                size,
+                scale,
+                style,
+                back: w::back_panel_path(scale),
+                paper: None,
+                front: w::front_panel_path(scale),
+            },
         }
     }
 
@@ -195,8 +262,35 @@ impl Template {
     }
 
     /// Everything between the two panels' fills: the rim light along the back panel's top edge,
-    /// then the paper sheet with the highlight on its top edge.
+    /// then the paper sheet with the highlight on its top edge. On Windows' folder, the shadow the
+    /// front casts on the back instead (the front's fill then covers its lower half).
     fn draw_middle(&self, pm: &mut Pixmap) {
+        if self.style == Style::Windows {
+            let mut shade = Paint {
+                anti_alias: true,
+                ..Paint::default()
+            };
+            shade.set_color_rgba8(0, 0, 0, WIN_BACK_SHADE);
+            pm.fill_path(
+                &self.back,
+                &shade,
+                FillRule::Winding,
+                Transform::identity(),
+                None,
+            );
+            rim(
+                pm,
+                &w::front_top_edge_path(self.scale),
+                &self.mask(&self.back),
+                WIN_SHADOW,
+                WIN_SHADOW_BAND,
+                self.scale,
+            );
+            return;
+        }
+        let Some(paper_path) = &self.paper else {
+            return;
+        };
         rim(
             pm,
             &g::back_top_edge_path(self.scale),
@@ -211,7 +305,7 @@ impl Template {
         };
         paper.set_color_rgba8(PAPER_FILL[0], PAPER_FILL[1], PAPER_FILL[2], PAPER_FILL[3]);
         pm.fill_path(
-            &self.paper,
+            paper_path,
             &paper,
             FillRule::Winding,
             Transform::identity(),
@@ -220,7 +314,7 @@ impl Template {
         rim(
             pm,
             &g::paper_top_edge_path(self.scale),
-            &self.mask(&self.paper),
+            &self.mask(paper_path),
             PAPER_HIGHLIGHT,
             PAPER_BAND,
             self.scale,
@@ -231,6 +325,25 @@ impl Template {
     /// shade along its bottom.
     fn draw_top(&self, pm: &mut Pixmap) {
         let front = self.mask(&self.front);
+        if self.style == Style::Windows {
+            rim(
+                pm,
+                &w::front_top_edge_path(self.scale),
+                &front,
+                WIN_HIGHLIGHT,
+                WIN_HIGHLIGHT_BAND,
+                self.scale,
+            );
+            rim(
+                pm,
+                &w::front_bottom_path(self.scale),
+                &front,
+                WIN_LIP,
+                WIN_LIP_BAND,
+                self.scale,
+            );
+            return;
+        }
         rim(
             pm,
             &g::front_top_sides_path(self.scale),
@@ -262,7 +375,7 @@ impl Template {
             line_join: LineJoin::Round,
             ..Stroke::default()
         };
-        for path in [&self.back, &self.paper] {
+        for path in std::iter::once(&self.back).chain(self.paper.as_ref()) {
             pm.stroke_path(path, &white, &stroke, Transform::identity(), None);
         }
         // The front panel hides whatever is behind it, edges included.
@@ -282,16 +395,22 @@ impl Template {
     }
 }
 
-/// Renders the template at [`RENDER_SIZE`], premultiplied.
+/// Renders FolderSkin's own folder at [`RENDER_SIZE`], premultiplied.
 pub fn render_master(art: &Artwork) -> raster::Premul {
-    let t = Template::new(RENDER_SIZE);
+    render_master_in(art, Style::Mac)
+}
+
+/// Renders the folder of `style` at [`RENDER_SIZE`], premultiplied.
+pub fn render_master_in(art: &Artwork, style: Style) -> raster::Premul {
+    let t = Template::new(RENDER_SIZE, style);
     let art_pm = pattern_pixmap(&art.rgba);
+    let (back, front) = style.fit_boxes();
     // Back panel: the skin cover-fitted to the whole back bbox, so the tab shows the top of the
     // image. Front panel: the same skin and focus, cover-fitted to the front rectangle, so the
     // front shows the middle of the image.
     t.draw(
-        &artwork_paint(&art_pm, &g::BACK_BBOX, art.focus, t.scale),
-        &artwork_paint(&art_pm, &g::FRONT, art.focus, t.scale),
+        &artwork_paint(&art_pm, &back, art.focus, t.scale),
+        &artwork_paint(&art_pm, &front, art.focus, t.scale),
     )
 }
 
@@ -307,7 +426,12 @@ pub fn render_master(art: &Artwork) -> raster::Premul {
 /// A design that isn't square is stretched to fill the canvas; one with no pixels leaves both
 /// panels empty.
 pub fn render_master_placed(design: &image::RgbaImage) -> raster::Premul {
-    let t = Template::new(RENDER_SIZE);
+    render_master_placed_in(design, Style::Mac)
+}
+
+/// [`render_master_placed`] on the folder of `style`.
+pub fn render_master_placed_in(design: &image::RgbaImage, style: Style) -> raster::Premul {
+    let t = Template::new(RENDER_SIZE, style);
     let (w, h) = design.dimensions();
     if w == 0 || h == 0 {
         let empty = Paint {
@@ -353,10 +477,24 @@ pub fn render_icon_set(art: &Artwork, sizes: &[u32]) -> IconSet {
     downsampled(&render_master(art), sizes)
 }
 
+/// [`render_icon_set`] on the folder of `style`.
+pub fn render_icon_set_in(art: &Artwork, sizes: &[u32], style: Style) -> IconSet {
+    downsampled(&render_master_in(art, style), sizes)
+}
+
 /// Renders a design placed on the icon canvas ([`render_master_placed`]) at every requested
 /// size, downsampling the one master render.
 pub fn render_placed_icon_set(design: &image::RgbaImage, sizes: &[u32]) -> IconSet {
     downsampled(&render_master_placed(design), sizes)
+}
+
+/// [`render_placed_icon_set`] on the folder of `style`.
+pub fn render_placed_icon_set_in(
+    design: &image::RgbaImage,
+    sizes: &[u32],
+    style: Style,
+) -> IconSet {
+    downsampled(&render_master_placed_in(design, style), sizes)
 }
 
 /// The folder template in the layers the composer stacks a design between, each straight-alpha
@@ -384,7 +522,12 @@ pub struct TemplateLayers {
 /// Draws the template's layers at `size` px, which must be at least 1, with the same drawing
 /// as the master at that size's own scale (see [`TemplateLayers`]).
 pub fn template_layers(size: u32) -> TemplateLayers {
-    let t = Template::new(size);
+    template_layers_in(size, Style::Mac)
+}
+
+/// [`template_layers`] of the folder of `style`.
+pub fn template_layers_in(size: u32, style: Style) -> TemplateLayers {
+    let t = Template::new(size, style);
     let coverage = |path: &Path| white_with_alpha(size, t.mask(path).data().iter().copied());
     let layer = |draw: fn(&Template, &mut Pixmap)| {
         let mut pm = t.pixmap();
@@ -448,7 +591,12 @@ fn fit_into_canvas(img: &image::RgbaImage, size: u32) -> image::RgbaImage {
 
 /// Renders one size straight to PNG bytes, for previews.
 pub fn render_preview_png(art: &Artwork, size: u32) -> Vec<u8> {
-    render_icon_set(art, &[size])
+    render_preview_png_in(art, size, Style::Mac)
+}
+
+/// [`render_preview_png`] on the folder of `style`.
+pub fn render_preview_png_in(art: &Artwork, size: u32, style: Style) -> Vec<u8> {
+    render_icon_set_in(art, &[size], style)
         .png(size)
         .expect("the size that was just rendered")
 }
@@ -456,15 +604,26 @@ pub fn render_preview_png(art: &Artwork, size: u32) -> Vec<u8> {
 /// The stand-in skin for the "no skin yet" state: a flat macOS-blue vertical gradient, so the
 /// plain folder goes through exactly the same render path as every real skin.
 pub fn default_folder_artwork() -> Artwork {
-    const TOP: [u8; 3] = [0x7C, 0xC8, 0xF5];
-    const BOTTOM: [u8; 3] = [0x4E, 0xA9, 0xE4];
+    vertical_gradient([0x7C, 0xC8, 0xF5], [0x4E, 0xA9, 0xE4])
+}
+
+/// [`default_folder_artwork`] for the folder of `style`: on Windows' folder, the yellow Explorer
+/// draws its own in.
+pub fn default_folder_artwork_in(style: Style) -> Artwork {
+    match style {
+        Style::Mac => default_folder_artwork(),
+        Style::Windows => vertical_gradient([0xFF, 0xE6, 0x9A], [0xFF, 0xCC, 0x48]),
+    }
+}
+
+fn vertical_gradient(top: [u8; 3], bottom: [u8; 3]) -> Artwork {
     let rgba = image::RgbaImage::from_fn(SKIN_WIDTH, SKIN_HEIGHT, |_, y| {
         let t = y as f32 / (SKIN_HEIGHT - 1) as f32;
         let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
         image::Rgba([
-            mix(TOP[0], BOTTOM[0]),
-            mix(TOP[1], BOTTOM[1]),
-            mix(TOP[2], BOTTOM[2]),
+            mix(top[0], bottom[0]),
+            mix(top[1], bottom[1]),
+            mix(top[2], bottom[2]),
             255,
         ])
     });
@@ -880,9 +1039,15 @@ mod tests {
     /// is saved as.
     #[test]
     fn the_layers_stacked_around_a_design_are_the_saved_icon() {
+        for style in [Style::Mac, Style::Windows] {
+            layers_stack_into_the_master(style);
+        }
+    }
+
+    fn layers_stack_into_the_master(style: Style) {
         let design = gradient_design(RENDER_SIZE);
-        let master = render_master_placed(&design);
-        let layers = template_layers(RENDER_SIZE);
+        let master = render_master_placed_in(&design, style);
+        let layers = template_layers_in(RENDER_SIZE, style);
         let design = raster::straight_to_premul(&design).data;
         let middle = raster::straight_to_premul(&layers.middle).data;
         let top = raster::straight_to_premul(&layers.top).data;
@@ -910,7 +1075,82 @@ mod tests {
             }
         }
         let (x, y) = (worst_at as u32 % RENDER_SIZE, worst_at as u32 / RENDER_SIZE);
-        assert!(worst <= 3, "{worst} off the render at ({x},{y})");
+        // Windows' folder rounds once more where the front's shadow on the back meets its
+        // highlight, both anti-aliased along the same edge.
+        let allowed = if style == Style::Windows { 4 } else { 3 };
+        assert!(
+            worst <= allowed,
+            "{style:?}: {worst} off the render at ({x},{y})"
+        );
+    }
+
+    /// A canvas point on a [`RENDER_SIZE`] render.
+    fn at(img: &image::RgbaImage, x: f32, y: f32) -> [u8; 4] {
+        let s = RENDER_SIZE as f32 / g::CANVAS;
+        img.get_pixel((x * s) as u32, (y * s) as u32).0
+    }
+
+    #[test]
+    fn the_windows_folder_has_its_own_shape() {
+        let art = solid(1024, 958, [40, 120, 220, 255]);
+        let win = raster::to_straight_rgba(&render_master_in(&art, Style::Windows));
+        // The tab at the top left, nothing right of it above the body, the body below that.
+        assert_eq!(at(&win, 200.0, 160.0)[3], 255);
+        assert_eq!(at(&win, 700.0, 180.0)[3], 0);
+        assert_eq!(at(&win, 700.0, 240.0)[3], 255);
+        // Wider and shorter than FolderSkin's own: nothing at the Mac folder's far edges.
+        assert_eq!(at(&win, 30.0, 500.0)[3], 0);
+        assert_eq!(at(&win, 500.0, 900.0)[3], 0);
+        let mac = raster::to_straight_rgba(&render_master(&art));
+        assert_eq!(at(&mac, 30.0, 500.0)[3], 255);
+    }
+
+    #[test]
+    fn the_windows_folder_has_no_paper() {
+        // Between the body's top edge and the front's, the back panel shows, not a sheet.
+        let art = solid(1024, 958, [40, 120, 220, 255]);
+        let win = raster::to_straight_rgba(&render_master_in(&art, Style::Windows));
+        let p = at(&win, 700.0, 238.0);
+        assert!(p[2] > p[0] + 100, "{p:?} should be the blue back panel");
+        let layers = template_layers_in(256, Style::Windows);
+        assert!(
+            layers.middle.pixels().all(|p| p.0[0] == 0 || p.0[3] < 255),
+            "no opaque paper in the middle layer"
+        );
+    }
+
+    #[test]
+    fn the_windows_front_is_lit_along_its_top_and_darker_along_its_bottom() {
+        let art = solid(1024, 958, [200, 160, 60, 255]);
+        let win = raster::to_straight_rgba(&render_master_in(&art, Style::Windows));
+        let lum = |p: [u8; 4]| p[0] as u32 + p[1] as u32 + p[2] as u32;
+        let middle = lum(at(&win, 700.0, 500.0));
+        assert!(
+            lum(at(&win, 700.0, 250.0)) > middle + 20,
+            "the top edge is brighter"
+        );
+        assert!(
+            lum(at(&win, 700.0, 836.0)) + 20 < middle,
+            "the bottom lip is darker"
+        );
+        // The front casts a shadow on the back just above its top edge, under the tab.
+        assert!(lum(at(&win, 200.0, 288.0)) + 10 < lum(at(&win, 200.0, 200.0)));
+    }
+
+    #[test]
+    fn styles_have_ids_and_the_native_one_is_this_computers() {
+        for s in [Style::Mac, Style::Windows] {
+            assert_eq!(Style::from_id(s.id()), Some(s));
+        }
+        assert_eq!(Style::from_id("linux"), None);
+        assert_eq!(
+            Style::native(),
+            if cfg!(windows) {
+                Style::Windows
+            } else {
+                Style::Mac
+            }
+        );
     }
 
     #[test]

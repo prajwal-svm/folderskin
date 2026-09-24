@@ -7,9 +7,9 @@
  * JSON and read back to edit it again), and every change makes a new document.
  */
 import { normalizeColor } from "./color";
-import { centreOf, type Parts } from "./parts";
+import { centreOf, type FolderStyle, type Parts } from "./parts";
 
-export { centreOf, FALLBACK_PARTS, type Parts } from "./parts";
+export { centreOf, fallbackParts, FALLBACK_PARTS, WINDOWS_PARTS, type FolderStyle, type Parts } from "./parts";
 
 /** Edge of the design canvas, in the units every position and size below is measured in. */
 export const CANVAS = 1024;
@@ -246,7 +246,8 @@ export type Layer = FillLayer | PatternLayer | TextLayer | EmojiLayer | ShapeLay
 export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer | IconLayer;
 export type LayerKind = Layer["kind"];
 
-export type Doc = { version: 1; shape: Shape; layers: Layer[] };
+/** A design: its layers, bottom first, and what it's cut to: a folder (a Mac's or Windows') or nothing. */
+export type Doc = { version: 1; shape: Shape; style: FolderStyle; layers: Layer[] };
 
 // ---------- making layers ----------
 
@@ -463,8 +464,42 @@ export function suggestName(doc: Doc): string | null {
 
 // ---------- changing the document ----------
 
-export function emptyDoc(shape: Shape = "folder"): Doc {
-  return { version: DOC_VERSION, shape, layers: [] };
+export function emptyDoc(shape: Shape = "folder", style: FolderStyle = "mac"): Doc {
+  return { version: DOC_VERSION, shape, style, layers: [] };
+}
+
+/**
+ * The design moved from one folder onto another, a Mac's to Windows' or back. Each placed layer
+ * keeps its place on the folder (on the tab, on the front, in the middle of it) and its size for
+ * the folder's size; a picture that covered the whole folder still covers it. What covers the
+ * canvas stays as it is.
+ */
+export function refit(doc: Doc, from: Parts, to: Parts, style: FolderStyle): Doc {
+  const [ax0, ay0, ax1, ay1] = from.folder;
+  const [bx0, by0, bx1, by1] = to.folder;
+  const sx = (bx1 - bx0) / (ax1 - ax0);
+  // Down the folder in three stretches: the tab, the back between it and the front, the front.
+  const ya = [ay0, from.tab[3], from.front[1], ay1];
+  const yb = [by0, to.tab[3], to.front[1], by1];
+  const mapY = (y: number) => {
+    const i = y < ya[1] ? 0 : y < ya[2] ? 1 : 2;
+    return yb[i] + ((y - ya[i]) * (yb[i + 1] - yb[i])) / (ya[i + 1] - ya[i]);
+  };
+  const area = (p: Parts) => (p.front[2] - p.front[0]) * (p.front[3] - p.front[1]);
+  const k = Math.sqrt(area(to) / area(from));
+  const kCover = Math.max(sx, (by1 - by0) / (ay1 - ay0));
+  const r = (n: number) => Math.round(n * 10) / 10;
+  const layers = doc.layers.map((l): Layer => {
+    if (!isPlaced(l)) return l;
+    const at = { x: r(bx0 + (l.x - ax0) * sx), y: r(mapY(l.y)) };
+    if (l.kind === "shape" || l.kind === "image") {
+      const covers = l.w >= ax1 - ax0 - 1 && l.h >= ay1 - ay0 - 1;
+      const f = covers ? kCover : k;
+      return { ...l, ...at, w: r(l.w * f), h: r(l.h * f) };
+    }
+    return { ...l, ...at, size: r(l.size * k) };
+  });
+  return { ...doc, style, layers };
 }
 
 export const indexOf = (doc: Doc, id: string) => doc.layers.findIndex((l) => l.id === id);
@@ -744,5 +779,5 @@ export function parseDoc(value: unknown): Doc | null {
     seen.add(layer.id);
     layers.push(layer);
   }
-  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", layers };
+  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", style: value.style === "windows" ? "windows" : "mac", layers };
 }

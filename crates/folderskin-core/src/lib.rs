@@ -7,6 +7,7 @@ pub mod apply;
 pub mod compositor;
 pub mod fit;
 pub mod geometry;
+pub mod geometry_windows;
 pub mod ico;
 pub mod matte;
 pub mod pack;

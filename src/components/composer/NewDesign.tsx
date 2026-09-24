@@ -35,7 +35,7 @@ const EMPTY_FOLDER = emptyDoc("folder");
 const EMPTY_FREE = emptyDoc("free");
 
 const EMPTY: { shape: Shape; label: string; note: string }[] = [
-  { shape: "folder", label: "Empty folder", note: "Cut to FolderSkin's folder" },
+  { shape: "folder", label: "Empty folder", note: "Cut to the folder" },
   { shape: "free", label: "Free icon", note: "Any shape you like" },
 ];
 

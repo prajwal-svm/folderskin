@@ -15,8 +15,9 @@ use crate::commands::{self, SkinDto};
 use crate::state::AppState;
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use base64::Engine;
-use folderskin_core::geometry as g;
+use folderskin_core::compositor::Style;
 use folderskin_core::{compositor, matte, raster};
+use folderskin_core::{geometry as g, geometry_windows as gw};
 use image::codecs::jpeg::JpegEncoder;
 use image::{ExtendedColorType, ImageEncoder, ImageFormat, RgbaImage};
 use serde::de::DeserializeOwned;
@@ -66,6 +67,24 @@ impl Shape {
     }
 }
 
+/// Which folder a design is drawn on: FolderSkin's own, as Finder shows it, or Windows'.
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum FolderStyle {
+    #[default]
+    Mac,
+    Windows,
+}
+
+impl From<FolderStyle> for Style {
+    fn from(style: FolderStyle) -> Style {
+        match style {
+            FolderStyle::Mac => Style::Mac,
+            FolderStyle::Windows => Style::Windows,
+        }
+    }
+}
+
 /// What `composer_save` is told about a design, ahead of its picture.
 #[derive(Deserialize)]
 struct SaveHeader {
@@ -74,6 +93,9 @@ struct SaveHeader {
     #[serde(default)]
     tags: Vec<String>,
     shape: Shape,
+    /// The folder it's drawn on, when its shape is the folder.
+    #[serde(default)]
+    style: FolderStyle,
     /// The design's document, kept as it came so the composer can open it again.
     #[serde(default)]
     design: serde_json::Value,
@@ -86,6 +108,8 @@ struct SaveHeader {
 #[derive(Deserialize)]
 struct PreviewHeader {
     shape: Shape,
+    #[serde(default)]
+    style: FolderStyle,
     sizes: Vec<u32>,
 }
 
@@ -121,7 +145,8 @@ pub struct PartsDto {
     pub front_radius: f32,
     /// The back panel, tab included.
     pub back: [f32; 4],
-    /// The paper sheet between the panels.
+    /// The paper sheet between the panels. Windows' folder has none: there it's where the back
+    /// panel's body shows above the front.
     pub paper: [f32; 4],
     /// The tab: its left edge, its top, where its slanted right edge meets the top of the back
     /// panel's body, and that top.
@@ -129,8 +154,19 @@ pub struct PartsDto {
 }
 
 impl PartsDto {
-    fn new() -> PartsDto {
+    fn new(style: Style) -> PartsDto {
         let corners = |r: g::Rect| [r.x0, r.y0, r.x1, r.y1];
+        if style == Style::Windows {
+            return PartsDto {
+                canvas: g::CANVAS,
+                folder: corners(gw::BACK_BBOX),
+                front: corners(gw::FRONT),
+                front_radius: gw::CORNER,
+                back: corners(gw::BACK_BBOX),
+                paper: [gw::LEFT, gw::BODY_TOP, gw::RIGHT, gw::BOTTOM],
+                tab: [gw::LEFT, gw::TAB_TOP, gw::BODY_STEP_X, gw::BODY_TOP],
+            };
+        }
         PartsDto {
             canvas: g::CANVAS,
             folder: [g::FRONT.x0, g::TAB_TOP, g::FRONT.x1, g::FRONT.y1],
@@ -171,22 +207,28 @@ pub struct ComposerImageDto {
 
 // ---------- commands ----------
 
-/// The template, drawn the first time the composer asks for it and kept until the app quits.
-static TEMPLATE: OnceLock<ComposerTemplateDto> = OnceLock::new();
+/// Each folder's template, drawn the first time the composer asks for it and kept until the app
+/// quits: FolderSkin's own, then Windows'.
+static TEMPLATES: [OnceLock<ComposerTemplateDto>; 2] = [OnceLock::new(), OnceLock::new()];
 
-/// The folder template's layers at 2048 px, and where its parts are.
+/// The layers of the folder of `style` (FolderSkin's own when not given) at 2048 px, and where its
+/// parts are.
 #[tauri::command]
-pub async fn composer_template() -> Result<ComposerTemplateDto, String> {
-    tauri::async_runtime::spawn_blocking(|| TEMPLATE.get_or_init(draw_template).clone())
-        .await
-        .map_err(|e| e.to_string())
+pub async fn composer_template(style: Option<FolderStyle>) -> Result<ComposerTemplateDto, String> {
+    let style = Style::from(style.unwrap_or_default());
+    let slot = usize::from(style == Style::Windows);
+    tauri::async_runtime::spawn_blocking(move || {
+        TEMPLATES[slot].get_or_init(|| draw_template(style)).clone()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// Saves a design as a skin, or over the design it was made from, and returns the skin.
 ///
 /// The body is raw bytes: `[u32 LE header length][header JSON][PNG]`, the header
-/// `{name, tags, shape: "folder" | "free", design, replaces}`. The PNG is the design, square and
-/// 64 to 4096 px across.
+/// `{name, tags, shape: "folder" | "free", style: "mac" | "windows", design, replaces}`. The PNG
+/// is the design, square and 64 to 4096 px across.
 #[tauri::command]
 pub async fn composer_save(
     state: State<'_, AppState>,
@@ -201,8 +243,8 @@ pub async fn composer_save(
 
 /// The icon a design makes, as PNG data URLs, one for each size asked for, in that order.
 ///
-/// The body is framed as `composer_save`'s, the header `{shape: "folder" | "free", sizes}`, with
-/// at most six sizes of 16 to 512 px.
+/// The body is framed as `composer_save`'s, the header `{shape: "folder" | "free", style, sizes}`,
+/// with at most six sizes of 16 to 512 px.
 #[tauri::command]
 pub async fn composer_preview(request: Request<'_>) -> Result<Vec<String>, String> {
     let body = raw_body(&request)?;
@@ -257,8 +299,8 @@ pub async fn composer_design(
 
 // ---------- the work, off the async threads ----------
 
-fn draw_template() -> ComposerTemplateDto {
-    let layers = compositor::template_layers(LAYER_SIZE);
+fn draw_template(style: Style) -> ComposerTemplateDto {
+    let layers = compositor::template_layers_in(LAYER_SIZE, style);
     let url = |layer: &RgbaImage| commands::data_url(&raster::encode_png(layer));
     ComposerTemplateDto {
         size: LAYER_SIZE,
@@ -267,7 +309,7 @@ fn draw_template() -> ComposerTemplateDto {
         middle: url(&layers.middle),
         top: url(&layers.top),
         outline: url(&layers.outline),
-        parts: PartsDto::new(),
+        parts: PartsDto::new(style),
     }
 }
 
@@ -281,9 +323,10 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
     }
     let design = decode_design(png, store::MAX_STORED_SIDE)?;
     let document = serde_json::to_vec(&header.design).map_err(|_| UNREADABLE.to_string())?;
+    let style = Style::from(header.style);
     let image = match header.shape {
         Shape::Folder => SkinImage::Folder(Arc::new(raster::to_straight_rgba(
-            &compositor::render_master_placed(&design),
+            &compositor::render_master_placed_in(&design, style),
         ))),
         Shape::Free => {
             if matte::alpha_bounds(&design, 8).is_none() {
@@ -292,9 +335,21 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
             SkinImage::Folder(Arc::new(design))
         }
     };
-    // The shape is part of what was made: the same picture on the folder and on its own are two
-    // different skins.
-    let id = store::skin_id(&[png, &document, header.shape.name().as_bytes()].concat());
+    // The shape and the folder are part of what was made: the same picture on the folder and on
+    // its own, or on the Mac's folder and on Windows', are different skins.
+    let on = match (header.shape, style) {
+        (Shape::Folder, Style::Windows) => "windows",
+        _ => "",
+    };
+    let id = store::skin_id(
+        &[
+            png,
+            &document,
+            header.shape.name().as_bytes(),
+            on.as_bytes(),
+        ]
+        .concat(),
+    );
     let new = NewSkin {
         id,
         name: store::clean_name(&header.name).unwrap_or_else(|| UNNAMED.into()),
@@ -340,7 +395,9 @@ fn preview(body: &[u8]) -> Result<Vec<String>, String> {
     }
     let design = decode_design(png, PREVIEW_DESIGN_SIDE)?;
     let icons = match header.shape {
-        Shape::Folder => compositor::render_placed_icon_set(&design, &header.sizes),
+        Shape::Folder => {
+            compositor::render_placed_icon_set_in(&design, &header.sizes, header.style.into())
+        }
         Shape::Free => compositor::icon_set_from_image(&design, &header.sizes),
     };
     Ok(icons
@@ -765,7 +822,7 @@ mod tests {
 
     #[test]
     fn the_parts_are_the_template_in_canvas_units() {
-        let parts = serde_json::to_value(PartsDto::new()).unwrap();
+        let parts = serde_json::to_value(PartsDto::new(Style::Mac)).unwrap();
         assert_eq!(parts["canvas"], 1024.0);
         assert_eq!(parts["folder"], json!([15.0, 36.5, 1009.0, 973.5]));
         assert_eq!(parts["front"], json!([15.0, 160.5, 1009.0, 973.5]));
@@ -777,7 +834,7 @@ mod tests {
         assert!((tab[2] - 441.739).abs() < 0.01, "{}", tab[2]);
         assert_eq!(tab[3], 97.0);
         // As the webview reads it: plain arrays, the numbers as short as they are in geometry.rs.
-        let text = serde_json::to_string(&PartsDto::new()).unwrap();
+        let text = serde_json::to_string(&PartsDto::new(Style::Mac)).unwrap();
         assert!(
             text.contains(r#""paper":[74.5,131.3,949.5,973.5]"#),
             "{text}"
@@ -785,19 +842,66 @@ mod tests {
     }
 
     #[test]
+    fn windows_folder_has_its_own_parts() {
+        let parts = serde_json::to_value(PartsDto::new(Style::Windows)).unwrap();
+        assert_eq!(parts["canvas"], 1024.0);
+        assert_eq!(parts["folder"], json!([64.0, 136.0, 960.0, 840.0]));
+        assert_eq!(parts["front"], json!([64.0, 248.0, 960.0, 840.0]));
+        assert_eq!(parts["front_radius"], 36.0);
+        assert_eq!(parts["tab"], json!([64.0, 136.0, 464.0, 232.0]));
+    }
+
+    #[test]
     fn the_template_is_drawn_at_2048_with_its_parts() {
-        let template = serde_json::to_value(draw_template()).unwrap();
-        assert_eq!(template["size"], 2048);
-        for layer in ["back", "front", "middle", "top", "outline"] {
-            let url = template[layer].as_str().unwrap();
-            let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(b64)
-                .unwrap();
-            let img = image::load_from_memory(&bytes).unwrap();
-            assert_eq!((img.width(), img.height()), (2048, 2048), "{layer}");
+        for style in [Style::Mac, Style::Windows] {
+            let template = serde_json::to_value(draw_template(style)).unwrap();
+            assert_eq!(template["size"], 2048);
+            for layer in ["back", "front", "middle", "top", "outline"] {
+                let url = template[layer].as_str().unwrap();
+                let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(b64)
+                    .unwrap();
+                let img = image::load_from_memory(&bytes).unwrap();
+                assert_eq!((img.width(), img.height()), (2048, 2048), "{layer}");
+            }
+            assert_eq!(
+                template["parts"],
+                serde_json::to_value(PartsDto::new(style)).unwrap()
+            );
         }
-        assert_eq!(template["parts"]["canvas"], 1024.0);
+    }
+
+    #[test]
+    fn a_design_on_windows_folder_is_its_own_icon_and_its_own_skin() {
+        let png = png_of(&design(256, 255));
+        let icon = |style: &str| {
+            let body = frame(
+                &json!({"shape": "folder", "style": style, "sizes": [64]}),
+                &png,
+            );
+            preview(&body).unwrap().remove(0)
+        };
+        assert_ne!(icon("mac"), icon("windows"));
+        let no_style = frame(&json!({"shape": "folder", "sizes": [64]}), &png);
+        assert_eq!(
+            preview(&no_style).unwrap()[0],
+            icon("mac"),
+            "the Mac's when not said"
+        );
+        let linux = frame(
+            &json!({"shape": "folder", "style": "linux", "sizes": [64]}),
+            &png,
+        );
+        assert!(preview(&linux).is_err());
+
+        let state = AppState::default();
+        let saved = |style: &str| {
+            let mut header = save_header("Mine", "folder", None);
+            header["style"] = style.into();
+            save(&state, &frame(&header, &png)).unwrap().skin.id
+        };
+        assert_ne!(saved("mac"), saved("windows"));
     }
 
     // Not on Windows: with tauri's `test` feature the lib's test binary imports a WebView2 entry

@@ -291,12 +291,17 @@ fn packs_index(dir: &Path) -> Result<(), String> {
 
 /// Writes the layers the composer draws a design between into `out`, one PNG each.
 fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
-    std::fs::create_dir_all(out).map_err(|e| format!("couldn't make {}: {e}", out.display()))?;
-    for (file, layer) in composer::layer_files(size) {
-        let path = out.join(file);
-        std::fs::write(&path, raster::encode_png(&layer))
-            .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
-        println!("wrote {} ({size}×{size})", path.display());
+    use folderskin_core::compositor::Style;
+    for style in [Style::Mac, Style::Windows] {
+        let dir = out.join(composer::style_dir(style));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
+        for (file, layer) in composer::layer_files(size, style) {
+            let path = dir.join(file);
+            std::fs::write(&path, raster::encode_png(&layer))
+                .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+            println!("wrote {} ({size}×{size})", path.display());
+        }
     }
     Ok(())
 }
