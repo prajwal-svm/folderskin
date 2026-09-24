@@ -177,6 +177,16 @@ export class Assets {
     return Promise.all(waits).then(() => undefined);
   }
 
+  /** Whether a picture `doc` shows is still loading, so it can't be drawn whole yet. One that failed has gone as far as it will. */
+  loading(doc: Doc): boolean {
+    return doc.layers.some((l) => {
+      if (l.kind !== "image" || l.hidden) return false;
+      this.image(l.src);
+      const p = this.pictures.get(l.src);
+      return p !== undefined && !p.ready && !p.failed;
+    });
+  }
+
   /** Drops pictures the document no longer uses. */
   prune(docs: Doc[]) {
     const used = new Set<string>();

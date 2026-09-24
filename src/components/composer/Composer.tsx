@@ -454,8 +454,9 @@ export function Composer({
   });
   const doc = history.present;
 
-  // Each folder's layers, from Rust, the first time a design is on that folder.
-  const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts }>>>({});
+  // Each folder's layers, from Rust, the first time a design is on that folder; null when they
+  // didn't load, and the design is shown by itself.
+  const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts } | null>>>({});
   const asked = useRef(new Set<FolderStyle>());
   useEffect(() => {
     const style = doc.style;
@@ -469,10 +470,13 @@ export function Composer({
       })
       .catch((e) => {
         asked.current.delete(style);
+        setTemplates((all) => ({ ...all, [style]: null }));
         toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
       });
   }, [doc.style, toast]);
   const template = templates[doc.style] ?? null;
+  /** The folder the design is on hasn't loaded yet: the stage waits for it rather than show the design without it. */
+  const folderLoading = templates[doc.style] === undefined;
   const parts = template?.parts ?? fallbackParts(doc.style);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
@@ -1124,6 +1128,7 @@ export function Composer({
             onSettle={() => dispatch({ type: "settle" })}
             assets={assets}
             template={template?.images ?? null}
+            folderLoading={folderLoading}
             parts={parts}
             view={viewOf}
             backdrop={view.backdrop}

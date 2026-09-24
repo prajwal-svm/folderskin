@@ -21,9 +21,12 @@ import {
 } from "../../composer/geometry";
 import { boxOf, renderDoc } from "../../composer/render";
 import { RotateCwIcon } from "../icons/composer";
+import { LoaderIcon } from "../icons/loader";
 
 /** Room around the canvas for handles that reach past its edge, in screen pixels. */
 const PAD = 30;
+/** How long the stage waits before it shows its loader, so a quick load never shows one at all. */
+const LOADER_DELAY_MS = 150;
 /** How far above a box its turn handle floats, and how near a handle the pointer must be. */
 const ROT_GAP_PX = 24;
 const HANDLE_PX = 11;
@@ -50,7 +53,8 @@ function resized(layer: PlacedLayer, box0: Box, box: Box): Record<string, number
  * The composer's canvas. It draws the design (render.ts) and shows it on the folder or flat
  * (composite.ts), and turns the pointer into changes: pick a layer, drag it (snapping to the
  * folder's middle, its tab and other layers), size it from its corners and sides, turn it from
- * the knob above it. Selection is a soft tint over the layer, never an outline.
+ * the knob above it. Selection is a soft tint over the layer, never an outline. Until the folder
+ * and the design's pictures have loaded it shows nothing half drawn: a loader, past a moment.
  */
 export function ComposerStage({
   doc,
@@ -61,6 +65,7 @@ export function ComposerStage({
   onSettle,
   assets,
   template,
+  folderLoading,
   parts,
   view,
   backdrop,
@@ -82,6 +87,8 @@ export function ComposerStage({
   onSettle: () => void;
   assets: Assets;
   template: TemplateImages | null;
+  /** The folder's layers are still on their way: nothing is shown until they're here, never the design without its folder. */
+  folderLoading: boolean;
   parts: Parts;
   view: View;
   backdrop: Backdrop;
@@ -146,6 +153,22 @@ export function ComposerStage({
     });
     return () => cancelAnimationFrame(frame.current);
   }, [drawn, view, template, px, version, assets]);
+
+  // What the stage is waiting for before it can show the design as it is: the folder, or a
+  // picture still decoding. Past a moment, a loader stands in for the design.
+  const picturesLoading = useMemo(() => assets.loading(drawn), [assets, drawn, version]);
+  const waiting = folderLoading ? "folder" : picturesLoading ? "picture" : null;
+  const [loader, setLoader] = useState<typeof waiting>(null);
+  useEffect(() => {
+    if (!waiting) {
+      setLoader(null);
+      return;
+    }
+    // Already showing, it says at once what it waits for now.
+    setLoader((l) => (l ? waiting : l));
+    const t = window.setTimeout(() => setLoader(waiting), LOADER_DELAY_MS);
+    return () => window.clearTimeout(t);
+  }, [waiting]);
 
   const toUnits = useCallback(
     (e: { clientX: number; clientY: number }): Point => {
@@ -276,8 +299,14 @@ export function ComposerStage({
   const hovered = hover ? placed.find((l) => l.id === hover) : undefined;
 
   return (
-    <div className="cmp-stage" data-backdrop={backdrop} ref={wrap}>
+    <div className="cmp-stage" data-backdrop={backdrop} data-waiting={folderLoading || loader ? "" : undefined} ref={wrap}>
       <canvas className="cmp-canvas" ref={canvas} style={{ left, top, width: size, height: size }} aria-hidden="true" />
+      {loader && (
+        <div className="cmp-stage-loader" role="status">
+          <LoaderIcon size={22} />
+          <span>{loader === "folder" ? "Getting the folder ready" : "Getting the picture ready"}</span>
+        </div>
+      )}
       {hint && (
         <p className="cmp-stage-hint" style={{ left, top: top + size / 2, width: size }}>
           {hint}

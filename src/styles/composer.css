@@ -218,9 +218,40 @@
   animation: fade-up var(--t-slow) var(--ease-out) both;
 }
 
+/* While the folder or a picture is still loading, what's drawn so far stays out of sight, and the
+   handles with it; after a moment the loader stands in the design's place. */
+.cmp-stage[data-waiting] .cmp-canvas,
+.cmp-stage[data-waiting] .cmp-overlay,
+.cmp-stage[data-waiting] .cmp-stage-hint {
+  visibility: hidden;
+}
+
+.cmp-stage-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+  pointer-events: none;
+  animation: fade-in var(--t-base) var(--ease-out) both;
+}
+
 .cmp-stage[data-backdrop="dark"] .cmp-stage-hint,
-.cmp-stage[data-backdrop="colour"] .cmp-stage-hint {
+.cmp-stage[data-backdrop="colour"] .cmp-stage-hint,
+.cmp-stage[data-backdrop="dark"] .cmp-stage-loader,
+.cmp-stage[data-backdrop="colour"] .cmp-stage-loader {
   color: rgba(255, 255, 255, 0.85);
+}
+
+/* The light desktop is light in either theme. */
+.cmp-stage[data-backdrop="light"] .cmp-stage-hint,
+.cmp-stage[data-backdrop="light"] .cmp-stage-loader {
+  color: rgba(16, 24, 40, 0.6);
 }
 
 /* The selected layer is tinted, not framed; knobs sit on its corners and sides. */

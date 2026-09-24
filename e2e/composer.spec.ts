@@ -45,6 +45,13 @@ const LOGO_PACK = {
   icons: [{ n: "red-square", d: ["M2 2h20v20H2z"], c: "#ff0000" }],
 };
 
+/** Holds requests until `open` is called. */
+function gate() {
+  let open = () => {};
+  const wait = new Promise<void>((resolve) => (open = resolve));
+  return { wait, open: () => open() };
+}
+
 test.describe("starting a new design", () => {
   test("opens as a dialog over the whole window on the first visit", async ({ page }) => {
     await openApp(page);
@@ -391,6 +398,62 @@ test.describe("the canvas and its panels", () => {
     // A free icon has no folder to choose.
     await composer(page).getByRole("switch", { name: "folder skeleton" }).click();
     await expect(which).toHaveCount(0);
+  });
+
+  test("shows a loader, not a half-drawn stage, while the folder is on its way", async ({ page }) => {
+    // The folders' pictures are held back until each is let through.
+    const held = { mac: gate(), windows: gate() };
+    await page.route(/\/docs\/images\/composer\/(windows\/)?[a-z]+\.png/, async (route) => {
+      await held[route.request().url().includes("/windows/") ? "windows" : "mac"].wait;
+      await route.continue();
+    });
+    await openApp(page);
+    await startFrom(page, "Label");
+    const loader = composer(page).getByRole("status").filter({ hasText: "Getting the folder ready" });
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    await expect(loader).toBeVisible();
+    await expect(canvas).toBeHidden();
+
+    const which = composer(page).getByRole("radiogroup", { name: "which folder" });
+    const onMac = (await which.getByRole("radio", { name: "Mac" }).getAttribute("aria-checked")) === "true";
+    held[onMac ? "mac" : "windows"].open();
+    await expect(loader).toBeHidden();
+    await expect(canvas).toBeVisible();
+
+    // The other folder, the first time it's chosen.
+    await which.getByRole("radio", { name: onMac ? "Windows" : "Mac" }).click();
+    await expect(loader).toBeVisible();
+    await expect(canvas).toBeHidden();
+    held[onMac ? "windows" : "mac"].open();
+    await expect(loader).toBeHidden();
+    await expect(canvas).toBeVisible();
+  });
+
+  test("shows a loader, not the design without its photo, while the photo is still being read", async ({ page }) => {
+    // The photo (a big JPEG) isn't read until it's let through, as a big one takes a while.
+    await page.addInitScript(() => {
+      const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
+      const held: [HTMLImageElement, string][] = [];
+      (window as unknown as { letThrough: () => void }).letThrough = () => held.splice(0).forEach(([img, v]) => src.set!.call(img, v));
+      Object.defineProperty(HTMLImageElement.prototype, "src", {
+        get() {
+          return src.get!.call(this);
+        },
+        set(v: string) {
+          if (v.startsWith("data:image/jpeg") && v.length > 20_000) held.push([this, v]);
+          else src.set!.call(this, v);
+        },
+      });
+    });
+    await openApp(page);
+    await startFrom(page, "Photo");
+    const loader = composer(page).getByRole("status").filter({ hasText: "Getting the picture ready" });
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    await expect(loader).toBeVisible();
+    await expect(canvas).toBeHidden();
+    await page.evaluate(() => (window as unknown as { letThrough: () => void }).letThrough());
+    await expect(loader).toBeHidden();
+    await expect(canvas).toBeVisible();
   });
 
   test("the second panel is Attributes, with tips behind the info button", async ({ page }) => {
