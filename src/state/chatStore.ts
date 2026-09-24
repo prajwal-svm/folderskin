@@ -37,13 +37,19 @@ type State = {
   active: Chat | null;
   /** A chat that couldn't be opened or saved, said once. */
   problem: string | null;
+  /** This computer is painting, for whichever chat: it paints one picture at a time. */
+  localRunning: boolean;
 };
 
-let state: State = { ready: false, list: [], active: null, problem: null };
+let state: State = { ready: false, list: [], active: null, problem: null, localRunning: false };
 /** Every chat read or made this session, by id, as it is now. */
 const chats = new Map<string, Chat>();
 /** The job each running request was started as, by turn id, for Stop. */
 const jobs = new Map<string, string>();
+/** The running requests the user has pressed Stop on, by turn id: only these end as stopped. */
+const stopping = new Set<string>();
+/** The running requests being painted on this computer, by turn id. */
+const painting = new Set<string>();
 const listeners = new Set<() => void>();
 let started = false;
 
@@ -73,6 +79,16 @@ function put(chat: Chat, now = true) {
   }
 }
 
+/** Saves the chat `id` as it is now, once it has a request in it. */
+function saveNow(id: string): Promise<void> {
+  const chat = chats.get(id);
+  if (!chat || chat.turns.length === 0) return Promise.resolve();
+  return api
+    .chatSave(persistable(chat))
+    .then((summary) => set({ list: upsertSummary(state.list, summary), problem: null }))
+    .catch((e) => set({ problem: `Chats aren't being saved: ${errorMessage(e)}` }));
+}
+
 const saving = new Map<string, number>();
 /** Saves `chat` a moment from now, once however many changes come before then. */
 function saveSoon(id: string) {
@@ -81,14 +97,17 @@ function saveSoon(id: string) {
     id,
     window.setTimeout(() => {
       saving.delete(id);
-      const chat = chats.get(id);
-      if (!chat || chat.turns.length === 0) return;
-      api
-        .chatSave(persistable(chat))
-        .then((summary) => set({ list: upsertSummary(state.list, summary), problem: null }))
-        .catch((e) => set({ problem: `Chats aren't being saved: ${errorMessage(e)}` }));
+      void saveNow(id);
     }, 250),
   );
+}
+
+/** Saves every chat still waiting to be saved, now: the window is closing. */
+export async function flushChats(): Promise<void> {
+  const ids = [...saving.keys()];
+  for (const id of ids) window.clearTimeout(saving.get(id));
+  saving.clear();
+  await Promise.all(ids.map(saveNow));
 }
 
 async function load(id: string): Promise<Chat> {
@@ -143,17 +162,28 @@ export function startNewChat(folder: ChatFolder | null) {
   set({ active: chat });
 }
 
-export function renameChatTo(id: string, title: string) {
-  const chat = chats.get(id);
-  if (!chat) return;
+/** Renames a chat, the open one or any in the history (read first if it hasn't been opened). */
+export async function renameChatTo(id: string, title: string) {
+  let chat = chats.get(id);
+  if (!chat) {
+    try {
+      chat = await load(id);
+    } catch (e) {
+      set({ problem: `Couldn't rename that chat: ${errorMessage(e)}` });
+      return;
+    }
+    // Deleted while it was being read.
+    if (!state.list.some((s) => s.id === id)) return;
+  }
   const next = renameChat(chat, title, Date.now());
   put(next);
+  set({ list: state.list.map((s) => (s.id === id ? { ...s, title: next.title } : s)) });
   if (next.turns.length > 0) saveSoon(id);
-  else set({ list: state.list.map((s) => (s.id === id ? { ...s, title: next.title } : s)) });
 }
 
 export async function deleteChat(id: string) {
   window.clearTimeout(saving.get(id));
+  saving.delete(id);
   try {
     await api.chatDelete(id);
   } catch (e) {
@@ -190,6 +220,8 @@ export type Ask = {
   model: string;
   /** "OpenAI · GPT Image 2.5", as the request is made. */
   where: string;
+  /** Painted on this computer, which paints one picture at a time. */
+  local: boolean;
   refs: ChatRef[];
   tags: string[];
   size: string | null;
@@ -198,11 +230,11 @@ export type Ask = {
 /**
  * Sends a request from the open chat. It runs to the end whatever happens on screen: `onSkin`
  * gets the picture when it's made (App puts it in the library), and the chat it came from shows
- * how it went.
+ * how it went. False when it can't be sent now: this computer is still painting another.
  */
-export function ask(req: Ask, onSkin: (skin: Skin) => void) {
+export function ask(req: Ask, onSkin: (skin: Skin) => void): boolean {
   const chat = state.active;
-  if (!chat) return;
+  if (!chat || (req.local && painting.size > 0)) return false;
   const now = Date.now();
   const turn: Turn = {
     id: `t${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
@@ -220,6 +252,10 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
   saveSoon(chatIdNow);
   const job = `${chatIdNow}-${turn.id}`;
   jobs.set(turn.id, job);
+  if (req.local) {
+    painting.add(turn.id);
+    set({ localRunning: true });
+  }
 
   const update = (patch: (t: Turn) => Partial<Turn>, immediate: boolean) => {
     const c = chats.get(chatIdNow);
@@ -228,6 +264,8 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
     put(patchTurn(c, turn.id, patch(t), Date.now()), immediate);
   };
   const onEvent = (event: AiEvent) => update((t) => applyEvent(t, event), false);
+  /** A finished turn keeps nothing of what it reported while it ran. */
+  const ended = () => ({ finished: Date.now(), stage: undefined, step: undefined, download: undefined });
 
   api
     .aiGenerate(
@@ -245,35 +283,37 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
       onEvent,
     )
     .then((skin) => {
-      update(() => ({ status: "done", skinId: skin.id, finished: Date.now(), stage: undefined, step: undefined, download: undefined }), true);
+      update(() => ({ ...ended(), status: "done", skinId: skin.id }), true);
       onSkin(skin);
     })
     .catch((e) => {
+      // Only the user's Stop ends a request as stopped. Anything else that ends it early is a
+      // failure to show, whatever its words say.
+      if (stopping.has(turn.id)) return update(() => ({ ...ended(), status: "stopped", error: undefined }), true);
       const error = aiFailure(e);
-      const stopped = error.code === "stopped";
-      update(() => ({ status: stopped ? "stopped" : "error", error: stopped ? undefined : error, finished: Date.now(), stage: undefined, step: undefined, download: undefined }), true);
+      update(() => ({ ...ended(), status: "error", error: error.code === "stopped" ? { ...error, code: "failed" } : error }), true);
     })
     .finally(() => {
       jobs.delete(turn.id);
+      stopping.delete(turn.id);
+      if (painting.delete(turn.id)) set({ localRunning: painting.size > 0 });
       saveSoon(chatIdNow);
     });
+  return true;
 }
 
 /** Stops a running request. It says "Stopping" until the run has actually let go. */
 export function stop(turnId: string) {
   const job = jobs.get(turnId);
   if (!job) return;
+  stopping.add(turnId);
   const chatIdNow = job.split("-")[0];
   const c = chats.get(chatIdNow);
   if (c) put(patchTurn(c, turnId, { stage: "Stopping", step: undefined, download: undefined }, Date.now()));
   api.aiCancel(job).catch(() => {
-    // Older builds can't stop a run; it finishes, and its picture is kept.
+    // Older builds can't stop a run; it finishes, and its picture is kept (or its error shown).
+    stopping.delete(turnId);
   });
-}
-
-/** Whether any request is running, in any chat. */
-export function anyRunning(): boolean {
-  return jobs.size > 0;
 }
 
 export function dismissProblem() {

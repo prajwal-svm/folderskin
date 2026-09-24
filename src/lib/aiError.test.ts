@@ -17,6 +17,11 @@ describe("aiFailure", () => {
     expect(aiFailure(new Error("that key was rejected by OpenAI. Check it was copied whole and is still active.")).code).toBe("unauthorized");
     expect(codeOf("xAI is rate limiting you right now. Wait a moment and try again.")).toBe("rate_limited");
     expect(codeOf("OpenAI declined that prompt: safety system")).toBe("refused");
+    expect(codeOf("Black Forest Labs could not finish the image: the prompt or the result was blocked by the provider's filter")).toBe("refused");
+    // Something else in the way is not the provider saying no.
+    expect(codeOf("Recraft returned an error (502): request blocked by proxy")).toBe("failed");
+    // Only the user's Stop stops a request (chatStore.ts); a provider's word for it is a failure.
+    expect(codeOf("Google returned an error (499): The operation was cancelled.")).toBe("failed");
     expect(codeOf("couldn't reach Recraft: dns error")).toBe("network");
     expect(codeOf("couldn't reach OpenAI: the connection was refused")).toBe("network");
     expect(codeOf("BFL took too long to finish the image.")).toBe("timeout");
