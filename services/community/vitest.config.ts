@@ -22,6 +22,9 @@ export default defineConfig(async () => {
     ],
     test: {
       setupFiles: ["./test/setup.ts"],
+      // A file's first test also starts its workerd and builds the profanity matcher, which can
+      // take longer than vitest's five seconds on a busy machine.
+      testTimeout: 20_000,
       // obscenity ships CommonJS behind an ESM wrapper. wrangler's bundler joins the two when it
       // deploys; the test runner loads modules one by one, so it gets them pre-bundled instead.
       deps: { optimizer: { ssr: { enabled: true, include: ["obscenity"] } } },
