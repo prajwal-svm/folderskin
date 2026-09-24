@@ -122,7 +122,7 @@ export function ProviderKeys({
             ) : p.has_key ? (
               <OkBadge size={17} playOnMount label={p.kind === "local" ? "Set up" : "Key saved"} />
             ) : (
-              <span className="provider-state">{p.kind === "local" ? "Free" : "No key"}</span>
+              <span className="provider-state">{p.kind === "local" ? "Not set up" : "No key"}</span>
             )}
           </button>
         ))}

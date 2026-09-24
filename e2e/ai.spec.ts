@@ -342,26 +342,27 @@ test.describe("the AI chat", () => {
     // A stop asked for isn't an error, and there is one way on from it, not two.
     await expect(settings(page).getByRole("status").filter({ hasText: "What was downloaded is kept" })).toBeVisible();
     await expect(settings(page).getByRole("alert")).toHaveCount(0);
-    await expect(settings(page).getByRole("button", { name: "Set up this computer" })).toHaveCount(0);
+    await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
     await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
   });
 
-  test("before it is set up, this computer says so, and setting up counts the whole download", async ({ page }) => {
+  test("before it is set up, the Local Model says so, and setting up counts the whole download", async ({ page }) => {
     await openApp(page);
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
-    const tile = settings(page).getByRole("radio", { name: /This computer/ });
+    const tile = settings(page).getByRole("radio", { name: /Local Model/ });
     await expect(tile).toContainText("Not set up");
     await tile.click();
     // How long a picture takes is only known once one has been painted, and it says so.
-    await expect(settings(page).locator(".local-list")).toContainText("A picture takesKnown after the first picture");
-    await settings(page).getByRole("button", { name: "Set up this computer" }).click();
-    await expect(tile).toContainText("Setting up");
+    await expect(settings(page).locator(".local-list")).toContainText("Last pictureShows after your first one");
+    await settings(page).getByRole("button", { name: "Set up the local model" }).click();
+    await expect(tile.getByRole("img", { name: "downloading" })).toBeVisible();
     // Each file as it comes, and how far the whole download has got.
-    await expect(settings(page).locator(".local-progress")).toContainText(/of 5\.\d+ GB in all/);
-    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
-    await expect(tile.getByLabel("Set up")).toBeVisible();
+    await expect(settings(page).locator(".local-progress")).toContainText(/of \d+(\.\d+)? GB in all/);
+    // Ready shows on the tile, and nothing else needs to say so.
+    await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
+    await expect(settings(page).getByText(/Set up and ready/)).toHaveCount(0);
   });
 
   test("a setup under way is found again when its settings are opened again", async ({ page }) => {

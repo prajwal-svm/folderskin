@@ -12,7 +12,14 @@ import { DeleteIcon } from "../icons/delete";
 import { InfoIcon } from "../icons/info";
 import { LoaderIcon } from "../icons/loader";
 
-type Setup = { stage: string; file: string | null; done: number; total: number };
+/**
+ * A setup under way: the file coming in, and for the whole download how much there was to fetch
+ * when it started and how much of each file has come since (from where that file resumed).
+ */
+type Setup = { stage: string; file: string | null; done: number; total: number; whole: number; from: Record<string, number>; got: Record<string, number> };
+
+/** How much of the whole download has come so far. */
+const wholeDone = (setup: Setup) => Object.values(setup.got).reduce((sum, n) => sum + n, 0);
 
 /**
  * The Local Model, with no key and no account: the model, and folded away beneath it the machine
@@ -50,10 +57,11 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     };
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (from?: LocalStatus) => {
     setProblem(null);
     setStopping(false);
-    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0 });
+    const whole = (from ?? status)?.download_bytes ?? 0;
+    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0, whole, from: {}, got: {} });
     const ended = setupBegan();
     const onEvent = (e: AiEvent) =>
       setSetup((s) => {
@@ -61,8 +69,12 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
         switch (e.type) {
           case "stage":
             return { ...s, stage: e.message };
-          case "download":
-            return { ...s, file: e.file, done: e.done, total: e.total };
+          case "download": {
+            // A file that resumes starts where it left off: only what comes now counts.
+            const from = e.file in s.from ? s.from : { ...s.from, [e.file]: e.done };
+            const got = { ...s.got, [e.file]: Math.max(0, e.done - from[e.file]) };
+            return { ...s, file: e.file, done: e.done, total: e.total, from, got };
+          }
           case "progress":
             return { ...s, done: e.step, total: e.steps };
           case "log":
@@ -85,11 +97,11 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       setSetup(null);
       setStopping(false);
     }
-  }, [onChanged]);
+  }, [onChanged, status]);
   useEffect(() => {
     looked.current = (s) => {
       // Asking to set up while a setup runs joins it (ai_local_setup), with its progress from here on.
-      if (s.setting_up) void start();
+      if (s.setting_up) void start(s);
       // The status has just asked the runtime whether it starts; the provider list goes by that too.
       else onChanged();
     };
@@ -122,8 +134,11 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     );
   }
 
-  const share = setup && setup.total > 0 ? Math.min(100, (setup.done / setup.total) * 100) : 0;
+  // The bar is the whole download's when it's known how much that is, the file's otherwise.
+  const share = !setup ? 0 : setup.whole > 0 ? Math.min(100, (wholeDone(setup) / setup.whole) * 100) : setup.total > 0 ? Math.min(100, (setup.done / setup.total) * 100) : 0;
   const short = status ? spaceShort(status) : null;
+  // A stop that was asked for isn't a failure: it says what was kept, with one way on.
+  const stopped = problem?.code === "stopped";
   return (
     <div className="local-setup">
       {status && (
@@ -186,7 +201,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           {status.note && <p className="local-note">{status.note}</p>}
         </div>
       )}
-      {status && !status.ready && status.can_set_up && !setup && (
+      {status && !status.ready && status.can_set_up && !setup && !stopped && (
         <div className="local-go">
           <span className={short ? "local-note is-warn" : "local-note"}>{short ?? whatItTakes(status)}</span>
           <button type="button" className="btn btn-primary" disabled={short !== null} onClick={() => void start()}>
@@ -207,10 +222,21 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           </div>
           <p className="local-note">
             {setup.file ? `${setup.file}: ${formatBytes(setup.done)} of ${formatBytes(setup.total)}` : "Starting"}
+            {setup.whole > 0 && ` · ${formatBytes(Math.min(wholeDone(setup), setup.whole))} of ${formatBytes(setup.whole)} in all`}
           </p>
         </div>
       )}
-      {problem && (
+      {stopped && !setup && (
+        <div className="local-go" role="status">
+          <span className="local-note">{problem.message}</span>
+          {status?.can_set_up && (
+            <button type="button" className="btn btn-primary" onClick={() => void start()}>
+              Carry on setting up
+            </button>
+          )}
+        </div>
+      )}
+      {problem && !stopped && (
         <div className="turn-error" role="alert">
           <p className="turn-error-text">{problem.message}</p>
           {problem.fix && (
@@ -221,9 +247,9 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
             </ul>
           )}
           <div className="turn-actions">
-            {status?.can_set_up && (problem.code === "stopped" || worthRetrying(problem.code)) && (
+            {status?.can_set_up && worthRetrying(problem.code) && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void start()}>
-                {problem.code === "stopped" ? "Carry on setting up" : "Try again"}
+                Try again
               </button>
             )}
             {problem.ask && (
