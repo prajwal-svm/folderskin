@@ -1,5 +1,4 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // The tests run inside workerd with local D1, R2 and rate-limit simulators, and never reach the
@@ -7,7 +6,9 @@ import { defineConfig } from "vitest/config";
 // service fetches (Turnstile, webhooks) is stubbed in the test that expects it. `outboundService`
 // answers every other request with an error, so a test that forgot a stub fails instead of going online.
 export default defineConfig(async () => {
-  const migrations = await readD1Migrations(fileURLToPath(new URL("./migrations", import.meta.url)));
+  // Relative to this folder, which `pnpm test` runs in, here and in CI. The service is typechecked
+  // against the Workers types only, so this file can't use Node's own modules.
+  const migrations = await readD1Migrations("./migrations");
   return {
     plugins: [
       cloudflareTest({
