@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 pub fn apply(args: &ApplyArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let what = preview::apply(&args.folder, &args.image, args.focus.unwrap_or((0.5, 0.5)))?;
+    focus_unused(args.focus, what, out);
     out.result(
         Some(&args.folder),
         "applied",
@@ -71,6 +72,7 @@ pub fn rgb(hex: &str) -> Result<[u8; 3], CliError> {
 
 pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let (png, what) = rendered(args, preview::look())?;
+    focus_unused(args.focus, what, out);
     images::write_as_named(&png, &args.out, "save the preview")?;
     let (place, stdout) = place(&args.out);
     out.result(
@@ -83,6 +85,17 @@ pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
     Ok(())
 }
 
+/// Says that `--focus` was left out when the picture turned out to be a finished folder, which is
+/// used as it is and not cropped.
+fn focus_unused(focus: Option<(f32, f32)>, became: &str, out: &Arc<Out>) {
+    if focus.is_some() && became == FINISHED {
+        out.warn("--focus is left out: a finished folder is used as it is, not cropped");
+    }
+}
+
+/// What a finished folder becomes, as [`preview::becomes`] says it.
+const FINISHED: &str = "a finished folder, used as it is";
+
 /// The PNG `render` writes, with artwork on the folder of `style`, and what it became.
 fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), CliError> {
     let focus = args.focus.unwrap_or((0.5, 0.5));
@@ -90,7 +103,10 @@ fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), 
         (Some(path), _) => {
             let (img, _) = images::load(path)?;
             let skin = preview::skin(img, focus, path)?;
-            (skin.preview_png_in(args.size, style), skin.describe())
+            (
+                skin.preview_png_in(args.size, style),
+                preview::becomes(&skin, style),
+            )
         }
         (None, Some(hex)) => {
             let [r, g, b] = rgb(hex)?;
@@ -98,10 +114,11 @@ fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), 
                 rgba: RgbaImage::from_pixel(SKIN_WIDTH, SKIN_HEIGHT, image::Rgba([r, g, b, 255])),
                 focus,
             };
-            (
-                render_preview_png_in(&art, args.size, style),
-                "artwork on FolderSkin's folder",
-            )
+            let becomes = match style {
+                Style::Mac => "artwork on FolderSkin's folder",
+                Style::Windows => "artwork on Windows' folder",
+            };
+            (render_preview_png_in(&art, args.size, style), becomes)
         }
         (None, None) => {
             return Err(CliError::usage(

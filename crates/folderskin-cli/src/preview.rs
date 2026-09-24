@@ -31,6 +31,16 @@ pub fn look() -> Style {
     }
 }
 
+/// What a picture becomes on the folder of `style`, in words: artwork on FolderSkin's folder or
+/// on Windows', or a finished folder used as it is.
+pub fn becomes(skin: &Skin, style: Style) -> &'static str {
+    match (skin, style) {
+        (Skin::Folder(_), _) => skin.describe(),
+        (Skin::Artwork(_), Style::Mac) => "artwork on FolderSkin's folder",
+        (Skin::Artwork(_), Style::Windows) => "artwork on Windows' folder",
+    }
+}
+
 /// A contact sheet's cells and columns.
 const CELL: u32 = 256;
 const COLUMNS: u32 = 4;
@@ -95,7 +105,7 @@ pub fn preview(picture: &Path, dir: &Path) -> Result<(PathBuf, &'static str), Cl
         .with_extension("png");
     std::fs::write(&dest, skin.preview_png_in(PREVIEW_SIZE, look()))
         .map_err(|e| CliError::io("save the preview", &dest, &e))?;
-    Ok((dest, skin.describe()))
+    Ok((dest, becomes(&skin, look())))
 }
 
 /// Every preview in `previews`, `CELL` px square, `COLUMNS` to a row, in the order given.
@@ -133,7 +143,7 @@ pub fn apply(folder: &Path, picture: &Path, focus: (f32, f32)) -> Result<&'stati
     apply_icon(folder, &skin.icon_set_in(&ICON_SIZES, look()))
         .map_err(|e| apply_error(folder, e))?;
     refresh_shell_icons();
-    Ok(skin.describe())
+    Ok(becomes(&skin, look()))
 }
 
 pub fn apply_error(folder: &Path, e: ApplyError) -> CliError {
@@ -186,6 +196,14 @@ mod tests {
         let sheet = image::open(dir.join("_sheet.png")).unwrap();
         assert_eq!((sheet.width(), sheet.height()), (CELL * 4, CELL * 2));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn what_a_picture_becomes_names_the_folder_it_goes_on() {
+        let art = RgbaImage::from_pixel(64, 60, image::Rgba([40, 120, 200, 255]));
+        let skin = skin(art, (0.5, 0.5), Path::new("a.png")).unwrap();
+        assert_eq!(becomes(&skin, Style::Mac), "artwork on FolderSkin's folder");
+        assert_eq!(becomes(&skin, Style::Windows), "artwork on Windows' folder");
     }
 
     #[test]

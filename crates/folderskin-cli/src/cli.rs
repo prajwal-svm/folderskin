@@ -21,7 +21,7 @@ pub struct Cli {
     #[arg(long, short, global = true)]
     pub verbose: bool,
     /// The folder artwork goes on, as in the app: mac or windows (default: the one chosen in the
-    /// app)
+    /// app). For apply, render, image check and crop, and ai gen, batch and theme
     #[arg(long, global = true, value_enum)]
     pub look: Option<LookArg>,
     #[command(subcommand)]

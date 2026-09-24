@@ -37,6 +37,11 @@ pub fn main() -> ExitCode {
         Err(e) => return usage(e, json, &command, &args),
     };
     let out = Out::new(cli.json, cli.verbose);
+    // Only some commands put artwork on a folder: the rest would take --look and ignore it.
+    if cli.look.is_some() && !uses_look(&cli.command) {
+        out.error(&look_unused(), &command);
+        return ExitCode::from(Exit::Usage as u8);
+    }
     preview::set_look(match cli.look {
         Some(cli::LookArg::Mac) => folderskin_core::compositor::Style::Mac,
         Some(cli::LookArg::Windows) => folderskin_core::compositor::Style::Windows,
@@ -55,6 +60,30 @@ pub fn main() -> ExitCode {
             ExitCode::from(e.exit as u8)
         }
     }
+}
+
+/// Whether `command` puts artwork on a folder, whose look `--look` chooses.
+fn uses_look(command: &Command) -> bool {
+    use cli::{AiCommand, ImageCommand};
+    matches!(
+        command,
+        Command::Apply(_)
+            | Command::Render(_)
+            | Command::Image(
+                ImageCommand::Render(_) | ImageCommand::Check { .. } | ImageCommand::Crop(_)
+            )
+            | Command::Ai(AiCommand::Gen(_) | AiCommand::Batch(_) | AiCommand::Theme(_))
+    )
+}
+
+/// `--look` given to a command it would change nothing for.
+fn look_unused() -> CliError {
+    CliError::usage(
+        "That command isn't quite right.",
+        "--look chooses the folder artwork goes on, which only apply, render, ai gen, ai batch, \
+         ai theme, image check and image crop do.",
+    )
+    .fix("Leave --look out of this command.")
 }
 
 /// Runs one command.
@@ -249,6 +278,36 @@ mod tests {
         );
         assert!(!error.why.contains("help"), "{error:?}");
         assert_eq!(error.fix, ["See what it takes: folderskin image --help"]);
+    }
+
+    #[test]
+    fn the_look_is_refused_where_nothing_goes_on_a_folder() {
+        let takes = |words: &[&str]| {
+            let mut typed = vec!["folderskin", "--look", "windows"];
+            typed.extend_from_slice(words);
+            uses_look(&Cli::try_parse_from(args(&typed)).unwrap().command)
+        };
+        for words in [
+            &["render", "a.png"][..],
+            &["apply", "D:/x", "--image", "a.png"],
+            &["image", "check", "a.png"],
+            &["image", "crop", "a.png"],
+            &["ai", "gen", "a boat"],
+            &["ai", "theme", "D:/x"],
+        ] {
+            assert!(takes(words), "{words:?}");
+        }
+        for words in [
+            &["template"][..],
+            &["revert", "D:/x"],
+            &["image", "trim", "a.png"],
+            &["ai", "key", "list"],
+            &["ai", "setup"],
+            &["packs", "index"],
+        ] {
+            assert!(!takes(words), "{words:?}");
+        }
+        assert_eq!(look_unused().exit, Exit::Usage);
     }
 
     #[test]
