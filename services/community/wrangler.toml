@@ -35,7 +35,7 @@ compatibility_date = "2026-08-15"
 # be ways in that the WAF rule and Turnstile's hostname check don't cover.
 workers_dev = false
 preview_urls = false
-# routes = [{ pattern = "community.example.org", custom_domain = true }]
+routes = [{ pattern = "community.folderskin.app", custom_domain = true }]
 
 # Workers Logs stay off: they keep each request's URL, and a phone link's URL is the link itself.
 # The Worker logs only its own short error lines, never a request, a header or a secret.
@@ -43,7 +43,7 @@ preview_urls = false
 [[d1_databases]]
 binding = "DB"
 database_name = "folderskin-community"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "21bafbdc-055f-4cfd-ae03-6efbe866a8d3"
 migrations_dir = "migrations"
 
 # Private: pictures waiting for review and the contact sheets. Never given a public address.
@@ -69,10 +69,11 @@ namespace_id = "1001"
 simple = { limit = 120, period = 60 }
 
 # Optional: email to the maintainer's own address, which has to be a verified destination in
-# Email Routing. MAIL_TO below is the same address; MAIL_FROM is one on the zone.
-[[send_email]]
-name = "MAILER"
-destination_address = "maintainer@example.org"
+# Email Routing. MAIL_TO below is the same address; MAIL_FROM is one on the zone. Off until
+# Email Routing is set up on folderskin.app: the webhook covers anything urgent meanwhile.
+# [[send_email]]
+# name = "MAILER"
+# destination_address = "maintainer@example.org"
 
 # The daily clean-up and digest.
 [triggers]
@@ -82,8 +83,8 @@ crons = ["17 7 * * *"]
 # The maintainer's signing keys (base64url Ed25519 public keys, comma separated), from
 # `folderskin-tools community keygen`. Empty means nobody can use the admin endpoints; the phone
 # links in notifications still work.
-ADMIN_KEYS = ""
-PUBLIC_BASE_URL = "https://community.example.org"
+ADMIN_KEYS = "3EuyfNm69LvmEeAFaMb6aBCF1jA8bWilIEk-FxjIOi0"
+PUBLIC_BASE_URL = "https://community.folderskin.app"
 # Cloudflare's always-passes test key until the real widget exists.
 TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
 MAIL_TO = "maintainer@example.org"
