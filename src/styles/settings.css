@@ -13,8 +13,8 @@
 
 .modal-close.is-floating {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 18px;
+  right: 16px;
   z-index: 2;
   /* What scrolls up under it passes behind, not through. */
   background: var(--island);
@@ -128,6 +128,16 @@
   color: var(--ink);
 }
 
+/* The keyboard is always on the chosen page, so that one shows it in the accent. */
+.settings-nav-btn.is-active:focus-visible {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+
+.settings-nav-btn.is-active:focus-visible svg {
+  color: var(--accent-ink);
+}
+
 .settings-nav-text {
   min-width: 0;
   overflow: hidden;
@@ -135,32 +145,39 @@
   white-space: nowrap;
 }
 
-.settings-nav-empty {
-  padding: 8px 10px;
-  font-weight: 600;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
 /* ---------- the page ---------- */
 
-/* The page scrolls below a strip of its own for the close button, so nothing passes under it. */
+/* Its first heading shares a line with the search and the close button; what scrolls up passes
+   behind the button. */
 .settings-main {
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 30px;
-  margin-top: 46px;
-  padding: 8px 34px 32px;
+  padding: 24px 34px 32px;
   overflow-y: auto;
   overflow-x: hidden;
   /* As the other dialogs do: what scrolls up fades out rather than meeting an edge. */
   mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
   animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+/* Nothing found: the page stays out of sight, so what's open on it isn't lost, and says so. */
+.settings-main.is-empty > :not(.settings-empty) {
+  display: none;
+}
+
+.settings-empty {
+  margin: auto;
+  max-width: 36ch;
+  text-align: center;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .set-section {
@@ -174,6 +191,15 @@
   font-weight: 800;
   font-size: 15px;
   letter-spacing: -0.01em;
+}
+
+/* A title the search found, lit as its rows are, without moving what's around it. */
+.set-section-title.is-match {
+  align-self: flex-start;
+  margin: -2px -8px;
+  padding: 2px 8px;
+  border-radius: var(--r-control);
+  background: var(--accent-wash);
 }
 
 .set-section-note {
@@ -205,13 +231,23 @@
   border-bottom: 0;
 }
 
-/* What the search found, lit in the accent. The wash runs a little past the row's text. */
+/* What the search found, lit in the accent. The wash runs a little past the row's text, and the
+   hairlines either side of it give way, so none meets its rounded corners. */
 .set-row.is-match {
   margin: 0 -12px;
   padding-left: 12px;
   padding-right: 12px;
   border-radius: var(--r-control);
   background: var(--accent-wash);
+}
+
+.set-row.is-match,
+.set-row:has(+ .set-row.is-match) {
+  border-bottom-color: transparent;
+}
+
+.set-row.is-match + .set-row.is-match {
+  margin-top: 2px;
 }
 
 .set-row-text {
@@ -260,6 +296,16 @@
   height: 36px;
 }
 
+/* The plain folder as FolderSkin draws it, where the skins are kept. */
+.set-row-folder {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .set-path {
   display: block;
   font-family: var(--mono);
@@ -274,6 +320,28 @@
   flex-direction: column;
   gap: 12px;
   padding-top: 14px;
+}
+
+/* Buttons on a page are the rows' size, whichever part of the app they come from. */
+.settings-main .set-block .btn:not(.btn-sm) {
+  height: 32px;
+  gap: 6px;
+  padding: 0 13px;
+  font-size: 12.5px;
+}
+
+/* Connecting to GitHub in the GitHub section: as wide as it needs, lined up with the page. */
+.settings-main .gh-connect {
+  max-width: 420px;
+}
+
+.settings-main .gh-connect > .btn-ghost,
+.settings-main .gh-cancel {
+  align-self: flex-start;
+}
+
+.settings-main .gh-cancel {
+  margin-left: -6px;
 }
 
 /* Its text lines up with the page's; the padding is only for the wash behind it on hover. */
@@ -314,8 +382,7 @@
   padding: 0;
 }
 
-.set-seg-btn:hover,
-.set-seg-btn:focus-visible {
+.set-seg-btn:hover {
   color: var(--ink);
 }
 
@@ -329,19 +396,34 @@
   background: var(--well-2);
 }
 
+/* The keyboard: a wash on one not chosen, and the chosen one edged and drawn in the accent, as a
+   field with the focus is. */
+.set-seg-btn:not(.is-on):focus-visible {
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+
+.set-seg-btn.is-on:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Room inside for the chosen one's ring, so it ends where the controls above and below it do. */
 .set-swatches {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 4px;
+  margin: -4px 0;
 }
 
-/* A ring in its own colour, a gap of the page's colour inside it, when it's the one chosen. */
+/* Each is its accent's --swatch-<id> (tokens.css). */
 .set-swatch {
   width: 22px;
   height: 22px;
   border-radius: 50%;
   background: var(--swatch);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 0 0 1px var(--island-line);
   transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast) ease;
 }
 
@@ -350,23 +432,22 @@
   transform: scale(1.1);
 }
 
-/* Black and white: half of each, since it's black on a light window and white on a dark one. */
+/* The chosen one: a ring in its own colour, with a gap that shows whatever is behind it. This is
+   the choice, not the focus. */
+.set-swatch.is-on {
+  box-shadow: none;
+  outline: 2px solid var(--swatch);
+  outline-offset: 2px;
+}
+
+/* Black and white: half of each, since it's black on a light window and white on a dark one. Its
+   white half keeps an edge on the light window, and its ring is the ink. */
 .set-swatch.is-mono {
-  background: linear-gradient(135deg, #1d1d1f 0 50%, #ffffff 50% 100%);
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .set-swatch.is-mono.is-on {
-  box-shadow:
-    inset 0 0 0 1px var(--line),
-    0 0 0 2px var(--island),
-    0 0 0 4px var(--ink);
-}
-
-.set-swatch.is-on {
-  box-shadow:
-    0 0 0 2px var(--island),
-    0 0 0 4px var(--swatch);
+  outline: 2px solid var(--ink);
 }
 
 /* ---------- licence profiles ---------- */
@@ -432,12 +513,13 @@
   overflow-wrap: anywhere;
 }
 
+/* The accent's ink, a little toward the page's, to read at this size on every accent. */
 .set-chip {
   flex: none;
   padding: 2px 8px;
   border-radius: var(--r-pill);
   background: var(--accent-soft);
-  color: var(--accent-ink);
+  color: color-mix(in srgb, var(--accent-ink) 80%, var(--ink));
   font-weight: 700;
   font-size: 11px;
 }
@@ -451,7 +533,8 @@
   white-space: nowrap;
 }
 
-/* Its buttons show while it's pointed at or has the focus, as a layer's do in the composer. */
+/* Its buttons show while it's pointed at or the keyboard is on it, as a layer's do in the
+   composer. */
 .set-profile-actions {
   flex: none;
   display: flex;
@@ -461,7 +544,7 @@
 }
 
 .set-profile:hover .set-profile-actions,
-.set-profile:focus-within .set-profile-actions {
+.set-profile:has(:focus-visible) .set-profile-actions {
   opacity: 1;
 }
 
@@ -546,6 +629,6 @@
   }
 
   .settings-main {
-    padding: 8px 20px 28px;
+    padding: 24px 20px 28px;
   }
 }

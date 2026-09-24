@@ -515,6 +515,11 @@
   background: var(--island);
 }
 
+/* A field whose problem is shown under it. */
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
 .input::placeholder {
   color: var(--hint);
   font-weight: 600;

@@ -1114,6 +1114,7 @@ export default function App() {
       {settingsTab && (
         <Settings
           tab={settingsTab}
+          folderPicture={defaultThumb}
           themePref={themePref}
           onThemePref={setThemePref}
           rail={layout.rail}

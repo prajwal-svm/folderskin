@@ -45,21 +45,25 @@ function firstProfiles(old: unknown): Profiles {
 
 /**
  * Profiles as saved, made sound: unknown licences back to the first, names trimmed, repeated ids
- * dropped, and a default that is one of them. Never empty.
+ * dropped, a name used twice numbered ("Profile 2"), and a default that is one of them. Never
+ * empty.
  */
 export function readProfiles(raw: unknown, old?: unknown): Profiles {
   const v = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
   if (!v || !Array.isArray(v.list)) return firstProfiles(old);
   const seen = new Set<string>();
+  const names = new Set<string>();
   const list: LicenceProfile[] = [];
   for (const p of v.list.slice(0, MAX_PROFILES)) {
     if (typeof p !== "object" || p === null) continue;
     const r = p as Record<string, unknown>;
     if (typeof r.id !== "string" || !r.id || seen.has(r.id)) continue;
     seen.add(r.id);
+    const name = unusedName(cleanProfileName(typeof r.name === "string" ? r.name : "") || "Profile", names);
+    names.add(name.toLowerCase());
     list.push({
       id: r.id,
-      name: cleanProfileName(typeof r.name === "string" ? r.name : "") || "Profile",
+      name,
       author: typeof r.author === "string" && isGithubUser(r.author) ? r.author : "",
       license: isLicense(r.license) ? r.license : LICENSES[0].id,
     });
@@ -73,14 +77,29 @@ export function cleanProfileName(name: string): string {
   return Array.from(name.replace(/\s+/g, " ").trim()).slice(0, MAX_PROFILE_NAME).join("");
 }
 
-export function loadProfiles(): Profiles {
-  try {
-    const raw = JSON.parse(localStorage.getItem(PROFILES_KEY) ?? "null");
-    const old = raw ? undefined : JSON.parse(localStorage.getItem(OLD_SHARING_KEY) ?? "null");
-    return readProfiles(raw, old);
-  } catch {
-    return firstProfiles(null);
+/** `name`, or with the first number after it that no name in `taken` (lowercased) has yet. */
+function unusedName(name: string, taken: Set<string>): string {
+  let next = name;
+  for (let n = 2; taken.has(next.toLowerCase()); n++) {
+    const suffix = ` ${n}`;
+    next = Array.from(name).slice(0, MAX_PROFILE_NAME - suffix.length).join("").trimEnd() + suffix;
   }
+  return next;
+}
+
+/** One key as JSON, or null when it's missing, broken or can't be read. */
+function readKey(key: string): unknown {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+export function loadProfiles(): Profiles {
+  // Read apart, so broken profiles still fall back to what sharing kept before them.
+  const raw = readKey(PROFILES_KEY);
+  return readProfiles(raw, raw ? undefined : readKey(OLD_SHARING_KEY));
 }
 
 export function saveProfiles(profiles: Profiles): void {
@@ -93,12 +112,19 @@ export function saveProfiles(profiles: Profiles): void {
 
 export const defaultProfile = (p: Profiles): LicenceProfile => p.list.find((x) => x.id === p.defaultId) ?? p.list[0];
 
-/** Why a profile can't be kept as it is, or null when it can. */
-export function profileProblem(p: Pick<LicenceProfile, "name" | "author">, others: LicenceProfile[]): string | null {
+/** What's wrong with a profile, and the field it's about ("list" when it's no one field). */
+export type ProfileProblem = { field: "name" | "author" | "list"; text: string };
+
+/**
+ * Why a profile can't be kept as it is, or null when it can. `others` is every profile but this
+ * one, so a new profile finds the list already full there.
+ */
+export function profileProblem(p: Pick<LicenceProfile, "name" | "author">, others: LicenceProfile[]): ProfileProblem | null {
   const name = cleanProfileName(p.name);
-  if (!name) return "Give the profile a name.";
-  if (others.some((o) => o.name.toLowerCase() === name.toLowerCase())) return `There's a profile called ${name} already.`;
-  if (p.author && !isGithubUser(p.author)) return "Credit goes to a GitHub user name: letters, numbers and single dashes.";
+  if (!name) return { field: "name", text: "Give the profile a name." };
+  if (others.some((o) => o.name.toLowerCase() === name.toLowerCase())) return { field: "name", text: `There's a profile called ${name} already.` };
+  if (p.author && !isGithubUser(p.author)) return { field: "author", text: "Credit goes to a GitHub user name: letters, numbers and single dashes." };
+  if (others.length >= MAX_PROFILES) return { field: "list", text: `There can be ${MAX_PROFILES} profiles at most. Delete one to add this one.` };
   return null;
 }
 

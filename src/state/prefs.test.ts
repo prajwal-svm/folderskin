@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { ACCENTS, applyPrefs, readPrefs } from "./prefs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ACCENTS, applyPrefs, readPrefs, reducesMotion, setPrefs } from "./prefs";
 
 describe("appearance preferences", () => {
   it("read back what was saved, and the defaults for anything else", () => {
@@ -21,5 +21,28 @@ describe("appearance preferences", () => {
   it("offer each accent once, blue first", () => {
     expect(ACCENTS[0].id).toBe("blue");
     expect(new Set(ACCENTS.map((a) => a.id)).size).toBe(ACCENTS.length);
+  });
+
+  describe("keeping still", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    const computerAsks = (reduce: boolean) => {
+      vi.stubGlobal("document", { documentElement: { dataset: {} } });
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: reduce && q.includes("reduce") }));
+    };
+
+    it("follows Motion: Reduced even when the computer doesn't ask for it", () => {
+      computerAsks(false);
+      setPrefs({ motion: "system" });
+      expect(reducesMotion()).toBe(false);
+      setPrefs({ motion: "reduced" });
+      expect(reducesMotion()).toBe(true);
+    });
+
+    it("follows the computer's own setting under System", () => {
+      computerAsks(true);
+      setPrefs({ motion: "system" });
+      expect(reducesMotion()).toBe(true);
+    });
   });
 });

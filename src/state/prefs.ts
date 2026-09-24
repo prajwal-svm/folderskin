@@ -5,14 +5,15 @@
  */
 import { useSyncExternalStore } from "react";
 
+/** The accents Settings offers, each drawn by its --swatch-<id> in tokens.css. */
 export const ACCENTS = [
-  { id: "blue", label: "Blue", swatch: "#3a86ff" },
-  { id: "purple", label: "Purple", swatch: "#8b5cf6" },
-  { id: "pink", label: "Pink", swatch: "#ec4899" },
-  { id: "orange", label: "Orange", swatch: "#f97316" },
-  { id: "green", label: "Green", swatch: "#16a34a" },
+  { id: "blue", label: "Blue" },
+  { id: "purple", label: "Purple" },
+  { id: "pink", label: "Pink" },
+  { id: "orange", label: "Orange" },
+  { id: "green", label: "Green" },
   /** Black on a light window, white on a dark one. */
-  { id: "mono", label: "Black and white", swatch: "mono" },
+  { id: "mono", label: "Black and white" },
 ] as const;
 
 export type Accent = (typeof ACCENTS)[number]["id"];
@@ -78,4 +79,13 @@ function subscribe(listener: () => void): () => void {
 
 export function usePrefs(): Prefs {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+
+/**
+ * Whether what moves by script should keep still: Motion is Reduced here, or the computer asks
+ * for less motion. The stylesheets and the animated icons read the same two things themselves.
+ */
+export function reducesMotion(): boolean {
+  if (snapshot().motion === "reduced") return true;
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }

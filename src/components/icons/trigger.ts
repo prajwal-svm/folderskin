@@ -7,7 +7,7 @@
  * hovered or keyboard-focused, instead of listening on a wrapper div: that div is invalid inside
  * a button and only reacts to the glyph's own few pixels.
  */
-import { useAnimationControls } from "motion/react";
+import { useAnimationControls, useReducedMotionConfig } from "motion/react";
 import { useLayoutEffect, useMemo, useRef } from "react";
 
 export interface IconProps {
@@ -26,11 +26,17 @@ const HOST = "button, a, label, [role='button'], [role='tab'], [data-icon-host]"
  *
  * A layout effect, so `playOnMount` starts before the first paint instead of showing the
  * finished icon for a frame and then restarting it.
+ *
+ * With less motion asked for (Settings > Motion, or the computer's own setting) the icon keeps
+ * its resting pose: MotionConfig stills transforms by itself, but not a stroke drawing itself in
+ * or a part fading.
  */
 export function useIconTrigger(play: () => void, reset: () => void, playOnMount = false) {
   const ref = useRef<SVGSVGElement>(null);
+  const still = useReducedMotionConfig() ?? false;
 
   useLayoutEffect(() => {
+    if (still) return;
     const svg = ref.current;
     const host = svg?.closest<HTMLElement>(HOST) ?? svg?.parentElement;
     if (!host) return;
@@ -48,7 +54,7 @@ export function useIconTrigger(play: () => void, reset: () => void, playOnMount 
       host.removeEventListener("focusin", focus);
       host.removeEventListener("focusout", reset);
     };
-  }, [play, reset, playOnMount]);
+  }, [play, reset, playOnMount, still]);
 
   return ref;
 }
