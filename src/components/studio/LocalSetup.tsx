@@ -4,22 +4,13 @@ import { aiFailure, worthRetrying } from "../../lib/aiError";
 import { formatBytes } from "../../lib/tree";
 import { duration, spaceShort, whatItTakes } from "../../lib/localSetup";
 import type { AiEvent, TurnError } from "../../state/chats";
-import { setupBegan } from "../../state/localSetupRun";
+import { heard, setupBegan, useSetupProgress, wholeDone } from "../../state/localSetupRun";
 import { Confirm } from "../Confirm";
 import { CpuIcon } from "../icons/composer";
 import { CopyIcon } from "../icons/copy";
 import { DeleteIcon } from "../icons/delete";
 import { InfoIcon } from "../icons/info";
 import { LoaderIcon } from "../icons/loader";
-
-/**
- * A setup under way: the file coming in, and for the whole download how much there was to fetch
- * when it started and how much of each file has come since (from where that file resumed).
- */
-type Setup = { stage: string; file: string | null; done: number; total: number; whole: number; from: Record<string, number>; got: Record<string, number> };
-
-/** How much of the whole download has come so far. */
-const wholeDone = (setup: Setup) => Object.values(setup.got).reduce((sum, n) => sum + n, 0);
 
 /**
  * The Local Model, with no key and no account: the model, and folded away beneath it the machine
@@ -34,7 +25,8 @@ const wholeDone = (setup: Setup) => Object.values(setup.got).reduce((sum, n) => 
 export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
   const [status, setStatus] = useState<LocalStatus | null>(null);
   const [problem, setProblem] = useState<TurnError | null>(null);
-  const [setup, setSetup] = useState<Setup | null>(null);
+  // Kept for the window (state/localSetupRun.ts), so opened again part-way it counts on.
+  const setup = useSetupProgress();
   const [stopping, setStopping] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
   /** Asking whether to remove the model, or removing it. */
@@ -60,27 +52,8 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
   const start = useCallback(async (from?: LocalStatus) => {
     setProblem(null);
     setStopping(false);
-    const whole = (from ?? status)?.download_bytes ?? 0;
-    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0, whole, from: {}, got: {} });
-    const ended = setupBegan();
-    const onEvent = (e: AiEvent) =>
-      setSetup((s) => {
-        if (!s) return s;
-        switch (e.type) {
-          case "stage":
-            return { ...s, stage: e.message };
-          case "download": {
-            // A file that resumes starts where it left off: only what comes now counts.
-            const from = e.file in s.from ? s.from : { ...s.from, [e.file]: e.done };
-            const got = { ...s.got, [e.file]: Math.max(0, e.done - from[e.file]) };
-            return { ...s, file: e.file, done: e.done, total: e.total, from, got };
-          }
-          case "progress":
-            return { ...s, done: e.step, total: e.steps };
-          case "log":
-            return s;
-        }
-      });
+    const ended = setupBegan((from ?? status)?.download_bytes ?? 0);
+    const onEvent = (e: AiEvent) => heard(e);
     try {
       setStatus(await api.aiLocalSetup(onEvent));
       onChanged();
@@ -94,7 +67,6 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
         .catch(() => {});
     } finally {
       ended();
-      setSetup(null);
       setStopping(false);
     }
   }, [onChanged, status]);
@@ -221,8 +193,13 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
             <span />
           </div>
           <p className="local-note">
-            {setup.file ? `${setup.file}: ${formatBytes(setup.done)} of ${formatBytes(setup.total)}` : "Starting"}
-            {setup.whole > 0 && ` · ${formatBytes(Math.min(wholeDone(setup), setup.whole))} of ${formatBytes(setup.whole)} in all`}
+            {[
+              // The file the stage above names, once it's coming; between files, the whole alone.
+              setup.file ? `${setup.file}: ${formatBytes(setup.done)} of ${formatBytes(setup.total)}` : wholeDone(setup) === 0 ? "Starting" : null,
+              setup.whole > 0 ? `${formatBytes(Math.min(wholeDone(setup), setup.whole))} of ${formatBytes(setup.whole)} in all` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
       )}

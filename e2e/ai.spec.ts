@@ -400,11 +400,19 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
     await settings(page).getByRole("button", { name: "Set up the local model" }).click();
     await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
+    // How far the whole download has got, from the bar.
+    const bar = settings(page).locator(".local-progress .turn-progress");
+    const share = async () => parseFloat((await bar.getAttribute("style"))?.match(/--done:\s*([\d.]+)%/)?.[1] ?? "0");
+    await expect.poll(share).toBeGreaterThan(15);
+    const before = await share();
     await settings(page).getByRole("button", { name: "close" }).click();
+    await page.waitForTimeout(600);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
     // Where it has got to, with its Stop; it isn't offered as if nothing were running.
     await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
+    // And the whole download counts on from there, with what came while it was closed.
+    expect(await share()).toBeGreaterThan(before);
     await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("status").filter({ hasText: "What was downloaded is kept" })).toBeVisible();

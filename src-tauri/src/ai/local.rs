@@ -170,7 +170,12 @@ impl SetupRun {
     fn tell(&self, event: AiEvent) {
         let mut heard = lock(&self.heard);
         match &event {
-            AiEvent::Stage { .. } => heard.stage = Some(event.clone()),
+            // A new stage is about something else ("Checking", the next file): the file before it
+            // isn't where the setup has got to any more, and one that joins isn't told it is.
+            AiEvent::Stage { .. } => {
+                heard.stage = Some(event.clone());
+                heard.download = None;
+            }
             AiEvent::Download { .. } => heard.download = Some(event.clone()),
             AiEvent::Log { .. } => {
                 if heard.log.len() == KEPT_LOG {
@@ -861,6 +866,33 @@ mod tests {
         let (third, _) = keeping();
         assert!(matches!(here.join_setup(third), SetupTurn::Lead(_)));
         assert!(!here.is_setting_up(), "dropped, it lets go");
+    }
+
+    #[test]
+    fn a_window_that_joins_between_files_is_told_the_stage_alone() {
+        let here = Local::default();
+        let (first, _) = keeping();
+        let SetupTurn::Lead(lead) = here.join_setup(first) else {
+            panic!("nothing was being set up");
+        };
+        let tell = lead.listener();
+        tell(AiEvent::stage("download", "Downloading libwebp.zip"));
+        tell(AiEvent::Download {
+            file: "libwebp.zip".into(),
+            done: 100,
+            total: 100,
+        });
+        tell(AiEvent::stage("download", "Downloading sd-master.zip"));
+        let (second, second_heard) = keeping();
+        let SetupTurn::Join(_) = here.join_setup(second) else {
+            panic!("it joins the one under way");
+        };
+        // Not libwebp's last count under sd-master's stage.
+        assert_eq!(
+            *second_heard.lock().unwrap(),
+            [AiEvent::stage("download", "Downloading sd-master.zip")]
+        );
+        drop(lead);
     }
 
     #[test]

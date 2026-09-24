@@ -946,7 +946,8 @@ export const mockApi = {
     let download: AiEvent | null = null;
     const log: AiEvent[] = [];
     const tell = (event: AiEvent) => {
-      if (event.type === "stage") stage = event;
+      // A new stage is about something else: the file before it isn't heard again (ai/local.rs).
+      if (event.type === "stage") [stage, download] = [event, null];
       else if (event.type === "download") download = event;
       else if (event.type === "log") log.push(event);
       for (const listener of listeners) listener(event);
