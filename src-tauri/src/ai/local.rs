@@ -389,8 +389,9 @@ pub struct RuntimeProblem {
     pub message: String,
 }
 
-/// Below this much memory a Mac swaps while klein paints: at 1024 x 960 it peaks at 11.7 GB
-/// (measured on an M3 Pro with mflux 0.20.0, 4-bit), whatever mflux's low-RAM options.
+/// Below this much memory a Mac swaps while klein paints: at 1024 x 960 mflux's footprint peaks
+/// at 7.8 GB, decoding in tiles with a 2 GB cache (measured on an M3 Pro with mflux 0.20.0, 4-bit),
+/// and an 8 GB Mac has little more than that for everything.
 const LOW_MEMORY_GB: f64 = 16.0;
 
 /// Looks at what is installed. Asks the runtime whether it starts, which takes a second: call it
@@ -428,7 +429,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         if settings.backend == Backend::Mlx && machine.ram_gb < LOW_MEMORY_GB {
             notes.push(format!(
                 "With {:.0} GB of memory this Mac paints slowly, and other apps slow down while it \
-                 does: the model needs about 12 GB. A provider with your own key is quicker.",
+                 does: the model needs about 8 GB. A provider with your own key is quicker.",
                 machine.ram_gb
             ));
         }

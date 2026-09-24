@@ -1,7 +1,7 @@
 ---
 name: folderskin-localgen
 description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. One model, FLUX.2 [klein] 4B (Apache-2.0), for words, reference pictures and whole-folder skins alike, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon), all driven by the `folderskin` command line. Sets the machine up with `folderskin ai setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, checks and cleans pictures up (trim, clip, cut out, adjust), and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
-version: 3.1.0
+version: 3.1.1
 ---
 
 # Painting folder art locally
@@ -64,8 +64,10 @@ On a laptop with a second, integrated GPU, Vulkan lists both; on the test laptop
 plus NVIDIA) stable-diffusion.cpp chose the NVIDIA card by itself, and `doctor` lists what it sees.
 
 On an M3 Pro with 36 GB, `mlx`, `q4`: artwork about 50 s and a whole folder about 55 s, each
-including mflux's own start (about 10 s of Python loading). mflux peaks at 11.7 GB while klein
-paints, so a Mac with 8 GB swaps and is slow; 16 GB or more is comfortable.
+including mflux's own start (about 10 s of Python loading). Painting passes mflux `--vae-tiling`
+and `--mlx-cache-limit-gb 2`, so its footprint peaks at 7.8 GB (23.1 GB without, enough to freeze
+a 36 GB Mac for seconds while the picture is decoded). A Mac with 8 GB still swaps and is slow;
+16 GB or more is comfortable.
 
 ## Step 2: paint
 
