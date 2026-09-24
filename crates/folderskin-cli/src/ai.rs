@@ -402,8 +402,9 @@ fn sheet(made: &[PathBuf], out_dir: &Path, out: &Arc<Out>) -> bool {
     }
 }
 
-/// Says what `order` would paint, for --dry-run, without painting it.
-fn plan(order: &Order, out: &Arc<Out>) {
+/// Says what `order` would paint, and the folder it would go into, for --dry-run, without
+/// painting it.
+fn plan(order: &Order, out_dir: &Path, out: &Arc<Out>) {
     let what = match &order.name {
         Some(name) => format!("{name}.png"),
         None => format!("{:?}", order.idea),
@@ -413,14 +414,15 @@ fn plan(order: &Order, out: &Arc<Out>) {
         style => format!(", {style}"),
     };
     out.result(
-        None,
+        Some(out_dir),
         "plan",
         json!({"idea": order.idea, "style": order.style, "shape": order.shape,
-               "refs": order.refs, "seed": order.seed, "name": order.name}),
+               "refs": order.refs, "seed": order.seed, "name": order.name, "out": out_dir}),
         &format!(
-            "would paint {what} ({}{style}, seed {})",
+            "would paint {what} ({}{style}, seed {}) into {}",
             order.shape.id(),
-            order.seed
+            order.seed,
+            out_dir.display()
         ),
         false,
     );
@@ -492,10 +494,14 @@ fn gen(args: GenArgs, out: &Arc<Out>) -> Result<(), CliError> {
             ));
         }
     }
+    // What would stop the painting stops a dry run too: a missing runtime or model, or a
+    // reference picture that isn't there.
+    painter.check_ready(&orders[0])?;
+    let out_dir = absolute(&args.out);
     if args.dry_run {
         dry_run_note(orders.len(), &painter, out);
         for order in &orders {
-            plan(order, out);
+            plan(order, &out_dir, out);
         }
         if let Some(folder) = &args.apply {
             out.result(
@@ -508,8 +514,6 @@ fn gen(args: GenArgs, out: &Arc<Out>) -> Result<(), CliError> {
         }
         return Ok(());
     }
-    painter.check_ready(&orders[0])?;
-    let out_dir = absolute(&args.out);
     out.note(&format!(
         "painting {} with {}",
         count(args.n as usize, "picture"),
@@ -679,20 +683,19 @@ fn batch(args: &BatchArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 name,
                 raw: false,
             };
-            if !args.dry_run {
-                painter.check_ready(&order)?;
-            }
+            // A dry run too: it says what the painting would do, and so what would stop it.
+            painter.check_ready(&order)?;
             work.push((painter.clone(), order));
         }
     }
+    let out_dir = absolute(&args.out);
     if args.dry_run {
         dry_run_note(work.len(), &painter, out);
         for (_, order) in &work {
-            plan(order, out);
+            plan(order, &out_dir, out);
         }
         return Ok(());
     }
-    let out_dir = absolute(&args.out);
     out.note(&format!(
         "{} from {} with {}",
         count(work.len(), "picture"),
@@ -868,7 +871,28 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
         args.style,
         painter.describe()
     ));
+    // The picture for a folder, painted from its name.
+    let order_for = |folder: &Path, name: &str, seed: u64| Order {
+        idea: folderskin_local::prompts::theme_idea(
+            &folder.file_name().unwrap_or_default().to_string_lossy(),
+        ),
+        style: args.style.clone(),
+        shape: paint::shape(args.shape),
+        refs: Vec::new(),
+        seed,
+        name: Some(name.to_string()),
+        raw: false,
+    };
     if args.dry_run {
+        // What would stop the painting stops a dry run too, when there is anything to paint.
+        let unpainted = folders
+            .iter()
+            .zip(&names)
+            .zip(seeds.clone())
+            .find(|((_, name), _)| !out_dir.join(format!("{name}.png")).is_file());
+        if let Some(((folder, name), seed)) = unpainted {
+            painter.check_ready(&order_for(folder, name, seed))?;
+        }
         out.note("dry run: nothing is painted or applied");
         for (folder, name) in folders.iter().zip(&names) {
             let picture = out_dir.join(format!("{name}.png"));
@@ -895,17 +919,7 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
     for ((folder, name), seed) in folders.iter().zip(&names).zip(seeds) {
         let picture = out_dir.join(format!("{name}.png"));
         if !picture.is_file() {
-            let order = Order {
-                idea: folderskin_local::prompts::theme_idea(
-                    &folder.file_name().unwrap_or_default().to_string_lossy(),
-                ),
-                style: args.style.clone(),
-                shape: paint::shape(args.shape),
-                refs: Vec::new(),
-                seed,
-                name: Some(name.clone()),
-                raw: false,
-            };
+            let order = order_for(folder, name, seed);
             if first_check {
                 painter.check_ready(&order)?;
                 first_check = false;
@@ -1540,6 +1554,28 @@ mod tests {
         );
         assert_eq!(words("!!!", 40), "folder");
         assert_eq!(words("Summer '25 — Crète", 40), "summer-25-crète");
+    }
+
+    #[test]
+    fn a_dry_run_is_refused_what_the_painting_would_be() {
+        use clap::Parser;
+        let cli = crate::cli::Cli::try_parse_from([
+            "folderskin",
+            "ai",
+            "gen",
+            "a boat",
+            "--ref",
+            "no-such-picture.png",
+            "--dry-run",
+        ])
+        .unwrap();
+        let crate::cli::Command::Ai(AiCommand::Gen(args)) = cli.command else {
+            panic!("not gen");
+        };
+        // A reference that isn't there, or nothing set up on this computer: either way, not
+        // "would paint".
+        let refused = gen(args, &Out::new(true, false));
+        assert!(refused.is_err(), "a dry run said it would paint");
     }
 
     #[test]
