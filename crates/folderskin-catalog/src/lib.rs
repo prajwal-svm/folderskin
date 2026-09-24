@@ -218,6 +218,72 @@ mod tests {
     }
 
     #[test]
+    fn words_in_any_script_are_split_as_the_index_splits_them() {
+        // SQLite reads the vowel signs of Hindi and Thai, and the points of Hebrew and Arabic,
+        // as spaces: a search has to as well, or a word becomes a phrase the skins can't be
+        // searched for.
+        assert_eq!(
+            search::match_expr("हिन्दी").as_deref(),
+            Some(r#""ह"* "न"* "द"*"#)
+        );
+        assert_eq!(
+            search::match_expr("Café, x\u{305}y").as_deref(),
+            Some(r#""Café"* "x"* "y"*"#),
+            "a mark SQLite doesn't fold ends a word"
+        );
+        assert_eq!(
+            search::match_expr("cafe\u{301}").as_deref(),
+            Some("\"cafe\u{301}\"*"),
+            "an accent it folds stays with its letter"
+        );
+
+        let mut packs = sample();
+        packs.extend([
+            pack(
+                "hindi",
+                "हिन्दी गीत",
+                "someone",
+                &["music"],
+                60,
+                &["किताब", "हिन्दी"],
+            ),
+            pack("thai", "Hello", "someone", &["hello"], 61, &["สวัสดี ครับ"]),
+            pack("tamil", "தமிழ்", "someone", &["hello"], 62, &["கலை"]),
+            pack("bengali", "কলকাতা", "someone", &["city"], 63, &["কলকাতা"]),
+            pack("hebrew", "Peace", "someone", &["hello"], 64, &["שָׁלוֹם"]),
+            pack("arabic", "Welcome", "someone", &["hello"], 65, &["مَرْحَبًا"]),
+        ]);
+        let c = catalog(&packs);
+        for (q, id, skin) in [
+            ("किताब", "hindi", "किताब"),
+            ("हिन्दी", "hindi", "हिन्दी"),
+            ("สวัสดี", "thai", "สวัสดี ครับ"),
+            ("தமிழ்", "tamil", ""),
+            ("கலை", "tamil", "கலை"),
+            ("কলকাতা", "bengali", "কলকাতা"),
+            ("שָׁלוֹם", "hebrew", "שָׁלוֹם"),
+            ("مَرْحَبًا", "arabic", "مَرْحَبًا"),
+        ] {
+            let r = c
+                .search(&Query {
+                    q,
+                    limit: 10,
+                    ..Query::default()
+                })
+                .unwrap_or_else(|e| panic!("{q}: {e}"));
+            assert!(ids(&r).contains(&id), "{q}: {:?}", ids(&r));
+            if !skin.is_empty() {
+                assert!(
+                    r.skins.iter().any(|s| s.pack == id && s.name == skin),
+                    "{q}: {:?}",
+                    r.skins
+                );
+            }
+        }
+        assert_eq!(ids(&find(&c, "cafe\u{301}")), ["cafe-noir"]);
+    }
+
+    #[test]
     fn a_name_match_ranks_above_a_skin_match() {
         let c = catalog(&sample());
         // "night" names Night prints, and is only a skin of Classic Art.

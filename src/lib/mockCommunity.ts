@@ -42,13 +42,18 @@ export const SKIN_HITS = 12;
 export const MAX_FACETS = 200;
 const MAX_WORDS = 8;
 
-/** Lower case, accents off, split on anything but letters and digits: how the index sees text. */
+/**
+ * Lower case, accents off, split on anything but letters, digits and private-use characters: how
+ * the index sees text. Only the Latin accents come off; every other mark, such as the vowel
+ * signs of Hindi or Thai, ends a word there, so "हिन्दी" is ह, न and द, as it is to the app.
+ */
 export function words(text: string): string[] {
   return text
     .normalize("NFD")
-    .replace(/\p{M}/gu, "")
+    .replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFC")
     .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
+    .split(/[^\p{L}\p{N}\p{Co}]+/u)
     .filter(Boolean);
 }
 

@@ -6,9 +6,11 @@
 //! "van star" narrows it to packs that also say something starting with "van".
 
 use crate::build::{APPLICATION_ID, CATALOG_VERSION};
+use regex::Regex;
 use rusqlite::{Connection, OpenFlags, ToSql};
 use serde::Serialize;
 use std::path::Path;
+use std::sync::LazyLock;
 
 /// The most packs one page holds.
 pub const MAX_PAGE: usize = 200;
@@ -167,14 +169,12 @@ impl Catalog {
 
     /// One page of packs matching `query`, with the skins and the tags that match too.
     pub fn search(&self, query: &Query) -> Result<Results, String> {
-        self.run(query)
-            .map_err(|e| format!("couldn't search the packs: {e}"))
+        self.run(query).map_err(unreadable)
     }
 
     /// Packs by id, in the order asked for; ids the catalog doesn't have are left out.
     pub fn packs(&self, ids: &[String]) -> Result<Vec<PackRow>, String> {
-        self.packs_by_id(ids)
-            .map_err(|e| format!("couldn't read the packs: {e}"))
+        self.packs_by_id(ids).map_err(unreadable)
     }
 
     /// Every pack's id and hash, in id order: the versions this catalog publishes.
@@ -182,7 +182,7 @@ impl Catalog {
         self.rows("SELECT id, hash FROM packs ORDER BY id", &[], |r| {
             Ok((r.get(0)?, r.get(1)?))
         })
-        .map_err(|e| format!("couldn't read the packs: {e}"))
+        .map_err(unreadable)
     }
 
     fn packs_by_id(&self, ids: &[String]) -> rusqlite::Result<Vec<PackRow>> {
@@ -229,8 +229,10 @@ impl Catalog {
             )?
         };
 
+        // The strip of skins is extra: should the skins index ever refuse what was typed, the
+        // packs still come.
         let skins = if words.is_some() && self.skins > 0 {
-            self.skin_hits(query.q, tag)?
+            self.skin_hits(query.q, tag).unwrap_or_default()
         } else {
             Vec::new()
         };
@@ -484,12 +486,32 @@ fn damaged() -> String {
     "the catalog of community packs is damaged".into()
 }
 
-/// The words of a search, split the way the index splits them.
-fn words(q: &str) -> impl Iterator<Item = String> + '_ {
-    q.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .take(MAX_WORDS)
-        .map(str::to_lowercase)
+/// What a catalog that opened but can't be read says. SQLite's own words ("database disk image
+/// is malformed") mean nothing to someone searching for skins; they only go to the log.
+fn unreadable(e: rusqlite::Error) -> String {
+    eprintln!("folderskin: the community catalog couldn't be read: {e}");
+    "the list of community packs on this computer couldn't be read. Try Refresh".into()
+}
+
+/// A word as the index's tokenizer, unicode61, reads one: a letter, digit or private-use
+/// character, then more of them and any of the combining accents it folds away (SQLite's list,
+/// U+0300 to U+0331 with gaps). Every other mark ends a word, the vowel signs of Hindi, Tamil
+/// and Thai and the points of Hebrew and Arabic among them. Rust's `is_alphanumeric` counts
+/// those as letters, but a quoted word the index reads as two is a phrase, and the skins index,
+/// which keeps no positions, refuses phrases.
+static WORD: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"[\p{L}\p{N}\p{Co}]",
+        r"[\p{L}\p{N}\p{Co}\x{300}-\x{304}\x{306}-\x{30C}\x{30F}\x{311}\x{31B}",
+        r"\x{323}-\x{328}\x{32D}\x{32E}\x{330}\x{331}]*",
+    ))
+    .expect("the pattern is valid")
+});
+
+/// The words of a search, split the way the index splits them: "हिन्दी" is three words to the
+/// index (ह, न and द), so it is three here. The index folds case and accents itself.
+fn words(q: &str) -> impl Iterator<Item = &str> {
+    WORD.find_iter(q).take(MAX_WORDS).map(|m| m.as_str())
 }
 
 /// What was typed as an FTS5 query: every word a quoted prefix, all of them required. `None`

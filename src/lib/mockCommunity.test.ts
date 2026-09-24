@@ -22,7 +22,23 @@ const ids = (r: { packs: MockPack[] }) => r.packs.map((p) => p.id);
 describe("the preview's search follows the app's", () => {
   it("splits text into words the way the index does", () => {
     expect(words("Café noir, ukiyo-e!")).toEqual(["cafe", "noir", "ukiyo", "e"]);
+    expect(words("café")).toEqual(["cafe"]);
     expect(words("  ")).toEqual([]);
+    // Vowel signs and points end a word, as SQLite reads them (search.rs has the same cases).
+    expect(words("हिन्दी")).toEqual(["ह", "न", "द"]);
+    expect(words("สวัสดี")).toEqual(["สว", "สด"]);
+    expect(words("한국")).toEqual(["한국"]);
+  });
+
+  it("finds words in any script the way the app does", () => {
+    const c = new MockCatalog([
+      ...SAMPLE,
+      pack("hindi", "हिन्दी गीत", "someone", ["music"], 60, ["किताब", "हिन्दी"]),
+      pack("thai", "Hello", "someone", ["hello"], 61, ["สวัสดี ครับ"]),
+    ]);
+    expect(ids(find(c, "किताब"))).toEqual(["hindi"]);
+    expect(find(c, "हिन्दी").skins.map((h) => h.name)).toEqual(["हिन्दी"]);
+    expect(find(c, "สวัสดี").skins.map((h) => h.name)).toEqual(["สวัสดี ครับ"]);
   });
 
   it("matches every word as the start of a word in a name, author, tag or skin", () => {
