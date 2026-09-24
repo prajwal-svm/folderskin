@@ -588,7 +588,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
         let exe = paths::sd_cli(settings.backend);
         let installed = exe.is_file();
         let (devices, problem) = if installed {
-            probe_devices(&exe)
+            probed(&exe, probe_devices)
         } else {
             (Vec::new(), None)
         };
@@ -643,8 +643,44 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
     }
 }
 
+/// What [`probe_devices`] says of a runtime, and why it wouldn't run if it didn't.
+type Probe = (Vec<String>, Option<(&'static str, String)>);
+
+/// A runtime that started: where it is, which build is there (its size and when it was written),
+/// and the devices it listed.
+type Started = (PathBuf, u64, Option<std::time::SystemTime>, Vec<String>);
+
+/// Every runtime that has started this session.
+static STARTED: std::sync::Mutex<Vec<Started>> = std::sync::Mutex::new(Vec::new());
+
+/// [`probe_devices`], asked once a session for a runtime that starts. Starting it takes a second
+/// or two (it loads the GPU's libraries), and the settings asked every time they opened, so
+/// "Looking at this computer…" showed each time. A build put in place since is asked again, and
+/// so is one that didn't start: whatever was wrong (a missing Visual C++ runtime) may have been
+/// put right since.
+fn probed(exe: &Path, probe: impl FnOnce(&Path) -> Probe) -> Probe {
+    let build = std::fs::metadata(exe)
+        .ok()
+        .map(|m| (m.len(), m.modified().ok()));
+    let mut started = STARTED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((len, when)) = build {
+        let seen = started
+            .iter()
+            .find(|(path, l, w, _)| path == exe && *l == len && *w == when);
+        if let Some((.., devices)) = seen {
+            return (devices.clone(), None);
+        }
+    }
+    let (devices, problem) = probe(exe);
+    if let (Some((len, when)), None) = (build, &problem) {
+        started.retain(|(path, ..)| path != exe);
+        started.push((exe.to_path_buf(), len, when, devices.clone()));
+    }
+    (devices, problem)
+}
+
 /// `sd-cli --list-devices`, and why it wouldn't run if it didn't, with that problem's code.
-fn probe_devices(exe: &Path) -> (Vec<String>, Option<(&'static str, String)>) {
+fn probe_devices(exe: &Path) -> Probe {
     let mut cmd = std::process::Command::new(exe);
     cmd.arg("--list-devices")
         .stdin(std::process::Stdio::null())
@@ -735,6 +771,41 @@ mod tests {
             .sum();
         let shared = MODELS[0].files(settings.tier).llm.size;
         assert!(download_size(&arm, &settings) <= each - shared);
+    }
+
+    #[test]
+    fn a_runtime_that_starts_is_asked_once_until_another_build_is_put_in() {
+        let dir = std::env::temp_dir().join(format!("fs-probed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("sd-cli.exe");
+        std::fs::write(&exe, b"build one").unwrap();
+        let asked = std::cell::Cell::new(0);
+        let starts = |_: &Path| {
+            asked.set(asked.get() + 1);
+            (vec!["CUDA0	RTX".to_string()], None)
+        };
+        assert_eq!(probed(&exe, starts).0, ["CUDA0	RTX"]);
+        assert_eq!(probed(&exe, starts).0, ["CUDA0	RTX"], "from the first time");
+        assert_eq!(asked.get(), 1);
+        std::fs::write(&exe, b"build two, longer").unwrap();
+        probed(&exe, starts);
+        assert_eq!(asked.get(), 2, "another build is asked again");
+
+        // One that won't start is asked every time: it may have been put right.
+        let broken = dir.join("broken.exe");
+        std::fs::write(&broken, b"x").unwrap();
+        let fails = |_: &Path| {
+            asked.set(asked.get() + 1);
+            (
+                Vec::new(),
+                Some(("vc_runtime_missing", "no VC++".to_string())),
+            )
+        };
+        assert!(probed(&broken, fails).1.is_some());
+        assert!(probed(&broken, fails).1.is_some());
+        assert_eq!(asked.get(), 4);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
