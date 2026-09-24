@@ -1242,7 +1242,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "folderskin"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "base64 0.22.1",
  "folderskin-ai",
@@ -1272,7 +1272,7 @@ dependencies = [
 
 [[package]]
 name = "folderskin-ai"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "base64 0.22.1",
  "folderskin-core",
@@ -1286,7 +1286,7 @@ dependencies = [
 
 [[package]]
 name = "folderskin-catalog"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "flate2",
  "folderskin-core",
@@ -1318,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "folderskin-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "image",
  "libc",
@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "folderskin-keys"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "folderskin-share"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "folderskin-tools"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "clap",
  "folderskin-catalog",

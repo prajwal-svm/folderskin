@@ -6,16 +6,53 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+## 0.1.4 — 2026-09-24
+
+### Added
+
+- **Generate with AI is a chat.** Describe a folder, look at what comes back, ask for changes,
+  and apply a result from the conversation. The chat has the window to itself until a folder is
+  chosen, keeps its history across restarts (chats can be found, renamed and deleted), and shows
+  what's happening while a picture is painted, with **Stop** when it's taking too long.
+- **Paint on this computer, with no account or key.** Settings → AI Provider → Local Model sets up
+  an open model that runs on your own machine: one download, which can be stopped and picked up
+  again, and pictures made without sending anything anywhere.
+- **Search every community pack.** Community searches all packs and their skins as you type, on
+  this computer, and still answers while it refreshes or when you're offline, showing the packs
+  from your last visit.
+- **The Mac's folder or Windows'.** The folder panel switches every skin between the two folder
+  looks, and the composer designs for whichever is chosen.
+- **The composer grew up.** New designs start from a dialog, with the Mac's and Windows' own
+  folders to start empty on; there's an icon library whose icons can be tried on the canvas in
+  place; layers have names of their own; and a fill can cover the whole folder or just its front.
+- **Settings has pages down the side**, a search that finds any setting, an accent colour, a
+  setting for less motion, and licence profiles for the packs you share.
+- **The `folderskin` command line.** Paint, theme a whole folder tree from its folder names, clean
+  pictures up, and make and check packs from a terminal. It's released on its own, with install
+  scripts for macOS, Linux and Windows.
+
 ### Changed
 
 - **Community packs have a repository of their own.** They moved, with their history, from
-  `community/` here to [folderskin-community](https://github.com/prajwal-svm/folderskin-community), and
-  the app reads them from there. Sharing a pack from the app now forks that small repository
-  instead of all of FolderSkin, and its pull request is checked and indexed by a workflow there.
-  `folderskin-tools packs` and `folderskin packs` default to the current folder, so they run as
-  they are inside a folderskin-community checkout; `--dir` points them anywhere else. Nine packs
-  arrived with the move: Everyday Folders, Subjects, AI Providers, Hollywood, Sound & Music,
-  Cinema & Photography, Retro Travel Posters, Science & Space, and Money & Work.
+  `community/` here to [folderskin-community](https://github.com/prajwal-svm/folderskin-community),
+  and the app reads them from there. Nine packs arrived with the move: Everyday Folders,
+  Subjects, AI Providers, Hollywood, Sound & Music, Cinema & Photography, Retro Travel Posters,
+  Science & Space, and Money & Work.
+- **Sharing a pack goes through GitHub.** Publishing forks folderskin-community, a small
+  repository of packs rather than all of FolderSkin, and opens the pull request there. Sharing
+  without GitHub is built but not on yet; the share dialog doesn't offer it until its service is.
+- The sidebar folds to a rail, and the edges between the panels can be dragged.
+- Tooltips, dropdowns and dialogs are the app's own everywhere: one dialog at a time, the focus
+  kept inside it, Tab stopping once at a group, and Escape closing an open list first.
+
+### Fixed
+
+- Adding or updating a pack shows how far it has got, and a picture that arrives bigger than its
+  pack says is refused as damaged.
+- Community packs keep the same line endings on every computer, so a pack's version matches on
+  Windows too.
+- Chats that were waiting to be saved are saved when the window closes, and a new chat no longer
+  starts with the last one's reference pictures.
 
 ## 0.1.3 — 2026-09-20
 
