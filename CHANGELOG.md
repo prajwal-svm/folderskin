@@ -6,6 +6,8 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+## 0.1.5 — 2026-09-24
+
 ### Fixed
 
 - **Painting with the local model no longer freezes the Mac.** As the picture was decoded, the
@@ -21,6 +23,10 @@ All notable changes to FolderSkin are recorded here. The format follows
   in its own folder. A Mac fresh out of the box needs nothing else, and your own Python stays
   as it is. Removing the model removes all of it. On a Mac too old for the model (it needs
   macOS 14 or later), the settings say so before anything is downloaded.
+- **Escape closes a filter panel and keeps your search.** In the library and in Community,
+  Escape used to empty the search as well, and the skins that matched it went with it.
+- **Carrying on with a stopped setup counts to the end.** Pressed straight after a stop, it could
+  count against the old total and finish with the bar at 82%. It now waits to know what's left.
 
 ## 0.1.4 — 2026-09-24
 
