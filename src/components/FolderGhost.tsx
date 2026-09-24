@@ -1,9 +1,9 @@
 import { useId } from "react";
-import { localOs } from "../lib/platform";
+import { useLook } from "../state/look";
 
 /**
- * The folder template as SVG: FolderSkin's own, or on Windows the folder Windows draws, the one
- * a skin's artwork goes on there. The paths are the compositor's shapes on its 1024 canvas
+ * The folder template as SVG: FolderSkin's own, or the folder Windows draws when skins go on
+ * that one (state/look.ts). The paths are the compositor's shapes on its 1024 canvas
  * (printed by `cargo run -p folderskin-core --example outline_svg`), so a real folder rendered
  * into the same box lines up with this outline exactly.
  *
@@ -42,7 +42,7 @@ export function FolderGhost({
   const fill = layer !== "line";
   const line = layer !== "fill";
   const mac = tone === "mac";
-  const windows = localOs() === "windows";
+  const windows = useLook() === "windows";
   const colours = COLOURS[windows ? "windows" : "mac"];
   const cls = ["ghost", `ghost-${tone}`, fill ? "ghost-fill" : "", line ? "ghost-line" : "", className]
     .filter(Boolean)

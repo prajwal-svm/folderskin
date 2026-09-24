@@ -301,6 +301,9 @@ export type MySubmission = {
 
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
+  /** Which folder artwork skins are drawn and applied on: "mac" unless the user chose Windows'. */
+  folderLook: () => invoke<FolderStyle>("folder_look"),
+  setFolderLook: (look: FolderStyle) => invoke<void>("set_folder_look", { look }),
 
   // ---- publishing a pack to GitHub ----
   /** Who is signed in, or null. A sign-in GitHub no longer accepts counts as none. */

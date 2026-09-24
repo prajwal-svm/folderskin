@@ -13,6 +13,8 @@ import { throttle } from "./lib/throttle";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
+import { chooseLook } from "./state/look";
+import type { FolderStyle } from "./composer/parts";
 import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RIGHT, saveLayout, type Layout } from "./state/layout";
 import { IslandResizer } from "./components/IslandResizer";
 import { useDragDrop } from "./hooks/useDragDrop";
@@ -210,6 +212,21 @@ export default function App() {
       })
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
+
+  // Skins go on the Mac's folder or Windows' (state/look.ts). After a switch the library's
+  // thumbnails and the plain folder are drawn again on the new one.
+  const chooseFolderLook = useCallback(
+    (look: FolderStyle) => {
+      chooseLook(look)
+        .then(() => api.listSkins())
+        .then((list) => {
+          setSkins(newestFirst(list.skins));
+          setDefaultThumb(list.default_thumbnail);
+        })
+        .catch((e) => toast(`Couldn't switch the folder: ${errorMessage(e)}`, { tone: "danger" }));
+    },
+    [toast],
+  );
 
   // The stylesheet reserves room for the window's own controls on Windows (shell.css). window.rs
   // sets the same flag before the first paint so there is no reflow; this is what makes it right
@@ -1013,6 +1030,7 @@ export default function App() {
         onTryAgain={tryAgain}
         onDismissRun={() => dispatch({ type: "runDismissed" })}
         pickHint={aiView ? "Preview a picture from the chat" : undefined}
+        onLook={chooseFolderLook}
       />
       </div>
       )}

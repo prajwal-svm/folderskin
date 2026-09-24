@@ -370,6 +370,12 @@
 
 /* ---------- words ---------- */
 
+/* Mac or Windows, under the empty folder's words, before there's a folder to try skins on. */
+.stage-look {
+  margin-top: -4px;
+  animation: fade-in var(--t-base) ease both;
+}
+
 .stage-copy {
   display: flex;
   flex-direction: column;

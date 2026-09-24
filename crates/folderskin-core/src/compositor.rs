@@ -26,15 +26,6 @@ pub enum Style {
 }
 
 impl Style {
-    /// The folder this computer's own file browser draws.
-    pub fn native() -> Style {
-        if cfg!(windows) {
-            Style::Windows
-        } else {
-            Style::Mac
-        }
-    }
-
     pub fn id(self) -> &'static str {
         match self {
             Style::Mac => "mac",
@@ -60,15 +51,13 @@ impl Style {
 }
 
 /// The Windows folder's shading: its back panel a shade darker than its front (the tab and the
-/// strip above the front read as the folder's inside), a soft shadow where the front meets it, a
-/// bright line along the front's top edge and a darker lip along its bottom.
+/// strip above the front read as the folder's inside), a soft shadow where the front meets it,
+/// and a bright line along the front's top edge. Nothing darkens its bottom edge.
 const WIN_BACK_SHADE: u8 = 30;
 const WIN_SHADOW: [u8; 4] = [0, 0, 0, 30];
 const WIN_SHADOW_BAND: f32 = 20.0;
 const WIN_HIGHLIGHT: [u8; 4] = [255, 255, 255, 120];
 const WIN_HIGHLIGHT_BAND: f32 = 8.0;
-const WIN_LIP: [u8; 4] = [0, 0, 0, 44];
-const WIN_LIP_BAND: f32 = 10.0;
 
 /// Source artwork plus the focus point (0..1, 0..1) that cover-fit crops keep centred.
 pub struct Artwork {
@@ -110,10 +99,9 @@ const RIM_BAND: f32 = 4.0;
 /// How far the paper's highlight fades inward, in canvas units.
 const PAPER_BAND: f32 = 1.0;
 /// Rim light alpha. Tuned so a flat mid-grey skin gains ~14 luminance at the edge, which is
-/// what the reference icon measures; see the `rim_magnitudes_match_the_reference` test.
+/// what the reference icon measures; see the `rim_magnitudes_match_the_reference` test. The
+/// front's bottom edge has no shade: it read as a dark line under every folder.
 const RIM_LIGHT: u8 = 19;
-/// Bottom shade alpha, tuned the same way for ~-35 luminance.
-const RIM_SHADE: u8 = 48;
 /// Width of the line [`TemplateLayers::outline`] draws along the folder's edges, in canvas units.
 const OUTLINE_WIDTH: f32 = 2.5;
 
@@ -321,8 +309,7 @@ impl Template {
         );
     }
 
-    /// What goes over the front panel's fill: the rim light along its top and sides, and the
-    /// shade along its bottom.
+    /// What goes over the front panel's fill: the rim light along its top and sides.
     fn draw_top(&self, pm: &mut Pixmap) {
         let front = self.mask(&self.front);
         if self.style == Style::Windows {
@@ -334,14 +321,6 @@ impl Template {
                 WIN_HIGHLIGHT_BAND,
                 self.scale,
             );
-            rim(
-                pm,
-                &w::front_bottom_path(self.scale),
-                &front,
-                WIN_LIP,
-                WIN_LIP_BAND,
-                self.scale,
-            );
             return;
         }
         rim(
@@ -349,14 +328,6 @@ impl Template {
             &g::front_top_sides_path(self.scale),
             &front,
             [255, 255, 255, RIM_LIGHT],
-            RIM_BAND,
-            self.scale,
-        );
-        rim(
-            pm,
-            &g::front_bottom_path(self.scale),
-            &front,
-            [0, 0, 0, RIM_SHADE],
             RIM_BAND,
             self.scale,
         );
@@ -512,7 +483,7 @@ pub struct TemplateLayers {
     /// What sits between the back panel's fill and the front panel's: the rim light along the
     /// back panel's top edge, and the paper sheet with its highlight over that.
     pub middle: image::RgbaImage,
-    /// What goes over the front panel's fill: its rim light and the shade along its bottom.
+    /// What goes over the front panel's fill: its rim light.
     pub top: image::RgbaImage,
     /// The folder's visible edges as a white line about 2.5 canvas units wide: the whole front
     /// panel, and the back panel and the paper sheet where the front panel doesn't hide them.
@@ -808,16 +779,12 @@ mod tests {
             "front right {}",
             lum(2017, 1200)
         );
-        // Front panel bottom edge: canvas y 973.5 → the last inside row is master 1946.
+        // Front panel bottom edge: canvas y 973.5 → the last inside row is master 1946. No dark
+        // line along it.
         assert!(
-            (lum(1024, 1946) + 35).abs() <= 6,
+            lum(1024, 1946).abs() <= 2,
             "front bottom {}",
             lum(1024, 1946)
-        );
-        assert!(
-            lum(1024, 1938).abs() <= 2,
-            "front bottom fade {}",
-            lum(1024, 1938)
         );
         // Back body top edge: canvas y 97 → master y 194.
         assert!(
@@ -846,14 +813,9 @@ mod tests {
         let front_top = (161..167).map(|y| lum(800, y)).max().unwrap();
         assert!((front_top - 14).abs() <= 6, "front top {front_top}");
         assert!(lum(800, 168).abs() <= 2, "front top fade {}", lum(800, 168));
-        // x = 512, rows 969..973.
-        let bottom = (969..974).map(|y| lum(512, y)).min().unwrap();
-        assert!((bottom + 35).abs() <= 6, "front bottom {bottom}");
-        assert!(
-            lum(512, 967).abs() <= 2,
-            "front bottom fade {}",
-            lum(512, 967)
-        );
+        // x = 512, rows 969..973: no dark line along the bottom.
+        let bottom = (969..973).map(|y| lum(512, y)).min().unwrap();
+        assert!(bottom.abs() <= 2, "front bottom {bottom}");
         // x = 700, rows 97..101.
         let back_top = (97..102).map(|y| lum(700, y)).max().unwrap();
         assert!((back_top - 14).abs() <= 6, "back top {back_top}");
@@ -1120,7 +1082,7 @@ mod tests {
     }
 
     #[test]
-    fn the_windows_front_is_lit_along_its_top_and_darker_along_its_bottom() {
+    fn the_windows_front_is_lit_along_its_top_and_not_darkened_along_its_bottom() {
         let art = solid(1024, 958, [200, 160, 60, 255]);
         let win = raster::to_straight_rgba(&render_master_in(&art, Style::Windows));
         let lum = |p: [u8; 4]| p[0] as u32 + p[1] as u32 + p[2] as u32;
@@ -1130,27 +1092,19 @@ mod tests {
             "the top edge is brighter"
         );
         assert!(
-            lum(at(&win, 700.0, 836.0)) + 20 < middle,
-            "the bottom lip is darker"
+            lum(at(&win, 700.0, 836.0)).abs_diff(middle) <= 3,
+            "no dark line along the bottom"
         );
         // The front casts a shadow on the back just above its top edge, under the tab.
         assert!(lum(at(&win, 200.0, 288.0)) + 10 < lum(at(&win, 200.0, 200.0)));
     }
 
     #[test]
-    fn styles_have_ids_and_the_native_one_is_this_computers() {
+    fn styles_have_ids() {
         for s in [Style::Mac, Style::Windows] {
             assert_eq!(Style::from_id(s.id()), Some(s));
         }
         assert_eq!(Style::from_id("linux"), None);
-        assert_eq!(
-            Style::native(),
-            if cfg!(windows) {
-                Style::Windows
-            } else {
-                Style::Mac
-            }
-        );
     }
 
     #[test]
@@ -1237,12 +1191,11 @@ mod tests {
             assert!(px[3] > 0 && px[3] < 64, "({x},{y}) {px:?}");
             assert_eq!(px[..3], [255, 255, 255], "({x},{y})");
         }
-        // Over the paper, it brightens the front's top edge and the shade darkens its bottom.
+        // Over the paper, it brightens the front's top edge; nothing darkens its bottom.
         let lit = master.get_pixel(1600, 321).0;
-        let shaded = master.get_pixel(1024, 1946).0;
+        assert_eq!(master.get_pixel(1024, 1946).0, PAPER_FILL);
         for c in 0..3 {
             assert!(lit[c] > PAPER_FILL[c], "{lit:?}");
-            assert!(shaded[c] < PAPER_FILL[c] - 20, "{shaded:?}");
         }
     }
 

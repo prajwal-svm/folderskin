@@ -5,6 +5,9 @@ import { fileBrowser } from "../lib/platform";
 import { applyLabel, folders, runSummary, tooMany } from "../lib/tree";
 import type { State } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
+import { LookSwitch } from "./LookSwitch";
+import { useLook } from "../state/look";
+import type { FolderStyle } from "../composer/parts";
 import { ArrowDownIcon } from "./icons/arrow-down";
 import { ArrowLeftIcon } from "./icons/arrow-left";
 import { FolderOpenIcon } from "./icons/folder-open";
@@ -51,6 +54,7 @@ export function FolderStage({
   onTryAgain,
   onDismissRun,
   pickHint = "Pick a skin to try it on",
+  onLook,
 }: {
   state: State;
   /** The skin selected in the library, if any. */
@@ -79,6 +83,8 @@ export function FolderStage({
   onDismissRun: () => void;
   /** What to do to see a skin on the folder, where there's none on it yet. */
   pickHint?: string;
+  /** Chooses which folder skins go on, from the switch shown while there's no folder. */
+  onLook?: (look: FolderStyle) => void;
 }) {
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
@@ -162,6 +168,8 @@ export function FolderStage({
 
         <StageCopy state={state} skin={skin} browseLabel={browseLabel} />
 
+        {!folder && !drag && onLook && <StageLook onLook={onLook} />}
+
         {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} />}
 
         {state.run && !busy && !drag && (
@@ -191,6 +199,11 @@ export function FolderStage({
       </div>
     </aside>
   );
+}
+
+/** Which folder skins go on, chosen while there's no folder yet: the empty one above shows it. */
+function StageLook({ onLook }: { onLook: (look: FolderStyle) => void }) {
+  return <LookSwitch className="stage-look" label="which folder skins go on" value={useLook()} onChange={onLook} />;
 }
 
 /**

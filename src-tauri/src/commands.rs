@@ -20,12 +20,17 @@ use tauri::{AppHandle, Manager, State};
 
 /// Bump when the compositor's output changes so cached thumbnails, the default folder's and the
 /// saved skins' alike, are re-rendered.
-pub const THUMB_CACHE_VERSION: u32 = 2;
+pub const THUMB_CACHE_VERSION: u32 = 3;
 
-/// What a cached thumbnail's name carries: [`THUMB_CACHE_VERSION`], and the folder it's drawn on
-/// when that isn't FolderSkin's own, so a Mac-shaped one cached earlier isn't shown on Windows.
+/// What a cached thumbnail's name carries: [`THUMB_CACHE_VERSION`], and the folder skins go on
+/// now ([`crate::look`]) when that isn't FolderSkin's own, so each folder keeps its own thumbnails.
 pub fn thumb_tag() -> String {
-    match compositor::Style::native() {
+    thumb_tag_in(crate::look::current())
+}
+
+/// [`thumb_tag`] for the folder of `style`.
+pub fn thumb_tag_in(style: compositor::Style) -> String {
+    match style {
         compositor::Style::Mac => format!("v{THUMB_CACHE_VERSION}"),
         style => format!("v{THUMB_CACHE_VERSION}-{}", style.id()),
     }
@@ -195,9 +200,9 @@ fn default_thumb_path(app: &AppHandle) -> Option<PathBuf> {
 /// The plain default folder's thumbnail as a data URL: kept in memory once drawn, and on disk
 /// between launches.
 fn default_thumbnail(app: &AppHandle, state: &AppState) -> String {
-    state.default_thumbnail(|| {
+    let style = crate::look::current();
+    state.default_thumbnail(style, || {
         let png = cached_png(default_thumb_path(app).as_deref(), || {
-            let style = compositor::Style::native();
             compositor::render_preview_png_in(
                 &compositor::default_folder_artwork_in(style),
                 THUMB_SIZE,
@@ -623,6 +628,16 @@ mod tests {
             let read: SkinSource = serde_json::from_value(name.into()).unwrap();
             assert_eq!(read, source);
         }
+    }
+
+    #[test]
+    fn each_folder_keeps_its_own_thumbnails_and_the_macs_keep_their_names() {
+        use compositor::Style;
+        assert_eq!(thumb_tag_in(Style::Mac), format!("v{THUMB_CACHE_VERSION}"));
+        assert_eq!(
+            thumb_tag_in(Style::Windows),
+            format!("v{THUMB_CACHE_VERSION}-windows")
+        );
     }
 
     #[test]

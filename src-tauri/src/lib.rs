@@ -9,6 +9,7 @@ pub mod composer;
 pub mod folder_icon;
 pub mod github;
 pub mod icons;
+pub mod look;
 pub mod onboarding;
 pub mod pack_views;
 pub mod previews;
@@ -123,6 +124,8 @@ pub fn run() {
             icons::icon_packs_installed,
             icons::icon_pack_read,
             icons::icon_pack_remove,
+            look::folder_look,
+            look::set_folder_look,
             chats::chats_list,
             chats::chat_read,
             chats::chat_save,
@@ -150,6 +153,8 @@ pub fn run() {
             // The onboarding's marker sits beside them (onboarding.rs).
             match app.path().app_data_dir() {
                 Ok(dir) => {
+                    // Before the skins: their thumbnails are drawn on the folder chosen.
+                    look::load(&dir);
                     app.state::<chats::Chats>().open(dir.join("chats"));
                     app.state::<state::AppState>().open_store(dir.join("skins"))
                 }

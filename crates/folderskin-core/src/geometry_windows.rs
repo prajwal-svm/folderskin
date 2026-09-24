@@ -144,14 +144,6 @@ pub fn front_top_edge_path(scale: f32) -> Path {
     scaled(pb, scale)
 }
 
-/// Open path along the front's bottom edge and its two bottom corners, for its darker lip.
-pub fn front_bottom_path(scale: f32) -> Path {
-    let mut pb = PathBuilder::new();
-    arc(&mut pb, RIGHT - CORNER, BOTTOM - CORNER, CORNER, 0.0, 90.0);
-    arc(&mut pb, LEFT + CORNER, BOTTOM - CORNER, CORNER, 90.0, 180.0);
-    scaled(pb, scale)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,12 +202,10 @@ mod tests {
 
     #[test]
     fn edge_paths_are_open_and_meet_the_outline() {
-        for p in [front_top_edge_path(1.0), front_bottom_path(1.0)] {
-            assert!(!p
-                .segments()
-                .any(|s| matches!(s, tiny_skia::PathSegment::Close)));
-        }
         let top = front_top_edge_path(1.0);
+        assert!(!top
+            .segments()
+            .any(|s| matches!(s, tiny_skia::PathSegment::Close)));
         let end = *top.points().last().unwrap();
         assert!((end.x - RIGHT).abs() < 0.01 && (end.y - (FRONT_TOP + CORNER)).abs() < 0.01);
     }

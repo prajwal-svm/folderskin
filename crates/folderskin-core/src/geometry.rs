@@ -303,15 +303,6 @@ pub fn front_top_sides_path(scale: f32) -> Path {
     scaled(pb, scale)
 }
 
-/// Open path along the front panel's bottom edge and its two bottom corners, for the shade.
-pub fn front_bottom_path(scale: f32) -> Path {
-    let r = FRONT_RADIUS;
-    let mut pb = PathBuilder::new();
-    arc(&mut pb, FRONT.x1 - r, FRONT.y1 - r, r, 0.0, 90.0);
-    arc(&mut pb, FRONT.x0 + r, FRONT.y1 - r, r, 90.0, 180.0);
-    scaled(pb, scale)
-}
-
 /// Open path along the back panel body's top edge, from the fillet's end through the body's
 /// top-right corner, for the rim light.
 pub fn back_top_edge_path(scale: f32) -> Path {
@@ -436,7 +427,6 @@ mod tests {
     fn rim_paths_are_open() {
         for p in [
             front_top_sides_path(1.0),
-            front_bottom_path(1.0),
             back_top_edge_path(1.0),
             paper_top_edge_path(1.0),
         ] {
@@ -447,12 +437,8 @@ mod tests {
     #[test]
     fn front_rim_paths_join_into_the_front_outline() {
         let top = front_top_sides_path(1.0);
-        let bottom = front_bottom_path(1.0);
         assert!(near(first(&top), (FRONT.x0, FRONT.y1 - FRONT_RADIUS)));
         assert!(near(last(&top), (FRONT.x1, FRONT.y1 - FRONT_RADIUS)));
-        // The bottom run picks up where the top/sides run ends and closes the loop.
-        assert!(near(first(&bottom), last(&top)));
-        assert!(near(last(&bottom), first(&top)));
     }
 
     #[test]

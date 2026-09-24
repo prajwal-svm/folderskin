@@ -8,6 +8,7 @@ import { lockDown } from "./lib/lockdown";
 import { watchAwake } from "./lib/awake";
 import { applyTheme, loadThemePref, resolveTheme } from "./state/theme";
 import { applyPrefs, loadPrefs, usePrefs } from "./state/prefs";
+import { startLook } from "./state/look";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
@@ -25,6 +26,8 @@ import "./styles/share.css";
 // The theme is known before anything draws, so a first launch's onboarding opens in it too.
 applyTheme(resolveTheme(loadThemePref()));
 applyPrefs(loadPrefs());
+// Which folder skins go on, as Rust kept it: the empty folder in the folder panel shows it.
+void startLook();
 
 /** The animated icons move as little as the rest of the app when Settings asks for less motion. */
 function Motion({ children }: { children: ReactNode }) {

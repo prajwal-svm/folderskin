@@ -27,7 +27,7 @@
 //! rather than overwritten, and the store starts empty.
 
 use folderskin_core::apply::paths::write_atomic;
-use folderskin_core::compositor::{self, Artwork, IconSet, Style};
+use folderskin_core::compositor::{self, Artwork, IconSet};
 use folderskin_core::pack;
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
@@ -196,7 +196,9 @@ impl SkinImage {
     /// (Windows' own on Windows, FolderSkin's elsewhere), a finished folder fitted as it is.
     pub fn icon_set(&self, sizes: &[u32]) -> IconSet {
         match self {
-            SkinImage::Artwork(art) => compositor::render_icon_set_in(art, sizes, Style::native()),
+            SkinImage::Artwork(art) => {
+                compositor::render_icon_set_in(art, sizes, crate::look::current())
+            }
             SkinImage::Folder(img) => compositor::icon_set_from_image(img, sizes),
         }
     }
@@ -205,7 +207,7 @@ impl SkinImage {
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
         match self {
             SkinImage::Artwork(art) => {
-                compositor::render_preview_png_in(art, size, Style::native())
+                compositor::render_preview_png_in(art, size, crate::look::current())
             }
             SkinImage::Folder(img) => compositor::preview_png_from_image(img, size),
         }

@@ -384,6 +384,9 @@ const templateImages = (style: FolderStyle) => {
   return mockTemplates.get(style)!;
 };
 
+/** Which folder the preview puts skins on, kept like the app keeps it. */
+const MOCK_LOOK_KEY = "folderskin.mock.look";
+
 /** Designs "saved" in the browser preview, by skin id, so Edit design can be tried. */
 const mockDesigns = new Map<string, unknown>();
 
@@ -509,6 +512,10 @@ function mockShareStatus(): ShareStatus {
 }
 
 export const mockApi = {
+  folderLook: async (): Promise<FolderStyle> => (localStorage.getItem(MOCK_LOOK_KEY) === "windows" ? "windows" : "mac"),
+  setFolderLook: async (look: FolderStyle): Promise<void> => {
+    localStorage.setItem(MOCK_LOOK_KEY, look);
+  },
   listSkins: async (): Promise<SkinList> => ({
     skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
     default_thumbnail: COLOUR_FOLDERS[0],
