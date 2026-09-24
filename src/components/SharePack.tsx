@@ -14,7 +14,8 @@ import {
 } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { cleanName } from "../lib/names";
-import { LICENSES, loadSharingPrefs, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, packSlug, PACKS_GUIDE_URL, saveSharingPrefs, UPLOAD_URL } from "../lib/packs";
+import { creditDefaultProfile, LICENSES, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, packSlug, PACKS_GUIDE_URL, UPLOAD_URL } from "../lib/packs";
+import { defaultProfile, loadProfiles } from "../lib/profiles";
 import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, shareProgressLabel, type PictureSource } from "../lib/share";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
 import { GithubAvatar } from "./GithubAvatar";
@@ -95,7 +96,7 @@ export function SharePack({
   const [name, setName] = useState(start.name);
   const [packTags, setPackTags] = useState<string[]>(start.tags);
 
-  const [license, setLicense] = useState<string>(() => loadSharingPrefs().license);
+  const [license, setLicense] = useState<string>(() => defaultProfile(loadProfiles()).license);
   const [notes, setNotes] = useState("");
   const [mine, setMine] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -221,7 +222,7 @@ export function SharePack({
     setError(null);
     try {
       const path = await api.exportPack({ folder, name: clean, author, license, tags: packTags, skinIds: chosen.map((s) => s.id) });
-      saveSharingPrefs({ author, license });
+      creditDefaultProfile(author);
       setSaved(path);
     } catch (e) {
       setError(errorMessage(e));
@@ -230,13 +231,15 @@ export function SharePack({
     }
   };
 
-  const publish = useCallback(async () => {
+  // `who` is the account just connected when connecting carries on and publishes: this render's
+  // `account` is from before it.
+  const publish = useCallback(async (who: GithubAccount | null = account) => {
     setBusy(true);
     setError(null);
     setProgress({ stage: "checking" });
     try {
       const out = await api.publishPack(pack(), setProgress);
-      saveSharingPrefs({ author, license });
+      if (who) creditDefaultProfile(who.login);
       setPublished(out);
     } catch (e) {
       setError(errorMessage(e));
@@ -246,7 +249,7 @@ export function SharePack({
     }
     // `pack()` reads the current form, which is exactly what should be sent when it is pressed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [license, notes, packTags, clean, chosen]);
+  }, [license, notes, packTags, clean, chosen, account]);
 
   // Signing in from the author row only signs them in; signing in from the publish button carries
   // on and publishes. A ref keeps the callback itself stable, so the code on screen survives.
@@ -258,7 +261,7 @@ export function SharePack({
     const go = wantedRef.current === "publish";
     setAccount(who);
     setConnecting(null);
-    if (go) void publishRef.current();
+    if (go) void publishRef.current(who);
   }, []);
 
   // ---- without GitHub ----
@@ -272,7 +275,6 @@ export function SharePack({
         { name: clean, license, tags: packTags, skinIds: chosen.map((s) => s.id), notes, source, termsVersion: PACK_TERMS_VERSION },
         setSending,
       );
-      saveSharingPrefs({ ...loadSharingPrefs(), license });
       setSent(out);
     } catch (e) {
       setError(errorMessage(e));

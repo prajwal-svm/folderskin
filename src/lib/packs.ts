@@ -1,5 +1,5 @@
-import { isGithubUser, LICENSES } from "./licences";
-import { defaultProfile, loadProfiles, saveProfiles, upsertProfile, type LicenseId } from "./profiles";
+import { isGithubUser } from "./licences";
+import { defaultProfile, loadProfiles, saveProfiles, upsertProfile } from "./profiles";
 
 /** Community packs live in the FolderSkin repository on GitHub, under community/. */
 export const REPO_URL = "https://github.com/prajwal-svm/folderskin";
@@ -21,21 +21,15 @@ export const MAX_PACK_SKINS = 50;
 
 export { isGithubUser, LICENSES, licenseLabel } from "./licences";
 
-/** What sharing starts from: the author and licence of the default licence profile (profiles.ts). */
-export type SharingPrefs = { author: string; license: string };
-
-export function loadSharingPrefs(): SharingPrefs {
-  const p = defaultProfile(loadProfiles());
-  return { author: p.author, license: p.license };
-}
-
-/** Keeps what was just shared with in the default profile, so the next pack starts from it. */
-export function saveSharingPrefs(prefs: SharingPrefs): void {
+/**
+ * Gives the default licence profile (profiles.ts) the GitHub name a pack was just shared as, when
+ * it credits no one yet. That is all sharing ever changes in a profile: which one a pack uses,
+ * and a licence changed for one pack, stay with that pack. Profiles are changed in Settings.
+ */
+export function creditDefaultProfile(login: string): void {
   const profiles = loadProfiles();
   const p = defaultProfile(profiles);
-  const license = LICENSES.some((l) => l.id === prefs.license) ? (prefs.license as LicenseId) : p.license;
-  const author = isGithubUser(prefs.author) ? prefs.author : p.author;
-  saveProfiles(upsertProfile(profiles, { ...p, author, license }));
+  if (!p.author && isGithubUser(login)) saveProfiles(upsertProfile(profiles, { ...p, author: login }));
 }
 
 /** The folder name a pack gets from its name, the way `pack::slug` makes it in Rust. */
