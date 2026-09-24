@@ -108,6 +108,8 @@ export class CommunityStore {
   private handlers: CommunityHandlers | null = null;
   /** The pack `busy` names, for saying which one to wait for. */
   private working: CommunityPack | null = null;
+  /** Goes up with every pack marked, so an older answer about the library isn't laid over it. */
+  private marked = 0;
 
   constructor(private readonly delay = SEARCH_DELAY_MS) {}
 
@@ -238,18 +240,24 @@ export class CommunityStore {
   /** Marks pack `id` as in the library or not, everywhere it is shown. */
   mark(id: string | undefined, added: boolean) {
     if (!id) return;
+    this.marked++;
     this.remarkWith((p) => (p.id === id ? { ...p, added, update: false } : p));
   }
 
   /** Marks every pack shown against what the library holds now. Left as it was if the app can't say. */
-  async remark() {
+  async remark(): Promise<void> {
+    const marked = this.marked;
     let installed: Record<string, string | null>;
     try {
       installed = await api.communityInstalled();
     } catch {
       return;
     }
+    // A pack added or removed while the app answered: that answer is older than its mark.
+    if (marked !== this.marked) return this.remark();
     this.remarkWith((p) => {
+      // The pack being worked on is marked when that is done.
+      if (p.id === this.state.busy) return p;
       const added = p.id in installed;
       // As the app decides it: a pack added before versions were kept is offered the update.
       const update = added && p.hash !== "" && installed[p.id] !== p.hash;

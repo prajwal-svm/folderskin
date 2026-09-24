@@ -6,6 +6,8 @@ const asked: { query: CommunityQuery; answer: (r: CommunitySearch) => void; fail
 const added: ((progress: PackProgress) => void)[] = [];
 /** What the library holds, as `community_installed` says it. */
 let installed: Record<string, string | null> = {};
+/** Answers to `community_installed` the test holds back, when it does. */
+let heldInstalled: ((answer: Record<string, string | null>) => void)[] | null = null;
 
 vi.mock("./tauri", () => ({
   api: {
@@ -23,7 +25,7 @@ vi.mock("./tauri", () => ({
       return { removed: ["old"], skins: [] };
     },
     communityRefresh: async () => ({ updates: 0, packs: 0 }),
-    communityInstalled: async () => installed,
+    communityInstalled: () => new Promise((answer) => (heldInstalled ? heldInstalled.push(answer) : answer(installed))),
     removePack: async () => [],
   },
   errorMessage: (e: unknown) => String(e),
@@ -47,6 +49,7 @@ beforeEach(() => {
   asked.length = 0;
   added.length = 0;
   installed = {};
+  heldInstalled = null;
 });
 afterEach(() => vi.useRealTimers());
 
@@ -148,6 +151,23 @@ describe("the Community store", () => {
     ]);
     expect([s.shown!.hitPacks[0].added, s.viewing!.pack.added]).toEqual([false, false]);
     expect(asked).toHaveLength(1);
+  });
+
+  it("doesn't lay an older answer about the library over a pack marked since", async () => {
+    const store = new CommunityStore(0);
+    store.start();
+    asked[0].answer(answer(2));
+    await settle();
+    heldInstalled = [];
+    store.start();
+    // p0 finishes adding while the app is answering, from before it was added.
+    store.mark("p0", true);
+    heldInstalled[0]({});
+    await settle();
+    expect(heldInstalled).toHaveLength(2);
+    heldInstalled[1]({ p0: "" });
+    await settle();
+    expect(store.get().shown!.packs[0]?.added).toBe(true);
   });
 
   it("works on one pack at a time, and says which to wait for", async () => {
