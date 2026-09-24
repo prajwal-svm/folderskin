@@ -286,6 +286,8 @@ pub enum KeyCommand {
     Clear { provider: String },
     /// Check a key with the provider, without generating anything
     Test { provider: String },
+    /// Which providers have a key, saved or in the environment (never the keys themselves)
+    List,
 }
 
 #[derive(Subcommand, Debug)]
@@ -684,6 +686,10 @@ mod tests {
             parse(&["ai", "key", "set", "openai", "sk-123"]).is_err(),
             "a key never goes on the command line"
         );
+        assert!(matches!(
+            parse(&["ai", "key", "list"]).unwrap().command,
+            Command::Ai(AiCommand::Key(KeyCommand::List))
+        ));
     }
 
     #[test]

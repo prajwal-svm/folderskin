@@ -1007,6 +1007,15 @@ fn config(command: Option<ConfigCommand>, out: &Arc<Out>) -> Result<(), CliError
 }
 
 fn provider_or_error(id: &str) -> Result<&'static folderskin_ai::ProviderInfo, CliError> {
+    if id.trim().eq_ignore_ascii_case(config::LOCAL) {
+        // A provider name everywhere else, so worth an answer of its own here.
+        return Err(CliError::fixable(
+            "no_key_needed",
+            "The local models need no key.",
+            "They run on this computer, so there is no key to save, remove or test.",
+        )
+        .fix("See whether this computer is ready for them: folderskin ai doctor"));
+    }
     folderskin_ai::provider(&id.to_lowercase()).ok_or_else(|| {
         CliError::fixable(
             "unknown_provider",
@@ -1019,6 +1028,28 @@ fn provider_or_error(id: &str) -> Result<&'static folderskin_ai::ProviderInfo, C
 
 fn key(command: KeyCommand, out: &Arc<Out>) -> Result<(), CliError> {
     match command {
+        KeyCommand::List => {
+            let keys = config::keys();
+            let rows: Vec<(&folderskin_ai::ProviderInfo, String)> = folderskin_ai::providers()
+                .iter()
+                .map(|p| (p, paint::key_state(p, &keys)))
+                .collect();
+            let human = rows
+                .iter()
+                .map(|(p, state)| format!("{:10} {:22} {state}", p.id, p.label))
+                .collect::<Vec<_>>()
+                .join("\n");
+            out.result(
+                None,
+                "keys",
+                json!(rows
+                    .iter()
+                    .map(|(p, state)| json!({"provider": p.id, "key": state}))
+                    .collect::<Vec<_>>()),
+                &human,
+                false,
+            );
+        }
         KeyCommand::Set { provider } => {
             let p = provider_or_error(&provider)?;
             let key = terminal::read_secret(&format!(
@@ -1273,6 +1304,19 @@ mod tests {
         // Any other failure, such as a file that can't be opened, isn't papered over.
         let locked = Err(CliError::fixable("io", "Couldn't read the settings.", ""));
         assert!(config_to_change(locked, Some(&unset)).is_err());
+    }
+
+    #[test]
+    fn local_needs_no_key_and_says_so() {
+        for id in ["local", "Local", " local "] {
+            let e = provider_or_error(id).unwrap_err();
+            assert_eq!(e.code, "no_key_needed", "{id:?}");
+        }
+        assert_eq!(provider_or_error("OpenAI").unwrap().id, "openai");
+        assert_eq!(
+            provider_or_error("midjourney").unwrap_err().code,
+            "unknown_provider"
+        );
     }
 
     #[test]
