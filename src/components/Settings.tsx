@@ -935,9 +935,9 @@ function About({
       <div className="set-block about-pitch">
         <p className="about-tagline">Give any folder a skin.</p>
         <p className="about-intro">
-          Your wedding folder looks exactly like your tax folder. FolderSkin gives every folder a look that fits what&apos;s inside: a
-          golden-hour film still for the wedding, a vintage travel poster for the trip, pop art for the vlog, soft pastels for the
-          baby&apos;s first year.
+          Your best memories wear the same plain folder as your old paperwork. FolderSkin gives every folder a look that fits
+          what&apos;s inside: a golden-hour film still for summer photos, a vintage travel poster for a trip, pop art for a video
+          project, soft pastels for a birthday.
         </p>
         <ul className="about-points">
           <li>Skins from free community packs, from your own photos, or designed by you.</li>
