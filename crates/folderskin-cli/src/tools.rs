@@ -342,11 +342,29 @@ fn unreadable_packs(dir: &Path, why: String) -> CliError {
 
 /// folderskin-tools' plain messages as a sentence: a capital letter first, a full stop last.
 fn sentence(text: &str) -> String {
-    let mut chars = text.trim().chars();
+    sentence_about(text, &[])
+}
+
+/// [`sentence`], except that a message starting with a path keeps it as it was written: one of
+/// the `given` paths the command was handed, or a first word that is plainly a path. Capitalised,
+/// `community\packs\x` read `Community\packs\x` and a picture called `nope` became `Nope`.
+fn sentence_about(text: &str, given: &[&Path]) -> String {
+    let text = text.trim();
+    let first_word = text.split_whitespace().next().unwrap_or("");
+    let starts_with_path = first_word.contains(['/', '\\'])
+        || given.iter().any(|p| {
+            let p = p.display().to_string();
+            !p.is_empty() && text.starts_with(&p)
+        });
+    let mut chars = text.chars();
     let Some(first) = chars.next() else {
         return String::new();
     };
-    let s: String = first.to_uppercase().chain(chars).collect();
+    let s: String = if starts_with_path {
+        text.to_string()
+    } else {
+        first.to_uppercase().chain(chars).collect()
+    };
     if s.ends_with(['.', '!', '?']) {
         s
     } else {
@@ -361,10 +379,15 @@ fn make_pack(
     out: &Arc<Out>,
 ) -> Result<(), CliError> {
     let (folder, made) = make::make(pictures, opts).map_err(|why| {
+        let given: Vec<&Path> = pictures
+            .iter()
+            .map(PathBuf::as_path)
+            .chain([opts.dir.as_path()])
+            .collect();
         CliError::fixable(
             "pack_not_made",
             "The pack couldn't be made.",
-            sentence(&why),
+            sentence_about(&why, &given),
         )
         .fix("Nothing was left behind; fix what it says and run it again.")
     })?;
@@ -449,6 +472,26 @@ mod tests {
         assert!(e.fix.iter().any(|f| f.contains("--dir")));
         assert_eq!(sentence("couldn't read it"), "Couldn't read it.");
         assert_eq!(sentence("Done!"), "Done!");
+        // A path keeps its own letters.
+        assert_eq!(
+            sentence("community\\packs\\uat-test exists already; pick another id or remove it"),
+            "community\\packs\\uat-test exists already; pick another id or remove it."
+        );
+        assert_eq!(
+            sentence_about("nope doesn't exist", &[Path::new("nope")]),
+            "nope doesn't exist."
+        );
+        assert_eq!(
+            sentence_about(
+                "community/packs/x exists already",
+                &[Path::new("community")]
+            ),
+            "community/packs/x exists already."
+        );
+        assert_eq!(
+            sentence_about("there are no pictures there", &[Path::new("nope")]),
+            "There are no pictures there."
+        );
     }
 
     #[test]
