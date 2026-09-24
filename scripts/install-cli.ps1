@@ -20,7 +20,9 @@ function Fail([string]$what, [string]$try) {
     Write-Host "folderskin: $what" -ForegroundColor Red
     if ($try) { Write-Host "  Try: $try" }
     $arch = $env:PROCESSOR_ARCHITECTURE
-    $plain = $what.Replace('"', "'")
+    # Safe to paste back into PowerShell: no quote of any kind inside the double quotes (it takes
+    # typographic quotes, U+2018 to U+201F, for plain ones), no $ and no backtick.
+    $plain = $what -replace ('["`' + [char]0x2018 + '-' + [char]0x201F + ']'), "'" -replace '[$]', 'USD '
     Write-Host ('  Or ask Claude: claude "The folderskin installer failed on Windows ' + $arch + ': ' + $plain + ' Help me install it."')
     # Not `exit`: run through `iex`, that would close the PowerShell window it was typed into.
     throw 'folderskin: the install stopped; nothing was changed.'

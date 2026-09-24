@@ -179,12 +179,14 @@ fn truncate(s: &str, max: usize) -> String {
 
 /// Text that can sit inside double quotes in bash, zsh, PowerShell and cmd without anything in
 /// it being run or expanded: no quotes, no `$`, backticks or `!`, no line breaks, and no
-/// backslash just before the closing quote.
+/// backslash just before the closing quote. PowerShell also takes typographic quotes (“ ” „ and
+/// ‘ ’ ‚ ‛) for plain ones, so a file named `x”;calc;“.png` would end the string there: every
+/// quote mark becomes a plain apostrophe.
 pub fn shell_safe(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {
-            '"' | '`' => out.push('\''),
+            '"' | '`' | '\u{2018}'..='\u{201F}' => out.push('\''),
             '$' => out.push_str("USD "),
             '!' => out.push('.'),
             '%' => out.push_str(" percent"),
@@ -282,6 +284,69 @@ mod tests {
             shell_safe("ends in a path C:\\dir\\"),
             "ends in a path C:\\dir"
         );
+    }
+
+    /// Names a reviewer used to break out of the quotes in PowerShell, where “ ” „ close a
+    /// double-quoted string as `"` does.
+    const HOSTILE: [&str; 4] = [
+        "x\u{201D};calc;\u{201C}.png",
+        "a\u{201E}|calc|\u{201C}b",
+        "c\u{2019};calc;\u{2018}d",
+        "e\u{201F}&calc&\u{201B}f",
+    ];
+
+    #[test]
+    fn typographic_quotes_cant_end_the_string_either() {
+        for name in HOSTILE {
+            let ask = CliError::io(
+                "read the picture",
+                std::path::Path::new(name),
+                &std::io::Error::from(std::io::ErrorKind::NotFound),
+            )
+            .ask(&format!("folderskin image check {name}"));
+            let inner = &ask["claude \"".len()..ask.len() - 1];
+            assert!(
+                !inner.contains(|c: char| c == '"' || ('\u{2018}'..='\u{201F}').contains(&c)),
+                "{inner}"
+            );
+            assert!(
+                inner.contains("calc"),
+                "the text is kept, only defused: {inner}"
+            );
+        }
+    }
+
+    /// Hands the ask line to PowerShell's own parser (nothing is run) and expects exactly one
+    /// command, `claude`, with one argument. Skipped where PowerShell isn't installed.
+    #[test]
+    fn powershell_reads_the_ask_line_as_one_command() {
+        let script = "$e = $null; \
+            $ast = [System.Management.Automation.Language.Parser]::ParseInput($env:FS_ASK_LINE, [ref]$null, [ref]$e); \
+            $cmds = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)); \
+            \"$($e.Count) $($cmds.Count) $($cmds[0].CommandElements.Count)\"";
+        for shell in ["pwsh", "powershell"] {
+            let mut lines = Vec::new();
+            for name in HOSTILE {
+                let e = CliError::fixable("io", format!("Couldn't read {name}."), "");
+                lines.push(e.ask(&format!("folderskin image check {name}")));
+            }
+            let mut ran = true;
+            for line in &lines {
+                let out = std::process::Command::new(shell)
+                    .args(["-NoProfile", "-NonInteractive", "-Command", script])
+                    .env("FS_ASK_LINE", line)
+                    .output();
+                let Ok(out) = out else {
+                    ran = false;
+                    break;
+                };
+                let said = String::from_utf8_lossy(&out.stdout);
+                assert_eq!(said.trim(), "0 1 2", "{shell} split {line}");
+            }
+            if ran {
+                return;
+            }
+        }
     }
 
     #[test]
