@@ -341,9 +341,14 @@ fn local_model(name: &str) -> Result<Option<ModelId>, CliError> {
     }
 }
 
-/// One of `provider`'s models by id.
+/// One of `provider`'s models by id, in any case: Ideogram's only model is `V_3`.
 fn provider_model(provider: &ProviderInfo, id: &str) -> Result<&'static ModelInfo, CliError> {
-    folderskin_ai::model(provider.id, id).ok_or_else(|| {
+    let found = folderskin_ai::provider(provider.id).and_then(|p| {
+        p.models
+            .iter()
+            .find(|m| m.id.eq_ignore_ascii_case(id.trim()))
+    });
+    found.ok_or_else(|| {
         CliError::fixable(
             "unknown_model",
             format!("{} doesn't offer a model called {id:?}.", provider.label),
@@ -686,5 +691,34 @@ mod tests {
             .err()
             .unwrap();
         assert_eq!(e.code, "unknown_model");
+    }
+
+    #[test]
+    fn provider_models_are_found_in_any_case() {
+        let ideogram = folderskin_ai::provider("ideogram").unwrap();
+        for id in ["V_3", "v_3", " V_3 "] {
+            assert_eq!(provider_model(ideogram, id).unwrap().id, "V_3", "{id:?}");
+        }
+        let openai = folderskin_ai::provider("openai").unwrap();
+        assert_eq!(
+            provider_model(openai, "GPT-IMAGE-1").unwrap().id,
+            "gpt-image-1"
+        );
+    }
+
+    #[test]
+    fn seed_runs_stop_at_the_largest_seed_instead_of_wrapping() {
+        assert_eq!(seeds(7, 3).unwrap(), 7..10);
+        assert_eq!(seeds(MAX_SEED, 1).unwrap(), MAX_SEED..MAX_SEED + 1);
+        let e = seeds(MAX_SEED, 2).unwrap_err();
+        assert_eq!(
+            (e.code.as_str(), e.exit),
+            ("bad_seed", crate::error::Exit::Fixable)
+        );
+        assert!(
+            e.why.contains("2 pictures from seed 9223372036854775807"),
+            "{e:?}"
+        );
+        assert!(seeds(u64::MAX, 2).is_err(), "no overflow");
     }
 }

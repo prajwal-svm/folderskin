@@ -4,14 +4,12 @@ use crate::cli::{
     AiCommand, BatchArgs, ConfigCommand, ConfigKey, GenArgs, KeyCommand, MachineArgs, RuntimeArg,
     SetupArgs, ThemeArgs,
 };
-use crate::config::{self, Config, LOCAL};
+use crate::config::{self, Config};
 use crate::error::CliError;
 use crate::out::Out;
 use crate::paint::{self, Order, Painted, Painter};
 use crate::{preview, runtime, terminal};
-use folderskin_local::{
-    detect, random_seed, slug, CancelToken, ModelId, Runtime, Shape, MODELS, STYLES,
-};
+use folderskin_local::{detect, random_seed, CancelToken, ModelId, Runtime, Shape, MODELS, STYLES};
 use serde::Deserialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -777,10 +775,7 @@ fn config(command: Option<ConfigCommand>, out: &Arc<Out>) -> Result<(), CliError
             .iter()
             .map(|k| {
                 let value = config.get(*k).map_or_else(
-                    || match k {
-                        ConfigKey::Provider => format!("{LOCAL} (default)"),
-                        _ => "auto (default)".into(),
-                    },
+                    || format!("{} (default)", config.default_for(*k)),
                     str::to_string,
                 );
                 format!("{:9} {value}", k.id())

@@ -96,19 +96,27 @@ impl Config {
 
     /// Sets `key` after checking `value` makes sense for it.
     pub fn set(&mut self, key: ConfigKey, value: &str) -> Result<(), CliError> {
-        let value = value.trim().to_lowercase();
-        let bad = |allowed: &str| {
+        // Model ids are kept as the provider spells them (Ideogram's is `V_3`); everything else
+        // is lower case.
+        let value = match key {
+            ConfigKey::Model => value.trim().to_string(),
+            _ => value.trim().to_lowercase(),
+        };
+        let bad = |why: String| {
             CliError::fixable(
                 "config_value",
                 format!("{value:?} isn't a {} FolderSkin knows.", key.id()),
-                format!("It can be {allowed}."),
+                why,
             )
         };
         match key {
             ConfigKey::Provider => {
                 if value != LOCAL && folderskin_ai::provider(&value).is_none() {
-                    return Err(bad(&format!("{LOCAL} or {}", provider_ids().join(", ")))
-                        .fix("See them all: folderskin ai models"));
+                    return Err(bad(format!(
+                        "The provider can be {LOCAL} or {}.",
+                        or_list(&provider_ids())
+                    ))
+                    .fix("See them all: folderskin ai models"));
                 }
                 if self.provider.as_deref() != Some(value.as_str()) && self.model.is_some() {
                     // A model belongs to a provider; the old one's model means nothing here.
@@ -119,27 +127,47 @@ impl Config {
             ConfigKey::Model => {
                 let provider = self.provider.clone().unwrap_or_else(|| LOCAL.into());
                 let known = model_ids(&provider);
-                if !known.iter().any(|m| *m == value) {
-                    return Err(bad(&format!("for {provider}, one of {}", known.join(", ")))
-                        .fix("Set the provider first if you meant another one: folderskin ai config set provider <id>"));
-                }
-                self.model = Some(value);
+                let Some(model) = known.iter().find(|m| m.eq_ignore_ascii_case(&value)) else {
+                    return Err(bad(format!(
+                        "For {provider}, the model can be {}.",
+                        or_list(&known)
+                    ))
+                    .fix("Set the provider first if you meant another one's: folderskin ai config set provider <id>"));
+                };
+                self.model = Some(model.to_string());
             }
             ConfigKey::Tier => {
-                if !["auto", "q8", "q4"].contains(&value.as_str()) {
-                    return Err(bad("auto, q8 or q4"));
+                let known = ["auto", "q8", "q4"];
+                if !known.contains(&value.as_str()) {
+                    return Err(bad(format!("The tier can be {}.", or_list(&known))));
                 }
                 self.tier = Some(value);
             }
             ConfigKey::Backend => {
                 let known = ["auto", "cuda", "vulkan", "metal", "cpu", "mlx"];
                 if !known.contains(&value.as_str()) {
-                    return Err(bad(&known.join(", ")));
+                    return Err(bad(format!("The backend can be {}.", or_list(&known))));
                 }
                 self.backend = Some(value);
             }
         }
         Ok(())
+    }
+
+    /// What `key` is when nothing is set, for `ai config get`: a provider's first model, and
+    /// `auto` (decided from the computer) for the local model, the tier and the backend.
+    pub fn default_for(&self, key: ConfigKey) -> String {
+        match key {
+            ConfigKey::Provider => LOCAL.to_string(),
+            ConfigKey::Model => {
+                let provider = self.provider.as_deref().unwrap_or(LOCAL);
+                match folderskin_ai::provider(provider) {
+                    Some(p) if provider != LOCAL => p.models[0].id.to_string(),
+                    _ => "auto".to_string(),
+                }
+            }
+            ConfigKey::Tier | ConfigKey::Backend => "auto".to_string(),
+        }
     }
 
     pub fn unset(&mut self, key: ConfigKey) {
@@ -160,6 +188,15 @@ impl Config {
         (configured == provider)
             .then_some(self.model.as_deref())
             .flatten()
+    }
+}
+
+/// "a, b or c".
+fn or_list(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
     }
 }
 
@@ -234,10 +271,38 @@ mod tests {
         let err = c.set(ConfigKey::Provider, "midjourney").unwrap_err();
         assert!(err.why.contains("openai"), "{err:?}");
         c.set(ConfigKey::Model, "klein").unwrap();
-        assert!(
-            c.set(ConfigKey::Model, "gpt-image-1").is_err(),
+        let err = c.set(ConfigKey::Model, "gpt-image-1").unwrap_err();
+        assert_eq!(
+            err.why, "For local, the model can be auto, zimage or klein.",
             "not a local model"
         );
+    }
+
+    #[test]
+    fn a_model_keeps_its_providers_spelling() {
+        let mut c = Config::default();
+        c.set(ConfigKey::Provider, "Ideogram").unwrap();
+        assert_eq!(c.provider.as_deref(), Some("ideogram"));
+        for typed in ["V_3", "v_3"] {
+            c.set(ConfigKey::Model, typed).unwrap();
+            assert_eq!(c.model.as_deref(), Some("V_3"), "{typed}");
+        }
+        c.set(ConfigKey::Provider, "local").unwrap();
+        c.set(ConfigKey::Model, "Klein").unwrap();
+        assert_eq!(c.model.as_deref(), Some("klein"));
+    }
+
+    #[test]
+    fn unset_settings_show_what_they_come_to() {
+        let mut c = Config::default();
+        assert_eq!(c.default_for(ConfigKey::Provider), "local");
+        assert_eq!(c.default_for(ConfigKey::Model), "auto");
+        c.set(ConfigKey::Provider, "openai").unwrap();
+        assert_eq!(
+            c.default_for(ConfigKey::Model),
+            folderskin_ai::provider("openai").unwrap().models[0].id
+        );
+        assert_eq!(c.default_for(ConfigKey::Tier), "auto");
     }
 
     #[test]
