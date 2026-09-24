@@ -274,13 +274,13 @@ fn gen(args: GenArgs, out: &Arc<Out>) -> Result<(), CliError> {
         out.warn("a provider picks its own seed, so --seed is left out");
     }
     let first = args.seed.unwrap_or_else(random_seed);
-    let orders: Vec<Order> = (0..u64::from(args.n))
-        .map(|i| Order {
+    let orders: Vec<Order> = paint::seeds(first, u64::from(args.n))?
+        .map(|seed| Order {
             idea: idea.clone(),
             style: args.style.clone(),
             shape: paint::shape(args.shape),
             refs: args.refs.clone(),
-            seed: first + i,
+            seed,
             name: (args.n == 1).then(|| args.name.clone()).flatten(),
             raw: args.raw,
         })
@@ -384,6 +384,16 @@ pub fn read_briefs(path: &Path) -> Result<Vec<Brief>, CliError> {
                 "n is how many to paint, at least 1.",
             ));
         }
+        if let Some(seed) = brief.seed {
+            if let Err(e) = paint::seeds(seed, u64::from(brief.n.unwrap_or(1))) {
+                return Err(CliError::fixable(
+                    "bad_briefs",
+                    format!("{which} starts from too high a seed."),
+                    e.why,
+                )
+                .fix("Give it a smaller seed, or leave seed out for a random one."));
+            }
+        }
         for r in &mut brief.refs {
             let full = base.join(&*r);
             if !full.is_file() {
@@ -412,7 +422,7 @@ fn batch(args: &BatchArgs, out: &Arc<Out>) -> Result<(), CliError> {
         };
         let n = brief.n.unwrap_or(1);
         let first = brief.seed.unwrap_or_else(random_seed);
-        for i in 0..n {
+        for (i, seed) in paint::seeds(first, u64::from(n))?.enumerate() {
             let name = match (&brief.name, n) {
                 (Some(name), 1) => Some(name.clone()),
                 (Some(name), _) => Some(format!("{name}-{}", i + 1)),
@@ -427,7 +437,7 @@ fn batch(args: &BatchArgs, out: &Arc<Out>) -> Result<(), CliError> {
                     .and_then(Shape::parse)
                     .unwrap_or_default(),
                 refs: brief.refs.iter().map(PathBuf::from).collect(),
-                seed: first + u64::from(i),
+                seed,
                 name,
                 raw: false,
             };
@@ -545,6 +555,7 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let seed = args.seed.unwrap_or_else(random_seed);
     let folders = folders_under(&root, args.depth)?;
     let names = theme_names(&root, &folders);
+    let seeds = paint::seeds(seed, folders.len() as u64)?;
     if folders.is_empty() {
         return Err(CliError::fixable(
             "no_folders",
@@ -566,7 +577,7 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
     ));
     let cancel = terminal::stop_on_ctrl_c();
     let mut first_check = true;
-    for (i, (folder, name)) in folders.iter().zip(&names).enumerate() {
+    for ((folder, name), seed) in folders.iter().zip(&names).zip(seeds) {
         let picture = out_dir.join(format!("{name}.png"));
         if !picture.is_file() {
             let order = Order {
@@ -576,7 +587,7 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 style: args.style.clone(),
                 shape: paint::shape(args.shape),
                 refs: Vec::new(),
-                seed: seed + i as u64,
+                seed,
                 name: Some(name.clone()),
                 raw: false,
             };

@@ -212,8 +212,8 @@ fn crop(args: &CropArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 "That box goes outside the picture.",
                 format!(
                     "The picture is {w} × {h}; the box ends at {} × {}.",
-                    x + bw,
-                    y + bh
+                    u64::from(x) + u64::from(bw),
+                    u64::from(y) + u64::from(bh)
                 ),
             )
             .fix("Keep X + WIDTH and Y + HEIGHT within the picture."));

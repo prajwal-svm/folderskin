@@ -171,6 +171,14 @@ pub struct Picture {
 /// Says what is missing before a job is started, so a batch fails at once rather than at its
 /// first picture.
 pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
+    if job.seed > MAX_SEED {
+        return Err(Error::fixable(
+            "bad_seed",
+            format!("The seed {} is too big.", job.seed),
+            format!("A seed goes from 0 to {MAX_SEED}, the most the runtimes take."),
+        )
+        .fix("Use a smaller seed, or leave it out for a random one."));
+    }
     for r in &job.refs {
         if !r.is_file() {
             return Err(Error::fixable(
@@ -610,6 +618,10 @@ fn iso_utc(secs: u64) -> String {
     )
 }
 
+/// The largest seed there is: sd-cli reads it as a signed 64-bit number, and stops without a
+/// word on anything bigger.
+pub const MAX_SEED: u64 = i64::MAX as u64;
+
 /// A seed nobody picked: below 2³¹, which every runtime takes.
 pub fn random_seed() -> u64 {
     use std::hash::{BuildHasher, Hasher};
@@ -707,6 +719,25 @@ mod tests {
         let err = check_ready(&job, &settings).unwrap_err();
         assert_eq!(err.code, "reference_missing");
         assert!(err.why.contains("here.png"));
+    }
+
+    #[test]
+    fn a_seed_the_runtimes_cant_take_is_refused_before_they_run() {
+        let settings = Settings {
+            backend: Backend::Cuda,
+            tier: Tier::Q8,
+            vram_gb: 4.0,
+        };
+        let mut job = Job::new("x");
+        job.seed = MAX_SEED + 1;
+        let err = check_ready(&job, &settings).unwrap_err();
+        assert_eq!((err.code, err.class), ("bad_seed", crate::Class::Fixable));
+        assert!(err.why.contains("9223372036854775807"), "{err:?}");
+        job.seed = MAX_SEED;
+        assert_ne!(
+            check_ready(&job, &settings).err().map(|e| e.code),
+            Some("bad_seed")
+        );
     }
 
     #[test]

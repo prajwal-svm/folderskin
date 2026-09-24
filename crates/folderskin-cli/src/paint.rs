@@ -9,6 +9,7 @@ use folderskin_ai::prompts::Shape as AiShape;
 use folderskin_ai::{AiError, Finished, ModelInfo, ProviderInfo};
 use folderskin_local::{
     generate, slug, Backend, CancelToken, Job, Machine, ModelId, Settings, Shape, Stage, Tier,
+    MAX_SEED,
 };
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -138,6 +139,24 @@ pub struct Painted {
     pub path: PathBuf,
     pub shape: Shape,
     pub meta: serde_json::Value,
+}
+
+/// The seeds for `count` pictures: `first`, then each picture the next. Refused when they would
+/// run past the largest seed the runtimes take, rather than wrapping round to 0.
+pub fn seeds(first: u64, count: u64) -> Result<std::ops::Range<u64>, CliError> {
+    match first.checked_add(count) {
+        Some(end) if end.saturating_sub(1) <= MAX_SEED => Ok(first..end),
+        _ => Err(CliError::fixable(
+            "bad_seed",
+            format!("The seeds from {first} run too high."),
+            format!(
+                "{count} picture{} from seed {first} would need seeds past {MAX_SEED}, the most \
+                 the runtimes take.",
+                if count == 1 { "" } else { "s" }
+            ),
+        )
+        .fix("Start from a smaller seed, e.g. --seed 42, or leave it out for a random one.")),
+    }
 }
 
 pub fn shape(arg: ShapeArg) -> Shape {

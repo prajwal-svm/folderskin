@@ -46,7 +46,9 @@ pub mod unzip;
 pub use cancel::CancelToken;
 pub use error::{Class, Error};
 pub use event::{Event, Level, Reporter, Stage};
-pub use generate::{check_ready, generate, random_seed, slug, Job, Picture, Provenance, Settings};
+pub use generate::{
+    check_ready, generate, random_seed, slug, Job, Picture, Provenance, Settings, MAX_SEED,
+};
 pub use machine::{detect, pick_backend, pick_tier, Backend, Machine, Tier};
 pub use manifest::{Model, ModelId, MODELS};
 pub use paths::home;

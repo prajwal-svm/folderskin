@@ -145,7 +145,7 @@ pub struct GenArgs {
     #[arg(short, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
     pub n: u32,
     /// Where the seeds start, so a good picture can be painted again exactly (local models)
-    #[arg(long)]
+    #[arg(long, value_parser = parse_seed)]
     pub seed: Option<u64>,
     /// Local: auto, zimage or klein (pictures always go to klein). With --provider: its model id
     #[arg(long)]
@@ -210,7 +210,7 @@ pub struct ThemeArgs {
     #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=5))]
     pub depth: u32,
     /// The first folder's seed; the next folder gets the next one
-    #[arg(long)]
+    #[arg(long, value_parser = parse_seed)]
     pub seed: Option<u64>,
     /// Put each picture on its folder, as the app would
     #[arg(long)]
@@ -454,6 +454,20 @@ fn parse_hue(s: &str) -> Result<f64, String> {
     parse_number(s, -180.0, 180.0, "the hue")
 }
 
+/// A whole number from 0 to [`folderskin_local::MAX_SEED`], the most the runtimes take.
+pub fn parse_seed(s: &str) -> Result<u64, String> {
+    s.trim()
+        .parse::<u64>()
+        .ok()
+        .filter(|seed| *seed <= folderskin_local::MAX_SEED)
+        .ok_or_else(|| {
+            format!(
+                "a seed is a whole number from 0 to {}, e.g. 42",
+                folderskin_local::MAX_SEED
+            )
+        })
+}
+
 /// `X,Y,W,H` in pixels.
 pub fn parse_box(s: &str) -> Result<(u32, u32, u32, u32), String> {
     let parts: Vec<u32> = s
@@ -538,6 +552,28 @@ mod tests {
         assert!(parse(&["ai", "gen", "x", "-n", "0"]).is_err());
         assert!(parse(&["ai", "gen", "x", "--shape", "skin"]).is_err());
         assert!(parse(&["ai", "gen"]).is_err(), "an idea is needed");
+    }
+
+    #[test]
+    fn seeds_stop_where_the_runtimes_do() {
+        // sd-cli reads a seed as a signed 64-bit number and stops without a word beyond it.
+        let seed = |s: &str| match parse(&["ai", "gen", "x", "--seed", s]).map(|c| c.command) {
+            Ok(Command::Ai(AiCommand::Gen(g))) => Ok(g.seed),
+            Ok(_) => panic!("not gen"),
+            Err(e) => Err(e.kind()),
+        };
+        assert_eq!(seed("9223372036854775807"), Ok(Some(i64::MAX as u64)));
+        for bad in ["9223372036854775808", "18446744073709551615", "x"] {
+            assert_eq!(
+                seed(bad),
+                Err(clap::error::ErrorKind::ValueValidation),
+                "{bad}"
+            );
+        }
+        assert!(parse(&["ai", "theme", "d", "--seed", "18446744073709551615"]).is_err());
+        assert!(parse_seed("99999999999999999999")
+            .unwrap_err()
+            .contains("from 0 to 9223372036854775807"));
     }
 
     #[test]
