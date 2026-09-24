@@ -31,6 +31,7 @@ import {
   WINDOWS_PARTS,
   type Doc,
 } from "./doc";
+import { inkOn } from "./color";
 import { templateById } from "./templates";
 
 const three = (): Doc => {
@@ -270,6 +271,22 @@ describe("moving a design between the Mac's folder and Windows'", () => {
     const mac = templateById("two-tone")!.make(FALLBACK_PARTS).layers.find((l) => l.name === "Front");
     if (mac?.kind !== "shape") throw new Error("not the front");
     expect(mac.y - mac.h / 2).toBeCloseTo((FALLBACK_PARTS.paper[1] + FALLBACK_PARTS.front[1]) / 2, 5);
+  });
+
+  it("makes new words stand out from Two-tone's front, the rectangle that covers it, not the colour under that", () => {
+    for (const parts of [FALLBACK_PARTS, WINDOWS_PARTS]) {
+      const d = templateById("two-tone")!.make(parts);
+      expect(backgroundColor(d, parts.front)).toBe("#023047");
+      expect(inkOn(backgroundColor(d, parts.front)!)).toBe("#ffffff");
+      // Moved to the other folder, it still covers the front.
+      const other = parts === FALLBACK_PARTS ? WINDOWS_PARTS : FALLBACK_PARTS;
+      expect(backgroundColor(refit(d, parts, other, other === WINDOWS_PARTS ? "windows" : "mac"), other.front)).toBe("#023047");
+      // Drawing the design still goes by the folder's own colour.
+      expect(backgroundColor(d)).toBe("#ffb703");
+    }
+    // A label on the front is something on it, not its colour.
+    const label = { ...makeShape("rect", 512, 560, "#ffffff"), w: 560, h: 210 };
+    expect(backgroundColor(addLayer(three(), label), FALLBACK_PARTS.front)).toBe("#ff0000");
   });
 
   it("comes back to about where it was", () => {
