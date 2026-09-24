@@ -257,6 +257,34 @@ pub async fn ai_local_remove(local: State<'_, Local>) -> Result<LocalStatusDto, 
     .map_err(|e| AiFailure::bug(format!("Removing the local model stopped: {e}.")))?
 }
 
+/// Removes the model files an earlier setup left that the Local Model doesn't use now, and says
+/// how it stands after. Refused while it is being set up or painting, as removing the model is.
+#[tauri::command]
+pub async fn ai_local_remove_unused(local: State<'_, Local>) -> Result<LocalStatusDto, AiFailure> {
+    if local.is_setting_up() {
+        return Err(AiFailure::new("busy", "The local model is being set up.")
+            .fix("Stop the setup, then remove the files."));
+    }
+    let Some(_turn) = local.try_turn() else {
+        return Err(
+            AiFailure::new("busy", "The local model is painting a picture.")
+                .fix("Wait for it to finish, or stop it, then remove the files."),
+        );
+    };
+    let here = local.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let doing = Doing {
+            what: "removing model files the local model doesn't use".into(),
+            setup: true,
+        };
+        folderskin_local::remove_unused(&here.settings(), &folderskin_local::Reporter::silent())
+            .map_err(|e| failure::from_engine(e, &doing))?;
+        Ok(here.status())
+    })
+    .await
+    .map_err(|e| AiFailure::bug(format!("Removing the files stopped: {e}.")))?
+}
+
 /// Sets the local model up, telling `send` how it goes.
 async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusDto, AiFailure> {
     // Only one setup is let through join_setup, so this is only a guard.

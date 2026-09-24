@@ -393,6 +393,20 @@ test.describe("the AI chat", () => {
     await expect(settings(page).getByText(/Set up and ready/)).toHaveCount(0);
   });
 
+  test("model files an earlier setup left are said, and can be removed on their own", async ({ page }) => {
+    await openApp(page, { query: "leftovers" });
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    const leftovers = settings(page).getByText(/An earlier setup left 15(\.\d)? GB of model files this model doesn't use/);
+    await expect(leftovers).toBeVisible();
+    await settings(page).getByRole("button", { name: "Remove them" }).click();
+    await page.getByRole("dialog", { name: "Remove the files the model doesn't use?" }).getByRole("button", { name: "Remove" }).click();
+    await expect(leftovers).toHaveCount(0);
+    // What the model needs is still offered.
+    await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toBeVisible();
+  });
+
   test("a setup under way is found again when its settings are opened again", async ({ page }) => {
     await openApp(page, { query: "slowsetup" });
     await openView(page, /generate with ai/i);

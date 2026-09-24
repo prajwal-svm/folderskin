@@ -78,7 +78,12 @@ const MOCK_LABELS: Record<string, string> = { openai: "OpenAI", xai: "xAI Grok",
 
 /** Whether the Local Model is set up in the preview (`?localready` starts it set up), and how long
  *  its last picture took: unknown until one is painted, as the app only knows once it has. */
-const mockLocal = { ready: new URLSearchParams(location.search).has("localready"), seconds: null as number | null };
+// `?leftovers`: an earlier build's model files (8-bit klein and Z-Image Turbo) still on the disk.
+const mockLocal = {
+  ready: new URLSearchParams(location.search).has("localready"),
+  seconds: null as number | null,
+  unused: new URLSearchParams(location.search).has("leftovers") ? 15_158_000_000 : 0,
+};
 
 /** The preview's setup under way, which a second aiLocalSetup joins as ai_local_setup does: it
  *  hears where the setup has got to, then what comes next, and settles as the setup does. */
@@ -93,7 +98,8 @@ function mockLocalStatus(): LocalStatus {
     device: "NVIDIA GeForce RTX 3050 Ti, 4 GB",
     download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
     installs: null,
-    kept_bytes: mockLocal.ready ? 5_380_000_000 : 0,
+    kept_bytes: (mockLocal.ready ? 5_380_000_000 : 0) + mockLocal.unused,
+    unused_bytes: mockLocal.unused,
     model: "FLUX.2 [klein] 4B",
     quality: "4-bit",
     model_bytes: 5_207_178_964,
@@ -923,12 +929,19 @@ export const mockApi = {
     mockStopped.add(job);
   },
   aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
+  aiLocalRemoveUnused: async (): Promise<LocalStatus> => {
+    if (mockSetup) throw { code: "busy", message: "The local model is being set up.", fix: ["Stop the setup, then remove the files."] };
+    await sleep(300);
+    mockLocal.unused = 0;
+    return mockLocalStatus();
+  },
   aiLocalRemove: async (): Promise<LocalStatus> => {
     // As ai_local_remove: refused while it's being set up; otherwise what was downloaded goes.
     if (mockSetup) throw { code: "busy", message: "The local model is being set up.", fix: ["Stop the setup, then remove the model."] };
     await sleep(300);
     // How long a picture took here stays: it belongs to the machine, not to the files.
     mockLocal.ready = false;
+    mockLocal.unused = 0;
     return mockLocalStatus();
   },
   aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {

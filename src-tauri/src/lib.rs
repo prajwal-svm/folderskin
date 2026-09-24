@@ -127,6 +127,7 @@ pub fn run() {
             ai::ai_local_status,
             ai::ai_local_setup,
             ai::ai_local_remove,
+            ai::ai_local_remove_unused,
             icons::icon_pack_download,
             icons::icon_packs_installed,
             icons::icon_pack_read,

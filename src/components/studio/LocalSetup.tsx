@@ -31,6 +31,8 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
   const [factsOpen, setFactsOpen] = useState(false);
   /** Asking whether to remove the model, or removing it. */
   const [removal, setRemoval] = useState<"ask" | "removing" | null>(null);
+  /** Likewise for the model files an earlier setup left that the model doesn't use now. */
+  const [leftovers, setLeftovers] = useState<"ask" | "removing" | null>(null);
   const looked = useRef<(status: LocalStatus) => void>(() => {});
   const factsId = useId();
 
@@ -97,6 +99,18 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       setRemoval(null);
     }
   }, [onChanged]);
+
+  const removeLeftovers = useCallback(async () => {
+    setProblem(null);
+    setLeftovers("removing");
+    try {
+      setStatus(await api.aiLocalRemoveUnused());
+    } catch (e) {
+      setProblem(aiFailure(e));
+    } finally {
+      setLeftovers(null);
+    }
+  }, []);
 
   if (!status && !problem) {
     return (
@@ -173,6 +187,17 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           {status.note && <p className="local-note">{status.note}</p>}
         </div>
       )}
+      {status && status.unused_bytes > 0 && !setup && (
+        // An earlier build's files (the other tier's, Z-Image Turbo's) that setting up again
+        // doesn't use or take away: said here, not only in the fold, with the way to get the room back.
+        <div className="local-go">
+          <span className="local-note">An earlier setup left {formatBytes(status.unused_bytes)} of model files this model doesn't use.</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={leftovers === "removing"} onClick={() => setLeftovers("ask")}>
+            {leftovers === "removing" ? <LoaderIcon size={13} /> : <DeleteIcon size={13} />}
+            {leftovers === "removing" ? "Removing them" : "Remove them"}
+          </button>
+        </div>
+      )}
       {status && !status.ready && status.can_set_up && !setup && !stopped && (
         <div className="local-go">
           <span className={short ? "local-note is-warn" : "local-note"}>{short ?? whatItTakes(status)}</span>
@@ -237,6 +262,15 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
             )}
           </div>
         </div>
+      )}
+      {leftovers === "ask" && status && (
+        <Confirm
+          title="Remove the files the model doesn't use?"
+          text={`This deletes ${formatBytes(status.unused_bytes)} of model files an earlier setup left, which the model doesn't use now. What it runs with stays.`}
+          action="Remove"
+          onCancel={() => setLeftovers(null)}
+          onConfirm={() => void removeLeftovers()}
+        />
       )}
       {removal === "ask" && status && (
         <Confirm

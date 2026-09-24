@@ -209,6 +209,8 @@ export type LocalStatus = {
   installs: string | null;
   /** What setup's files take on disk now, partial downloads included: what removing the model gives back. */
   kept_bytes: number;
+  /** Of those, the model files an earlier setup left that the model doesn't use now (the other tier's, or Z-Image Turbo's). */
+  unused_bytes: number;
   /** The model it paints with ("FLUX.2 [klein] 4B"), how finely ("4-bit") and what its files come to here. */
   model: string;
   quality: string;
@@ -412,6 +414,8 @@ const tauriApi = {
   aiLocalStatus: () => invoke<LocalStatus>("ai_local_status"),
   /** Removes the local model: what setup downloaded, and mflux when setup installed it. Refused ("busy") while it is being set up or is painting. */
   aiLocalRemove: () => invoke<LocalStatus>("ai_local_remove"),
+  /** Removes the model files an earlier setup left that the model doesn't use now, and says how it stands after. */
+  aiLocalRemoveUnused: () => invoke<LocalStatus>("ai_local_remove_unused"),
   /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes.
    *  Stopped with `aiCancel(LOCAL_SETUP_JOB)` (it fails with the code "stopped"); what was downloaded is kept.
    *  Asked while a setup is under way, it joins that one: `onEvent` hears where it has got to, and it settles as that one does. */

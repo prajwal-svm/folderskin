@@ -358,6 +358,9 @@ pub struct LocalStatusDto {
     /// What setup's files take on disk now, partial downloads included: what removing the model
     /// gives back (besides mflux, when setup installed it).
     pub kept_bytes: u64,
+    /// Of those, the model files an earlier setup left that the model doesn't use now: the other
+    /// tier's, or Z-Image Turbo's ([`folderskin_local::unused`]).
+    pub unused_bytes: u64,
     /// The model it paints with ("FLUX.2 [klein] 4B"), how finely ("4-bit") and what its files
     /// come to here.
     pub model: String,
@@ -454,6 +457,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         installs: (settings.backend == Backend::Mlx && !runtime.installed && can_set_up)
             .then(|| runtime.name.clone()),
         kept_bytes: folderskin_local::kept_bytes(),
+        unused_bytes: folderskin_local::unused_bytes(settings),
         model: model.label.into(),
         quality: match settings.tier {
             Tier::Q4 => "4-bit",
