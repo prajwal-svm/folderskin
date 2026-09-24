@@ -31,6 +31,20 @@ async function dragOnCanvas(page: Page, from: { x: number; y: number }, dx: numb
   await page.mouse.up();
 }
 
+/** A pack of one logo with its brand's colour, served where the preview downloads Simple Icons from. */
+const LOGO_PACK = {
+  format: 1,
+  id: "simple-icons",
+  name: "Simple Icons",
+  version: "1",
+  license: "CC0-1.0",
+  source: "https://simpleicons.org",
+  style: "fill",
+  viewBox: 24,
+  brands: true,
+  icons: [{ n: "red-square", d: ["M2 2h20v20H2z"], c: "#ff0000" }],
+};
+
 test.describe("starting a new design", () => {
   test("opens as a dialog over the whole window on the first visit", async ({ page }) => {
     await openApp(page);
@@ -281,6 +295,28 @@ test.describe("the icon library", () => {
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
     await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
     expect(await layerAt(page)).toEqual(before);
+  });
+
+  test("adds logos in their own colours when Original is chosen", async ({ page }) => {
+    await page.route("**/dist-icons/simple-icons.json", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(LOGO_PACK) }));
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByRole("button", { name: /icon pack: Lucide/ }).click();
+    await page.getByRole("button", { name: "download Simple Icons" }).click();
+    await expect(side(page).getByRole("button", { name: /icon pack: Simple Icons/ })).toBeVisible({ timeout: 10_000 });
+    const original = side(page).getByRole("radio", { name: "Original" });
+    await original.click();
+    await expect(original).toHaveAttribute("aria-checked", "true");
+    await side(page).getByRole("button", { name: "Red square", exact: true }).dblclick();
+    // Lucide's icons have no colours of their own: they're added flat, and the switch says so.
+    await side(page).getByRole("button", { name: /icon pack: Simple Icons/ }).click();
+    await page.getByRole("button", { name: /^Lucide/ }).click();
+    await expect(side(page).getByRole("radio", { name: "Original" })).toHaveCount(0);
+    await expect(side(page).getByRole("radio", { name: "Flat" })).toHaveAttribute("aria-checked", "true");
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Red square" }).click();
+    await expect(side(page).getByRole("radio", { name: "Original" })).toHaveAttribute("aria-checked", "true");
   });
 
   test("shows each pack with its logo and no licence small print", async ({ page }) => {

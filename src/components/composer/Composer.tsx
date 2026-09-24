@@ -110,7 +110,8 @@ const LOOK_KEY = "folderskin.composer.iconLook";
 
 function loadLook(): IconLook {
   try {
-    return localStorage.getItem(LOOK_KEY) === "flat" ? "flat" : "emboss";
+    const v = localStorage.getItem(LOOK_KEY);
+    return v === "flat" || v === "original" ? v : "emboss";
   } catch {
     return "emboss";
   }
@@ -766,10 +767,14 @@ export function Composer({
     );
   };
 
-  /** A look chosen in the library: the selected icon's, at once, and the next new one's. */
+  /**
+   * A look chosen in the library: the selected icon's, at once, and the next new one's. Original
+   * for a selected logo is that logo's only; chosen while adding, the logos added next keep their
+   * colours (icons without colours of their own come out flat).
+   */
   const chooseLook = (look: IconLook) => {
     if (iconTarget && iconTarget.look !== look) commit(patchLayer(latestDoc.current, iconTarget.id, { look }));
-    if (look === "original") return;
+    if (look === "original" && iconTarget) return;
     setIconLook(look);
     try {
       localStorage.setItem(LOOK_KEY, look);
