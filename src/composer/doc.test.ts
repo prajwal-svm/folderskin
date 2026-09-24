@@ -31,6 +31,7 @@ import {
   WINDOWS_PARTS,
   type Doc,
 } from "./doc";
+import { templateById } from "./templates";
 
 const three = (): Doc => {
   let d = emptyDoc();
@@ -210,6 +211,54 @@ describe("moving a design between the Mac's folder and Windows'", () => {
     expect(back.x + back.w / 2).toBeGreaterThanOrEqual(mx1 - 0.5);
     expect(back.y - back.h / 2).toBeLessThanOrEqual(my0 + 0.5);
     expect(back.y + back.h / 2).toBeGreaterThanOrEqual(my1 - 0.5);
+  });
+
+  it("keeps a picture that only just covered Windows' folder covering a Mac's", () => {
+    let d = emptyDoc("folder", "windows");
+    d = addLayer(d, makeImage("data:image/png;base64,AAAA", 1600, 1000, imageBox(1600, 1000, WINDOWS_PARTS, true)));
+    const pic = refit(d, WINDOWS_PARTS, FALLBACK_PARTS, "mac").layers[0];
+    if (pic.kind !== "image") throw new Error("not the picture");
+    const [x0, y0, x1, y1] = FALLBACK_PARTS.folder;
+    expect(pic.x - pic.w / 2).toBeLessThanOrEqual(x0);
+    expect(pic.x + pic.w / 2).toBeGreaterThanOrEqual(x1);
+    expect(pic.y - pic.h / 2).toBeLessThanOrEqual(y0);
+    expect(pic.y + pic.h / 2).toBeGreaterThanOrEqual(y1);
+    expect(pic.w / pic.h).toBeCloseTo(1.6, 2);
+  });
+
+  it("keeps a band across the folder on its part and across the whole width", () => {
+    const d = templateById("two-tone")!.make(FALLBACK_PARTS);
+    const there = refit(d, FALLBACK_PARTS, WINDOWS_PARTS, "windows");
+    const front = there.layers.find((l) => l.name === "Front");
+    if (front?.kind !== "shape") throw new Error("not the front");
+    // Below the tab, so the words on it show against the back's colour.
+    expect(front.y - front.h / 2).toBeGreaterThan(WINDOWS_PARTS.tab[3]);
+    expect(front.y - front.h / 2).toBeLessThanOrEqual(WINDOWS_PARTS.front[1]);
+    expect(front.y + front.h / 2).toBeGreaterThanOrEqual(WINDOWS_PARTS.folder[3]);
+    expect(front.x - front.w / 2).toBeLessThanOrEqual(WINDOWS_PARTS.folder[0]);
+    expect(front.x + front.w / 2).toBeGreaterThanOrEqual(WINDOWS_PARTS.folder[2]);
+    const back = refit(there, WINDOWS_PARTS, FALLBACK_PARTS, "mac").layers.find((l) => l.name === "Front");
+    const was = d.layers.find((l) => l.name === "Front");
+    if (back?.kind !== "shape" || was?.kind !== "shape") throw new Error("not the front");
+    for (const k of ["x", "y", "w", "h"] as const) expect(Math.abs(back[k] - was[k]), k).toBeLessThan(0.5);
+  });
+
+  it("keeps the Photo template's caption band across Windows' folder", () => {
+    const d = templateById("photo")!.make(FALLBACK_PARTS);
+    const band = refit(d, FALLBACK_PARTS, WINDOWS_PARTS, "windows").layers.find((l) => l.name === "Caption band");
+    if (band?.kind !== "shape") throw new Error("not the band");
+    expect(band.x - band.w / 2).toBeLessThanOrEqual(WINDOWS_PARTS.folder[0]);
+    expect(band.x + band.w / 2).toBeGreaterThanOrEqual(WINDOWS_PARTS.folder[2]);
+    expect(band.y + band.h / 2).toBeLessThan(WINDOWS_PARTS.folder[3]);
+  });
+
+  it("starts Two-tone's front on Windows' front, which has no paper sheet to hide the split behind", () => {
+    const front = templateById("two-tone")!.make(WINDOWS_PARTS).layers.find((l) => l.name === "Front");
+    if (front?.kind !== "shape") throw new Error("not the front");
+    expect(front.y - front.h / 2).toBe(WINDOWS_PARTS.front[1]);
+    const mac = templateById("two-tone")!.make(FALLBACK_PARTS).layers.find((l) => l.name === "Front");
+    if (mac?.kind !== "shape") throw new Error("not the front");
+    expect(mac.y - mac.h / 2).toBeCloseTo((FALLBACK_PARTS.paper[1] + FALLBACK_PARTS.front[1]) / 2, 5);
   });
 
   it("comes back to about where it was", () => {

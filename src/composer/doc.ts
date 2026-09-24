@@ -471,13 +471,15 @@ export function emptyDoc(shape: Shape = "folder", style: FolderStyle = "mac"): D
 /**
  * The design moved from one folder onto another, a Mac's to Windows' or back. Each placed layer
  * keeps its place on the folder (on the tab, on the front, in the middle of it) and its size for
- * the folder's size; a picture that covered the whole folder still covers it. What covers the
- * canvas stays as it is.
+ * the folder's size; a picture that covered the whole folder still covers it, and a band across
+ * it (Two-tone's front, a caption) still runs across it from and to the same parts. What covers
+ * the canvas stays as it is.
  */
 export function refit(doc: Doc, from: Parts, to: Parts, style: FolderStyle): Doc {
   const [ax0, ay0, ax1, ay1] = from.folder;
   const [bx0, by0, bx1, by1] = to.folder;
   const sx = (bx1 - bx0) / (ax1 - ax0);
+  const sy = (by1 - by0) / (ay1 - ay0);
   // Down the folder in three stretches: the tab, the back between it and the front, the front.
   const ya = [ay0, from.tab[3], from.front[1], ay1];
   const yb = [by0, to.tab[3], to.front[1], by1];
@@ -487,17 +489,28 @@ export function refit(doc: Doc, from: Parts, to: Parts, style: FolderStyle): Doc
   };
   const area = (p: Parts) => (p.front[2] - p.front[0]) * (p.front[3] - p.front[1]);
   const k = Math.sqrt(area(to) / area(from));
-  const kCover = Math.max(sx, (by1 - by0) / (ay1 - ay0));
+  // A layer over the whole folder moves in step with the whole folder and grows by the more of
+  // its two stretches, so every edge that was past the folder's is still past it.
+  const kCover = Math.max(sx, sy);
   const r = (n: number) => Math.round(n * 10) / 10;
   const layers = doc.layers.map((l): Layer => {
     if (!isPlaced(l)) return l;
-    const at = { x: r(bx0 + (l.x - ax0) * sx), y: r(mapY(l.y)) };
+    const x = r(bx0 + (l.x - ax0) * sx);
     if (l.kind === "shape" || l.kind === "image") {
-      const covers = l.w >= ax1 - ax0 - 1 && l.h >= ay1 - ay0 - 1;
-      const f = covers ? kCover : k;
-      return { ...l, ...at, w: r(l.w * f), h: r(l.h * f) };
+      const top = l.y - l.h / 2;
+      const bottom = l.y + l.h / 2;
+      const across = l.x - l.w / 2 <= ax0 + 1 && l.x + l.w / 2 >= ax1 - 1;
+      if (across && top <= ay0 + 1 && bottom >= ay1 - 1) {
+        return { ...l, x, y: r(by0 + (l.y - ay0) * sy), w: r(l.w * kCover), h: r(l.h * kCover) };
+      }
+      if (across && l.kind === "shape" && l.shape === "rect" && l.rotation === 0) {
+        const t = mapY(top);
+        const b = mapY(bottom);
+        return { ...l, x, y: r((t + b) / 2), w: r(l.w * sx), h: r(b - t) };
+      }
+      return { ...l, x, y: r(mapY(l.y)), w: r(l.w * k), h: r(l.h * k) };
     }
-    return { ...l, ...at, size: r(l.size * k) };
+    return { ...l, x, y: r(mapY(l.y)), size: r(l.size * k) };
   });
   return { ...doc, style, layers };
 }

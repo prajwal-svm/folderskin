@@ -20,6 +20,7 @@ export function IslandResizer({
   max,
   grows,
   onWidth,
+  onStep,
   onReset,
 }: {
   label: string;
@@ -31,6 +32,8 @@ export function IslandResizer({
   grows: "right" | "left";
   /** Asks for a width; the layout decides what it becomes (the sidebar folds when narrow). */
   onWidth: (width: number) => void;
+  /** Asks for the width to change by `by` with the arrow keys, for an island with rules of its own for a step; `onWidth` otherwise. */
+  onStep?: (by: number) => void;
   onReset: () => void;
 }) {
   const sign = grows === "right" ? 1 : -1;
@@ -64,7 +67,8 @@ export function IslandResizer({
     const by = { ArrowRight: step, ArrowLeft: -step }[e.key];
     if (by !== undefined) {
       e.preventDefault();
-      onWidth(width + sign * by);
+      if (onStep) onStep(sign * by);
+      else onWidth(width + sign * by);
     } else if (e.key === "Home" || e.key === "End") {
       e.preventDefault();
       onWidth(e.key === "Home" ? min : max);

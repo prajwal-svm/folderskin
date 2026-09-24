@@ -56,7 +56,7 @@ test.describe("settings", () => {
         const css = getComputedStyle(document.documentElement);
         return [css.getPropertyValue("--accent").trim(), css.getPropertyValue("--on-accent").trim()];
       });
-    expect(await mono()).toEqual(["#f2eeed", "#1f1c1c"]);
+    await expect.poll(mono).toEqual(["#f2eeed", "#1f1c1c"]);
     await dialog(page).getByRole("radiogroup", { name: "theme" }).getByRole("radio", { name: "Light" }).click();
     await expect.poll(mono).toEqual(["#1d1d1f", "#ffffff"]);
 
@@ -77,6 +77,56 @@ test.describe("settings", () => {
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");
     await expect(dialog(page).getByRole("radio", { name: "Black and white" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("Tab stops once at each group, on its chosen one, and the arrow keys move within it", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await expect(dialog(page).getByRole("tab", { name: "General" })).toBeFocused();
+    const theme = dialog(page).getByRole("radiogroup", { name: "theme" });
+    await page.keyboard.press("Tab");
+    await expect(theme.getByRole("radio", { checked: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog(page).getByRole("radio", { name: "Blue" })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(theme.getByRole("radio", { checked: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog(page).getByRole("tab", { name: "General" })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog(page).getByLabel("search settings")).toBeFocused();
+  });
+
+  test("Escape in an open list closes the list and leaves the dialog and what's typed in it", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    await dialog(page).getByRole("button", { name: "Add a profile" }).click();
+    const form = dialog(page).getByRole("form", { name: "new profile" });
+    await form.getByLabel("Name").fill("Typed but not saved");
+    await form.getByRole("button", { name: "licence" }).click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(dialog(page)).toBeVisible();
+    await expect(form.getByLabel("Name")).toHaveValue("Typed but not saved");
+    await expect(form.getByRole("button", { name: "licence" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog(page)).toHaveCount(0);
+  });
+
+  test("Escape in the search empties it first, and closes the dialog after", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    const search = dialog(page).getByLabel("search settings");
+    await search.fill("motion");
+    await expect(dialog(page).getByRole("tab")).toHaveText(["General"]);
+    await page.keyboard.press("Escape");
+    await expect(dialog(page)).toBeVisible();
+    await expect(search).toHaveValue("");
+    await expect(dialog(page).getByRole("tab")).toHaveCount(4);
+    await expect(search).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog(page)).toHaveCount(0);
   });
 
   test("folds the sidebar to its icons and back", async ({ page }) => {
