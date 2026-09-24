@@ -155,6 +155,21 @@ pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliErro
     std::fs::write(target, bytes).map_err(|e| CliError::io(doing, target, &e))
 }
 
+/// Writes `png`, a rendered PNG, to `target` in the format its name asks for, as [`save`] does:
+/// the PNG as it is for a `.png` name (or none, or standard output), encoded again for `.jpg` and
+/// `.webp`, and refused for any other.
+pub fn write_as_named(png: &[u8], target: &Path, doing: &str) -> Result<(), CliError> {
+    let named_png = is_stdio(target)
+        || image::ImageFormat::from_path(target).map_or(true, |f| f == image::ImageFormat::Png);
+    if named_png {
+        return write_png(png, target, doing);
+    }
+    let img = image::load_from_memory(png)
+        .map_err(|e| CliError::bug("A rendered picture didn't read back.", e.to_string()))?
+        .to_rgba8();
+    save(&img, target)
+}
+
 fn make_parent(target: &Path) -> Result<(), CliError> {
     if let Some(dir) = target.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| CliError::io("make the folder", dir, &e))?;

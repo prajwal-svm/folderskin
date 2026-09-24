@@ -94,7 +94,7 @@ pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
             .fix("folderskin render picture.png --out preview.png"))
         }
     };
-    images::write_png(&png, &args.out, "save the preview")?;
+    images::write_as_named(&png, &args.out, "save the preview")?;
     let (place, stdout) = place(&args.out);
     out.result(
         (!stdout).then_some(args.out.as_path()),
@@ -128,7 +128,7 @@ pub fn template(args: &TemplateArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let (w, h) = (args.width, args.height);
     let cut = compositor::blank_template_cutout(w, h);
     let write = |path: &Path, img: &RgbaImage| {
-        images::write_png(
+        images::write_as_named(
             &folderskin_core::raster::encode_png(img),
             path,
             "save the template",
@@ -473,6 +473,40 @@ mod tests {
             ..t
         };
         assert_eq!(template(&both, &out).unwrap_err().code, "usage");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn render_and_template_write_the_format_the_name_asks_for() {
+        let dir = std::env::temp_dir().join(format!("fs-render-format-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let out = Out::new(true, false);
+        let t = TemplateArgs {
+            out: dir.join("t.webp"),
+            width: 64,
+            height: 64,
+            backdrop: "FF00FF".into(),
+            mask: Some(dir.join("m.jpg")),
+        };
+        template(&t, &out).unwrap();
+        let r = RenderArgs {
+            image: Some(t.out.clone()),
+            solid: None,
+            out: dir.join("p.jpg"),
+            size: 32,
+            focus: None,
+        };
+        render(&r, &out).unwrap();
+        let format = |p: &Path| image::guess_format(&std::fs::read(p).unwrap()).unwrap();
+        assert_eq!(format(&t.out), image::ImageFormat::WebP);
+        assert_eq!(format(&dir.join("m.jpg")), image::ImageFormat::Jpeg);
+        assert_eq!(format(&r.out), image::ImageFormat::Jpeg);
+        // A name no picture format goes by is refused, as the image commands refuse it.
+        let gif = RenderArgs {
+            out: dir.join("p.gif"),
+            ..r
+        };
+        assert_eq!(render(&gif, &out).unwrap_err().code, "unknown_format");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
