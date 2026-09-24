@@ -1,6 +1,7 @@
 //! The composer's icon packs beyond the built-in one: downloaded once from the `icons-v*`
-//! release, checked against the SHA-256 the app itself carries (src/composer/icons/catalog.ts),
-//! and kept in the app's data folder.
+//! release of github.com/prajwal-svm/folderskin-icons, where they are built and published,
+//! checked against the SHA-256 the app itself carries (src/composer/icons/catalog.ts), and kept
+//! in the app's data folder.
 //!
 //! The webview can't fetch them itself: the content security policy allows no remote
 //! connections, and it shouldn't. It names a pack and the hash it expects; the URL is built here,
@@ -16,7 +17,7 @@ use tauri::{ipc::Channel, AppHandle, Manager};
 
 /// Where the packs are published. `FOLDERSKIN_ICONS_URL` points at another copy, such as a local
 /// folder served while trying a new pack.
-const RELEASES: &str = "https://github.com/prajwal-svm/folderskin/releases/download";
+const RELEASES: &str = "https://github.com/prajwal-svm/folderskin-icons/releases/download";
 /// The biggest pack today is about 5 MB; anything far past that isn't one of ours.
 const MAX_PACK: u64 = 24 * 1024 * 1024;
 

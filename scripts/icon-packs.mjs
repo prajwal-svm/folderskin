@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Builds the composer's icon packs from pinned releases of open-source icon sets.
+ * Builds the composer's icon packs from pinned releases of open-source icon sets. The built-in
+ * pack and the catalog the app reads are written here; the downloadable packs are published from
+ * github.com/prajwal-svm/folderskin-icons, whose copy of this script builds them to the same
+ * bytes. Keep the two in step: the app checks every download against the SHA-256 in the catalog.
  *
  *   node scripts/icon-packs.mjs lucide          the built-in pack, written into src/composer/icons/
  *   node scripts/icon-packs.mjs --all           every pack into dist-icons/, and the catalog the app reads
