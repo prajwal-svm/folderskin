@@ -620,6 +620,31 @@ test.describe("the canvas and its panels", () => {
     await expect(canvas).toBeVisible();
   });
 
+  test("keeps the canvas its size when the icon at its real sizes comes in under it", async ({ page }) => {
+    // The previews aren't drawn until they're let through.
+    await page.addInitScript(() => {
+      const toBlob = HTMLCanvasElement.prototype.toBlob;
+      let open = false;
+      const held: (() => void)[] = [];
+      (window as unknown as { letThrough: () => void }).letThrough = () => {
+        open = true;
+        held.splice(0).forEach((go) => go());
+      };
+      HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement["toBlob"]>) {
+        if (open) toBlob.apply(this, args);
+        else held.push(() => toBlob.apply(this, args));
+      };
+    });
+    await openApp(page);
+    await startFrom(page, "Plain");
+    const size = () => composer(page).locator("canvas.cmp-canvas").evaluate((c: HTMLCanvasElement) => `${c.style.width} ${c.style.height}`);
+    await expect(composer(page).locator(".cmp-stage")).not.toHaveAttribute("data-waiting");
+    const before = await size();
+    await page.evaluate(() => (window as unknown as { letThrough: () => void }).letThrough());
+    await expect(composer(page).locator(".cmp-size")).toHaveCount(3);
+    expect(await size()).toBe(before);
+  });
+
   test("shows a loader, not the design without its photo, while the photo is still being read", async ({ page }) => {
     // The photo (a big JPEG) isn't read until it's let through, as a big one takes a while.
     await page.addInitScript(() => {

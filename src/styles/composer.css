@@ -395,12 +395,14 @@
   border-color: var(--accent);
 }
 
+/* As tall as the biggest preview (64 points) before they come, so the bar doesn't grow when they
+   do and shrink the canvas under the pointer. */
 .cmp-sizes {
   margin-left: auto;
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  min-height: 36px;
+  min-height: 64px;
 }
 
 /* Given way when the canvas is too narrow for them (useBarRoom), rather than drawn cut off. */
