@@ -41,7 +41,7 @@ async function seedChats(page: Page, titles: string[]) {
         turns: [{ id: "t1", idea: title.toLowerCase(), shape: "folder", provider: "openai", model: "gpt-image-2.5-flare", where: "OpenAI · GPT Image 2.5 Flare", refs: [], status: "stopped", started: at, finished: at }],
       };
     });
-    const index = chats.map((c) => ({ id: c.id, title: c.title, created: c.created, updated: c.updated, turns: 1, cover: null }));
+    const index = chats.map((c) => ({ id: c.id, title: c.title, created: c.created, updated: c.updated, turns: 1, pictures: 0, cover: null }));
     localStorage.setItem(key, JSON.stringify({ index, chats: Object.fromEntries(chats.map((c) => [c.id, c])) }));
   }, titles);
 }

@@ -49,7 +49,14 @@ export type Chat = {
   turns: Turn[];
 };
 
-export type ChatSummary = { id: string; title: string; created: number; updated: number; turns: number; cover: string | null };
+/** `turns` counts every request, `pictures` only those that made one. */
+export type ChatSummary = { id: string; title: string; created: number; updated: number; turns: number; pictures: number; cover: string | null };
+
+/** How many pictures a chat made, as the history list says it. */
+export function picturesMade(n: number): string {
+  if (n === 0) return "no pictures";
+  return n === 1 ? "1 picture" : `${n} pictures`;
+}
 
 /** What an AI run reports while it works (the Tauri channel's messages). */
 export type AiEvent =
@@ -152,7 +159,8 @@ export function persistable(chat: Chat): Chat {
 
 export function summaryOf(chat: Chat): ChatSummary {
   const cover = [...chat.turns].reverse().find((t) => t.skinId)?.skinId ?? null;
-  return { id: chat.id, title: chat.title, created: chat.created, updated: chat.updated, turns: chat.turns.length, cover };
+  const pictures = chat.turns.filter((t) => t.skinId).length;
+  return { id: chat.id, title: chat.title, created: chat.created, updated: chat.updated, turns: chat.turns.length, pictures, cover };
 }
 
 /** Newest first, the one just changed replacing its old self. */

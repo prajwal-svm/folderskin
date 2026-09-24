@@ -1030,6 +1030,7 @@ export const mockApi = {
       created: c.created,
       updated: c.updated,
       turns: c.turns.length,
+      pictures: c.turns.filter((t) => t.skinId).length,
       cover: [...c.turns].reverse().find((t) => t.skinId)?.skinId ?? null,
     };
     store.chats[c.id] = chat;

@@ -9,6 +9,7 @@ import {
   NEW_TITLE,
   patchTurn,
   persistable,
+  picturesMade,
   progressOf,
   readChat,
   renameChat,
@@ -132,12 +133,21 @@ describe("the list of chats", () => {
   it("summarises a chat with its latest picture as the cover", () => {
     let c = addTurn(newChat("c1", 0), turn("t1", "a", { status: "done", skinId: "s1" }), 1);
     c = addTurn(c, turn("t2", "b", { status: "error" }), 2);
-    expect(summaryOf(c)).toMatchObject({ id: "c1", turns: 2, cover: "s1" });
+    expect(summaryOf(c)).toMatchObject({ id: "c1", turns: 2, pictures: 1, cover: "s1" });
+  });
+
+  it("counts the pictures a chat made, not the requests that were stopped or failed", () => {
+    let c = addTurn(newChat("c1", 0), turn("t1", "a red kite", { status: "stopped" }), 1);
+    c = addTurn(c, turn("t2", "a red kite", { status: "stopped" }), 2);
+    expect(summaryOf(c)).toMatchObject({ turns: 2, pictures: 0 });
+    expect(picturesMade(0)).toBe("no pictures");
+    expect(picturesMade(1)).toBe("1 picture");
+    expect(picturesMade(2)).toBe("2 pictures");
   });
 
   it("keeps newest first and one entry per chat", () => {
-    const a = { id: "a", title: "A", created: 0, updated: 1, turns: 1, cover: null };
-    const b = { id: "b", title: "B", created: 0, updated: 2, turns: 1, cover: null };
+    const a = { id: "a", title: "A", created: 0, updated: 1, turns: 1, pictures: 0, cover: null };
+    const b = { id: "b", title: "B", created: 0, updated: 2, turns: 1, pictures: 0, cover: null };
     expect(upsertSummary([b, a], { ...a, updated: 3 }).map((s) => s.id)).toEqual(["a", "b"]);
   });
 
@@ -145,10 +155,10 @@ describe("the list of chats", () => {
     const now = new Date(2026, 8, 23, 15, 0).getTime();
     const at = (d: number, h = 12) => new Date(2026, 8, 23 - d, h).getTime();
     const list = [
-      { id: "t", title: "t", created: 0, updated: at(0, 9), turns: 1, cover: null },
-      { id: "y", title: "y", created: 0, updated: at(1), turns: 1, cover: null },
-      { id: "w", title: "w", created: 0, updated: at(4), turns: 1, cover: null },
-      { id: "o", title: "o", created: 0, updated: at(40), turns: 1, cover: null },
+      { id: "t", title: "t", created: 0, updated: at(0, 9), turns: 1, pictures: 0, cover: null },
+      { id: "y", title: "y", created: 0, updated: at(1), turns: 1, pictures: 0, cover: null },
+      { id: "w", title: "w", created: 0, updated: at(4), turns: 1, pictures: 0, cover: null },
+      { id: "o", title: "o", created: 0, updated: at(40), turns: 1, pictures: 0, cover: null },
     ];
     expect(groupChats(list, now).map((g) => [g.label, g.chats.map((c) => c.id)])).toEqual([
       ["Today", ["t"]],
@@ -160,8 +170,8 @@ describe("the list of chats", () => {
 
   it("finds chats by every word of their title", () => {
     const list = [
-      { id: "1", title: "Lighthouse at dusk", created: 0, updated: 0, turns: 1, cover: null },
-      { id: "2", title: "Pop art cats", created: 0, updated: 0, turns: 1, cover: null },
+      { id: "1", title: "Lighthouse at dusk", created: 0, updated: 0, turns: 1, pictures: 0, cover: null },
+      { id: "2", title: "Pop art cats", created: 0, updated: 0, turns: 1, pictures: 0, cover: null },
     ];
     expect(searchChats(list, "dusk light").map((c) => c.id)).toEqual(["1"]);
     expect(searchChats(list, " ")).toBe(list);

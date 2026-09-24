@@ -216,7 +216,7 @@ export type LocalStatus = {
 };
 
 /** A saved conversation with the assistant, as the history lists it (chats.rs). */
-export type ChatSummaryDto = { id: string; title: string; created: number; updated: number; turns: number; cover: string | null };
+export type ChatSummaryDto = { id: string; title: string; created: number; updated: number; turns: number; pictures: number; cover: string | null };
 
 /** A reference picture kept for a chat: a shrunk copy in the chat's own folder, and a thumbnail. */
 export type ChatRefDto = { id: string; name: string; path: string; thumb: string };

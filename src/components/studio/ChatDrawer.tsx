@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Skin } from "../../lib/tauri";
-import { groupChats, searchChats, type ChatSummary } from "../../state/chats";
+import { groupChats, picturesMade, searchChats, type ChatSummary } from "../../state/chats";
 import { SparklesIcon } from "../icons/sparkles";
 import { SearchIcon } from "../icons/search";
 import { PencilIcon } from "../icons/pencil";
@@ -129,7 +129,7 @@ export function ChatDrawer({
                           {c.title}
                         </span>
                         <span className="chat-meta">
-                          {when(c.updated, now)} · {c.turns === 1 ? "1 picture" : `${c.turns} pictures`}
+                          {when(c.updated, now)} · {picturesMade(c.pictures ?? 0)}
                         </span>
                       </span>
                     </button>

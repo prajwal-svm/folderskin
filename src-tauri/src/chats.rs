@@ -1,7 +1,8 @@
 //! The AI assistant's conversations, kept between runs.
 //!
 //! ```text
-//! <app data>/chats/index.json       [{id, title, created, updated, turns, cover}], newest first
+//! <app data>/chats/index.json       [{id, title, created, updated, turns, pictures, cover}],
+//!                                   newest first
 //! <app data>/chats/<id>.json        one chat, as the webview wrote it
 //! <app data>/chats/<id>/<hash>.png  the reference pictures it was given, copied and shrunk
 //! ```
@@ -57,7 +58,11 @@ pub struct ChatSummary {
     pub title: String,
     pub created: u64,
     pub updated: u64,
+    /// Every request, the stopped and the failed included.
     pub turns: u32,
+    /// The requests that made a picture, which is what the list counts. An index written
+    /// before this was kept doesn't read, and so is rebuilt from the chats.
+    pub pictures: u32,
     /// The skin its latest picture became, for the list's thumbnail.
     pub cover: Option<String>,
 }
@@ -113,17 +118,15 @@ pub fn summarise(chat: &Value) -> Result<ChatSummary, String> {
         .take(MAX_TITLE_CHARS)
         .collect();
     let when = |key: &str| chat.get(key).and_then(Value::as_u64).unwrap_or(0);
-    let cover = turns
-        .iter()
-        .rev()
-        .find_map(|t| t.get("skinId").and_then(Value::as_str))
-        .map(str::to_string);
+    let skin = |t: &Value| t.get("skinId").and_then(Value::as_str).map(str::to_string);
+    let cover = turns.iter().rev().find_map(skin);
     Ok(ChatSummary {
         id: id.to_string(),
         title,
         created: when("created"),
         updated: when("updated"),
         turns: turns.len() as u32,
+        pictures: turns.iter().filter_map(skin).count() as u32,
         cover,
     })
 }
@@ -374,6 +377,40 @@ mod tests {
         assert!(save(&dir, &huge).unwrap_err().contains("too big"));
         assert!(read(&dir, "../index").is_err());
         assert!(delete(&dir, "..").is_err());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_chat_counts_the_pictures_it_made_not_its_requests() {
+        let made = |skin: Option<&str>, status: &str| {
+            let mut t = json!({"id": "t", "idea": "a red kite", "status": status});
+            if let Some(skin) = skin {
+                t["skinId"] = json!(skin);
+            }
+            t
+        };
+        let stopped = json!({"id": "ca1", "turns": [made(None, "stopped"), made(None, "stopped")]});
+        let s = summarise(&stopped).unwrap();
+        assert_eq!((s.turns, s.pictures), (2, 0));
+        let mixed =
+            json!({"id": "ca2", "turns": [made(Some("user:a"), "done"), made(None, "stopped")]});
+        let s = summarise(&mixed).unwrap();
+        assert_eq!(
+            (s.turns, s.pictures, s.cover.as_deref()),
+            (2, 1, Some("user:a"))
+        );
+    }
+
+    #[test]
+    fn an_index_from_before_pictures_were_counted_is_rebuilt() {
+        let dir = temp();
+        save(&dir, &chat("ca1", 5, Some("user:abc"))).unwrap();
+        std::fs::write(
+            dir.join(INDEX),
+            br#"[{"id":"ca1","title":"x","created":5,"updated":5,"turns":1,"cover":"user:abc"}]"#,
+        )
+        .unwrap();
+        assert_eq!(index(&dir)[0].pictures, 1);
         std::fs::remove_dir_all(dir).ok();
     }
 
