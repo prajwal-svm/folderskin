@@ -45,6 +45,7 @@ import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 import { SunIcon } from "./icons/sun";
+import { Brand, branded } from "./Brand";
 
 export type SettingsTab = "general" | "ai" | "sharing" | "about";
 
@@ -62,7 +63,7 @@ const PAGES: { id: SettingsTab; label: string; Icon: typeof SunIcon; find: strin
   },
   {
     id: "ai",
-    label: "AI",
+    label: "AI Provider",
     Icon: SparklesIcon,
     find: "ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
   },
@@ -250,7 +251,7 @@ function Section({ title, note, find = "", children }: { title: string; note?: R
   return (
     <section className="set-section">
       <h2 className={lit ? "set-section-title is-match" : "set-section-title"}>{title}</h2>
-      {note && <p className="set-section-note">{note}</p>}
+      {note && <p className="set-section-note">{branded(note)}</p>}
       <div className="set-rows">{children}</div>
     </section>
   );
@@ -264,8 +265,8 @@ function Row({ label, note, find = "", lead, children }: { label: ReactNode; not
     <div className={lit ? "set-row is-match" : "set-row"}>
       {lead}
       <div className="set-row-text">
-        <span className="set-row-label">{label}</span>
-        {note && <span className="set-row-note">{note}</span>}
+        <span className="set-row-label">{branded(label)}</span>
+        {note && <span className="set-row-note">{branded(note)}</span>}
       </div>
       {children !== undefined && <div className="set-row-control">{children}</div>}
     </div>
@@ -935,7 +936,7 @@ function About({
       <div className="set-block about-pitch">
         <p className="about-tagline">Give any folder a skin.</p>
         <p className="about-intro">
-          Your best memories wear the same plain folder as your old paperwork. FolderSkin gives every folder a look that fits
+          Your best memories wear the same plain folder as your old paperwork. <Brand /> gives every folder a look that fits
           what&apos;s inside: a golden-hour film still for summer photos, a vintage travel poster for a trip, pop art for a video
           project, soft pastels for a birthday.
         </p>

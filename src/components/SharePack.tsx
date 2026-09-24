@@ -31,6 +31,7 @@ import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { GithubIcon } from "./icons/github";
 import { LoaderIcon } from "./icons/loader";
+import { Brand, branded } from "./Brand";
 
 /** Which way a pack goes: a pull request on GitHub, or FolderSkin's review queue for anyone without an account. */
 type Route = "github" | "direct";
@@ -482,7 +483,9 @@ export function SharePack({
         }
       >
         <ol className="share-steps">
-          <li>Open GitHub and sign in. It makes you a copy of FolderSkin to add to.</li>
+          <li>
+            Open GitHub and sign in. It makes you a copy of <Brand /> to add to.
+          </li>
           <li>
             Drag the <strong>{id}</strong> folder onto the page.
           </li>
@@ -771,7 +774,7 @@ export function SharePack({
       {route === "direct" && direct?.available && (
         <ul className="share-direct" aria-label="how sharing without GitHub works">
           <li>
-            <strong>Reviewed first.</strong> A person at FolderSkin looks at every pack. Nothing is public until it's approved.
+            <strong>Reviewed first.</strong> A person at <Brand /> looks at every pack. Nothing is public until it&apos;s approved.
           </li>
           <li>
             <strong>Public once approved.</strong> The pictures, the pack's name and tags, and your name go to everyone under the licence
@@ -809,13 +812,13 @@ export function SharePack({
       {progress && (
         <p className="gh-waiting">
           <LoaderIcon />
-          {progressLabel(progress)}
+          {branded(progressLabel(progress))}
         </p>
       )}
       {sending && (
         <p className="gh-waiting" role="status">
           <LoaderIcon />
-          {shareProgressLabel(sending)}
+          {branded(shareProgressLabel(sending))}
         </p>
       )}
       {error && !busy && <p className="field-note is-error">{error}</p>}

@@ -18,6 +18,7 @@ import { ChatDrawer } from "./ChatDrawer";
 import { FolderTarget } from "./FolderTarget";
 import { PromptBox, refLimit } from "./PromptBox";
 import { TurnCard, type TurnActions } from "./TurnCard";
+import { Brand } from "../Brand";
 
 const CHOICE_KEY = "folderskin.ai.choice";
 
@@ -302,7 +303,9 @@ export const Studio = forwardRef<
             <SparklesIcon size={22} />
           </span>
           <p className="empty-title">The assistant isn't in this build</p>
-          <p className="empty-text">FolderSkin couldn't load its provider list: {loadError}. Rebuild the app, then open this again.</p>
+          <p className="empty-text">
+            <Brand /> couldn&apos;t load its provider list: {loadError}. Rebuild the app, then open this again.
+          </p>
           <button type="button" className="btn btn-secondary" onClick={load}>
             Try again
           </button>

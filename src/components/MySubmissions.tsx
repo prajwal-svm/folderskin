@@ -5,6 +5,7 @@ import { PACK_TERMS_URL, licenseLabel } from "../lib/packs";
 import { api, errorMessage, type MySubmission } from "../lib/tauri";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
+import { Brand, branded } from "./Brand";
 
 const when = (seconds: number) => new Date(seconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
@@ -60,7 +61,7 @@ export function MySubmissions() {
     ) : (
       <p className="gh-waiting">
         <LoaderIcon />
-        Asking FolderSkin's sharing service
+        Asking <Brand />&apos;s sharing service
       </p>
     );
   }
@@ -97,13 +98,15 @@ export function MySubmissions() {
               )}
               {s.note && <p className="share-sub-note">“{s.note}”</p>}
               {s.status === "withdrawn" && s.pulled && (
-                <p className="share-sub-note">It was in the community packs, so FolderSkin's maintainer has been told to take it out. That can take a few days.</p>
+                <p className="share-sub-note">
+                  It was in the community packs, so <Brand />&apos;s maintainer has been told to take it out. That can take a few days.
+                </p>
               )}
               {canWithdraw(s.status) && (
                 <div className="share-sub-actions">
                   {asking === s.id ? (
                     <>
-                      <span className="field-note">{withdrawNote(s)}</span>
+                      <span className="field-note">{branded(withdrawNote(s))}</span>
                       <button type="button" className="btn btn-ghost" onClick={() => setAsking(null)} disabled={busy === s.id}>
                         Keep it
                       </button>

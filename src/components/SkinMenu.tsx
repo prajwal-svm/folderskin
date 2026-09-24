@@ -9,6 +9,7 @@ import { DeleteIcon } from "./icons/delete";
 import { EarthIcon } from "./icons/earth";
 import { PaletteIcon } from "./icons/palette";
 import { PencilIcon } from "./icons/pencil";
+import { branded } from "./Brand";
 
 /** Wide enough for a whole name, tags and facts without cutting any of them short. */
 const WIDTH = 360;
@@ -214,7 +215,7 @@ export function SkinMenu({
           {facts.map(([label, value]) => (
             <div className="skin-fact" key={label}>
               <dt>{label}</dt>
-              <dd>{value}</dd>
+              <dd>{branded(value)}</dd>
             </div>
           ))}
         </dl>

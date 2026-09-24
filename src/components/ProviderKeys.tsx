@@ -11,6 +11,7 @@ import { CpuIcon } from "./icons/composer";
 import { Select } from "./Select";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
+import { branded } from "./Brand";
 
 /**
  * The AI providers, the key for the chosen one, and optionally its model. Shared by the
@@ -139,9 +140,7 @@ export function ProviderKeys({
             options={provider.models.map((m) => ({ value: m.id, label: `${m.label} (${m.price_hint})` }))}
           />
           <span className="field-note">
-            {model?.native_alpha
-              ? "Returns a transparent background by itself."
-              : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out."}
+            {branded(model?.native_alpha ? "Returns a transparent background by itself." : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out.")}
           </span>
         </div>
       )}
@@ -181,7 +180,7 @@ export function ProviderKeys({
             </button>
           </div>
         )}
-        {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{note.text}</span>}
+        {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{branded(note.text)}</span>}
         <div className="key-links">
           <button type="button" className="link-btn" onClick={() => void openUrl(provider.keys_url).catch(() => {})}>
             Get a key <ExternalLinkIcon size={12} />

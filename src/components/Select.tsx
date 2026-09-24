@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronDownIcon, TickIcon } from "./icons/composer";
 import { Popover } from "./composer/Popover";
+import { branded } from "./Brand";
 
 export type SelectOption<T> = { value: T; label: string; /** Drawn instead of the label, in the list and the button. */ render?: ReactNode };
 
@@ -93,7 +94,7 @@ export function Select<T extends string | number>({
           }
         }}
       >
-        {current ? <span>{current.render ?? current.label}</span> : <span className="cmp-select-placeholder">{placeholder}</span>}
+        {current ? <span>{branded(current.render ?? current.label)}</span> : <span className="cmp-select-placeholder">{placeholder}</span>}
         <ChevronDownIcon size={14} />
       </button>
       {anchor && (
@@ -110,7 +111,7 @@ export function Select<T extends string | number>({
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(i)}
               >
-                <span className="cmp-option-label">{o.render ?? o.label}</span>
+                <span className="cmp-option-label">{branded(o.render ?? o.label)}</span>
                 {i === chosen && current !== null && <TickIcon size={14} />}
               </div>
             ))}
