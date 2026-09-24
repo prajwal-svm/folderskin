@@ -308,10 +308,9 @@ async fn install_webp(
         );
         return Ok(());
     }
-    let url = manifest::WEBP_WINDOWS_URL;
-    let zip = paths::downloads_dir().join(url.rsplit('/').next().unwrap_or("libwebp.zip"));
+    let zip = webp_zip();
     let remote = Remote {
-        url: url.to_string(),
+        url: manifest::WEBP_WINDOWS_URL.to_string(),
         size: manifest::WEBP_WINDOWS_SIZE,
         sha256: Some(manifest::WEBP_WINDOWS_SHA256.to_string()),
     };
@@ -330,6 +329,63 @@ async fn install_webp(
     .map_err(|e| unpack_error(&zip, &e))?;
     reporter.log(Level::Info, format!("installed cwebp in {}", dir.display()));
     Ok(())
+}
+
+/// Where Google's cwebp build is downloaded to on Windows.
+fn webp_zip() -> PathBuf {
+    let url = manifest::WEBP_WINDOWS_URL;
+    paths::downloads_dir().join(url.rsplit('/').next().unwrap_or("libwebp.zip"))
+}
+
+/// Whether `settings` can paint here now: the runtime is installed and both models are downloaded
+/// (mflux fetches its own weights the first time it runs each model). It only looks at files, so
+/// it is quick enough for a list the window shows; [`status`] also asks the runtime whether it
+/// starts.
+pub fn is_set_up(settings: &Settings) -> bool {
+    if settings.backend == Backend::Mlx {
+        return paths::which(MFLUX_PROBE).is_some();
+    }
+    paths::sd_cli(settings.backend).is_file()
+        && MODELS.iter().all(|m| {
+            m.files(settings.tier)
+                .all()
+                .iter()
+                .all(|f| f.local().is_file())
+        })
+}
+
+/// The bytes [`setup`] would still download for `settings` on `machine`: the tested runtime
+/// build when it isn't installed, cwebp on Windows, and every model file that isn't here yet (a
+/// file both models use counted once), less whatever interrupted downloads already brought. 0 for
+/// mflux, which downloads each model's weights itself when it first runs it.
+pub fn download_size(machine: &Machine, settings: &Settings) -> u64 {
+    if settings.backend == Backend::Mlx {
+        return 0;
+    }
+    let mut total = 0;
+    if machine.os == Os::Windows && paths::cwebp().is_none() {
+        total += download::remaining(&webp_zip(), manifest::WEBP_WINDOWS_SIZE);
+    }
+    let exe = paths::sd_cli(settings.backend);
+    let installed = exe.is_file()
+        && std::fs::read_to_string(exe.with_file_name(".release"))
+            .is_ok_and(|s| s.trim() == manifest::SDCPP_TAG);
+    if !installed {
+        for asset in
+            manifest::sdcpp_assets(machine.os, machine.arch, settings.backend).unwrap_or(&[])
+        {
+            total += download::remaining(&paths::downloads_dir().join(asset.name), asset.size);
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    for model in &MODELS {
+        for file in model.files(settings.tier).all() {
+            if seen.insert(file.local()) {
+                total += download::remaining(&file.local(), file.size);
+            }
+        }
+    }
+    total
 }
 
 async fn install_mlx(reporter: &Reporter, cancel: &CancelToken) -> Result<(), Error> {
@@ -572,6 +628,32 @@ mod tests {
         let e = no_build(Os::Linux, Arch::X86_64, Backend::Cuda);
         assert!(e.why.contains("vulkan and cpu builds"), "{e:?}");
         assert!(e.fix[0].ends_with("--backend vulkan"), "{e:?}");
+    }
+
+    #[test]
+    fn what_is_left_to_download_counts_a_shared_file_once() {
+        let machine = |os, arch, gpu| Machine {
+            os,
+            arch,
+            ram_gb: 16.0,
+            gpu,
+            gpu_name: String::new(),
+            vram_gb: 0.0,
+        };
+        // mflux downloads its own weights.
+        let mac = machine(Os::Macos, Arch::Arm64, Gpu::Apple);
+        assert_eq!(download_size(&mac, &Settings::for_machine(&mac)), 0);
+        // No runtime build and no cwebp for ARM64 Linux, so at most the models, their shared
+        // text encoder once: less than the two models' totals added up.
+        let arm = machine(Os::Linux, Arch::Arm64, Gpu::None);
+        let settings = Settings::for_machine(&arm);
+        let each: u64 = MODELS
+            .iter()
+            .flat_map(|m| m.files(settings.tier).all())
+            .map(|f| f.size)
+            .sum();
+        let shared = MODELS[0].files(settings.tier).llm.size;
+        assert!(download_size(&arm, &settings) <= each - shared);
     }
 
     #[test]

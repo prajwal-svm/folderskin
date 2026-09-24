@@ -47,6 +47,20 @@ pub fn is_done(dest: &Path, size: u64) -> bool {
     file_size(dest) == Some(size) && with_suffix(dest, ".ok").is_file()
 }
 
+/// How many of `size` bytes [`fetch`] still has to download for `dest`: none once the whole
+/// file is there (checked or not), and what an interrupted download hasn't brought yet.
+pub fn remaining(dest: &Path, size: u64) -> u64 {
+    if file_size(dest) == Some(size) {
+        return 0;
+    }
+    let have = file_size(&with_suffix(dest, ".part")).unwrap_or(0);
+    if have > size {
+        size // too long to be this file: it starts again
+    } else {
+        size - have
+    }
+}
+
 /// Downloads `remote` to `dest`, resuming a partial download, and checks its size and hash once.
 pub async fn fetch(
     client: &reqwest::Client,
@@ -646,6 +660,24 @@ mod tests {
         assert!(!dir.join("m.gguf.ok").exists());
         let e = sha256_file(&dest, &cancel).unwrap_err();
         assert_eq!(e.kind(), std::io::ErrorKind::Interrupted);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn what_is_left_to_download_counts_what_already_arrived() {
+        let dir = temp_dir("remaining");
+        let dest = dir.join("m.gguf");
+        assert_eq!(remaining(&dest, 1000), 1000, "nothing here yet");
+        std::fs::write(dir.join("m.gguf.part"), vec![0u8; 400]).unwrap();
+        assert_eq!(
+            remaining(&dest, 1000),
+            600,
+            "an interrupted download carries on"
+        );
+        std::fs::write(dir.join("m.gguf.part"), vec![0u8; 1200]).unwrap();
+        assert_eq!(remaining(&dest, 1000), 1000, "too long: it starts again");
+        std::fs::write(&dest, vec![0u8; 1000]).unwrap();
+        assert_eq!(remaining(&dest, 1000), 0, "whole, if not yet checked");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
