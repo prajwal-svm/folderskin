@@ -31,7 +31,7 @@ vi.mock("./tauri", () => ({
   errorMessage: (e: unknown) => String(e),
 }));
 
-const { CommunityStore, PAGE, progressLabel, progressShare } = await import("./communityStore");
+const { CommunityStore, PAGE, countLine, progressLabel, progressShare } = await import("./communityStore");
 
 function pack(id: string): CommunityPack {
   return { id, name: id, author: "a", license: "CC0-1.0", tags: ["t"], count: 1, bytes: 0, hash: "", preview: "", added: false, update: false };
@@ -225,5 +225,16 @@ describe("the Community store", () => {
     expect(progressLabel({ stage: "save", done: 20, total: 16 })).toBe("Saving 16 of 16");
     expect(progressLabel(null)).toBe("Adding");
     expect(progressLabel(null, "Updating")).toBe("Updating");
+  });
+
+  it("counts what the list holds in words that agree", () => {
+    const shown = (total: number, q = "", tag = "") =>
+      ({ q, tag, sort: "best", id: 1, total, all: 10004, packs: [], skins: [], hitPacks: [], facets: [], lastVisit: null, generation: "g" }) as Parameters<typeof countLine>[0];
+    expect(countLine(shown(10004), null)).toBe("10,004 packs");
+    expect(countLine(shown(1, "greek"), null)).toBe("1 pack matches “greek”");
+    expect(countLine(shown(23, "koi"), null)).toBe("23 packs match “koi”");
+    expect(countLine(shown(1, "pop", "art"), null)).toBe("1 pack matches “pop” tagged Art");
+    expect(countLine(shown(0, "zzz"), null)).toBe("0 packs match “zzz”");
+    expect(countLine(null, null)).toBe("");
   });
 });

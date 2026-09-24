@@ -14,6 +14,7 @@
 import { useSyncExternalStore } from "react";
 import type { ToastTone } from "../hooks/useToasts";
 import { clip } from "./names";
+import { tagLabel } from "./tags";
 import { api, errorMessage, type CommunityPack, type CommunitySort, type PackProgress, type Skin, type SkinHit } from "./tauri";
 
 /** Packs a page holds. */
@@ -386,4 +387,18 @@ export function progressShare(p: PackProgress | null): number {
 export function progressLabel(p: PackProgress | null, before = "Adding"): string {
   if (!p) return before;
   return `${p.stage === "download" ? "Downloading" : "Saving"} ${Math.min(p.done, p.total)} of ${p.total}`;
+}
+
+const numbers = new Intl.NumberFormat("en-GB");
+
+/** What the list holds, in a few words: "10,000 packs", "1 pack matches “koi”", "23 packs match “koi”". */
+export function countLine(shown: Shown | null, error: string | null): string {
+  if (!shown) return "";
+  if (error) return `Couldn't search: ${error}`;
+  const one = shown.total === 1;
+  const packs = `${numbers.format(shown.total)} ${one ? "pack" : "packs"}`;
+  const words = shown.q ? ` ${one ? "matches" : "match"} “${shown.q}”` : "";
+  const tagged = shown.tag ? ` tagged ${tagLabel(shown.tag)}` : "";
+  const lastVisit = shown.lastVisit ? `. ${shown.lastVisit.charAt(0).toUpperCase()}${shown.lastVisit.slice(1)}, so these are the packs from your last visit` : "";
+  return `${packs}${words}${tagged}${lastVisit}`;
 }

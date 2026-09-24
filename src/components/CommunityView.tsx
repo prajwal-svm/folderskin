@@ -6,7 +6,7 @@ import { api, errorMessage, type CommunityPack, type CommunitySort, type PackPro
 import { isTauri } from "../lib/devMock";
 import { licenseLabel, PACKS_GUIDE_URL } from "../lib/packs";
 import { tagLabel } from "../lib/tags";
-import { community, progressLabel, progressShare, useCommunity, type PackTask, type PackView, type Shown } from "../lib/communityStore";
+import { community, countLine, progressLabel, progressShare, useCommunity, type PackTask, type PackView } from "../lib/communityStore";
 import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
@@ -223,7 +223,7 @@ export function CommunityView({
 
       <p className="community-status" aria-live="polite">
         <span className="community-count" data-results-for={shown ? shown.q : undefined}>
-          {status(shown, s.error)}
+          {countLine(shown, s.error)}
           {s.searching && shown && <LoaderIcon size={13} />}
           {shown?.lastVisit && !s.error && (
             <button type="button" className="link-btn" disabled={s.refreshing} onClick={() => void community.refresh()}>
@@ -306,17 +306,6 @@ export function CommunityView({
       )}
     </section>
   );
-}
-
-/** What the list holds, in a few words: "10,000 packs", "23 packs match “koi”". */
-function status(shown: Shown | null, error: string | null): string {
-  if (!shown) return "";
-  if (error) return `Couldn't search: ${error}`;
-  const packs = `${numbers.format(shown.total)} ${shown.total === 1 ? "pack" : "packs"}`;
-  const words = shown.q ? ` match “${shown.q}”` : "";
-  const tagged = shown.tag ? ` tagged ${tagLabel(shown.tag)}` : "";
-  const lastVisit = shown.lastVisit ? `. ${shown.lastVisit.charAt(0).toUpperCase()}${shown.lastVisit.slice(1)}, so these are the packs from your last visit` : "";
-  return `${packs}${words}${tagged}${lastVisit}`;
 }
 
 /** One pack: its folders, who made it and its tags, and Add (or Update and Remove). */
