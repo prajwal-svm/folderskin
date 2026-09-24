@@ -196,6 +196,39 @@ test.describe("the icon library", () => {
     expect(spots.size).toBe(3);
   });
 
+  test("adds several icons side by side on Windows' folder too", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("radiogroup", { name: "which folder" }).getByRole("radio", { name: "Windows" }).click();
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    for (const name of ["Camera", "Aperture", "Anchor"]) {
+      await side(page).getByLabel("search icons").fill(name.toLowerCase());
+      await side(page).getByRole("button", { name, exact: true }).dblclick();
+    }
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    const boxes: { x: number; y: number; w: number }[] = [];
+    for (const name of ["Camera", "Aperture", "Anchor"]) {
+      await side(page).locator(".cmp-layer", { hasText: name }).click();
+      boxes.push({ ...(await layerAt(page)), w: Number(await side(page).getByLabel("Size, typed", { exact: true }).inputValue()) });
+    }
+    // None on top of another: each pair is at least their half-widths apart across.
+    for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(Math.abs(a.x - b.x) * 2).toBeGreaterThanOrEqual(a.w + b.w);
+  });
+
+  test("new words go beside the label's own, not over them", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    const label = await layerAt(page);
+    const labelSize = Number(await side(page).getByLabel("Size, typed", { exact: true }).inputValue());
+    await composer(page).getByRole("button", { name: "Text" }).click();
+    await expect(side(page).locator(".cmp-layer.is-on .cmp-layer-label")).toHaveText("Your words");
+    const words = await layerAt(page);
+    const wordsSize = Number(await side(page).getByLabel("Size, typed", { exact: true }).inputValue());
+    // At least a line of each apart, up or down: the words go beside the label, not over it.
+    expect(Math.abs(words.y - label.y) * 2).toBeGreaterThanOrEqual(labelSize + wordsSize);
+  });
+
   test("tries the icon pointed at on the canvas itself, and puts it back after", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");

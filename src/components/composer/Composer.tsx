@@ -55,6 +55,7 @@ import {
   type PatternKind,
   type ShapeKind,
 } from "../../composer/doc";
+import { freeSpot, placeIcon } from "../../composer/geometry";
 import { canRedo, canUndo, historyReducer, startHistory } from "../../composer/history";
 import { boxOf, renderDoc } from "../../composer/render";
 import { TEMPLATES, type Picture } from "../../composer/templates";
@@ -710,7 +711,11 @@ export function Composer({
   );
 
   const addText = () => {
-    add(makeText("Your words", front.x, front.y, ink));
+    const text = makeText("Your words", front.x, front.y, ink);
+    // Beside what's there already, as an icon goes, not over a label's own words.
+    const { w, h } = boxOf(text, assets);
+    const at = freeSpot(parts.front, front, w, h, taken);
+    add(at ? { ...text, x: at.x, y: at.y } : text);
     window.setTimeout(() => {
       textRef.current?.focus();
       textRef.current?.select();
@@ -763,36 +768,15 @@ export function Composer({
    * the front already covers, so icons added one after another sit side by side rather than on top
    * of each other. The first is the size of a folder's symbol, the ones after a little smaller.
    */
+  /** What a new icon or text should keep clear of: the icons, emoji and words already there. */
+  const taken = useMemo(
+    () => doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && (l.kind === "icon" || l.kind === "emoji" || l.kind === "text")).map((l) => boxOf(l, assets)),
+    [doc.layers, assets],
+  );
   const iconSpot = useMemo(() => {
-    const taken = doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && (l.kind === "icon" || l.kind === "emoji" || l.kind === "text")).map((l) => boxOf(l, assets));
-    const firstIcon = !doc.layers.some((l) => l.kind === "icon");
-    const size = firstIcon ? 340 : 240;
-    // Far enough from the middle to clear the biggest thing already there, with a gap.
-    const widest = taken.reduce((m, b) => Math.max(m, b.w, b.h), size);
-    const step = widest / 2 + size / 2 + 28;
-    const [fx0, fy0, fx1, fy1] = parts.front;
-    const fits = (x: number, y: number) => x - size / 2 >= fx0 + 24 && x + size / 2 <= fx1 - 24 && y - size / 2 >= fy0 + 24 && y + size / 2 <= fy1 - 24;
-    const free = (x: number, y: number) => taken.every((b) => Math.abs(b.x - x) * 2 >= b.w + size || Math.abs(b.y - y) * 2 >= b.h + size);
-    const around = [
-      [0, 0],
-      [-1, 0],
-      [1, 0],
-      [0, -1],
-      [0, 1],
-      [-1, -1],
-      [1, -1],
-      [-1, 1],
-      [1, 1],
-    ];
-    for (const [dx, dy] of around) {
-      const x = front.x + dx * step;
-      const y = front.y + dy * step;
-      if (fits(x, y) && free(x, y)) return { x, y, size, color: ink };
-    }
-    // Nowhere free: stepped down and across from the middle, one step per icon already there.
     const n = doc.layers.filter((l) => l.kind === "icon").length;
-    return { x: front.x + (n % 5) * 36, y: front.y + (n % 5) * 36, size, color: ink };
-  }, [doc.layers, assets, parts.front, front.x, front.y, ink]);
+    return { ...placeIcon(parts.front, { x: front.x, y: front.y }, taken, n), color: ink };
+  }, [doc.layers, taken, parts.front, front.x, front.y, ink]);
 
   /** An icon added from the library, in its free spot. Nothing is selected, so the next click tries another. */
   const addIcon = (drawing: IconDrawing) => {

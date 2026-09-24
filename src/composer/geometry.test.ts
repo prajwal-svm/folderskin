@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bounds, boxTargets, contains, cursorFor, handlePoint, hitHandle, MIN_SIZE, normAngle, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
+import { bounds, boxTargets, contains, cursorFor, freeSpot, handlePoint, hitHandle, MIN_SIZE, normAngle, placeIcon, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
+import { FALLBACK_PARTS, WINDOWS_PARTS, centreOf } from "./parts";
 
 const box: Box = { x: 500, y: 400, w: 200, h: 100, rotation: 0 };
 const turned: Box = { ...box, rotation: 90 };
@@ -97,5 +98,49 @@ describe("canvas geometry", () => {
     const t = snap({ ...moving, x: 309 }, boxTargets([{ x: 250, y: 900, w: 10, h: 10, rotation: 0 }]), 6);
     expect(t.dx).toBe(-4);
     expect(snap(moving, { xs: [600], ys: [] }, 6).guides).toEqual([]);
+  });
+});
+
+describe("where something new goes on the folder", () => {
+  /** Adds `count` icons one after another, as the library does, and says where each went. */
+  const addIcons = (front: [number, number, number, number], count: number) => {
+    const taken: Box[] = [];
+    for (let n = 0; n < count; n++) {
+      const at = placeIcon(front, centreOf(front), taken, n);
+      taken.push({ x: at.x, y: at.y, w: at.size, h: at.size, rotation: 0 });
+    }
+    return taken;
+  };
+  const apart = (boxes: Box[]) => boxes.every((a, i) => boxes.every((b, j) => i === j || Math.abs(a.x - b.x) * 2 >= a.w + b.w || Math.abs(a.y - b.y) * 2 >= a.h + b.h));
+
+  it("puts icons side by side on the Mac's folder, as it always has", () => {
+    const icons = addIcons(FALLBACK_PARTS.front, 3);
+    expect(icons.map((b) => [b.x, b.w])).toEqual([
+      [512, 340],
+      [194, 240],
+      [830, 240],
+    ]);
+  });
+
+  it("puts icons side by side on Windows' narrower folder too, a little smaller", () => {
+    const icons = addIcons(WINDOWS_PARTS.front, 3);
+    expect(apart(icons)).toBe(true);
+    expect(new Set(icons.map((b) => b.x)).size).toBe(3);
+    const [x0, , x1] = WINDOWS_PARTS.front;
+    for (const b of icons) {
+      expect(b.x - b.w / 2).toBeGreaterThanOrEqual(x0);
+      expect(b.x + b.w / 2).toBeLessThanOrEqual(x1);
+      expect(b.w).toBeGreaterThanOrEqual(160);
+    }
+  });
+
+  it("puts new words beside a label's own rather than over them", () => {
+    const front = FALLBACK_PARTS.front;
+    const label: Box = { ...centreOf(front), w: 640, h: 180, rotation: 0 };
+    const at = freeSpot(front, centreOf(front), 620, 180, [label])!;
+    expect(at).not.toBeNull();
+    expect(apart([label, { ...at, w: 620, h: 180, rotation: 0 }])).toBe(true);
+    // With nothing there, the middle.
+    expect(freeSpot(front, centreOf(front), 620, 180, [])).toEqual(centreOf(front));
   });
 });

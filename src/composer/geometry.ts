@@ -179,3 +179,60 @@ export function boxTargets(boxes: Box[]): Targets {
   }
   return { xs, ys };
 }
+
+/** Room kept between what's already on the folder and something new beside it. */
+const SPOT_GAP = 28;
+/** And between something new and the front panel's edges. */
+const SPOT_MARGIN = 24;
+/** The middle first, then beside it, above and below, then the corners. */
+const AROUND = [
+  [0, 0],
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
+];
+
+/**
+ * Where something `w` × `h` can go on the front panel (`front`, x0 y0 x1 y1) without covering
+ * any of `taken`: the middle when it's free, otherwise a whole step beside, above or below it,
+ * the step clearing the biggest thing already there with a gap. `null` when nowhere is free.
+ */
+export function freeSpot(front: [number, number, number, number], centre: Point, w: number, h: number, taken: Box[]): Point | null {
+  const [fx0, fy0, fx1, fy1] = front;
+  const widest = taken.reduce((m, b) => Math.max(m, b.w), w);
+  const tallest = taken.reduce((m, b) => Math.max(m, b.h), h);
+  const fits = (x: number, y: number) => x - w / 2 >= fx0 + SPOT_MARGIN && x + w / 2 <= fx1 - SPOT_MARGIN && y - h / 2 >= fy0 + SPOT_MARGIN && y + h / 2 <= fy1 - SPOT_MARGIN;
+  const free = (x: number, y: number) => taken.every((b) => Math.abs(b.x - x) * 2 >= b.w + w || Math.abs(b.y - y) * 2 >= b.h + h);
+  for (const [dx, dy] of AROUND) {
+    const x = centre.x + dx * (widest / 2 + w / 2 + SPOT_GAP);
+    const y = centre.y + dy * (tallest / 2 + h / 2 + SPOT_GAP);
+    if (fits(x, y) && free(x, y)) return { x, y };
+  }
+  return null;
+}
+
+/** An icon's size: the first one big, the ones after it smaller. */
+export const FIRST_ICON = 340;
+export const NEXT_ICON = 240;
+/** How small an icon may be drawn to find it a free spot, rather than on top of another. */
+const SMALLEST_ICON = 160;
+
+/**
+ * Where the next icon goes, and how big: in a free spot on the front panel at its usual size, or
+ * a little smaller where the panel is too narrow for that (Windows' front is narrower than the
+ * Mac's), and only when nothing is free anywhere, stepped down and across from the middle, one
+ * step per icon already there (`count`).
+ */
+export function placeIcon(front: [number, number, number, number], centre: Point, taken: Box[], count: number): Point & { size: number } {
+  const usual = count === 0 ? FIRST_ICON : NEXT_ICON;
+  for (let size = usual; size >= SMALLEST_ICON; size -= 20) {
+    const at = freeSpot(front, centre, size, size, taken);
+    if (at) return { ...at, size };
+  }
+  return { x: centre.x + (count % 5) * 36, y: centre.y + (count % 5) * 36, size: usual };
+}
