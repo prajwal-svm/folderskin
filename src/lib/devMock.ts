@@ -578,20 +578,33 @@ function mockShareStatus(): ShareStatus {
 /** Set when the folder look changes, so the next list of skins takes as long as a redraw would. */
 let mockRedraw = false;
 
+/**
+ * For the `?hold…` switches, which keep something under way for a test to look at, however busy
+ * the machine: whether `switch` is on, and if so, waits until the page calls `window[go]()`.
+ * `stop` is asked as it waits, and throws to give up (a Stop pressed meanwhile).
+ */
+async function held(switchName: string, go: string, stop: () => void = () => {}): Promise<boolean> {
+  if (!new URLSearchParams(location.search).has(switchName)) return false;
+  const w = window as unknown as Record<string, (() => void) | undefined>;
+  let went = false;
+  w[go] = () => {
+    went = true;
+  };
+  try {
+    while (!went) {
+      await sleep(50);
+      stop();
+    }
+  } finally {
+    delete w[go];
+  }
+  return true;
+}
+
 /** How long a redraw takes: a moment, or with `?holdredraw` until the page calls `mockRedrawn()`,
  *  so a test can look at the library while it's drawn again, however busy the machine. */
 async function redrawTime(): Promise<void> {
-  if (!new URLSearchParams(location.search).has("holdredraw")) {
-    await sleep(700);
-    return;
-  }
-  const w = window as { mockRedrawn?: () => void };
-  await new Promise<void>((resolve) => {
-    w.mockRedrawn = () => {
-      delete w.mockRedrawn;
-      resolve();
-    };
-  });
+  if (!(await held("holdredraw", "mockRedrawn"))) await sleep(700);
 }
 
 export const mockApi = {
@@ -619,17 +632,7 @@ export const mockApi = {
   githubWait: async () => {
     // Approved a moment after the code is asked for, or with `?holdgithub` once the page calls
     // `mockApprove()`, so a test can look at the code while it waits, however busy the machine.
-    if (new URLSearchParams(location.search).has("holdgithub")) {
-      const w = window as { mockApprove?: () => void };
-      await new Promise<void>((resolve) => {
-        w.mockApprove = () => {
-          delete w.mockApprove;
-          resolve();
-        };
-      });
-    } else {
-      await sleep(2500);
-    }
+    if (!(await held("holdgithub", "mockApprove"))) await sleep(2500);
     mockGithub.account = { login: "octocat", name: "The Octocat", avatar_url: "" };
     return mockGithub.account;
   },
@@ -779,6 +782,8 @@ export const mockApi = {
       }
       onProgress?.({ stage: "download", done, total });
     }
+    // `?holdpacks`: downloaded, it waits to be saved until the page calls `mockPackGo()`.
+    await held("holdpacks", "mockPackGo");
     for (let done = 0; done <= total; done += 4) {
       onProgress?.({ stage: "save", done: Math.min(done, total), total });
       await sleep(80);
@@ -804,6 +809,7 @@ export const mockApi = {
       onProgress?.({ stage: "download", done, total: pack.count });
       await sleep(1200 / Math.max(pack.count, 1));
     }
+    await held("holdpacks", "mockPackGo");
     onProgress?.({ stage: "save", done: pack.count, total: pack.count });
     mockStale.delete(packId);
     mockStale.add(`${packId}-updated`);
@@ -899,13 +905,18 @@ export const mockApi = {
     const local = req.provider === "local";
     const who = local ? "the local model" : (MOCK_LABELS[req.provider] ?? req.provider);
     const job = req.job ?? "";
+    const stop = () => {
+      if (mockStopped.has(job)) throw { code: "stopped", message: "Stopped before it finished." };
+    };
     // Waits `ms`, or gives up the moment the run is stopped.
     const wait = async (ms: number) => {
       for (let t = 0; t < ms; t += 100) {
-        if (mockStopped.has(job)) throw { code: "stopped", message: "Stopped before it finished." };
+        stop();
         await sleep(100);
       }
     };
+    // `?holdpaint`: painted, the picture waits until the page calls `mockPaintGo()`.
+    const painted = () => held("holdpaint", "mockPaintGo", stop);
     const fail = new URLSearchParams(location.search).get("aifail");
     // The errors are the objects ai/failure.rs returns, with its codes and words.
     if (local) {
@@ -922,6 +933,7 @@ export const mockApi = {
         onEvent({ type: "progress", step, steps: 4 });
         onEvent({ type: "log", level: "info", message: `[INFO ] sampling step ${step}/4, 0.9 s/it` });
       }
+      await painted();
       if (fail === "memory") {
         throw {
           code: "out_of_memory",
@@ -946,6 +958,7 @@ export const mockApi = {
       }
       onEvent({ type: "stage", stage: "paint", message: `${who} is painting it` });
       await wait(1800);
+      await painted();
     }
     if (req.shape === "folder") {
       onEvent({ type: "stage", stage: "cut", message: "Cutting it out of the background" });
@@ -1021,21 +1034,10 @@ export const mockApi = {
     // under way, and where it expects, however busy the machine. Stop still stops it there.
     const holding = new URLSearchParams(location.search).get("holdsetup");
     const holdAfter = holding === null ? null : Number(holding);
-    const hold = async () => {
-      const w = window as { mockSetupGo?: () => void };
-      let go = false;
-      w.mockSetupGo = () => {
-        delete w.mockSetupGo;
-        go = true;
-      };
-      while (!go) {
-        await sleep(50);
-        if (mockStopped.delete(SETUP)) {
-          delete w.mockSetupGo;
-          throw stopped();
-        }
-      }
-    };
+    const hold = () =>
+      held("holdsetup", "mockSetupGo", () => {
+        if (mockStopped.delete(SETUP)) throw stopped();
+      });
     const run = async (): Promise<LocalStatus> => {
       tell({ type: "stage", stage: "download", message: "Downloading what the local model needs" });
       let pieces = 0;

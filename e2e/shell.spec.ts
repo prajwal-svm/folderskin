@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, openView } from "./app";
+import { letGo, openApp, openView } from "./app";
 
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "sections" });
 const width = async (page: Page, selector: string) => (await page.locator(selector).first().boundingBox())!.width;
@@ -211,10 +211,7 @@ test.describe("the folder skins go on", () => {
   test("switching it says the library is being drawn again, and dims the old thumbnails until then", async ({ page }) => {
     // Each redraw lasts until it's let through, so the note is looked at while it's there.
     await openApp(page, { query: "holdredraw" });
-    const redrawn = async () => {
-      await page.waitForFunction(() => typeof (window as { mockRedrawn?: () => void }).mockRedrawn === "function");
-      await page.evaluate(() => (window as { mockRedrawn?: () => void }).mockRedrawn?.());
-    };
+    const redrawn = () => letGo(page, "mockRedrawn");
     const look = page.getByRole("radiogroup", { name: "which folder skins go on" });
     const note = page.getByRole("status").filter({ hasText: "Drawing your skins on Windows' folder" });
     const gallery = page.locator(".gallery-scroll");
