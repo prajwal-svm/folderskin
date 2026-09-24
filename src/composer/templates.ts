@@ -77,7 +77,11 @@ export const TEMPLATES: Template[] = [
     label: "Two-tone",
     make: (p) => {
       // The split sits behind the paper sheet, so the back is one colour and the front another.
-      const split = (p.paper[1] + p.front[1]) / 2;
+      // Windows' folder has no sheet (its `paper` is the back's body, as wide as the back), so
+      // there the split is the front's top edge: right of the tab exactly, and under the tab,
+      // where the front's edge steps lower, a strip of the back takes the front's colour.
+      const sheet = p.paper[0] > p.back[0];
+      const split = sheet ? (p.paper[1] + p.front[1]) / 2 : p.front[1];
       const t = centreOf(p.tab);
       return doc([
         makeFill(solid("#ffb703")),
