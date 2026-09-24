@@ -8,6 +8,7 @@ members = [
     "crates/folderskin-keys",
     "crates/folderskin-local",
     "crates/folderskin-cli",
+    "crates/folderskin-catalog",
 ]
 
 [workspace.package]

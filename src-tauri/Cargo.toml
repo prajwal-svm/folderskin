@@ -28,7 +28,9 @@ image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true
-tokio.workspace = true
+# `sync` for the community catalog's load lock and download turns; Tauri's own tokio already has
+# it, so it adds nothing to the build.
+tokio = { workspace = true, features = ["sync"] }
 base64 = "0.22"
 sha2.workspace = true
 # A pack's pictures download a few at a time (`StreamExt::buffered`). Already in the tree through
@@ -36,6 +38,8 @@ sha2.workspace = true
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 # The sealed API key store, shared with the `folderskin` command line.
 folderskin-keys = { path = "../crates/folderskin-keys" }
+# The community catalog: searched on this computer, and the published tree it comes with.
+folderskin-catalog = { path = "../crates/folderskin-catalog" }
 
 # Tauri's mock runtime, so a test can send a command the bytes a webview sends (composer.rs,
 # tree.rs). The feature adds no crate. Left off Windows: with it, the lib's test binary imports a

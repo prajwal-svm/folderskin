@@ -1,6 +1,7 @@
 //! FolderSkin desktop app (Tauri v2).
 
 pub mod ai;
+pub mod catalog;
 pub mod chats;
 pub mod commands;
 pub mod community;
@@ -10,6 +11,7 @@ pub mod github;
 pub mod icons;
 pub mod onboarding;
 pub mod pack_views;
+pub mod previews;
 pub mod state;
 pub mod store;
 pub mod tree;
@@ -70,6 +72,9 @@ pub fn run() {
         .manage(keys::Keys::default())
         .manage(github::Pending::default())
         .manage(chats::Chats::default())
+        .manage(catalog::Community::default())
+        // Community strips and thumbnails, fetched as the cards that show them scroll in.
+        .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -80,7 +85,6 @@ pub fn run() {
             commands::edit_skin,
             commands::skins_folder,
             community::community_packs,
-            community::community_preview,
             community::community_add,
             community::community_update,
             community::community_pack_skins,
@@ -122,6 +126,9 @@ pub fn run() {
             chats::chat_save,
             chats::chat_delete,
             chats::chat_keep_reference,
+            community::community_search,
+            community::community_refresh,
+            community::community_installed,
         ])
         .setup(|app| {
             // Before anything that could panic, so a crash report has somewhere to land.

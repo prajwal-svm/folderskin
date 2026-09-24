@@ -2,12 +2,17 @@ name: Community
 
 # A pull request that adds or changes a pack gets the same checks the app runs before it saves
 # one, without the full CI. On main, the index and the preview strips are rebuilt and committed
-# if they differ. `packs index` is deterministic, so unchanged packs commit nothing.
+# if they differ, and so is the published tree the app searches (community/v2). `packs index`
+# and `packs catalog` are deterministic, so unchanged packs commit nothing.
 on:
   push:
     branches: [main]
     paths:
       - "community/packs/**"
+      - "community/featured.json"
+      # A new catalog layout or builder rebuilds the tree.
+      - "crates/folderskin-catalog/**"
+      - "crates/folderskin-tools/src/catalog.rs"
   pull_request:
     branches: [main]
     paths:
@@ -34,24 +39,35 @@ jobs:
       - name: Check every pack
         run: cargo run -p folderskin-tools --quiet -- packs check
 
+      # Also catches a featured.json naming a pack that isn't there. It starts from the tree on
+      # main, so only what the pull request changes is drawn.
+      - name: Build the catalog the app would get
+        run: |
+          cp -r community/v2 "$RUNNER_TEMP/v2" 2>/dev/null || true
+          cargo run -p folderskin-tools --quiet -- packs catalog --out "$RUNNER_TEMP/v2"
+
   index:
     name: Update the index
     needs: check
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: write
     # One run at a time. A merge that lands mid-run queues the next run, which indexes it.
     concurrency:
       group: community-index
       cancel-in-progress: false
+    env:
+      # Set only when the repository has an R2 mirror; see "Publish the tree to the R2 mirror".
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
     steps:
       # The branch rather than the commit that started the run, so a queued run indexes the
-      # newest packs.
+      # newest packs. The whole history, because a pack is dated by the commit that added it.
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+          fetch-depth: 0
 
       - name: Install Rust
         uses: ./.github/actions/rust-toolchain
@@ -59,20 +75,64 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@v2
 
+      # Thumbnails and strips as lossy WebP with lossless edges, a fraction of the lossless size.
+      - name: Install cwebp
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends webp
+
       - name: Build the index and the previews
         run: cargo run -p folderskin-tools --release -- packs index
+
+      - name: Build the published tree
+        env:
+          # A public https:// folder serving the same tree, such as the R2 bucket's own domain;
+          # head.json lists it for the app to try first. Unset while GitHub alone serves it.
+          MIRROR_URL: ${{ vars.COMMUNITY_MIRROR_URL }}
+        run: |
+          args=()
+          if [ -n "$MIRROR_URL" ]; then args+=(--mirror "$MIRROR_URL"); fi
+          cargo run -p folderskin-tools --release -- packs catalog "${args[@]}"
+
+      # ---------------------------------------------------------------------------------------
+      # Optional: a copy of the tree on Cloudflare R2, over its S3 API. Runs only when the
+      # repository has the R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID and R2_BUCKET
+      # secrets; without them GitHub alone serves the packs and this step is skipped.
+      # Every file but head.json is named after its contents, so each is uploaded once and
+      # cached for a year; head.json goes last, so the bucket never names a catalog it doesn't
+      # have yet. This runs before the commit below, so GitHub's head.json, the one the app
+      # reads, only moves once the mirror holds everything it names.
+      # ---------------------------------------------------------------------------------------
+      - name: Publish the tree to the R2 mirror
+        if: env.R2_ACCESS_KEY_ID != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # R2 checks what it needs; the CLI's newer default checksums it doesn't take.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          # packs catalog never changes what a published name holds, so a file already there
+          # under its name is the same file, whatever its date says.
+          aws s3 sync community/v2 "s3://$R2_BUCKET/v2" --endpoint-url "$R2_ENDPOINT" \
+            --exclude head.json --size-only --no-progress \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp community/v2/head.json "s3://$R2_BUCKET/v2/head.json" \
+            --endpoint-url "$R2_ENDPOINT" --no-progress \
+            --cache-control "public, max-age=60" --content-type application/json
 
       # A push made with the workflow's own token starts no other workflow, so this commit
       # cannot start another run. The rebase covers commits that landed while it was building.
       - name: Commit them if they changed
         run: |
-          if [ -z "$(git status --porcelain -- community/index.json community/previews)" ]; then
+          if [ -z "$(git status --porcelain -- community/index.json community/previews community/v2)" ]; then
             echo "The community index is up to date."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- community/index.json community/previews
+          git add -A -- community/index.json community/previews community/v2
           git commit -m "Update the community pack index"
           git pull --rebase origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"

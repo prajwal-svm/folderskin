@@ -10,7 +10,7 @@ use folderskin_core::compositor::{
 use folderskin_core::raster;
 use folderskin_tools::cli::{Cli, Command, PacksCommand};
 use folderskin_tools::skin::Skin;
-use folderskin_tools::{composer, make, packs};
+use folderskin_tools::{catalog, composer, make, packs};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -111,6 +111,7 @@ fn run(cli: Cli) -> Result<(), String> {
         Command::Packs { command } => match command {
             PacksCommand::Check { dir, max_kb } => packs_check(&dir, max_kb),
             PacksCommand::Index { dir } => packs_index(&dir),
+            PacksCommand::Catalog { dir, out, mirrors } => packs_catalog(&dir, out, mirrors),
             PacksCommand::Make {
                 pictures,
                 id,
@@ -286,6 +287,43 @@ fn packs_index(dir: &Path) -> Result<(), String> {
         ""
     };
     println!("{} indexed{unchanged}", report.totals());
+    Ok(())
+}
+
+/// Checks every community pack and, when all pass, brings the published tree up to date. Every
+/// file is named, so the counts are printed rather than a line for each.
+fn packs_catalog(dir: &Path, out: PathBuf, mirrors: Vec<String>) -> Result<(), String> {
+    let report = packs::check(dir)?;
+    for problem in &report.problems {
+        println!("{problem}");
+    }
+    let opts = catalog::CatalogOptions {
+        out,
+        mirrors,
+        cwebp: make::find_cwebp(),
+        dates: catalog::git_dates(dir),
+    };
+    if opts.cwebp.is_none() {
+        println!("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger");
+    }
+    if opts.dates.is_empty() && !report.packs.is_empty() {
+        println!("no git history for these packs, so Newest can't tell them apart");
+    }
+    let built = catalog::write_catalog(dir, &report, &opts)?;
+    let head = &built.head;
+    let unchanged = if built.changes.is_empty() {
+        ", nothing changed"
+    } else {
+        ""
+    };
+    println!(
+        "{}: generation {}, a {} KB catalog; {} files written, {} removed{unchanged}",
+        report.totals(),
+        head.generation,
+        head.catalog.bytes.div_ceil(1024),
+        built.changes.written.len(),
+        built.changes.removed.len(),
+    );
     Ok(())
 }
 
