@@ -587,4 +587,93 @@ mod tests {
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    /// Paints `order` here, keeping every event it sends.
+    fn paint_here(
+        order: Order<'_>,
+        cancel: &CancelToken,
+    ) -> (Result<Painted, AiFailure>, Vec<AiEvent>) {
+        let here = Local::default();
+        assert!(
+            here.is_ready(),
+            "set this computer up first: folderskin ai setup"
+        );
+        let (machine, settings) = (here.machine(), here.settings());
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        let send: Arc<dyn Fn(AiEvent) + Send + Sync> =
+            Arc::new(move |e| sink.lock().unwrap().push(e));
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(paint(order, &machine, &settings, send, cancel));
+        let events = seen.lock().unwrap().clone();
+        (result, events)
+    }
+
+    #[test]
+    #[ignore = "paints on this computer's graphics card for half a minute, once it is set up"]
+    fn a_whole_folder_is_painted_here_with_its_progress() {
+        let (result, events) = paint_here(
+            Order {
+                job: "c-test-folder",
+                idea: "a koi pond at night with paper lanterns",
+                shape: Shape::Folder,
+                model: None,
+                refs: &[],
+            },
+            &CancelToken::new(),
+        );
+        let painted = result.unwrap();
+        assert_eq!(
+            painted.model,
+            ModelId::Klein,
+            "a whole folder goes to klein"
+        );
+        assert!(image::load_from_memory(&painted.bytes).is_ok());
+        let stages: Vec<&str> = events
+            .iter()
+            .filter_map(|e| match e {
+                AiEvent::Stage { message, .. } => Some(message.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(stages.contains(&"Loading the model"), "{stages:?}");
+        assert!(stages.contains(&"Painting"), "{stages:?}");
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AiEvent::Progress { steps, .. } if *steps > 0)));
+        let work = folderskin_local::home().join("app");
+        assert!(
+            !std::fs::read_dir(&work)
+                .is_ok_and(|mut d| d.any(|e| e
+                    .is_ok_and(|e| e.file_name().to_string_lossy().starts_with("c-test-folder")))),
+            "the painting's own folder is gone afterwards"
+        );
+    }
+
+    #[test]
+    #[ignore = "starts the runtime on this computer's graphics card, once it is set up"]
+    fn a_painting_stops_when_asked() {
+        let cancel = CancelToken::new();
+        let stop = cancel.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            stop.cancel();
+        });
+        let started = std::time::Instant::now();
+        let (result, _) = paint_here(
+            Order {
+                job: "c-test-stop",
+                idea: "a lighthouse at dusk",
+                shape: Shape::Artwork,
+                model: None,
+                refs: &[],
+            },
+            &cancel,
+        );
+        assert!(result.err().is_some_and(|e| e.is_stopped()));
+        assert!(started.elapsed() < std::time::Duration::from_secs(15));
+    }
 }
