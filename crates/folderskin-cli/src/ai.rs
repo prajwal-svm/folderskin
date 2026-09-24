@@ -498,6 +498,7 @@ pub fn folders_under(root: &Path, depth: u32) -> Result<Vec<PathBuf>, CliError> 
                     && !name.starts_with('.')
                     && !name.starts_with('$')
                     && !SKIP.contains(&name.as_str())
+                    && !hidden(&entry)
                 {
                     next.push(entry.path());
                 }
@@ -508,6 +509,24 @@ pub fn folders_under(root: &Path, depth: u32) -> Result<Vec<PathBuf>, CliError> 
         level = next;
     }
     Ok(found)
+}
+
+/// Whether Windows marks the folder hidden, as it does its own system folders and as people hide
+/// theirs. The system mark alone doesn't count: it is what a folder with a custom icon carries,
+/// FolderSkin's own included, so a drive themed once would be left out the next time. A dot is
+/// the only mark elsewhere, and that is checked by name.
+#[cfg(windows)]
+fn hidden(entry: &std::fs::DirEntry) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+    entry
+        .metadata()
+        .is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0)
+}
+
+#[cfg(not(windows))]
+fn hidden(_: &std::fs::DirEntry) -> bool {
+    false
 }
 
 /// File names for `folders` under `root`: the folder's path in words (in any script), then a
@@ -1029,6 +1048,30 @@ mod tests {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
         std::fs::write(root.join("notes.txt"), b"x").unwrap();
+        if cfg!(windows) {
+            // Hidden the Windows way, with no dot to tell. System alone is a skinned folder.
+            for (name, flag) in [("Hidden one", "+H"), ("Skinned", "+S")] {
+                std::fs::create_dir(root.join(name)).unwrap();
+                let set = std::process::Command::new("attrib")
+                    .arg(flag)
+                    .arg(root.join(name))
+                    .status()
+                    .unwrap();
+                assert!(set.success());
+            }
+            let found = folders_under(&root, 1).unwrap();
+            assert_eq!(
+                found,
+                [
+                    root.join("Photos"),
+                    root.join("Skinned"),
+                    root.join("Taxes 2025")
+                ]
+            );
+            for name in ["Hidden one", "Skinned"] {
+                std::fs::remove_dir(root.join(name)).unwrap();
+            }
+        }
         let one = folders_under(&root, 1).unwrap();
         assert_eq!(one, [root.join("Photos"), root.join("Taxes 2025")]);
         let two = folders_under(&root, 2).unwrap();
