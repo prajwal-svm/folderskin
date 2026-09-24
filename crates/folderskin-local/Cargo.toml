@@ -35,3 +35,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
+
+[target.'cfg(unix)'.dependencies]
+# kill(2), to end the runtimes still running when FolderSkin quits (run::end_all): Windows has
+# its job object for that, macOS and Linux nothing that does it for us.
+libc = "0.2"

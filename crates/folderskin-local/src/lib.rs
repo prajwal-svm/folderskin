@@ -1,16 +1,15 @@
 //! Local image generation for FolderSkin: open-weight models that run on this computer, with no
 //! API key and no account.
 //!
-//! Two models, the same on every platform, both Apache-2.0:
+//! One model, the same on every platform: FLUX.2 [klein] 4B (Apache-2.0, 4 steps), which paints
+//! from words alone or from pictures (reference photos, and FolderSkin's own blank folder
+//! repainted for a whole-folder skin). One download: 4.6 GB on a Mac, 5.2 GB elsewhere, at the
+//! 4-bit every computer starts with.
 //!
-//! * Z-Image-Turbo (6B, 8 steps): text to picture, the workhorse for artwork.
-//! * FLUX.2 [klein] 4B (4 steps): works from pictures. Reference photos, and FolderSkin's own
-//!   blank folder repainted for a whole-folder skin.
-//!
-//! Two runtimes run them: stable-diffusion.cpp on Windows and Linux (CUDA for NVIDIA on Windows,
+//! Two runtimes run it: stable-diffusion.cpp on Windows and Linux (CUDA for NVIDIA on Windows,
 //! Vulkan for every other GPU) and on a Mac's GPU through Metal, whose `--auto-fit` streams
-//! weights from RAM when they don't fit in VRAM (which is what lets a 4 GB laptop GPU run the
-//! 8-bit models); and mflux on Apple Silicon, the MLX port of the same two models.
+//! weights from RAM when they don't fit in VRAM; and mflux on Apple Silicon, the MLX port of the
+//! same model, from pre-quantised weights setup downloads like every other file.
 //!
 //! The command line (`folderskin ai …`) is the first front end; the app can call the same
 //! functions in-process. Everything slow is an `async fn` that takes a [`Reporter`] for its

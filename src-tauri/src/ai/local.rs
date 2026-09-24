@@ -9,9 +9,7 @@ use crate::store::SkinImage;
 use folderskin_core::compositor::{Artwork, SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_core::matte;
 use folderskin_local::machine::Gpu;
-use folderskin_local::{
-    Backend, CancelToken, Job, Machine, ModelId, Reporter, Settings, Shape, Tier,
-};
+use folderskin_local::{Backend, CancelToken, Job, Machine, ModelId, Reporter, Settings, Shape};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -22,15 +20,12 @@ use tokio::sync::watch;
 /// The provider id the chat sends for "This computer".
 pub const PROVIDER_ID: &str = "local";
 
-/// The models on offer, as the provider list shows them: `auto` lets each picture go to the model
-/// that suits it (klein when there are pictures to work from or a whole folder to repaint,
-/// otherwise Z-Image), and the other two ask for one.
-const MODELS: [(&str, &str, bool); 3] = [
-    ("auto", "Best for this computer", true),
-    ("klein", "FLUX.2 klein 4B", true),
-    // Text to picture only: a picture to work from goes to klein whatever is asked.
-    ("zimage", "Z-Image Turbo", false),
-];
+/// The model on offer, as the provider list shows it: klein, which paints from words and from
+/// pictures alike.
+const MODELS: [(&str, &str, bool); 1] = [("klein", "FLUX.2 klein 4B", true)];
+
+/// Z-Image Turbo, which an earlier build also offered: skins it painted keep its name.
+const RETIRED_LABELS: [(&str, &str); 1] = [("zimage", "Z-Image Turbo")];
 
 /// The machine, looked at once (it runs `nvidia-smi` or asks the system for its display
 /// adapters, a second or two), a turn for the one painting the graphics card has room for, and
@@ -285,10 +280,11 @@ pub fn provider(ready: bool) -> AiProviderDto {
     }
 }
 
-/// A local model by the name the provider list gave it; `auto` leaves it to each picture.
+/// A local model by the name the provider list gave it. The names an earlier build offered,
+/// `auto` and `zimage`, paint with klein too, so a chat saved then goes on working.
 pub fn model_choice(id: &str) -> Result<Option<ModelId>, AiFailure> {
     match id {
-        "auto" | "" => Ok(None),
+        "auto" | "" | "zimage" => Ok(None),
         other => ModelId::parse(other).map(Some).ok_or_else(|| {
             AiFailure::failed(format!("This computer has no model called {other:?}."))
                 .fix("Choose another model in the provider settings.")
@@ -296,12 +292,15 @@ pub fn model_choice(id: &str) -> Result<Option<ModelId>, AiFailure> {
     }
 }
 
-/// The name a local model goes by in the library ("On this computer · FLUX.2 klein 4B").
+/// The name a local model goes by in the library ("On this computer · FLUX.2 klein 4B"), a
+/// retired one's too.
 pub fn model_label(id: &str) -> Option<&'static str> {
     MODELS
         .iter()
-        .find(|(m, ..)| *m == id)
-        .map(|(_, label, _)| *label)
+        .map(|(m, label, _)| (*m, *label))
+        .chain(RETIRED_LABELS)
+        .find(|(m, _)| *m == id)
+        .map(|(_, label)| label)
 }
 
 /// How the models run here, as people know it: CUDA, Vulkan, Metal, MLX or CPU.
@@ -338,10 +337,12 @@ pub struct LocalStatusDto {
     pub setting_up: bool,
     pub backend: String,
     pub device: String,
+    /// What setting up downloads: the runtime's build (stable-diffusion.cpp) and the model's
+    /// files, less what is already here.
     pub download_bytes: u64,
-    /// The models' weights come down the first time each one paints (mflux on Apple Silicon), so
-    /// `download_bytes` doesn't count them.
-    pub downloads_on_first_use: bool,
+    /// The runtime setting up installs besides that, when it isn't installed yet: "mflux" on
+    /// Apple Silicon, whose packages uv fetches and `download_bytes` can't count.
+    pub installs: Option<String>,
     pub seconds_per_image: Option<f64>,
     pub home: String,
     pub note: Option<String>,
@@ -359,6 +360,10 @@ pub struct RuntimeProblem {
     /// "stable-diffusion.cpp is installed but won't start: …"
     pub message: String,
 }
+
+/// Below this much memory a Mac swaps while klein paints: at 1024 x 960 it peaks at 11.7 GB
+/// (measured on an M3 Pro with mflux 0.20.0, 4-bit), whatever mflux's low-RAM options.
+const LOW_MEMORY_GB: f64 = 16.0;
 
 /// Looks at what is installed. Asks the runtime whether it starts, which takes a second: call it
 /// off the async threads. Says nobody is setting it up; [`Local::status`] knows better.
@@ -402,10 +407,10 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
                     .into(),
             );
         }
-        if settings.tier == Tier::Q4 && settings.backend != Backend::Mlx {
+        if settings.backend == Backend::Mlx && machine.ram_gb < LOW_MEMORY_GB {
             notes.push(format!(
-                "With {:.0} GB of memory it uses the smaller 4-bit models, which are a little \
-                 softer.",
+                "With {:.0} GB of memory this Mac paints slowly, and other apps slow down while it \
+                 does: the model needs about 12 GB. A provider with your own key is quicker.",
                 machine.ram_gb
             ));
         }
@@ -421,7 +426,8 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         } else {
             folderskin_local::download_size(machine, settings)
         },
-        downloads_on_first_use: settings.backend == Backend::Mlx,
+        installs: (settings.backend == Backend::Mlx && !runtime.installed && can_set_up)
+            .then(|| runtime.name.clone()),
         seconds_per_image: Timing::read().seconds_for(settings),
         home: status.home.display().to_string(),
         note: (!notes.is_empty()).then(|| notes.join(" ")),
@@ -527,7 +533,6 @@ pub async fn paint(
             device(machine, settings.backend)
         ),
         setup: false,
-        model: Some(model),
     };
     send(AiEvent::info(format!(
         "backend: {} ({})",
@@ -656,6 +661,7 @@ impl Drop for WorkDir {
 mod tests {
     use super::*;
     use folderskin_local::machine::{Arch, Os};
+    use folderskin_local::Tier;
     use image::{Rgba, RgbaImage};
 
     fn machine(gpu: Gpu, name: &str, vram: f64) -> Machine {
@@ -679,19 +685,11 @@ mod tests {
         assert!(p.has_key, "set up and ready shows as ready");
         assert!(!provider(false).has_key);
         let ids: Vec<&str> = p.models.iter().map(|m| m.id.as_str()).collect();
-        assert_eq!(ids, ["auto", "klein", "zimage"]);
+        assert_eq!(ids, ["klein"], "one model, which paints everything");
         assert!(p
             .models
             .iter()
-            .all(|m| m.price_hint == "Free" && !m.native_alpha));
-        let takes = |id: &str| {
-            p.models
-                .iter()
-                .find(|m| m.id == id)
-                .unwrap()
-                .accepts_reference
-        };
-        assert!(takes("auto") && takes("klein") && !takes("zimage"));
+            .all(|m| m.price_hint == "Free" && !m.native_alpha && m.accepts_reference));
         assert!(p.keys_url.is_empty() && p.key_hint.is_empty());
         let json = serde_json::to_value(&p).unwrap();
         assert_eq!(json["kind"], "local");
@@ -699,11 +697,15 @@ mod tests {
 
     #[test]
     fn models_are_chosen_by_the_names_the_list_gives_them() {
-        assert_eq!(model_choice("auto").unwrap(), None);
         assert_eq!(model_choice("klein").unwrap(), Some(ModelId::Klein));
-        assert_eq!(model_choice("zimage").unwrap(), Some(ModelId::Zimage));
+        // What chats saved by an earlier build ask for still paints, with klein.
+        assert_eq!(model_choice("auto").unwrap(), None);
+        assert_eq!(model_choice("").unwrap(), None);
+        assert_eq!(model_choice("zimage").unwrap(), None);
         assert_eq!(model_choice("sdxl").unwrap_err().code, "failed");
         assert_eq!(model_label("klein"), Some("FLUX.2 klein 4B"));
+        // A skin Z-Image painted keeps its name in the library.
+        assert_eq!(model_label("zimage"), Some("Z-Image Turbo"));
         assert_eq!(model_label("nope"), None);
     }
 
@@ -750,7 +752,11 @@ mod tests {
         }
         let json = serde_json::to_value(&s).unwrap();
         assert!(json.get("problem").is_none(), "{json}");
-        assert_eq!(json["downloads_on_first_use"], false);
+        assert_eq!(
+            json["installs"],
+            serde_json::Value::Null,
+            "nothing to install here"
+        );
     }
 
     /// A listener that keeps what it hears.
@@ -844,6 +850,39 @@ mod tests {
         let here = Local::default();
         *lock(&here.0.runtime_starts) = Some(false);
         assert!(!here.is_ready(), "the list and the panel agree");
+    }
+
+    #[test]
+    fn a_mac_says_what_setting_up_takes_and_when_it_is_short_of_memory() {
+        let mac = |ram_gb| Machine {
+            os: Os::Macos,
+            arch: Arch::Arm64,
+            ram_gb,
+            gpu: Gpu::Apple,
+            gpu_name: "Apple M2".into(),
+            vram_gb: 0.0,
+        };
+        let small = mac(8.0);
+        let s = status(&small, &Settings::for_machine(&small));
+        assert!(s.can_set_up);
+        assert_eq!(s.backend, "MLX");
+        if !s.ready {
+            // The weights are counted now, not left to download the first time it paints.
+            assert!(s.download_bytes > 0 || s.installs.is_some(), "{s:?}");
+            assert!(s.download_bytes <= 4_619_699_678, "{s:?}");
+            let note = s.note.as_deref().unwrap_or_default();
+            assert!(
+                note.contains("8 GB of memory") && note.contains("12 GB"),
+                "{note}"
+            );
+        }
+        assert!(s.installs.is_none() || s.installs.as_deref() == Some("mflux"));
+        let roomy = mac(36.0);
+        let s = status(&roomy, &Settings::for_machine(&roomy));
+        assert!(
+            !s.note.as_deref().unwrap_or_default().contains("12 GB"),
+            "{s:?}"
+        );
     }
 
     #[test]

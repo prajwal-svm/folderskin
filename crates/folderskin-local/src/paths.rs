@@ -187,12 +187,9 @@ mod tests {
         let (empty, bin) = (dir.join("empty"), dir.join("bin"));
         std::fs::create_dir_all(&empty).unwrap();
         std::fs::create_dir_all(&bin).unwrap();
-        let tool = bin.join("mflux-generate-z-image-turbo");
+        let tool = bin.join("mflux-generate-flux2");
         std::fs::write(&tool, b"#!/bin/sh\n").unwrap();
-        let found = find_in(
-            "mflux-generate-z-image-turbo",
-            &[empty.clone(), bin.clone()],
-        );
+        let found = find_in("mflux-generate-flux2", &[empty.clone(), bin.clone()]);
         assert_eq!(found.as_deref(), Some(tool.as_path()));
         assert_eq!(find_in("uv", &[empty, bin]), None);
         std::fs::remove_dir_all(&dir).unwrap();

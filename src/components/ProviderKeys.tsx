@@ -132,11 +132,7 @@ export function ProviderKeys({
           />
           <span className="field-note">
             {provider.kind === "local"
-              ? model?.id === "auto"
-                ? "The best model this computer can run well."
-                : model?.accepts_reference
-                  ? "Can paint from reference pictures."
-                  : "Fastest; paints from words only."
+              ? "Paints from your words, and from reference pictures."
               : model?.native_alpha
                 ? "Returns a transparent background by itself."
                 : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out."}

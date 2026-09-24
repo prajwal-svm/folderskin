@@ -7,7 +7,8 @@ use crate::CancelToken;
 use std::collections::VecDeque;
 use std::io::Read;
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Mutex, MutexGuard};
 use std::time::Duration;
 
 /// How many of the runtime's last log lines are kept for an error report.
@@ -23,6 +24,62 @@ pub struct Finished {
     /// Whether it got as far as painting.
     pub painted: bool,
 }
+
+/// The runtimes running now, by process id, for [`end_all`]. An id leaves the list before its
+/// process is reaped, and a process's id can only go to another once it has been reaped, so an id
+/// here is always one of ours.
+static RUNNING: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// Set by [`end_all`]: a runtime started after it is ended as soon as it is listed.
+static ENDED: AtomicBool = AtomicBool::new(false);
+
+fn running() -> MutexGuard<'static, Vec<u32>> {
+    RUNNING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// A runtime on the list, for as long as this is kept.
+struct Listed(u32);
+
+impl Listed {
+    /// Lists `pid`, and says whether everything is being ended, in which case it is too.
+    fn new(pid: u32) -> (Listed, bool) {
+        let mut list = running();
+        list.push(pid);
+        (Listed(pid), ENDED.load(Ordering::SeqCst))
+    }
+}
+
+impl Drop for Listed {
+    fn drop(&mut self) {
+        running().retain(|p| *p != self.0);
+    }
+}
+
+/// Ends every runtime still running, and any started from now on. For a program on its way out:
+/// a painting (or mflux's install) doesn't end with the program that started it on macOS and
+/// Linux, and would go on holding gigabytes of memory and the graphics card for minutes. On
+/// Windows the job object (see `job` below) already ends them when the program exits.
+pub fn end_all() {
+    let list = running();
+    ENDED.store(true, Ordering::SeqCst);
+    for &pid in list.iter() {
+        kill(pid);
+    }
+}
+
+#[cfg(unix)]
+fn kill(pid: u32) {
+    if let Ok(pid) = i32::try_from(pid) {
+        // SAFETY: kill(2) takes any pid; one on the list is ours and not yet reaped (see
+        // RUNNING), so it can't be another process's.
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn kill(_pid: u32) {}
 
 /// Keeps a console window from opening for a child of the app, which has no console of its own.
 pub(crate) fn hide_window(cmd: &mut Command) {
@@ -50,6 +107,10 @@ pub fn run(
     hide_window(&mut cmd);
     let mut child = cmd.spawn()?;
     job::adopt(&child);
+    let (listed, ending) = Listed::new(child.id());
+    if ending {
+        let _ = child.kill();
+    }
 
     // Both streams are read on threads of their own, so neither fills up and blocks the runtime.
     let (tx, rx) = mpsc::channel::<Vec<u8>>();
@@ -120,6 +181,8 @@ pub fn run(
             let _ = reader.join();
         }
     }
+    // Off the list before it is reaped: after that its id can be another process's.
+    drop(listed);
     let status = child.wait()?;
     Ok(Finished {
         status: stopped.is_none().then_some(status),

@@ -16,6 +16,8 @@ pub struct Remote {
     pub size: u64,
     /// The published SHA-256, lower-case hex; `None` checks the size only.
     pub sha256: Option<String>,
+    /// How it is named in its progress and its errors; `None` names it by its file name.
+    pub label: Option<String>,
 }
 
 /// The HTTP client for downloads: no overall time limit (a model is gigabytes), but one on
@@ -69,10 +71,11 @@ pub async fn fetch(
     reporter: &Reporter,
     cancel: &CancelToken,
 ) -> Result<(), Error> {
-    let name = dest
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let name = remote.label.clone().unwrap_or_else(|| {
+        dest.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
     if is_done(dest, remote.size) {
         return Ok(());
     }
@@ -427,6 +430,7 @@ mod tests {
             url: format!("{}/{file}", server.base),
             size: bytes.len() as u64,
             sha256,
+            label: None,
         };
         run(async {
             fetch(
@@ -595,6 +599,7 @@ mod tests {
             url: format!("http://127.0.0.1:{port}/m.gguf"),
             size: 10,
             sha256: None,
+            label: None,
         };
         let err = run(fetch(
             &client().unwrap(),
@@ -620,6 +625,7 @@ mod tests {
             url: format!("{}/m.gguf", server.base),
             size: data.len() as u64,
             sha256: None,
+            label: None,
         };
         let err = run(fetch(
             &client().unwrap(),
@@ -646,6 +652,7 @@ mod tests {
             url: "http://127.0.0.1:9/m.gguf".into(),
             size: data.len() as u64,
             sha256: Some(sha(&data)),
+            label: None,
         };
         let err = run(fetch(
             &client().unwrap(),

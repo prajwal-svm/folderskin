@@ -193,7 +193,7 @@ export const LOCAL_SETUP_JOB = "local-setup";
 
 /** Whether pictures can be made on this computer, and what it takes (the local engine). */
 export type LocalStatus = {
-  /** The runtime and both models are here, and the runtime starts. */
+  /** The runtime and the model are here, and the runtime starts. */
   ready: boolean;
   /** Setting up has something to install here; false on a computer the runtime has no build for (an Intel Mac, ARM64 Linux), where `note` says what to do instead. */
   can_set_up: boolean;
@@ -203,10 +203,10 @@ export type LocalStatus = {
   backend: string;
   /** What it runs on, as people know it ("NVIDIA GeForce RTX 3050 Ti, 4 GB"). */
   device: string;
-  /** What's still to download before it's ready; 0 once it is. */
+  /** What's still to download before it's ready (the runtime's build and the model), less what's here; 0 once it is. */
   download_bytes: number;
-  /** The models download the first time each one paints (mflux on Apple Silicon), so `download_bytes` leaves them out. */
-  downloads_on_first_use: boolean;
+  /** The runtime setting up installs besides that, while it isn't installed: "mflux" on Apple Silicon, whose packages uv fetches and `download_bytes` can't count. */
+  installs: string | null;
   /** How long the last picture painted here took, once one has been. */
   seconds_per_image: number | null;
   /** Where the runtime and models are kept. */

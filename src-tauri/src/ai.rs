@@ -259,7 +259,6 @@ async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusD
     let doing = Doing {
         what: format!("setting this computer up to paint ({on})"),
         setup: true,
-        model: None,
     };
     folderskin_local::setup(
         &machine,
@@ -726,7 +725,6 @@ mod tests {
         let doing = Doing {
             what: "setting this computer up to paint (CUDA, RTX 3050 Ti)".into(),
             setup: true,
-            model: None,
         };
         let vc = runtime_wont_start(
             &local::RuntimeProblem {

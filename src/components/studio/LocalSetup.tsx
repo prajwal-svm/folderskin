@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { api, LOCAL_SETUP_JOB, type LocalStatus } from "../../lib/tauri";
 import { aiFailure, worthRetrying } from "../../lib/aiError";
 import { formatBytes } from "../../lib/tree";
+import { whatItTakes } from "../../lib/localSetup";
 import type { AiEvent, TurnError } from "../../state/chats";
 import { OkBadge } from "../OkBadge";
 import { CpuIcon, TerminalIcon } from "../icons/composer";
@@ -9,13 +10,6 @@ import { CopyIcon } from "../icons/copy";
 import { LoaderIcon } from "../icons/loader";
 
 type Setup = { stage: string; file: string | null; done: number; total: number; log: string[] };
-
-/** What pressing "Set up this computer" will take, in a line under it. */
-function whatItTakes(status: LocalStatus): string {
-  if (status.downloads_on_first_use) return "Installs mflux; each model downloads the first time it paints, then works offline.";
-  if (status.download_bytes > 0) return `Downloads ${formatBytes(status.download_bytes)} once, then works offline.`;
-  return "Nothing left to download; setting up checks what's here.";
-}
 
 /**
  * Pictures made on this computer, with no key and no account: what it runs on here and how long a
@@ -71,6 +65,12 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       onChanged();
     } catch (e) {
       setProblem(aiFailure(e));
+      // What a stopped or failed setup downloaded is kept: the line under the button should say
+      // what is left, not what there was before it started.
+      api
+        .aiLocalStatus()
+        .then(setStatus)
+        .catch(() => {});
     } finally {
       setSetup(null);
       setStopping(false);

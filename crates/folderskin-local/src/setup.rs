@@ -20,10 +20,11 @@ pub enum Runtime {
     Latest,
 }
 
-/// Downloads and installs everything `settings` needs on `machine`: cwebp (for packs), then
-/// mflux on Apple Silicon, or stable-diffusion.cpp and both models everywhere else. What is
-/// already there and checked is left alone, and an interrupted download carries on. One setup
-/// runs at a time on a computer, whichever program started it: another fails with "busy".
+/// Downloads and installs everything `settings` needs on `machine`: cwebp (for packs), the
+/// runtime (mflux on Apple Silicon, stable-diffusion.cpp everywhere else), and the model's
+/// weights. What is already there and checked is left alone, and an interrupted download carries
+/// on. One setup runs at a time on a computer, whichever program started it: another fails with
+/// "busy".
 pub async fn setup(
     machine: &Machine,
     settings: &Settings,
@@ -48,36 +49,45 @@ pub async fn setup(
         );
     }
     if settings.backend == Backend::Mlx {
-        return install_mlx(reporter, cancel).await;
+        // mflux first: it is quick, and a Mac without uv hears so before a long download.
+        install_mlx(reporter, cancel).await?;
+    } else {
+        install_sdcpp(
+            &client,
+            machine,
+            settings.backend,
+            runtime,
+            reporter,
+            cancel,
+        )
+        .await?;
     }
-    install_sdcpp(
-        &client,
-        machine,
-        settings.backend,
-        runtime,
-        reporter,
-        cancel,
-    )
-    .await?;
     for model in &MODELS {
-        for file in model.files(settings.tier).all() {
+        for file in model.files_for(settings.backend, settings.tier) {
             cancel.check()?;
             let remote = Remote {
-                url: file.url(),
+                url: file.url.clone(),
                 size: file.size,
                 sha256: Some(file.sha256.to_string()),
+                label: Some(file.name.clone()),
             };
-            download::fetch(&client, &remote, &file.local(), reporter, cancel).await?;
+            download::fetch(&client, &remote, &file.local, reporter, cancel).await?;
         }
+        let kept_in = if settings.backend == Backend::Mlx {
+            model.mlx(settings.tier).dir()
+        } else {
+            paths::models_dir()
+        };
+        reporter.log(
+            Level::Info,
+            format!(
+                "{} ({}) is in {}",
+                model.label,
+                settings.tier,
+                kept_in.display()
+            ),
+        );
     }
-    reporter.log(
-        Level::Info,
-        format!(
-            "models ({}) are in {}",
-            settings.tier,
-            paths::models_dir().display()
-        ),
-    );
     Ok(())
 }
 
@@ -162,6 +172,7 @@ async fn install_sdcpp(
             url: asset.url,
             size: asset.size,
             sha256: asset.sha256,
+            label: None,
         };
         download::fetch(client, &remote, &zip, reporter, cancel).await?;
         cancel.check()?;
@@ -349,6 +360,7 @@ async fn install_webp(
         url: manifest::WEBP_WINDOWS_URL.to_string(),
         size: manifest::WEBP_WINDOWS_SIZE,
         sha256: Some(manifest::WEBP_WINDOWS_SHA256.to_string()),
+        label: None,
     };
     download::fetch(client, &remote, &zip, reporter, cancel).await?;
     let dir = paths::webp_dir();
@@ -373,51 +385,50 @@ fn webp_zip() -> PathBuf {
     paths::downloads_dir().join(url.rsplit('/').next().unwrap_or("libwebp.zip"))
 }
 
-/// Whether `settings` can paint here now: the runtime is installed and both models are downloaded
-/// (mflux fetches its own weights the first time it runs each model). It only looks at files, so
-/// it is quick enough for a list the window shows; [`status`] also asks the runtime whether it
-/// starts.
+/// Whether `settings` can paint here now: the runtime is installed and the model's files are all
+/// here. It only looks at files, so it is quick enough for a list the window shows; [`status`]
+/// also asks the runtime whether it starts.
 pub fn is_set_up(settings: &Settings) -> bool {
-    if settings.backend == Backend::Mlx {
-        return paths::find_tool(MFLUX_PROBE).is_some();
-    }
-    paths::sd_cli(settings.backend).is_file()
+    let runtime = if settings.backend == Backend::Mlx {
+        paths::find_tool(MFLUX_PROBE).is_some()
+    } else {
+        paths::sd_cli(settings.backend).is_file()
+    };
+    runtime
         && MODELS.iter().all(|m| {
-            m.files(settings.tier)
-                .all()
+            m.files_for(settings.backend, settings.tier)
                 .iter()
-                .all(|f| f.local().is_file())
+                .all(|f| f.local.is_file())
         })
 }
 
-/// The bytes [`setup`] would still download for `settings` on `machine`: the tested runtime
-/// build when it isn't installed, cwebp on Windows, and every model file that isn't here yet (a
-/// file both models use counted once), less whatever interrupted downloads already brought. 0 for
-/// mflux, which downloads each model's weights itself when it first runs it.
+/// The bytes [`setup`] would still download for `settings` on `machine`: stable-diffusion.cpp's
+/// tested build when it isn't installed, cwebp on Windows, and every model file that isn't here
+/// yet (one two models share counted once), less whatever interrupted downloads already brought.
+/// mflux itself, a few hundred MB of Python packages that uv fetches, isn't counted.
 pub fn download_size(machine: &Machine, settings: &Settings) -> u64 {
-    if settings.backend == Backend::Mlx {
-        return 0;
-    }
     let mut total = 0;
     if machine.os == Os::Windows && paths::cwebp().is_none() {
         total += download::remaining(&webp_zip(), manifest::WEBP_WINDOWS_SIZE);
     }
-    let exe = paths::sd_cli(settings.backend);
-    let installed = exe.is_file()
-        && std::fs::read_to_string(exe.with_file_name(".release"))
-            .is_ok_and(|s| s.trim() == manifest::SDCPP_TAG);
-    if !installed {
-        for asset in
-            manifest::sdcpp_assets(machine.os, machine.arch, settings.backend).unwrap_or(&[])
-        {
-            total += download::remaining(&paths::downloads_dir().join(asset.name), asset.size);
+    if settings.backend != Backend::Mlx {
+        let exe = paths::sd_cli(settings.backend);
+        let installed = exe.is_file()
+            && std::fs::read_to_string(exe.with_file_name(".release"))
+                .is_ok_and(|s| s.trim() == manifest::SDCPP_TAG);
+        if !installed {
+            for asset in
+                manifest::sdcpp_assets(machine.os, machine.arch, settings.backend).unwrap_or(&[])
+            {
+                total += download::remaining(&paths::downloads_dir().join(asset.name), asset.size);
+            }
         }
     }
     let mut seen = std::collections::HashSet::new();
     for model in &MODELS {
-        for file in model.files(settings.tier).all() {
-            if seen.insert(file.local()) {
-                total += download::remaining(&file.local(), file.size);
+        for file in model.files_for(settings.backend, settings.tier) {
+            if seen.insert(file.local.clone()) {
+                total += download::remaining(&file.local, file.size);
             }
         }
     }
@@ -465,7 +476,7 @@ async fn install_mlx(reporter: &Reporter, cancel: &CancelToken) -> Result<(), Er
         Some(s) if s.success() => {
             reporter.log(
                 Level::Info,
-                "installed mflux; it downloads each model the first time it runs it",
+                format!("installed mflux {}", manifest::MFLUX_VERSION),
             );
             Ok(())
         }
@@ -491,7 +502,6 @@ pub struct Status {
     pub machine: Machine,
     pub settings: Settings,
     pub runtime: RuntimeStatus,
-    /// Empty for mflux, which downloads its own weights.
     pub models: Vec<ModelStatus>,
     pub cwebp: Option<PathBuf>,
 }
@@ -522,7 +532,7 @@ pub struct ModelStatus {
     pub label: String,
     pub licence: String,
     pub files: Vec<FileStatus>,
-    /// Everything it needs, including files it shares with the other model.
+    /// Everything it needs.
     pub bytes: u64,
 }
 
@@ -580,31 +590,27 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
             problem_code,
         }
     };
-    let models = if settings.backend == Backend::Mlx {
-        Vec::new()
-    } else {
-        MODELS
-            .iter()
-            .map(|m| {
-                let files = m.files(settings.tier).all();
-                ModelStatus {
-                    id: m.id,
-                    label: m.label.into(),
-                    licence: m.licence.into(),
-                    bytes: files.iter().map(|f| f.size).sum(),
-                    files: files
-                        .iter()
-                        .map(|f| FileStatus {
-                            name: f.name().into(),
-                            size: f.size,
-                            present: f.local().is_file(),
-                            checked: download::is_done(&f.local(), f.size),
-                        })
-                        .collect(),
-                }
-            })
-            .collect()
-    };
+    let models = MODELS
+        .iter()
+        .map(|m| {
+            let files = m.files_for(settings.backend, settings.tier);
+            ModelStatus {
+                id: m.id,
+                label: m.label.into(),
+                licence: m.licence.into(),
+                bytes: files.iter().map(|f| f.size).sum(),
+                files: files
+                    .iter()
+                    .map(|f| FileStatus {
+                        name: f.name.clone(),
+                        size: f.size,
+                        present: f.local.is_file(),
+                        checked: download::is_done(&f.local, f.size),
+                    })
+                    .collect(),
+            }
+        })
+        .collect();
     Status {
         home: paths::home(),
         machine: machine.clone(),
@@ -684,7 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn what_is_left_to_download_counts_a_shared_file_once() {
+    fn what_is_left_to_download_is_the_model_less_what_is_here() {
         let machine = |os, arch, gpu| Machine {
             os,
             arch,
@@ -693,20 +699,50 @@ mod tests {
             gpu_name: String::new(),
             vram_gb: 0.0,
         };
-        // mflux downloads its own weights.
+        let left = |settings: &Settings| -> u64 {
+            MODELS
+                .iter()
+                .flat_map(|m| m.files_for(settings.backend, settings.tier))
+                .map(|f| download::remaining(&f.local, f.size))
+                .sum()
+        };
+        // A Mac downloads klein's MLX weights and nothing else: mflux is uv's to fetch, and cwebp
+        // comes from Homebrew or not at all.
         let mac = machine(Os::Macos, Arch::Arm64, Gpu::Apple);
-        assert_eq!(download_size(&mac, &Settings::for_machine(&mac)), 0);
-        // No runtime build and no cwebp for ARM64 Linux, so at most the models, their shared
-        // text encoder once: less than the two models' totals added up.
+        let settings = Settings::for_machine(&mac);
+        assert_eq!((settings.backend, settings.tier), (Backend::Mlx, Tier::Q4));
+        assert_eq!(download_size(&mac, &settings), left(&settings));
+        assert!(left(&settings) <= 4_619_699_678);
+        // No runtime build and no cwebp for ARM64 Linux, so at most the model's own files.
         let arm = machine(Os::Linux, Arch::Arm64, Gpu::None);
         let settings = Settings::for_machine(&arm);
-        let each: u64 = MODELS
+        assert_eq!(download_size(&arm, &settings), left(&settings));
+    }
+
+    #[test]
+    fn a_mac_reports_its_weights_file_by_file() {
+        let mac = Machine {
+            os: Os::Macos,
+            arch: Arch::Arm64,
+            ram_gb: 36.0,
+            gpu: Gpu::Apple,
+            gpu_name: "Apple M3 Pro".into(),
+            vram_gb: 0.0,
+        };
+        let s = status(&mac, &Settings::for_machine(&mac));
+        assert_eq!(s.runtime.name, "mflux");
+        assert!(s.runtime.available);
+        let [klein] = s.models.as_slice() else {
+            panic!("one model: {:?}", s.models);
+        };
+        assert_eq!(klein.label, "FLUX.2 [klein] 4B");
+        assert_eq!(klein.bytes, 4_619_699_678);
+        assert_eq!(klein.files.len(), 11);
+        assert!(klein
+            .files
             .iter()
-            .flat_map(|m| m.files(settings.tier).all())
-            .map(|f| f.size)
-            .sum();
-        let shared = MODELS[0].files(settings.tier).llm.size;
-        assert!(download_size(&arm, &settings) <= each - shared);
+            .any(|f| f.name == "transformer/0.safetensors"));
+        assert!(klein.files.iter().any(|f| f.name == "vae/0.safetensors"));
     }
 
     #[test]

@@ -159,7 +159,7 @@ test.describe("the AI chat", () => {
     await expect(chat(page).locator(".studio-foot")).toContainText("nothing leaves this computer");
     await sendIdea(page, "a paper boat");
     const card = chat(page).locator("article.turn").last();
-    await expect(card.locator(".turn-where")).toContainText(/Step \d of 8/, { timeout: 10_000 });
+    await expect(card.locator(".turn-where")).toContainText(/Step \d of 4/, { timeout: 10_000 });
     await card.getByRole("button", { name: "Details" }).click();
     await expect(card.locator(".turn-log-lines")).toContainText("backend: CUDA");
     // Out of memory: what happened, what to do, and a question ready for Claude.
@@ -244,7 +244,7 @@ test.describe("the AI chat", () => {
   });
 
   test("a setup under way is found again when its settings are opened again", async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { query: "slowsetup" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /This computer/ }).click();
@@ -259,7 +259,7 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
-    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
+    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 20_000 });
   });
 
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {

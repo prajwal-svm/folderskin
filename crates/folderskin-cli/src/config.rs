@@ -38,7 +38,7 @@ pub struct Config {
 }
 
 pub const LOCAL: &str = "local";
-const LOCAL_MODELS: [&str; 3] = ["auto", "zimage", "klein"];
+const LOCAL_MODELS: [&str; 2] = ["auto", "klein"];
 
 impl Config {
     /// The saved defaults, or none when nothing was saved yet.
@@ -273,7 +273,7 @@ mod tests {
         c.set(ConfigKey::Model, "klein").unwrap();
         let err = c.set(ConfigKey::Model, "gpt-image-1").unwrap_err();
         assert_eq!(
-            err.why, "For local, the model can be auto, zimage or klein.",
+            err.why, "For local, the model can be auto or klein.",
             "not a local model"
         );
     }
@@ -329,9 +329,9 @@ mod tests {
     fn it_round_trips_as_json_leaving_out_what_isnt_set() {
         let mut c = Config::default();
         c.set(ConfigKey::Provider, "local").unwrap();
-        c.set(ConfigKey::Model, "zimage").unwrap();
+        c.set(ConfigKey::Model, "klein").unwrap();
         let text = serde_json::to_string(&c).unwrap();
-        assert_eq!(text, r#"{"provider":"local","model":"zimage"}"#);
+        assert_eq!(text, r#"{"provider":"local","model":"klein"}"#);
         assert_eq!(serde_json::from_str::<Config>(&text).unwrap(), c);
         assert_eq!(
             serde_json::from_str::<Config>("{}").unwrap(),

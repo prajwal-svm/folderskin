@@ -51,7 +51,7 @@ pub struct Job {
     pub seed: u64,
     /// The file name without its extension; `None` names it from the idea, style and seed.
     pub name: Option<String>,
-    /// The model for plain artwork; `None` is Z-Image-Turbo. Pictures always go to klein.
+    /// The model; `None` is the default, klein.
     pub model: Option<ModelId>,
     /// Send `idea` to the model word for word, without FolderSkin's prompt around it.
     pub raw: bool,
@@ -71,14 +71,10 @@ impl Job {
         }
     }
 
-    /// The model that paints it: klein whenever there are pictures to work from (references, or
-    /// the blank folder a whole-folder skin repaints), otherwise the one asked for.
+    /// The model that paints it: the one asked for, or klein, which paints from words and from
+    /// pictures (references, and the blank folder a whole-folder skin repaints) alike.
     pub fn model(&self) -> &'static Model {
-        if !self.refs.is_empty() || self.shape == Shape::Folder {
-            ModelId::Klein.info()
-        } else {
-            self.model.unwrap_or(ModelId::Zimage).info()
-        }
+        self.model.unwrap_or(ModelId::Klein).info()
     }
 
     /// The prompt the model gets.
@@ -203,34 +199,38 @@ pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
             )
             .fix(setup));
         }
-        return Ok(());
-    }
-    let exe = paths::sd_cli(settings.backend);
-    if !exe.is_file() {
-        let (os, arch) = (Os::this(), Arch::this());
-        if sdcpp_assets(os, arch, settings.backend).is_none() {
-            // Setup would only say the same, after the person had gone to run it.
-            return Err(crate::setup::no_build(os, arch, settings.backend));
+    } else {
+        let exe = paths::sd_cli(settings.backend);
+        if !exe.is_file() {
+            let (os, arch) = (Os::this(), Arch::this());
+            if sdcpp_assets(os, arch, settings.backend).is_none() {
+                // Setup would only say the same, after the person had gone to run it.
+                return Err(crate::setup::no_build(os, arch, settings.backend));
+            }
+            return Err(Error::environment(
+                "runtime_missing",
+                format!(
+                    "stable-diffusion.cpp isn't installed for {}.",
+                    settings.backend
+                ),
+                format!("There is no {}.", exe.display()),
+            )
+            .fix(setup));
         }
-        return Err(Error::environment(
-            "runtime_missing",
-            format!(
-                "stable-diffusion.cpp isn't installed for {}.",
-                settings.backend
-            ),
-            format!("There is no {}.", exe.display()),
-        )
-        .fix(setup));
     }
     let model = job.model();
-    let missing: Vec<&str> = model
-        .files(settings.tier)
-        .all()
+    let files = model.files_for(settings.backend, settings.tier);
+    let missing: Vec<&str> = files
         .iter()
-        .filter(|f| !f.local().is_file())
-        .map(|f| f.name())
+        .filter(|f| !f.local.is_file())
+        .map(|f| f.name.as_str())
         .collect();
     if !missing.is_empty() {
+        let kept_in = if settings.backend == Backend::Mlx {
+            model.mlx(settings.tier).dir()
+        } else {
+            paths::models_dir()
+        };
         return Err(Error::environment(
             "models_missing",
             format!("{} isn't downloaded yet.", model.label),
@@ -238,18 +238,16 @@ pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
                 "{} {} missing from {}.",
                 missing.join(", "),
                 if missing.len() == 1 { "is" } else { "are" },
-                paths::models_dir().display()
+                kept_in.display()
             ),
         )
         .fix(setup));
     }
+    if settings.backend == Backend::Mlx {
+        return Ok(());
+    }
     // Paths sd-cli can't open fail here, in words, rather than as "file not found" in its log.
-    if model
-        .files(settings.tier)
-        .all()
-        .iter()
-        .any(|f| paths::for_sdcpp(&f.local()).is_none())
-    {
+    if files.iter().any(|f| paths::for_sdcpp(&f.local).is_none()) {
         return Err(Error::environment(
             "path_not_ascii",
             "stable-diffusion.cpp can't open the models where they are.",
@@ -284,8 +282,8 @@ fn not_ascii(path: &Path, doing: &str) -> Error {
     .fix("Use a folder and a file name with plain letters, e.g. C:\\folderskin\\photo.png.")
 }
 
-/// The mflux program whose presence means mflux is installed.
-pub(crate) const MFLUX_PROBE: &str = "mflux-generate-z-image-turbo";
+/// The mflux program whose presence means mflux is installed: the one that paints from words.
+pub(crate) const MFLUX_PROBE: &str = "mflux-generate-flux2";
 
 /// Paints `job` into `out_dir` (made if needed), reporting as it goes. Takes about half a minute
 /// to a minute on a laptop GPU; the runtime is ended if `cancel` is set.
@@ -328,31 +326,33 @@ fn generate_blocking(
     let out = out_dir.join(format!("{name}.png"));
     let model = job.model();
 
-    // A whole folder repaints FolderSkin's blank folder, handed in as the first picture.
+    // A whole folder repaints FolderSkin's blank folder, handed in as the first picture. It is
+    // named by its size, which depends on the runtime (command::template_size).
     let mut pictures = job.refs.clone();
     let silhouette = (job.shape == Shape::Folder).then(|| folder_silhouette(WIDTH, HEIGHT));
     if job.shape == Shape::Folder {
-        let template = out_dir.join(".template.png");
+        let (w, h) = command::template_size(settings.backend);
+        let template = out_dir.join(format!(".template-{w}x{h}.png"));
         if !template.is_file() {
-            let img = compositor::blank_template(WIDTH, HEIGHT, matte::MAGENTA);
+            let img = compositor::blank_template(w, h, matte::MAGENTA);
             std::fs::write(&template, folderskin_core::raster::encode_png(&img))
                 .map_err(|e| Error::io("write the blank folder", &template, &e))?;
         }
         pictures.insert(0, template);
     }
     let prompt = job.prompt();
-    let steps = if settings.backend == Backend::Mlx {
-        model.mlx_steps
-    } else {
-        model.steps
-    };
+    let steps = model.steps;
 
     let (cmd, runtime, painted) = if settings.backend == Backend::Mlx {
-        let (program, args) =
-            command::mflux(model, settings.tier, &prompt, job.seed, &pictures, &out);
+        let weights = model.mlx(settings.tier);
+        let (program, args) = command::mflux(model, weights, &prompt, job.seed, &pictures, &out);
         // By its full path: an app opened from the Finder has no ~/.local/bin on its PATH.
         let mut cmd = Command::new(paths::find_tool(program).unwrap_or_else(|| program.into()));
         cmd.args(args);
+        // The weights are all in their folder, checked: painting never reaches for the network,
+        // and a missing file fails at once in words rather than as a download in the background.
+        cmd.env("HF_HUB_OFFLINE", "1")
+            .env("HF_HUB_DISABLE_TELEMETRY", "1");
         let painted = Painting {
             at: out.clone(),
             stand_in: false,
@@ -754,12 +754,9 @@ mod tests {
     }
 
     #[test]
-    fn pictures_always_go_to_klein() {
+    fn klein_paints_words_folders_and_references() {
         let mut job = Job::new("x");
-        assert_eq!(job.model().id, ModelId::Zimage);
-        job.model = Some(ModelId::Klein);
         assert_eq!(job.model().id, ModelId::Klein);
-        job.model = Some(ModelId::Zimage);
         job.shape = Shape::Folder;
         assert_eq!(
             job.model().id,
@@ -769,6 +766,7 @@ mod tests {
         job.shape = Shape::Artwork;
         job.refs = vec![PathBuf::from("dog.jpg")];
         assert_eq!(job.model().id, ModelId::Klein);
+        assert!(job.model().takes_pictures);
     }
 
     #[test]

@@ -8,7 +8,7 @@
 //! No message ever carries a key: a provider's words are scrubbed of it before they're kept.
 
 use folderskin_ai::AiError;
-use folderskin_local::{Error as EngineError, ModelId};
+use folderskin_local::Error as EngineError;
 use serde::Serialize;
 
 /// Where to report something that is FolderSkin's own fault.
@@ -135,8 +135,6 @@ pub struct Doing {
     /// Setting up rather than painting: a missing runtime is then a failed install, not a
     /// computer that isn't set up.
     pub setup: bool,
-    /// The model that was painting, when one was.
-    pub model: Option<ModelId>,
 }
 
 /// The local engine's failure, in the app's words: its fixes name the command line's commands,
@@ -164,20 +162,15 @@ pub fn from_engine(e: EngineError, doing: &Doing) -> AiFailure {
             return failure;
         }
         "generation_failed" if folderskin_local::generate::ran_out_of_memory(&e.why) => {
-            let failure = AiFailure::new(
+            AiFailure::new(
                 "out_of_memory",
                 "The graphics card ran out of memory while painting.",
             )
-            .fix("Close apps that use the graphics card, such as games or video editors, then try again.");
-            if doing.model == Some(ModelId::Zimage) {
-                failure
-                    .fix("Or choose FLUX.2 klein 4B, the smaller model, in the provider settings.")
-            } else {
-                failure.fix(
-                    "If it keeps happening, restart the computer: something may still be \
-                     holding the graphics card's memory.",
-                )
-            }
+            .fix("Close apps that use the graphics card, such as games or video editors, then try again.")
+            .fix(
+                "If it keeps happening, restart the computer: something may still be holding the \
+                 graphics card's memory.",
+            )
         }
         "generation_failed" => AiFailure::new("failed", join(&e.what, &detail))
             .fix("Try again.")
@@ -298,11 +291,10 @@ mod tests {
     use super::*;
     use folderskin_local::Class;
 
-    fn painting(model: Option<ModelId>) -> Doing {
+    fn painting() -> Doing {
         Doing {
             what: "painting a folder picture on this computer (CUDA, RTX 3050 Ti, 4 GB)".into(),
             setup: false,
-            model,
         }
     }
 
@@ -371,7 +363,7 @@ mod tests {
 
     #[test]
     fn a_stop_is_a_stop_whatever_the_engine_was_doing() {
-        let e = from_engine(EngineError::cancelled(), &painting(None));
+        let e = from_engine(EngineError::cancelled(), &painting());
         assert!(e.is_stopped());
         assert_eq!(e.ask, None);
     }
@@ -380,11 +372,11 @@ mod tests {
     fn a_computer_that_isnt_set_up_is_offered_the_setup() {
         let e = EngineError::environment(
             "models_missing",
-            "Z-Image-Turbo isn't downloaded yet.",
+            "FLUX.2 [klein] 4B isn't downloaded yet.",
             "z.gguf is missing from C:\\models.",
         )
         .fix("Download what's missing: folderskin ai setup --backend cuda --tier q8");
-        let f = from_engine(e.clone(), &painting(None));
+        let f = from_engine(e.clone(), &painting());
         assert_eq!(f.code, "local_not_ready");
         assert!(f.fix.iter().all(|s| !s.contains("folderskin ai")), "{f:?}");
         // Setting up is the answer, so there's nothing to ask Claude, as in the preview.
@@ -393,7 +385,6 @@ mod tests {
         let during_setup = Doing {
             what: "setting this computer up".into(),
             setup: true,
-            model: None,
         };
         assert_eq!(from_engine(e, &during_setup).code, "models_missing");
     }
@@ -405,17 +396,12 @@ mod tests {
             "The picture couldn't be painted.",
             "stable-diffusion.cpp stopped with exit code 1. Its last output:\n[ERROR] ggml_cuda: out of memory",
         );
-        let f = from_engine(e.clone(), &painting(Some(ModelId::Zimage)));
+        let f = from_engine(e, &painting());
         assert_eq!(f.code, "out_of_memory");
         assert_eq!(f.fix.len(), 2, "{f:?}");
-        assert!(f.fix[1].contains("FLUX.2 klein 4B"));
+        assert!(f.fix[0].contains("Close apps"), "{f:?}");
+        assert!(f.fix[1].contains("restart the computer"), "{f:?}");
         assert!(f.ask.as_deref().unwrap().contains("RTX 3050 Ti"));
-        let klein = from_engine(e, &painting(Some(ModelId::Klein)));
-        assert_eq!(klein.fix.len(), 2);
-        assert!(
-            !klein.fix[1].contains("FLUX.2 klein"),
-            "klein is already the smaller model: {klein:?}"
-        );
     }
 
     #[test]
@@ -434,7 +420,7 @@ mod tests {
                 ),
             );
             assert_eq!(
-                from_engine(e, &painting(None)).code,
+                from_engine(e, &painting()).code,
                 "out_of_memory",
                 "{said}"
             );
@@ -452,7 +438,6 @@ mod tests {
         let during_setup = Doing {
             what: "setting this computer up".into(),
             setup: true,
-            model: None,
         };
         let f = from_engine(e, &during_setup);
         assert_eq!(f.code, "busy");
@@ -469,21 +454,21 @@ mod tests {
             "stable-diffusion.cpp stopped with exit code 3. Its last output:\nbad things",
         )
         .fix("Run again with --verbose to see everything the runtime printed.");
-        let f = from_engine(e, &painting(None));
+        let f = from_engine(e, &painting());
         assert_eq!(f.code, "failed");
         assert_eq!(
             f.message,
             "The picture couldn't be painted. stable-diffusion.cpp stopped with exit code 3."
         );
 
-        let f = from_engine(no_build(), &painting(None));
+        let f = from_engine(no_build(), &painting());
         assert_eq!(f.code, "no_build_for_platform");
         assert!(f.fix.iter().all(|s| !s.contains("folderskin ai")), "{f:?}");
         assert!(f.fix.last().unwrap().contains("your own key"));
 
         let e = EngineError::fixable("bad_seed", "The seed 9 is too big.", "A seed goes to 8.")
             .fix("Use a smaller seed, or leave it out for a random one.");
-        let f = from_engine(e, &painting(None));
+        let f = from_engine(e, &painting());
         assert_eq!(
             (f.code.as_str(), f.message.as_str()),
             ("bad_seed", "The seed 9 is too big. A seed goes to 8.")
@@ -496,11 +481,11 @@ mod tests {
         )
         .fix("Run the same command again to download it afresh.");
         assert_eq!(
-            from_engine(e, &painting(None)).fix,
+            from_engine(e, &painting()).fix,
             ["Try again to download it afresh."]
         );
         let e = EngineError::new(Class::Bug, "bug", "Painting stopped unexpectedly.", "panic");
-        assert!(from_engine(e, &painting(None)).fix[0].contains(ISSUES_URL));
+        assert!(from_engine(e, &painting()).fix[0].contains(ISSUES_URL));
     }
 
     fn no_build() -> EngineError {
