@@ -243,6 +243,60 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             };
             make_pack(&pictures, &opts, preview.as_deref(), out)
         }
+        PacksCommand::Catalog {
+            dir,
+            out: to,
+            mirrors,
+        } => {
+            let report = packs::check(&dir).map_err(|why| unreadable_packs(&dir, why))?;
+            for problem in &report.problems {
+                out.warn(problem);
+            }
+            let opts = folderskin_tools::catalog::CatalogOptions {
+                out: to,
+                mirrors,
+                cwebp: make::find_cwebp().or_else(folderskin_local::paths::cwebp),
+                dates: folderskin_tools::catalog::git_dates(&dir),
+            };
+            if opts.cwebp.is_none() {
+                out.warn("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger (folderskin ai setup installs it on Windows)");
+            }
+            if opts.dates.is_empty() && !report.packs.is_empty() {
+                out.warn("no git history for these packs, so Newest can't tell them apart");
+            }
+            let built =
+                folderskin_tools::catalog::write_catalog(&dir, &report, &opts).map_err(|why| {
+                    CliError::fixable(
+                        "catalog_failed",
+                        "The catalog couldn't be written.",
+                        sentence(&why),
+                    )
+                })?;
+            let unchanged = if built.changes.is_empty() {
+                ", nothing changed"
+            } else {
+                ""
+            };
+            out.result(
+                Some(&opts.out),
+                "catalog",
+                json!({
+                    "generation": built.head.generation,
+                    "written": built.changes.written,
+                    "removed": built.changes.removed,
+                }),
+                &format!(
+                    "{}: generation {}, a {} KB catalog; {} files written, {} removed{unchanged}",
+                    report.totals(),
+                    built.head.generation,
+                    built.head.catalog.bytes.div_ceil(1024),
+                    built.changes.written.len(),
+                    built.changes.removed.len(),
+                ),
+                false,
+            );
+            Ok(())
+        }
     }
 }
 
