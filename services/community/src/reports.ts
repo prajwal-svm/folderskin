@@ -31,7 +31,7 @@ const WORDS: Record<ReportReason, string> = {
 
 /**
  * The submission a report is about, when `target` names one: its id, or an approved pack's folder
- * name. A pack pulled into community/packs goes by the folder it was written to there, which is
+ * name. A pack pulled into folderskin-community goes by the folder it was written to there, which is
  * the name people see; a folder of that name that isn't one of these belongs to a pack from GitHub.
  */
 async function resolve(env: Env, target: string): Promise<string | null> {

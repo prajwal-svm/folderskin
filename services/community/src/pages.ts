@@ -116,7 +116,7 @@ export type ReviewInfo = {
   license: string;
   source: string;
   notes: string;
-  /** Where it is in community/packs, once it has been pulled there. */
+  /** Where it is in folderskin-community, once it has been pulled there. */
   folder: string | null;
   flags: { code: string; severity: string; detail: string }[];
   sheets: number;
@@ -131,7 +131,7 @@ function details(info: ReviewInfo, token: string): string {
     ? `<ul class="flags">${info.reports.map((r) => `<li>${e(r.reason)}: ${e(r.details || "no details")}</li>`).join("")}</ul>`
     : "none";
   const sheets = Array.from({ length: info.sheets }, (_, n) => `<img class="sheet" alt="Contact sheet ${n + 1}" src="/l/${e(token)}/sheets/${n}">`).join("");
-  const pulled = info.folder ? `<dt>Pulled into</dt><dd>community/packs/${e(info.folder)}</dd>` : "";
+  const pulled = info.folder ? `<dt>Pulled into</dt><dd>folderskin-community, packs/${e(info.folder)}</dd>` : "";
   return `<div class="card"><dl>
 <dt>Pack</dt><dd>${e(info.name)}</dd>
 <dt>By</dt><dd>${e(info.handle)} (${e(info.tier)})</dd>
@@ -173,7 +173,7 @@ export function takedownPage(info: ReviewInfo, token: string): string {
     ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select><button class="danger" type="submit">Take it down now</button></form>`
     : `<p>This pack is ${e(info.status)} already.</p>`;
   return page(`Take down ${info.name} · FolderSkin`, `<h1>Take down a pack</h1>${details(info, token)}${action}
-<p>Taking it down removes it from FolderSkin's storage at once. If it was already pulled into the repository, remove it there too.</p>`);
+<p>Taking it down removes it from FolderSkin's storage at once. If it was already pulled into folderskin-community, remove it there too.</p>`);
 }
 
 /** The switch that pauses (or resumes) sharing without GitHub. */

@@ -7,7 +7,7 @@
  *
  *   HOLD    hold/<submission>/<sha256>     a picture waiting for review
  *           hold/<submission>/sheet-<n>    a contact sheet
- *   PUBLIC  packs/<pack id>/pack.json      an approved pack, as community/packs holds it
+ *   PUBLIC  packs/<pack id>/pack.json      an approved pack, as folderskin-community's packs/ holds it
  *           packs/<pack id>/<file>
  */
 import { now } from "./bytes";
@@ -39,7 +39,7 @@ export type Submission = {
   pack_id: string | null;
   /** The handle pack.json credits, as it was when the pack was approved. */
   author: string | null;
-  /** The folder in community/packs it was pulled into, once it has been. */
+  /** The folder in folderskin-community's packs/ it was pulled into, once it has been. */
   folder: string | null;
   ip_hash: string;
   created_at: number;
@@ -103,7 +103,7 @@ export function authorView(s: Submission) {
     decided_at: s.decided_at,
     // The name it has in the community once it is there, which is the folder it was pulled into.
     pack_id: s.status === "approved" ? (s.folder ?? s.pack_id) : null,
-    // In community/packs already, where only the maintainer can take it out again.
+    // In folderskin-community already, where only the maintainer can take it out again.
     pulled: s.exported_at !== null,
     reasons: explain(reasonsOf(s)),
     note: s.note,
@@ -304,11 +304,11 @@ export async function takedown(
   await removeAll(env.HOLD, `hold/${id}/`);
   await consequences(env, s, reasons);
   const folder = s.exported_at ? repoFolder(s) : null;
-  await record(env, "takedown", id, `${reasons.join(",")}${folder ? ` (remove community/packs/${folder} too)` : ""}`, "high");
+  await record(env, "takedown", id, `${reasons.join(",")}${folder ? ` (remove packs/${folder} from folderskin-community too)` : ""}`, "high");
   return { pack_id: s.status === "approved" ? s.pack_id : null, exported: folder !== null, folder };
 }
 
-/** The folder a pulled pack has in community/packs. */
+/** The folder a pulled pack has in folderskin-community's packs/. */
 const repoFolder = (s: Submission) => s.folder ?? s.pack_id ?? "";
 
 /**
@@ -326,7 +326,7 @@ export async function withdraw(env: Env, s: Submission, ctx: ExecutionContext): 
   if (s.pack_id && s.status === "approved") await removeAll(env.PUBLIC, `packs/${s.pack_id}/`);
   await removeAll(env.HOLD, `hold/${s.id}/`);
   const folder = s.exported_at ? repoFolder(s) : null;
-  await record(env, "withdrawn", s.id, `withdrawn by its author${folder ? `; remove community/packs/${folder} too` : ""}`);
+  await record(env, "withdrawn", s.id, `withdrawn by its author${folder ? `; remove packs/${folder} from folderskin-community too` : ""}`);
   if (folder) {
     ctx.waitUntil(
       alert(
@@ -334,8 +334,8 @@ export async function withdraw(env: Env, s: Submission, ctx: ExecutionContext): 
         {
           title: `Withdrawn: "${s.name}" needs taking out of the repository`,
           lines: [
-            `Its author withdrew it. It was pulled into the repository as community/packs/${folder}, so it stays in the app until that folder is removed.`,
-            "Remove the folder, run folderskin-tools packs index, and commit.",
+            `Its author withdrew it. It was pulled into folderskin-community as packs/${folder}, so it stays in the app until that folder is removed.`,
+            "Remove the folder there and commit; its workflow rebuilds the index.",
           ],
         },
         "flagged",

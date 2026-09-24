@@ -2,20 +2,18 @@ name: CI
 
 # Docs-only changes skip CI: a push here also cancels the run already going on the same branch
 # (see `concurrency`), so a README fix would otherwise stop a half-finished Windows build.
-# Community packs have their own, lighter checks in community.yml.
+# Community packs live in github.com/prajwal-svm/folderskin-community, with checks of their own.
 on:
   push:
     branches: [main]
     paths-ignore:
       - "**.md"
       - "docs/**"
-      - "community/**"
   pull_request:
     branches: [main]
     paths-ignore:
       - "**.md"
       - "docs/**"
-      - "community/**"
   workflow_dispatch:
 
 # No job here writes to the repository, comments on pull requests or makes releases.
@@ -167,9 +165,15 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      # The packs under community/ still pass when the rules in folderskin_core::pack change.
+      # The published packs still pass when the rules in folderskin_core::pack change.
+      - name: Check out the community packs
+        uses: actions/checkout@v7
+        with:
+          repository: prajwal-svm/folderskin-community
+          path: folderskin-community
+
       - name: Check the community packs
-        run: cargo run -p folderskin-tools --quiet -- packs check
+        run: cargo run -p folderskin-tools --quiet -- packs check --dir folderskin-community
 
   # The code that writes icons is different on each system and only compiles on its own, so
   # macOS and Windows get their own lint and test run. While the repository is private, Actions

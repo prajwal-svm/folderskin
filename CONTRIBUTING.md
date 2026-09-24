@@ -84,7 +84,9 @@ get a request for changes, not a silent merge.
 
 ## Sharing skins
 
-FolderSkin ships no skins of its own; they come from community packs under `community/packs/`.
+FolderSkin ships no skins of its own; they come from community packs, which live in their own
+repository, [folderskin-community](https://github.com/prajwal-svm/folderskin-community). Packs are
+proposed there by pull request.
 [docs/PACKS.md](docs/PACKS.md) has the pack contract, how to make one with `folderskin-tools packs
 make` and how to check it, and [docs/SKINS.md](docs/SKINS.md) how a picture lands on the folder.
 [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md) is the same

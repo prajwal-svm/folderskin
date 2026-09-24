@@ -31,7 +31,6 @@ folderskin/
 │   ├── folderskin-core/     geometry · fit · raster · compositor · ico · matte · pack · apply
 │   ├── folderskin-ai/       the AI providers: catalogue, requests, prompts
 │   └── folderskin-tools/    CLI: make, check and index packs, render, guide, apply, revert
-├── community/               the community packs, their index and their preview strips
 ├── assets/                  the app icon's source and the font
 └── docs/
 ```
@@ -105,7 +104,7 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
 | `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line, at most 60 characters; the tags cleaned, at most 8), or an error string for the plain default folder's id |
 | `skins_folder` | – | the folder the saved skins live in |
-| `community_packs` | `fresh` | the packs in `community/index.json` on GitHub, each with its `hash`, `added` and `update` |
+| `community_packs` | `fresh` | the packs in folderskin-community's `index.json` on GitHub, each with its `hash`, `added` and `update` |
 | `community_preview` | `packId`, `fresh` | the pack's preview strip as a PNG data URL |
 | `community_pack_skins` | `packId`, `hash` | every skin of the pack drawn as its folder, to look through; kept drawn for a week, so looking again at that `hash` downloads nothing |
 | `community_add` | `packId`, `onProgress` | the pack's skins in the pack's order, saved all together or not at all; progress on the channel (below) |
@@ -278,7 +277,8 @@ FolderSkin ships no skins: `src-tauri/build.rs` is only Tauri's own build step, 
 comes from the user's store. The folder template and the plain default folder are code in
 `folderskin-core`, not pictures.
 
-`community.rs` reads the packs straight from the repository on GitHub (`FOLDERSKIN_COMMUNITY_URL`
+`community.rs` reads the packs straight from their repository on GitHub,
+[folderskin-community](https://github.com/prajwal-svm/folderskin-community) (`FOLDERSKIN_COMMUNITY_URL`
 points it at another copy). Adding one downloads its `pack.json`, then its pictures four at a
 time (`futures_util`'s `buffered`, which keeps them in the pack's order), each held to the
 limits in `folderskin_core::pack` and hashed with the manifest in the pack's order
@@ -452,6 +452,6 @@ codegen unit. Any dependency that would move this budget needs a reason in the p
 
 Vite copies everything in `public/` into every build, and Tauri embeds the build in the binary,
 so dev-only files stay out of `public/`. The browser mock (`src/lib/devMock.ts`) is only used
-under `import.meta.env.DEV`, so a build leaves it out, and it shows the pictures in
-`community/packs/`, which Vite serves from the repository in dev only; skin previews
+under `import.meta.env.DEV`, so a build leaves it out, and it shows real pack pictures fetched
+from folderskin-community on GitHub rather than files in this repository; skin previews
 that once sat in `public/` added 2.3 MB to the binary without showing up as files in the bundle.

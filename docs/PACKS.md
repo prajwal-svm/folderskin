@@ -1,9 +1,9 @@
 # Community skins and packs
 
 Anyone can share skins with everyone who uses FolderSkin, for free. A shared set of skins is a
-**pack**; one skin on its own is a pack of one. Packs live in this repository under
-`community/packs/` and reach the app straight from GitHub, so there are no accounts and no
-server of ours in between. FolderSkin ships no skins of its own: packs, your own pictures and AI
+**pack**; one skin on its own is a pack of one. Packs live in their own repository,
+[folderskin-community](https://github.com/prajwal-svm/folderskin-community), under `packs/`, and reach the
+app straight from GitHub, so there are no accounts and no server of ours in between. FolderSkin ships no skins of its own: packs, your own pictures and AI
 results are where every skin comes from.
 
 ## Adding a pack
@@ -32,12 +32,12 @@ From the app:
 3. Press **Connect and publish**. The first time, FolderSkin shows a short code to copy and opens
    <https://github.com/login/device>; approve it once and it remembers.
 4. That is the end of it. FolderSkin checks the pack against the contract below, makes you a copy
-   of the repository if you can't push to this one, puts the pack on a branch in a single commit,
-   and opens the pull request as you, with your answers in the description.
+   of folderskin-community if you can't push to it, puts the pack on a branch in a single commit, and
+   opens the pull request there as you, with your answers in the description.
 
 The pull request runs the same checks the app just ran. Once a maintainer merges it, a workflow
-rebuilds `community/index.json` and the preview, and the pack appears in everyone's Community
-view.
+in folderskin-community rebuilds `index.json` and the preview, and the pack appears in everyone's
+Community view.
 
 FolderSkin asks GitHub for `public_repo`, which is enough to fork a public repository, push to
 your own fork and open a pull request. It never asks to see a private repository. The sign-in is
@@ -47,15 +47,16 @@ under Settings → Applications on GitHub.
 
 **Save a folder** still does what it always did, for anyone who would rather handle GitHub
 themselves: it writes a folder that follows every rule below, ready to drag onto a pull request.
-You can also make a pack by hand: follow the contract and open a pull request that adds one folder
-under `community/packs/`.
+You can also make a pack by hand: follow the contract and open a pull request to
+[folderskin-community](https://github.com/prajwal-svm/folderskin-community) that adds one folder under
+`packs/`.
 
 ## The contract
 
 A pack is one folder:
 
 ```
-community/packs/night-prints/
+packs/night-prints/
   pack.json
   koi.png
   fox-in-the-rain.jpg
@@ -131,10 +132,11 @@ Share only pictures you made or are allowed to share.
 ## Making a pack from pictures
 
 `packs make` turns a folder of pictures, such as renders saved from an image model, into a pack
-under `community/packs/` that already passes the checks:
+under `packs/` in a checkout of folderskin-community that already passes the checks. The commands
+below run from this repository, with folderskin-community checked out beside it:
 
 ```sh
-cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders \
+cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders --dir ../folderskin-community \
   --id 3d --name "3D" --tags 3d,glossy --author your-github-name --preview /tmp/3d.png
 ```
 
@@ -161,20 +163,20 @@ grey, so a hole shows); a picture with no flat background still comes out as art
 To see one picture as the app will show it, `render` draws it as its folder:
 
 ```sh
-cargo run -p folderskin-tools -- render community/packs/3d/glass.webp --out /tmp/glass.png --size 512
+cargo run -p folderskin-tools -- render ../folderskin-community/packs/3d/glass.webp --out /tmp/glass.png --size 512
 ```
 
 ## Checking a pack yourself
 
-From the repository root:
+From this repository, with folderskin-community checked out beside it:
 
 ```
-cargo run -p folderskin-tools -- packs check
+cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 ```
 
-It checks every folder in `community/packs/` with the rules the app uses, and prints each
-problem as a sentence. `--dir` points it at another copy of `community/`, and `--max-kb` holds
-the pictures to a smaller size than the 2 MB limit.
+It checks every folder in `packs/` with the rules the app uses, and prints each problem as a
+sentence. Run inside a folderskin-community checkout, `--dir` can be left out: the tools look in the
+current folder by default. `--max-kb` holds the pictures to a smaller size than the 2 MB limit.
 
 ## How the app reads packs
 
@@ -184,14 +186,14 @@ from GitHub again. A pack you added that has changed on GitHub since shows **Upd
 swaps its skins for the new version; folders keep their icons, and a favourite of a picture both
 versions share stays a favourite.
 
-- `community/index.json` lists every pack: its id, name, author, licence, tags, number of skins
+- `index.json` in folderskin-community lists every pack: its id, name, author, licence, tags, number of skins
   and a hash of its exact contents (`pack.json` and every picture). The app keeps the hash with
   the skins it adds, which is how it knows a pack has an update. `folderskin-tools packs index` writes it, together with
-  `community/previews/<id>.png`, a strip of the pack's first four skins drawn as folders. Both
-  are generated on `main`; never edit them by hand.
+  `previews/<id>.png`, a strip of the pack's first four skins drawn as folders. Both are
+  generated on folderskin-community's `main`; never edit them by hand.
 - The app downloads a pack's pictures only when you add it, four at a time, and shows how many
   have arrived. It checks every one against the limits above and saves nothing unless all of
   them pass; then it saves them together, so a pack is never half added.
-- `FOLDERSKIN_COMMUNITY_URL` points the app at another copy of `community/`. For example,
-  serve a checkout with `python3 -m http.server` and set it to
-  `http://localhost:8000/community` to try a pack end to end.
+- `FOLDERSKIN_COMMUNITY_URL` points the app at another copy of folderskin-community. For example,
+  serve a checkout with `python3 -m http.server` from its root and set it to
+  `http://localhost:8000` to try a pack end to end.

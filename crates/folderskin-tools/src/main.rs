@@ -202,8 +202,8 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             // GitHub had that name first.
             if let Some(folder) = answer["folder"].as_str() {
                 println!(
-                    "It was pulled into the repository already: remove community/packs/{folder} \
-                     there too, then run `folderskin-tools packs index`."
+                    "It was pulled into folderskin-community already: remove packs/{folder} there \
+                     too, and its workflow rebuilds the index."
                 );
             }
             show(answer);

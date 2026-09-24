@@ -2,8 +2,7 @@
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
-| **CI** (`ci.yml`) | pushes and pull requests to `main`, except ones that only touch docs or `community/` | the jobs below |
-| **Community** (`community.yml`) | pull requests that touch `community/`, pushes to `main` that change a pack | checks every pack; on `main`, rebuilds `community/index.json` and the previews |
+| **CI** (`ci.yml`) | pushes and pull requests to `main`, except ones that only touch docs | the jobs below |
 | **CodeQL** (`codeql.yml`) | pushes and pull requests to `main`, once the repository is public | code scanning for TypeScript and the workflows |
 | **Release** (`release.yml`) | a `v*.*.*` tag, or by hand | draft release with installers for every platform ([RELEASING.md](RELEASING.md)) |
 | **Dependabot** (`.github/dependabot.yml`) | Mondays | one pull request of minor and patch updates per ecosystem |
@@ -13,7 +12,7 @@ The CI jobs:
 | Job | Runner | Checks |
 | --- | --- | --- |
 | Frontend | Ubuntu | `pnpm audit` of production dependencies, `pnpm build` (tsc, then Vite), `pnpm test:coverage` |
-| Rust | Ubuntu | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo llvm-cov` over the workspace's tests, `packs check` on the community packs |
+| Rust | Ubuntu | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo llvm-cov` over the workspace's tests, `packs check` on a fresh checkout of the community packs |
 | Rust (macOS), Rust (Windows) | macOS, Windows | clippy and tests again, because the code that writes icons only compiles on its own system |
 | cargo-deny | Ubuntu | RustSec advisories, and licences an MIT app can ship (`deny.toml`) |
 | SonarQube Cloud | Ubuntu | static analysis and coverage, once it's set up (below) |

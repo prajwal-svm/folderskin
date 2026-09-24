@@ -1,7 +1,7 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type CommunityPack, type PackProgress, type PackSkinPreview } from "../lib/tauri";
-import { licenseLabel, REPO_URL } from "../lib/packs";
+import { licenseLabel, PACKS_URL } from "../lib/packs";
 import { progressLabel, progressShare } from "../lib/communityStore";
 import { Modal } from "./Modal";
 import { OkBadge } from "./OkBadge";
@@ -115,7 +115,7 @@ export function PackViewer({
           <button
             type="button"
             className="link-btn pack-view-github"
-            onClick={() => void openUrl(`${REPO_URL}/tree/main/community/packs/${pack.id}`).catch(() => {})}
+            onClick={() => void openUrl(`${PACKS_URL}/${pack.id}`).catch(() => {})}
           >
             Open on GitHub <ExternalLinkIcon size={13} />
           </button>

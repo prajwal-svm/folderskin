@@ -6,6 +6,17 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **Community packs have a repository of their own.** They moved, with their history, from
+  `community/` here to [folderskin-community](https://github.com/prajwal-svm/folderskin-community), and
+  the app reads them from there. Sharing a pack from the app now forks that small repository
+  instead of all of FolderSkin, and its pull request is checked and indexed by a workflow there.
+  `folderskin-tools packs` and `folderskin packs` default to the current folder, so they run as
+  they are inside a folderskin-community checkout; `--dir` points them anywhere else. Nine packs
+  arrived with the move: Everyday Folders, Subjects, AI Providers, Hollywood, Sound & Music,
+  Cinema & Photography, Retro Travel Posters, Science & Space, and Money & Work.
+
 ## 0.1.3 — 2026-09-20
 
 ### Fixed

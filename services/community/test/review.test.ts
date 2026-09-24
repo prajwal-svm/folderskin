@@ -170,13 +170,13 @@ describe("the maintainer's endpoints", () => {
     expect(await (await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" })).json()).toMatchObject({ pack_id: "sky-moods" });
     const bad = await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "../sky-moods" });
     expect((await errorOf(bad)).code).toBe("bad_folder");
-    // `pull` found community/packs/sky-moods taken by a pack from GitHub, and wrote sky-moods-2.
+    // `pull` found packs/sky-moods taken by a pack from GitHub, and wrote sky-moods-2.
     const done = await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "sky-moods-2" });
     expect(await done.json()).toEqual({ exported: true, folder: "sky-moods-2" });
     expect((await mine(who))[0]).toMatchObject({ id, status: "approved", pack_id: "sky-moods-2", pulled: true });
 
     // A report about the pack from GitHub isn't about this one; one about its own folder is.
-    const repo = "https://github.com/prajwal-svm/folderskin/tree/main/community/packs";
+    const repo = "https://github.com/prajwal-svm/folderskin-community/tree/main/packs";
     const aboutOf = async (target: string) => {
       expect((await call(postJson("/v1/reports", { target, reason: "copyright" }))).status).toBe(201);
       return (await env.DB.prepare("SELECT submission FROM reports WHERE target = ?1").bind(target).first<{ submission: string | null }>())?.submission;
@@ -200,7 +200,7 @@ describe("the maintainer's endpoints", () => {
     expect(hook).toHaveBeenCalledTimes(1);
     const text = String(hook.mock.calls[0][1]?.body);
     expect(text).toContain('Withdrawn: "Second thoughts" needs taking out of the repository');
-    expect(text).toContain("community/packs/second-thoughts");
+    expect(text).toContain("folderskin-community as packs/second-thoughts");
     expect((await mine(who))[0]).toMatchObject({ id, status: "withdrawn", pulled: true });
   });
 

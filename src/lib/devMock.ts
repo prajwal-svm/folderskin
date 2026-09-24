@@ -1,8 +1,8 @@
 /**
  * Browser-only stand-in for the Tauri commands so `pnpm dev` in a plain browser shows the real
  * layout. The library lives in memory and starts empty, like a first launch; community packs use
- * the pictures in community/packs (Vite serves the repository in dev only, so they never reach a
- * build) and the intro's colour folders.
+ * the real pictures from the packs repository on GitHub (COMMUNITY_RAW) and the intro's colour
+ * folders.
  * Never used inside the app: `isTauri()` is true there.
  *
  * The onboarding shows until it's finished once in this browser; add `?onboarding` to the address
@@ -161,6 +161,9 @@ function saveMockChats(store: MockChats) {
 type MockPack = Omit<CommunityPack, "added" | "update" | "hash" | "bytes" | "preview"> & { skins?: string[] };
 
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
+/** The packs repository's files, where the preview's real pictures come from. Declared before anything that runs
+ *  at load: `library` is seeded from picture(), which reads it. */
+const COMMUNITY_RAW = "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
 const MOCK_PACKS: MockPack[] = [
   { id: "classic-art", name: "Classic Art", author: "prajwal-svm", license: "CC0-1.0", tags: ["classic art"], count: 16 },
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
@@ -227,20 +230,20 @@ const listed = () => (new URLSearchParams(location.search).has("real") ? MOCK_PA
 
 /** A stand-in skin picture: one of Classic Art's, or one of the intro's colour folders. */
 function picture(i: number): string {
-  return i % 3 === 2 ? COLOUR_FOLDERS[i % COLOUR_FOLDERS.length] : `/community/packs/classic-art/${CLASSIC_ART[i % CLASSIC_ART.length][0]}.webp`;
+  return i % 3 === 2 ? COLOUR_FOLDERS[i % COLOUR_FOLDERS.length] : `${COMMUNITY_RAW}/packs/classic-art/${CLASSIC_ART[i % CLASSIC_ART.length][0]}.webp`;
 }
 
 /** What a pack's skins look like here: the real pictures for Classic Art and Colours. */
 function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
   return Array.from({ length: pack.count }, (_, i) => {
-    if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: `/community/packs/classic-art/${CLASSIC_ART[i][0]}.webp` };
+    if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: `${COMMUNITY_RAW}/packs/classic-art/${CLASSIC_ART[i][0]}.webp` };
     if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
     return { name: pack.skins?.[i] ?? `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
   });
 }
 
 /** The real preview strips, which the made-up packs borrow in turn. */
-const REAL_PREVIEWS = ["classic-art", "colours", "greek-art", "scientists-pop-art", "soft-rainbow"].map((id) => `/community/previews/${id}.png`);
+const REAL_PREVIEWS = ["classic-art", "colours", "greek-art", "scientists-pop-art", "soft-rainbow"].map((id) => `${COMMUNITY_RAW}/previews/${id}.png`);
 /** When the sample packs were published, newest first. */
 const SAMPLE_DATES: Record<string, number> = { "classic-art": 1_780_000_000, colours: 1_770_000_000, "night-prints": 1_760_000_000, "chrome-dreams": 1_750_000_000 };
 
@@ -259,7 +262,7 @@ function communityCatalog(): MockCatalog {
     bytes: p.count * 180_000,
     added: SAMPLE_DATES[p.id] ?? 0,
     skins: packPictures(p).map((s) => s.name),
-    preview: `/community/previews/${PREVIEW_OF[p.id] ?? "colours"}.png`,
+    preview: `${COMMUNITY_RAW}/previews/${PREVIEW_OF[p.id] ?? "colours"}.png`,
   }));
   mockCatalogue = new MockCatalog([...samples, ...madeUpPacks(many, REAL_PREVIEWS)], ["classic-art", "colours"]);
   return mockCatalogue;

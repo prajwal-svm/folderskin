@@ -27,9 +27,12 @@ use std::time::Duration;
 use tauri::ipc::Channel;
 use tauri::State;
 
-/// Where packs live, and where the pull request is opened.
+/// Where packs live, and where the pull request is opened: the packs repository, which is small
+/// enough that forking it costs a contributor nothing.
 const OWNER: &str = "prajwal-svm";
-const REPO: &str = "folderskin";
+const REPO: &str = "folderskin-community";
+/// The app's own repository, which holds the pack contract and the terms the body links to.
+const APP_REPO: &str = "folderskin";
 const API: &str = "https://api.github.com";
 
 /// What the token is stored under, alongside the AI providers.
@@ -372,7 +375,7 @@ pub async fn publish_pack(
         )
         .await?;
         tree.push(json!({
-            "path": format!("community/packs/{id}/{file}"),
+            "path": format!("packs/{id}/{file}"),
             "mode": "100644",
             "type": "blob",
             "sha": blob["sha"],
@@ -467,11 +470,11 @@ fn body(name: &str, author: &str, license: &str, skins: usize, notes: &str, term
     format!(
         "Adds the **{name}** pack: {skins} skins, by @{author}, under {license}.\n\n\
          Opened from FolderSkin, which checked the pack against the contract in \
-         [docs/PACKS.md](https://github.com/{OWNER}/{REPO}/blob/main/docs/PACKS.md) before sending \
+         [docs/PACKS.md](https://github.com/{OWNER}/{APP_REPO}/blob/main/docs/PACKS.md) before sending \
          it: picture sizes and formats, file and folder names, tag shapes, the manifest and the \
          size limits all pass.\n\n\
          **Where the pictures came from**\n\n{}\n\n\
-         @{author} agreed to [the pack terms](https://github.com/{OWNER}/{REPO}/blob/main/docs/PACK-TERMS.md), \
+         @{author} agreed to [the pack terms](https://github.com/{OWNER}/{APP_REPO}/blob/main/docs/PACK-TERMS.md), \
          version {terms}, in the app before this was opened.\n",
         if notes.is_empty() {
             "_Not said._".to_string()
@@ -567,6 +570,16 @@ mod tests {
         assert!(
             text.contains("version 1"),
             "what they agreed to is on the record: {text}"
+        );
+        // The pull request goes to the packs repository, but the contract and the terms live
+        // with the app.
+        assert!(
+            text.contains("github.com/prajwal-svm/folderskin/blob/main/docs/PACKS.md"),
+            "{text}"
+        );
+        assert!(
+            text.contains("github.com/prajwal-svm/folderskin/blob/main/docs/PACK-TERMS.md"),
+            "{text}"
         );
     }
 
