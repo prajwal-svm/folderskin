@@ -617,7 +617,19 @@ export const mockApi = {
     return { user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900 };
   },
   githubWait: async () => {
-    await new Promise((r) => setTimeout(r, 2500));
+    // Approved a moment after the code is asked for, or with `?holdgithub` once the page calls
+    // `mockApprove()`, so a test can look at the code while it waits, however busy the machine.
+    if (new URLSearchParams(location.search).has("holdgithub")) {
+      const w = window as { mockApprove?: () => void };
+      await new Promise<void>((resolve) => {
+        w.mockApprove = () => {
+          delete w.mockApprove;
+          resolve();
+        };
+      });
+    } else {
+      await sleep(2500);
+    }
     mockGithub.account = { login: "octocat", name: "The Octocat", avatar_url: "" };
     return mockGithub.account;
   },
