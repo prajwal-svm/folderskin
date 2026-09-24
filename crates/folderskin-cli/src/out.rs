@@ -164,14 +164,20 @@ impl Out {
         stdout_busy: bool,
     ) {
         if self.json {
-            if stdout_busy {
-                return; // the picture is on standard output; nothing else may be
-            }
-            return self.event(&Event::Result {
+            let event = Event::Result {
                 path: path.map(Path::to_path_buf),
                 kind: kind.to_string(),
                 meta,
-            });
+            };
+            if stdout_busy {
+                // The picture is on standard output and nothing else may be, so the result
+                // goes to standard error, still one JSON object on a line of its own.
+                let line = serde_json::to_string(&event).unwrap_or_default();
+                let _state = self.lock();
+                let _ = writeln!(std::io::stderr().lock(), "{line}");
+                return;
+            }
+            return self.event(&event);
         }
         let mut state = self.lock();
         {

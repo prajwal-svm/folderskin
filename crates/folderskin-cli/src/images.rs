@@ -17,7 +17,7 @@ use folderskin_core::painted;
 use image::codecs::png::{CompressionType, FilterType as PngFilter, PngEncoder};
 use image::{ImageEncoder, RgbaImage};
 use serde_json::json;
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -157,6 +157,9 @@ pub fn encode_png(img: &RgbaImage) -> Vec<u8> {
 /// folder first.
 pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliError> {
     if is_stdio(target) {
+        if std::io::stdout().is_terminal() {
+            return Err(picture_to_terminal());
+        }
         let mut stdout = std::io::stdout().lock();
         return stdout
             .write_all(bytes)
@@ -168,6 +171,16 @@ pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliErro
     }
     make_parent(target)?;
     std::fs::write(target, bytes).map_err(|e| CliError::io(doing, target, &e))
+}
+
+/// Standard output is the terminal: a picture there is a screenful of binary, not a picture.
+fn picture_to_terminal() -> CliError {
+    CliError::usage(
+        "The picture has nowhere to go.",
+        "It would go to standard output, which is this terminal.",
+    )
+    .fix("Give it a file: --out result.png")
+    .fix("Or pass it on to another command: ... --out - | folderskin image check -")
 }
 
 /// Writes `png`, a rendered PNG, to `target` in the format its name asks for, as [`save`] does:

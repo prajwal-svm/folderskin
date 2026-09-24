@@ -328,7 +328,8 @@ pub enum ImageCommand {
 pub struct OneImage {
     /// The picture; `-` reads standard input
     pub input: PathBuf,
-    /// Where the result goes; `-` writes a PNG to standard output (default: beside the input)
+    /// Where the result goes; `-` writes a PNG to standard output (default: beside the input, or
+    /// standard output for a picture from standard input)
     #[arg(long)]
     pub out: Option<PathBuf>,
 }
@@ -364,7 +365,8 @@ pub struct AmountArgs {
     /// How much, from -100 to 100
     #[arg(allow_negative_numbers = true, value_parser = parse_amount)]
     pub amount: f64,
-    /// Where the result goes; `-` writes a PNG to standard output (default: beside the input)
+    /// Where the result goes; `-` writes a PNG to standard output (default: beside the input, or
+    /// standard output for a picture from standard input)
     #[arg(long)]
     pub out: Option<PathBuf>,
 }
