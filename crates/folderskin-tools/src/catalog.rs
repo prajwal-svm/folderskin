@@ -3,8 +3,11 @@
 //!
 //! Every file but `head.json` is named after what is in it, so a file that is already there is
 //! already right: a second run only writes what changed, and renders a thumbnail only for a
-//! picture it hasn't seen. `head.json` is written last, so a host serving the folder while it is
-//! being built never names a catalog that isn't there yet. Files that neither this generation
+//! picture it hasn't seen. A name, once published, never holds anything else, since caches and
+//! mirrors keep it for a year: when this build would write a catalog or a manifest that says the
+//! same in other bytes (a newer gzip, say), the one already there stays and is the one vouched
+//! for. `head.json` is written last, so a host serving the folder while it is being built never
+//! names a catalog that isn't there yet. Files that neither this generation
 //! nor the one before it use are removed after that: an app that read the old `head.json` a
 //! moment ago can still fetch what it names.
 //!
@@ -113,9 +116,17 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
 
     let bytes = build::to_bytes(&records)?;
     let generation = tree::sha256_hex(&bytes)[..16].to_string();
-    let gz = tree::gzip(&bytes);
     let catalog = tree::catalog_path(&generation);
-    write_new(&out.join(&catalog), &gz, &mut changes)?;
+    let path = out.join(&catalog);
+    let gz = match kept_catalog(&path, &bytes) {
+        Some(gz) => gz,
+        None => {
+            let gz = tree::gzip(&bytes);
+            write_file(&path, &gz)?;
+            changes.written.push(path);
+            gz
+        }
+    };
     keep.insert(catalog.clone());
 
     let head = Head {
@@ -196,11 +207,17 @@ fn publish_pack(
     let json = serde_json::to_string_pretty(&published).map_err(|e| e.to_string())? + "\n";
     // The app reads it back with the same checks, so a tree that builds is a tree it takes.
     PublishedPack::parse(json.as_bytes())?;
-    write_changed(
-        &out.join(tree::manifest_path(id, &hash)),
-        json.as_bytes(),
-        changes,
-    )?;
+    let path = out.join(tree::manifest_path(id, &hash));
+    let listed = match std::fs::read(&path)
+        .ok()
+        .filter(|kept| PublishedPack::parse(kept).is_ok_and(|p| p == published))
+    {
+        Some(kept) => kept,
+        None => {
+            write_changed(&path, json.as_bytes(), changes)?;
+            json.into_bytes()
+        }
+    };
 
     let entry = IndexEntry::new(id, pack, hash.clone());
     let record = PackRecord {
@@ -210,7 +227,7 @@ fn publish_pack(
         license: entry.license,
         tags: entry.tags,
         hash,
-        manifest: tree::sha256_hex(json.as_bytes()),
+        manifest: tree::sha256_hex(&listed),
         added: opts.dates.get(id).copied().unwrap_or(0),
         count: entry.count,
         bytes: bytes_total,
@@ -436,6 +453,14 @@ fn names(dir: &Path) -> Result<Vec<String>, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(e) => Err(format!("couldn't read {}: {e}", dir.display())),
     }
+}
+
+/// The catalog file at `path`, when it is there and unpacks to `database`: this generation,
+/// already published, whatever gzip made it.
+fn kept_catalog(path: &Path, database: &[u8]) -> Option<Vec<u8>> {
+    let gz = std::fs::read(path).ok()?;
+    let unpacked = tree::gunzip(&gz, tree::MAX_CATALOG_UNPACKED).ok()?;
+    (unpacked == database).then_some(gz)
 }
 
 /// Writes a file named after its contents, unless it is already there: then it already holds
@@ -749,6 +774,56 @@ mod tests {
         );
         let head = Head::parse(&std::fs::read(c.out().join(HEAD_FILE)).unwrap()).unwrap();
         open_catalog(&c, &head);
+    }
+
+    #[test]
+    fn a_published_name_keeps_its_bytes_and_head_json_describes_them() {
+        let c = Community::new("same-name");
+        two_packs(&c);
+        let first = c.build().unwrap();
+        let catalog = c.out().join(&first.head.catalog.url);
+        let reds_hash = open_catalog(&c, &first.head)
+            .packs(&["reds".into()])
+            .unwrap()[0]
+            .hash
+            .clone();
+
+        // The same catalog gzipped otherwise, as a newer flate2 might: another OS byte in the
+        // header, the same database inside. It stays, and head.json describes it.
+        let mut other_gzip = std::fs::read(&catalog).unwrap();
+        other_gzip[9] ^= 1;
+        std::fs::write(&catalog, &other_gzip).unwrap();
+        let again = c.build().unwrap();
+        assert_eq!(again.head.generation, first.head.generation);
+        assert_eq!(
+            std::fs::read(&catalog).unwrap(),
+            other_gzip,
+            "left as published"
+        );
+        assert_eq!(again.head.catalog.sha256, tree::sha256_hex(&other_gzip));
+        let written: Vec<_> = again.changes.written.iter().collect();
+        assert_eq!(written, [&c.out().join(HEAD_FILE)], "only head.json");
+        open_catalog(&c, &again.head);
+
+        // A manifest that says the same in other bytes stays too, and the catalog vouches for
+        // it as it is (a new generation, since what it vouches for changed).
+        let reds = c.out().join(tree::manifest_path("reds", &reds_hash));
+        let parsed = PublishedPack::parse(&std::fs::read(&reds).unwrap()).unwrap();
+        let compact = serde_json::to_vec(&parsed).unwrap();
+        std::fs::write(&reds, &compact).unwrap();
+        let vouched = c.build().unwrap();
+        assert_eq!(std::fs::read(&reds).unwrap(), compact, "left as published");
+        let listed = open_catalog(&c, &vouched.head)
+            .packs(&["reds".into()])
+            .unwrap();
+        assert_eq!(listed[0].manifest, tree::sha256_hex(&compact));
+
+        // A damaged file under a name is replaced: it was never right.
+        let catalog = c.out().join(&vouched.head.catalog.url);
+        std::fs::write(&catalog, b"not a catalog").unwrap();
+        let mended = c.build().unwrap();
+        assert_eq!(mended.head.generation, vouched.head.generation);
+        open_catalog(&c, &mended.head);
     }
 
     #[test]
