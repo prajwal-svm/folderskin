@@ -142,6 +142,7 @@ test.describe("tooltips", () => {
     await expect(page.getByRole("dialog", { name: /sort and tags/i })).toBeVisible();
     expect(await titled(), "native tooltips in Community").toEqual([]);
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: /sort and tags/i })).toHaveCount(0);
 
     await page.locator(".skin-hit").first().click();
     await expect(page.locator(".pack-skin").first()).toBeVisible();
@@ -179,6 +180,29 @@ test.describe("tooltips", () => {
     await page.locator(".tile-name", { hasText: /^Mona Lisa$/ }).first().hover();
     await page.waitForTimeout(700);
     await expect(page.getByRole("tooltip")).toHaveCount(0);
+  });
+});
+
+test.describe("the filters beside a search", () => {
+  test("take the focus, so Escape closes them and leaves what was typed", async ({ page }) => {
+    await openApp(page);
+    const library = page.getByLabel("search skins");
+    await library.fill("mona");
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "filter and sort skins" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "filter and sort skins" })).toHaveCount(0);
+    await expect(library).toHaveValue("mona");
+
+    await openView(page, /community/i);
+    const packs = page.getByRole("searchbox", { name: /search packs/i });
+    await packs.fill("toledo");
+    await page.getByRole("button", { name: /sort and more tags/i }).click();
+    await expect(page.getByRole("dialog", { name: /sort and tags/i })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: /sort and tags/i })).toHaveCount(0);
+    await expect(packs).toHaveValue("toledo");
+    await expect(page.locator(".skin-hit").first()).toBeVisible();
   });
 });
 
