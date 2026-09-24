@@ -512,20 +512,58 @@ pub fn folders_under(root: &Path, depth: u32) -> Result<Vec<PathBuf>, CliError> 
     Ok(found)
 }
 
-/// File names for `folders` under `root`, from their paths, each one different.
+/// File names for `folders` under `root`: the folder's path in words (in any script), then a
+/// fingerprint of the path itself. A run that finds a picture already painted keeps it, and
+/// `--apply` puts it on the folder of that name, so a name must belong to its folder alone: told
+/// apart by order instead, "Фото" and "照片" (or "A b" and "a-b") would swap pictures as soon as a
+/// folder was added beside them.
 pub fn theme_names(root: &Path, folders: &[PathBuf]) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     folders
         .iter()
         .map(|folder| {
             let relative = folder.strip_prefix(root).unwrap_or(folder);
-            let mut name = slug(&relative.to_string_lossy(), 60);
-            while !seen.insert(name.clone()) {
-                name.push_str("-x");
+            // The same on every system: `/` between the parts.
+            let path = relative
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            let hash = fingerprint(&path);
+            let name = format!("{}-{:08x}", words(&path, 48), hash >> 32);
+            if seen.insert(name.clone()) {
+                name
+            } else {
+                // Two paths sharing both parts: all 64 bits of the fingerprint tell them apart.
+                format!("{}-{hash:016x}", words(&path, 48))
             }
-            name
         })
         .collect()
+}
+
+/// Lower-case letters and digits of any script, joined by dashes, at most `limit` of them:
+/// "Photos/Summer '25" → "photos-summer-25".
+fn words(text: &str, limit: usize) -> String {
+    let mut out = String::new();
+    for c in text.chars().flat_map(char::to_lowercase) {
+        if c.is_alphanumeric() {
+            out.push(c);
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let cut: String = out.trim_matches('-').chars().take(limit).collect();
+    match cut.trim_end_matches('-') {
+        "" => "folder".to_string(),
+        cut => cut.to_string(),
+    }
+}
+
+/// 64-bit FNV-1a: small, and the same in every build, unlike the standard library's hasher.
+fn fingerprint(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
 
 fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
@@ -549,7 +587,7 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let out_dir = absolute(&args.out.clone().unwrap_or_else(|| {
         PathBuf::from("folderskin-out").join(format!(
             "theme-{}",
-            slug(&root.file_name().unwrap_or_default().to_string_lossy(), 40)
+            words(&root.file_name().unwrap_or_default().to_string_lossy(), 40)
         ))
     }));
     let seed = args.seed.unwrap_or_else(random_seed);
@@ -985,10 +1023,11 @@ mod tests {
         assert_eq!(one, [root.join("Photos"), root.join("Taxes 2025")]);
         let two = folders_under(&root, 2).unwrap();
         assert_eq!(two.len(), 3);
-        assert_eq!(
-            theme_names(&root, &two),
-            ["photos", "taxes-2025", "photos-holidays"]
-        );
+        let words: Vec<String> = theme_names(&root, &two)
+            .iter()
+            .map(|n| n[..n.len() - 9].to_string())
+            .collect();
+        assert_eq!(words, ["photos", "taxes-2025", "photos-holidays"]);
         std::fs::remove_dir_all(&root).unwrap();
     }
 
@@ -999,6 +1038,36 @@ mod tests {
             &root,
             &[root.join("A b"), root.join("a-b"), root.join("A_B")],
         );
-        assert_eq!(names, ["a-b", "a-b-x", "a-b-x-x"]);
+        assert!(names.iter().all(|n| n.starts_with("a-b-")), "{names:?}");
+        let unique: std::collections::HashSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), 3, "{names:?}");
+    }
+
+    #[test]
+    fn a_folder_keeps_its_name_whatever_is_beside_it() {
+        // Non-English names used to become "skin", "skin-x", … in order, so adding a folder
+        // handed one folder's picture to another.
+        let root = PathBuf::from("/r");
+        let first = theme_names(&root, &[root.join("Фото"), root.join("照片")]);
+        let later = theme_names(
+            &root,
+            &[root.join("Документы"), root.join("Фото"), root.join("照片")],
+        );
+        assert_eq!(later[1..], first[..], "{first:?} {later:?}");
+        assert!(first[0].starts_with("фото-"), "{first:?}");
+        assert!(first[1].starts_with("照片-"), "{first:?}");
+        assert!(later[0].starts_with("документы-"), "{later:?}");
+        // The same on every system, and for the same folder next time.
+        assert_eq!(
+            theme_names(&root, &[root.join("Photos").join("Holidays")]),
+            theme_names(&root, &[PathBuf::from("/r/Photos/Holidays")])
+        );
+        assert_eq!(
+            fingerprint("a"),
+            0xaf63_dc4c_8601_ec8c,
+            "FNV-1a's published value"
+        );
+        assert_eq!(words("!!!", 40), "folder");
+        assert_eq!(words("Summer '25 — Crète", 40), "summer-25-crète");
     }
 }
