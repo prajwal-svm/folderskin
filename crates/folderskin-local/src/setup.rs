@@ -22,7 +22,8 @@ pub enum Runtime {
 
 /// Downloads and installs everything `settings` needs on `machine`: cwebp (for packs), then
 /// mflux on Apple Silicon, or stable-diffusion.cpp and both models everywhere else. What is
-/// already there and checked is left alone, and an interrupted download carries on.
+/// already there and checked is left alone, and an interrupted download carries on. One setup
+/// runs at a time on a computer, whichever program started it: another fails with "busy".
 pub async fn setup(
     machine: &Machine,
     settings: &Settings,
@@ -30,6 +31,11 @@ pub async fn setup(
     reporter: &Reporter,
     cancel: &CancelToken,
 ) -> Result<(), Error> {
+    // No build to install: say so before touching anything.
+    if !can_set_up(machine, settings.backend) {
+        return Err(no_build(machine.os, machine.arch, settings.backend));
+    }
+    let _only_one = lock(&paths::home())?;
     let client = download::client()?;
     if let Err(e) = install_webp(&client, machine, reporter, cancel).await {
         if e.is_cancelled() {
@@ -73,6 +79,36 @@ pub async fn setup(
         ),
     );
     Ok(())
+}
+
+/// Whether [`setup`] has something to install for `backend` on `machine`: mflux, which uv
+/// installs, or a stable-diffusion.cpp build published for this computer.
+pub fn can_set_up(machine: &Machine, backend: Backend) -> bool {
+    backend == Backend::Mlx || manifest::sdcpp_assets(machine.os, machine.arch, backend).is_some()
+}
+
+/// Holds `setup.lock` in `home` for as long as the file is kept, so two setups (the app's and
+/// `folderskin ai setup` in a terminal, or two terminals) never write into the same download.
+/// The system lets go of it when the process ends, however it ends.
+fn lock(home: &Path) -> Result<std::fs::File, Error> {
+    std::fs::create_dir_all(home).map_err(|e| Error::io("make the models' folder", home, &e))?;
+    let path = home.join("setup.lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| Error::io("open the setup's lock", &path, &e))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => Err(Error::environment(
+            "busy",
+            "This computer is already being set up.",
+            "Another setup, in FolderSkin or in a terminal, is downloading into the same folder.",
+        )
+        .fix("Wait for it to finish, then run the command again.")),
+        Err(std::fs::TryLockError::Error(e)) => Err(Error::io("lock the setup", &path, &e)),
+    }
 }
 
 /// One release asset to install.
@@ -343,7 +379,7 @@ fn webp_zip() -> PathBuf {
 /// starts.
 pub fn is_set_up(settings: &Settings) -> bool {
     if settings.backend == Backend::Mlx {
-        return paths::which(MFLUX_PROBE).is_some();
+        return paths::find_tool(MFLUX_PROBE).is_some();
     }
     paths::sd_cli(settings.backend).is_file()
         && MODELS.iter().all(|m| {
@@ -389,15 +425,16 @@ pub fn download_size(machine: &Machine, settings: &Settings) -> u64 {
 }
 
 async fn install_mlx(reporter: &Reporter, cancel: &CancelToken) -> Result<(), Error> {
-    if paths::which(MFLUX_PROBE).is_some() {
+    if paths::find_tool(MFLUX_PROBE).is_some() {
         reporter.log(Level::Info, "mflux is installed");
         return Ok(());
     }
-    let Some(uv) = paths::which("uv") else {
+    let Some(uv) = paths::find_tool("uv") else {
         return Err(Error::environment(
             "uv_missing",
             "mflux can't be installed yet.",
-            "It is installed with uv, and uv isn't on the PATH.",
+            "It is installed with uv, and uv isn't on the PATH, in ~/.local/bin or in Homebrew's \
+             folder.",
         )
         .fix("Install uv (https://docs.astral.sh/uv/), then run setup again."));
     };
@@ -474,6 +511,9 @@ pub struct RuntimeStatus {
     pub devices: Vec<String>,
     /// Why it can't run, when it is installed but won't start.
     pub problem: Option<String>,
+    /// The problem's code: "vc_runtime_missing" when Windows can't find the Visual C++ runtime
+    /// it needs, otherwise "runtime_failed_to_start".
+    pub problem_code: Option<&'static str>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -505,7 +545,7 @@ impl ModelStatus {
 /// second; call it off the UI thread.
 pub fn status(machine: &Machine, settings: &Settings) -> Status {
     let runtime = if settings.backend == Backend::Mlx {
-        let path = paths::which(MFLUX_PROBE);
+        let path = paths::find_tool(MFLUX_PROBE);
         RuntimeStatus {
             name: "mflux".into(),
             installed: path.is_some(),
@@ -514,6 +554,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
             release: None,
             devices: Vec::new(),
             problem: None,
+            problem_code: None,
         }
     } else {
         let exe = paths::sd_cli(settings.backend);
@@ -523,6 +564,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
         } else {
             (Vec::new(), None)
         };
+        let (problem_code, problem) = problem.unzip();
         RuntimeStatus {
             name: "stable-diffusion.cpp".into(),
             // One built from source and put in place counts too.
@@ -535,6 +577,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
             installed,
             devices,
             problem,
+            problem_code,
         }
     };
     let models = if settings.backend == Backend::Mlx {
@@ -572,8 +615,8 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
     }
 }
 
-/// `sd-cli --list-devices`, and why it wouldn't run if it didn't.
-fn probe_devices(exe: &Path) -> (Vec<String>, Option<String>) {
+/// `sd-cli --list-devices`, and why it wouldn't run if it didn't, with that problem's code.
+fn probe_devices(exe: &Path) -> (Vec<String>, Option<(&'static str, String)>) {
     let mut cmd = std::process::Command::new(exe);
     cmd.arg("--list-devices")
         .stdin(std::process::Stdio::null())
@@ -591,17 +634,27 @@ fn probe_devices(exe: &Path) -> (Vec<String>, Option<String>) {
         ),
         Ok(out) if out.status.code() == Some(0xC000_0135_u32 as i32) => (
             Vec::new(),
-            Some(
+            Some((
+                "vc_runtime_missing",
                 "it needs the Microsoft Visual C++ runtime: install \
                  https://aka.ms/vs/17/release/vc_redist.x64.exe"
                     .into(),
-            ),
+            )),
         ),
         Ok(out) => (
             Vec::new(),
-            Some(format!("it stopped with exit code {:?}", out.status.code())),
+            Some((
+                "runtime_failed_to_start",
+                format!("it stopped with exit code {:?}", out.status.code()),
+            )),
         ),
-        Err(e) => (Vec::new(), Some(format!("it couldn't be started: {e}"))),
+        Err(e) => (
+            Vec::new(),
+            Some((
+                "runtime_failed_to_start",
+                format!("it couldn't be started: {e}"),
+            )),
+        ),
     }
 }
 
@@ -654,6 +707,43 @@ mod tests {
             .sum();
         let shared = MODELS[0].files(settings.tier).llm.size;
         assert!(download_size(&arm, &settings) <= each - shared);
+    }
+
+    #[test]
+    fn a_second_setup_is_turned_away_while_the_first_holds_the_lock() {
+        let home = std::env::temp_dir().join(format!("fs-setup-lock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let first = lock(&home).expect("nothing else is setting up");
+        // A second open of the file, as another process's would be.
+        let err = lock(&home).unwrap_err();
+        assert_eq!(err.code, "busy", "{err:?}");
+        assert!(err.fix[0].contains("run the command again"), "{err:?}");
+        drop(first);
+        let again = lock(&home).expect("the first let go");
+        drop(again);
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn only_a_computer_with_a_build_or_mflux_can_be_set_up() {
+        let machine = |os, arch| Machine {
+            os,
+            arch,
+            ram_gb: 16.0,
+            gpu: Gpu::Other,
+            gpu_name: String::new(),
+            vram_gb: 0.0,
+        };
+        assert!(can_set_up(
+            &machine(Os::Windows, Arch::X86_64),
+            Backend::Vulkan
+        ));
+        assert!(can_set_up(&machine(Os::Macos, Arch::Arm64), Backend::Mlx));
+        assert!(!can_set_up(&machine(Os::Macos, Arch::X86_64), Backend::Cpu));
+        assert!(!can_set_up(
+            &machine(Os::Linux, Arch::Arm64),
+            Backend::Vulkan
+        ));
     }
 
     #[test]
