@@ -331,12 +331,12 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   background: var(--island);
 }
 
+/* As wide as the model's name where the row has room, and cut short only where it hasn't. */
 .model-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  max-width: 240px;
   height: 30px;
   padding: 0 10px;
   border-radius: var(--r-pill);

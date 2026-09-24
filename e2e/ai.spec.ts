@@ -131,6 +131,16 @@ test.describe("the AI chat", () => {
     await expect(drawer.getByText(/Your chats will be here|No chat is called/)).toBeVisible();
   });
 
+  test("names the whole model in its pill where there's room, and in the pill's tip", async ({ page }) => {
+    await openApp(page);
+    await openView(page, /generate with ai/i);
+    const pill = chat(page).locator(".model-pill");
+    await expect(pill).toContainText("Local Model · FLUX.2 klein 4B");
+    expect(await pill.locator(".model-pill-text").evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(false);
+    await pill.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Local Model · FLUX.2 klein 4B");
+  });
+
   test("starts a new chat each time it's opened, with the last one in the history", async ({ page }) => {
     await withKey(page);
     await sendIdea(page, "a paper boat");
