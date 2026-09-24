@@ -41,6 +41,14 @@
   --stage-colour: color-mix(in srgb, var(--accent) 65%, #081029);
   --accent-glow: rgba(58, 134, 255, 0.5);
   --on-accent: #ffffff;
+  /* Each accent as Settings offers it, the same in both themes: its bright colour, and black and
+     white half and half. */
+  --swatch-blue: #3a86ff;
+  --swatch-purple: #8b5cf6;
+  --swatch-pink: #ec4899;
+  --swatch-orange: #f97316;
+  --swatch-green: #16a34a;
+  --swatch-mono: linear-gradient(135deg, #1d1d1f 0 50%, #ffffff 50% 100%);
 
   /* status */
   --ok: #12b981;
@@ -125,8 +133,9 @@
 }
 
 /* The accent, when it isn't blue: Settings > General > Accent colour sets data-accent on <html>
-   (state/prefs.ts). Each keeps blue's roles: --accent-hover under white text, --accent-ink as
-   text on an island, --accent-soft behind a selection. */
+   (state/prefs.ts). Each keeps blue's roles: --accent and --accent-hover under white text (3:1 at
+   least, so orange and green are a shade deeper than their swatches), --accent-ink as text on an
+   island, --accent-soft behind a selection, a step apart from --well-2 behind a hover. */
 
 :root[data-accent="purple"] {
   --accent: #8b5cf6;
@@ -163,8 +172,8 @@
 }
 
 :root[data-accent="orange"] {
-  --accent: #f97316;
-  --accent-hover: #ea580c;
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
   --accent-ink: #c2410c;
   --accent-soft: #ffedd5;
   --accent-wash: rgba(249, 115, 22, 0.1);
@@ -172,7 +181,7 @@
 }
 
 :root[data-theme="dark"][data-accent="orange"] {
-  --accent-hover: #e8660e;
+  --accent-hover: #c2410c;
   --accent-ink: #fdab6e;
   --accent-soft: #4a3324;
   --accent-wash: rgba(249, 115, 22, 0.14);
@@ -180,8 +189,8 @@
 }
 
 :root[data-accent="green"] {
-  --accent: #16a34a;
-  --accent-hover: #15803d;
+  --accent: #15803d;
+  --accent-hover: #166534;
   --accent-ink: #15803d;
   --accent-soft: #dcfce7;
   --accent-wash: rgba(22, 163, 74, 0.1);
@@ -189,7 +198,7 @@
 }
 
 :root[data-theme="dark"][data-accent="green"] {
-  --accent-hover: #16924a;
+  --accent-hover: #166534;
   --accent-ink: #5fd18a;
   --accent-soft: #2a4232;
   --accent-wash: rgba(22, 163, 74, 0.14);
@@ -200,7 +209,7 @@
   --accent: #1d1d1f;
   --accent-hover: #000000;
   --accent-ink: #1d1d1f;
-  --accent-soft: #e9e9ec;
+  --accent-soft: #dadadf;
   --accent-wash: rgba(29, 29, 31, 0.08);
   --accent-glow: rgba(29, 29, 31, 0.4);
   --stage-colour: #2b2b2f;
@@ -211,7 +220,7 @@
   --accent: #f2eeed;
   --accent-hover: #ffffff;
   --accent-ink: #f2eeed;
-  --accent-soft: #4a4545;
+  --accent-soft: #56504f;
   --accent-wash: rgba(255, 255, 255, 0.1);
   --accent-glow: rgba(255, 255, 255, 0.45);
   --stage-colour: #3a3636;

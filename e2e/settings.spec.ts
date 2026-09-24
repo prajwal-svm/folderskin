@@ -177,4 +177,38 @@ test.describe("settings", () => {
     await expect(rows).toHaveCount(2);
     await expect(rows.nth(1)).toContainText("Default");
   });
+
+  test("every accent keeps the words on its buttons readable", async ({ page }) => {
+    await openApp(page);
+    const ratios = await page.evaluate(() => {
+      const lum = (rgb: string) => {
+        const [r, g, b] = (rgb.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+          const c = Number(v) / 255;
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const ratio = (a: string, b: string) => {
+        const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return (x + 0.05) / (y + 0.05);
+      };
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      const colour = (v: string) => {
+        probe.style.color = `var(${v})`;
+        return getComputedStyle(probe).color;
+      };
+      const root = document.documentElement;
+      const out: Record<string, number> = {};
+      for (const theme of ["light", "dark"])
+        for (const accent of ["blue", "purple", "pink", "orange", "green", "mono"]) {
+          root.dataset.theme = theme;
+          root.dataset.accent = accent;
+          for (const bg of ["--accent", "--accent-hover"]) out[`${theme} ${accent} ${bg}`] = ratio(colour("--on-accent"), colour(bg));
+        }
+      probe.remove();
+      return out;
+    });
+    for (const [where, r] of Object.entries(ratios)) expect(r, where).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -1145,7 +1145,7 @@ html[data-os="windows"] .app.is-right-off .studio-head {
 .provider-state {
   font-weight: 700;
   font-size: 11px;
-  color: var(--hint);
+  color: var(--muted);
 }
 
 

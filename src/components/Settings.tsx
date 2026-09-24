@@ -350,7 +350,7 @@ function General({
                 tabIndex={prefs.accent === a.id ? 0 : -1}
                 data-tip={a.label}
                 className={["set-swatch", a.id === "mono" && "is-mono", prefs.accent === a.id && "is-on"].filter(Boolean).join(" ")}
-                style={a.id === "mono" ? undefined : ({ "--swatch": a.swatch } as CSSProperties)}
+                style={{ "--swatch": `var(--swatch-${a.id})` } as CSSProperties}
                 onClick={() => setPrefs({ accent: a.id })}
                 onKeyDown={(e) => onSwatchKey(e, i)}
               />
