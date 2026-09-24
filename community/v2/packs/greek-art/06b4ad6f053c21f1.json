@@ -1,0 +1,135 @@
+{
+  "version": 2,
+  "id": "greek-art",
+  "hash": "06b4ad6f053c21f1",
+  "name": "Greek Art",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": [
+    "greek art",
+    "statues",
+    "marble"
+  ],
+  "skins": [
+    {
+      "file": "open-arms.webp",
+      "name": "Open Arms",
+      "sha256": "67e33993bc3c9c0b05274e79d6788f3398c7d744abea33257cfd061f5daf86e5",
+      "bytes": 120926,
+      "w": 1024,
+      "h": 941
+    },
+    {
+      "file": "upward-gaze.webp",
+      "name": "Upward Gaze",
+      "sha256": "c7adc048304f212c159250d919bed38441f02bd068e5d1c50b3ded23188f5765",
+      "bytes": 134920,
+      "w": 1024,
+      "h": 933
+    },
+    {
+      "file": "parthenon.webp",
+      "name": "Parthenon",
+      "sha256": "ee151ccded74ca70c7714ffb880b35fa4695e1a5db1dbde6217a9a7b6a0e3225",
+      "bytes": 220244,
+      "w": 1024,
+      "h": 951
+    },
+    {
+      "file": "poseidon.webp",
+      "name": "Poseidon",
+      "sha256": "e5cf9b0c8394e24a5fb7390a75d2a990ad0dc6129f51dad1b6cc3f19c71ef0e7",
+      "bytes": 179944,
+      "w": 1024,
+      "h": 948
+    },
+    {
+      "file": "glitch.webp",
+      "name": "Glitch",
+      "sha256": "7d845329f8a1dd036e4370405bf64de9a3d1f5a38f78a32759aedabe304dab63",
+      "bytes": 107240,
+      "w": 1024,
+      "h": 930
+    },
+    {
+      "file": "shattered.webp",
+      "name": "Shattered",
+      "sha256": "99494c6dd5d611106ffd1671203af2fb30ac2efa52de346ed44e250f5fcc2230",
+      "bytes": 119882,
+      "w": 1024,
+      "h": 947
+    },
+    {
+      "file": "winged-guardian.webp",
+      "name": "Winged Guardian",
+      "sha256": "53b1c1b27f6142de8140198195764fae2bfaf4caf7af510477939e368c1922f6",
+      "bytes": 158738,
+      "w": 1024,
+      "h": 954
+    },
+    {
+      "file": "the-muse.webp",
+      "name": "The Muse",
+      "sha256": "a28c04c4a2d624e533ec4629d54619b375aba944836deb91f00bb7d5ed4551bd",
+      "bytes": 110024,
+      "w": 1024,
+      "h": 942
+    },
+    {
+      "file": "the-philosopher.webp",
+      "name": "The Philosopher",
+      "sha256": "046a3be0b50408a01a566a230f49fca8d2241c8718775f8796902ac222eb5647",
+      "bytes": 131794,
+      "w": 1024,
+      "h": 948
+    },
+    {
+      "file": "deep-in-thought.webp",
+      "name": "Deep in Thought",
+      "sha256": "1e646401f2a984950371c3ca1d4c128a2917e2d30f2b661b602d1d38f18b88cf",
+      "bytes": 156736,
+      "w": 1024,
+      "h": 950
+    },
+    {
+      "file": "among-the-ruins.webp",
+      "name": "Among the Ruins",
+      "sha256": "c07ce36ce07e02de72b45711261eae07ad842f4c4e199e9677580d40b0028ae1",
+      "bytes": 223668,
+      "w": 1024,
+      "h": 946
+    },
+    {
+      "file": "fallen-head.webp",
+      "name": "Fallen Head",
+      "sha256": "a9fdae57841a35400518a6bab6ad7184940d040eddbbfadc48e86ab3cb1aa9f8",
+      "bytes": 194290,
+      "w": 1024,
+      "h": 937
+    },
+    {
+      "file": "marble-youth.webp",
+      "name": "Marble Youth",
+      "sha256": "5eeaa5454fe604c65acf492f837ca7c0bb87be019bb8ac3acc65e84cfc75fc7b",
+      "bytes": 97264,
+      "w": 1024,
+      "h": 941
+    },
+    {
+      "file": "temple-at-sunset.webp",
+      "name": "Temple at Sunset",
+      "sha256": "0dd8fa7384397c5bb054dd347d03908de8da9a2b1ad45992b8e2a7c1ec3196a6",
+      "bytes": 222390,
+      "w": 1024,
+      "h": 951
+    },
+    {
+      "file": "poseidon-in-the-clouds.webp",
+      "name": "Poseidon in the Clouds",
+      "sha256": "f6ed0d34707a4e0bf49c2cac3f9d99c51f7496789b0a105faf602c217a77c763",
+      "bytes": 140932,
+      "w": 1024,
+      "h": 946
+    }
+  ]
+}

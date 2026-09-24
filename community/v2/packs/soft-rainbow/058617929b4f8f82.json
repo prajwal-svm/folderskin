@@ -1,0 +1,94 @@
+{
+  "version": 2,
+  "id": "soft-rainbow",
+  "hash": "058617929b4f8f82",
+  "name": "Soft Rainbow",
+  "author": "prajwal-svm",
+  "license": "CC0-1.0",
+  "tags": [
+    "pastel",
+    "colour"
+  ],
+  "skins": [
+    {
+      "file": "lemon-chiffon.png",
+      "name": "Lemon Chiffon",
+      "sha256": "6f0a29aae255e92cbd9f2d0a19024f94338b15d52741b958240b4ac08ff359c3",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "powder-petal.png",
+      "name": "Powder Petal",
+      "sha256": "cd60103b3741f9fd04620f01d38f0c38e016a21fbb06a8090024591785397e61",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "cotton-rose.png",
+      "name": "Cotton Rose",
+      "sha256": "253c50dc14aad634f5ae3a2708e059ef377c20df568da64808555da6c0ab3189",
+      "bytes": 4267,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "pink-orchid.png",
+      "name": "Pink Orchid",
+      "sha256": "fb395843f71e647a65433db180a5fcdbf1a62b44a5721916e1fc3e9898a2090e",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "mauve.png",
+      "name": "Mauve",
+      "sha256": "a32fb69f537836eed65327e60e68c699faf2ab257d1ff27338e458afc7e24cc7",
+      "bytes": 4269,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "baby-blue-ice.png",
+      "name": "Baby Blue Ice",
+      "sha256": "4f45f3b361d0188f6784a25424f8ab74c652f65838af4479c47acba81c6b0a5c",
+      "bytes": 4269,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "frosted-blue.png",
+      "name": "Frosted Blue",
+      "sha256": "cdff67b013c603689789c16ea78c7c3c1c8655ebb94770aa6d2824974ad02dcc",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "electric-aqua.png",
+      "name": "Electric Aqua",
+      "sha256": "2505cd42b14a2e3631fffce6636992090cf57ae87e0983f8a39e93bf1692cb98",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "aquamarine.png",
+      "name": "Aquamarine",
+      "sha256": "ff3f9a3c9680901cd3f859f15889d992ed6118a727f08a6b076140caa31412a2",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    },
+    {
+      "file": "celadon.png",
+      "name": "Celadon",
+      "sha256": "4a0de471e3cbd74eb3c7e06ec398915d4d2e3cbb1ddcf57f670a32038b57d3eb",
+      "bytes": 4268,
+      "w": 1024,
+      "h": 958
+    }
+  ]
+}
