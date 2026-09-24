@@ -1268,16 +1268,21 @@ mod tests {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
         std::fs::write(root.join("notes.txt"), b"x").unwrap();
-        if cfg!(windows) {
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            // Set in this process rather than by running attrib, which antivirus watches for.
+            #[link(name = "kernel32")]
+            extern "system" {
+                fn SetFileAttributesW(name: *const u16, attributes: u32) -> i32;
+            }
             // Hidden the Windows way, with no dot to tell. System alone is a skinned folder.
-            for (name, flag) in [("Hidden one", "+H"), ("Skinned", "+S")] {
-                std::fs::create_dir(root.join(name)).unwrap();
-                let set = std::process::Command::new("attrib")
-                    .arg(flag)
-                    .arg(root.join(name))
-                    .status()
-                    .unwrap();
-                assert!(set.success());
+            for (name, attributes) in [("Hidden one", 0x2), ("Skinned", 0x4)] {
+                let dir = root.join(name);
+                std::fs::create_dir(&dir).unwrap();
+                let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
+                // SAFETY: a NUL-terminated wide path that outlives the call.
+                assert_ne!(unsafe { SetFileAttributesW(wide.as_ptr(), attributes) }, 0);
             }
             let found = folders_under(&root, 1).unwrap();
             assert_eq!(
