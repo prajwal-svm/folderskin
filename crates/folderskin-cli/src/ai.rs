@@ -837,7 +837,15 @@ fn cancel_check(cancel: &CancelToken) -> Result<(), CliError> {
 fn styles(out: &Arc<Out>) -> Result<(), CliError> {
     let human = STYLES
         .iter()
-        .map(|s| format!("{:14} {}", s.key, s.text))
+        .map(|s| {
+            // `none` has no words of its own: it is the idea as it was written.
+            let text = if s.text.is_empty() {
+                "no style: the idea is painted as it is written"
+            } else {
+                s.text
+            };
+            format!("{:14} {text}", s.key)
+        })
         .collect::<Vec<_>>()
         .join("\n");
     out.result(None, "styles", json!(STYLES), &human, false);
@@ -882,6 +890,16 @@ fn models(out: &Arc<Out>) -> Result<(), CliError> {
     lines.push(String::new());
     lines.push("With your own key (--provider):".into());
     let mut providers = Vec::new();
+    // Each column as wide as its longest entry, so a long price never pushes the next along.
+    let all = || {
+        folderskin_ai::providers()
+            .iter()
+            .flat_map(|p| p.models.iter())
+    };
+    let width = |f: fn(&folderskin_ai::ModelInfo) -> &str| {
+        all().map(|m| f(m).chars().count()).max().unwrap_or(0)
+    };
+    let (id_w, label_w, price_w) = (width(|m| m.id), width(|m| m.label), width(|m| m.price_hint));
     for p in folderskin_ai::providers() {
         let state = paint::key_state(p, &keys);
         lines.push(format!("  {:10} {:22} {state}", p.id, p.label));
@@ -893,13 +911,14 @@ fn models(out: &Arc<Out>) -> Result<(), CliError> {
             if m.native_alpha {
                 can.push("transparency");
             }
-            lines.push(format!(
-                "      {:28} {:26} {:18} {}",
+            let row = format!(
+                "      {:id_w$}  {:label_w$}  {:price_w$}  {}",
                 m.id,
                 m.label,
                 m.price_hint,
                 can.join(", ")
-            ));
+            );
+            lines.push(row.trim_end().to_string());
         }
         providers.push(
             json!({"id": p.id, "label": p.label, "key": state, "keys_url": p.keys_url,
