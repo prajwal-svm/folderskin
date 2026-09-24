@@ -78,7 +78,7 @@ const MOCK_LABELS: Record<string, string> = { openai: "OpenAI", xai: "xAI Grok",
 
 /** Whether "this computer" is set up in the preview (`?localready` starts it set up), and how long
  *  its last picture took: unknown until one is painted, as the app only knows once it has. */
-const mockLocal = { ready: new URLSearchParams(location.search).has("localready"), seconds: null as number | null };
+const mockLocal = { ready: new URLSearchParams(location.search).has("localready"), seconds: null as number | null, timings: [] as { label: string; seconds: number }[] };
 
 /** The preview's setup under way, which a second aiLocalSetup joins as ai_local_setup does: it
  *  hears where the setup has got to, then what comes next, and settles as the setup does. */
@@ -94,6 +94,7 @@ function mockLocalStatus(): LocalStatus {
     download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
     downloads_on_first_use: false,
     seconds_per_image: mockLocal.seconds,
+    timings: mockLocal.timings,
     home: "C:\\Users\\you\\AppData\\Local\\folderskin-localgen",
     note: null,
   };
@@ -937,7 +938,9 @@ export const mockApi = {
         };
       }
       // Painted: now the settings can say how long a picture takes here (ai/local.rs Timing).
-      mockLocal.seconds = 18;
+      const label = klein ? "FLUX.2 klein 4B" : "Z-Image Turbo";
+      mockLocal.timings = [...mockLocal.timings.filter((t) => t.label !== label), { label, seconds: klein ? 9 : 18 }];
+      mockLocal.seconds = mockLocal.timings.find((t) => t.label === "Z-Image Turbo")?.seconds ?? 9;
     } else {
       onEvent({ type: "stage", stage: "send", message: `Sending your idea to ${who}` });
       await wait(700);

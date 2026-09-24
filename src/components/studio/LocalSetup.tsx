@@ -8,7 +8,30 @@ import { CpuIcon, TerminalIcon } from "../icons/composer";
 import { CopyIcon } from "../icons/copy";
 import { LoaderIcon } from "../icons/loader";
 
-type Setup = { stage: string; file: string | null; done: number; total: number; log: string[] };
+/**
+ * A setup as it goes: the file downloading now and how far it has got, and how far the whole
+ * download has got, `whole` being what was left to download when it started. Each file counts
+ * what came this time, from where it was when first heard of, as `whole` does.
+ */
+type Setup = { stage: string; file: string | null; done: number; total: number; whole: number; from: Record<string, number>; got: Record<string, number>; log: string[] };
+
+/** How much of the whole download has come so far. */
+export function wholeDone(setup: Pick<Setup, "got">): number {
+  return Object.values(setup.got).reduce((sum, n) => sum + n, 0);
+}
+
+/** "18 seconds", "14 minutes". */
+function duration(seconds: number): string {
+  return seconds < 60 ? `${Math.round(seconds)} seconds` : `${Math.round(seconds / 60)} minutes`;
+}
+
+/** How long a picture takes here, as far as is known: each model's time once both have painted. */
+function pictureTakes(status: LocalStatus): string {
+  const timings = status.timings ?? [];
+  if (timings.length > 1) return timings.map((t) => `about ${duration(t.seconds)} with ${t.label}`).join(", ");
+  if (status.seconds_per_image !== null) return `about ${duration(status.seconds_per_image)}`;
+  return "Known after the first picture";
+}
 
 /** What pressing "Set up this computer" will take, in a line under it. */
 function whatItTakes(status: LocalStatus): string {
@@ -25,7 +48,16 @@ function whatItTakes(status: LocalStatus): string {
  * already under way when the panel opened (it was closed, or another provider picked) is joined,
  * so its progress and its Stop are back.
  */
-export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
+export function LocalSetup({
+  onChanged,
+  copy,
+  onBusy,
+}: {
+  onChanged: () => void;
+  copy: (text: string, what: string) => void;
+  /** Hears when a setup starts and ends, for the provider list to say so. */
+  onBusy?: (busy: boolean) => void;
+}) {
   const [status, setStatus] = useState<LocalStatus | null>(null);
   const [problem, setProblem] = useState<TurnError | null>(null);
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -48,18 +80,23 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     };
   }, []);
 
+  const whole = status?.download_bytes ?? 0;
   const start = useCallback(async () => {
     setProblem(null);
     setStopping(false);
-    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0, log: [] });
+    onBusy?.(true);
+    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0, whole, from: {}, got: {}, log: [] });
     const onEvent = (e: AiEvent) =>
       setSetup((s) => {
         if (!s) return s;
         switch (e.type) {
           case "stage":
             return { ...s, stage: e.message };
-          case "download":
-            return { ...s, file: e.file, done: e.done, total: e.total };
+          case "download": {
+            const from = e.file in s.from ? s.from : { ...s.from, [e.file]: e.done };
+            const got = { ...s.got, [e.file]: Math.max(0, e.done - from[e.file]) };
+            return { ...s, file: e.file, done: e.done, total: e.total, from, got };
+          }
           case "progress":
             return { ...s, done: e.step, total: e.steps };
           case "log":
@@ -74,8 +111,9 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     } finally {
       setSetup(null);
       setStopping(false);
+      onBusy?.(false);
     }
-  }, [onChanged]);
+  }, [onChanged, onBusy, whole]);
   useEffect(() => {
     looked.current = (s) => {
       // Asking to set up while a setup runs joins it (ai_local_setup), with its progress from here on.
@@ -98,7 +136,9 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     );
   }
 
-  const share = setup && setup.total > 0 ? Math.min(100, (setup.done / setup.total) * 100) : 0;
+  // The bar is the whole download's when it's known how much that is, the file's otherwise.
+  const share = !setup ? 0 : setup.whole > 0 ? Math.min(100, (wholeDone(setup) / setup.whole) * 100) : setup.total > 0 ? Math.min(100, (setup.done / setup.total) * 100) : 0;
+  const stopped = problem?.code === "stopped";
   return (
     <div className="local-setup">
       {status && (
@@ -112,10 +152,10 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
               <dt>Runs with</dt>
               <dd>{status.backend}</dd>
             </div>
-            {status.seconds_per_image !== null && (
+            {(status.ready || status.can_set_up) && (
               <div>
                 <dt>A picture takes</dt>
-                <dd>about {status.seconds_per_image < 60 ? `${Math.round(status.seconds_per_image)} seconds` : `${Math.round(status.seconds_per_image / 60)} minutes`}</dd>
+                <dd>{pictureTakes(status)}</dd>
               </div>
             )}
             <div>
@@ -133,7 +173,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           <OkBadge size={17} playOnMount /> Set up and ready. Nothing you make here leaves this computer.
         </p>
       )}
-      {status && !status.ready && status.can_set_up && !setup && (
+      {status && !status.ready && status.can_set_up && !setup && !stopped && (
         <div className="local-go">
           <button type="button" className="btn btn-primary" onClick={() => void start()}>
             Set up this computer
@@ -154,6 +194,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           </div>
           <p className="local-note">
             {setup.file ? `${setup.file}: ${formatBytes(setup.done)} of ${formatBytes(setup.total)}` : "Starting"}
+            {setup.whole > 0 && ` · ${formatBytes(Math.min(wholeDone(setup), setup.whole))} of ${formatBytes(setup.whole)} in all`}
           </p>
           {setup.log.length > 0 && (
             <div className="turn-log">
@@ -166,7 +207,17 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           )}
         </div>
       )}
-      {problem && (
+      {stopped && (
+        <div className="local-go" role="status">
+          {status?.can_set_up && (
+            <button type="button" className="btn btn-primary" onClick={() => void start()}>
+              Carry on setting up
+            </button>
+          )}
+          <span className="local-note">{problem.message}</span>
+        </div>
+      )}
+      {problem && !stopped && (
         <div className="turn-error" role="alert">
           <p className="turn-error-text">{problem.message}</p>
           {problem.fix && (
@@ -177,9 +228,9 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
             </ul>
           )}
           <div className="turn-actions">
-            {status?.can_set_up && (problem.code === "stopped" || worthRetrying(problem.code)) && (
+            {status?.can_set_up && worthRetrying(problem.code) && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void start()}>
-                {problem.code === "stopped" ? "Carry on setting up" : "Try again"}
+                Try again
               </button>
             )}
             {problem.ask && (

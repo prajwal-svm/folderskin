@@ -207,8 +207,10 @@ export type LocalStatus = {
   download_bytes: number;
   /** The models download the first time each one paints (mflux on Apple Silicon), so `download_bytes` leaves them out. */
   downloads_on_first_use: boolean;
-  /** How long the last picture painted here took, once one has been. */
+  /** How long a picture from words took the last time (Z-Image's), once one has been painted. */
   seconds_per_image: number | null;
+  /** How long each model took the last time it painted here: klein runs at quite another speed. */
+  timings: { label: string; seconds: number }[];
   /** Where the runtime and models are kept. */
   home: string;
   /** Anything worth knowing before setting up, such as too little memory for the best model. */

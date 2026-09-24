@@ -39,6 +39,8 @@ export function ProviderKeys({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
+  /** This computer is being set up, as its panel last heard. */
+  const [settingUp, setSettingUp] = useState(false);
 
   const save = useCallback(async () => {
     if (!provider || !draft.trim()) return;
@@ -114,7 +116,7 @@ export function ProviderKeys({
             {p.has_key ? (
               <OkBadge size={17} playOnMount label={p.kind === "local" ? "Set up" : "Key saved"} />
             ) : (
-              <span className="provider-state">{p.kind === "local" ? "Free" : "No key"}</span>
+              <span className="provider-state">{p.kind === "local" ? (settingUp ? "Setting up" : "Not set up") : "No key"}</span>
             )}
           </button>
         ))}
@@ -147,7 +149,7 @@ export function ProviderKeys({
       {provider.kind === "local" ? (
         <div className="field">
           <span className="field-label">On this computer</span>
-          <LocalSetup onChanged={onChanged} copy={copy} />
+          <LocalSetup onChanged={onChanged} copy={copy} onBusy={setSettingUp} />
         </div>
       ) : (
       <div className="field">

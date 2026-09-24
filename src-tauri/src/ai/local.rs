@@ -342,13 +342,25 @@ pub struct LocalStatusDto {
     /// The models' weights come down the first time each one paints (mflux on Apple Silicon), so
     /// `download_bytes` doesn't count them.
     pub downloads_on_first_use: bool,
+    /// How long a picture from words alone took the last time, which goes to Z-Image; klein's
+    /// when only it has painted here yet.
     pub seconds_per_image: Option<f64>,
+    /// How long each model took the last time it painted here, by the name the list gives it:
+    /// klein, painting whole folders and from pictures, runs at quite another speed.
+    pub timings: Vec<ModelTiming>,
     pub home: String,
     pub note: Option<String>,
     /// Why the runtime won't start, when it is installed but doesn't; for `ai_local_setup`'s
     /// failure, since setting up again doesn't change it.
     #[serde(skip)]
     pub problem: Option<RuntimeProblem>,
+}
+
+/// How long one model took to paint a picture here.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ModelTiming {
+    pub label: String,
+    pub seconds: f64,
 }
 
 /// An installed runtime that won't start.
@@ -373,6 +385,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         code: runtime.problem_code.unwrap_or("runtime_failed_to_start"),
         message: format!("{} is installed but won't start: {p}.", runtime.name),
     });
+    let timing = Timing::read();
     let mut notes = Vec::new();
     if let Some(problem) = &problem {
         notes.push(problem.message.clone());
@@ -422,20 +435,27 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
             folderskin_local::download_size(machine, settings)
         },
         downloads_on_first_use: settings.backend == Backend::Mlx,
-        seconds_per_image: Timing::read().seconds_for(settings),
+        seconds_per_image: timing.seconds_for(settings),
+        timings: timing.by_model(settings),
         home: status.home.display().to_string(),
         note: (!notes.is_empty()).then(|| notes.join(" ")),
         problem,
     }
 }
 
-/// How long the last picture took here, so the next status can say roughly how long one takes.
-/// Kept beside the models, since it belongs to this computer and how it runs them.
+/// How long the last picture took here with each model, so the next status can say roughly how
+/// long one takes. Kept beside the models, since it belongs to this computer and how it runs
+/// them. Z-Image and klein paint at quite different speeds, so each keeps its own: one time for
+/// both said fourteen minutes after a Z-Image picture and five after a klein one.
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Timing {
     pub backend: String,
     pub tier: String,
+    /// The last picture's, whichever model painted it; all a file written before `models` has.
     pub seconds: f64,
+    /// The last picture's with each model, by id.
+    #[serde(default)]
+    pub models: std::collections::BTreeMap<String, f64>,
 }
 
 impl Timing {
@@ -450,20 +470,59 @@ impl Timing {
             .unwrap_or_default()
     }
 
-    /// The time, when it was measured with these settings.
-    pub fn seconds_for(&self, settings: &Settings) -> Option<f64> {
-        (self.backend == settings.backend.id()
-            && self.tier == settings.tier.id()
-            && self.seconds > 0.0)
-            .then_some(self.seconds)
+    fn measured_with(&self, settings: &Settings) -> bool {
+        self.backend == settings.backend.id() && self.tier == settings.tier.id()
     }
 
-    fn record(settings: &Settings, seconds: f64) {
-        let timing = Timing {
-            backend: settings.backend.id().into(),
-            tier: settings.tier.id().into(),
-            seconds: (seconds * 10.0).round() / 10.0,
-        };
+    /// How long a picture from words alone takes, when it was measured with these settings:
+    /// Z-Image's time, which is where such a picture goes; klein's, or the last picture's from a
+    /// file that kept no more, until Z-Image has painted.
+    pub fn seconds_for(&self, settings: &Settings) -> Option<f64> {
+        if !self.measured_with(settings) {
+            return None;
+        }
+        [ModelId::Zimage, ModelId::Klein]
+            .iter()
+            .find_map(|m| self.models.get(m.id()).copied())
+            .or(Some(self.seconds))
+            .filter(|s| *s > 0.0)
+    }
+
+    /// Each model's time, when they were measured with these settings, in the list's order.
+    pub fn by_model(&self, settings: &Settings) -> Vec<ModelTiming> {
+        if !self.measured_with(settings) {
+            return Vec::new();
+        }
+        MODELS
+            .iter()
+            .filter_map(|(id, label, _)| {
+                let seconds = *self.models.get(*id)?;
+                (seconds > 0.0).then(|| ModelTiming {
+                    label: label.to_string(),
+                    seconds,
+                })
+            })
+            .collect()
+    }
+
+    /// This timing with `model`'s latest picture taking `seconds`. Times measured with other
+    /// settings are no guide to these, so they go.
+    pub fn with(mut self, settings: &Settings, model: ModelId, seconds: f64) -> Timing {
+        if !self.measured_with(settings) {
+            self = Timing {
+                backend: settings.backend.id().into(),
+                tier: settings.tier.id().into(),
+                ..Timing::default()
+            };
+        }
+        let seconds = (seconds * 10.0).round() / 10.0;
+        self.seconds = seconds;
+        self.models.insert(model.id().into(), seconds);
+        self
+    }
+
+    fn record(settings: &Settings, model: ModelId, seconds: f64) {
+        let timing = Timing::read().with(settings, model, seconds);
         if let Ok(text) = serde_json::to_vec(&timing) {
             // Only a hint for next time: a computer that can't keep it just doesn't say.
             let _ = std::fs::write(Timing::file(), text);
@@ -550,7 +609,7 @@ pub async fn paint(
     let picture = folderskin_local::generate(&job, settings, &work.0, &reporter, cancel)
         .await
         .map_err(|e| failure::from_engine(e, &doing))?;
-    Timing::record(settings, picture.provenance.seconds);
+    Timing::record(settings, model, picture.provenance.seconds);
     let shape = picture.shape;
     if order.shape == Shape::Folder {
         send(AiEvent::stage("cut", "Cutting it out of the background"));
@@ -857,14 +916,63 @@ mod tests {
             backend: "cuda".into(),
             tier: "q8".into(),
             seconds: 28.4,
+            ..Timing::default()
         };
-        assert_eq!(t.seconds_for(&settings), Some(28.4));
+        assert_eq!(
+            t.seconds_for(&settings),
+            Some(28.4),
+            "a file from before models"
+        );
         let vulkan = Settings {
             backend: Backend::Vulkan,
             ..settings
         };
         assert_eq!(t.seconds_for(&vulkan), None);
         assert_eq!(Timing::default().seconds_for(&settings), None);
+    }
+
+    #[test]
+    fn each_model_keeps_its_own_time() {
+        let settings = Settings {
+            backend: Backend::Cuda,
+            tier: Tier::Q8,
+            vram_gb: 4.0,
+        };
+        let t = Timing::default()
+            .with(&settings, ModelId::Klein, 301.0)
+            .with(&settings, ModelId::Zimage, 839.0)
+            .with(&settings, ModelId::Klein, 298.04);
+        // A picture from words goes to Z-Image, whatever painted last.
+        assert_eq!(t.seconds_for(&settings), Some(839.0));
+        assert_eq!(
+            t.by_model(&settings),
+            [
+                ModelTiming {
+                    label: "FLUX.2 klein 4B".into(),
+                    seconds: 298.0
+                },
+                ModelTiming {
+                    label: "Z-Image Turbo".into(),
+                    seconds: 839.0
+                },
+            ]
+        );
+        // Until Z-Image has painted, klein's is the guide.
+        let only_klein = Timing::default().with(&settings, ModelId::Klein, 42.0);
+        assert_eq!(only_klein.seconds_for(&settings), Some(42.0));
+        // Times from other settings go when these are measured.
+        let vulkan = Settings {
+            backend: Backend::Vulkan,
+            ..settings
+        };
+        let moved = t.with(&vulkan, ModelId::Klein, 90.0);
+        assert_eq!(moved.by_model(&vulkan).len(), 1);
+        assert_eq!(moved.seconds_for(&settings), None);
+        // A file written before models were kept still reads.
+        let old: Timing =
+            serde_json::from_str(r#"{"backend":"cuda","tier":"q8","seconds":60.0}"#).unwrap();
+        assert_eq!(old.seconds_for(&settings), Some(60.0));
+        assert!(old.by_model(&settings).is_empty());
     }
 
     #[test]
