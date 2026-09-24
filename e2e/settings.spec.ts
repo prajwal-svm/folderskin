@@ -88,18 +88,33 @@ test.describe("settings", () => {
     await openSettings(page);
     // The globe on the Sharing tab draws itself again when pointed at, unless motion is reduced.
     const globe = dialog(page).getByRole("tab", { name: "Sharing" }).locator("svg");
-    const drawn = async () => {
-      // Its way back from being drawn takes a little over a second.
+    const drawing = () => globe.evaluate((s) => s.outerHTML);
+    // Pointed away from, once its way back from being drawn is over: the same twice running.
+    const resting = async () => {
       await page.mouse.move(0, 0);
-      await page.waitForTimeout(1500);
-      const before = await globe.evaluate((s) => s.outerHTML);
-      await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
-      await page.waitForTimeout(250);
-      return before !== (await globe.evaluate((s) => s.outerHTML));
+      let last: string | null = null;
+      await expect
+        .poll(
+          async () => {
+            const now = await drawing();
+            const same = now === last;
+            last = now;
+            return same;
+          },
+          { intervals: [300] },
+        )
+        .toBe(true);
+      return last!;
     };
-    expect(await drawn()).toBe(true);
+    const before = await resting();
+    await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
+    await expect.poll(drawing).not.toBe(before);
     await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "Reduced" }).click();
-    expect(await drawn()).toBe(false);
+    const still = await resting();
+    await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
+    // A moment later it is as it was.
+    await page.waitForTimeout(250);
+    expect(await drawing()).toBe(still);
 
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
