@@ -112,7 +112,10 @@ fn run(cli: Cli) -> Result<(), String> {
         Command::Packs { command } => match command {
             PacksCommand::Check { dir, max_kb } => packs_check(&dir, max_kb),
             PacksCommand::Index { dir } => packs_index(&dir),
-            PacksCommand::Catalog { dir, out, mirrors } => packs_catalog(&dir, out, mirrors),
+            PacksCommand::Catalog { dir, out, mirrors } => {
+                let out = folderskin_tools::cli::catalog_out(&dir, out);
+                packs_catalog(&dir, out, mirrors)
+            }
             PacksCommand::Make {
                 pictures,
                 id,

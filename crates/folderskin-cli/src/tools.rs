@@ -265,7 +265,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 out.warn(problem);
             }
             let opts = catalog::CatalogOptions {
-                out: to,
+                out: folderskin_tools::cli::catalog_out(&dir, to),
                 mirrors,
                 cwebp: make::find_cwebp().or_else(folderskin_local::paths::cwebp),
                 dates: catalog::git_dates(&dir),

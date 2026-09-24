@@ -240,13 +240,19 @@ pub enum PacksCommand {
         /// The community folder, holding packs/ and, if there is one, featured.json
         #[arg(long, default_value = "community")]
         dir: PathBuf,
-        /// Where the tree goes
-        #[arg(long, default_value = "community/v2")]
-        out: PathBuf,
+        /// Where the tree goes (default: v2 in the community folder, beside packs/)
+        #[arg(long)]
+        out: Option<PathBuf>,
         /// Another https:// folder serving the same tree, which the app tries first; repeatable
         #[arg(long = "mirror", value_name = "URL")]
         mirrors: Vec<String>,
     },
+}
+
+/// Where `packs catalog` writes its tree: `--out`, or `v2` in the community folder it reads, as
+/// `packs index` writes into that folder too.
+pub fn catalog_out(dir: &std::path::Path, out: Option<PathBuf>) -> PathBuf {
+    out.unwrap_or_else(|| dir.join("v2"))
 }
 
 pub fn parse_focus(s: &str) -> Result<(f32, f32), String> {
@@ -414,7 +420,10 @@ mod tests {
                 command: PacksCommand::Catalog { dir, out, mirrors },
             } => {
                 assert_eq!(dir, PathBuf::from("community"));
-                assert_eq!(out, PathBuf::from("community/v2"));
+                assert_eq!(
+                    catalog_out(&dir, out),
+                    PathBuf::from("community").join("v2")
+                );
                 assert!(mirrors.is_empty());
             }
             other => panic!("{other:?}"),
@@ -434,9 +443,29 @@ mod tests {
             Command::Packs {
                 command: PacksCommand::Catalog { out, mirrors, .. },
             } => {
-                assert_eq!(out, PathBuf::from("/tmp/v2"));
+                assert_eq!(out, Some(PathBuf::from("/tmp/v2")));
                 assert_eq!(mirrors, ["https://a.example/v2", "https://b.example/v2"]);
             }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_catalog_goes_into_the_community_folder_it_was_given() {
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "packs",
+            "catalog",
+            "--dir",
+            "elsewhere/mine",
+        ]);
+        match cli.command {
+            Command::Packs {
+                command: PacksCommand::Catalog { dir, out, .. },
+            } => assert_eq!(
+                catalog_out(&dir, out),
+                PathBuf::from("elsewhere/mine").join("v2")
+            ),
             other => panic!("{other:?}"),
         }
     }
