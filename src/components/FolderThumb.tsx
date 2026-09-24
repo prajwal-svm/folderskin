@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { isYours } from "../lib/tags";
+import { reducesMotion } from "../state/prefs";
 import { StarIcon } from "./icons/star";
 
 /** Degrees the folder turns when the pointer is at the tile's edge. */
@@ -11,8 +12,6 @@ const DRIFT = 5;
 const LIFT = 1.04;
 /** Share of the remaining distance covered each frame: the folder eases after the pointer. */
 const FOLLOW = 0.16;
-
-const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * One folder in the library. While hovered it lifts slightly and turns toward the pointer: the
@@ -91,7 +90,7 @@ export function FolderThumb({
 
   const track = useCallback(
     (e: PointerEvent<HTMLButtonElement>) => {
-      if (reducedMotion()) return;
+      if (reducesMotion()) return;
       const r = e.currentTarget.getBoundingClientRect();
       const x = Math.min(1, Math.max(-1, ((e.clientX - r.left) / r.width) * 2 - 1));
       const y = Math.min(1, Math.max(-1, ((e.clientY - r.top) / r.height) * 2 - 1));

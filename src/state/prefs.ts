@@ -79,3 +79,12 @@ function subscribe(listener: () => void): () => void {
 export function usePrefs(): Prefs {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
+
+/**
+ * Whether what moves by script should keep still: Motion is Reduced here, or the computer asks
+ * for less motion. The stylesheets and the animated icons read the same two things themselves.
+ */
+export function reducesMotion(): boolean {
+  if (snapshot().motion === "reduced") return true;
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}

@@ -17,6 +17,7 @@ import {
 } from "../lib/onboarding";
 import { licenseLabel } from "../lib/packs";
 import { api, errorMessage, type CommunityPack } from "../lib/tauri";
+import { reducesMotion } from "../state/prefs";
 import { applyTheme, loadThemePref } from "../state/theme";
 import { OkBadge } from "./OkBadge";
 import { PackPreview, prefetchPreview } from "./PackPreview";
@@ -45,10 +46,6 @@ const DECODE_WAIT = 700;
 const DONE_PAUSE = 900;
 
 type Phase = "row" | "landing" | "logo" | "welcome";
-
-function prefersReducedMotion(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 /** Resolves once every picture is decoded, or after `wait` ms, whichever comes first. */
 function decodeAll(sources: string[], wait: number): Promise<void> {
@@ -125,7 +122,7 @@ export function Onboarding({ leaving, onDone, onGone }: { leaving: boolean; onDo
  * A click or a key skips to the end. Without `replay`, or with reduced motion, only the end shows.
  */
 function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
-  const [animate] = useState(() => replay && !prefersReducedMotion());
+  const [animate] = useState(() => replay && !reducesMotion());
   const [phase, setPhase] = useState<Phase>(animate ? "row" : "welcome");
   const [ready, setReady] = useState(!animate);
   const [step, setStep] = useState(0);

@@ -49,6 +49,7 @@ test.describe("settings", () => {
     expect(await html(page, "data-motion")).toBe("reduced");
 
     // Black and white is black on the light window and white on the dark one, with dark words on it.
+    await openSettings(page);
     await dialog(page).getByRole("radio", { name: "Black and white" }).click();
     const mono = () =>
       page.evaluate(() => {
@@ -60,11 +61,38 @@ test.describe("settings", () => {
     await expect.poll(mono).toEqual(["#1d1d1f", "#ffffff"]);
 
     // Back to the defaults: no attributes left behind.
-    await openSettings(page);
     await dialog(page).getByRole("radio", { name: "Blue" }).click();
     await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "System" }).click();
     await expect.poll(() => html(page, "data-accent")).toBeNull();
     await expect.poll(() => html(page, "data-motion")).toBeNull();
+  });
+
+  test("Motion: Reduced keeps the icons and the library's folders still", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    // The globe on the Sharing tab draws itself again when pointed at, unless motion is reduced.
+    const globe = dialog(page).getByRole("tab", { name: "Sharing" }).locator("svg");
+    const drawn = async () => {
+      // Its way back from being drawn takes a little over a second.
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(1500);
+      const before = await globe.evaluate((s) => s.outerHTML);
+      await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
+      await page.waitForTimeout(250);
+      return before !== (await globe.evaluate((s) => s.outerHTML));
+    };
+    expect(await drawn()).toBe(true);
+    await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "Reduced" }).click();
+    expect(await drawn()).toBe(false);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog(page)).toBeHidden();
+    const tile = page.locator(".tile-hit").first();
+    const box = (await tile.boundingBox())!;
+    await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.2);
+    await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.15);
+    await page.waitForTimeout(300);
+    expect(await tile.locator(".tile-art").evaluate((el) => (el as HTMLElement).style.transform)).toBe("");
   });
 
   test("the accent colours are chosen with the arrow keys too", async ({ page }) => {
