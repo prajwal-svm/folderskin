@@ -2,7 +2,7 @@
 //! file, so what was tested is what gets downloaded, and a run next month never needs GitHub's
 //! API (whose anonymous limit is 60 calls an hour). `setup --runtime latest` moves the runtime on.
 
-use crate::machine::{Backend, Os, Tier};
+use crate::machine::{Arch, Backend, Os, Tier};
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -31,9 +31,12 @@ const fn asset(name: &'static str, size: u64, sha256: &'static str) -> Asset {
     Asset { name, size, sha256 }
 }
 
-/// The release assets that make up each backend. The CUDA build needs its runtime DLLs beside it.
-/// The macOS build wants macOS 26; mflux (`--backend mlx`) is the Mac's default.
-pub fn sdcpp_assets(os: Os, backend: Backend) -> Option<&'static [Asset]> {
+/// The release assets that make up each backend on `os` and `arch`, or `None` when there is no
+/// build to download. The CUDA build needs its runtime DLLs beside it. The Linux builds are
+/// x86_64 only; the macOS build is Apple Silicon only and wants macOS 26 (mflux, `--backend mlx`,
+/// is the Mac's default). The Windows builds are x64, which Windows on Arm runs through its own
+/// emulation.
+pub fn sdcpp_assets(os: Os, arch: Arch, backend: Backend) -> Option<&'static [Asset]> {
     const WINDOWS_CUDA: &[Asset] = &[
         asset(
             "sd-master-28b454b-bin-win-cuda12-x64.zip",
@@ -71,15 +74,23 @@ pub fn sdcpp_assets(os: Os, backend: Backend) -> Option<&'static [Asset]> {
         34355695,
         "2ef9041b3464dd4354748e52acb4c8a90904150231f131fccc3588b934e1f92d",
     )];
-    match (os, backend) {
-        (Os::Windows, Backend::Cuda) => Some(WINDOWS_CUDA),
-        (Os::Windows, Backend::Vulkan) => Some(WINDOWS_VULKAN),
-        (Os::Windows, Backend::Cpu) => Some(WINDOWS_CPU),
-        (Os::Linux, Backend::Vulkan) => Some(LINUX_VULKAN),
-        (Os::Linux, Backend::Cpu) => Some(LINUX_CPU),
-        (Os::Macos, Backend::Metal) => Some(MACOS_METAL),
+    match (os, arch, backend) {
+        (Os::Windows, _, Backend::Cuda) => Some(WINDOWS_CUDA),
+        (Os::Windows, _, Backend::Vulkan) => Some(WINDOWS_VULKAN),
+        (Os::Windows, _, Backend::Cpu) => Some(WINDOWS_CPU),
+        (Os::Linux, Arch::X86_64, Backend::Vulkan) => Some(LINUX_VULKAN),
+        (Os::Linux, Arch::X86_64, Backend::Cpu) => Some(LINUX_CPU),
+        (Os::Macos, Arch::Arm64, Backend::Metal) => Some(MACOS_METAL),
         _ => None,
     }
+}
+
+/// The stable-diffusion.cpp backends there is a build of for `os` and `arch`.
+pub fn sdcpp_backends(os: Os, arch: Arch) -> Vec<Backend> {
+    Backend::ALL
+        .into_iter()
+        .filter(|b| sdcpp_assets(os, arch, *b).is_some())
+        .collect()
 }
 
 /// How to recognise an asset of a newer release, whose name carries its commit: it starts with
@@ -110,7 +121,7 @@ const fn pattern(
 }
 
 /// The same assets as [`sdcpp_assets`], by pattern, for `--runtime latest`.
-pub fn sdcpp_patterns(os: Os, backend: Backend) -> Option<&'static [AssetPattern]> {
+pub fn sdcpp_patterns(os: Os, arch: Arch, backend: Backend) -> Option<&'static [AssetPattern]> {
     const WINDOWS_CUDA: &[AssetPattern] = &[
         pattern("", "", "bin-win-cuda12-x64.zip"),
         pattern("cudart-sd-bin-win-cu12-x64.zip", "", ""),
@@ -120,13 +131,13 @@ pub fn sdcpp_patterns(os: Os, backend: Backend) -> Option<&'static [AssetPattern
     const LINUX_VULKAN: &[AssetPattern] = &[pattern("", "bin-Linux-", "-x86_64-vulkan.zip")];
     const LINUX_CPU: &[AssetPattern] = &[pattern("", "bin-Linux-", "-x86_64.zip")];
     const MACOS_METAL: &[AssetPattern] = &[pattern("", "bin-Darwin-", "-arm64.zip")];
-    match (os, backend) {
-        (Os::Windows, Backend::Cuda) => Some(WINDOWS_CUDA),
-        (Os::Windows, Backend::Vulkan) => Some(WINDOWS_VULKAN),
-        (Os::Windows, Backend::Cpu) => Some(WINDOWS_CPU),
-        (Os::Linux, Backend::Vulkan) => Some(LINUX_VULKAN),
-        (Os::Linux, Backend::Cpu) => Some(LINUX_CPU),
-        (Os::Macos, Backend::Metal) => Some(MACOS_METAL),
+    match (os, arch, backend) {
+        (Os::Windows, _, Backend::Cuda) => Some(WINDOWS_CUDA),
+        (Os::Windows, _, Backend::Vulkan) => Some(WINDOWS_VULKAN),
+        (Os::Windows, _, Backend::Cpu) => Some(WINDOWS_CPU),
+        (Os::Linux, Arch::X86_64, Backend::Vulkan) => Some(LINUX_VULKAN),
+        (Os::Linux, Arch::X86_64, Backend::Cpu) => Some(LINUX_CPU),
+        (Os::Macos, Arch::Arm64, Backend::Metal) => Some(MACOS_METAL),
         _ => None,
     }
 }
@@ -373,17 +384,20 @@ mod tests {
     #[test]
     fn every_pin_is_complete() {
         for os in [Os::Windows, Os::Macos, Os::Linux] {
-            for backend in Backend::ALL {
-                let (assets, patterns) = (sdcpp_assets(os, backend), sdcpp_patterns(os, backend));
-                assert_eq!(assets.is_some(), patterns.is_some(), "{os:?} {backend:?}");
-                let (Some(assets), Some(patterns)) = (assets, patterns) else {
-                    continue;
-                };
-                assert_eq!(assets.len(), patterns.len());
-                for (asset, pattern) in assets.iter().zip(patterns) {
-                    assert!(pattern.matches(asset.name), "{pattern:?} {}", asset.name);
-                    assert_eq!(asset.sha256.len(), 64);
-                    assert!(asset.url().ends_with(asset.name));
+            for arch in [Arch::X86_64, Arch::Arm64] {
+                for backend in Backend::ALL {
+                    let assets = sdcpp_assets(os, arch, backend);
+                    let patterns = sdcpp_patterns(os, arch, backend);
+                    assert_eq!(assets.is_some(), patterns.is_some(), "{os:?} {backend:?}");
+                    let (Some(assets), Some(patterns)) = (assets, patterns) else {
+                        continue;
+                    };
+                    assert_eq!(assets.len(), patterns.len());
+                    for (asset, pattern) in assets.iter().zip(patterns) {
+                        assert!(pattern.matches(asset.name), "{pattern:?} {}", asset.name);
+                        assert_eq!(asset.sha256.len(), 64);
+                        assert!(asset.url().ends_with(asset.name));
+                    }
                 }
             }
         }
@@ -414,15 +428,38 @@ mod tests {
 
     #[test]
     fn a_newer_release_is_recognised_by_its_asset_names() {
-        let cuda = sdcpp_patterns(Os::Windows, Backend::Cuda).unwrap();
+        let cuda = sdcpp_patterns(Os::Windows, Arch::X86_64, Backend::Cuda).unwrap();
         assert!(cuda[0].matches("sd-master-912-abcdef0-bin-win-cuda12-x64.zip"));
         assert!(!cuda[0].matches("sd-master-912-abcdef0-bin-win-vulkan-x64.zip"));
-        let linux = sdcpp_patterns(Os::Linux, Backend::Cpu).unwrap();
+        let linux = sdcpp_patterns(Os::Linux, Arch::X86_64, Backend::Cpu).unwrap();
         assert!(linux[0].matches("sd-master-912-abcdef0-bin-Linux-Ubuntu-24.04-x86_64.zip"));
         assert!(!linux[0].matches("sd-master-912-abcdef0-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"));
         assert_eq!(ModelId::parse("klein"), Some(ModelId::Klein));
         assert_eq!(ModelId::Klein.info().steps, 4);
         assert_eq!(KLEIN_VAE.name(), "full_encoder_small_decoder.safetensors");
         assert_eq!(ZIMAGE_VAE.name(), "ae.safetensors");
+    }
+
+    #[test]
+    fn a_build_is_only_offered_for_the_processor_it_was_made_for() {
+        // Every Linux build is x86_64: an ARM64 Linux computer gets nothing to install, rather
+        // than an x86_64 program that can't start.
+        assert_eq!(sdcpp_backends(Os::Linux, Arch::Arm64), []);
+        assert_eq!(
+            sdcpp_patterns(Os::Linux, Arch::Arm64, Backend::Vulkan),
+            None
+        );
+        assert_eq!(
+            sdcpp_backends(Os::Linux, Arch::X86_64),
+            [Backend::Vulkan, Backend::Cpu]
+        );
+        // The Mac build is for Apple Silicon only.
+        assert_eq!(sdcpp_backends(Os::Macos, Arch::X86_64), []);
+        assert_eq!(sdcpp_backends(Os::Macos, Arch::Arm64), [Backend::Metal]);
+        // Windows on Arm runs the x64 builds.
+        assert_eq!(
+            sdcpp_backends(Os::Windows, Arch::Arm64),
+            [Backend::Cuda, Backend::Vulkan, Backend::Cpu]
+        );
     }
 }

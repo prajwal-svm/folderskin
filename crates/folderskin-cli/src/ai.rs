@@ -64,6 +64,13 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 .unwrap_or_default()
         )),
         (None, true) => lines.push(format!("runtime:  {} is installed", runtime.name)),
+        _ if !runtime.available => {
+            // Nothing setup could install would run here: say so now, not after a download.
+            let why = folderskin_local::setup::no_build(machine.os, machine.arch, settings.backend);
+            lines.push(format!("runtime:  none to install: {}", why.what));
+            lines.push(format!("          {}", why.why));
+            next.extend(why.fix);
+        }
         _ => {
             lines.push(format!("runtime:  {} is not installed", runtime.name));
             next.push(format!(
@@ -125,8 +132,11 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
     if settings.backend == folderskin_local::Backend::Cpu {
         lines.push("note:     no GPU backend; expect minutes per picture".into());
     }
-    match next.first() {
-        Some(step) => lines.push(format!("next:     {step}")),
+    match next.split_first() {
+        Some((step, more)) => {
+            lines.push(format!("next:     {step}"));
+            lines.extend(more.iter().map(|m| format!("          {m}")));
+        }
         None => lines.push("ready:    folderskin ai gen \"a lighthouse at dusk\"".into()),
     }
     let meta = serde_json::to_value(&status).unwrap_or_default();

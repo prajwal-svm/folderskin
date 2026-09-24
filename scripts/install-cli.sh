@@ -113,4 +113,9 @@ esac
 
 say "installed folderskin $version in $DEST"
 "$DEST/folderskin" --version
+if [ "$platform" = "linux-aarch64" ]; then
+  # stable-diffusion.cpp publishes x86_64 Linux builds only, so `ai setup` has nothing to install.
+  say "note: the local models don't run on ARM64 Linux; the image tools do, and so does painting"
+  say "  with your own key (folderskin ai gen \"...\" --provider openai; see folderskin ai models)."
+fi
 say "next: folderskin ai doctor"

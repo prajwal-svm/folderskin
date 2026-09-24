@@ -7,8 +7,8 @@
 
 use crate::command::{self, HEIGHT, WIDTH};
 use crate::event::{Level, Reporter, Stage};
-use crate::machine::{pick_backend, pick_tier, Backend, Machine, Tier};
-use crate::manifest::{Model, ModelId, SDCPP_TAG};
+use crate::machine::{pick_backend, pick_tier, Arch, Backend, Machine, Os, Tier};
+use crate::manifest::{sdcpp_assets, Model, ModelId, SDCPP_TAG};
 use crate::prompts::{self, Shape};
 use crate::{paths, CancelToken, Error};
 use folderskin_core::{compositor, matte, painted};
@@ -198,6 +198,11 @@ pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
     }
     let exe = paths::sd_cli(settings.backend);
     if !exe.is_file() {
+        let (os, arch) = (Os::this(), Arch::this());
+        if sdcpp_assets(os, arch, settings.backend).is_none() {
+            // Setup would only say the same, after the person had gone to run it.
+            return Err(crate::setup::no_build(os, arch, settings.backend));
+        }
         return Err(Error::environment(
             "runtime_missing",
             format!(

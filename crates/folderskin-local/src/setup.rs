@@ -4,7 +4,7 @@
 use crate::download::{self, Remote};
 use crate::event::{Level, Reporter, Stage};
 use crate::generate::{Settings, MFLUX_PROBE};
-use crate::machine::{Backend, Machine, Os};
+use crate::machine::{Arch, Backend, Machine, Os};
 use crate::manifest::{self, MODELS};
 use crate::{paths, unzip, CancelToken, Error};
 use serde::Serialize;
@@ -92,22 +92,8 @@ async fn install_sdcpp(
     cancel: &CancelToken,
 ) -> Result<(), Error> {
     let exe = paths::sd_cli(backend);
-    let Some(pinned) = manifest::sdcpp_assets(machine.os, backend) else {
-        return Err(Error::environment(
-            "no_build_for_platform",
-            format!(
-                "stable-diffusion.cpp publishes no {backend} build for {} {}.",
-                machine.os.id(),
-                machine.arch.id()
-            ),
-            "There is nothing to download for this combination.",
-        )
-        .fix(format!(
-            "Build it from source ({}/blob/master/docs/build.md) and put sd-cli in {}",
-            manifest::SDCPP_REPO,
-            exe.parent().unwrap_or(Path::new(".")).display()
-        ))
-        .fix("Or pick a backend that has a build, e.g. --backend vulkan or --backend cpu."));
+    let Some(pinned) = manifest::sdcpp_assets(machine.os, machine.arch, backend) else {
+        return Err(no_build(machine.os, machine.arch, backend));
     };
     let (tag, assets) = match runtime {
         Runtime::Pinned => (
@@ -122,7 +108,7 @@ async fn install_sdcpp(
                 })
                 .collect::<Vec<_>>(),
         ),
-        Runtime::Latest => latest_assets(client, machine.os, backend).await?,
+        Runtime::Latest => latest_assets(client, machine.os, machine.arch, backend).await?,
     };
     let stamp = exe.with_file_name(".release");
     if exe.is_file() && std::fs::read_to_string(&stamp).is_ok_and(|s| s.trim() == tag) {
@@ -175,6 +161,55 @@ async fn install_sdcpp(
     Ok(())
 }
 
+/// Why stable-diffusion.cpp can't be set up for `backend` on this computer, and what to do
+/// instead: another backend when one has a build, building it, or a provider.
+pub fn no_build(os: Os, arch: Arch, backend: Backend) -> Error {
+    let others = manifest::sdcpp_backends(os, arch);
+    let why = match (others.is_empty(), os) {
+        (false, _) => format!(
+            "For {} {} it publishes {} builds.",
+            os.id(),
+            arch.id(),
+            others
+                .iter()
+                .map(|b| b.id())
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ),
+        (true, Os::Linux) => {
+            "Its Linux builds are for x86_64 processors only, so the local models can't be set \
+             up on this one."
+                .to_string()
+        }
+        (true, Os::Macos) => "Its Mac build is for Apple Silicon only.".to_string(),
+        (true, Os::Windows) => "It publishes no build for this computer.".to_string(),
+    };
+    let mut error = Error::environment(
+        "no_build_for_platform",
+        format!(
+            "stable-diffusion.cpp publishes no {backend} build for {} {}.",
+            os.id(),
+            arch.id()
+        ),
+        why,
+    );
+    if let Some(other) = others.first() {
+        error = error.fix(format!(
+            "Use a backend that has one: folderskin ai setup --backend {other}"
+        ));
+    }
+    error
+        .fix(format!(
+            "Or build it from source ({}/blob/master/docs/build.md) and put sd-cli in {}",
+            manifest::SDCPP_REPO,
+            paths::sd_cli(backend)
+                .parent()
+                .unwrap_or(Path::new("."))
+                .display()
+        ))
+        .fix("Or paint with a provider and your own key instead: folderskin ai models")
+}
+
 fn unpack_error(zip: &Path, e: &std::io::Error) -> Error {
     if e.kind() == std::io::ErrorKind::InvalidData {
         let _ = std::fs::remove_file(zip);
@@ -194,6 +229,7 @@ fn unpack_error(zip: &Path, e: &std::io::Error) -> Error {
 async fn latest_assets(
     client: &reqwest::Client,
     os: Os,
+    arch: Arch,
     backend: Backend,
 ) -> Result<(String, Vec<Download>), Error> {
     let failed = |why: String| {
@@ -226,7 +262,7 @@ async fn latest_assets(
         .await
         .map_err(|e| failed(format!("GitHub's answer couldn't be read: {e}.")))?;
     let tag = release["tag_name"].as_str().unwrap_or("latest").to_string();
-    let patterns = manifest::sdcpp_patterns(os, backend).unwrap_or(&[]);
+    let patterns = manifest::sdcpp_patterns(os, arch, backend).unwrap_or(&[]);
     let assets = release["assets"].as_array().cloned().unwrap_or_default();
     let mut out = Vec::new();
     for pattern in patterns {
@@ -373,6 +409,9 @@ pub struct RuntimeStatus {
     pub name: String,
     pub path: Option<PathBuf>,
     pub installed: bool,
+    /// Whether `setup` can install it here: false when stable-diffusion.cpp publishes no build of
+    /// this backend for this computer (ARM64 Linux, an Intel Mac), or mflux off Apple Silicon.
+    pub available: bool,
     /// The installed build's tag.
     pub release: Option<String>,
     /// What stable-diffusion.cpp can run on, one "name\tdescription" line each.
@@ -414,6 +453,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
         RuntimeStatus {
             name: "mflux".into(),
             installed: path.is_some(),
+            available: machine.os == Os::Macos && machine.arch == Arch::Arm64,
             path,
             release: None,
             devices: Vec::new(),
@@ -429,6 +469,9 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
         };
         RuntimeStatus {
             name: "stable-diffusion.cpp".into(),
+            // One built from source and put in place counts too.
+            available: installed
+                || manifest::sdcpp_assets(machine.os, machine.arch, settings.backend).is_some(),
             release: std::fs::read_to_string(exe.with_file_name(".release"))
                 .ok()
                 .map(|s| s.trim().to_string()),
@@ -503,5 +546,62 @@ fn probe_devices(exe: &Path) -> (Vec<String>, Option<String>) {
             Some(format!("it stopped with exit code {:?}", out.status.code())),
         ),
         Err(e) => (Vec::new(), Some(format!("it couldn't be started: {e}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::machine::{Gpu, Tier};
+
+    #[test]
+    fn a_computer_without_a_build_hears_what_it_can_do_instead() {
+        let e = no_build(Os::Linux, Arch::Arm64, Backend::Vulkan);
+        assert_eq!(
+            (e.code, e.class),
+            ("no_build_for_platform", crate::Class::Environment)
+        );
+        assert!(e.what.contains("vulkan build for linux arm64"), "{e:?}");
+        assert!(e.why.contains("x86_64 processors only"), "{e:?}");
+        assert!(
+            !e.fix.iter().any(|f| f.contains("--backend")),
+            "there is no other backend to offer: {e:?}"
+        );
+        assert!(e.fix.iter().any(|f| f.contains("folderskin ai models")));
+
+        let e = no_build(Os::Linux, Arch::X86_64, Backend::Cuda);
+        assert!(e.why.contains("vulkan and cpu builds"), "{e:?}");
+        assert!(e.fix[0].ends_with("--backend vulkan"), "{e:?}");
+    }
+
+    #[test]
+    fn setup_on_arm64_linux_stops_before_downloading_a_build_that_cant_run() {
+        // pick_backend gives an ARM64 Linux computer with a GPU Vulkan, and without one the CPU;
+        // neither has an ARM64 build, so nothing is downloaded or installed.
+        for gpu in [Gpu::Other, Gpu::None] {
+            let machine = Machine {
+                os: Os::Linux,
+                arch: Arch::Arm64,
+                ram_gb: 16.0,
+                gpu,
+                gpu_name: String::new(),
+                vram_gb: 0.0,
+            };
+            let settings = Settings::for_machine(&machine);
+            assert_eq!(settings.tier, Tier::Q4);
+            let err = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(setup(
+                    &machine,
+                    &settings,
+                    Runtime::Pinned,
+                    &Reporter::silent(),
+                    &CancelToken::new(),
+                ))
+                .unwrap_err();
+            assert_eq!(err.code, "no_build_for_platform", "{gpu:?}: {err:?}");
+        }
     }
 }

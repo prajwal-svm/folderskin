@@ -38,7 +38,9 @@ with 24 GB of RAM or more, `q4` below), what is installed, and the next command 
 downloads the pinned stable-diffusion.cpp build and the models, about 15.7 GB at `q8` and 9.4 GB
 at `q4`, resuming where a download stopped and checking every file against its published SHA-256.
 On a Mac it installs mflux with `uv tool install`, which downloads each model the first time it
-runs it. Ctrl+C stops it cleanly; running it again carries on.
+runs it. Ctrl+C stops it cleanly; running it again carries on. stable-diffusion.cpp publishes
+Linux builds for x86_64 only, so on ARM64 Linux (and on an Intel Mac) `doctor` says there is
+nothing to install; the image tools and `--provider` still work there.
 
 `--backend` and `--tier` override the choice for one command; `folderskin ai config set tier q4`
 (or `backend`, `model`, `provider`) makes it the default.
