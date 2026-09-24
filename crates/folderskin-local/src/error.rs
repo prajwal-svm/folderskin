@@ -78,12 +78,21 @@ impl Error {
 
     /// A file or folder that couldn't be read or written.
     pub fn io(doing: &str, path: &Path, e: &std::io::Error) -> Error {
-        let why = match e.kind() {
-            std::io::ErrorKind::NotFound => format!("{} isn't there.", path.display()),
-            std::io::ErrorKind::PermissionDenied => {
+        // When saving, "not found" means the folder it was to go in; say so, not "isn't there".
+        let missing_folder = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty() && !p.exists());
+        let why = match (e.kind(), missing_folder) {
+            (std::io::ErrorKind::NotFound, Some(folder)) => format!(
+                "The folder {} for {} doesn't exist.",
+                folder.display(),
+                path.file_name().unwrap_or_default().to_string_lossy()
+            ),
+            (std::io::ErrorKind::NotFound, None) => format!("{} isn't there.", path.display()),
+            (std::io::ErrorKind::PermissionDenied, _) => {
                 format!("This account isn't allowed to use {}.", path.display())
             }
-            std::io::ErrorKind::StorageFull => format!(
+            (std::io::ErrorKind::StorageFull, _) => format!(
                 "The disk that holds {} is full.",
                 path.parent().unwrap_or(path).display()
             ),
@@ -135,6 +144,20 @@ mod tests {
             &std::io::Error::from(std::io::ErrorKind::StorageFull),
         );
         assert!(full.why.contains("full"), "{}", full.why);
+    }
+
+    #[test]
+    fn a_missing_folder_is_named_rather_than_the_file_it_should_hold() {
+        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let root = std::env::temp_dir();
+        let gone = root.join("folderskin-no-such-folder").join("x");
+        let e = Error::io("save the preview", &gone.join("z.png"), &not_found);
+        assert_eq!(
+            e.why,
+            format!("The folder {} for z.png doesn't exist.", gone.display())
+        );
+        let e = Error::io("read the picture", &root.join("fs-no-such.png"), &not_found);
+        assert!(e.why.ends_with("fs-no-such.png isn't there."), "{}", e.why);
     }
 
     #[test]

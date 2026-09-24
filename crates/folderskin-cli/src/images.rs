@@ -135,25 +135,43 @@ pub fn encode_png(img: &RgbaImage) -> Vec<u8> {
     buf
 }
 
+/// Writes `bytes`, a PNG, to `target`: standard output for `-`, otherwise the file, making its
+/// folder first.
+pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliError> {
+    if is_stdio(target) {
+        let mut stdout = std::io::stdout().lock();
+        return stdout
+            .write_all(bytes)
+            .and_then(|()| stdout.flush())
+            .map_err(|e| CliError::io(doing, Path::new("standard output"), &e));
+    }
+    make_parent(target)?;
+    std::fs::write(target, bytes).map_err(|e| CliError::io(doing, target, &e))
+}
+
+fn make_parent(target: &Path) -> Result<(), CliError> {
+    if let Some(dir) = target.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|e| CliError::io("make the folder", dir, &e))?;
+    }
+    Ok(())
+}
+
 /// Writes `img` to `target`: standard output for `-` (always PNG), otherwise in the format the
 /// file name asks for.
 pub fn save(img: &RgbaImage, target: &Path) -> Result<(), CliError> {
     if is_stdio(target) {
-        let mut stdout = std::io::stdout().lock();
-        return stdout
-            .write_all(&encode_png(img))
-            .and_then(|()| stdout.flush())
-            .map_err(|e| CliError::io("write the picture", Path::new("standard output"), &e));
+        return write_png(&encode_png(img), target, "write the picture");
     }
-    if let Some(dir) = target.parent().filter(|d| !d.as_os_str().is_empty()) {
-        std::fs::create_dir_all(dir).map_err(|e| CliError::io("make the folder", dir, &e))?;
-    }
+    make_parent(target)?;
     let format = image::ImageFormat::from_path(target).unwrap_or(image::ImageFormat::Png);
     let written = match format {
         image::ImageFormat::Png => {
             std::fs::write(target, encode_png(img)).map_err(image::ImageError::IoError)
         }
-        image::ImageFormat::Jpeg => image::DynamicImage::ImageRgba8(img.clone())
+        // JPEG has no transparency. Dropping the alpha would leave whatever colour the clear
+        // pixels happen to hold, black as often as not; on the key colour instead, a cut-out
+        // folder stays a folder the app cuts out again.
+        image::ImageFormat::Jpeg => image::DynamicImage::ImageRgba8(matte::flatten(img, MAGENTA))
             .to_rgb8()
             .save_with_format(target, format),
         image::ImageFormat::WebP => img.save_with_format(target, format),
@@ -275,9 +293,26 @@ fn crop_aspect(img: &RgbaImage, aspect: f64, focus: (f32, f32)) -> RgbaImage {
     image::imageops::crop_imm(img, x0, y0, cw as u32, ch as u32).to_image()
 }
 
+/// Whether the app will take `img` as a finished folder (cut out, or on the key colour) rather
+/// than artwork to wrap onto its folder. Around a finished folder is backdrop, never paper.
+fn is_finished_folder(img: &RgbaImage) -> bool {
+    matte::finished_cutout(img, MAGENTA).is_some()
+}
+
 fn trim(args: &OneImage, out: &Arc<Out>) -> Result<(), CliError> {
     let (img, _) = load(&args.input)?;
     let dest = target(&args.input, args.out.as_deref(), "trimmed");
+    if is_finished_folder(&img) {
+        // Its backdrop would read as a paper margin, and cutting it away would cut up the folder.
+        return done(
+            &img,
+            &dest,
+            "left unchanged: it is a finished folder, and what surrounds it is its backdrop, not \
+             paper (folderskin image clip or image cutout take a backdrop away)",
+            out,
+            json!({"border": null, "finished_folder": true}),
+        );
+    }
     match painted::trim_paper(&img) {
         Some((b, trimmed)) => done(
             &trimmed,
@@ -407,7 +442,7 @@ fn adjusted(args: &OneImage, fx: Fx, what: &str, out: &Arc<Out>) -> Result<(), C
     let (img, _) = load(&args.input)?;
     let suffix = what.split_whitespace().next().unwrap_or("adjusted");
     let dest = target(&args.input, args.out.as_deref(), suffix);
-    let result = adjust::adjust(&img, &fx);
+    let (result, cut_out) = adjust_picture(&img, &fx);
     let settings: Vec<String> = [
         ("brightness", fx.brightness),
         ("contrast", fx.contrast),
@@ -421,14 +456,35 @@ fn adjusted(args: &OneImage, fx: Fx, what: &str, out: &Arc<Out>) -> Result<(), C
     .filter(|(_, v)| *v != 0.0)
     .map(|(k, v)| format!("{k} {v:+}"))
     .collect();
+    let mut said = settings.join(", ");
+    if cut_out {
+        said.push_str(
+            " (a finished folder on the key colour: cut out first, so the backdrop stays one the \
+             app recognises)",
+        );
+    }
     done(
         &result,
         &dest,
-        &settings.join(", "),
+        &said,
         out,
         json!({"brightness": fx.brightness, "contrast": fx.contrast, "saturation": fx.saturation,
-               "hue": fx.hue, "grayscale": fx.grayscale, "sepia": fx.sepia, "invert": fx.invert}),
+               "hue": fx.hue, "grayscale": fx.grayscale, "sepia": fx.sepia, "invert": fx.invert,
+               "cut_out": cut_out}),
     )
+}
+
+/// `img` with `fx` applied, and whether it was cut out first. A finished folder on the magenta
+/// key colour is: adjusted as it is, inverting turns the backdrop green and desaturating turns it
+/// grey, and the app would then wrap the whole picture, backdrop and all, onto its folder as
+/// artwork.
+pub fn adjust_picture(img: &RgbaImage, fx: &Fx) -> (RgbaImage, bool) {
+    if matte::surround(img, MAGENTA) == Surround::Keyed {
+        if let Some(cut) = matte::finished_cutout(img, MAGENTA) {
+            return (adjust::adjust(&cut, fx), true);
+        }
+    }
+    (adjust::adjust(img, fx), false)
 }
 
 fn check(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
@@ -513,8 +569,13 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
     };
     let surround = matte::surround(&img, MAGENTA);
     let transparent = img.pixels().filter(|p| p.0[3] < 255).count();
-    let border = painted::find_border(&img).or_else(|| painted::find_bands(&img));
-    let kind = match matte::finished_cutout(&img, MAGENTA) {
+    let finished = matte::finished_cutout(&img, MAGENTA);
+    // Only artwork can sit on paper; around a finished folder is its backdrop.
+    let border = match finished {
+        Some(_) => None,
+        None => painted::find_border(&img).or_else(|| painted::find_bands(&img)),
+    };
+    let kind = match &finished {
         Some(cut) => format!(
             "a finished folder ({} × {} once cut out): used as it is",
             cut.width(),
@@ -566,7 +627,7 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
     }
     let meta = json!({
         "width": w, "height": h, "bytes": bytes, "format": format,
-        "kind": if kind.starts_with("a finished folder") { "folder" } else { "artwork" },
+        "kind": if finished.is_some() { "folder" } else { "artwork" },
         "surround": format!("{surround:?}").to_lowercase(),
         "transparent_share": transparent as f64 / n,
         "mean_rgb": mean.iter().map(|v| v.round() as u8).collect::<Vec<_>>(),
@@ -635,6 +696,101 @@ mod tests {
         }
         let e = save(&img, &dir.join("a.gif")).unwrap_err();
         assert_eq!(e.code, "unknown_format");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fs-images-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn template() -> RgbaImage {
+        folderskin_core::compositor::blank_template(640, 600, MAGENTA)
+    }
+
+    #[test]
+    fn a_finished_folders_backdrop_is_never_taken_for_paper() {
+        // Both find a "margin" in a folder on magenta and in a cut-out one; cutting it away used
+        // to leave a slab of grey with a strip of magenta.
+        let keyed = template();
+        let clipped = matte::finished_cutout(&keyed, MAGENTA).unwrap();
+        let fixture = image::open(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../folderskin-core/tests/fixtures/painted/painted-folder.cut.png"
+        ))
+        .unwrap()
+        .to_rgba8();
+        for img in [&keyed, &clipped, &fixture] {
+            assert!(is_finished_folder(img));
+        }
+
+        let dir = temp_dir("trim");
+        let (input, output) = (dir.join("t.png"), dir.join("t-trimmed.png"));
+        std::fs::write(&input, encode_png(&keyed)).unwrap();
+        let args = OneImage {
+            input,
+            out: Some(output.clone()),
+        };
+        trim(&args, &Out::new(true, false)).unwrap();
+        let trimmed = image::open(&output).unwrap().to_rgba8();
+        assert_eq!(trimmed, keyed, "trim leaves a finished folder as it is");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn adjusting_a_folder_on_the_key_colour_keeps_it_a_folder() {
+        let keyed = template();
+        for fx in [
+            Fx {
+                invert: 100.0,
+                ..Fx::default()
+            },
+            Fx {
+                saturation: -60.0,
+                ..Fx::default()
+            },
+        ] {
+            let (adjusted, cut_out) = adjust_picture(&keyed, &fx);
+            assert!(cut_out);
+            assert_eq!(matte::surround(&adjusted, MAGENTA), Surround::Transparent);
+            assert_eq!(
+                check::check(&adjusted, 10_000, "a.png").kind,
+                "folder",
+                "{fx:?}"
+            );
+        }
+        // Artwork is adjusted as it is.
+        let art = RgbaImage::from_fn(64, 60, |x, y| Rgba([x as u8 * 3, y as u8 * 4, 90, 255]));
+        let (adjusted, cut_out) = adjust_picture(
+            &art,
+            &Fx {
+                invert: 100.0,
+                ..Fx::default()
+            },
+        );
+        assert!(!cut_out);
+        assert_eq!(adjusted.dimensions(), art.dimensions());
+        assert_eq!(adjusted.get_pixel(0, 0).0, [255, 255, 165, 255]);
+    }
+
+    #[test]
+    fn a_cut_out_saved_as_jpeg_goes_back_on_the_key_colour() {
+        let dir = temp_dir("jpeg");
+        let clipped = matte::finished_cutout(&template(), MAGENTA).unwrap();
+        save(&clipped, &dir.join("f.jpg")).unwrap();
+        let back = image::open(dir.join("f.jpg")).unwrap().to_rgba8();
+        assert_eq!(matte::surround(&back, MAGENTA), Surround::Keyed);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn pngs_go_to_standard_output_or_into_folders_made_for_them() {
+        let dir = temp_dir("write");
+        let deep = dir.join("x").join("y").join("z.png");
+        write_png(b"\x89PNG", &deep, "save the preview").unwrap();
+        assert_eq!(std::fs::read(&deep).unwrap(), b"\x89PNG");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

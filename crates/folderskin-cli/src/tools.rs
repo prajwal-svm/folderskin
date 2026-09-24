@@ -82,36 +82,54 @@ pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
             .fix("folderskin render picture.png --out preview.png"))
         }
     };
-    std::fs::write(&args.out, png).map_err(|e| CliError::io("save the preview", &args.out, &e))?;
+    images::write_png(&png, &args.out, "save the preview")?;
+    let (place, stdout) = place(&args.out);
     out.result(
-        Some(&args.out),
+        (!stdout).then_some(args.out.as_path()),
         "render",
         json!({"size": args.size, "becomes": what}),
-        &format!(
-            "wrote {} ({size}×{size}): {what}",
-            args.out.display(),
-            size = args.size
-        ),
-        false,
+        &format!("wrote {place} ({size}×{size}): {what}", size = args.size),
+        stdout,
     );
     Ok(())
 }
 
+/// How a result's destination reads, and whether it is standard output (`-`).
+fn place(path: &Path) -> (String, bool) {
+    if path.as_os_str() == "-" {
+        ("standard output".into(), true)
+    } else {
+        (path.display().to_string(), false)
+    }
+}
+
 pub fn template(args: &TemplateArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let backdrop = rgb(&args.backdrop)?;
+    let is_stdout = |p: &Path| p.as_os_str() == "-";
+    if is_stdout(&args.out) && args.mask.as_deref().is_some_and(is_stdout) {
+        return Err(CliError::usage(
+            "Only one picture can go to standard output.",
+            "Both --out and --mask are -.",
+        )
+        .fix("Write the silhouette to a file: --mask mask.png"));
+    }
     let (w, h) = (args.width, args.height);
     let cut = compositor::blank_template_cutout(w, h);
     let write = |path: &Path, img: &RgbaImage| {
-        std::fs::write(path, folderskin_core::raster::encode_png(img))
-            .map_err(|e| CliError::io("save the template", path, &e))
+        images::write_png(
+            &folderskin_core::raster::encode_png(img),
+            path,
+            "save the template",
+        )
     };
     write(&args.out, &matte::flatten(&cut, backdrop))?;
+    let (place_out, stdout) = place(&args.out);
     out.result(
-        Some(&args.out),
+        (!stdout).then_some(args.out.as_path()),
         "template",
         json!({"width": w, "height": h}),
-        &format!("wrote {} ({w}×{h}): the blank folder", args.out.display()),
-        false,
+        &format!("wrote {place_out} ({w}×{h}): the blank folder"),
+        stdout,
     );
     if let Some(mask) = &args.mask {
         let silhouette = RgbaImage::from_fn(w, h, |x, y| {
@@ -119,12 +137,13 @@ pub fn template(args: &TemplateArgs, out: &Arc<Out>) -> Result<(), CliError> {
             image::Rgba([a, a, a, 255])
         });
         write(mask, &silhouette)?;
+        let (place_mask, mask_stdout) = place(mask);
         out.result(
-            Some(mask),
+            (!mask_stdout).then_some(mask.as_path()),
             "silhouette",
             json!({"width": w, "height": h}),
-            &format!("wrote {} ({w}×{h}): its silhouette", mask.display()),
-            false,
+            &format!("wrote {place_mask} ({w}×{h}): its silhouette"),
+            stdout || mask_stdout,
         );
     }
     Ok(())
@@ -162,7 +181,11 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 out.warn(problem);
             }
             let changes = packs::write_index(&dir, &report).map_err(|why| {
-                CliError::fixable("index_failed", "The index couldn't be written.", why)
+                CliError::fixable(
+                    "index_failed",
+                    "The index couldn't be written.",
+                    sentence(&why),
+                )
             })?;
             let unchanged = if changes.is_empty() {
                 ", nothing changed"
@@ -224,10 +247,39 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
 }
 
 fn unreadable_packs(dir: &Path, why: String) -> CliError {
-    CliError::fixable("packs_unreadable", "The packs can't be read.", why).fix(format!(
-        "Check that {} holds a packs folder, or pass --dir",
-        dir.display()
+    let packs = dir.join("packs");
+    if !packs.is_dir() {
+        return CliError::fixable(
+            "packs_unreadable",
+            "There are no packs here to read.",
+            format!("There is no {} folder.", packs.display()),
+        )
+        .fix("Run it from a FolderSkin checkout, where they are in community/packs.")
+        .fix("Or point it at the folder that holds packs/: --dir <folder>");
+    }
+    CliError::fixable(
+        "packs_unreadable",
+        "The packs can't be read.",
+        sentence(&why),
+    )
+    .fix(format!(
+        "Check that {} is readable, then run it again.",
+        packs.display()
     ))
+}
+
+/// folderskin-tools' plain messages as a sentence: a capital letter first, a full stop last.
+fn sentence(text: &str) -> String {
+    let mut chars = text.trim().chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    let s: String = first.to_uppercase().chain(chars).collect();
+    if s.ends_with(['.', '!', '?']) {
+        s
+    } else {
+        s + "."
+    }
 }
 
 fn make_pack(
@@ -237,8 +289,12 @@ fn make_pack(
     out: &Arc<Out>,
 ) -> Result<(), CliError> {
     let (folder, made) = make::make(pictures, opts).map_err(|why| {
-        CliError::fixable("pack_not_made", "The pack couldn't be made.", why)
-            .fix("Nothing was left behind; fix what it says and run it again.")
+        CliError::fixable(
+            "pack_not_made",
+            "The pack couldn't be made.",
+            sentence(&why),
+        )
+        .fix("Nothing was left behind; fix what it says and run it again.")
     })?;
     let mut lines: Vec<String> = made
         .iter()
@@ -306,5 +362,52 @@ mod tests {
         for bad in ["FFF", "FF00FF00", "#GG00FF", "", "teal"] {
             assert_eq!(rgb(bad).unwrap_err().code, "usage", "{bad:?}");
         }
+    }
+
+    #[test]
+    fn no_packs_folder_is_said_in_a_sentence() {
+        let dir = std::env::temp_dir().join(format!("fs-no-packs-{}", std::process::id()));
+        let e = unreadable_packs(&dir, "couldn't read x: os error 3".into());
+        assert_eq!(e.what, "There are no packs here to read.");
+        assert_eq!(
+            e.why,
+            format!("There is no {} folder.", dir.join("packs").display())
+        );
+        assert!(e.fix.iter().any(|f| f.contains("--dir")));
+        assert_eq!(sentence("couldn't read it"), "Couldn't read it.");
+        assert_eq!(sentence("Done!"), "Done!");
+    }
+
+    #[test]
+    fn render_and_template_make_the_folder_they_write_into() {
+        let dir = std::env::temp_dir().join(format!("fs-render-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let out = Out::new(true, false);
+        let t = TemplateArgs {
+            out: dir.join("a").join("t.png"),
+            width: 64,
+            height: 64,
+            backdrop: "FF00FF".into(),
+            mask: Some(dir.join("b").join("m.png")),
+        };
+        template(&t, &out).unwrap();
+        let r = RenderArgs {
+            image: Some(t.out.clone()),
+            solid: None,
+            out: dir.join("c").join("d").join("p.png"),
+            size: 32,
+            focus: None,
+        };
+        render(&r, &out).unwrap();
+        for p in [&t.out, t.mask.as_ref().unwrap(), &r.out] {
+            assert!(image::open(p).is_ok(), "{}", p.display());
+        }
+        let both = TemplateArgs {
+            out: "-".into(),
+            mask: Some("-".into()),
+            ..t
+        };
+        assert_eq!(template(&both, &out).unwrap_err().code, "usage");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
