@@ -545,7 +545,12 @@ function OptionsPopover({
     return () => window.removeEventListener("resize", place);
   }, [anchor]);
 
-  useEffect(() => panel.current?.focus({ preventScroll: true }), []);
+  // Focus waits until it's placed: before that it's hidden, and hidden things can't take focus.
+  // Left in the search, Escape would empty the search as well as closing this.
+  const placed = pos !== null;
+  useEffect(() => {
+    if (placed) panel.current?.focus({ preventScroll: true });
+  }, [placed]);
 
   useEffect(() => {
     const down = (e: MouseEvent) => {

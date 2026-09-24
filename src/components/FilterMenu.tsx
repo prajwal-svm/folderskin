@@ -130,8 +130,13 @@ function FilterPopover({
     return () => window.removeEventListener("resize", place);
   }, [anchor]);
 
-  // Keyboard users land in the popover; Tab goes on through its controls.
-  useEffect(() => panel.current?.focus({ preventScroll: true }), []);
+  // Keyboard users land in the popover; Tab goes on through its controls. Once it's placed:
+  // before that it's hidden, and hidden things can't take focus. Left in the search, Escape
+  // would empty the search as well as closing this.
+  const placed = pos !== null;
+  useEffect(() => {
+    if (placed) panel.current?.focus({ preventScroll: true });
+  }, [placed]);
 
   useEffect(() => {
     const down = (e: MouseEvent) => {
