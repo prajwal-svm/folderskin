@@ -348,7 +348,7 @@ fn sentence(text: &str) -> String {
 /// [`sentence`], except that a message starting with a path keeps it as it was written: one of
 /// the `given` paths the command was handed, or a first word that is plainly a path. Capitalised,
 /// `community\packs\x` read `Community\packs\x` and a picture called `nope` became `Nope`.
-fn sentence_about(text: &str, given: &[&Path]) -> String {
+pub(crate) fn sentence_about(text: &str, given: &[&Path]) -> String {
     let text = text.trim();
     let first_word = text.split_whitespace().next().unwrap_or("");
     let starts_with_path = first_word.contains(['/', '\\'])

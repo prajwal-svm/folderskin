@@ -396,6 +396,34 @@ mod tests {
 
     // ------------------------------------------------------------------ desktop.ini
 
+    #[test]
+    fn a_utf16_desktop_ini_is_read_and_written_back_the_same_way() {
+        use windows::{decode_ini, encode_ini, IniEncoding};
+        let text =
+            "[.ShellClassInfo]\r\nLocalizedResourceName=Мои фото\r\nIconResource=mine.ico,0\r\n";
+        let bytes = encode_ini(text, IniEncoding::Utf16);
+        assert_eq!(bytes[..4], [0xFF, 0xFE, b'[', 0]);
+        let (read, encoding) = decode_ini(&bytes).unwrap();
+        assert_eq!(encoding, IniEncoding::Utf16);
+        assert_eq!(read.strip_prefix('\u{feff}'), Some(text));
+        // Skinned and reverted, it comes back byte for byte, name and all.
+        let skinned = windows::desktop_ini_contents(Some(&read), &ico_name(), Before::default());
+        assert!(skinned.starts_with('\u{feff}'), "{skinned:?}");
+        assert!(skinned.contains("LocalizedResourceName=Мои фото"));
+        let back = windows::desktop_ini_without_ours(&skinned).unwrap();
+        assert_eq!(encode_ini(&back, encoding), bytes);
+        // UTF-8, with or without its mark, stays UTF-8.
+        assert_eq!(
+            decode_ini(b"[a]\r\n"),
+            Some(("[a]\r\n".to_string(), IniEncoding::Utf8))
+        );
+        let marked = "\u{feff}[a]\r\n";
+        assert_eq!(encode_ini(marked, IniEncoding::Utf8), marked.as_bytes());
+        // Neither: refused, not guessed at.
+        assert_eq!(decode_ini(b"caf\xe9"), None);
+        assert_eq!(decode_ini(&[0xFF, 0xFE, b'a']), None, "half a character");
+    }
+
     /// The icon file name for a skin, as `apply` derives it from the packed `.ico`.
     fn ico_name() -> String {
         windows::ico_file_name(b"the packed icon")

@@ -144,11 +144,20 @@ pub fn apply_error(folder: &Path, e: ApplyError) -> CliError {
             format!("{} doesn't exist or isn't a folder.", folder.display()),
         )
         .fix("Give the path of a folder that exists."),
-        ApplyError::Refused(why) => CliError::fixable(
-            "apply_refused",
-            "FolderSkin won't change that folder's icon.",
-            why,
-        ),
+        ApplyError::Refused(why) => {
+            let fix = if why.contains("UTF-") {
+                "Save its desktop.ini as UTF-8 or UTF-16 (in Notepad: Save as, then Encoding), \
+                 then run the command again."
+            } else {
+                "Pick one of your own folders instead, such as one inside Documents."
+            };
+            CliError::fixable(
+                "apply_refused",
+                "FolderSkin won't change that folder's icon.",
+                crate::tools::sentence_about(&why, &[folder]),
+            )
+            .fix(fix)
+        }
         ApplyError::Io(io) => CliError::io("change the folder's icon", folder, &io),
         ApplyError::Platform(why) => {
             CliError::environment("apply_failed", "The system didn't take the new icon.", why)
@@ -177,6 +186,31 @@ mod tests {
         let sheet = image::open(dir.join("_sheet.png")).unwrap();
         assert_eq!((sheet.width(), sheet.height()), (CELL * 4, CELL * 2));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_refusal_says_why_in_a_sentence_and_what_to_do() {
+        let folder = Path::new(r"C:\x\utf16");
+        let e = apply_error(
+            folder,
+            ApplyError::Refused(format!(
+                "{} is neither UTF-8 nor UTF-16 text, so FolderSkin will not rewrite it",
+                folder.join("desktop.ini").display()
+            )),
+        );
+        assert_eq!(e.code, "apply_refused");
+        assert!(
+            e.why.starts_with(r"C:\x\utf16"),
+            "the path as written: {e:?}"
+        );
+        assert!(e.why.ends_with("rewrite it."), "{e:?}");
+        assert!(e.fix[0].contains("UTF-8 or UTF-16"), "{e:?}");
+        let e = apply_error(
+            folder,
+            ApplyError::Refused("this is your home folder; pick a folder inside it instead".into()),
+        );
+        assert!(e.why.starts_with("This is your home folder"), "{e:?}");
+        assert_eq!(e.fix.len(), 1, "{e:?}");
     }
 
     #[test]
