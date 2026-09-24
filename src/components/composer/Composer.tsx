@@ -69,6 +69,8 @@ import { PictureMenu } from "./PictureMenu";
 import { EmojiPicker, PatternGrid, ShapeGrid } from "./pickers";
 import { Popover } from "./Popover";
 import { NewDesign, type Start } from "./NewDesign";
+import { LookSwitch } from "../LookSwitch";
+import { getLook } from "../../state/look";
 import { IconLibrary, PREVIEW_ID } from "./IconLibrary";
 import { Segmented } from "./controls";
 import { ImageIcon } from "../icons/image";
@@ -447,8 +449,8 @@ export function Composer({
 
   const draft = useMemo(loadDraft, []);
   const [history, dispatch] = useReducer(historyReducer, undefined, () => {
-    // A first design is on the folder this computer shows.
-    const style: FolderStyle = localOs() === "windows" ? "windows" : "mac";
+    // A first design is on the folder chosen in the folder panel: the Mac's unless it says Windows'.
+    const style: FolderStyle = getLook();
     return startHistory(draft?.doc ?? { ...TEMPLATES[0].make(fallbackParts(style)), style });
   });
   const doc = history.present;
@@ -1154,16 +1156,7 @@ export function Composer({
             Folder skeleton
           </button>
           {doc.shape === "folder" && (
-            <Segmented
-              small
-              label="which folder"
-              value={doc.style}
-              onChange={restyle}
-              options={[
-                { value: "mac", label: "Mac", title: "The folder a Mac shows" },
-                { value: "windows", label: "Windows", title: "The folder Windows shows" },
-              ]}
-            />
+            <LookSwitch value={doc.style} onChange={restyle} />
           )}
           <div className="cmp-backdrops" role="radiogroup" aria-label="what's behind the folder">
             {BACKDROPS.map((b) => (
