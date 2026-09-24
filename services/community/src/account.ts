@@ -84,29 +84,34 @@ export async function verifyKey(request: Request, env: Env): Promise<Response> {
     limit: PER_NETWORK.verifications,
     error: fail(429, "quota", "Too many computers on your network were verified today. Please try again tomorrow."),
   };
+  const existing = await env.DB.prepare("SELECT handle, tier FROM keys WHERE key = ?1").bind(k).first<{ handle: string; tier: Tier }>();
+  if (existing?.tier === "banned") throw fail(403, "banned", "This computer can't share packs any more.");
   // Only a verification that goes through counts against the network, so a failed check, a
   // reloaded page or someone else on a shared network trying and failing can't use up the day.
   // A network that has had its fill is turned away before Cloudflare is asked, though.
   if ((await used(env, quota.scope, quota.id, at)) >= quota.limit) throw quota.error;
   await checkChallenge(env, request, token, n);
   await takeAll(env, [quota], at);
+  const giveItBack = () => giveBack(env, dayOf(at), quota.scope, quota.id, quota.amount);
   // Spent only now, so a challenge that failed can be tried again from the same link.
   const spent = await env.DB.prepare("INSERT INTO seen (id, expires) VALUES (?1, ?2) ON CONFLICT (id) DO NOTHING")
     .bind(`verify:${n}`, made + VERIFY_LINK_SECONDS + 600)
     .run();
   if (spent.meta.changes !== 1) {
-    await giveBack(env, dayOf(at), quota.scope, quota.id, quota.amount);
+    await giveItBack();
     throw fail(409, "link_used", "This link has been used already. Start again from FolderSkin.");
   }
 
-  const existing = await env.DB.prepare("SELECT handle, tier FROM keys WHERE key = ?1").bind(k).first<{ handle: string; tier: Tier }>();
   if (existing) {
-    if (existing.tier === "banned") throw fail(403, "banned", "This computer can't share packs any more.");
     await env.DB.prepare("UPDATE keys SET verified_at = ?2 WHERE key = ?1").bind(k, at).run();
     return json({ handle: existing.handle });
   }
-  const given = await claimHandle(env, k, handle, at);
-  return json({ handle: given }, 201);
+  try {
+    return json({ handle: await claimHandle(env, k, handle, at) }, 201);
+  } catch (e) {
+    await giveItBack();
+    throw e;
+  }
 }
 
 /** Asks Cloudflare whether the challenge was passed on this page, for this nonce. */

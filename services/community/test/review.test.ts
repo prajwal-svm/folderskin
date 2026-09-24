@@ -3,7 +3,22 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { sha256Hex } from "../src/bytes";
 import { daily, digest } from "../src/daily";
 import { makeLink } from "../src/links";
-import { BASE, call, describe as describePack, device, errorOf, freshIp, pictures, postJson, signed, submit, testEnv, verify, type Device } from "./helpers";
+import {
+  BASE,
+  call,
+  describe as describePack,
+  device,
+  errorOf,
+  freshIp,
+  pictures,
+  postJson,
+  signed,
+  submit,
+  testEnv,
+  verify,
+  verifyLink,
+  type Device,
+} from "./helpers";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -114,6 +129,9 @@ describe("the maintainer's endpoints", () => {
     expect(await me.json()).toMatchObject({ tier: "banned" });
     const blocked = await call(await signed(who, "POST", "/v1/submissions", { manifest: {} }));
     expect((await errorOf(blocked)).code).toBe("banned");
+    // Verifying again doesn't help, and doesn't even get as far as asking Cloudflare.
+    const link = await verifyLink(who, "very-bad-actor");
+    expect((await errorOf(await call(postJson("/v1/keys/verify", { ...link, token: `pass:${link.n}` }, who.ip)))).code).toBe("banned");
   });
 
   it("only take reasons that map to the pack terms", async () => {
