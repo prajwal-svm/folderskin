@@ -645,9 +645,9 @@ mod tests {
     fn a_flag_beats_the_config_which_beats_the_computer() {
         let mut config = Config::default();
         let none = MachineArgs::default();
-        let (s, b, t) = settings(&machine(), &none, &config).unwrap();
+        let (detected, b, t) = settings(&machine(), &none, &config).unwrap();
         assert_eq!(
-            (s.backend, s.tier, b, t),
+            (detected.backend, detected.tier, b, t),
             (Backend::Cuda, Tier::Q4, Source::Detected, Source::Detected)
         );
         // Each layer asks for something the one below it doesn't, so which one won shows.
@@ -678,11 +678,12 @@ mod tests {
                 .backend,
             Backend::Cuda
         );
-        // `auto` on the command line beats what ai config says, as any other flag does.
+        // `auto` on the command line beats what ai config says, as any other flag does: it's what
+        // this computer is detected to want.
         let (s, b, t) = settings(&machine(), &auto, &config).unwrap();
         assert_eq!(
             (s.backend, s.tier, b, t),
-            (Backend::Cuda, Tier::Q8, Source::Detected, Source::Detected)
+            (detected.backend, detected.tier, Source::Detected, Source::Detected)
         );
     }
 
