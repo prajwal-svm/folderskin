@@ -81,6 +81,9 @@ fn is_stdio(path: &Path) -> bool {
 /// A picture from a file, or from standard input for `-`, with its size in bytes.
 pub fn load(path: &Path) -> Result<(RgbaImage, usize), CliError> {
     if !is_stdio(path) {
+        if path.is_dir() {
+            return Err(CliError::folder_not_file("read the picture", path));
+        }
         let bytes = std::fs::read(path).map_err(|e| CliError::io("read the picture", path, &e))?;
         let img = image::load_from_memory(&bytes)
             .map_err(|e| preview::unreadable(path, &e))?
@@ -145,6 +148,9 @@ pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliErro
             .and_then(|()| stdout.flush())
             .map_err(|e| CliError::io(doing, Path::new("standard output"), &e));
     }
+    if target.is_dir() {
+        return Err(CliError::folder_not_file(doing, target));
+    }
     make_parent(target)?;
     std::fs::write(target, bytes).map_err(|e| CliError::io(doing, target, &e))
 }
@@ -161,6 +167,9 @@ fn make_parent(target: &Path) -> Result<(), CliError> {
 pub fn save(img: &RgbaImage, target: &Path) -> Result<(), CliError> {
     if is_stdio(target) {
         return write_png(&encode_png(img), target, "write the picture");
+    }
+    if target.is_dir() {
+        return Err(CliError::folder_not_file("save the picture", target));
     }
     make_parent(target)?;
     let format = image::ImageFormat::from_path(target).unwrap_or(image::ImageFormat::Png);
@@ -782,6 +791,39 @@ mod tests {
         save(&clipped, &dir.join("f.jpg")).unwrap();
         let back = image::open(dir.join("f.jpg")).unwrap().to_rgba8();
         assert_eq!(matte::surround(&back, MAGENTA), Surround::Keyed);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_folder_or_a_cut_short_file_is_named_for_what_it_is() {
+        let dir = temp_dir("not-a-file");
+        let folder = dir.join("afolder.png");
+        std::fs::create_dir(&folder).unwrap();
+        let img = RgbaImage::from_pixel(8, 8, Rgba([10, 20, 30, 255]));
+        for e in [
+            load(&folder).unwrap_err(),
+            preview::read_picture(&folder).unwrap_err(),
+            save(&img, &folder).unwrap_err(),
+            write_png(b"\x89PNG", &folder, "save the preview").unwrap_err(),
+        ] {
+            assert_eq!(e.code, "not_a_file", "{e:?}");
+            assert!(
+                e.why.ends_with("afolder.png is a folder, not a file."),
+                "{e:?}"
+            );
+        }
+        let whole = encode_png(&RgbaImage::from_fn(64, 64, |x, y| {
+            Rgba([x as u8 * 4, y as u8 * 4, 90, 255])
+        }));
+        let short = dir.join("truncated.png");
+        std::fs::write(&short, &whole[..whole.len() / 2]).unwrap();
+        for e in [
+            load(&short).unwrap_err(),
+            preview::read_picture(&short).unwrap_err(),
+        ] {
+            assert_eq!(e.code, "image_unreadable", "{e:?}");
+            assert!(e.why.contains("cut short"), "{e:?}");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

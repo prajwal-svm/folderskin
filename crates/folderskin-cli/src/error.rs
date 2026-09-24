@@ -68,6 +68,21 @@ impl CliError {
         folderskin_local::Error::io(doing, path, e).into()
     }
 
+    /// A folder given where a file goes. Asked before the file is opened: Windows reports
+    /// opening a folder as a file as a permissions problem, which sent people looking for a
+    /// program holding the file open.
+    pub fn folder_not_file(doing: &str, path: &std::path::Path) -> Self {
+        CliError::fixable(
+            "not_a_file",
+            format!("Couldn't {doing}."),
+            format!("{} is a folder, not a file.", path.display()),
+        )
+        .fix(format!(
+            "Give a file's path instead, such as {}",
+            path.join("picture.png").display()
+        ))
+    }
+
     /// Adds one thing to try.
     pub fn fix(mut self, step: impl Into<String>) -> Self {
         self.fix.push(step.into());

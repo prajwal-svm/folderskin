@@ -19,6 +19,9 @@ const COLUMNS: u32 = 4;
 const SHEET_GREY: [u8; 3] = [236, 236, 236];
 
 pub fn read_picture(path: &Path) -> Result<RgbaImage, CliError> {
+    if path.is_dir() {
+        return Err(CliError::folder_not_file("read the picture", path));
+    }
     image::open(path)
         .map(|i| i.to_rgba8())
         .map_err(|e| unreadable(path, &e))
@@ -26,6 +29,15 @@ pub fn read_picture(path: &Path) -> Result<RgbaImage, CliError> {
 
 pub fn unreadable(path: &Path, e: &image::ImageError) -> CliError {
     match e {
+        // The decoder ran out of picture: the file is there, just cut short.
+        image::ImageError::IoError(io) if io.kind() == std::io::ErrorKind::UnexpectedEof => {
+            CliError::fixable(
+                "image_unreadable",
+                "That picture can't be read.",
+                format!("{} ends early: the file is cut short.", path.display()),
+            )
+            .fix("Download, copy or export it again, then run the command again.")
+        }
         image::ImageError::IoError(io) => CliError::io("read the picture", path, io),
         image::ImageError::Unsupported(_) => CliError::fixable(
             "image_unreadable",
