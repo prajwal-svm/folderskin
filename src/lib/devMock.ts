@@ -150,9 +150,10 @@ let mockCatalogueLoaded = false;
 function communityCatalog(): MockCatalog {
   if (mockCatalogue) return mockCatalogue;
   const many = Math.min(Math.max(Number(new URLSearchParams(location.search).get("packs") ?? "0") || 0, 0), 50_000);
-  const samples: CatalogPack[] = listed().map((p) => ({
+  const samples: CatalogPack[] = listed().map((p, i) => ({
     ...p,
-    hash: "",
+    // A version of their own, so the library can say which one it has.
+    hash: (0xf00 + i).toString(16).padStart(16, "0"),
     bytes: p.count * 180_000,
     added: SAMPLE_DATES[p.id] ?? 0,
     skins: packPictures(p).map((s) => s.name),
@@ -518,7 +519,8 @@ export const mockApi = {
       skins: found.skins.map((h) => ({ pack: h.pack.id, pack_name: h.pack.name, name: h.name, index: h.index, thumbnail: packPictures(h.pack)[h.index].thumbnail })),
       hit_packs: hitPacks.map(communityPack),
       facets: found.facets,
-      offline: false,
+      last_visit: null,
+      generation: "preview",
     };
   },
   communityRefresh: async (): Promise<{ updates: number; packs: number }> => {
@@ -526,6 +528,15 @@ export const mockApi = {
     if (offline()) throw OFFLINE;
     const packs = communityCatalog().packs;
     return { updates: packs.filter((p) => packAdded(p.id) && mockStale.has(p.id)).length, packs: packs.length };
+  },
+  communityInstalled: async (): Promise<Record<string, string | null>> => {
+    const installed: Record<string, string | null> = {};
+    for (const skin of library) {
+      if (!skin.pack || skin.pack in installed) continue;
+      // A pack with a newer version out was added at some older one.
+      installed[skin.pack] = mockStale.has(skin.pack) ? "0000000000000000" : (communityCatalog().find(skin.pack)?.hash ?? null);
+    }
+    return installed;
   },
   addPack: async (packId: string, onProgress?: (progress: PackProgress) => void): Promise<Skin[]> => {
     const pack = findPack(packId);

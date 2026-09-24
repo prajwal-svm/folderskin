@@ -157,6 +157,35 @@ test("leaving Community and coming back finds it as it was, without searching ag
   expect(await searches(page)).toBe(before);
 });
 
+test("one pack at a time: while one is being added, another can't be removed", async ({ page }) => {
+  await openCommunity(page, 0);
+  const card = (name: string) => cards(page).filter({ has: page.locator(".pack-name", { hasText: new RegExp(`^${name}$`) }) });
+  await card("Classic Art").getByRole("button", { name: "Add", exact: true }).click();
+  await expect(card("Classic Art").getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
+
+  await card("Colours").getByRole("button", { name: "Add", exact: true }).click();
+  await expect(card("Colours").getByRole("progressbar")).toBeVisible();
+  await expect(card("Classic Art").getByRole("button", { name: "remove Classic Art" })).toBeDisabled();
+  await expect(card("Colours").getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
+  await expect(card("Classic Art").getByRole("button", { name: "remove Classic Art" })).toBeEnabled();
+});
+
+test("coming back, the packs kept are marked against the library again, still without a search", async ({ page }) => {
+  await openCommunity(page, 0);
+  const colours = cards(page).filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) });
+  await colours.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(colours.getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
+  await expect(colours.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
+  const before = await searches(page);
+
+  // The preview publishes a newer Colours as soon as it is added: coming back finds it.
+  await openView(page, /all skins/i);
+  await expect(page.locator(".community")).toHaveCount(0);
+  await openView(page, /community/i);
+  await expect(colours.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+  expect(await searches(page)).toBe(before);
+});
+
 test("without a connection it says so, and can try again", async ({ page }) => {
   await openApp(page, { query: "offline" });
   await openView(page, /community/i);

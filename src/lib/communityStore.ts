@@ -7,6 +7,9 @@
  * searches at once. Every search is numbered and only the newest one's answer is shown, so an
  * answer that comes back late can never put an old list over a newer one. The first page comes
  * with the answer; the others are asked for as their places scroll into view.
+ *
+ * Coming back, the packs shown are marked again against the library, which may have changed
+ * meanwhile; that is a question for this computer, not a search.
  */
 import { useSyncExternalStore } from "react";
 import type { ToastTone } from "../hooks/useToasts";
@@ -39,7 +42,10 @@ export type Shown = {
   skins: SkinHit[];
   hitPacks: CommunityPack[];
   facets: { tag: string; count: number }[];
-  offline: boolean;
+  /** Why these are the packs from the last visit ("you're offline"); null when they are current. */
+  lastVisit: string | null;
+  /** The catalog that answered. */
+  generation: string;
 };
 
 export type CommunityState = {
@@ -100,6 +106,8 @@ export class CommunityStore {
   /** Pages asked for, for the answer on screen. */
   private pages = new Set<number>();
   private handlers: CommunityHandlers | null = null;
+  /** The pack `busy` names, for saying which one to wait for. */
+  private working: CommunityPack | null = null;
 
   constructor(private readonly delay = SEARCH_DELAY_MS) {}
 
@@ -119,9 +127,11 @@ export class CommunityStore {
     this.handlers = handlers;
   }
 
-  /** Searches the first time the view opens; after that the answer is already here. */
+  /** Searches the first time the view opens; after that the answer is already here, and only
+   *  whether its packs are in the library is asked again. */
   start() {
     if (!this.state.shown && !this.state.searching) void this.search();
+    else if (this.state.shown) void this.remark();
   }
 
   setQuery(query: string) {
@@ -149,8 +159,9 @@ export class CommunityStore {
     this.state = { ...this.state, scrollTop };
   }
 
-  /** Searches for what is asked now. Resolves once it has answered, or been overtaken. */
-  async search(): Promise<void> {
+  /** Searches for what is asked now. Resolves once it has answered, or been overtaken. The
+   *  list starts at the top again unless `keepScroll`. */
+  async search({ keepScroll = false } = {}): Promise<void> {
     clearTimeout(this.timer);
     const n = ++this.asked;
     const { query, tag, sort } = this.state;
@@ -164,10 +175,23 @@ export class CommunityStore {
       this.pages = new Set([0]);
       const id = (this.state.shown?.id ?? 0) + 1;
       this.set({
-        shown: { q, tag, sort, id, total: r.total, all: r.all, packs, skins: r.skins, hitPacks: r.hit_packs, facets: r.facets, offline: r.offline },
+        shown: {
+          q,
+          tag,
+          sort,
+          id,
+          total: r.total,
+          all: r.all,
+          packs,
+          skins: r.skins,
+          hitPacks: r.hit_packs,
+          facets: r.facets,
+          lastVisit: r.last_visit,
+          generation: r.generation,
+        },
         searching: false,
         error: null,
-        scrollTop: 0,
+        scrollTop: keepScroll ? this.state.scrollTop : 0,
       });
     } catch (e) {
       if (n === this.asked) this.set({ searching: false, error: errorMessage(e) });
@@ -187,9 +211,15 @@ export class CommunityStore {
       .then((r) => {
         const now = this.state.shown;
         if (!now || now.id !== id) return;
+        // A newer catalog came in under this list (Refresh, or back online): its pages wouldn't
+        // line up with the rest, so the list is asked for again where it is.
+        if (r.generation !== now.generation) {
+          void this.search({ keepScroll: true });
+          return;
+        }
         const packs = now.packs.slice();
         r.packs.forEach((p, i) => (packs[page * PAGE + i] = p));
-        this.set({ shown: { ...now, packs } });
+        this.set({ shown: { ...now, packs, lastVisit: r.last_visit } });
       })
       .catch(() => {
         // Asked again when that place is drawn again.
@@ -208,7 +238,27 @@ export class CommunityStore {
   /** Marks pack `id` as in the library or not, everywhere it is shown. */
   mark(id: string | undefined, added: boolean) {
     if (!id) return;
-    const change = (p: CommunityPack) => (p.id === id ? { ...p, added, update: false } : p);
+    this.remarkWith((p) => (p.id === id ? { ...p, added, update: false } : p));
+  }
+
+  /** Marks every pack shown against what the library holds now. Left as it was if the app can't say. */
+  async remark() {
+    let installed: Record<string, string | null>;
+    try {
+      installed = await api.communityInstalled();
+    } catch {
+      return;
+    }
+    this.remarkWith((p) => {
+      const added = p.id in installed;
+      // As the app decides it: a pack added before versions were kept is offered the update.
+      const update = added && p.hash !== "" && installed[p.id] !== p.hash;
+      return p.added === added && p.update === update ? p : { ...p, added, update };
+    });
+  }
+
+  /** Passes every pack shown, in the list, the skins' packs and the viewer, through `change`. */
+  private remarkWith(change: (p: CommunityPack) => CommunityPack) {
     const shown = this.state.shown;
     const viewing = this.state.viewing;
     this.set({
@@ -217,8 +267,18 @@ export class CommunityStore {
     });
   }
 
+  /** True, having said so, when another pack is being worked on: one at a time. */
+  private waiting(): boolean {
+    const working = this.working;
+    if (!this.state.busy || !working) return false;
+    const doing = this.state.task === "add" ? "added" : this.state.task === "update" ? "updated" : "removed";
+    this.handlers?.toast(`${clip(working.name)} is still being ${doing}. Try again once it's done.`);
+    return true;
+  }
+
   async add(pack: CommunityPack) {
-    if (this.state.busy) return;
+    if (this.waiting()) return;
+    this.working = pack;
     this.set({ busy: pack.id, task: "add", progress: null });
     try {
       const skins = await api.addPack(pack.id, this.hear(pack.id));
@@ -228,12 +288,14 @@ export class CommunityStore {
     } catch (e) {
       this.handlers?.toast(`Couldn't add ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
+      this.working = null;
       this.set({ busy: null, task: null, progress: null });
     }
   }
 
   async update(pack: CommunityPack) {
-    if (this.state.busy) return;
+    if (this.waiting()) return;
+    this.working = pack;
     this.set({ busy: pack.id, task: "update", progress: null });
     try {
       const { removed, skins } = await api.updatePack(pack.id, this.hear(pack.id));
@@ -244,12 +306,14 @@ export class CommunityStore {
     } catch (e) {
       this.handlers?.toast(`Couldn't update ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
+      this.working = null;
       this.set({ busy: null, task: null, progress: null });
     }
   }
 
   async remove(pack: CommunityPack) {
-    if (this.state.busy) return;
+    if (this.waiting()) return;
+    this.working = pack;
     this.set({ busy: pack.id, task: "remove" });
     try {
       this.handlers?.onRemoved(await api.removePack(pack.id));
@@ -258,6 +322,7 @@ export class CommunityStore {
     } catch (e) {
       this.handlers?.toast(`Couldn't remove ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
     } finally {
+      this.working = null;
       this.set({ busy: null, task: null });
     }
   }

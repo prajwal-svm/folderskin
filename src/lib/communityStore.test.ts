@@ -4,6 +4,8 @@ import type { CommunityPack, CommunityQuery, CommunitySearch, PackProgress } fro
 /** Searches the store has sent, each answered when the test says. */
 const asked: { query: CommunityQuery; answer: (r: CommunitySearch) => void; fail: (e: unknown) => void }[] = [];
 const added: ((progress: PackProgress) => void)[] = [];
+/** What the library holds, as `community_installed` says it. */
+let installed: Record<string, string | null> = {};
 
 vi.mock("./tauri", () => ({
   api: {
@@ -21,6 +23,8 @@ vi.mock("./tauri", () => ({
       return { removed: ["old"], skins: [] };
     },
     communityRefresh: async () => ({ updates: 0, packs: 0 }),
+    communityInstalled: async () => installed,
+    removePack: async () => [],
   },
   errorMessage: (e: unknown) => String(e),
 }));
@@ -32,9 +36,9 @@ function pack(id: string): CommunityPack {
 }
 
 /** An answer of `total` packs, the ones from `offset` on. */
-function answer(total: number, offset = 0, prefix = "p"): CommunitySearch {
+function answer(total: number, offset = 0, prefix = "p", generation = "g1"): CommunitySearch {
   const packs = Array.from({ length: Math.max(0, Math.min(PAGE, total - offset)) }, (_, i) => pack(`${prefix}${offset + i}`));
-  return { total, all: total, packs, skins: [], hit_packs: [], facets: [], offline: false };
+  return { total, all: total, packs, skins: [], hit_packs: [], facets: [], last_visit: null, generation };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -42,6 +46,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 beforeEach(() => {
   asked.length = 0;
   added.length = 0;
+  installed = {};
 });
 afterEach(() => vi.useRealTimers());
 
@@ -99,6 +104,62 @@ describe("the Community store", () => {
     asked[2].answer(answer(1000, 5 * PAGE));
     await settle();
     expect(store.get().shown!.packs).toHaveLength(10);
+  });
+
+  it("asks for the list again, where it is, when a page comes from a newer catalog", async () => {
+    const store = new CommunityStore(0);
+    void store.search();
+    asked[0].answer(answer(1000));
+    await settle();
+    store.keepScroll(4000);
+    store.need(PAGE);
+    // Back online, or Refreshed: the page is another catalog's.
+    asked[1].answer(answer(900, PAGE, "n", "g2"));
+    await settle();
+    expect(store.get().shown!.packs[PAGE]).toBeUndefined();
+    expect(asked.map((a) => a.query.offset)).toEqual([0, PAGE, 0]);
+    asked[2].answer(answer(900, 0, "n", "g2"));
+    await settle();
+    const s = store.get();
+    expect([s.shown!.total, s.shown!.generation, s.scrollTop]).toEqual([900, "g2", 4000]);
+  });
+
+  it("marks the packs it kept against the library when the view comes back", async () => {
+    const store = new CommunityStore(0);
+    store.start();
+    const r = answer(3);
+    r.packs[0] = { ...r.packs[0], added: true };
+    r.packs[1] = { ...r.packs[1], hash: "new" };
+    r.hit_packs = [{ ...r.packs[0] }];
+    asked[0].answer(r);
+    await settle();
+    store.open(store.get().shown!.packs[0]!);
+
+    // Meanwhile p0 was deleted in the library, and p1 added at an older version.
+    installed = { p1: "old" };
+    store.start();
+    await settle();
+    const s = store.get();
+    const marks = s.shown!.packs.map((p) => [p!.added, p!.update]);
+    expect(marks).toEqual([
+      [false, false],
+      [true, true],
+      [false, false],
+    ]);
+    expect([s.shown!.hitPacks[0].added, s.viewing!.pack.added]).toEqual([false, false]);
+    expect(asked).toHaveLength(1);
+  });
+
+  it("works on one pack at a time, and says which to wait for", async () => {
+    const store = new CommunityStore(0);
+    const toast = vi.fn();
+    store.bind({ onAdded: vi.fn(), onRemoved: vi.fn(), onShowTag: vi.fn(), toast });
+    const adding = store.add({ ...pack("p0"), name: "Colours" });
+    await store.remove(pack("p1"));
+    expect(toast).toHaveBeenCalledWith("Colours is still being added. Try again once it's done.");
+    await adding;
+    await store.remove(pack("p1"));
+    expect(toast).toHaveBeenLastCalledWith("Removed p1", { tone: "ok" });
   });
 
   it("marks a pack everywhere it is shown", async () => {

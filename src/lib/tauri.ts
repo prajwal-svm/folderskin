@@ -84,8 +84,11 @@ export type CommunitySearch = {
   hit_packs: CommunityPack[];
   /** The tags of the packs the words match, most used first. */
   facets: { tag: string; count: number }[];
-  /** True when nothing could be reached and these are the packs from the last visit. */
-  offline: boolean;
+  /** Why these are the packs from the last visit rather than the ones published now, as the
+   *  start of a sentence ("you're offline"); null when they are the ones published now. */
+  last_visit: string | null;
+  /** Which catalog answered: a page from a newer one than the rest of the list says so. */
+  generation: string;
 };
 
 /** Who is signed in to GitHub. */
@@ -255,6 +258,9 @@ const tauriApi = {
   communitySearch: (query: CommunityQuery) => invoke<CommunitySearch>("community_search", { ...query }),
   /** Asks for the packs again past every cache; resolves to how many of the library's packs have an update. */
   communityRefresh: () => invoke<{ updates: number; packs: number }>("community_refresh"),
+  /** The packs in the library now, by id, with the version each was added at (null when it
+   *  was added before FolderSkin kept one). Nothing is downloaded. */
+  communityInstalled: () => invoke<Record<string, string | null>>("community_installed"),
   /** Downloads a pack and saves all of its skins or none; resolves to them. `onProgress` hears how far it has got. */
   addPack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
     invoke<Skin[]>("community_add", { packId, onProgress: new Channel<PackProgress>(onProgress) }),

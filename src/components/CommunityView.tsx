@@ -225,6 +225,11 @@ export function CommunityView({
         <span className="community-count" data-results-for={shown ? shown.q : undefined}>
           {status(shown, s.error)}
           {s.searching && shown && <LoaderIcon size={13} />}
+          {shown?.lastVisit && !s.error && (
+            <button type="button" className="link-btn" disabled={s.refreshing} onClick={() => void community.refresh()}>
+              Try again
+            </button>
+          )}
         </span>
         <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
           Every pack is checked before it's listed
@@ -310,8 +315,8 @@ function status(shown: Shown | null, error: string | null): string {
   const packs = `${numbers.format(shown.total)} ${shown.total === 1 ? "pack" : "packs"}`;
   const words = shown.q ? ` match “${shown.q}”` : "";
   const tagged = shown.tag ? ` tagged ${tagLabel(shown.tag)}` : "";
-  const offline = shown.offline ? ". You're offline, so these are the packs from your last visit" : "";
-  return `${packs}${words}${tagged}${offline}`;
+  const lastVisit = shown.lastVisit ? `. ${shown.lastVisit.charAt(0).toUpperCase()}${shown.lastVisit.slice(1)}, so these are the packs from your last visit` : "";
+  return `${packs}${words}${tagged}${lastVisit}`;
 }
 
 /** One pack: its folders, who made it and its tags, and Add (or Update and Remove). */
@@ -400,7 +405,14 @@ const PackCard = memo(function PackCard({
                   </button>
                 )}
                 {!gallery ? (
-                  <button type="button" className="btn btn-ghost" disabled={busy} aria-busy={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => onRemove(pack)}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={busy || blocked}
+                    aria-busy={busy}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onRemove(pack)}
+                  >
                     {busy ? "Removing" : "Remove"}
                   </button>
                 ) : busy ? (
@@ -414,6 +426,7 @@ const PackCard = memo(function PackCard({
                     className="icon-btn pack-remove"
                     title="Remove this pack"
                     aria-label={`remove ${pack.name}`}
+                    disabled={blocked}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemove(pack)}
                   >

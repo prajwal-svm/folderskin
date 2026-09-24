@@ -364,6 +364,11 @@
   color: var(--danger);
 }
 
+/* another pack is being worked on: one at a time */
+.pack .pack-remove:disabled {
+  opacity: 0.55;
+}
+
 /* a place whose page is on its way */
 .pack.is-placeholder {
   pointer-events: none;
