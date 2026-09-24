@@ -244,6 +244,14 @@ test.describe("settings", () => {
     await expect.poll(() => look(icons)).not.toBe(iconsFocused);
   });
 
+  test("the plain folder stands for where the skins are kept", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    const row = dialog(page).locator(".set-row").filter({ hasText: /\d+ skins?/ });
+    await expect(row.locator("img.set-row-folder")).toHaveAttribute("src", /.+/);
+    await expect(row.locator(".set-row-lead")).toHaveCount(0);
+  });
+
   test("the focus stays with the profiles as they're added, changed, deleted and brought back", async ({ page }) => {
     await openApp(page);
     await openSettings(page);

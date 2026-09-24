@@ -102,6 +102,7 @@ const matches = (query: string, text: string) => query.length >= 2 && hasWords(q
  */
 export function Settings({
   tab: first = "general",
+  folderPicture,
   themePref,
   onThemePref,
   rail,
@@ -117,6 +118,8 @@ export function Settings({
   onShowUpdate,
 }: {
   tab?: SettingsTab;
+  /** The plain folder as FolderSkin draws it, for the row about where skins are kept. */
+  folderPicture?: string | null;
   themePref: ThemePref;
   onThemePref: (pref: ThemePref) => void;
   /** The sidebar is folded to its rail of icons. */
@@ -223,6 +226,7 @@ export function Settings({
           <Query.Provider value={query}>
             {tab === "general" && (
               <General
+                folderPicture={folderPicture}
                 themePref={themePref}
                 onThemePref={onThemePref}
                 rail={rail}
@@ -328,6 +332,7 @@ const MOTIONS: SegOption<Motion>[] = [
 ];
 
 function General({
+  folderPicture,
   themePref,
   onThemePref,
   rail,
@@ -335,6 +340,7 @@ function General({
   fileBrowser,
   savedCount,
 }: {
+  folderPicture?: string | null;
   themePref: ThemePref;
   onThemePref: (pref: ThemePref) => void;
   rail: boolean;
@@ -416,11 +422,7 @@ function General({
         <Row
           label={savedCount === 1 ? "1 skin" : `${savedCount} skins`}
           find="storage folder backup skins"
-          lead={
-            <span className="set-row-lead" aria-hidden="true">
-              <FolderLead />
-            </span>
-          }
+          lead={folderPicture ? <img className="set-row-folder" src={folderPicture} alt="" draggable={false} /> : undefined}
           note={
             <span className="set-path" data-tip={folder ?? undefined} data-tip-overflow>
               {folder ? prettyPath(folder) : folderError ? "Kept until you quit" : " "}
@@ -435,14 +437,6 @@ function General({
         </Row>
       </Section>
     </>
-  );
-}
-
-function FolderLead() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    </svg>
   );
 }
 
