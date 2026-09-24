@@ -1,0 +1,4 @@
+# Packs are hashed byte for byte: by `packs index` and `packs catalog` wherever they run, and by
+# the app from what GitHub serves. A Windows checkout that turned their line endings into CRLF
+# would hash to other versions than CI publishes, so they stay LF on every computer.
+community/** text=auto eol=lf
