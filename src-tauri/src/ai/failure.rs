@@ -2,7 +2,8 @@
 //! try, and a question ready to paste to Claude. src/lib/aiError.ts reads it; its codes are the
 //! ones there (`missing_key`, `unauthorized`, `rate_limited`, `network`, `refused`, `timeout`,
 //! `stopped`, `no_backdrop`, `local_not_ready`, `out_of_memory`, `failed`), plus the local
-//! engine's own (`no_build_for_platform`, `path_not_ascii`, …) passed through as they are.
+//! engine's own (`no_build_for_platform`, `path_not_ascii`, `vc_runtime_missing`,
+//! `runtime_failed_to_start`, `busy`, …) passed through as they are.
 //!
 //! No message ever carries a key: a provider's words are scrubbed of it before they're kept.
 
@@ -145,16 +146,24 @@ pub fn from_engine(e: EngineError, doing: &Doing) -> AiFailure {
         return AiFailure::stopped();
     }
     let detail = first_line(&e.why);
-    let said = e.why.to_lowercase();
     let failure = match e.code {
-        "runtime_missing" | "models_missing" | "mflux_missing" if !doing.setup => AiFailure::new(
-            "local_not_ready",
-            "Pictures can't be made on this computer until it's set up.",
-        )
-        .fix(format!("{} Set it up in the provider settings.", e.what)),
-        "generation_failed"
-            if said.contains("out of memory") || said.contains("cannot allocate") =>
-        {
+        // Nothing is wrong but that: the card offers the setup, and there's nothing to ask about.
+        "runtime_missing" | "models_missing" | "mflux_missing" if !doing.setup => {
+            return AiFailure::new(
+                "local_not_ready",
+                "Pictures can't be made on this computer until it's set up.",
+            )
+            .fix(format!("{} Set it up in the provider settings.", e.what));
+        }
+        // Another setup has the computer (the command line's, or another FolderSkin's).
+        "busy" => {
+            let mut failure = AiFailure::new("busy", join(&e.what, &detail));
+            for step in app_fixes(&e.fix) {
+                failure = failure.fix(step);
+            }
+            return failure;
+        }
+        "generation_failed" if folderskin_local::generate::ran_out_of_memory(&e.why) => {
             let failure = AiFailure::new(
                 "out_of_memory",
                 "The graphics card ran out of memory while painting.",
@@ -378,6 +387,8 @@ mod tests {
         let f = from_engine(e.clone(), &painting(None));
         assert_eq!(f.code, "local_not_ready");
         assert!(f.fix.iter().all(|s| !s.contains("folderskin ai")), "{f:?}");
+        // Setting up is the answer, so there's nothing to ask Claude, as in the preview.
+        assert_eq!(f.ask, None);
         // While setting up, it is what went wrong with the setup instead.
         let during_setup = Doing {
             what: "setting this computer up".into(),
@@ -405,6 +416,49 @@ mod tests {
             !klein.fix[1].contains("FLUX.2 klein"),
             "klein is already the smaller model: {klein:?}"
         );
+    }
+
+    #[test]
+    fn running_out_of_memory_on_vulkan_is_heard_too() {
+        // What stable-diffusion.cpp's Vulkan backend prints when an AMD or Intel card is full.
+        for said in [
+            "ggml_vulkan: Device memory allocation of size 4831838208 failed.",
+            "ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory",
+            "ggml_backend_alloc_ctx_tensors_from_buft: failed to allocate Vulkan0 buffer of size 4831838208",
+        ] {
+            let e = EngineError::environment(
+                "generation_failed",
+                "The picture couldn't be painted.",
+                format!(
+                    "stable-diffusion.cpp stopped with exit code 1. Its last output:\n{said}"
+                ),
+            );
+            assert_eq!(
+                from_engine(e, &painting(None)).code,
+                "out_of_memory",
+                "{said}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_setup_from_the_command_line_holding_the_computer_says_so_plainly() {
+        let e = EngineError::environment(
+            "busy",
+            "This computer is already being set up.",
+            "Another setup, in FolderSkin or in a terminal, is downloading into the same folder.",
+        )
+        .fix("Wait for it to finish, then run the command again.");
+        let during_setup = Doing {
+            what: "setting this computer up".into(),
+            setup: true,
+            model: None,
+        };
+        let f = from_engine(e, &during_setup);
+        assert_eq!(f.code, "busy");
+        assert!(f.message.contains("in a terminal"), "{f:?}");
+        assert_eq!(f.fix, ["Wait for it to finish, then try again."]);
+        assert_eq!(f.ask, None);
     }
 
     #[test]

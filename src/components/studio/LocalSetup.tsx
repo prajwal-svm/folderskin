@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, LOCAL_SETUP_JOB, type LocalStatus } from "../../lib/tauri";
-import { aiFailure } from "../../lib/aiError";
+import { aiFailure, worthRetrying } from "../../lib/aiError";
 import { formatBytes } from "../../lib/tree";
 import type { AiEvent, TurnError } from "../../state/chats";
 import { OkBadge } from "../OkBadge";
@@ -10,11 +10,20 @@ import { LoaderIcon } from "../icons/loader";
 
 type Setup = { stage: string; file: string | null; done: number; total: number; log: string[] };
 
+/** What pressing "Set up this computer" will take, in a line under it. */
+function whatItTakes(status: LocalStatus): string {
+  if (status.downloads_on_first_use) return "Installs mflux; each model downloads the first time it paints, then works offline.";
+  if (status.download_bytes > 0) return `Downloads ${formatBytes(status.download_bytes)} once, then works offline.`;
+  return "Nothing left to download; setting up checks what's here.";
+}
+
 /**
  * Pictures made on this computer, with no key and no account: what it runs on here and how long a
  * picture takes, and one button that downloads and checks everything it needs, showing each file
  * as it comes and a log for anyone who wants to see what it's doing. It can be stopped part-way;
- * what was downloaded is kept, and setting up again carries on from there.
+ * what was downloaded is kept, and setting up again carries on from there. A setup that was
+ * already under way when the panel opened (it was closed, or another provider picked) is joined,
+ * so its progress and its Stop are back.
  */
 export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
   const [status, setStatus] = useState<LocalStatus | null>(null);
@@ -22,12 +31,17 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
   const [setup, setSetup] = useState<Setup | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const looked = useRef<(status: LocalStatus) => void>(() => {});
 
   useEffect(() => {
     let live = true;
     api
       .aiLocalStatus()
-      .then((s) => live && setStatus(s))
+      .then((s) => {
+        if (!live) return;
+        setStatus(s);
+        looked.current(s);
+      })
       .catch((e) => live && setProblem(aiFailure(e)));
     return () => {
       live = false;
@@ -62,6 +76,14 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       setStopping(false);
     }
   }, [onChanged]);
+  useEffect(() => {
+    looked.current = (s) => {
+      // Asking to set up while a setup runs joins it (ai_local_setup), with its progress from here on.
+      if (s.setting_up) void start();
+      // The status has just asked the runtime whether it starts; the provider list goes by that too.
+      else onChanged();
+    };
+  }, [start, onChanged]);
 
   const stop = useCallback(() => {
     setStopping(true);
@@ -111,12 +133,12 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           <OkBadge size={17} playOnMount /> Set up and ready. Nothing you make here leaves this computer.
         </p>
       )}
-      {status && !status.ready && !setup && (
+      {status && !status.ready && status.can_set_up && !setup && (
         <div className="local-go">
           <button type="button" className="btn btn-primary" onClick={() => void start()}>
             Set up this computer
           </button>
-          <span className="local-note">Downloads {formatBytes(status.download_bytes)} once, then works offline.</span>
+          <span className="local-note">{whatItTakes(status)}</span>
         </div>
       )}
       {setup && (
@@ -155,7 +177,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
             </ul>
           )}
           <div className="turn-actions">
-            {status && (
+            {status?.can_set_up && (problem.code === "stopped" || worthRetrying(problem.code)) && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void start()}>
                 {problem.code === "stopped" ? "Carry on setting up" : "Try again"}
               </button>

@@ -11,7 +11,8 @@ pub const LOCAL_SETUP: &str = "local-setup";
 
 /// How long a Stop that arrived before its run is kept for it. The window sends the request and
 /// then the Stop, and the two can be handled in either order; a Stop older than this belongs to
-/// a run that has already ended.
+/// a run that has already ended. It is also how long an ended run is remembered, so a Stop that
+/// arrives just after its run ended isn't mistaken for one that came early for the next.
 const EARLY_STOP: Duration = Duration::from_secs(5);
 
 /// Shared by every command; clones are the same registry.
@@ -23,6 +24,9 @@ struct Inner {
     running: HashMap<String, (u64, CancelToken)>,
     /// Jobs stopped before they were started, and when.
     early: Vec<(String, Instant)>,
+    /// Jobs that ended lately, and when: a Stop for one of them came too late, and is dropped
+    /// rather than kept for the next run of that name ("Try again" just after a Stop).
+    ended: Vec<(String, Instant)>,
     serial: u64,
 }
 
@@ -58,6 +62,10 @@ impl Jobs {
     fn enter(&self, mut inner: MutexGuard<'_, Inner>, job: &str) -> Running {
         let token = CancelToken::new();
         inner.early.retain(|(_, at)| at.elapsed() < EARLY_STOP);
+        // A run of this name is going again: Stops are for it now.
+        inner
+            .ended
+            .retain(|(j, at)| j != job && at.elapsed() < EARLY_STOP);
         if let Some(i) = inner.early.iter().position(|(j, _)| j == job) {
             inner.early.remove(i);
             token.cancel();
@@ -79,12 +87,17 @@ impl Jobs {
         self.lock().running.contains_key(job)
     }
 
-    /// Stops `job`, or the run of that name as soon as it starts. True when it was running.
+    /// Stops `job`, or the run of that name as soon as it starts. True when it was running. A
+    /// Stop for a run that has just ended does nothing: it was meant for that run, not the next.
     pub fn cancel(&self, job: &str) -> bool {
         let mut inner = self.lock();
         if let Some((_, token)) = inner.running.get(job) {
             token.cancel();
             return true;
+        }
+        inner.ended.retain(|(_, at)| at.elapsed() < EARLY_STOP);
+        if inner.ended.iter().any(|(j, _)| j == job) {
+            return false;
         }
         inner.early.retain(|(_, at)| at.elapsed() < EARLY_STOP);
         inner.early.push((job.to_string(), Instant::now()));
@@ -102,6 +115,8 @@ impl Drop for Running {
             .is_some_and(|(serial, _)| *serial == self.serial)
         {
             inner.running.remove(&self.job);
+            inner.ended.retain(|(_, at)| at.elapsed() < EARLY_STOP);
+            inner.ended.push((self.job.clone(), Instant::now()));
         }
     }
 }
@@ -131,6 +146,20 @@ mod tests {
         drop(run);
         // It is used up: the next run of that name goes ahead.
         assert!(!jobs.start("c1-t2").token.is_cancelled());
+    }
+
+    #[test]
+    fn a_stop_that_arrives_after_its_run_ended_doesnt_stop_the_next() {
+        let jobs = Jobs::default();
+        // Setting up fails just as Stop is clicked: the Stop lands after the run is gone.
+        drop(jobs.try_start(LOCAL_SETUP).unwrap());
+        assert!(!jobs.cancel(LOCAL_SETUP));
+        // "Try again" straight away goes ahead.
+        let again = jobs.try_start(LOCAL_SETUP).unwrap();
+        assert!(!again.token.is_cancelled());
+        // And a Stop for that one still stops it.
+        assert!(jobs.cancel(LOCAL_SETUP));
+        assert!(again.token.is_cancelled());
     }
 
     #[test]

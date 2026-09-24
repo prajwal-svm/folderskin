@@ -105,7 +105,7 @@ function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
       ? { label: `Add your ${provider} key`, run: () => act.settings(turn.provider) }
       : error.code === "unauthorized"
         ? { label: "Check the key", run: () => act.settings(turn.provider) }
-        : error.code === "local_not_ready"
+        : error.code === "local_not_ready" || error.code === "runtime_failed_to_start"
           ? { label: "Set up this computer", run: () => act.settings("local") }
           : error.code === "refused"
             ? { label: "Reword it", run: () => act.reword(turn) }

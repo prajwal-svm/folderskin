@@ -194,11 +194,12 @@ pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
         settings.backend, settings.tier
     );
     if settings.backend == Backend::Mlx {
-        if paths::which(MFLUX_PROBE).is_none() {
+        if paths::find_tool(MFLUX_PROBE).is_none() {
             return Err(Error::environment(
                 "mflux_missing",
                 "mflux isn't installed.",
-                "On Apple Silicon the models run in mflux, and it isn't on the PATH.",
+                "On Apple Silicon the models run in mflux, and it isn't on the PATH or where uv \
+                 installs its tools.",
             )
             .fix(setup));
         }
@@ -349,7 +350,8 @@ fn generate_blocking(
     let (cmd, runtime, painted) = if settings.backend == Backend::Mlx {
         let (program, args) =
             command::mflux(model, settings.tier, &prompt, job.seed, &pictures, &out);
-        let mut cmd = Command::new(program);
+        // By its full path: an app opened from the Finder has no ~/.local/bin on its PATH.
+        let mut cmd = Command::new(paths::find_tool(program).unwrap_or_else(|| program.into()));
         cmd.args(args);
         let painted = Painting {
             at: out.clone(),
@@ -399,7 +401,10 @@ fn generate_blocking(
             Error::environment(
                 "mflux_missing",
                 "mflux isn't installed.",
-                format!("mflux's program for {} isn't on the PATH.", model.label),
+                format!(
+                    "mflux's program for {} isn't on the PATH or where uv installs its tools.",
+                    model.label
+                ),
             )
             .fix("Install it: folderskin ai setup --backend mlx")
         } else {
@@ -408,13 +413,15 @@ fn generate_blocking(
                 "The runtime couldn't be started.",
                 format!("{runtime}: {e}."),
             )
+            // Two steps, so the app keeps the first and says the second in its own words.
             .fix(format!(
-                "Reinstall it: delete {} and run folderskin ai setup",
+                "Reinstall it: delete {}",
                 paths::sd_cli(settings.backend)
                     .parent()
                     .unwrap_or(Path::new("."))
                     .display()
             ))
+            .fix("Then set it up again: folderskin ai setup")
         }
     })?;
     let seconds = started.elapsed().as_secs_f64();
@@ -642,7 +649,7 @@ fn runtime_error(
                 "The picture couldn't be painted.",
                 format!("{runtime} {exit}.{}", tail_text(tail)),
             );
-            if said.contains("out of memory") || said.contains("cannot allocate") {
+            if ran_out_of_memory(&said) {
                 error = error
                     .fix("Close other programs that use the GPU or a lot of memory, then try again.")
                     .fix("Or use the smaller weights: add --tier q4 (download them with folderskin ai setup --tier q4).");
@@ -659,6 +666,20 @@ fn runtime_error(
             )
         }
     }
+}
+
+/// Whether a runtime's output says the graphics card (or the computer) ran out of memory, in
+/// each backend's words: CUDA's "cudaMalloc failed: out of memory", Vulkan's "Device memory
+/// allocation of size … failed", "ErrorOutOfDeviceMemory" and "failed to allocate Vulkan0 buffer
+/// of size …", Metal's "failed to allocate buffer", and MLX's "…ErrorOutOfMemory".
+pub fn ran_out_of_memory(output: &str) -> bool {
+    let said = output.to_lowercase();
+    said.contains("out of memory")
+        || said.contains("cannot allocate")
+        || said.contains("outofmemory")
+        || said.contains("outofdevicememory")
+        || said.contains("memory allocation of size")
+        || (said.contains("failed to allocate") && said.contains("buffer"))
 }
 
 /// Now, in UTC, as ISO 8601: "2026-09-23T13:32:05Z".
@@ -777,6 +798,25 @@ mod tests {
         );
         let killed = runtime_error(None, &[], "sd", Backend::Vulkan).unwrap();
         assert!(killed.why.contains("stopped by the system"));
+    }
+
+    #[test]
+    fn running_out_of_memory_is_heard_in_every_backends_words() {
+        for said in [
+            "ggml_cuda: cudaMalloc failed: out of memory",
+            "ggml_vulkan: Device memory allocation of size 4831838208 failed.",
+            "ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory",
+            "ggml_backend_alloc_ctx_tensors_from_buft: failed to allocate Vulkan0 buffer of size 4831838208",
+            "ggml_metal: failed to allocate buffer, size = 3072.00 MiB",
+            "[METAL] Command buffer execution failed: Insufficient Memory \
+             (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)",
+        ] {
+            assert!(ran_out_of_memory(said), "{said}");
+        }
+        assert!(!ran_out_of_memory("[ERROR] failed to load model"));
+        let tail = vec!["ggml_vulkan: Device memory allocation of size 1 failed.".to_string()];
+        let oom = runtime_error(Some(1), &tail, "stable-diffusion.cpp", Backend::Vulkan).unwrap();
+        assert!(oom.fix.iter().any(|f| f.contains("--tier q4")), "{oom:?}");
     }
 
     #[test]

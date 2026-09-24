@@ -243,6 +243,25 @@ test.describe("the AI chat", () => {
     await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
   });
 
+  test("a setup under way is found again when its settings are opened again", async ({ page }) => {
+    await openApp(page);
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /This computer/ }).click();
+    await settings(page).getByRole("button", { name: "Set up this computer" }).click();
+    await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
+    await settings(page).getByRole("button", { name: "close" }).click();
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /This computer/ }).click();
+    // Where it has got to, with its Stop; it isn't offered as if nothing were running.
+    await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
+    await expect(settings(page).getByRole("button", { name: "Set up this computer" })).toHaveCount(0);
+    await settings(page).getByRole("button", { name: "Stop" }).click();
+    await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
+    await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
+    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
+  });
+
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {
     await withKey(page);
     await chat(page).locator(".model-pill").click();

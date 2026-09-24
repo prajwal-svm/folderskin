@@ -230,8 +230,10 @@ fn key_check(provider_id: &str, label: &str, status: u16, message: String) -> Re
         (_, 200..=299) => Ok(()),
         // Black Forest Labs answers a key that isn't even shaped like one with 422.
         ("bfl", 401 | 403 | 422) => Err(AiError::Unauthorized(label.to_string())),
-        // Past the key and turned away for the picture that isn't one: the key is good.
-        ("ideogram", 400..=499) if !matches!(status, 401 | 403 | 429) => Ok(()),
+        // Past the key and turned away for the picture that isn't one: the key is good. Only
+        // the answers that mean a bad picture: a 404 or 405 says the endpoint moved, not that
+        // the key was accepted.
+        ("ideogram", 400 | 415 | 422) => Ok(()),
         _ => Err(AiError::from_status(label, status, message)),
     }
 }
@@ -540,8 +542,19 @@ mod tests {
             ));
         }
         // Ideogram: the key is checked first, then the picture that isn't one is turned away.
-        assert!(key_check("ideogram", "Ideogram", 400, "bad image".into()).is_ok());
-        assert!(key_check("ideogram", "Ideogram", 422, "bad image".into()).is_ok());
+        for status in [400, 415, 422] {
+            assert!(key_check("ideogram", "Ideogram", status, "bad image".into()).is_ok());
+        }
+        // An endpoint that moved or changed says nothing about the key.
+        for status in [404, 405, 413] {
+            assert!(
+                matches!(
+                    key_check("ideogram", "Ideogram", status, "Not Found".into()),
+                    Err(AiError::Provider { .. })
+                ),
+                "{status}"
+            );
+        }
         assert!(matches!(
             key_check("ideogram", "Ideogram", 401, "Access denied".into()),
             Err(AiError::Unauthorized(_))

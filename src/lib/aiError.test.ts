@@ -36,5 +36,9 @@ describe("aiFailure", () => {
     expect(worthRetrying("missing_key")).toBe(false);
     expect(worthRetrying("no_build_for_platform")).toBe(false);
     expect(worthRetrying("out_of_memory")).toBe(true);
+    // The same picture or path fails the same way again.
+    for (const code of ["reference_unreadable", "reference_missing", "path_not_ascii", "no_idea"]) expect(worthRetrying(code)).toBe(false);
+    // Another setup ends, and then it goes ahead.
+    expect(worthRetrying("busy")).toBe(true);
   });
 });

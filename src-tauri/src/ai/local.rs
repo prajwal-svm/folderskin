@@ -13,9 +13,11 @@ use folderskin_local::{
     Backend, CancelToken, Job, Machine, ModelId, Reporter, Settings, Shape, Tier,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use tokio::sync::watch;
 
 /// The provider id the chat sends for "This computer".
 pub const PROVIDER_ID: &str = "local";
@@ -31,7 +33,8 @@ const MODELS: [(&str, &str, bool); 3] = [
 ];
 
 /// The machine, looked at once (it runs `nvidia-smi` or asks the system for its display
-/// adapters, a second or two), and a turn for the one painting the graphics card has room for.
+/// adapters, a second or two), a turn for the one painting the graphics card has room for, and
+/// the setup under way, if one is.
 #[derive(Clone, Default)]
 pub struct Local(Arc<Inner>);
 
@@ -39,6 +42,15 @@ pub struct Local(Arc<Inner>);
 struct Inner {
     machine: OnceLock<Machine>,
     turn: tokio::sync::Mutex<()>,
+    /// Whether the runtime started the last time it was asked; `None` until it has been.
+    runtime_starts: Mutex<Option<bool>>,
+    /// The setup under way: a window that asks to set up joins it rather than starting another.
+    setup: Mutex<Option<Arc<SetupRun>>>,
+}
+
+/// A lock that a panic elsewhere can't leave unusable: every change under these is one step.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl Local {
@@ -52,10 +64,53 @@ impl Local {
         Settings::for_machine(&self.machine())
     }
 
-    /// Whether pictures can be painted here now, from the files alone: quick enough for the
-    /// provider list once the machine has been looked at.
+    /// Whether pictures can be painted here now, by the same test as [`Local::status`]'s
+    /// `ready`: the files are here, and the runtime starts. Whether it starts is remembered from
+    /// the last status, so this is quick enough for the provider list; the first time the files
+    /// are all here it is asked, which takes a second.
     pub fn is_ready(&self) -> bool {
-        folderskin_local::is_set_up(&self.settings())
+        if !folderskin_local::is_set_up(&self.settings()) {
+            return false;
+        }
+        let known = *lock(&self.0.runtime_starts);
+        known.unwrap_or_else(|| self.status().ready)
+    }
+
+    /// How this computer stands ([`status`]), and whether it is being set up. Asks the runtime
+    /// whether it starts, which takes a second: call it off the async threads.
+    pub fn status(&self) -> LocalStatusDto {
+        let mut status = status(&self.machine(), &self.settings());
+        *lock(&self.0.runtime_starts) = Some(status.problem.is_none());
+        status.setting_up = self.is_setting_up();
+        status
+    }
+
+    /// Whether a setup is under way.
+    pub fn is_setting_up(&self) -> bool {
+        lock(&self.0.setup).is_some()
+    }
+
+    /// Joins the setup under way, which `listener` then hears from where it has got to; or, when
+    /// none is, makes this caller the one that runs it.
+    pub fn join_setup(&self, listener: Listener) -> SetupTurn {
+        let mut slot = lock(&self.0.setup);
+        if let Some(run) = slot.as_ref() {
+            run.listen(listener);
+            return SetupTurn::Join(SetupJoin(run.done.subscribe()));
+        }
+        let run = Arc::new(SetupRun {
+            heard: Mutex::new(Heard {
+                listeners: vec![listener],
+                ..Heard::default()
+            }),
+            done: watch::Sender::new(None),
+        });
+        *slot = Some(run.clone());
+        SetupTurn::Lead(SetupLead {
+            local: self.clone(),
+            run,
+            ended: false,
+        })
     }
 
     /// Waits for the turn to paint, saying so if another picture is painting, and gives up the
@@ -81,6 +136,127 @@ impl Local {
                 said = true;
             }
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        }
+    }
+}
+
+/// Something that hears a run's events: a window's channel.
+pub type Listener = Arc<dyn Fn(AiEvent) + Send + Sync>;
+
+/// How a setup ended, as `ai_local_setup` answers.
+pub type SetupOutcome = Result<LocalStatusDto, AiFailure>;
+
+/// The log lines a window that joins a setup part-way is shown, as many as the window keeps.
+const KEPT_LOG: usize = 300;
+
+/// A setup under way. Every window that asked for it hears how it goes and gets how it ended; one
+/// that joins part-way first hears where it has got to.
+struct SetupRun {
+    heard: Mutex<Heard>,
+    done: watch::Sender<Option<SetupOutcome>>,
+}
+
+#[derive(Default)]
+struct Heard {
+    listeners: Vec<Listener>,
+    stage: Option<AiEvent>,
+    download: Option<AiEvent>,
+    log: VecDeque<AiEvent>,
+}
+
+impl SetupRun {
+    fn tell(&self, event: AiEvent) {
+        let mut heard = lock(&self.heard);
+        match &event {
+            AiEvent::Stage { .. } => heard.stage = Some(event.clone()),
+            AiEvent::Download { .. } => heard.download = Some(event.clone()),
+            AiEvent::Log { .. } => {
+                if heard.log.len() == KEPT_LOG {
+                    heard.log.pop_front();
+                }
+                heard.log.push_back(event.clone());
+            }
+            AiEvent::Progress { .. } => {}
+        }
+        // Sent while the list is held, so one that joins can't miss an event or hear it twice.
+        for listener in &heard.listeners {
+            listener(event.clone());
+        }
+    }
+
+    fn listen(&self, listener: Listener) {
+        let mut heard = lock(&self.heard);
+        for event in heard.log.iter().chain(&heard.stage).chain(&heard.download) {
+            listener(event.clone());
+        }
+        heard.listeners.push(listener);
+    }
+}
+
+/// Whether a caller of [`Local::join_setup`] runs the setup or waits on the one under way.
+pub enum SetupTurn {
+    Lead(SetupLead),
+    Join(SetupJoin),
+}
+
+/// Running the setup: its events go to every window that asked ([`SetupLead::listener`]), and
+/// [`SetupLead::finish`] tells them all how it ended. Dropped without finishing, it tells them it
+/// stopped unexpectedly, so nobody waits for ever.
+pub struct SetupLead {
+    local: Local,
+    run: Arc<SetupRun>,
+    ended: bool,
+}
+
+impl SetupLead {
+    /// Where the setup's events go: to every window that asked for it.
+    pub fn listener(&self) -> Listener {
+        let run = self.run.clone();
+        Arc::new(move |event| run.tell(event))
+    }
+
+    /// Ends the setup with `outcome`, which every window that joined it gets too.
+    pub fn finish(mut self, outcome: SetupOutcome) -> SetupOutcome {
+        self.end(outcome.clone());
+        outcome
+    }
+
+    fn end(&mut self, outcome: SetupOutcome) {
+        if std::mem::replace(&mut self.ended, true) {
+            return;
+        }
+        let mut slot = lock(&self.local.0.setup);
+        if slot.as_ref().is_some_and(|run| Arc::ptr_eq(run, &self.run)) {
+            *slot = None;
+        }
+        drop(slot);
+        self.run.done.send_replace(Some(outcome));
+    }
+}
+
+impl Drop for SetupLead {
+    fn drop(&mut self) {
+        self.end(Err(AiFailure::bug(
+            "Setting this computer up stopped unexpectedly.",
+        )));
+    }
+}
+
+/// Waiting on a setup another window started.
+pub struct SetupJoin(watch::Receiver<Option<SetupOutcome>>);
+
+impl SetupJoin {
+    /// How the setup ended, once it has.
+    pub async fn outcome(mut self) -> SetupOutcome {
+        match self.0.wait_for(Option::is_some).await {
+            Ok(ended) => ended.clone().unwrap_or_else(|| {
+                Err(AiFailure::bug(
+                    "Setting this computer up stopped unexpectedly.",
+                ))
+            }),
+            Err(_) => Err(AiFailure::bug(
+                "Setting this computer up stopped unexpectedly.",
+            )),
         }
     }
 }
@@ -155,69 +331,101 @@ pub fn device(machine: &Machine, backend: Backend) -> String {
 #[derive(Clone, Debug, Serialize)]
 pub struct LocalStatusDto {
     pub ready: bool,
+    /// Whether setting up has anything to install here: false on a computer the runtime has no
+    /// build for (an Intel Mac, ARM64 Linux), where `note` says so and nothing is offered.
+    pub can_set_up: bool,
+    /// A setup is under way, started by this window or another; `ai_local_setup` joins it.
+    pub setting_up: bool,
     pub backend: String,
     pub device: String,
     pub download_bytes: u64,
+    /// The models' weights come down the first time each one paints (mflux on Apple Silicon), so
+    /// `download_bytes` doesn't count them.
+    pub downloads_on_first_use: bool,
     pub seconds_per_image: Option<f64>,
     pub home: String,
     pub note: Option<String>,
+    /// Why the runtime won't start, when it is installed but doesn't; for `ai_local_setup`'s
+    /// failure, since setting up again doesn't change it.
+    #[serde(skip)]
+    pub problem: Option<RuntimeProblem>,
+}
+
+/// An installed runtime that won't start.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RuntimeProblem {
+    /// "vc_runtime_missing" or "runtime_failed_to_start".
+    pub code: &'static str,
+    /// "stable-diffusion.cpp is installed but won't start: …"
+    pub message: String,
 }
 
 /// Looks at what is installed. Asks the runtime whether it starts, which takes a second: call it
-/// off the async threads.
+/// off the async threads. Says nobody is setting it up; [`Local::status`] knows better.
 pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
     let status = folderskin_local::status(machine, settings);
     let runtime = &status.runtime;
     let models_here = status.models.iter().all(|m| m.ready());
     let ready = runtime.installed && runtime.problem.is_none() && models_here;
+    let can_set_up =
+        runtime.available && folderskin_local::setup::can_set_up(machine, settings.backend);
+    let problem = runtime.problem.as_ref().map(|p| RuntimeProblem {
+        code: runtime.problem_code.unwrap_or("runtime_failed_to_start"),
+        message: format!("{} is installed but won't start: {p}.", runtime.name),
+    });
     let mut notes = Vec::new();
-    if !runtime.available {
+    if let Some(problem) = &problem {
+        notes.push(problem.message.clone());
+    }
+    if !ready && !can_set_up {
+        // Nothing to set up and nothing to paint with: only what to do instead.
         let why = folderskin_local::setup::no_build(machine.os, machine.arch, settings.backend);
         notes.push(format!(
             "{} {} You can still make pictures with a provider and your own key.",
             why.what, why.why
         ));
-    } else if let Some(problem) = &runtime.problem {
-        notes.push(format!(
-            "{} is installed but won't start: {problem}.",
-            runtime.name
-        ));
-    }
-    if settings.backend == Backend::Mlx
-        && !runtime.installed
-        && folderskin_local::paths::which("uv").is_none()
-    {
-        notes.push(
-            "Setting up installs mflux with uv, which isn't on this Mac yet: install it from \
-             https://docs.astral.sh/uv/ first."
-                .into(),
-        );
-    }
-    if settings.backend == Backend::Cpu {
-        notes.push(
-            "No graphics card it can use was found, so pictures are painted on the processor: \
-             expect a few minutes each."
-                .into(),
-        );
-    }
-    if settings.tier == Tier::Q4 && settings.backend != Backend::Mlx {
-        notes.push(format!(
-            "With {:.0} GB of memory it uses the smaller 4-bit models, which are a little softer.",
-            machine.ram_gb
-        ));
+    } else {
+        if settings.backend == Backend::Mlx
+            && !runtime.installed
+            && folderskin_local::paths::find_tool("uv").is_none()
+        {
+            notes.push(
+                "Setting up installs mflux with uv, which isn't on this Mac yet: install it from \
+                 https://docs.astral.sh/uv/ first."
+                    .into(),
+            );
+        }
+        if settings.backend == Backend::Cpu {
+            notes.push(
+                "No graphics card it can use was found, so pictures are painted on the \
+                 processor: expect a few minutes each."
+                    .into(),
+            );
+        }
+        if settings.tier == Tier::Q4 && settings.backend != Backend::Mlx {
+            notes.push(format!(
+                "With {:.0} GB of memory it uses the smaller 4-bit models, which are a little \
+                 softer.",
+                machine.ram_gb
+            ));
+        }
     }
     LocalStatusDto {
         ready,
+        can_set_up,
+        setting_up: false,
         backend: backend_name(settings.backend).into(),
         device: device(machine, settings.backend),
-        download_bytes: if ready {
+        download_bytes: if ready || !can_set_up {
             0
         } else {
             folderskin_local::download_size(machine, settings)
         },
+        downloads_on_first_use: settings.backend == Backend::Mlx,
         seconds_per_image: Timing::read().seconds_for(settings),
         home: status.home.display().to_string(),
         note: (!notes.is_empty()).then(|| notes.join(" ")),
+        problem,
     }
 }
 
@@ -344,6 +552,9 @@ pub async fn paint(
         .map_err(|e| failure::from_engine(e, &doing))?;
     Timing::record(settings, picture.provenance.seconds);
     let shape = picture.shape;
+    if order.shape == Shape::Folder {
+        send(AiEvent::stage("cut", "Cutting it out of the background"));
+    }
     let (image, bytes, warning) = tokio::task::spawn_blocking(move || {
         let bytes = std::fs::read(&picture.path).map_err(|e| {
             AiFailure::failed(format!("The painting couldn't be read back: {e}.")).fix("Try again.")
@@ -512,6 +723,127 @@ mod tests {
         );
         assert_eq!(backend_name(Backend::Cuda), "CUDA");
         assert_eq!(backend_name(Backend::Mlx), "MLX");
+    }
+
+    #[test]
+    fn a_computer_with_no_build_is_offered_no_setup() {
+        let intel_mac = Machine {
+            os: Os::Macos,
+            arch: Arch::X86_64,
+            ram_gb: 16.0,
+            gpu: Gpu::Other,
+            gpu_name: "Intel Iris Plus Graphics".into(),
+            vram_gb: 0.0,
+        };
+        let settings = Settings::for_machine(&intel_mac);
+        assert_eq!((settings.backend, settings.tier), (Backend::Cpu, Tier::Q4));
+        let s = status(&intel_mac, &settings);
+        assert!(!s.can_set_up && !s.setting_up);
+        if !s.ready {
+            assert_eq!(s.download_bytes, 0, "nothing would be downloaded");
+            let note = s.note.as_deref().unwrap();
+            assert!(note.contains("Apple Silicon only"), "{note}");
+            assert!(
+                !note.contains("processor") && !note.contains("4-bit"),
+                "only what to do instead: {note}"
+            );
+        }
+        let json = serde_json::to_value(&s).unwrap();
+        assert!(json.get("problem").is_none(), "{json}");
+        assert_eq!(json["downloads_on_first_use"], false);
+    }
+
+    /// A listener that keeps what it hears.
+    fn keeping() -> (Listener, Arc<std::sync::Mutex<Vec<AiEvent>>>) {
+        let kept = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = kept.clone();
+        (Arc::new(move |e| sink.lock().unwrap().push(e)), kept)
+    }
+
+    fn block_on<T>(fut: impl std::future::Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(fut)
+    }
+
+    #[test]
+    fn a_window_opened_again_joins_the_setup_under_way() {
+        let here = Local::default();
+        assert!(!here.is_setting_up());
+        let (first, first_heard) = keeping();
+        let SetupTurn::Lead(lead) = here.join_setup(first) else {
+            panic!("nothing was being set up");
+        };
+        assert!(here.is_setting_up());
+        let tell = lead.listener();
+        tell(AiEvent::info("installed cwebp"));
+        tell(AiEvent::stage(
+            "download",
+            "Downloading z_image_turbo-Q8_0.gguf",
+        ));
+        let at = |done| AiEvent::Download {
+            file: "z_image_turbo-Q8_0.gguf".into(),
+            done,
+            total: 100,
+        };
+        tell(at(10));
+        tell(at(20));
+        let (second, second_heard) = keeping();
+        let SetupTurn::Join(join) = here.join_setup(second) else {
+            panic!("it joins the one under way");
+        };
+        // Where it has got to, at once, then what comes next.
+        tell(at(50));
+        assert_eq!(
+            *second_heard.lock().unwrap(),
+            [
+                AiEvent::info("installed cwebp"),
+                AiEvent::stage("download", "Downloading z_image_turbo-Q8_0.gguf"),
+                at(20),
+                at(50),
+            ]
+        );
+        assert_eq!(
+            first_heard.lock().unwrap().len(),
+            5,
+            "the first hears it all"
+        );
+        let ended = lead.finish(Err(AiFailure::stopped()));
+        assert!(ended.unwrap_err().is_stopped());
+        assert!(!here.is_setting_up());
+        assert!(block_on(join.outcome()).unwrap_err().is_stopped());
+        // A setup asked for now is a new one.
+        let (third, _) = keeping();
+        assert!(matches!(here.join_setup(third), SetupTurn::Lead(_)));
+        assert!(!here.is_setting_up(), "dropped, it lets go");
+    }
+
+    #[test]
+    fn a_setup_that_ends_unexpectedly_still_answers_those_waiting() {
+        let here = Local::default();
+        let (a, _) = keeping();
+        let (b, _) = keeping();
+        let SetupTurn::Lead(lead) = here.join_setup(a) else {
+            panic!("nothing was being set up");
+        };
+        let SetupTurn::Join(join) = here.join_setup(b) else {
+            panic!("it joins");
+        };
+        drop(lead);
+        assert!(!here.is_setting_up());
+        let e = block_on(join.outcome()).unwrap_err();
+        assert_eq!(e.code, "failed");
+        assert!(e.message.contains("unexpectedly"), "{e:?}");
+    }
+
+    #[test]
+    fn a_runtime_that_wouldnt_start_isnt_listed_as_ready() {
+        // As the settings panel last found it: installed, but it wouldn't start.
+        let here = Local::default();
+        *lock(&here.0.runtime_starts) = Some(false);
+        assert!(!here.is_ready(), "the list and the panel agree");
     }
 
     #[test]

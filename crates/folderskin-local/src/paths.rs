@@ -74,6 +74,40 @@ pub fn which(program: &str) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// `program` on the PATH, or where uv, Homebrew and cargo put programs. An app opened from the
+/// Finder or the Dock has only launchd's PATH (/usr/bin:/bin:/usr/sbin:/sbin), which has none of
+/// them: uv itself lives in ~/.local/bin or /opt/homebrew/bin, and `uv tool install` puts mflux
+/// in ~/.local/bin. Windows gives every program the PATH the user set, so there it is [`which`].
+pub fn find_tool(program: &str) -> Option<PathBuf> {
+    which(program).or_else(|| find_in(program, &tool_dirs()))
+}
+
+/// The folders [`find_tool`] looks in after the PATH, uv's own for its tools first.
+fn tool_dirs() -> Vec<PathBuf> {
+    if cfg!(windows) {
+        return Vec::new();
+    }
+    let mut dirs: Vec<PathBuf> = ["UV_TOOL_BIN_DIR", "XDG_BIN_HOME"]
+        .into_iter()
+        .filter_map(env_path)
+        .collect();
+    dirs.extend(env_path("XDG_DATA_HOME").map(|data| data.join("..").join("bin")));
+    if let Some(user) = dirs::home_dir() {
+        dirs.push(user.join(".local").join("bin"));
+        dirs.push(user.join(".cargo").join("bin"));
+    }
+    dirs.push(PathBuf::from("/opt/homebrew/bin"));
+    dirs.push(PathBuf::from("/usr/local/bin"));
+    dirs
+}
+
+/// `program` in the first of `dirs` that has it.
+fn find_in(program: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
+    dirs.iter()
+        .map(|dir| dir.join(program))
+        .find(|p| p.is_file())
+}
+
 /// `path` in a form stable-diffusion.cpp can open, or `None` when there is none.
 ///
 /// On Windows sd-cli opens files through the ANSI file API, so a path with any letter outside
@@ -119,9 +153,9 @@ fn short_name(_: &Path) -> Option<PathBuf> {
     None
 }
 
-/// cwebp, from the PATH or where setup put it.
+/// cwebp, from the PATH (or Homebrew's folder) or where setup put it.
 pub fn cwebp() -> Option<PathBuf> {
-    which("cwebp").or_else(|| {
+    find_tool("cwebp").or_else(|| {
         let ours = webp_dir().join(if cfg!(windows) { "cwebp.exe" } else { "cwebp" });
         ours.is_file().then_some(ours)
     })
@@ -144,6 +178,38 @@ mod tests {
     #[test]
     fn which_finds_nothing_that_isnt_there() {
         assert_eq!(which("folderskin-no-such-program-anywhere"), None);
+        assert_eq!(find_tool("folderskin-no-such-program-anywhere"), None);
+    }
+
+    #[test]
+    fn a_tool_is_found_where_uv_and_homebrew_put_it_without_the_path() {
+        let dir = std::env::temp_dir().join(format!("fs-tools-{}", std::process::id()));
+        let (empty, bin) = (dir.join("empty"), dir.join("bin"));
+        std::fs::create_dir_all(&empty).unwrap();
+        std::fs::create_dir_all(&bin).unwrap();
+        let tool = bin.join("mflux-generate-z-image-turbo");
+        std::fs::write(&tool, b"#!/bin/sh\n").unwrap();
+        let found = find_in(
+            "mflux-generate-z-image-turbo",
+            &[empty.clone(), bin.clone()],
+        );
+        assert_eq!(found.as_deref(), Some(tool.as_path()));
+        assert_eq!(find_in("uv", &[empty, bin]), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+        if cfg!(windows) {
+            assert!(
+                tool_dirs().is_empty(),
+                "Windows programs get the user's PATH"
+            );
+        } else {
+            let user = dirs::home_dir().unwrap();
+            let dirs = tool_dirs();
+            assert!(dirs.contains(&user.join(".local").join("bin")), "{dirs:?}");
+            assert!(
+                dirs.contains(&PathBuf::from("/opt/homebrew/bin")),
+                "{dirs:?}"
+            );
+        }
     }
 
     #[test]
