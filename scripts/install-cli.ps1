@@ -83,11 +83,20 @@ try {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
 
-# On the user PATH from the next terminal on, and in this one now.
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+# On the user PATH from the next terminal on, and in this one now. The PATH is read and written
+# as it is stored: [Environment]::GetEnvironmentVariable hands it back with every %VARIABLE%
+# already expanded, and writing that back would pin entries like %USERPROFILE%\... for good.
+$envKey = 'HKCU:\Environment'
+if (-not (Test-Path $envKey)) { New-Item -Path $envKey | Out-Null }
+$userPath = (Get-Item $envKey).GetValue('Path', '', 'DoNotExpandEnvironmentNames')
 $parts = @($userPath -split ';' | Where-Object { $_ })
-if ($parts -notcontains $InstallDir) {
-    [Environment]::SetEnvironmentVariable('Path', (($parts + $InstallDir) -join ';'), 'User')
+$already = $parts | Where-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') -eq $InstallDir.TrimEnd('\') }
+if (-not $already) {
+    Set-ItemProperty -Path $envKey -Name 'Path' -Type ExpandString -Value (($parts + $InstallDir) -join ';')
+    # Setting a variable through .NET tells Windows the environment changed (WM_SETTINGCHANGE),
+    # so Explorer, and terminals opened from it, see the new PATH without signing out.
+    [Environment]::SetEnvironmentVariable('FOLDERSKIN_INSTALL_REFRESH', '1', 'User')
+    [Environment]::SetEnvironmentVariable('FOLDERSKIN_INSTALL_REFRESH', $null, 'User')
     Say "added $InstallDir to your user PATH; new terminals will find folderskin"
 }
 if (($env:Path -split ';') -notcontains $InstallDir) {
