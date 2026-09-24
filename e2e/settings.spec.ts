@@ -88,33 +88,36 @@ test.describe("settings", () => {
     await openSettings(page);
     // The globe on the Sharing tab draws itself again when pointed at, unless motion is reduced.
     const globe = dialog(page).getByRole("tab", { name: "Sharing" }).locator("svg");
-    const drawing = () => globe.evaluate((s) => s.outerHTML);
-    // Pointed away from, once its way back from being drawn is over: the same twice running.
-    const resting = async () => {
-      await page.mouse.move(0, 0);
-      let last: string | null = null;
-      await expect
-        .poll(
-          async () => {
-            const now = await drawing();
-            const same = now === last;
-            last = now;
-            return same;
-          },
-          { intervals: [300] },
-        )
-        .toBe(true);
-      return last!;
-    };
-    const before = await resting();
+    // At rest it's drawn in full: as it first is, or with all of each stroke there once it has
+    // drawn itself. (Its way there waits half a second before it starts, so it can't be told by
+    // its look holding still for a moment.)
+    const atRest = () =>
+      globe.evaluate((svg) => [...svg.children].every((part) => ["1 1", null].includes(part.getAttribute("stroke-dasharray")) && ["0", null].includes(part.getAttribute("stroke-dashoffset"))));
+    // Whether it draws itself from now on: any moment a stroke isn't all there is seen.
+    const watch = () =>
+      globe.evaluate((svg) => {
+        const w = window as unknown as { globeDrew?: boolean; globeWatch?: MutationObserver };
+        w.globeWatch?.disconnect();
+        w.globeDrew = false;
+        w.globeWatch = new MutationObserver(() => {
+          if (![...svg.children].every((part) => ["1 1", null].includes(part.getAttribute("stroke-dasharray")))) w.globeDrew = true;
+        });
+        w.globeWatch.observe(svg, { attributes: true, subtree: true });
+      });
+    const drew = () => page.evaluate(() => (window as unknown as { globeDrew?: boolean }).globeDrew);
+    await page.mouse.move(0, 0);
+    await expect.poll(atRest).toBe(true);
+    await watch();
     await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
-    await expect.poll(drawing).not.toBe(before);
+    await expect.poll(drew).toBe(true);
     await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "Reduced" }).click();
-    const still = await resting();
+    await page.mouse.move(0, 0);
+    await expect.poll(atRest).toBe(true);
+    await watch();
     await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
-    // A moment later it is as it was.
+    // A moment later it hasn't moved.
     await page.waitForTimeout(250);
-    expect(await drawing()).toBe(still);
+    expect(await drew()).toBe(false);
 
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
