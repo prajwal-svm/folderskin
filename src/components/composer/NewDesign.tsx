@@ -77,6 +77,9 @@ export function NewDesign({
     [folders, style],
   );
   const empty = useMemo(() => ({ folder: emptyDoc("folder", style), free: emptyDoc("free", style) }), [style]);
+  // The Mac's and Windows' own folders have nothing on them yet: they start empty, like a blank folder.
+  const plain = templates.filter(({ t }) => t.plain);
+  const designed = templates.filter(({ t }) => !t.plain);
   const template = folders[style]?.images ?? null;
 
   return (
@@ -110,12 +113,21 @@ export function NewDesign({
               <span className="cmp-card-note">{e.note}</span>
             </button>
           ))}
+          {plain.map(({ t, doc, template: folder }) => (
+            <button key={t.id} type="button" className="cmp-card" onClick={() => onStart({ kind: "template", template: t })}>
+              <span className="cmp-card-art" aria-hidden="true">
+                <DesignThumb doc={doc} template={folder} assets={assets} size={104} version={version} />
+              </span>
+              <span className="cmp-card-label">{t.label}</span>
+              <span className="cmp-card-note">{t.plain?.note}</span>
+            </button>
+          ))}
         </div>
       </section>
       <section className="new-section" aria-label="start from a template">
         <h3 className="new-heading">Or start from a template</h3>
         <div className="cmp-sheet-grid">
-          {templates.map(({ t, doc, template: folder }, i) => (
+          {designed.map(({ t, doc, template: folder }, i) => (
             <button key={t.id} type="button" className="cmp-card" style={{ animationDelay: `${Math.min(i, 14) * 18}ms` }} onClick={() => onStart({ kind: "template", template: t })}>
               <span className="cmp-card-art">
                 <DesignThumb doc={doc} template={folder} assets={assets} size={104} version={version} />

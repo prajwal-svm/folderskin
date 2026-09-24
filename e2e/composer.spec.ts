@@ -92,9 +92,15 @@ test.describe("starting a new design", () => {
 });
 
 test.describe("the Mac's and Windows' own folders", () => {
-  test("start on their own folder, with a front of its own colour that covers only the front", async ({ page }) => {
+  test("start empty on their own folder, with a front of its own colour that covers only the front", async ({ page }) => {
     await openApp(page);
-    await startFrom(page, "Windows folder");
+    await openView(page, /design your own/i);
+    // They're the folders as each system draws them, with nothing on them: empty starts, not templates.
+    const empty = newDialog(page).getByRole("region", { name: "start empty" });
+    await expect(empty.getByRole("button")).toHaveText([/^Empty folder/, /^Free icon/, /^Mac folder/, /^Windows folder/]);
+    await expect(newDialog(page).getByRole("region", { name: "start from a template" }).getByRole("button", { name: /Mac folder|Windows folder/ })).toHaveCount(0);
+    await empty.getByRole("button", { name: /^Windows folder/ }).click();
+    await expect(newDialog(page)).toBeHidden();
     const which = composer(page).getByRole("radiogroup", { name: "which folder" });
     await expect(which.getByRole("radio", { name: "Windows" })).toHaveAttribute("aria-checked", "true");
     await expect(layerNames(page)).toHaveText(["Bottom edge", "Front", "Back"]);
@@ -120,7 +126,7 @@ test.describe("the Mac's and Windows' own folders", () => {
 
     // From Windows' folder, the Mac's own look still starts on the Mac's.
     await composer(page).getByRole("button", { name: "New" }).click();
-    await newDialog(page).getByRole("button", { name: /^Mac folder$/ }).click();
+    await newDialog(page).getByRole("region", { name: "start empty" }).getByRole("button", { name: /^Mac folder/ }).click();
     await expect(newDialog(page)).toBeHidden();
     await expect(which.getByRole("radio", { name: "Mac" })).toHaveAttribute("aria-checked", "true");
     await expect(layerNames(page)).toHaveText(["Front", "Back"]);

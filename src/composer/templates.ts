@@ -30,6 +30,8 @@ export type Template = {
   label: string;
   /** Starts on this folder whichever folder the last design was on: it's that folder's own look. */
   style?: FolderStyle;
+  /** A folder as its system draws it, with nothing on it: offered with the empty starts, not the templates. */
+  plain?: { note: string };
   /** Needs a picture before it can start. */
   photo?: boolean;
   /** The design, laid out on `parts`: those of `style`'s folder when the template has one. */
@@ -57,6 +59,7 @@ export const TEMPLATES: Template[] = [
     id: "mac",
     label: "Mac folder",
     style: "mac",
+    plain: { note: "The Mac's blue" },
     make: (p) => {
       const back = (share: number) => p.back[1] + share * (p.front[1] - p.back[1]);
       const front = (share: number) => p.front[1] + share * (p.front[3] - p.front[1]);
@@ -92,6 +95,7 @@ export const TEMPLATES: Template[] = [
     id: "windows",
     label: "Windows folder",
     style: "windows",
+    plain: { note: "Windows' yellow" },
     make: (p) => {
       // Under the tab the front's top edge is 48 units lower than elsewhere: the back shows to there.
       const lowest = p.front[1] + 48;
