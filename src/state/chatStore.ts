@@ -79,6 +79,16 @@ function put(chat: Chat, now = true) {
   }
 }
 
+/** Saves the chat `id` as it is now, once it has a request in it. */
+function saveNow(id: string): Promise<void> {
+  const chat = chats.get(id);
+  if (!chat || chat.turns.length === 0) return Promise.resolve();
+  return api
+    .chatSave(persistable(chat))
+    .then((summary) => set({ list: upsertSummary(state.list, summary), problem: null }))
+    .catch((e) => set({ problem: `Chats aren't being saved: ${errorMessage(e)}` }));
+}
+
 const saving = new Map<string, number>();
 /** Saves `chat` a moment from now, once however many changes come before then. */
 function saveSoon(id: string) {
@@ -87,14 +97,17 @@ function saveSoon(id: string) {
     id,
     window.setTimeout(() => {
       saving.delete(id);
-      const chat = chats.get(id);
-      if (!chat || chat.turns.length === 0) return;
-      api
-        .chatSave(persistable(chat))
-        .then((summary) => set({ list: upsertSummary(state.list, summary), problem: null }))
-        .catch((e) => set({ problem: `Chats aren't being saved: ${errorMessage(e)}` }));
+      void saveNow(id);
     }, 250),
   );
+}
+
+/** Saves every chat still waiting to be saved, now: the window is closing. */
+export async function flushChats(): Promise<void> {
+  const ids = [...saving.keys()];
+  for (const id of ids) window.clearTimeout(saving.get(id));
+  saving.clear();
+  await Promise.all(ids.map(saveNow));
 }
 
 async function load(id: string): Promise<Chat> {
@@ -170,6 +183,7 @@ export async function renameChatTo(id: string, title: string) {
 
 export async function deleteChat(id: string) {
   window.clearTimeout(saving.get(id));
+  saving.delete(id);
   try {
     await api.chatDelete(id);
   } catch (e) {

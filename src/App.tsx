@@ -12,6 +12,7 @@ import { applyLabel, CONFIRM_ABOVE, folders, formatBytes, mergeRuns, runToast, t
 import { throttle } from "./lib/throttle";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
+import { flushChats } from "./state/chatStore";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
 import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RIGHT, saveLayout, type Layout } from "./state/layout";
 import { IslandResizer } from "./components/IslandResizer";
@@ -236,6 +237,20 @@ export default function App() {
       void off.then((stop) => stop());
     };
   }, [platform.os]);
+
+  // The assistant's chats are saved a moment after they change (chatStore.ts). Closing the window
+  // saves what is still waiting first, so a picture that has just been made stays in its chat;
+  // a save that hangs keeps the window open for a second at most. The browser preview only has
+  // pagehide, which can't wait for it.
+  useEffect(() => {
+    const flush = () => void flushChats();
+    window.addEventListener("pagehide", flush);
+    const off = isTauri() ? getCurrentWindow().onCloseRequested(() => Promise.race([flushChats(), new Promise<void>((r) => setTimeout(r, 1000))])) : null;
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      void off?.then((stop) => stop());
+    };
+  }, []);
 
   /** Puts skins in the library, or updates the ones already there. */
   const addSkins = useCallback((added: Skin[]) => {

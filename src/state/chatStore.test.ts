@@ -148,3 +148,18 @@ describe("this computer", () => {
     expect(api.aiGenerate).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("closing the window", () => {
+  it("saves at once what was waiting to be saved", async () => {
+    await start();
+    api.aiGenerate.mockResolvedValue({ id: "user:ai1" });
+    store.ask(request(), vi.fn());
+    await settled();
+    await store.flushChats();
+    expect(lastSaved(jobOf()[0])?.turns[0]).toMatchObject({ status: "done", skinId: "user:ai1" });
+    // Nothing is left to save a second time.
+    const saves = api.chatSave.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(api.chatSave).toHaveBeenCalledTimes(saves);
+  });
+});
