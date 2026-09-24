@@ -190,6 +190,16 @@ test.describe("the AI chat", () => {
     await expect(drawer.getByRole("button", { name: "rename Boats for the desktop" })).toBeVisible();
   });
 
+  test("a new chat starts without the last one's reference pictures", async ({ page }) => {
+    await withKey(page);
+    await sendIdea(page, "a paper boat");
+    await chat(page).getByRole("button", { name: "add a reference picture" }).click();
+    await expect(chat(page).getByRole("button", { name: "remove Reference.jpg" })).toBeVisible();
+    await chat(page).getByRole("button", { name: "new chat" }).click();
+    await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
+    await expect(chat(page).getByRole("button", { name: "remove Reference.jpg" })).toHaveCount(0);
+  });
+
   test("this computer paints one picture at a time, whichever chat asks", async ({ page }) => {
     await openApp(page, { query: "localready" });
     await openView(page, /generate with ai/i);

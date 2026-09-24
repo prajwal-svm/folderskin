@@ -134,6 +134,14 @@ export const Studio = forwardRef<
     if (active && folder) setChatFolder(folder);
   }, [active, folder]);
 
+  // A chat's reference pictures are copied into its own folder (chats.rs), so they're for that
+  // chat alone: another one starts with none.
+  const openChatId = useRef(chatId);
+  useEffect(() => {
+    openChatId.current = chatId;
+    setRefs([]);
+  }, [chatId]);
+
   // The newest card in view as it arrives and as it grows into its result.
   const last = chat?.turns.at(-1);
   useEffect(() => {
@@ -143,8 +151,11 @@ export const Studio = forwardRef<
   const addReference = useCallback(
     async (path: string) => {
       setAdding(true);
+      const at = openChatId.current;
       try {
         const kept = await keepReference(path);
+        // Another chat was opened while it was copied: it was kept for the one it was added to.
+        if (openChatId.current !== at) return;
         setRefs((rs) => (rs.some((r) => r.id === kept.id) ? rs : [...rs, kept]));
       } catch (e) {
         toast(`Couldn't use that picture: ${errorMessage(e)}`, { tone: "danger" });
