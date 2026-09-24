@@ -6,11 +6,11 @@ The website shares the app colors, Manrope font, theme preference, logo, and REA
 
 From the repository root, install dependencies with `pnpm install --frozen-lockfile`.
 
-Start the preview with `pnpm site:dev`. Open `http://localhost:4173/folderskin/`.
+Start the preview with `pnpm site:dev`. Open `http://localhost:4173/`.
 
 Use `pnpm site:test` to test system detection and installer selection. Use `pnpm site:build` to create `website/dist`.
 
-Use `pnpm site:preview` to serve the production build at `http://localhost:4174/folderskin/`.
+Use `pnpm site:preview` to serve the production build at `http://localhost:4174/`.
 
 ## Downloads
 
@@ -46,4 +46,4 @@ The Website workflow tests and builds pull requests. After this change reaches m
 
 Downloads resolve each new public release without a website rebuild. A manual workflow run on main also refreshes the fallback snapshot.
 
-The deployment URL is `https://prajwal-svm.github.io/folderskin/`. Set `SITE_BASE=/` only when a custom domain serves the website at its root.
+The website lives at `https://folderskin.app/`, the Pages site's custom domain; `https://prajwal-svm.github.io/folderskin/` redirects there. The build uses relative asset addresses, so it works at either; set `SITE_BASE` to build for a fixed path instead.

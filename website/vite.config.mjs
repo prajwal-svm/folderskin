@@ -4,7 +4,9 @@ import { prepareAssets } from "./scripts/assets.mjs";
 
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  base: process.env.SITE_BASE || "/folderskin/",
+  // Relative asset addresses: the same build works at folderskin.app/ and at
+  // prajwal-svm.github.io/folderskin/, which redirects there. SITE_BASE sets another.
+  base: process.env.SITE_BASE || "./",
   publicDir: prepareAssets(),
   server: {
     host: "127.0.0.1",
