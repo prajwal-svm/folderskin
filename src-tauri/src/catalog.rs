@@ -507,7 +507,8 @@ async fn download_catalog(
             Some(Fetch::NotFound(_)) | None => {
                 "the newest list of packs isn't there yet; try again in a minute".into()
             }
-            Some(Fetch::Damaged) => DAMAGED.into(),
+            // Its size is known, so one bigger is the wrong file too.
+            Some(Fetch::Damaged | Fetch::TooBig(_)) => DAMAGED.into(),
             Some(e) => e.to_string(),
         });
     };

@@ -548,7 +548,10 @@ async fn download_published(
                     })
                     .await
                     .map_err(|e| match e {
-                        Fetch::Damaged => format!("{} arrived damaged; try again", skin.file),
+                        // Its size is known, so one bigger is the wrong file too.
+                        Fetch::Damaged | Fetch::TooBig(_) => {
+                            format!("{} arrived damaged; try again", skin.file)
+                        }
                         e => format!("{}: {e}", skin.file),
                     })?;
                 let done = arrived.fetch_add(1, Ordering::Relaxed) + 1;
