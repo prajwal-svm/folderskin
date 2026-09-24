@@ -793,67 +793,12 @@ export const mockApi = {
     return `${req.folder}/${req.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
   },
   setWindowTheme: async () => {},
-  aiCatalogue: async (): Promise<AiCatalogue> => ({
-    providers: [
-      {
-        id: "local",
-        label: "Local Model",
-        kind: "local",
-        models: [
-          { id: "klein", label: "FLUX.2 klein 4B", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "Free" },
-        ],
-        keys_url: "",
-        docs_url: "",
-        key_hint: "",
-        has_key: mockLocal.ready,
-      },
-      {
-        id: "openai",
-        label: "OpenAI",
-        kind: "key",
-        models: [
-          { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.04 / image" },
-          { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.19 / image" },
-        ],
-        keys_url: "https://platform.openai.com/api-keys",
-        docs_url: "https://platform.openai.com/docs/guides/image-generation",
-        key_hint: "starts with sk-",
-        has_key: mockKeys.has("openai"),
-      },
-      {
-        id: "xai",
-        label: "xAI Grok",
-        kind: "key",
-        models: [{ id: "grok-imagine-image", label: "Grok Imagine", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.02 / image" }],
-        keys_url: "https://console.x.ai",
-        docs_url: "https://docs.x.ai",
-        key_hint: "starts with xai-",
-        has_key: mockKeys.has("xai"),
-      },
-      ...(
-        [
-          ["recraft", "Recraft", "recraftv3", "Recraft V3", true, "https://www.recraft.ai/profile/api", "https://www.recraft.ai/docs", "from your Recraft profile"],
-          ["google", "Google Gemini", "gemini-2.5-flash-image", "Gemini 2.5 Flash Image", false, "https://aistudio.google.com/apikey", "https://ai.google.dev/gemini-api/docs/image-generation", "from Google AI Studio"],
-          ["bfl", "Black Forest Labs", "flux-pro-1.1", "FLUX 1.1 Pro", false, "https://dashboard.bfl.ai", "https://docs.bfl.ai", "from the BFL dashboard"],
-          ["stability", "Stability AI", "core", "Stable Image Core", false, "https://platform.stability.ai/account/keys", "https://platform.stability.ai/docs/api-reference", "starts with sk-"],
-          ["ideogram", "Ideogram", "V_3", "Ideogram v3", false, "https://ideogram.ai/manage-api", "https://developer.ideogram.ai", "from your Ideogram account"],
-        ] as const
-      ).map(([id, label, model, modelLabel, alpha, keys_url, docs_url, key_hint]) => ({
-        id,
-        label,
-        kind: "key" as const,
-        models: [{ id: model, label: modelLabel, native_alpha: alpha, accepts_reference: false, sizes: ["1024x1024"], price_hint: "~$0.04 / image" }],
-        keys_url,
-        docs_url,
-        key_hint,
-        has_key: mockKeys.has(id),
-      })),
-    ],
-    presets: [
-      { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains" },
-      { id: "dunes", label: "Dunes", idea: "warm desert dunes at golden hour, long soft shadows" },
-    ],
-  }),
+  aiCatalogue: async (): Promise<AiCatalogue> => {
+    // `?slowcatalogue`: as the app's first catalogue of a session, which asks the local runtime
+    // whether it starts and takes a couple of seconds.
+    if (new URLSearchParams(location.search).has("slowcatalogue")) await sleep(1500);
+    return mockProviders();
+  },
   aiSetKey: async (provider: string) => {
     mockKeys.add(provider);
   },
@@ -1179,3 +1124,68 @@ export const mockApi = {
     mockShare.submissions = mockShare.submissions.map((s) => (s.id === id ? { ...s, status: "withdrawn", pack_id: null } : s));
   },
 };
+
+/** The providers and models, as ai_catalogue lists them, with the keys saved in this preview. */
+function mockProviders(): AiCatalogue {
+  return {
+    providers: [
+      {
+        id: "local",
+        label: "Local Model",
+        kind: "local",
+        models: [
+          { id: "klein", label: "FLUX.2 klein 4B", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "Free" },
+        ],
+        keys_url: "",
+        docs_url: "",
+        key_hint: "",
+        has_key: mockLocal.ready,
+      },
+      {
+        id: "openai",
+        label: "OpenAI",
+        kind: "key",
+        models: [
+          { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.04 / image" },
+          { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.19 / image" },
+        ],
+        keys_url: "https://platform.openai.com/api-keys",
+        docs_url: "https://platform.openai.com/docs/guides/image-generation",
+        key_hint: "starts with sk-",
+        has_key: mockKeys.has("openai"),
+      },
+      {
+        id: "xai",
+        label: "xAI Grok",
+        kind: "key",
+        models: [{ id: "grok-imagine-image", label: "Grok Imagine", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.02 / image" }],
+        keys_url: "https://console.x.ai",
+        docs_url: "https://docs.x.ai",
+        key_hint: "starts with xai-",
+        has_key: mockKeys.has("xai"),
+      },
+      ...(
+        [
+          ["recraft", "Recraft", "recraftv3", "Recraft V3", true, "https://www.recraft.ai/profile/api", "https://www.recraft.ai/docs", "from your Recraft profile"],
+          ["google", "Google Gemini", "gemini-2.5-flash-image", "Gemini 2.5 Flash Image", false, "https://aistudio.google.com/apikey", "https://ai.google.dev/gemini-api/docs/image-generation", "from Google AI Studio"],
+          ["bfl", "Black Forest Labs", "flux-pro-1.1", "FLUX 1.1 Pro", false, "https://dashboard.bfl.ai", "https://docs.bfl.ai", "from the BFL dashboard"],
+          ["stability", "Stability AI", "core", "Stable Image Core", false, "https://platform.stability.ai/account/keys", "https://platform.stability.ai/docs/api-reference", "starts with sk-"],
+          ["ideogram", "Ideogram", "V_3", "Ideogram v3", false, "https://ideogram.ai/manage-api", "https://developer.ideogram.ai", "from your Ideogram account"],
+        ] as const
+      ).map(([id, label, model, modelLabel, alpha, keys_url, docs_url, key_hint]) => ({
+        id,
+        label,
+        kind: "key" as const,
+        models: [{ id: model, label: modelLabel, native_alpha: alpha, accepts_reference: false, sizes: ["1024x1024"], price_hint: "~$0.04 / image" }],
+        keys_url,
+        docs_url,
+        key_hint,
+        has_key: mockKeys.has(id),
+      })),
+    ],
+    presets: [
+      { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains" },
+      { id: "dunes", label: "Dunes", idea: "warm desert dunes at golden hour, long soft shadows" },
+    ],
+  };
+}

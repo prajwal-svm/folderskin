@@ -195,9 +195,16 @@ export const Studio = forwardRef<
   const busy = "The local model is still painting the last one";
   const blocked = provider?.kind === "local" && chats.localRunning ? busy : null;
 
+  /** Sent before the providers were in (the first list of a session takes a moment): it goes when they are. */
+  const [queued, setQueued] = useState(false);
   const send = () => {
     const text = idea.trim();
-    if (!text || !provider || !model) return;
+    if (!text) return;
+    if (!catalogue) {
+      setQueued(true);
+      return;
+    }
+    if (!provider || !model) return;
     // Nothing set up for it yet: keep the words and open what fixes that.
     if (!provider.has_key) {
       openSettings(provider.id);
@@ -222,6 +229,13 @@ export const Studio = forwardRef<
     setPick(null);
     setRefs([]);
   };
+
+  useEffect(() => {
+    if (!queued || !catalogue) return;
+    setQueued(false);
+    send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queued, catalogue]);
 
   const act: TurnActions = {
     again: (turn: Turn) => {
@@ -419,6 +433,8 @@ export const Studio = forwardRef<
           model={model}
           onSettings={() => openSettings()}
           onSend={send}
+          loading={!catalogue}
+          queued={queued}
           blocked={blocked}
           dropping={props.dragImage}
         />

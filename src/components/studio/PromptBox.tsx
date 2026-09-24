@@ -38,6 +38,10 @@ export const PromptBox = forwardRef<
     model: AiModel | undefined;
     onSettings: () => void;
     onSend: () => void;
+    /** The providers aren't in yet: sending waits for them. */
+    loading: boolean;
+    /** Sent while they weren't, and waiting for them. */
+    queued: boolean;
     /** Why sending can't happen right now, when it can't though there are words to send. */
     blocked: string | null;
     /** A picture is being dragged over the window: it can be dropped here as a reference. */
@@ -45,12 +49,12 @@ export const PromptBox = forwardRef<
     boxRef?: React.Ref<HTMLFormElement>;
   }
 >(function PromptBox(
-  { idea, onIdea, placeholder, rows, refs, adding, onAddRef, onRemoveRef, shape, onShape, provider, model, onSettings, onSend, blocked, dropping, boxRef },
+  { idea, onIdea, placeholder, rows, refs, adding, onAddRef, onRemoveRef, shape, onShape, provider, model, onSettings, onSend, loading, queued, blocked, dropping, boxRef },
   ref,
 ) {
   const limit = refLimit(provider, model);
   const ready = provider?.kind === "local" ? provider.has_key : Boolean(provider?.has_key);
-  const canSend = Boolean(idea.trim()) && Boolean(model) && !blocked;
+  const canSend = Boolean(idea.trim()) && (Boolean(model) || loading) && !blocked && !queued;
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     if (canSend) onSend();
@@ -129,8 +133,16 @@ export const PromptBox = forwardRef<
           <span className="model-pill-text">{provider ? where : "Choose a provider"}</span>
           <SlidersHorizontalIcon size={14} />
         </button>
-        <button type="submit" className="send-btn" disabled={!canSend} aria-label="generate" data-tip={blocked ?? "Generate"} data-tip-kbd={blocked ? undefined : "Enter"}>
-          <ArrowUpIcon size={17} />
+        <button
+          type="submit"
+          className="send-btn"
+          disabled={!canSend}
+          aria-label="generate"
+          aria-busy={queued || undefined}
+          data-tip={blocked ?? (queued ? "Sends once the providers are loaded" : "Generate")}
+          data-tip-kbd={blocked || queued ? undefined : "Enter"}
+        >
+          {queued ? <LoaderIcon size={16} /> : <ArrowUpIcon size={17} />}
         </button>
       </div>
     </form>

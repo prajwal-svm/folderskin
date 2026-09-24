@@ -131,6 +131,16 @@ test.describe("the AI chat", () => {
     await expect(drawer.getByText(/Your chats will be here|No chat is called/)).toBeVisible();
   });
 
+  test("an idea sent before the providers are in is sent as soon as they are", async ({ page }) => {
+    await openApp(page, { query: "slowcatalogue&localready" });
+    await openView(page, /generate with ai/i);
+    await box(page).fill("a small cactus in a pot");
+    await box(page).press("Enter");
+    await expect(chat(page).locator("article.turn")).toHaveCount(1, { timeout: 5_000 });
+    await expect(chat(page).locator(".turn-ask")).toContainText("a small cactus in a pot");
+    await expect(box(page)).toHaveValue("");
+  });
+
   test("names the whole model in its pill where there's room, and in the pill's tip", async ({ page }) => {
     await openApp(page);
     await openView(page, /generate with ai/i);
