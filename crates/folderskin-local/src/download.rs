@@ -79,9 +79,10 @@ pub async fn fetch(
         let cancelled = cancel.clone();
         let got = tokio::task::spawn_blocking(move || sha256_file(&path, &cancelled))
             .await
-            .map_err(|e| Error::bug("The download check stopped unexpectedly.", e.to_string()))?
-            .map_err(|e| Error::io("check the download", &part, &e))?;
+            .map_err(|e| Error::bug("The download check stopped unexpectedly.", e.to_string()))?;
+        // Stopped part-way through the check is a cancel, not a file that can't be read.
         cancel.check()?;
+        let got = got.map_err(|e| Error::io("check the download", &part, &e))?;
         if !got.eq_ignore_ascii_case(want) {
             let _ = std::fs::remove_file(&part);
             return Err(Error::fixable(
@@ -270,14 +271,18 @@ fn root_cause(e: &reqwest::Error) -> String {
     }
 }
 
-/// The SHA-256 of a file, in lower-case hex, read in 16 MB pieces.
+/// The SHA-256 of a file, in lower-case hex, read in 16 MB pieces. Cancelling stops it with an
+/// [`std::io::ErrorKind::Interrupted`] error.
 pub fn sha256_file(path: &Path, cancel: &CancelToken) -> std::io::Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 16 << 20];
     loop {
         if cancel.is_cancelled() {
-            return Err(std::io::Error::other("cancelled"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "the check was cancelled",
+            ));
         }
         let n = file.read(&mut buf)?;
         if n == 0 {
@@ -611,6 +616,36 @@ mod tests {
         ))
         .unwrap_err();
         assert!(err.is_cancelled());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cancelling_while_a_download_is_checked_is_a_cancel_not_a_read_error() {
+        // A whole file without its marker is only checked, which a cancel interrupts.
+        let data = body(70_000);
+        let dir = temp_dir("cancel-check");
+        let dest = dir.join("m.gguf");
+        std::fs::write(&dest, &data).unwrap();
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let remote = Remote {
+            url: "http://127.0.0.1:9/m.gguf".into(),
+            size: data.len() as u64,
+            sha256: Some(sha(&data)),
+        };
+        let err = run(fetch(
+            &client().unwrap(),
+            &remote,
+            &dest,
+            &Reporter::silent(),
+            &cancel,
+        ))
+        .unwrap_err();
+        assert!(err.is_cancelled(), "{err:?}");
+        assert!(dest.is_file(), "the file is kept for the next run");
+        assert!(!dir.join("m.gguf.ok").exists());
+        let e = sha256_file(&dest, &cancel).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::Interrupted);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
