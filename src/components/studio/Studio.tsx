@@ -125,9 +125,13 @@ export const Studio = forwardRef<
   // The chat opened shows its own folder; a folder chosen while it's open becomes its folder.
   const chatId = chat?.id ?? null;
   const chatFolder = chat?.folder?.path ?? null;
+  const shownChat = useRef<string | null>(null);
   useEffect(() => {
-    if (active && chatFolder && chatFolder !== folder?.path) props.onUseFolder(chatFolder);
-    // Only when another chat is opened.
+    // Only when another chat is opened, not on coming back to this view: a folder chosen in the
+    // library meanwhile is the one to keep, and becomes the chat's.
+    if (!active || chatId === shownChat.current) return;
+    shownChat.current = chatId;
+    if (chatFolder && chatFolder !== folder?.path) props.onUseFolder(chatFolder);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, active]);
   useEffect(() => {

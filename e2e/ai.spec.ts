@@ -215,6 +215,21 @@ test.describe("the AI chat", () => {
     await expect(generate).toBeEnabled({ timeout: 10_000 });
   });
 
+  test("coming back keeps the folder chosen in the library meanwhile", async ({ page }) => {
+    await openApp(page);
+    await openView(page, /generate with ai/i);
+    await chat(page).getByRole("button", { name: "Choose a folder" }).click();
+    await expect(folderPanel(page).getByRole("heading", { name: "Projects" })).toBeVisible();
+    await openView(page, /all skins/i);
+    await folderPanel(page).getByRole("button", { name: "choose a different folder than Projects" }).click();
+    await expect(folderPanel(page).getByRole("heading", { name: "Wedding" })).toBeVisible();
+    await openView(page, /generate with ai/i);
+    await expect(chat(page).getByRole("button", { name: /for the folder Wedding/ })).toBeVisible();
+    await page.waitForTimeout(1000);
+    await expect(folderPanel(page).getByRole("heading", { name: "Wedding" })).toBeVisible();
+    await expect(chat(page).getByRole("button", { name: /for the folder Wedding/ })).toBeVisible();
+  });
+
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {
     await withKey(page);
     await chat(page).locator(".model-pill").click();
