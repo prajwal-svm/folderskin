@@ -833,6 +833,21 @@ export default function App() {
               : null;
 
   const library = view === "skins" || view === "yours" || view === "faves";
+  // The skin being tried is put down with Escape in the library, or a click on the grid's empty
+  // space, as a selection is: the folder shows as it is again, or the empty folder with the Mac |
+  // Windows switch under it. Not while typing, or while a menu or dialog has the key.
+  const skinId = state.skinId;
+  const putDown = useCallback(() => dispatch({ type: "skinCleared" }), []);
+  useEffect(() => {
+    if (!library || !skinId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || menu || aboutOpen || document.querySelector(".modal-backdrop, .cmp-pop, .filter-pop")) return;
+      if (e.target instanceof Element && e.target.closest("input, textarea, [contenteditable='true']")) return;
+      putDown();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [library, skinId, menu, aboutOpen, putDown]);
   const composing = view === "compose";
   // Windows has no system caption bar (window.rs builds the window undecorated), so the folder
   // island carries the window's controls and a strip to drag it by.
@@ -949,7 +964,13 @@ export default function App() {
                 />
               }
             />
-            <div className="gallery-scroll" aria-busy={redrawing ? true : undefined}>
+            <div
+              className="gallery-scroll"
+              aria-busy={redrawing ? true : undefined}
+              onClick={(e) => {
+                if (skinId && e.target instanceof Element && !e.target.closest(".tile, button, a, input")) putDown();
+              }}
+            >
               <Gallery
                 skins={visible}
                 selectedId={state.skinId}
@@ -1065,6 +1086,7 @@ export default function App() {
         onDismissRun={() => dispatch({ type: "runDismissed" })}
         pickHint={aiView ? "Preview a picture from the chat" : undefined}
         onLook={chooseFolderLook}
+        onPutDown={putDown}
       />
       </div>
       )}

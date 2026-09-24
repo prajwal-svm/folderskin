@@ -55,6 +55,7 @@ export function FolderStage({
   onDismissRun,
   pickHint = "Pick a skin to try it on",
   onLook,
+  onPutDown,
 }: {
   state: State;
   /** The skin selected in the library, if any. */
@@ -85,6 +86,8 @@ export function FolderStage({
   pickHint?: string;
   /** Chooses which folder skins go on, from the switch shown while there's no folder. */
   onLook?: (look: FolderStyle) => void;
+  /** Puts down the skin shown before any folder, so the empty folder (and its switch) is back. */
+  onPutDown?: () => void;
 }) {
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
@@ -168,8 +171,14 @@ export function FolderStage({
 
         <StageCopy state={state} skin={skin} browseLabel={browseLabel} />
 
-        {/* Under the empty folder only: while a skin is previewed, the preview is what's shown. */}
+        {/* Under the empty folder only: while a skin is previewed, the preview is what's shown,
+            with the way back to the empty folder (Escape does the same). */}
         {!folder && !skin && !drag && onLook && <StageLook onLook={onLook} />}
+        {!folder && skin && !drag && onPutDown && (
+          <button type="button" className="link-btn stage-put-down" data-tip="Or press Escape" onMouseDown={(e) => e.preventDefault()} onClick={onPutDown}>
+            Back to the empty folder
+          </button>
+        )}
 
         {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} />}
 

@@ -198,4 +198,38 @@ test.describe("the folder skins go on", () => {
     await expect(page.getByRole("status").filter({ hasText: "Drawing your skins on the Mac's folder" })).toBeVisible();
     await expect(gallery).not.toHaveAttribute("aria-busy", "true");
   });
+
+  test("its switch comes back once the skin being tried is put down", async ({ page }) => {
+    await openApp(page);
+    const look = page.getByRole("radiogroup", { name: "which folder skins go on" });
+    const tile = page.locator(".tile-hit").first();
+    const waiting = page.getByRole("heading", { name: "Now drop a folder" });
+    await expect(look).toBeVisible();
+
+    // Escape puts it down.
+    await tile.click();
+    await expect(waiting).toBeVisible();
+    await expect(look).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(look).toBeVisible();
+    await expect(tile).toHaveAttribute("aria-pressed", "false");
+
+    // So does a click on the grid's empty space, beside the tiles.
+    await tile.click();
+    await expect(look).toHaveCount(0);
+    await page.locator(".gallery-scroll").click({ position: { x: 4, y: 4 } });
+    await expect(look).toBeVisible();
+
+    // And the way back under the preview, which switches to Windows' folder from there.
+    await tile.click();
+    await page.getByRole("button", { name: "Back to the empty folder" }).click();
+    await look.getByRole("radio", { name: "Windows" }).click();
+    await expect(look.getByRole("radio", { name: "Windows" })).toBeChecked();
+
+    // Escape while typing a search empties the search, and the skin stays.
+    await tile.click();
+    await page.getByLabel("search skins").fill("mona");
+    await page.getByLabel("search skins").press("Escape");
+    await expect(waiting).toBeVisible();
+  });
 });

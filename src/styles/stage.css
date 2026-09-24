@@ -371,7 +371,8 @@
 /* ---------- words ---------- */
 
 /* Mac or Windows, under the empty folder's words, before there's a folder to try skins on. */
-.stage-look {
+.stage-look,
+.stage-put-down {
   margin-top: -4px;
   animation: fade-in var(--t-base) ease both;
 }
