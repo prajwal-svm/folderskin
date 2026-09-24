@@ -94,6 +94,12 @@ function mockLocalStatus(): LocalStatus {
     download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
     installs: null,
     kept_bytes: mockLocal.ready ? 5_380_000_000 : 0,
+    model: "FLUX.2 [klein] 4B",
+    quality: "4-bit",
+    model_bytes: 5_207_178_964,
+    // `?lowspace`: a disk with less free than setting up wants.
+    free_bytes: new URLSearchParams(location.search).has("lowspace") ? 3_200_000_000 : 180_000_000_000,
+    wanted_bytes: mockLocal.ready ? 0 : 8_070_000_000,
     seconds_per_image: mockLocal.seconds,
     home: "C:\\Users\\you\\AppData\\Local\\folderskin-localgen",
     note: null,

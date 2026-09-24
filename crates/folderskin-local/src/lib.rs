@@ -54,4 +54,6 @@ pub use manifest::{Model, ModelId, MODELS};
 pub use paths::home;
 pub use prompts::{compose, Shape, Style, STYLES};
 pub use remove::{kept_bytes, remove};
-pub use setup::{download_size, is_set_up, setup, status, Runtime, Status};
+pub use setup::{
+    download_size, is_set_up, setup, space_needed, space_wanted, status, Runtime, Status,
+};

@@ -16,16 +16,10 @@ export function duration(seconds: number): string {
 }
 
 /**
- * The details behind the info button beside the machine: what the model runs with, how long a
- * picture took the last time one was painted on this machine (measured here, so another
- * machine says its own, once it has painted one), and where the files are kept. One per line.
+ * What to clear before setting up, when the disk has less free than setting up wants (half again
+ * what it puts there); `null` when there's room, or the system didn't say.
  */
-export function machineDetails(status: Pick<LocalStatus, "backend" | "seconds_per_image" | "home">): string {
-  return [
-    `Runs with ${status.backend}`,
-    status.seconds_per_image === null
-      ? "How long a picture takes shows here after the first one"
-      : `The last picture here took about ${duration(status.seconds_per_image)}`,
-    `Kept in ${status.home}`,
-  ].join("\n");
+export function spaceShort(status: Pick<LocalStatus, "free_bytes" | "wanted_bytes">): string | null {
+  if (status.free_bytes === null || status.wanted_bytes === 0 || status.free_bytes >= status.wanted_bytes) return null;
+  return `Clear some space first: setting it up wants ${formatBytes(status.wanted_bytes)} free, and this disk has ${formatBytes(status.free_bytes)}.`;
 }

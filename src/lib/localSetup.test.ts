@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { duration, machineDetails, whatItTakes } from "./localSetup";
+import { duration, spaceShort, whatItTakes } from "./localSetup";
 
 describe("what setting the local model up takes", () => {
   it("says a Mac installs mflux and downloads the model, with its size", () => {
@@ -18,23 +18,24 @@ describe("what setting the local model up takes", () => {
   });
 });
 
-describe("the details about your machine", () => {
-  const status = { backend: "MLX", seconds_per_image: 46.2, home: "/Users/you/Library/Caches/folderskin-localgen" };
-
-  it("says how long the last picture took here, and where the files are, a line each", () => {
-    expect(machineDetails(status).split("\n")).toEqual([
-      "Runs with MLX",
-      "The last picture here took about 46 seconds",
-      "Kept in /Users/you/Library/Caches/folderskin-localgen",
-    ]);
-  });
-
-  it("says the time comes after the first picture, before there is one", () => {
-    expect(machineDetails({ ...status, seconds_per_image: null })).toContain("after the first one");
-  });
-
+describe("how long a picture took", () => {
   it("counts a long time in minutes", () => {
+    expect(duration(46.2)).toBe("46 seconds");
     expect(duration(59)).toBe("59 seconds");
     expect(duration(150)).toBe("3 minutes");
+  });
+});
+
+describe("room on the disk", () => {
+  it("asks for space to be cleared below half again what setting up puts there", () => {
+    expect(spaceShort({ free_bytes: 3_200_000_000, wanted_bytes: 6_930_000_000 })).toBe(
+      "Clear some space first: setting it up wants 6.9 GB free, and this disk has 3.2 GB.",
+    );
+  });
+
+  it("says nothing when there's room, nothing to set up, or the system didn't say", () => {
+    expect(spaceShort({ free_bytes: 90_000_000_000, wanted_bytes: 6_930_000_000 })).toBeNull();
+    expect(spaceShort({ free_bytes: 1_000, wanted_bytes: 0 })).toBeNull();
+    expect(spaceShort({ free_bytes: null, wanted_bytes: 6_930_000_000 })).toBeNull();
   });
 });

@@ -1000,43 +1000,136 @@ html[data-os="windows"] .app.is-right-off .studio-head {
 .local-facts {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   padding: 12px 14px;
   border-radius: var(--r-card);
   background: var(--well);
 }
 
-.local-chip {
+.local-facts > .local-note {
+  margin-top: 10px;
+}
+
+/* The model, named in the fold's title, with how fine it is and its size beside it. */
+.local-model {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.local-model svg {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+}
+
+.local-model-name {
   font-weight: 750;
   font-size: 13px;
   color: var(--ink);
 }
 
-.local-chip svg {
-  flex: none;
-  color: var(--muted);
+.local-model .local-muted {
+  font-size: 12px;
 }
 
+/* The machine, and the info mark that folds its details open beneath it: the whole row is the
+   button. Focus shows as a tint, never an outline. */
 .local-machine {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  width: 100%;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  box-sizing: content-box;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) ease;
+}
+
+.local-machine:focus-visible {
+  outline: none;
+  background: var(--accent-wash);
 }
 
 .local-info {
   flex: none;
+  display: inline-flex;
+  color: var(--muted);
+  transition: color var(--t-fast) ease;
+}
+
+.local-machine:hover .local-info,
+.local-facts.is-open .local-info {
+  color: var(--accent);
+}
+
+/* The details fold open by growing their row from nothing to their height. */
+.local-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--t-base) var(--ease-out);
+}
+
+.local-facts.is-open .local-more {
+  grid-template-rows: 1fr;
+}
+
+.local-more-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.local-more .local-list {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.local-muted {
+  font-weight: 600;
   color: var(--muted);
 }
 
-.local-remove {
+/* Where the model is kept names the user, so it stays veiled until it's pointed at or reached
+   with the keyboard. */
+.local-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+  filter: blur(4.5px);
+  transition: filter var(--t-fast) ease;
+}
+
+.local-path:hover,
+.local-path:focus-visible {
+  filter: none;
+}
+
+.local-path:focus-visible {
+  outline: none;
+  background: var(--accent-wash);
+}
+
+/* The model's removal, at the bottom right of its fold. */
+.local-more-foot {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.local-note.is-warn {
+  color: var(--danger);
 }
 
 .local-remove-btn {
@@ -1046,8 +1139,8 @@ html[data-os="windows"] .app.is-right-off .studio-head {
 
 .local-list {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 5px 14px;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px 14px;
   margin: 0;
 }
 
@@ -1064,15 +1157,9 @@ html[data-os="windows"] .app.is-right-off .studio-head {
 .local-list dd {
   margin: 0;
   min-width: 0;
-  font-weight: 650;
+  font-weight: 700;
   font-size: 12px;
-  color: var(--ink-2);
-}
-
-.local-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--ink);
 }
 
 .local-note {
@@ -1086,19 +1173,11 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   color: var(--muted);
 }
 
-.local-ready {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
+/* What setting up takes, and its button on the right. */
 .local-go {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 12px;
 }
@@ -1269,4 +1348,10 @@ html[data-os="windows"] .app.is-right-off .studio-head {
 
 .helper-copy {
   align-self: flex-start;
+}
+
+/* The Local Model's tile while its model downloads. */
+.provider-busy {
+  display: inline-flex;
+  color: var(--accent);
 }

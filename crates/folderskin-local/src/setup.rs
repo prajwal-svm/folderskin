@@ -37,6 +37,7 @@ pub async fn setup(
         return Err(no_build(machine.os, machine.arch, settings.backend));
     }
     let _only_one = lock(&paths::home())?;
+    check_space(machine, settings)?;
     let client = download::client()?;
     if let Err(e) = install_webp(&client, machine, reporter, cancel).await {
         if e.is_cancelled() {
@@ -89,6 +90,53 @@ pub async fn setup(
         );
     }
     Ok(())
+}
+
+/// Setting up wants half again as much free space as it will put on the disk: for what the
+/// system needs meanwhile, and so a nearly full disk is never filled to the last byte.
+pub const SPACE_MARGIN: f64 = 1.5;
+
+/// What uv puts on the disk for mflux and its packages (1.1 GB for mflux 0.20.0 on macOS, a
+/// little over for the next).
+pub const MFLUX_INSTALL_BYTES: u64 = 1_200_000_000;
+
+/// The bytes [`setup`] would still put on the disk: [`download_size`], and mflux when it has to
+/// be installed.
+pub fn space_needed(machine: &Machine, settings: &Settings) -> u64 {
+    let mflux = settings.backend == Backend::Mlx && paths::find_tool(MFLUX_PROBE).is_none();
+    download_size(machine, settings) + if mflux { MFLUX_INSTALL_BYTES } else { 0 }
+}
+
+/// The free space setting up wants for `needed` bytes ([`SPACE_MARGIN`]).
+pub fn space_wanted(needed: u64) -> u64 {
+    (needed as f64 * SPACE_MARGIN).ceil() as u64
+}
+
+/// Refuses to start a setup that would leave the disk all but full.
+fn check_space(machine: &Machine, settings: &Settings) -> Result<(), Error> {
+    let needed = space_needed(machine, settings);
+    let Some(free) = paths::free_space(&paths::home()) else {
+        return Ok(()); // the system doesn't say: the downloads will say if it fills up
+    };
+    let wanted = space_wanted(needed);
+    if needed == 0 || free >= wanted {
+        return Ok(());
+    }
+    let gb = |b: u64| format!("{:.1} GB", b as f64 / 1e9);
+    Err(Error::environment(
+        "low_disk_space",
+        "There isn't enough free space to set up the model.",
+        format!(
+            "It needs {}, and setting up wants {} free to be safe, but this disk has {} free.",
+            gb(needed),
+            gb(wanted),
+            gb(free)
+        ),
+    )
+    .fix(format!(
+        "Clear some space (about {} more), then set it up again.",
+        gb(wanted - free)
+    )))
 }
 
 /// Whether [`setup`] has something to install for `backend` on `machine`: mflux, which uv

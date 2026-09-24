@@ -3,6 +3,8 @@ import { openApp, openView } from "./app";
 
 const chat = (page: Page) => page.locator('section[aria-label="generate with AI"]:not([hidden])');
 const settings = (page: Page) => page.getByRole("dialog", { name: "Where pictures are made" });
+/** The Local Model's tile, whose check says it's set up and ready. */
+const localReady = (page: Page) => settings(page).getByRole("radio", { name: /Local Model/ }).getByRole("img", { name: "Set up" });
 const box = (page: Page) => chat(page).getByLabel("describe the folder");
 const folderPanel = (page: Page) => page.locator(".right-slot");
 
@@ -144,19 +146,42 @@ test.describe("the AI chat", () => {
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
-    await expect(settings(page).getByText("Set up and ready.")).toBeVisible();
-    await expect(settings(page).getByText(/Nothing you make here leaves/)).toHaveCount(0);
-    // What the machine runs with and how long a picture took are behind the info button.
-    await expect(settings(page).getByRole("button", { name: /about your machine/ })).toHaveAttribute("data-tip", /Runs with CUDA/);
-    await settings(page).getByRole("button", { name: "Remove the model" }).click();
+    await expect(localReady(page)).toBeVisible();
+    await expect(settings(page).getByText(/Set up and ready|Nothing you make here leaves/)).toHaveCount(0);
+    // The model is the fold's title; the machine, what it runs with, how long a picture took and
+    // where it's stored fold open under it, the path veiled until it's pointed at.
+    const model = settings(page).getByRole("button", { name: /FLUX\.2 \[klein\] 4B/ });
+    await expect(model).toContainText("4-bit");
+    await expect(model).toHaveAttribute("aria-expanded", "false");
+    await model.click();
+    await expect(model).toHaveAttribute("aria-expanded", "true");
+    const facts = settings(page).getByRole("region", { name: "about the local model" });
+    for (const text of ["Machine", "NVIDIA GeForce RTX 3050 Ti, 4 GB", "Runs with", "CUDA", "Stored at"]) await expect(facts).toContainText(text);
+    await expect(facts).not.toContainText("Kept in");
+    const path = facts.locator(".local-path");
+    await expect(path).toHaveCSS("filter", /blur/);
+    await path.hover();
+    await expect(path).toHaveCSS("filter", "none");
+    await facts.getByRole("button", { name: "Remove the model" }).click();
     const ask = page.getByRole("dialog", { name: "Remove the local model?" });
     await expect(ask).toContainText("5.4 GB");
     await ask.getByRole("button", { name: "Cancel" }).click();
-    await expect(settings(page).getByText("Set up and ready.")).toBeVisible();
-    await settings(page).getByRole("button", { name: "Remove the model" }).click();
+    await expect(localReady(page)).toBeVisible();
+    await facts.getByRole("button", { name: "Remove the model" }).click();
     await page.getByRole("dialog", { name: "Remove the local model?" }).getByRole("button", { name: "Remove" }).click();
-    await expect(settings(page).getByText("Removed. 5.4 GB is free again.")).toBeVisible();
+    // Removed is shown by what comes next: it offers to set the model up again, and says no more.
     await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toBeVisible();
+    await expect(settings(page).getByText(/Removed|free again/)).toHaveCount(0);
+    await expect(settings(page).getByRole("button", { name: "Remove the model" })).toHaveCount(0);
+  });
+
+  test("won't start setting up on a disk without room, and says to clear some", async ({ page }) => {
+    await openApp(page, { query: "lowspace" });
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    await expect(settings(page).getByText(/Clear some space first: setting it up wants 8\.1 GB free, and this disk has 3\.2 GB\./)).toBeVisible();
+    await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toBeDisabled();
   });
 
   test("a request can be stopped", async ({ page }) => {
@@ -196,7 +221,11 @@ test.describe("the AI chat", () => {
     await expect(settings(page).getByText("NVIDIA GeForce RTX 3050 Ti, 4 GB")).toBeVisible();
     await settings(page).getByRole("button", { name: "Set up the local model" }).click();
     await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
-    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
+    // The Local Model's tile says it's downloading, and stops saying so once it's ready.
+    const tile = settings(page).getByRole("radio", { name: /Local Model/ });
+    await expect(tile.getByRole("img", { name: "downloading" })).toBeVisible();
+    await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
+    await expect(tile.getByRole("img", { name: "downloading" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "close" }).click();
     await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
     await sendIdea(page, "a paper boat");
@@ -284,7 +313,7 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
-    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
+    await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
   });
 
   test("a setup under way is found again when its settings are opened again", async ({ page }) => {
@@ -303,7 +332,7 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
-    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 20_000 });
+    await expect(localReady(page)).toBeVisible({ timeout: 20_000 });
   });
 
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {

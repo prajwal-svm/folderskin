@@ -9,7 +9,9 @@ use crate::store::SkinImage;
 use folderskin_core::compositor::{Artwork, SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_core::matte;
 use folderskin_local::machine::Gpu;
-use folderskin_local::{Backend, CancelToken, Job, Machine, ModelId, Reporter, Settings, Shape};
+use folderskin_local::{
+    Backend, CancelToken, Job, Machine, ModelId, Reporter, Settings, Shape, Tier,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -351,6 +353,15 @@ pub struct LocalStatusDto {
     /// What setup's files take on disk now, partial downloads included: what removing the model
     /// gives back (besides mflux, when setup installed it).
     pub kept_bytes: u64,
+    /// The model it paints with ("FLUX.2 [klein] 4B"), how finely ("4-bit") and what its files
+    /// come to here.
+    pub model: String,
+    pub quality: String,
+    pub model_bytes: u64,
+    /// Free space on the disk the model goes on, when the system says, and what setting up wants
+    /// free ([`folderskin_local::space_wanted`]): with less, it refuses and says to clear some.
+    pub free_bytes: Option<u64>,
+    pub wanted_bytes: u64,
     pub seconds_per_image: Option<f64>,
     pub home: String,
     pub note: Option<String>,
@@ -377,6 +388,7 @@ const LOW_MEMORY_GB: f64 = 16.0;
 /// off the async threads. Says nobody is setting it up; [`Local::status`] knows better.
 pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
     let status = folderskin_local::status(machine, settings);
+    let model = ModelId::Klein.info();
     let runtime = &status.runtime;
     let models_here = status.models.iter().all(|m| m.ready());
     let ready = runtime.installed && runtime.problem.is_none() && models_here;
@@ -437,6 +449,23 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         installs: (settings.backend == Backend::Mlx && !runtime.installed && can_set_up)
             .then(|| runtime.name.clone()),
         kept_bytes: folderskin_local::kept_bytes(),
+        model: model.label.into(),
+        quality: match settings.tier {
+            Tier::Q4 => "4-bit",
+            Tier::Q8 => "8-bit",
+        }
+        .into(),
+        model_bytes: model
+            .files_for(settings.backend, settings.tier)
+            .iter()
+            .map(|f| f.size)
+            .sum(),
+        free_bytes: folderskin_local::paths::free_space(&folderskin_local::home()),
+        wanted_bytes: if ready || !can_set_up {
+            0
+        } else {
+            folderskin_local::space_wanted(folderskin_local::space_needed(machine, settings))
+        },
         seconds_per_image: Timing::read().seconds_for(settings),
         home: status.home.display().to_string(),
         note: (!notes.is_empty()).then(|| notes.join(" ")),
@@ -670,7 +699,6 @@ impl Drop for WorkDir {
 mod tests {
     use super::*;
     use folderskin_local::machine::{Arch, Os};
-    use folderskin_local::Tier;
     use image::{Rgba, RgbaImage};
 
     fn machine(gpu: Gpu, name: &str, vram: f64) -> Machine {

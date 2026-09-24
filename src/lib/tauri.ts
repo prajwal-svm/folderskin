@@ -209,6 +209,13 @@ export type LocalStatus = {
   installs: string | null;
   /** What setup's files take on disk now, partial downloads included: what removing the model gives back. */
   kept_bytes: number;
+  /** The model it paints with ("FLUX.2 [klein] 4B"), how finely ("4-bit") and what its files come to here. */
+  model: string;
+  quality: string;
+  model_bytes: number;
+  /** Free space on the disk the model goes on (null when the system doesn't say), and what setting up wants free: with less, it won't start. */
+  free_bytes: number | null;
+  wanted_bytes: number;
   /** How long the last picture painted here took, once one has been. */
   seconds_per_image: number | null;
   /** Where the runtime and models are kept. */
