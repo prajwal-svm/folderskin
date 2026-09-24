@@ -44,6 +44,8 @@ let state: State = { ready: false, list: [], active: null, problem: null };
 const chats = new Map<string, Chat>();
 /** The job each running request was started as, by turn id, for Stop. */
 const jobs = new Map<string, string>();
+/** The running requests the user has pressed Stop on, by turn id: only these end as stopped. */
+const stopping = new Set<string>();
 const listeners = new Set<() => void>();
 let started = false;
 
@@ -228,6 +230,8 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
     put(patchTurn(c, turn.id, patch(t), Date.now()), immediate);
   };
   const onEvent = (event: AiEvent) => update((t) => applyEvent(t, event), false);
+  /** A finished turn keeps nothing of what it reported while it ran. */
+  const ended = () => ({ finished: Date.now(), stage: undefined, step: undefined, download: undefined });
 
   api
     .aiGenerate(
@@ -245,16 +249,19 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
       onEvent,
     )
     .then((skin) => {
-      update(() => ({ status: "done", skinId: skin.id, finished: Date.now(), stage: undefined, step: undefined, download: undefined }), true);
+      update(() => ({ ...ended(), status: "done", skinId: skin.id }), true);
       onSkin(skin);
     })
     .catch((e) => {
+      // Only the user's Stop ends a request as stopped. Anything else that ends it early is a
+      // failure to show, whatever its words say.
+      if (stopping.has(turn.id)) return update(() => ({ ...ended(), status: "stopped", error: undefined }), true);
       const error = aiFailure(e);
-      const stopped = error.code === "stopped";
-      update(() => ({ status: stopped ? "stopped" : "error", error: stopped ? undefined : error, finished: Date.now(), stage: undefined, step: undefined, download: undefined }), true);
+      update(() => ({ ...ended(), status: "error", error: error.code === "stopped" ? { ...error, code: "failed" } : error }), true);
     })
     .finally(() => {
       jobs.delete(turn.id);
+      stopping.delete(turn.id);
       saveSoon(chatIdNow);
     });
 }
@@ -263,11 +270,13 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
 export function stop(turnId: string) {
   const job = jobs.get(turnId);
   if (!job) return;
+  stopping.add(turnId);
   const chatIdNow = job.split("-")[0];
   const c = chats.get(chatIdNow);
   if (c) put(patchTurn(c, turnId, { stage: "Stopping", step: undefined, download: undefined }, Date.now()));
   api.aiCancel(job).catch(() => {
-    // Older builds can't stop a run; it finishes, and its picture is kept.
+    // Older builds can't stop a run; it finishes, and its picture is kept (or its error shown).
+    stopping.delete(turnId);
   });
 }
 

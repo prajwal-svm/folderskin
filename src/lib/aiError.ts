@@ -23,9 +23,11 @@ const PATTERNS: [RegExp, string][] = [
   [/rate limit|too many requests/i, "rate_limited"],
   // Before a refusal: "the connection was refused" is the network, not the provider saying no.
   [/couldn't reach|network|connection|offline|dns/i, "network"],
-  [/declined|refused|safety|content policy/i, "refused"],
+  // A provider's filter blocking the prompt or the picture, but not a bare "blocked": that can be
+  // a firewall or a proxy.
+  [/declined|refused|safety|content policy|moderat|provider's filter|blocked by .*filter/i, "refused"],
   [/took too long|timed? ?out/i, "timeout"],
-  [/stopped|cancel+ed/i, "stopped"],
+  // Nothing here reads a stop from the words: only the user's Stop stops a request (chatStore.ts).
   [/backdrop|scene instead of a folder/i, "no_backdrop"],
   [/not set up|isn't set up|models? (?:aren't|are not) (?:there|downloaded)/i, "local_not_ready"],
   [/out of memory|vram|oom/i, "out_of_memory"],
