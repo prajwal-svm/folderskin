@@ -448,13 +448,11 @@ pub enum IniEncoding {
 /// that isn't UTF-8 or UTF-16 with its mark, which a lossy read and write would corrupt.
 pub fn decode_ini(bytes: &[u8]) -> Option<(String, IniEncoding)> {
     if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
-        if rest.len() % 2 != 0 {
+        let (pairs, odd) = rest.as_chunks::<2>();
+        if !odd.is_empty() {
             return None;
         }
-        let units: Vec<u16> = rest
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let units: Vec<u16> = pairs.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
         let text = String::from_utf16(&units).ok()?;
         return Some((format!("\u{feff}{text}"), IniEncoding::Utf16));
     }
