@@ -11,7 +11,7 @@ use crate::error::{shell_path, CliError};
 use crate::out::Out;
 use crate::{preview, tools};
 use folderskin_core::adjust::{self, Fx};
-use folderskin_core::compositor::{SKIN_HEIGHT, SKIN_WIDTH};
+use folderskin_core::compositor::Style;
 use folderskin_core::matte::{self, Surround, MAGENTA};
 use folderskin_core::painted;
 use image::codecs::png::{CompressionType, FilterType as PngFilter, PngEncoder};
@@ -299,10 +299,19 @@ fn crop(args: &CropArgs, out: &Arc<Out>) -> Result<(), CliError> {
     }
     let focus = args.focus.unwrap_or((0.5, 0.5));
     let (cut, what) = match args.aspect.to_lowercase().as_str() {
-        "artwork" => (
-            matte::crop_to_aspect(&img, SKIN_WIDTH, SKIN_HEIGHT, focus),
-            "the folder's artwork shape, 1024 × 958".to_string(),
-        ),
+        "artwork" => {
+            // The shape of the folder artwork goes on in this run: the Mac's, or Windows' wider one.
+            let look = crate::preview::look();
+            let (w, h) = look.artwork_size();
+            let whose = match look {
+                Style::Mac => "the folder's",
+                Style::Windows => "Windows' folder's",
+            };
+            (
+                matte::crop_to_aspect(&img, w, h, focus),
+                format!("{whose} artwork shape, {w} × {h}"),
+            )
+        }
         "square" => (crop_aspect(&img, 1.0, focus), "square".to_string()),
         other => {
             let ratio = other
@@ -590,7 +599,7 @@ fn check(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
         (input.display().to_string(), shell_path(input))
     };
     // The fixes are commands to paste, so they name it the way a shell reads it.
-    let report = check::check(&img, bytes, &pasted);
+    let report = check::check(&img, bytes, &pasted, crate::preview::look());
     let mut lines = vec![format!(
         "{name}: {}, {} × {}, {}",
         report.kind,
@@ -854,7 +863,7 @@ mod tests {
             assert!(cut_out);
             assert_eq!(matte::surround(&adjusted, MAGENTA), Surround::Transparent);
             assert_eq!(
-                check::check(&adjusted, 10_000, "a.png").kind,
+                check::check(&adjusted, 10_000, "a.png", Style::Mac).kind,
                 "folder",
                 "{fx:?}"
             );

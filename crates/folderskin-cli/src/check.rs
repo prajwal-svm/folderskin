@@ -1,7 +1,7 @@
 //! Will this picture land cleanly on a folder? What the app will make of it, and what to fix
 //! before it does.
 
-use folderskin_core::compositor::{self, SKIN_HEIGHT, SKIN_WIDTH};
+use folderskin_core::compositor::{self, Style};
 use folderskin_core::matte::{self, Surround, MAGENTA};
 use folderskin_core::pack::MAX_PICTURE_BYTES;
 use folderskin_core::painted;
@@ -83,9 +83,9 @@ fn is_key(p: &[u8; 4]) -> bool {
     p[3] > 0 && p[0] >= 255 - KEY_CLOSE && p[1] <= KEY_CLOSE && p[2] >= 255 - KEY_CLOSE
 }
 
-/// Checks `img` (whose file is `bytes` long) as FolderSkin will use it. `name` is how the fixes
-/// refer to it.
-pub fn check(img: &RgbaImage, bytes: usize, name: &str) -> Report {
+/// Checks `img` (whose file is `bytes` long) as FolderSkin will use it on the folder of `look`.
+/// `name` is how the fixes refer to it.
+pub fn check(img: &RgbaImage, bytes: usize, name: &str, look: Style) -> Report {
     let (w, h) = img.dimensions();
     let mut findings = Vec::new();
     if matte::alpha_bounds(img, 8).is_none() {
@@ -111,7 +111,7 @@ pub fn check(img: &RgbaImage, bytes: usize, name: &str) -> Report {
     }
     let report = match matte::finished_cutout(img, MAGENTA) {
         Some(cut) => folder(img, &cut, name, &mut findings),
-        None => artwork(img, name, &mut findings),
+        None => artwork(img, name, look, &mut findings),
     };
     if bytes > MAX_PICTURE_BYTES {
         // Only a pack has a size limit, and making one shrinks the picture anyway.
@@ -135,7 +135,7 @@ pub fn check(img: &RgbaImage, bytes: usize, name: &str) -> Report {
     }
 }
 
-fn artwork(img: &RgbaImage, name: &str, findings: &mut Vec<Finding>) -> &'static str {
+fn artwork(img: &RgbaImage, name: &str, look: Style, findings: &mut Vec<Finding>) -> &'static str {
     let (w, h) = img.dimensions();
     let short = w.min(h);
     if short < 256 {
@@ -152,9 +152,10 @@ fn artwork(img: &RgbaImage, name: &str, findings: &mut Vec<Finding>) -> &'static
         findings.push(ok(format!("{w} × {h} is big enough.")));
     }
 
-    // The folder cover-fits the picture to 1024 x 958, so a different shape loses its sides or
-    // its top and bottom.
-    let target = SKIN_WIDTH as f64 / SKIN_HEIGHT as f64;
+    // The folder cover-fits the picture to its own shape (1024 x 958 on the Mac's folder, wider
+    // on Windows'), so a different shape loses its sides or its top and bottom.
+    let (tw, th) = look.artwork_size();
+    let target = f64::from(tw) / f64::from(th);
     let aspect = w as f64 / h as f64;
     let kept = if aspect > target {
         target / aspect
@@ -174,6 +175,15 @@ fn artwork(img: &RgbaImage, name: &str, findings: &mut Vec<Finding>) -> &'static
             ),
             format!("Choose what stays: folderskin image crop {name} --focus 0.5,0.5"),
         ));
+    } else if lost >= 5.0 {
+        let sides = if aspect > target {
+            "left and right"
+        } else {
+            "top and bottom"
+        };
+        findings.push(ok(format!(
+            "{lost:.0}% of it is cropped off the {sides}: keep what matters away from them."
+        )));
     } else {
         findings.push(ok(
             "Its shape is close to the folder's, so little is cropped.",
@@ -191,18 +201,24 @@ fn artwork(img: &RgbaImage, name: &str, findings: &mut Vec<Finding>) -> &'static
         None => findings.push(ok("It fills the frame, with no paper margin.")),
     }
 
-    // The top eighth becomes the tab and the strip beside the paper: busy detail there is cut
-    // up by the folder's shape.
-    let top = h / 8;
+    // The top of it becomes the tab and the strip beside it (an eighth on the Mac's folder, a
+    // sixth on Windows'): busy detail there is cut up by the folder's shape.
+    let (part, top) = if look.tab_share() < 0.145 {
+        ("eighth", h / 8)
+    } else {
+        ("sixth", h / 6)
+    };
     let (top_detail, all_detail) = (detail(img, 0, top), detail(img, 0, h));
     if top > 4 && all_detail > 0.0 && top_detail > all_detail * 1.6 {
         findings.push(warning(
-            "A lot happens in the top eighth, which becomes the folder's tab and the strip beside \
-             the paper.",
+            format!(
+                "A lot happens in the top {part}, which becomes the folder's tab and the strip \
+                 beside it."
+            ),
             format!("See how it lands: folderskin render {name} --out preview.png"),
         ));
     } else {
-        findings.push(ok("The top eighth, where the tab goes, is quiet."));
+        findings.push(ok(format!("The top {part}, where the tab goes, is quiet.")));
     }
 
     let key = img.pixels().filter(|p| is_key(&p.0)).count();
@@ -351,15 +367,38 @@ mod tests {
     }
 
     #[test]
+    fn on_windows_folder_the_shape_and_the_tab_are_windows_own() {
+        // The Mac's artwork shape loses a sixth of its height on Windows' wider folder.
+        let r = check(&painting(1024, 958), 900_000, "a.png", Style::Windows);
+        assert!(
+            r.findings
+                .iter()
+                .any(|f| f.what.contains("cropped off the top and bottom")),
+            "{:?}",
+            verdicts(&r)
+        );
+        assert!(
+            r.findings.iter().any(|f| f.what.contains("top sixth")),
+            "{:?}",
+            verdicts(&r)
+        );
+        // And Windows' own shape passes there.
+        let (w, h) = Style::Windows.artwork_size();
+        assert_eq!((w, h), (1024, 805));
+        let r = check(&painting(w, h), 900_000, "a.png", Style::Windows);
+        assert_eq!((r.problems(), r.warnings()), (0, 0), "{:?}", verdicts(&r));
+    }
+
+    #[test]
     fn good_artwork_passes() {
-        let r = check(&painting(1024, 958), 900_000, "a.png");
+        let r = check(&painting(1024, 958), 900_000, "a.png", Style::Mac);
         assert_eq!(r.kind, "artwork");
         assert_eq!((r.problems(), r.warnings()), (0, 0), "{:?}", verdicts(&r));
     }
 
     #[test]
     fn a_tiny_letterbox_is_called_out() {
-        let r = check(&painting(400, 150), 10_000, "a.png");
+        let r = check(&painting(400, 150), 10_000, "a.png", Style::Mac);
         assert_eq!(r.problems(), 1, "{:?}", verdicts(&r));
         assert!(r
             .findings
@@ -378,7 +417,7 @@ mod tests {
                 *art.get_pixel(x, y)
             }
         });
-        let r = check(&img, 10_000, "print.png");
+        let r = check(&img, 10_000, "print.png", Style::Mac);
         let margin = r
             .findings
             .iter()
@@ -396,7 +435,7 @@ mod tests {
     #[test]
     fn a_folder_on_magenta_is_checked_as_a_folder() {
         let template = compositor::blank_template(1024, 960, MAGENTA);
-        let r = check(&template, 10_000, "f.png");
+        let r = check(&template, 10_000, "f.png", Style::Mac);
         assert_eq!(r.kind, "folder");
         assert!(
             r.findings
@@ -418,18 +457,19 @@ mod tests {
                 Rgba([255, 0, 255, 255])
             }
         });
-        let r = check(&card, 10_000, "card.png");
+        let r = check(&card, 10_000, "card.png", Style::Mac);
         assert_eq!(r.kind, "folder");
         assert!(r
             .findings
             .iter()
             .any(|f| f.what.contains("outline differs")));
-        let clear = check(&RgbaImage::new(64, 64), 100, "c.png");
+        let clear = check(&RgbaImage::new(64, 64), 100, "c.png", Style::Mac);
         assert_eq!(clear.problems(), 1);
         let flat = check(
             &RgbaImage::from_pixel(1024, 958, Rgba([200, 30, 30, 255])),
             100,
             "f.png",
+            Style::Mac,
         );
         assert!(flat
             .findings
@@ -450,7 +490,7 @@ mod tests {
                 img.put_pixel(x, y, Rgba([255, 0, 255, 255]));
             }
         }
-        let r = check(&img, 3_000_000, "k.png");
+        let r = check(&img, 3_000_000, "k.png", Style::Mac);
         assert!(r
             .findings
             .iter()

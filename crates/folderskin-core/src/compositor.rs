@@ -48,6 +48,27 @@ impl Style {
             Style::Windows => (w::BACK_BBOX, w::FRONT),
         }
     }
+
+    /// The shape artwork is best made in for this folder, in pixels, so it crops as little of it
+    /// as it can: FolderSkin's own [`SKIN_WIDTH`] × [`SKIN_HEIGHT`] on the Mac's folder, and as
+    /// wide on Windows', as tall as the box it is cover-fitted to there makes it (1024 × 805).
+    pub fn artwork_size(self) -> (u32, u32) {
+        match self {
+            Style::Mac => (SKIN_WIDTH, SKIN_HEIGHT),
+            Style::Windows => {
+                let (back, _) = self.fit_boxes();
+                let height = SKIN_WIDTH as f32 * back.height() / back.width();
+                (SKIN_WIDTH, height.round() as u32)
+            }
+        }
+    }
+
+    /// The share of the artwork's height, from its top, that shows above the front panel, as
+    /// the tab and the strip beside it: about an eighth on the Mac's folder, a sixth on Windows'.
+    pub fn tab_share(self) -> f32 {
+        let (back, front) = self.fit_boxes();
+        (front.y0 - back.y0) / back.height()
+    }
 }
 
 /// The Windows folder's shading: its back panel a shade darker than its front (the tab and the
@@ -653,6 +674,16 @@ pub fn blank_template_cutout(width: u32, height: u32) -> image::RgbaImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_folder_has_its_own_artwork_shape_and_tab() {
+        assert_eq!(Style::Mac.artwork_size(), (SKIN_WIDTH, SKIN_HEIGHT));
+        // Windows' back panel is wider for its height: 896 x 704.
+        assert_eq!(Style::Windows.artwork_size(), (1024, 805));
+        // What shows above the front: an eighth of the Mac's artwork, a sixth of Windows'.
+        assert!((Style::Mac.tab_share() - 0.132).abs() < 0.005);
+        assert!((Style::Windows.tab_share() - 0.159).abs() < 0.005);
+    }
 
     #[test]
     fn a_prerendered_image_is_centred_and_scaled_into_the_canvas() {
