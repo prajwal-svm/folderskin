@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp } from "./app";
+import { letGo, openApp } from "./app";
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Settings" });
 
@@ -431,8 +431,7 @@ test.describe("settings", () => {
     await expect(dialog(page).getByRole("button", { name: "Open GitHub" })).toBeFocused();
     // The profiles stay below while it waits.
     await expect(dialog(page).getByRole("heading", { name: "Licence profiles" })).toBeVisible();
-    await page.waitForFunction(() => typeof (window as { mockApprove?: () => void }).mockApprove === "function");
-    await page.evaluate(() => (window as { mockApprove?: () => void }).mockApprove?.());
+    await letGo(page, "mockApprove");
     const disconnect = dialog(page).getByRole("button", { name: "Disconnect" });
     await expect(disconnect).toBeFocused();
     const rows = dialog(page).locator(".set-profile");

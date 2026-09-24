@@ -1,13 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, openView } from "./app";
+import { letGo, openApp, openView } from "./app";
 
 // One after another in one worker: each makes ten thousand packs, and five of them at once
 // starved the rest of the suite (the composer's first load) and the timing below of the CPU.
 test.describe.configure({ mode: "default" });
 
 /** Opens Community with the sample packs and `packs` made-up ones, once the first answer is in. */
-async function openCommunity(page: Page, packs = 10_000) {
-  await openApp(page, { query: `packs=${packs}` });
+async function openCommunity(page: Page, packs = 10_000, query = "") {
+  await openApp(page, { query: `packs=${packs}${query ? `&${query}` : ""}` });
   await openView(page, /community/i);
   await expect(page.locator(".community-count")).toHaveText(/\d packs?$/);
 }
@@ -117,12 +117,14 @@ test("a pack opens to look through, and a skin that matched opens it at that ski
 });
 
 test("adding and updating a pack show how far they have got on its card", async ({ page }) => {
-  await openCommunity(page, 0);
+  // Each waits, downloaded, until it's let through, so its progress is looked at while it's there.
+  await openCommunity(page, 0, "holdpacks");
   const card = cards(page).filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) });
   await card.getByRole("button", { name: "Add", exact: true }).click();
   const adding = card.getByRole("progressbar", { name: "Adding Colours" });
   await expect(adding).toBeVisible();
   await expect(adding).toHaveAttribute("aria-valuetext", /^(Downloading|Saving) \d+ of 8$/);
+  await letGo(page, "mockPackGo");
   await expect(card.getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
   await expect(adding).toHaveCount(0);
   await expect(page.getByText(/Added 8 skins from Colours/)).toBeVisible();
@@ -134,6 +136,7 @@ test("adding and updating a pack show how far they have got on its card", async 
   const updating = card.getByRole("progressbar", { name: "Updating Colours" });
   await expect(updating).toBeVisible();
   await expect(updating).toHaveAttribute("aria-valuetext", /^(Updating|(Downloading|Saving) \d+ of 8)$/);
+  await letGo(page, "mockPackGo");
   await expect(page.getByText("Updated Colours")).toBeVisible({ timeout: 10_000 });
   await expect(card.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
 });
@@ -163,14 +166,16 @@ test("leaving Community and coming back finds it as it was, without searching ag
 });
 
 test("one pack at a time: while one is being added, another can't be removed", async ({ page }) => {
-  await openCommunity(page, 0);
+  await openCommunity(page, 0, "holdpacks");
   const card = (name: string) => cards(page).filter({ has: page.locator(".pack-name", { hasText: new RegExp(`^${name}$`) }) });
   await card("Classic Art").getByRole("button", { name: "Add", exact: true }).click();
+  await letGo(page, "mockPackGo");
   await expect(card("Classic Art").getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
 
   await card("Colours").getByRole("button", { name: "Add", exact: true }).click();
   await expect(card("Colours").getByRole("progressbar")).toBeVisible();
   await expect(card("Classic Art").getByRole("button", { name: "remove Classic Art" })).toBeDisabled();
+  await letGo(page, "mockPackGo");
   await expect(card("Colours").getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
   await expect(card("Classic Art").getByRole("button", { name: "remove Classic Art" })).toBeEnabled();
 });

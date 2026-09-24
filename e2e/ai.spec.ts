@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, openView } from "./app";
+import { held, letGo, openApp, openView } from "./app";
 
 const chat = (page: Page) => page.locator('section[aria-label="generate with AI"]:not([hidden])');
 const settings = (page: Page) => page.getByRole("dialog", { name: "Where pictures are made" });
@@ -17,8 +17,6 @@ const finishSetup = (page: Page) =>
       { timeout: 20_000 },
     )
     .toBe(1);
-/** Once the preview's setup is waiting where it's held. */
-const setupHeld = (page: Page) => page.waitForFunction(() => typeof (window as { mockSetupGo?: () => void }).mockSetupGo === "function");
 const folderPanel = (page: Page) => page.locator(".right-slot");
 
 /** Opens the AI view with an OpenAI key saved (the preview keeps keys for the page's life). */
@@ -93,11 +91,12 @@ test.describe("the AI chat", () => {
   });
 
   test("shows what's happening while it paints, and the result can be applied from the chat", async ({ page }) => {
-    await withKey(page);
+    await withKey(page, "holdpaint");
     await sendIdea(page, "a lighthouse at dusk, oil painting");
     const card = chat(page).locator("article.turn").last();
     await expect(card.locator(".turn-name")).toHaveText(/Sending your idea to OpenAI|OpenAI is painting it/);
     await expect(card.getByRole("button", { name: "Stop" })).toBeVisible();
+    await letGo(page, "mockPaintGo");
     await expect(card.getByRole("button", { name: "Choose a folder" })).toBeVisible({ timeout: 10_000 });
     // Named after its first words, never ending on a little one.
     await expect(card.locator(".turn-name")).toHaveText("A lighthouse at dusk");
@@ -168,7 +167,7 @@ test.describe("the AI chat", () => {
     await expect(pill).toContainText("Loading the providers");
     await expect(sub).toHaveText("Describe a scene, or tap a style below for an idea to start from.");
     await expect(chat(page).getByRole("button", { name: /No API key/ })).toHaveCount(0);
-    await page.evaluate(() => (window as { mockCatalogueIn?: () => void }).mockCatalogueIn?.());
+    await letGo(page, "mockCatalogueIn");
     await expect(pill).toContainText("Local Model · FLUX.2 klein 4B");
     await expect(sub).toContainText("It's generated right here, on your machine.");
     await expect(chat(page).getByRole("button", { name: /No API key/ })).toHaveCount(0);
@@ -246,7 +245,7 @@ test.describe("the AI chat", () => {
   });
 
   test("a request can be stopped", async ({ page }) => {
-    await withKey(page);
+    await withKey(page, "holdpaint");
     await sendIdea(page, "a quiet harbour");
     const card = chat(page).locator("article.turn").last();
     await card.getByRole("button", { name: "Stop" }).click();
@@ -275,7 +274,7 @@ test.describe("the AI chat", () => {
   });
 
   test("sets the local model up in one click, then paints with it, with its progress and log", async ({ page }) => {
-    await openApp(page, { query: "aifail=memory&holdsetup" });
+    await openApp(page, { query: "aifail=memory&holdsetup&holdpaint" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
@@ -294,6 +293,7 @@ test.describe("the AI chat", () => {
     await expect(card.locator(".turn-where")).toContainText(/Step \d of 4/, { timeout: 10_000 });
     await card.getByRole("button", { name: "Details" }).click();
     await expect(card.locator(".turn-log-lines")).toContainText("backend: CUDA");
+    await letGo(page, "mockPaintGo");
     // Out of memory: what happened, what to do, and a question ready for Claude.
     await expect(card.getByRole("alert")).toContainText("ran out of memory", { timeout: 10_000 });
     await expect(card.locator(".turn-fix li")).toHaveCount(2);
@@ -338,7 +338,7 @@ test.describe("the AI chat", () => {
   });
 
   test("the local model paints one picture at a time, whichever chat asks", async ({ page }) => {
-    await openApp(page, { query: "localready" });
+    await openApp(page, { query: "localready&holdpaint" });
     await openView(page, /generate with ai/i);
     await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
     await sendIdea(page, "a paper boat");
@@ -351,6 +351,7 @@ test.describe("the AI chat", () => {
     await expect(generate).toBeDisabled();
     await expect(generate).toHaveAttribute("data-tip", "The local model is still painting the last one");
     // Free again once the first one is done.
+    await letGo(page, "mockPaintGo");
     await expect(generate).toBeEnabled({ timeout: 10_000 });
   });
 
@@ -418,7 +419,7 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Set up the local model" }).click();
     const progress = settings(page).locator(".local-progress");
     await expect(progress).toContainText("of 5.4 GB in all");
-    await setupHeld(page);
+    await held(page, "mockSetupGo");
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
     const whole = async () => parseFloat((await progress.textContent())?.match(/of ([\d.]+) GB in all/)?.[1] ?? "0");
@@ -470,11 +471,11 @@ test.describe("the AI chat", () => {
     // How far the whole download has got, from the bar.
     const bar = settings(page).locator(".local-progress .turn-progress");
     const share = async () => parseFloat((await bar.getAttribute("style"))?.match(/--done:\s*([\d.]+)%/)?.[1] ?? "0");
-    await setupHeld(page);
+    await held(page, "mockSetupGo");
     const before = await share();
     await settings(page).getByRole("button", { name: "close" }).click();
     // It goes on while the settings are closed.
-    await page.evaluate(() => (window as { mockSetupGo?: () => void }).mockSetupGo?.());
+    await letGo(page, "mockSetupGo");
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
     // Where it has got to, with its Stop; it isn't offered as if nothing were running.
