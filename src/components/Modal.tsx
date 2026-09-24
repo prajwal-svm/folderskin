@@ -72,12 +72,25 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (open[open.length - 1] !== me) return;
       if (e.key === "Escape") {
+        // A list opened from the dialog, like a Select's, closes first and the dialog stays: the
+        // list hears Escape on the document, after this. Opened after the dialog, it comes after
+        // it in the page.
+        const pops = document.querySelectorAll(".cmp-pop");
+        if ([...pops].some((p) => panel.current && panel.current.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
         // Nothing else hears it: not a dialog underneath, not the composer's shortcuts.
         e.stopImmediatePropagation();
+        // A search field with words in it empties itself first, which is what the browser does
+        // with Escape there.
+        const t = e.target;
+        if (t instanceof HTMLInputElement && t.type === "search" && t.value) return;
         e.preventDefault();
         if (canClose.current) close.current();
       } else if (e.key === "Tab" && panel.current) {
-        const items = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+        // Only what Tab would stop at: one control of a group whose arrow keys move within it
+        // (the rest have a tabindex of -1), and the one that has the focus, wherever it is.
+        const items = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+          (el) => el === document.activeElement || (el.tabIndex >= 0 && el.offsetParent !== null),
+        );
         if (items.length === 0) return;
         const at = items.indexOf(document.activeElement as HTMLElement);
         const next = e.shiftKey ? (at <= 0 ? items.length - 1 : at - 1) : at === -1 || at === items.length - 1 ? 0 : at + 1;
