@@ -29,7 +29,8 @@ test.describe("the sidebar", () => {
     await openApp(page);
     await page.keyboard.press("Control+\\");
     await expect(sidebar(page)).toHaveClass(/is-rail/);
-    await page.waitForTimeout(400);
+    // Kept a moment after it changes.
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("folderskin.layout") ?? "{}").rail)).toBe(true);
     await page.reload();
     await expect(sidebar(page)).toHaveClass(/is-rail/);
     await page.keyboard.press("Control+\\");
@@ -95,7 +96,7 @@ test.describe("the edges between islands", () => {
     await page.keyboard.press("ArrowLeft");
     await expect(sidebar(page)).toHaveClass(/is-rail/);
     // The edge keeps the focus while the sidebar folds, so the next key still moves it.
-    await page.waitForTimeout(450);
+    await expect.poll(() => width(page, ".sidebar")).toBeLessThan(80);
     await expect(edge).toBeFocused();
     // Its value stays within the range it gives.
     await expect(edge).toHaveAttribute("aria-valuenow", "64");
@@ -208,7 +209,12 @@ test.describe("the filters beside a search", () => {
 
 test.describe("the folder skins go on", () => {
   test("switching it says the library is being drawn again, and dims the old thumbnails until then", async ({ page }) => {
-    await openApp(page);
+    // Each redraw lasts until it's let through, so the note is looked at while it's there.
+    await openApp(page, { query: "holdredraw" });
+    const redrawn = async () => {
+      await page.waitForFunction(() => typeof (window as { mockRedrawn?: () => void }).mockRedrawn === "function");
+      await page.evaluate(() => (window as { mockRedrawn?: () => void }).mockRedrawn?.());
+    };
     const look = page.getByRole("radiogroup", { name: "which folder skins go on" });
     const note = page.getByRole("status").filter({ hasText: "Drawing your skins on Windows' folder" });
     const gallery = page.locator(".gallery-scroll");
@@ -220,11 +226,13 @@ test.describe("the folder skins go on", () => {
     expect(Math.abs(at!.x + at!.width / 2 - (library!.x + library!.width / 2))).toBeLessThan(2);
     expect(at!.x).toBeGreaterThan(library!.x);
     expect(at!.x + at!.width).toBeLessThan(library!.x + library!.width);
+    await redrawn();
     await expect(note).toBeHidden();
     await expect(gallery).not.toHaveAttribute("aria-busy", "true");
     // And back, which says so too.
     await look.getByRole("radio", { name: "Mac" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Drawing your skins on the Mac's folder" })).toBeVisible();
+    await redrawn();
     await expect(gallery).not.toHaveAttribute("aria-busy", "true");
   });
 
