@@ -71,6 +71,7 @@ import { Popover } from "./Popover";
 import { NewDesign, type Start } from "./NewDesign";
 import { LookSwitch } from "../LookSwitch";
 import { getLook } from "../../state/look";
+import { useShownTheme } from "../../state/theme";
 import { IconLibrary, PREVIEW_ID } from "./IconLibrary";
 import { Segmented } from "./controls";
 import { ImageIcon } from "../icons/image";
@@ -145,13 +146,24 @@ function loadDraft(): Draft | null {
   }
 }
 
-function loadView(): { backdrop: Backdrop } {
+/**
+ * What's behind the folder on the canvas, when someone has picked it in this run of the app
+ * (sessionStorage); `null` until then, which follows the theme: white in light, dark in dark.
+ * Every launch starts from the theme again.
+ */
+function loadView(): { backdrop: Backdrop | null } {
   try {
-    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") as { backdrop?: unknown };
-    const backdrops: Backdrop[] = ["window", "light", "dark", "colour"];
-    return { backdrop: backdrops.includes(v.backdrop as Backdrop) ? (v.backdrop as Backdrop) : "window" };
+    // Earlier builds kept it for good.
+    localStorage.removeItem(VIEW_KEY);
   } catch {
-    return { backdrop: "window" };
+    // Nothing kept, nothing to forget.
+  }
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? "{}") as { backdrop?: unknown };
+    const backdrops: Backdrop[] = ["window", "light", "dark", "colour"];
+    return { backdrop: backdrops.includes(v.backdrop as Backdrop) ? (v.backdrop as Backdrop) : null };
+  } catch {
+    return { backdrop: null };
   }
 }
 
@@ -503,6 +515,8 @@ export function Composer({
   const [saving, setSaving] = useState<"save" | "copy" | "apply" | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: string; run: () => void } | null>(null);
   const [view, setView] = useState(loadView);
+  const theme = useShownTheme();
+  const backdrop: Backdrop = view.backdrop ?? (theme === "dark" ? "dark" : "light");
   const [previews, setPreviews] = useState<string[]>([]);
   /** What the side island shows: the layers and their settings, or the icon library. */
   const [side, setSide] = useState<"layers" | "icons">("layers");
@@ -553,7 +567,7 @@ export function Composer({
 
   useEffect(() => {
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify(view));
+      sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
     } catch {
       // Only a preference.
     }
@@ -1144,7 +1158,7 @@ export function Composer({
             folderLoading={folderLoading}
             parts={parts}
             view={viewOf}
-            backdrop={view.backdrop}
+            backdrop={backdrop}
             version={version}
             hint={doc.layers.length === 0 ? "An empty design is a see-through folder. Add a colour, words or a picture from the bar above." : null}
             onOpen={(layer) => {
@@ -1188,10 +1202,10 @@ export function Composer({
                 key={b.id}
                 type="button"
                 role="radio"
-                aria-checked={view.backdrop === b.id}
+                aria-checked={backdrop === b.id}
                 aria-label={b.label}
                 data-tip={b.label}
-                className={view.backdrop === b.id ? `cmp-backdrop is-${b.id} is-on` : `cmp-backdrop is-${b.id}`}
+                className={backdrop === b.id ? `cmp-backdrop is-${b.id} is-on` : `cmp-backdrop is-${b.id}`}
                 onClick={() => setView((v) => ({ ...v, backdrop: b.id }))}
               />
             ))}

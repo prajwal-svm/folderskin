@@ -182,7 +182,7 @@
 }
 
 .cmp-stage[data-backdrop="light"] {
-  background: #e7e9ec;
+  background: #ffffff;
 }
 
 .cmp-stage[data-backdrop="dark"] {
@@ -379,7 +379,7 @@
 }
 
 .cmp-backdrop.is-light {
-  background: #e7e9ec;
+  background: #ffffff;
 }
 
 .cmp-backdrop.is-dark {

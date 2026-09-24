@@ -114,6 +114,29 @@ test.describe("a new session", () => {
   });
 });
 
+test.describe("what's behind the folder", () => {
+  test("is white in light mode and dark in dark mode, and a pick lasts only as long as the app runs", async ({ page, context }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    const stage = composer(page).locator(".cmp-stage");
+    await expect(stage).toHaveAttribute("data-backdrop", "light");
+    await expect(stage).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    // Dark mode: the canvas follows.
+    await page.getByRole("switch", { name: "dark mode" }).click();
+    await expect(stage).toHaveAttribute("data-backdrop", "dark");
+    await page.getByRole("switch", { name: "dark mode" }).click();
+    await expect(stage).toHaveAttribute("data-backdrop", "light");
+    // A backdrop picked stays for this run, whatever the theme does.
+    await composer(page).getByRole("radiogroup", { name: "what's behind the folder" }).getByRole("radio", { name: "Colourful wallpaper" }).click();
+    await expect(stage).toHaveAttribute("data-backdrop", "colour");
+    // Next launch: back to the theme's.
+    const next = await context.newPage();
+    await openApp(next);
+    await startFrom(next, "Label");
+    await expect(composer(next).locator(".cmp-stage")).toHaveAttribute("data-backdrop", "light");
+  });
+});
+
 test.describe("layer names and words", () => {
   test("renaming a text layer names it in the list and leaves the words alone", async ({ page }) => {
     await openApp(page);
