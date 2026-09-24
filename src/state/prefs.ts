@@ -1,0 +1,78 @@
+/**
+ * How the app looks beyond light and dark (state/theme.ts): its accent colour and how much it
+ * moves. Both are kept on this computer and set on <html> as data attributes, which tokens.css and
+ * base.css read, so every part of the app follows without being told.
+ */
+import { useSyncExternalStore } from "react";
+
+export const ACCENTS = [
+  { id: "blue", label: "Blue", swatch: "#3a86ff" },
+  { id: "purple", label: "Purple", swatch: "#8b5cf6" },
+  { id: "pink", label: "Pink", swatch: "#ec4899" },
+  { id: "orange", label: "Orange", swatch: "#f97316" },
+  { id: "green", label: "Green", swatch: "#16a34a" },
+  { id: "graphite", label: "Graphite", swatch: "#6b7280" },
+] as const;
+
+export type Accent = (typeof ACCENTS)[number]["id"];
+
+/** "system" follows the computer's own reduce-motion setting; "reduced" is always still. */
+export type Motion = "system" | "reduced";
+
+export type Prefs = { accent: Accent; motion: Motion };
+
+export const PREFS_KEY = "folderskin.prefs";
+const DEFAULTS: Prefs = { accent: "blue", motion: "system" };
+
+/** What was saved, with anything unknown or missing back at its default. */
+export function readPrefs(raw: unknown): Prefs {
+  if (typeof raw !== "object" || raw === null) return { ...DEFAULTS };
+  const v = raw as Record<string, unknown>;
+  const accent = ACCENTS.some((a) => a.id === v.accent) ? (v.accent as Accent) : DEFAULTS.accent;
+  const motion = v.motion === "reduced" ? "reduced" : "system";
+  return { accent, motion };
+}
+
+export function loadPrefs(): Prefs {
+  try {
+    return readPrefs(JSON.parse(localStorage.getItem(PREFS_KEY) ?? "null"));
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+
+/** Sets the attributes the stylesheets read. The defaults are no attribute at all. */
+export function applyPrefs(prefs: Prefs, root: HTMLElement = document.documentElement): void {
+  if (prefs.accent === DEFAULTS.accent) delete root.dataset.accent;
+  else root.dataset.accent = prefs.accent;
+  if (prefs.motion === "reduced") root.dataset.motion = "reduced";
+  else delete root.dataset.motion;
+}
+
+let current: Prefs | null = null;
+const listeners = new Set<() => void>();
+
+function snapshot(): Prefs {
+  return (current ??= loadPrefs());
+}
+
+/** Changes some of the preferences, keeps them, and puts them on the page. */
+export function setPrefs(patch: Partial<Prefs>): void {
+  current = { ...snapshot(), ...patch };
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(current));
+  } catch {
+    /* nowhere to keep them: they last until the app closes */
+  }
+  applyPrefs(current);
+  for (const l of listeners) l();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function usePrefs(): Prefs {
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
+}

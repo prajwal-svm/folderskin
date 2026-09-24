@@ -31,6 +31,7 @@ export function Modal({
   narrow,
   className,
   closable = true,
+  bare,
 }: {
   title: string;
   sub?: ReactNode;
@@ -44,6 +45,8 @@ export function Modal({
   className?: string;
   /** False while something runs that mustn't be left: no close button, and Escape and a click outside do nothing. */
   closable?: boolean;
+  /** No heading or padded body: the dialog lays out its own inside, with the close button floating top right. `title` still names it. */
+  bare?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   // The latest onClose, so a parent that passes a new function each render doesn't re-run the
@@ -100,23 +103,36 @@ export function Modal({
       }}
     >
       <div className={[ "modal", wide && "modal-wide", narrow && "modal-narrow", className ].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
-        <header className="modal-head">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 className="modal-title">{title}</h2>
-            {sub && <p className="modal-sub">{sub}</p>}
-          </div>
-          {closable && (
-            <button type="button" className="icon-btn modal-close" aria-label="close" onClick={onClose}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </header>
-        <div className="modal-body">{children}</div>
-        {footer && <footer className="modal-foot">{footer}</footer>}
+        {bare ? (
+          <>
+            {children}
+            {closable && closeButton(onClose, "modal-close is-floating")}
+          </>
+        ) : (
+          <>
+            <header className="modal-head">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 className="modal-title">{title}</h2>
+                {sub && <p className="modal-sub">{sub}</p>}
+              </div>
+              {closable && closeButton(onClose, "modal-close")}
+            </header>
+            <div className="modal-body">{children}</div>
+            {footer && <footer className="modal-foot">{footer}</footer>}
+          </>
+        )}
       </div>
     </div>,
     document.body,
+  );
+}
+
+function closeButton(onClose: () => void, className: string) {
+  return (
+    <button type="button" className={`icon-btn ${className}`} aria-label="close" onClick={onClose}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    </button>
   );
 }

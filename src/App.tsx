@@ -1081,6 +1081,8 @@ export default function App() {
           tab={settingsTab}
           themePref={themePref}
           onThemePref={setThemePref}
+          rail={layout.rail}
+          onRail={(on) => on !== layout.rail && toggleRail()}
           fileBrowser={fileBrowser(platform.os)}
           savedCount={skins.filter((s) => s.custom).length}
           note={platform.note}

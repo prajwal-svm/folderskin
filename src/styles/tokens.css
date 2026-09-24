@@ -124,6 +124,95 @@
   --shadow-pop: 0 0 0 1px var(--island-line), 0 24px 60px -14px rgba(0, 0, 0, 0.8);
 }
 
+/* The accent, when it isn't blue: Settings > General > Accent colour sets data-accent on <html>
+   (state/prefs.ts). Each keeps blue's roles: --accent-hover under white text, --accent-ink as
+   text on an island, --accent-soft behind a selection. */
+
+:root[data-accent="purple"] {
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-ink: #6d28d9;
+  --accent-soft: #efe9fe;
+  --accent-wash: rgba(139, 92, 246, 0.1);
+  --accent-glow: rgba(139, 92, 246, 0.5);
+}
+
+:root[data-theme="dark"][data-accent="purple"] {
+  --accent-hover: #7c4ff0;
+  --accent-ink: #b69cff;
+  --accent-soft: #3a3150;
+  --accent-wash: rgba(139, 92, 246, 0.14);
+  --accent-glow: rgba(139, 92, 246, 0.55);
+}
+
+:root[data-accent="pink"] {
+  --accent: #ec4899;
+  --accent-hover: #db2777;
+  --accent-ink: #be185d;
+  --accent-soft: #fde7f2;
+  --accent-wash: rgba(236, 72, 153, 0.1);
+  --accent-glow: rgba(236, 72, 153, 0.5);
+}
+
+:root[data-theme="dark"][data-accent="pink"] {
+  --accent-hover: #dc3a88;
+  --accent-ink: #f58cc3;
+  --accent-soft: #4a2c3b;
+  --accent-wash: rgba(236, 72, 153, 0.14);
+  --accent-glow: rgba(236, 72, 153, 0.55);
+}
+
+:root[data-accent="orange"] {
+  --accent: #f97316;
+  --accent-hover: #ea580c;
+  --accent-ink: #c2410c;
+  --accent-soft: #ffedd5;
+  --accent-wash: rgba(249, 115, 22, 0.1);
+  --accent-glow: rgba(249, 115, 22, 0.5);
+}
+
+:root[data-theme="dark"][data-accent="orange"] {
+  --accent-hover: #e8660e;
+  --accent-ink: #fdab6e;
+  --accent-soft: #4a3324;
+  --accent-wash: rgba(249, 115, 22, 0.14);
+  --accent-glow: rgba(249, 115, 22, 0.55);
+}
+
+:root[data-accent="green"] {
+  --accent: #16a34a;
+  --accent-hover: #15803d;
+  --accent-ink: #15803d;
+  --accent-soft: #dcfce7;
+  --accent-wash: rgba(22, 163, 74, 0.1);
+  --accent-glow: rgba(22, 163, 74, 0.5);
+}
+
+:root[data-theme="dark"][data-accent="green"] {
+  --accent-hover: #16924a;
+  --accent-ink: #5fd18a;
+  --accent-soft: #2a4232;
+  --accent-wash: rgba(22, 163, 74, 0.14);
+  --accent-glow: rgba(22, 163, 74, 0.55);
+}
+
+:root[data-accent="graphite"] {
+  --accent: #6b7280;
+  --accent-hover: #4b5563;
+  --accent-ink: #4b5563;
+  --accent-soft: #eceef1;
+  --accent-wash: rgba(107, 114, 128, 0.1);
+  --accent-glow: rgba(107, 114, 128, 0.5);
+}
+
+:root[data-theme="dark"][data-accent="graphite"] {
+  --accent-hover: #7b818c;
+  --accent-ink: #c2c6cc;
+  --accent-soft: #403c3c;
+  --accent-wash: rgba(107, 114, 128, 0.14);
+  --accent-glow: rgba(107, 114, 128, 0.55);
+}
+
 @font-face {
   font-family: "Manrope";
   src: url("/fonts/Manrope-variable.ttf") format("truetype");

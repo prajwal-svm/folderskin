@@ -243,3 +243,12 @@ html[data-awake="false"] {
     transition-duration: 1ms !important;
   }
 }
+
+/* The same when Settings asks for less motion, whatever the computer's own setting. */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}

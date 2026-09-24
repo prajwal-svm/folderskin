@@ -1,0 +1,538 @@
+/*
+ * Settings (Settings.tsx): its pages down the left, the chosen one on the right. The dialog keeps
+ * one size whichever page is open, so moving between them doesn't make it jump; a long page
+ * scrolls inside it.
+ */
+
+.modal-settings {
+  position: relative;
+  width: min(860px, 100%);
+  height: min(620px, calc(100vh - 48px));
+  max-height: min(620px, calc(100vh - 48px));
+}
+
+.modal-close.is-floating {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  /* What scrolls up under it passes behind, not through. */
+  background: var(--island);
+}
+
+.settings {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+}
+
+/* ---------- the pages ---------- */
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--well) 55%, var(--island));
+}
+
+.settings-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--line);
+  background: var(--island);
+  color: var(--hint);
+  cursor: text;
+  transition: border-color var(--t-fast) ease;
+}
+
+.settings-search:focus-within {
+  border-color: var(--accent);
+}
+
+.settings-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.settings-search input::placeholder {
+  color: var(--hint);
+}
+
+.settings-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.settings-nav-label {
+  margin: 18px 10px 6px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-control);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 13.5px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.settings-nav-btn svg {
+  flex: none;
+  color: var(--muted);
+  transition: color var(--t-fast) ease;
+}
+
+.settings-nav-btn:hover,
+.settings-nav-btn:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.settings-nav-btn.is-active {
+  background: var(--well-2);
+  color: var(--ink);
+}
+
+.settings-nav-btn.is-active svg {
+  color: var(--ink);
+}
+
+.settings-nav-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-nav-empty {
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the page ---------- */
+
+/* The page scrolls below a strip of its own for the close button, so nothing passes under it. */
+.settings-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  margin-top: 46px;
+  padding: 8px 34px 32px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* As the other dialogs do: what scrolls up fades out rather than meeting an edge. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.set-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.set-section-title {
+  margin: 0;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.set-section-note {
+  max-width: 62ch;
+  margin: 6px 0 0;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.set-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 60px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--t-base) ease;
+}
+
+.set-row:last-child {
+  border-bottom: 0;
+}
+
+/* What the search found, lit in the accent. The wash runs a little past the row's text. */
+.set-row.is-match {
+  margin: 0 -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: var(--r-control);
+  background: var(--accent-wash);
+}
+
+.set-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.set-row-label {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.set-row-note {
+  min-width: 0;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.set-row-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-row-lead {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-control);
+  background: var(--well);
+  color: var(--ink-2);
+}
+
+.set-row .gh-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+.set-path {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+/* Its text lines up with the page's; the padding is only for the wash behind it on hover. */
+.set-link {
+  align-self: flex-start;
+  margin: -12px 0 0 -6px;
+}
+
+/* ---------- controls ---------- */
+
+.set-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+}
+
+.set-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.set-seg.is-icons .set-seg-btn {
+  width: 36px;
+  padding: 0;
+}
+
+.set-seg-btn:hover,
+.set-seg-btn:focus-visible {
+  color: var(--ink);
+}
+
+.set-seg-btn.is-on {
+  background: var(--island);
+  border-color: var(--island-line);
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .set-seg-btn.is-on {
+  background: var(--well-2);
+}
+
+.set-swatches {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A ring in its own colour, a gap of the page's colour inside it, when it's the one chosen. */
+.set-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast) ease;
+}
+
+.set-swatch:hover,
+.set-swatch:focus-visible {
+  transform: scale(1.1);
+}
+
+.set-swatch.is-on {
+  box-shadow:
+    0 0 0 2px var(--island),
+    0 0 0 4px var(--swatch);
+}
+
+/* ---------- licence profiles ---------- */
+
+.set-profiles {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+
+.set-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 10px 10px 16px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.set-profile + .set-profile,
+.set-profile + .set-profile-form,
+.set-profile-form + .set-profile {
+  border-top: 1px solid var(--line);
+}
+
+.set-profile:first-child {
+  border-radius: var(--r-card) var(--r-card) 0 0;
+}
+
+.set-profile:last-child {
+  border-radius: 0 0 var(--r-card) var(--r-card);
+}
+
+.set-profile:only-child {
+  border-radius: var(--r-card);
+}
+
+.set-profile:hover {
+  background: var(--well);
+}
+
+.set-profile.is-match {
+  background: var(--accent-wash);
+}
+
+.set-profile-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.set-profile-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.set-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.set-profile-meta {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Its buttons show while it's pointed at or has the focus, as a layer's do in the composer. */
+.set-profile-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--t-fast) ease;
+}
+
+.set-profile:hover .set-profile-actions,
+.set-profile:focus-within .set-profile-actions {
+  opacity: 1;
+}
+
+.icon-btn.is-danger:hover:not(:disabled),
+.icon-btn.is-danger:focus-visible:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.set-profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.set-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-author .input {
+  flex: 1;
+}
+
+.set-author .btn {
+  flex: none;
+}
+
+.set-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.set-add {
+  align-self: flex-start;
+  margin-top: 12px;
+}
+
+/* A profile just deleted, with the way back, until something else changes. */
+.set-undo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+/* ---------- about ---------- */
+
+.set-about {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.set-about-mark {
+  height: 44px;
+  width: auto;
+}
+
+.settings-main .about-links {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.settings-main .update-check {
+  display: flex;
+}
+
+/* The browser preview can be narrower than the app's smallest window. */
+@media (max-width: 760px) {
+  .settings {
+    grid-template-columns: 176px minmax(0, 1fr);
+  }
+
+  .settings-main {
+    padding: 8px 20px 28px;
+  }
+}

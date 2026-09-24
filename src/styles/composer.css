@@ -232,7 +232,7 @@
 }
 
 .cmp-sel {
-  background: rgba(58, 134, 255, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   animation: fade-in var(--t-fast) ease both;
 }
 
@@ -241,7 +241,7 @@
 }
 
 .cmp-hover {
-  background: rgba(58, 134, 255, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .cmp-knob {
