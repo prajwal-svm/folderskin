@@ -446,7 +446,8 @@ pub struct TemplateArgs {
 pub struct ApplyArgs {
     /// The folder to give the icon
     pub folder: PathBuf,
-    /// Any picture: a finished folder is used as it is, anything else goes on FolderSkin's folder
+    /// Any picture: a finished folder is used as it is, anything else goes on FolderSkin's
+    /// folder; `-` reads standard input
     #[arg(long)]
     pub image: PathBuf,
     /// What stays in the middle of the crop, e.g. 0.5,0.4 (artwork only)

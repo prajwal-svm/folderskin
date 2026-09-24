@@ -125,9 +125,11 @@ pub fn contact_sheet(previews: &[PathBuf], dest: &Path) -> Result<(), CliError> 
     })
 }
 
-/// Puts `picture` on `folder`, as the app does, and says what it became.
+/// Puts `picture` on `folder`, as the app does, and says what it became. `-` reads the picture
+/// from standard input, as every image command does.
 pub fn apply(folder: &Path, picture: &Path, focus: (f32, f32)) -> Result<&'static str, CliError> {
-    let skin = skin(read_picture(picture)?, focus, picture)?;
+    let (img, _) = crate::images::load(picture)?;
+    let skin = skin(img, focus, picture)?;
     apply_icon(folder, &skin.icon_set_in(&ICON_SIZES, look()))
         .map_err(|e| apply_error(folder, e))?;
     refresh_shell_icons();
