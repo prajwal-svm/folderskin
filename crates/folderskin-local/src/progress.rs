@@ -13,7 +13,13 @@
 //! 2.50s/it]`, with no log lines around it, so there a bar counting to the job's own number of
 //! steps counts as painting.
 
-use crate::event::{Event, Stage};
+use crate::event::{Event, Level, Stage};
+
+/// The painting stage's words when the model doesn't fit in the memory that is free, so the
+/// runtime reads its weights from the disk as it paints: several times slower, and nothing else
+/// would say why.
+pub const SLOW_PAINT: &str =
+    "Painting slowly: too little memory is free to hold the model, so it's read from the disk";
 
 /// Where the runtime is, going by what it has said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,6 +35,8 @@ pub struct OutputParser {
     steps: u32,
     phase: Phase,
     last_step: u32,
+    /// The runtime said it would keep the model's weights on the disk.
+    from_disk: bool,
 }
 
 /// One piece of a runtime's output, understood.
@@ -49,6 +57,7 @@ impl OutputParser {
             steps,
             phase: Phase::Loading,
             last_step: 0,
+            from_disk: false,
         }
     }
 
@@ -77,13 +86,34 @@ impl OutputParser {
             return Line::Event(Event::Progress { step, steps: total });
         }
         let lower = text.to_lowercase();
+        // stable-diffusion.cpp's auto-fit, when the free memory can't hold the weights:
+        // "DiT params 6272 MiB ... -> compute CUDA0, params disk" and
+        // `--params-backend "diffusion=disk,te=cpu,vae=cpu"`.
+        if !self.from_disk
+            && (lower.contains("params disk")
+                || (lower.contains("params-backend") && lower.contains("=disk")))
+        {
+            self.from_disk = true;
+            return Line::Event(Event::Log {
+                level: Level::Warn,
+                message: format!(
+                    "too little memory is free to hold the model, so it's read from the disk as \
+                     it paints, which is several times slower; closing other programs helps ({text})"
+                ),
+            });
+        }
         if lower.contains("sampling using") || lower.contains("generating image") {
             if self.phase != Phase::Painting {
                 self.phase = Phase::Painting;
                 self.last_step = 0;
                 return Line::Event(Event::Stage {
                     stage: Stage::Paint,
-                    message: "Painting".into(),
+                    message: if self.from_disk {
+                        SLOW_PAINT
+                    } else {
+                        "Painting"
+                    }
+                    .into(),
                 });
             }
         } else if (lower.contains("sampling completed")
@@ -243,6 +273,39 @@ mod tests {
             logs.iter().all(|l| !l.contains('|')),
             "no bars in the log: {logs:?}"
         );
+    }
+
+    #[test]
+    fn weights_read_from_the_disk_are_said_to_be_slow() {
+        let low = b"[INFO   ] backend_fit.cpp:210  - RAM free 6809 MiB, params budget 4761 MiB\n\
+[INFO   ] backend_fit.cpp:298  - DiT params 6272 MiB, compute 1180 MiB -> compute CUDA0, params disk\n\
+[INFO   ] backend_fit.cpp:330  - auto-fit: --params-backend \"diffusion=disk,te=cpu,vae=cpu\"\n\
+[INFO   ] request.cpp:420  - sampling using Euler method\n";
+        let (seen, _) = events(8, low);
+        let warned = seen
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    Event::Log {
+                        level: Level::Warn,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(warned, 1, "said once: {seen:?}");
+        assert!(seen.contains(&Event::Stage {
+            stage: Stage::Paint,
+            message: SLOW_PAINT.into()
+        }));
+        // With room for the weights, it is only painting.
+        let (seen, _) = events(4, SDCPP);
+        assert!(seen.contains(&Event::Stage {
+            stage: Stage::Paint,
+            message: "Painting".into()
+        }));
+        assert!(!seen.iter().any(|e| matches!(e, Event::Log { .. })));
     }
 
     #[test]

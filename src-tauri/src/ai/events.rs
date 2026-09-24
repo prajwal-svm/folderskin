@@ -53,6 +53,10 @@ pub fn from_engine(event: Event) -> Vec<AiEvent> {
     match event {
         Event::Stage { stage, message } => {
             let id = stage_id(stage);
+            // Why this picture is slow is worth the headline, not the details.
+            if message == folderskin_local::progress::SLOW_PAINT {
+                return vec![AiEvent::stage(id, message)];
+            }
             let plain = match stage {
                 Stage::Check => "Looking at this computer",
                 Stage::Load => "Loading the model",
