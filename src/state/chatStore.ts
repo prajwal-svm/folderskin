@@ -37,15 +37,19 @@ type State = {
   active: Chat | null;
   /** A chat that couldn't be opened or saved, said once. */
   problem: string | null;
+  /** This computer is painting, for whichever chat: it paints one picture at a time. */
+  localRunning: boolean;
 };
 
-let state: State = { ready: false, list: [], active: null, problem: null };
+let state: State = { ready: false, list: [], active: null, problem: null, localRunning: false };
 /** Every chat read or made this session, by id, as it is now. */
 const chats = new Map<string, Chat>();
 /** The job each running request was started as, by turn id, for Stop. */
 const jobs = new Map<string, string>();
 /** The running requests the user has pressed Stop on, by turn id: only these end as stopped. */
 const stopping = new Set<string>();
+/** The running requests being painted on this computer, by turn id. */
+const painting = new Set<string>();
 const listeners = new Set<() => void>();
 let started = false;
 
@@ -202,6 +206,8 @@ export type Ask = {
   model: string;
   /** "OpenAI · GPT Image 2.5", as the request is made. */
   where: string;
+  /** Painted on this computer, which paints one picture at a time. */
+  local: boolean;
   refs: ChatRef[];
   tags: string[];
   size: string | null;
@@ -210,11 +216,11 @@ export type Ask = {
 /**
  * Sends a request from the open chat. It runs to the end whatever happens on screen: `onSkin`
  * gets the picture when it's made (App puts it in the library), and the chat it came from shows
- * how it went.
+ * how it went. False when it can't be sent now: this computer is still painting another.
  */
-export function ask(req: Ask, onSkin: (skin: Skin) => void) {
+export function ask(req: Ask, onSkin: (skin: Skin) => void): boolean {
   const chat = state.active;
-  if (!chat) return;
+  if (!chat || (req.local && painting.size > 0)) return false;
   const now = Date.now();
   const turn: Turn = {
     id: `t${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
@@ -232,6 +238,10 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
   saveSoon(chatIdNow);
   const job = `${chatIdNow}-${turn.id}`;
   jobs.set(turn.id, job);
+  if (req.local) {
+    painting.add(turn.id);
+    set({ localRunning: true });
+  }
 
   const update = (patch: (t: Turn) => Partial<Turn>, immediate: boolean) => {
     const c = chats.get(chatIdNow);
@@ -272,8 +282,10 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void) {
     .finally(() => {
       jobs.delete(turn.id);
       stopping.delete(turn.id);
+      if (painting.delete(turn.id)) set({ localRunning: painting.size > 0 });
       saveSoon(chatIdNow);
     });
+  return true;
 }
 
 /** Stops a running request. It says "Stopping" until the run has actually let go. */
@@ -288,11 +300,6 @@ export function stop(turnId: string) {
     // Older builds can't stop a run; it finishes, and its picture is kept (or its error shown).
     stopping.delete(turnId);
   });
-}
-
-/** Whether any request is running, in any chat. */
-export function anyRunning(): boolean {
-  return jobs.size > 0;
 }
 
 export function dismissProblem() {

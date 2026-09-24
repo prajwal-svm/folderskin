@@ -34,11 +34,13 @@ const request = (extra: Partial<Ask> = {}): Ask => ({
   provider: "openai",
   model: "gpt-image",
   where: "OpenAI · GPT Image",
+  local: false,
   refs: [],
   tags: [],
   size: null,
   ...extra,
 });
+const onDevice = (extra: Partial<Ask> = {}) => request({ provider: "local", model: "flux", where: "This computer · FLUX.2 klein", local: true, ...extra });
 
 /** A request that runs until the test ends it. */
 function pending() {
@@ -124,5 +126,25 @@ describe("how a request ends", () => {
     const turn = lastSaved(chatId)?.turns[0];
     expect(turn?.status).toBe("stopped");
     expect(turn?.error).toBeUndefined();
+  });
+});
+
+describe("this computer", () => {
+  it("paints one picture at a time, whichever chat asks", async () => {
+    await start();
+    const first = pending();
+    api.aiGenerate.mockReturnValueOnce(first.done);
+    expect(store.ask(onDevice(), vi.fn())).toBe(true);
+    store.startNewChat(null);
+    expect(store.ask(onDevice({ idea: "a second boat" }), vi.fn())).toBe(false);
+    expect(api.aiGenerate).toHaveBeenCalledTimes(1);
+    // A provider's servers aren't this computer: they run alongside.
+    api.aiGenerate.mockReturnValueOnce(pending().done);
+    expect(store.ask(request(), vi.fn())).toBe(true);
+    first.finish({ id: "user:ai1" });
+    await settled();
+    api.aiGenerate.mockReturnValueOnce(pending().done);
+    expect(store.ask(onDevice({ idea: "a third boat" }), vi.fn())).toBe(true);
+    expect(api.aiGenerate).toHaveBeenCalledTimes(3);
   });
 });

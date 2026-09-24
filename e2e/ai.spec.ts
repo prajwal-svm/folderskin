@@ -190,6 +190,21 @@ test.describe("the AI chat", () => {
     await expect(drawer.getByRole("button", { name: "rename Boats for the desktop" })).toBeVisible();
   });
 
+  test("this computer paints one picture at a time, whichever chat asks", async ({ page }) => {
+    await openApp(page, { query: "localready" });
+    await openView(page, /generate with ai/i);
+    await expect(chat(page).locator(".studio-foot")).toContainText("nothing leaves this computer");
+    await sendIdea(page, "a paper boat");
+    await expect(chat(page).locator("article.turn").last().getByRole("button", { name: "Stop" })).toBeVisible();
+    await chat(page).getByRole("button", { name: "new chat" }).click();
+    await box(page).fill("a lighthouse at dusk");
+    const generate = chat(page).getByRole("button", { name: "generate" });
+    await expect(generate).toBeDisabled();
+    await expect(generate).toHaveAttribute("data-tip", "This computer is still painting the last one");
+    // Free again once the first one is done.
+    await expect(generate).toBeEnabled({ timeout: 10_000 });
+  });
+
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {
     await withKey(page);
     await chat(page).locator(".model-pill").click();

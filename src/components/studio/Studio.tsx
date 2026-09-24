@@ -167,8 +167,9 @@ export const Studio = forwardRef<
     setSettingsOpen(true);
   }, []);
 
-  const localBusy = Boolean(chat?.turns.some((t) => t.status === "working" && t.provider === "local"));
-  const blocked = provider?.kind === "local" && localBusy ? "This computer is still painting the last one" : null;
+  // This computer paints one picture at a time, whichever chat asked for the one it's on.
+  const busy = "This computer is still painting the last one";
+  const blocked = provider?.kind === "local" && chats.localRunning ? busy : null;
 
   const send = () => {
     const text = idea.trim();
@@ -178,19 +179,21 @@ export const Studio = forwardRef<
       openSettings(provider.id);
       return;
     }
-    ask(
+    const sent = ask(
       {
         idea: text,
         shape,
         provider: provider.id,
         model: model.id,
         where: `${provider.label} · ${model.label}`,
+        local: provider.kind === "local",
         refs: refs.slice(0, refLimit(provider, model)),
         tags: styleTags(text),
         size: model.sizes[0] ?? null,
       },
       props.onGenerated,
     );
+    if (!sent) return;
     setIdea("");
     setPick(null);
     setRefs([]);
@@ -201,7 +204,12 @@ export const Studio = forwardRef<
       const p = catalogue?.providers.find((x) => x.id === turn.provider);
       const m = p?.models.find((x) => x.id === turn.model);
       if (p && !p.has_key) return openSettings(p.id);
-      ask({ idea: turn.idea, shape: turn.shape, provider: turn.provider, model: turn.model, where: p && m ? `${p.label} · ${m.label}` : turn.where, refs: turn.refs, tags: styleTags(turn.idea), size: m?.sizes[0] ?? null }, props.onGenerated);
+      const local = p?.kind === "local";
+      const sent = ask(
+        { idea: turn.idea, shape: turn.shape, provider: turn.provider, model: turn.model, where: p && m ? `${p.label} · ${m.label}` : turn.where, local, refs: turn.refs, tags: styleTags(turn.idea), size: m?.sizes[0] ?? null },
+        props.onGenerated,
+      );
+      if (!sent && local) toast(`${busy}. Try again once it's done.`);
     },
     reword: (turn) => {
       setIdea(turn.idea);
