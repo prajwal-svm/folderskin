@@ -3,6 +3,9 @@
 
 use crate::cli::ConfigKey;
 use crate::error::CliError;
+use crate::paint::cannot_run;
+use folderskin_local::machine::{Arch, Os};
+use folderskin_local::Backend;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -148,6 +151,16 @@ impl Config {
                 if !known.contains(&value.as_str()) {
                     return Err(bad(format!("The backend can be {}.", or_list(&known))));
                 }
+                // Kept, it would stop every command that paints until it was taken out again.
+                let (os, arch) = (Os::this(), Arch::this());
+                if let Some(what) = Backend::parse(&value).and_then(|b| cannot_run(b, os, arch)) {
+                    return Err(CliError::fixable(
+                        "backend_unavailable",
+                        what,
+                        format!("This is {} {}.", os.id(), arch.id()),
+                    )
+                    .fix("Leave it at auto to use what suits this computer: folderskin ai config set backend auto"));
+                }
                 self.backend = Some(value);
             }
         }
@@ -268,6 +281,21 @@ mod tests {
         assert!(c.set(ConfigKey::Tier, "q5").is_err());
         assert!(c.set(ConfigKey::Backend, "rocm").is_err());
         c.set(ConfigKey::Backend, "vulkan").unwrap();
+        // A backend this computer can never run isn't kept.
+        for backend in ["mlx", "metal"] {
+            let parsed = Backend::parse(backend).unwrap();
+            match cannot_run(parsed, Os::this(), Arch::this()) {
+                Some(_) => {
+                    let e = c.set(ConfigKey::Backend, backend).unwrap_err();
+                    assert_eq!(e.code, "backend_unavailable");
+                    assert_eq!(c.backend.as_deref(), Some("vulkan"));
+                }
+                None => {
+                    c.set(ConfigKey::Backend, backend).unwrap();
+                    c.set(ConfigKey::Backend, "vulkan").unwrap();
+                }
+            }
+        }
         let err = c.set(ConfigKey::Provider, "midjourney").unwrap_err();
         assert!(err.why.contains("openai"), "{err:?}");
         c.set(ConfigKey::Model, "klein").unwrap();

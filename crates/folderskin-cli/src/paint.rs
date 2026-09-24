@@ -7,6 +7,7 @@ use crate::error::CliError;
 use crate::out::Out;
 use folderskin_ai::prompts::Shape as AiShape;
 use folderskin_ai::{AiError, Finished, ModelInfo, ProviderInfo};
+use folderskin_local::machine::{Arch, Os};
 use folderskin_local::{
     generate, slug, Backend, CancelToken, Job, Machine, ModelId, Settings, Shape, Stage, Tier,
     MAX_SEED,
@@ -33,23 +34,35 @@ impl Source {
     }
 }
 
+/// Why `backend` can never run on a computer of `os` and `arch`, whatever is installed: mlx
+/// wants Apple Silicon and Metal a Mac. `None` when it could.
+pub fn cannot_run(backend: Backend, os: Os, arch: Arch) -> Option<&'static str> {
+    match backend {
+        Backend::Mlx if !(os == Os::Macos && arch == Arch::Arm64) => {
+            Some("mlx only runs on Apple Silicon.")
+        }
+        Backend::Metal if os != Os::Macos => Some("metal only runs on a Mac."),
+        _ => None,
+    }
+}
+
 /// The backend and tier to use: a flag first, then `ai config`, then what suits the computer.
+/// `--backend auto` and `--tier auto` are flags too: they ask for what suits the computer, over
+/// whatever `ai config` says.
 pub fn settings(
     machine: &Machine,
     args: &MachineArgs,
     config: &Config,
 ) -> Result<(Settings, Source, Source), CliError> {
     let detected = Settings::for_machine(machine);
-    let backend_flag = args
-        .backend
-        .filter(|b| *b != BackendArg::Auto)
-        .map(|b| match b {
-            BackendArg::Cuda => Backend::Cuda,
-            BackendArg::Vulkan => Backend::Vulkan,
-            BackendArg::Metal => Backend::Metal,
-            BackendArg::Cpu => Backend::Cpu,
-            BackendArg::Mlx | BackendArg::Auto => Backend::Mlx,
-        });
+    let backend_flag = args.backend.map(|b| match b {
+        BackendArg::Auto => detected.backend,
+        BackendArg::Cuda => Backend::Cuda,
+        BackendArg::Vulkan => Backend::Vulkan,
+        BackendArg::Metal => Backend::Metal,
+        BackendArg::Cpu => Backend::Cpu,
+        BackendArg::Mlx => Backend::Mlx,
+    });
     let backend_config = config
         .backend
         .as_deref()
@@ -66,13 +79,15 @@ pub fn settings(
         })
         .transpose()?;
     let (backend, backend_source) = match (backend_flag, backend_config) {
+        (Some(b), _) if args.backend == Some(BackendArg::Auto) => (b, Source::Detected),
         (Some(b), _) => (b, Source::Flag),
         (None, Some(b)) => (b, Source::Config),
         (None, None) => (detected.backend, Source::Detected),
     };
-    let tier_flag = args.tier.filter(|t| *t != TierArg::Auto).map(|t| match t {
+    let tier_flag = args.tier.map(|t| match t {
+        TierArg::Auto => detected.tier,
         TierArg::Q4 => Tier::Q4,
-        TierArg::Q8 | TierArg::Auto => Tier::Q8,
+        TierArg::Q8 => Tier::Q8,
     });
     let tier_config = config
         .tier
@@ -80,21 +95,38 @@ pub fn settings(
         .filter(|t| *t != "auto")
         .and_then(Tier::parse);
     let (tier, tier_source) = match (tier_flag, tier_config) {
+        (Some(t), _) if args.tier == Some(TierArg::Auto) => (t, Source::Detected),
         (Some(t), _) => (t, Source::Flag),
         (None, Some(t)) => (t, Source::Config),
         (None, None) => (detected.tier, Source::Detected),
     };
-    if backend == Backend::Mlx && !(cfg!(target_os = "macos") && cfg!(target_arch = "aarch64")) {
-        return Err(CliError::fixable(
+    if let Some(what) = cannot_run(backend, machine.os, machine.arch) {
+        let error = CliError::fixable(
             "backend_unavailable",
-            "mlx only runs on Apple Silicon.",
-            format!(
-                "This is {} {}.",
-                std::env::consts::OS,
-                std::env::consts::ARCH
-            ),
-        )
-        .fix(format!("Leave --backend out to use {}.", detected.backend)));
+            what,
+            format!("This is {} {}.", machine.os.id(), machine.arch.id()),
+        );
+        return Err(match backend_source {
+            // No flag was given, so the way out is the saved setting.
+            Source::Config => error
+                .fix(format!(
+                    "The backend is saved in ai config. Go back to the one that suits this \
+                     computer ({}): folderskin ai config unset backend",
+                    detected.backend
+                ))
+                .fix(format!(
+                    "Or use another for this command: --backend {}",
+                    detected.backend
+                )),
+            // Leaving the flag out lands on the saved backend, or on the one that suits this
+            // computer when the saved one can't run here either.
+            _ => {
+                let without = backend_config
+                    .filter(|b| cannot_run(*b, machine.os, machine.arch).is_none())
+                    .unwrap_or(detected.backend);
+                error.fix(format!("Leave --backend out to use {without}."))
+            }
+        });
     }
     Ok((
         Settings {
@@ -644,19 +676,57 @@ mod tests {
                 .backend,
             Backend::Cuda
         );
+        // `auto` on the command line beats what ai config says, as any other flag does.
+        let (s, b, t) = settings(&machine(), &auto, &config).unwrap();
+        assert_eq!(
+            (s.backend, s.tier, b, t),
+            (Backend::Cuda, Tier::Q8, Source::Detected, Source::Detected)
+        );
     }
 
     #[test]
-    fn mlx_is_only_for_apple_silicon() {
-        let flags = MachineArgs {
-            backend: Some(BackendArg::Mlx),
+    fn mlx_is_only_for_apple_silicon_and_metal_only_for_a_mac() {
+        let flag = |backend| MachineArgs {
+            backend: Some(backend),
             tier: None,
         };
-        let result = settings(&machine(), &flags, &Config::default());
-        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            assert!(result.is_ok());
-        } else {
-            assert_eq!(result.unwrap_err().code, "backend_unavailable");
+        let none = Config::default();
+        for backend in [BackendArg::Mlx, BackendArg::Metal] {
+            let e = settings(&machine(), &flag(backend), &none).unwrap_err();
+            assert_eq!(e.code, "backend_unavailable");
+            assert_eq!(e.fix, ["Leave --backend out to use cuda."]);
+        }
+        let mac = Machine {
+            os: Os::Macos,
+            arch: Arch::Arm64,
+            gpu: folderskin_local::machine::Gpu::Apple,
+            ..machine()
+        };
+        for backend in [BackendArg::Mlx, BackendArg::Metal] {
+            assert!(settings(&mac, &flag(backend), &none).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_saved_backend_that_cant_run_here_says_how_to_unsave_it() {
+        let config = Config {
+            backend: Some("mlx".into()),
+            ..Config::default()
+        };
+        let e = settings(&machine(), &MachineArgs::default(), &config).unwrap_err();
+        assert_eq!(e.code, "backend_unavailable");
+        assert!(
+            e.fix[0].ends_with("folderskin ai config unset backend"),
+            "{e:?}"
+        );
+        assert!(!e.fix.iter().any(|f| f.contains("Leave --backend out")));
+        // Asked for on the command line, auto (or any backend that runs) gets past it.
+        for backend in [BackendArg::Auto, BackendArg::Vulkan] {
+            let flags = MachineArgs {
+                backend: Some(backend),
+                tier: None,
+            };
+            assert!(settings(&machine(), &flags, &config).is_ok(), "{backend:?}");
         }
     }
 
