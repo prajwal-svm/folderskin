@@ -214,6 +214,24 @@ pub fn shell_safe(text: &str) -> String {
     collapsed.trim_end_matches('\\').to_string()
 }
 
+/// `path` as it can be pasted into a suggested command: as it is when a shell would read it as
+/// one word, otherwise in double quotes, which cmd, PowerShell, bash and zsh all read the same
+/// (single quotes for a path that holds a double quote itself).
+pub fn shell_path(path: &std::path::Path) -> String {
+    let text = path.display().to_string();
+    let plain = !text.is_empty()
+        && !text.chars().any(|c| {
+            c.is_whitespace() || "\"'`$&|;<>()^%!*?[]{}#~,=".contains(c) || c.is_control()
+        });
+    if plain {
+        text
+    } else if text.contains('"') {
+        format!("'{text}'")
+    } else {
+        format!("\"{text}\"")
+    }
+}
+
 /// The command as typed, for an error report: `folderskin` and its arguments, quoted where
 /// they need it.
 pub fn command_line(args: &[std::ffi::OsString]) -> String {
@@ -413,6 +431,22 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn suggested_paths_can_be_pasted_as_they_are() {
+        use std::path::Path;
+        assert_eq!(shell_path(Path::new("renders/koi.png")), "renders/koi.png");
+        assert_eq!(
+            shell_path(Path::new("C:\\art\\koi-2.png")),
+            "C:\\art\\koi-2.png"
+        );
+        assert_eq!(
+            shell_path(Path::new("my wide shot.png")),
+            "\"my wide shot.png\""
+        );
+        assert_eq!(shell_path(Path::new("a&b.png")), "\"a&b.png\"");
+        assert_eq!(shell_path(Path::new("say \"hi\".png")), "'say \"hi\".png'");
     }
 
     #[test]

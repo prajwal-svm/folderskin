@@ -7,7 +7,7 @@
 
 use crate::check::{self, Verdict};
 use crate::cli::{AmountArgs, CropArgs, CutoutArgs, ImageCommand, OneImage};
-use crate::error::CliError;
+use crate::error::{shell_path, CliError};
 use crate::out::Out;
 use crate::{preview, tools};
 use folderskin_core::adjust::{self, Fx};
@@ -382,7 +382,7 @@ fn clip(args: &OneImage, out: &Arc<Out>) -> Result<(), CliError> {
                     cut.fit * 100.0
                 )
             };
-            let input = args.input.display();
+            let input = shell_path(&args.input);
             Err(CliError::fixable(
                 "folder_reshaped",
                 "That isn't FolderSkin's folder shape.",
@@ -407,6 +407,7 @@ fn cutout(args: &CutoutArgs, out: &Arc<Out>) -> Result<(), CliError> {
             return Err(no_backdrop(
                 &args.image.input,
                 "It isn't on one flat colour.",
+                true,
             ));
         };
         (
@@ -430,6 +431,7 @@ fn cutout(args: &CutoutArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 return Err(no_backdrop(
                     &args.image.input,
                     "It isn't on the magenta key colour (#FF00FF).",
+                    false,
                 ))
             }
         }
@@ -437,16 +439,25 @@ fn cutout(args: &CutoutArgs, out: &Arc<Out>) -> Result<(), CliError> {
     done(&cut, &dest, &what, out, json!({}))
 }
 
-fn no_backdrop(input: &Path, why: &str) -> CliError {
-    CliError::fixable("no_backdrop", "There is no backdrop to cut away.", why)
-        .fix(format!(
-            "For a backdrop of another flat colour: folderskin image cutout {} --flat-backdrop",
-            input.display()
-        ))
-        .fix(format!(
-            "For a folder repainted from FolderSkin's template: folderskin image clip {}",
-            input.display()
-        ))
+/// Nothing to cut away from `input`, and what to try instead: never the `--flat-backdrop` just
+/// tried (`flat`), which would only fail the same way.
+fn no_backdrop(input: &Path, why: &str, flat: bool) -> CliError {
+    let input = shell_path(input);
+    let mut e = CliError::fixable("no_backdrop", "There is no backdrop to cut away.", why);
+    if !flat {
+        e = e.fix(format!(
+            "For a backdrop of another flat colour: folderskin image cutout {input} --flat-backdrop"
+        ));
+    }
+    e = e.fix(format!(
+        "For a folder repainted from FolderSkin's template: folderskin image clip {input}"
+    ));
+    if flat {
+        e = e.fix(format!(
+            "If it is artwork, it needs no cutting: the app wraps it onto its folder (see it with folderskin render {input})"
+        ));
+    }
+    e
 }
 
 fn amount(
@@ -513,12 +524,13 @@ pub fn adjust_picture(img: &RgbaImage, fx: &Fx) -> (RgbaImage, bool) {
 
 fn check(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
     let (img, bytes) = load(input)?;
-    let name = if is_stdio(input) {
-        "<picture>".to_string()
+    let (name, pasted) = if is_stdio(input) {
+        ("<picture>".to_string(), "<picture>".to_string())
     } else {
-        input.display().to_string()
+        (input.display().to_string(), shell_path(input))
     };
-    let report = check::check(&img, bytes, &name);
+    // The fixes are commands to paste, so they name it the way a shell reads it.
+    let report = check::check(&img, bytes, &pasted);
     let mut lines = vec![format!(
         "{name}: {}, {} × {}, {:.1} MB",
         report.kind,
@@ -807,6 +819,24 @@ mod tests {
         let back = image::open(dir.join("f.jpg")).unwrap().to_rgba8();
         assert_eq!(matte::surround(&back, MAGENTA), Surround::Keyed);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn advice_never_repeats_the_command_that_failed_and_quotes_its_paths() {
+        let wide = Path::new("my wide shot.png");
+        let after_flat = no_backdrop(wide, "It isn't on one flat colour.", true);
+        assert!(
+            !after_flat.fix.iter().any(|f| f.contains("--flat-backdrop")),
+            "{after_flat:?}"
+        );
+        let after_magenta = no_backdrop(wide, "It isn't on the magenta key colour.", false);
+        assert!(after_magenta.fix[0].ends_with("cutout \"my wide shot.png\" --flat-backdrop"));
+        for e in [after_flat, after_magenta] {
+            assert!(
+                e.fix.iter().all(|f| !f.contains(" my wide")),
+                "every path is quoted: {e:?}"
+            );
+        }
     }
 
     #[test]
