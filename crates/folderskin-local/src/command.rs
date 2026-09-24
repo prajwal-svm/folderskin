@@ -134,6 +134,14 @@ pub fn mflux(
         // As with sd-cli's --disable-image-metadata: mflux otherwise writes the prompt into the
         // PNG (EXIF, IPTC and XMP), and a picture shared on its own shouldn't carry it.
         "--no-metadata",
+        // The picture decoded in tiles, and MLX's pool of freed memory held to 2 GB. Without
+        // them klein's footprint peaks at 23.1 GB as the picture is decoded, and even a Mac with
+        // 36 GB freezes for seconds while it compresses and swaps out everything else; with them
+        // it peaks at 7.8 GB, with no seams to see, and paints a few seconds sooner (measured on
+        // an M3 Pro with mflux 0.20.0, 4-bit). --low-ram does the same and more, twice as slowly.
+        "--vae-tiling",
+        "--mlx-cache-limit-gb",
+        "2",
         "--output",
     ] {
         args.push(a.into());
@@ -254,6 +262,10 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["--width", "1024"]));
         assert!(args.windows(2).any(|w| w == ["--height", "960"]));
         assert!(args.contains(&"--no-metadata".to_string()));
+        // Memory kept down, so the Mac doesn't freeze as the picture is decoded.
+        assert!(args.contains(&"--vae-tiling".to_string()));
+        assert!(args.windows(2).any(|w| w == ["--mlx-cache-limit-gb", "2"]));
+        assert!(!args.contains(&"--low-ram".to_string()), "twice as slow");
         assert!(!args.contains(&"--image-paths".to_string()));
         assert!(args.ends_with(&["--output".into(), "o.png".into()]));
 
@@ -268,6 +280,7 @@ mod tests {
         );
         assert_eq!(program, "mflux-generate-flux2-edit");
         let args = strings(&args);
+        assert!(args.contains(&"--vae-tiling".to_string()), "{args:?}");
         assert_eq!(args[1], q8.dir().to_string_lossy());
         let at = args.iter().position(|a| a == "--image-paths").unwrap();
         assert_eq!(

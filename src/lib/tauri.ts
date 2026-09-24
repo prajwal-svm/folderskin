@@ -205,7 +205,7 @@ export type LocalStatus = {
   device: string;
   /** What's still to download before it's ready (the runtime's build and the model), less what's here; 0 once it is. */
   download_bytes: number;
-  /** The runtime setting up installs besides that, while it isn't installed: "mflux" on Apple Silicon, whose packages uv fetches and `download_bytes` can't count. */
+  /** The runtime setting up installs besides that, while it isn't installed: "mflux" on Apple Silicon, installed with a uv and a Python of its own, whose packages `download_bytes` can't count. */
   installs: string | null;
   /** What setup's files take on disk now, partial downloads included: what removing the model gives back. */
   kept_bytes: number;

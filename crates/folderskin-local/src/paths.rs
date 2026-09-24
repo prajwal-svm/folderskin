@@ -55,6 +55,27 @@ pub fn webp_dir() -> PathBuf {
     home().join("bin").join("webp")
 }
 
+/// Where setup installs mflux on a Mac: the uv it installs with, the Python mflux runs on, mflux
+/// with its packages and its programs (in `bin`), all in one folder among the runtimes, so none
+/// of it touches the person's own uv or Python, and removing the model takes it all away.
+pub fn mflux_dir() -> PathBuf {
+    home().join("bin").join(Backend::Mlx.id())
+}
+
+/// An mflux program: the one setup installed, or else one on the PATH or where uv puts its tools
+/// (mflux installed by hand, or by an earlier FolderSkin with the person's own uv).
+pub fn mflux(program: &str) -> Option<PathBuf> {
+    ours_first(&mflux_dir().join("bin"), program)
+}
+
+/// `program` in `ours`, or else [`find_tool`]'s.
+fn ours_first(ours: &Path, program: &str) -> Option<PathBuf> {
+    let here = ours.join(program);
+    here.is_file()
+        .then_some(here)
+        .or_else(|| find_tool(program))
+}
+
 /// `program` on the PATH (with Windows' executable extensions), if it is there.
 pub fn which(program: &str) -> Option<PathBuf> {
     let paths = std::env::var_os("PATH")?;
@@ -263,6 +284,20 @@ mod tests {
                 "{dirs:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_mflux_setup_installed_comes_before_any_other() {
+        let dir = std::env::temp_dir().join(format!("fs-mflux-bin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let program = "folderskin-no-such-mflux-program";
+        assert_eq!(ours_first(&dir, program), None, "nowhere at all");
+        std::fs::write(dir.join(program), b"#!/bin/sh\n").unwrap();
+        assert_eq!(ours_first(&dir, program), Some(dir.join(program)));
+        std::fs::remove_dir_all(&dir).unwrap();
+        // Among the runtimes, so removing the model takes it away with them.
+        assert_eq!(mflux_dir(), home().join("bin").join("mlx"));
     }
 
     #[test]

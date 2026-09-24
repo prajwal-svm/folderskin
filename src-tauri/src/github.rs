@@ -220,7 +220,7 @@ pub async fn github_account(keys: State<'_, Keys>) -> Result<Option<Account>, St
 
 /// Forgets the token. GitHub still lists the app under the person's authorised apps until they
 /// revoke it there, which the app says.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn github_sign_out(keys: State<'_, Keys>) -> Result<(), String> {
     keys.clear(PROVIDER)
 }

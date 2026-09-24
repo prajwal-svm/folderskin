@@ -22,6 +22,9 @@ dirs = "6"
 # The runtime comes zipped. Both are already in the tree through the png crate.
 flate2 = "1"
 crc32fast = "1"
+# uv, which installs mflux on a Mac, comes as a .tar.gz. Already in the tree through the updater;
+# only read here, so none of its features.
+tar = { version = "0.4", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # How much memory the computer has, and a job object that takes the runtime down with us: a

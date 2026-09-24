@@ -157,8 +157,9 @@ fn key_provider(p: &ProviderInfo, has_key: bool) -> AiProviderDto {
     }
 }
 
-/// Saves a key to the private key file. The key never comes back out to the webview.
-#[tauri::command]
+/// Saves a key to the private key file. The key never comes back out to the webview. Off the main
+/// thread, like every command that waits for the disk.
+#[tauri::command(async)]
 pub fn ai_set_key(keys: State<'_, Keys>, provider: String, key: String) -> Result<(), AiFailure> {
     let key = key.trim();
     if key.is_empty() {
@@ -173,7 +174,7 @@ pub fn ai_set_key(keys: State<'_, Keys>, provider: String, key: String) -> Resul
         .map_err(|e| AiFailure::failed(format!("The key couldn't be saved: {e}")).without(key))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ai_clear_key(keys: State<'_, Keys>, provider: String) -> Result<(), AiFailure> {
     keys.clear(&provider)
         .map_err(|e| AiFailure::failed(format!("The key couldn't be removed: {e}")))

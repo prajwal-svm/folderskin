@@ -21,10 +21,10 @@ pub enum Runtime {
 }
 
 /// Downloads and installs everything `settings` needs on `machine`: cwebp (for packs), the
-/// runtime (mflux on Apple Silicon, stable-diffusion.cpp everywhere else), and the model's
-/// weights. What is already there and checked is left alone, and an interrupted download carries
-/// on. One setup runs at a time on a computer, whichever program started it: another fails with
-/// "busy".
+/// runtime (mflux on Apple Silicon, with the uv and the Python it needs; stable-diffusion.cpp
+/// everywhere else), and the model's weights. Nothing has to be installed first. What is already
+/// there and checked is left alone, and an interrupted download carries on. One setup runs at a
+/// time on a computer, whichever program started it: another fails with "busy".
 pub async fn setup(
     machine: &Machine,
     settings: &Settings,
@@ -32,9 +32,9 @@ pub async fn setup(
     reporter: &Reporter,
     cancel: &CancelToken,
 ) -> Result<(), Error> {
-    // No build to install: say so before touching anything.
-    if !can_set_up(machine, settings.backend) {
-        return Err(no_build(machine.os, machine.arch, settings.backend));
+    // Nothing to install, or nothing that would run here: say so before touching anything.
+    if let Some(why) = cannot_set_up(machine, settings.backend) {
+        return Err(why);
     }
     let _only_one = lock(&paths::home())?;
     check_space(machine, settings)?;
@@ -50,8 +50,9 @@ pub async fn setup(
         );
     }
     if settings.backend == Backend::Mlx {
-        // mflux first: it is quick, and a Mac without uv hears so before a long download.
-        install_mlx(reporter, cancel).await?;
+        // mflux first: it takes a minute, and whatever stops it is heard before the long
+        // download of the weights.
+        install_mflux(&client, &paths::mflux_dir(), reporter, cancel).await?;
     } else {
         install_sdcpp(
             &client,
@@ -96,14 +97,14 @@ pub async fn setup(
 /// system needs meanwhile, and so a nearly full disk is never filled to the last byte.
 pub const SPACE_MARGIN: f64 = 1.5;
 
-/// What uv puts on the disk for mflux and its packages (1.1 GB for mflux 0.20.0 on macOS, a
-/// little over for the next).
-pub const MFLUX_INSTALL_BYTES: u64 = 1_200_000_000;
+/// What installing mflux puts on the disk: uv (37 MB), Python 3.13 (65 MB), and mflux 0.20.0
+/// with its packages (1.1 GB), measured on macOS 26; a little over, for the next.
+pub const MFLUX_INSTALL_BYTES: u64 = 1_300_000_000;
 
 /// The bytes [`setup`] would still put on the disk: [`download_size`], and mflux when it has to
 /// be installed.
 pub fn space_needed(machine: &Machine, settings: &Settings) -> u64 {
-    let mflux = settings.backend == Backend::Mlx && paths::find_tool(MFLUX_PROBE).is_none();
+    let mflux = settings.backend == Backend::Mlx && paths::mflux(MFLUX_PROBE).is_none();
     download_size(machine, settings) + if mflux { MFLUX_INSTALL_BYTES } else { 0 }
 }
 
@@ -139,10 +140,64 @@ fn check_space(machine: &Machine, settings: &Settings) -> Result<(), Error> {
     )))
 }
 
-/// Whether [`setup`] has something to install for `backend` on `machine`: mflux, which uv
-/// installs, or a stable-diffusion.cpp build published for this computer.
+/// Whether [`setup`] has something to install for `backend` on `machine` that runs there: mflux
+/// on an Apple Silicon Mac new enough for it, or a stable-diffusion.cpp build published for this
+/// computer.
 pub fn can_set_up(machine: &Machine, backend: Backend) -> bool {
-    backend == Backend::Mlx || manifest::sdcpp_assets(machine.os, machine.arch, backend).is_some()
+    cannot_set_up(machine, backend).is_none()
+}
+
+/// The oldest macOS mflux runs on: MLX and PyTorch publish their Mac packages for macOS 14 and
+/// later only.
+pub const MFLUX_OLDEST_MACOS: (u32, u32) = (14, 0);
+
+/// Why [`setup`] can't set `backend` up on `machine`, when it can't: no stable-diffusion.cpp build
+/// for this computer, or mflux on a computer that isn't an Apple Silicon Mac, or on one whose
+/// macOS is older than [`MFLUX_OLDEST_MACOS`].
+pub fn cannot_set_up(machine: &Machine, backend: Backend) -> Option<Error> {
+    if backend != Backend::Mlx {
+        return manifest::sdcpp_assets(machine.os, machine.arch, backend)
+            .is_none()
+            .then(|| no_build(machine.os, machine.arch, backend));
+    }
+    if machine.os != Os::Macos || machine.arch != Arch::Arm64 {
+        let mut error = Error::environment(
+            "no_build_for_platform",
+            "mflux runs on Apple Silicon Macs only.",
+            format!(
+                "It paints with MLX, which is for Apple's own chips, and this is {} {}.",
+                machine.os.id(),
+                machine.arch.id()
+            ),
+        );
+        if let Some(other) = manifest::sdcpp_backends(machine.os, machine.arch).first() {
+            error = error.fix(format!(
+                "Use a backend that has a build here: folderskin ai setup --backend {other}"
+            ));
+        }
+        return Some(
+            error.fix("Or paint with a provider and your own key instead: folderskin ai models"),
+        );
+    }
+    // The Mac this runs on, which is the one `machine` describes.
+    crate::machine::macos_version()
+        .filter(|version| *version < MFLUX_OLDEST_MACOS)
+        .map(macos_too_old)
+}
+
+/// Why mflux can't be installed on a Mac with macOS `major.minor`.
+pub fn macos_too_old((major, minor): (u32, u32)) -> Error {
+    let (oldest, _) = MFLUX_OLDEST_MACOS;
+    Error::environment(
+        "macos_too_old",
+        format!("The local model needs macOS {oldest} or later, and this Mac has macOS {major}.{minor}."),
+        format!(
+            "MLX and PyTorch, which it paints with, publish their Mac packages for macOS {oldest} \
+             and later only."
+        ),
+    )
+    .fix("Update macOS (System Settings > General > Software Update), then run setup again.")
+    .fix("Or paint with a provider and your own key instead: folderskin ai models")
 }
 
 /// Holds `setup.lock` in `home` for as long as the file is kept, so two setups (the app's and
@@ -255,7 +310,7 @@ async fn install_sdcpp(
         tokio::task::spawn_blocking(move || unzip::extract(&from, &to, |n| Some(n.to_string())))
             .await
             .map_err(|e| Error::bug("Unpacking stopped unexpectedly.", e.to_string()))?
-            .map_err(|e| unpack_error(&zip, &e))?;
+            .map_err(|e| unpack_error(&zip, "The runtime", &e))?;
     }
     #[cfg(unix)]
     {
@@ -332,18 +387,19 @@ pub fn no_build(os: Os, arch: Arch, backend: Backend) -> Error {
         .fix("Or paint with a provider and your own key instead: folderskin ai models")
 }
 
-fn unpack_error(zip: &Path, e: &std::io::Error) -> Error {
+/// Why `archive` (the runtime's, or uv's) couldn't be unpacked. A damaged one is deleted, with
+/// its check mark, so the next setup downloads it afresh.
+fn unpack_error(archive: &Path, name: &str, e: &std::io::Error) -> Error {
     if e.kind() == std::io::ErrorKind::InvalidData {
-        let _ = std::fs::remove_file(zip);
-        let _ = std::fs::remove_file(zip.with_extension("zip.ok"));
+        download::discard(archive);
         Error::fixable(
             "unpack_failed",
-            "The runtime's archive couldn't be unpacked.",
-            format!("{}: {e}. It was deleted.", zip.display()),
+            format!("{name}'s archive couldn't be unpacked."),
+            format!("{}: {e}. It was deleted.", archive.display()),
         )
         .fix("Run setup again to download it afresh.")
     } else {
-        Error::io("unpack the runtime", zip, e)
+        Error::io(&format!("unpack {name}"), archive, e)
     }
 }
 
@@ -449,7 +505,7 @@ async fn install_webp(
     })
     .await
     .map_err(|e| Error::bug("Unpacking stopped unexpectedly.", e.to_string()))?
-    .map_err(|e| unpack_error(&zip, &e))?;
+    .map_err(|e| unpack_error(&zip, "The runtime", &e))?;
     download::discard(&zip);
     reporter.log(Level::Info, format!("installed cwebp in {}", dir.display()));
     Ok(())
@@ -466,7 +522,7 @@ fn webp_zip() -> PathBuf {
 /// also asks the runtime whether it starts.
 pub fn is_set_up(settings: &Settings) -> bool {
     let runtime = if settings.backend == Backend::Mlx {
-        paths::find_tool(MFLUX_PROBE).is_some()
+        paths::mflux(MFLUX_PROBE).is_some()
     } else {
         paths::sd_cli(settings.backend).is_file()
     };
@@ -480,12 +536,19 @@ pub fn is_set_up(settings: &Settings) -> bool {
 
 /// The bytes [`setup`] would still download for `settings` on `machine`: stable-diffusion.cpp's
 /// tested build when it isn't installed, cwebp on Windows, and every model file that isn't here
-/// yet (one two models share counted once), less whatever interrupted downloads already brought.
-/// mflux itself, a few hundred MB of Python packages that uv fetches, isn't counted.
+/// yet (one two models share counted once), less whatever interrupted downloads already brought;
+/// and on a Mac, uv when mflux has to be installed. mflux itself isn't counted: Python and a few
+/// hundred MB of packages, which uv fetches.
 pub fn download_size(machine: &Machine, settings: &Settings) -> u64 {
     let mut total = 0;
     if machine.os == Os::Windows && paths::cwebp().is_none() {
         total += download::remaining(&webp_zip(), manifest::WEBP_WINDOWS_SIZE);
+    }
+    if settings.backend == Backend::Mlx
+        && paths::mflux(MFLUX_PROBE).is_none()
+        && !uv_installed(&paths::mflux_dir())
+    {
+        total += download::remaining(&uv_archive(), manifest::UV_SIZE);
     }
     if settings.backend != Backend::Mlx {
         let exe = paths::sd_cli(settings.backend);
@@ -511,71 +574,266 @@ pub fn download_size(machine: &Machine, settings: &Settings) -> u64 {
     total
 }
 
-async fn install_mlx(reporter: &Reporter, cancel: &CancelToken) -> Result<(), Error> {
-    if paths::find_tool(MFLUX_PROBE).is_some() {
-        reporter.log(Level::Info, "mflux is installed");
+/// What setup installs as mflux, written in its folder once it is: another FolderSkin that pins
+/// another mflux, Python or set of packages installs it again.
+fn mflux_release() -> String {
+    format!(
+        "mflux {} on Python {}, packages as of {}",
+        manifest::MFLUX_VERSION,
+        manifest::MFLUX_PYTHON,
+        manifest::MFLUX_PACKAGES_AS_OF
+    )
+}
+
+/// The mflux that is already here and will do, if there is one: the one setup installed in `dir`
+/// when it is `release`, or else, when setup never installed one there, one of the person's own
+/// (`theirs`: installed by hand, or by an earlier FolderSkin with their own uv).
+fn mflux_here(
+    dir: &Path,
+    release: &str,
+    theirs: impl FnOnce() -> Option<PathBuf>,
+) -> Option<PathBuf> {
+    let ours = dir.join("bin").join(MFLUX_PROBE);
+    match std::fs::read_to_string(dir.join(".release")) {
+        Ok(stamp) => (stamp.trim() == release && ours.is_file()).then_some(ours),
+        Err(_) => theirs(),
+    }
+}
+
+/// Installs mflux in `dir` ([`paths::mflux_dir`]) with a uv of its own, and the Python mflux runs
+/// on with it, unless an mflux that will do is here already. Nothing has to be on the Mac first:
+/// one out of the box has neither uv nor a Python mflux can use, and whatever uv or Python the
+/// person has is left alone.
+async fn install_mflux(
+    client: &reqwest::Client,
+    dir: &Path,
+    reporter: &Reporter,
+    cancel: &CancelToken,
+) -> Result<(), Error> {
+    let release = mflux_release();
+    if let Some(found) = mflux_here(dir, &release, || paths::find_tool(MFLUX_PROBE)) {
+        reporter.log(
+            Level::Info,
+            format!("mflux is installed: {}", found.display()),
+        );
         return Ok(());
     }
-    let Some(uv) = paths::find_tool("uv") else {
-        return Err(Error::environment(
-            "uv_missing",
-            "mflux can't be installed yet.",
-            "It is installed with uv, and uv isn't on the PATH, in ~/.local/bin or in Homebrew's \
-             folder.",
-        )
-        .fix("Install uv (https://docs.astral.sh/uv/), then run setup again."));
-    };
+    std::fs::create_dir_all(dir).map_err(|e| Error::io("make mflux's folder", dir, &e))?;
+    let uv = install_uv(client, dir, reporter, cancel).await?;
+    // An install stopped part-way, or of another release, is started again: uv puts a tool in a
+    // folder of its own. The Python and the packages already downloaded are kept.
+    let stamp = dir.join(".release");
+    let _ = std::fs::remove_file(&stamp);
+    for leftover in [dir.join("tools"), dir.join("bin")] {
+        match std::fs::remove_dir_all(&leftover) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(Error::io(
+                    "clear an earlier install of mflux",
+                    &leftover,
+                    &e,
+                ))
+            }
+        }
+    }
+    let python = manifest::MFLUX_PYTHON;
+    reporter.stage(Stage::Install, format!("Installing Python {python}"));
+    run_uv(
+        &uv,
+        dir,
+        &["python", "install", python, "--managed-python", "--no-bin"],
+        reporter,
+        cancel,
+        |output| {
+            Error::environment(
+                "python_install_failed",
+                "Python couldn't be installed for mflux.",
+                format!("uv python install {python} failed. Its last output:\n{output}"),
+            )
+        },
+    )
+    .await?;
+    let mflux = format!("mflux=={}", manifest::MFLUX_VERSION);
     reporter.stage(
         Stage::Install,
         format!("Installing mflux {}", manifest::MFLUX_VERSION),
     );
+    run_uv(
+        &uv,
+        dir,
+        &[
+            "tool",
+            "install",
+            "--python",
+            python,
+            "--managed-python",
+            // Every package as a published build: never compiled here, which would need Apple's
+            // developer tools and would ask for them in a window of its own.
+            "--no-build",
+            "--exclude-newer",
+            manifest::MFLUX_PACKAGES_AS_OF,
+            &mflux,
+        ],
+        reporter,
+        cancel,
+        |output| {
+            Error::environment(
+                "mflux_install_failed",
+                "mflux couldn't be installed.",
+                format!("uv tool install {mflux} failed. Its last output:\n{output}"),
+            )
+        },
+    )
+    .await?;
+    // The packages as downloaded, which the install has copied out: the space comes back.
+    let _ = std::fs::remove_dir_all(dir.join("cache"));
+    std::fs::write(&stamp, &release)
+        .map_err(|e| Error::io("record mflux's install", &stamp, &e))?;
+    reporter.log(
+        Level::Info,
+        format!("installed {release} in {}", dir.display()),
+    );
+    Ok(())
+}
+
+/// The uv mflux is installed with: the one in `dir` when it is the pinned build, or else that
+/// build, downloaded, checked against its hash and unpacked there.
+async fn install_uv(
+    client: &reqwest::Client,
+    dir: &Path,
+    reporter: &Reporter,
+    cancel: &CancelToken,
+) -> Result<PathBuf, Error> {
+    let uv = dir.join("uv");
+    if uv_installed(dir) {
+        return Ok(uv);
+    }
+    let archive = uv_archive();
+    let remote = Remote {
+        url: manifest::UV_URL.to_string(),
+        size: manifest::UV_SIZE,
+        sha256: Some(manifest::UV_SHA256.to_string()),
+        label: Some(format!("uv {}", manifest::UV_VERSION)),
+    };
+    download::fetch(client, &remote, &archive, reporter, cancel).await?;
+    cancel.check()?;
+    reporter.stage(
+        Stage::Install,
+        format!("Unpacking uv {}", manifest::UV_VERSION),
+    );
+    let (from, to) = (archive.clone(), uv.clone());
+    tokio::task::spawn_blocking(move || extract_uv(&from, &to))
+        .await
+        .map_err(|e| Error::bug("Unpacking stopped unexpectedly.", e.to_string()))?
+        .map_err(|e| unpack_error(&archive, "uv", &e))?;
+    let stamp = dir.join(".uv-release");
+    std::fs::write(&stamp, manifest::UV_VERSION)
+        .map_err(|e| Error::io("record the installed uv", &stamp, &e))?;
+    download::discard(&archive);
+    Ok(uv)
+}
+
+/// Whether the pinned uv is in `dir`, mflux's folder.
+fn uv_installed(dir: &Path) -> bool {
+    dir.join("uv").is_file()
+        && std::fs::read_to_string(dir.join(".uv-release"))
+            .is_ok_and(|s| s.trim() == manifest::UV_VERSION)
+}
+
+/// Where uv's release archive is downloaded to.
+fn uv_archive() -> PathBuf {
+    paths::downloads_dir().join(format!(
+        "uv-{}-aarch64-apple-darwin.tar.gz",
+        manifest::UV_VERSION
+    ))
+}
+
+/// Takes the uv program out of Astral's release archive (`uv-aarch64-apple-darwin/uv`, beside
+/// uvx, which isn't needed) and puts it at `to`, ready to run, by way of a file beside it, so a
+/// program half written is never taken for a whole one.
+fn extract_uv(archive: &Path, to: &Path) -> std::io::Result<()> {
+    let gz = flate2::read::GzDecoder::new(std::fs::File::open(archive)?);
+    let mut tar = tar::Archive::new(gz);
+    for entry in tar.entries()? {
+        let mut entry = entry?;
+        let is_uv = entry.header().entry_type().is_file()
+            && entry.path()?.file_name() == Some(std::ffi::OsStr::new("uv"));
+        if !is_uv {
+            continue;
+        }
+        let part = to.with_file_name("uv.part");
+        let mut file = std::fs::File::create(&part)?;
+        std::io::copy(&mut entry, &mut file)?;
+        drop(file);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&part, std::fs::Permissions::from_mode(0o755))?;
+        }
+        return std::fs::rename(&part, to);
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        "there is no uv program in it",
+    ))
+}
+
+/// `uv` with `args`, told to keep everything in `dir` (mflux's folder): the Python it installs,
+/// the tool and its programs, and its downloads. The person's own uv folders, the Python on the
+/// PATH and the settings of whatever project a terminal is in are left out of it.
+fn uv_command(uv: &Path, dir: &Path, args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new(uv);
-    cmd.args([
-        "tool",
-        "install",
-        &format!("mflux=={}", manifest::MFLUX_VERSION),
-    ]);
+    cmd.args(args)
+        .current_dir(dir)
+        .env("UV_PYTHON_INSTALL_DIR", dir.join("python"))
+        .env("UV_TOOL_DIR", dir.join("tools"))
+        .env("UV_TOOL_BIN_DIR", dir.join("bin"))
+        .env("UV_CACHE_DIR", dir.join("cache"));
+    // What a terminal may have set that would undo the flags: a Python of its own, or none
+    // downloaded.
+    for name in [
+        "UV_PYTHON",
+        "UV_NO_MANAGED_PYTHON",
+        "UV_PYTHON_PREFERENCE",
+        "UV_PYTHON_DOWNLOADS",
+    ] {
+        cmd.env_remove(name);
+    }
+    cmd
+}
+
+/// Runs `uv` with `args` in `dir` ([`uv_command`]), its output reported as it comes; `failed`
+/// says what went wrong from its last lines when it doesn't succeed.
+async fn run_uv(
+    uv: &Path,
+    dir: &Path,
+    args: &[&str],
+    reporter: &Reporter,
+    cancel: &CancelToken,
+    failed: impl FnOnce(String) -> Error,
+) -> Result<(), Error> {
+    let cmd = uv_command(uv, dir, args);
     let (reporter2, cancel2) = (reporter.clone(), cancel.clone());
     let finished =
         tokio::task::spawn_blocking(move || crate::run::run(cmd, 0, &reporter2, &cancel2))
             .await
             .map_err(|e| Error::bug("Installing mflux stopped unexpectedly.", e.to_string()))?
             .map_err(|e| {
+                // Downloaded afresh next time, in case it is the program that is at fault.
+                let _ = std::fs::remove_file(dir.join(".uv-release"));
                 Error::environment(
                     "mflux_install_failed",
                     "uv couldn't be started.",
-                    e.to_string(),
+                    format!("{}: {e}.", uv.display()),
                 )
+                .fix("Run setup again.")
             })?;
     cancel.check()?;
     match finished.status {
-        Some(s) if s.success() => {
-            reporter.log(
-                Level::Info,
-                format!("installed mflux {}", manifest::MFLUX_VERSION),
-            );
-            // So removing the model later takes away this mflux, and never one installed by hand.
-            let marker = paths::home().join(crate::remove::MFLUX_MARKER);
-            if let Err(e) = std::fs::write(&marker, manifest::MFLUX_VERSION) {
-                reporter.log(
-                    Level::Warn,
-                    format!("{} couldn't be written: {e}", marker.display()),
-                );
-            }
-            Ok(())
-        }
-        _ => Err(Error::environment(
-            "mflux_install_failed",
-            "mflux couldn't be installed.",
-            format!(
-                "uv tool install failed. Its last output:\n{}",
-                finished.tail.join("\n")
-            ),
-        )
-        .fix(format!(
-            "Run it yourself to see why: uv tool install mflux=={}",
-            manifest::MFLUX_VERSION
-        ))),
+        Some(status) if status.success() => Ok(()),
+        _ => Err(failed(finished.tail.join("\n"))
+            .fix("Check that this Mac is online, then run setup again.")),
     }
 }
 
@@ -597,7 +855,8 @@ pub struct RuntimeStatus {
     pub path: Option<PathBuf>,
     pub installed: bool,
     /// Whether `setup` can install it here: false when stable-diffusion.cpp publishes no build of
-    /// this backend for this computer (ARM64 Linux, an Intel Mac), or mflux off Apple Silicon.
+    /// this backend for this computer (ARM64 Linux, an Intel Mac), or for mflux off Apple Silicon
+    /// or on a macOS older than it needs ([`MFLUX_OLDEST_MACOS`]).
     pub available: bool,
     /// The installed build's tag.
     pub release: Option<String>,
@@ -639,11 +898,11 @@ impl ModelStatus {
 /// second; call it off the UI thread.
 pub fn status(machine: &Machine, settings: &Settings) -> Status {
     let runtime = if settings.backend == Backend::Mlx {
-        let path = paths::find_tool(MFLUX_PROBE);
+        let path = paths::mflux(MFLUX_PROBE);
         RuntimeStatus {
             name: "mflux".into(),
             installed: path.is_some(),
-            available: machine.os == Os::Macos && machine.arch == Arch::Arm64,
+            available: path.is_some() || can_set_up(machine, Backend::Mlx),
             path,
             release: None,
             devices: Vec::new(),
@@ -826,12 +1085,18 @@ mod tests {
                 .map(|f| download::remaining(&f.local, f.size))
                 .sum()
         };
-        // A Mac downloads klein's MLX weights and nothing else: mflux is uv's to fetch, and cwebp
-        // comes from Homebrew or not at all.
+        // A Mac downloads klein's MLX weights, and uv when mflux isn't installed: mflux's own
+        // packages are uv's to fetch, and cwebp comes from Homebrew or not at all.
         let mac = machine(Os::Macos, Arch::Arm64, Gpu::Apple);
         let settings = Settings::for_machine(&mac);
         assert_eq!((settings.backend, settings.tier), (Backend::Mlx, Tier::Q4));
-        assert_eq!(download_size(&mac, &settings), left(&settings));
+        let uv = if paths::mflux(MFLUX_PROBE).is_none() && !uv_installed(&paths::mflux_dir()) {
+            download::remaining(&uv_archive(), manifest::UV_SIZE)
+        } else {
+            0
+        };
+        assert!(uv <= manifest::UV_SIZE);
+        assert_eq!(download_size(&mac, &settings), left(&settings) + uv);
         assert!(left(&settings) <= 4_619_699_678);
         // No runtime build and no cwebp for ARM64 Linux, so at most the model's own files.
         let arm = machine(Os::Linux, Arch::Arm64, Gpu::None);
@@ -950,6 +1215,149 @@ mod tests {
             &machine(Os::Linux, Arch::Arm64),
             Backend::Vulkan
         ));
+        // mflux is for Apple's chips: elsewhere it says so, and what has a build instead.
+        let e = cannot_set_up(&machine(Os::Linux, Arch::X86_64), Backend::Mlx).unwrap();
+        assert_eq!(e.code, "no_build_for_platform", "{e:?}");
+        assert!(e.what.contains("Apple Silicon"), "{e:?}");
+        assert!(e.fix[0].ends_with("--backend vulkan"), "{e:?}");
+        assert!(!can_set_up(&machine(Os::Macos, Arch::X86_64), Backend::Mlx));
+    }
+
+    #[test]
+    fn a_mac_too_old_for_mflux_hears_it_needs_a_newer_macos() {
+        let e = macos_too_old((13, 6));
+        assert_eq!(
+            (e.code, e.class),
+            ("macos_too_old", crate::Class::Environment)
+        );
+        assert!(e.what.contains("macOS 14 or later"), "{e:?}");
+        assert!(e.what.contains("macOS 13.6"), "{e:?}");
+        assert!(e.fix[0].contains("Software Update"), "{e:?}");
+        // The Mac running this is new enough, or isn't a Mac.
+        assert!(crate::machine::macos_version().is_none_or(|v| v >= MFLUX_OLDEST_MACOS));
+    }
+
+    #[test]
+    fn mflux_is_installed_again_only_when_setups_own_is_missing_or_another_release() {
+        let dir = std::env::temp_dir().join(format!("fs-mflux-here-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        let theirs = || {
+            Some(PathBuf::from(
+                "/Users/someone/.local/bin/mflux-generate-flux2",
+            ))
+        };
+        let nobodys = || None;
+        let release = mflux_release();
+        // Setup never installed one: the person's own will do, and without one it is installed.
+        assert_eq!(mflux_here(&dir, &release, theirs), theirs());
+        assert_eq!(mflux_here(&dir, &release, nobodys), None);
+        // Setup's own, of this release, is used; the person's isn't even looked for.
+        let ours = dir.join("bin").join(MFLUX_PROBE);
+        std::fs::write(&ours, b"#!/bin/sh\n").unwrap();
+        std::fs::write(dir.join(".release"), &release).unwrap();
+        assert_eq!(
+            mflux_here(&dir, &release, || panic!("not asked")),
+            Some(ours.clone())
+        );
+        // Another release of setup's own is installed again, whoever else has one.
+        std::fs::write(dir.join(".release"), "mflux 0.19.0 on Python 3.12").unwrap();
+        assert_eq!(mflux_here(&dir, &release, theirs), None);
+        // And so is one whose programs have gone.
+        std::fs::write(dir.join(".release"), &release).unwrap();
+        std::fs::remove_file(&ours).unwrap();
+        assert_eq!(mflux_here(&dir, &release, theirs), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert!(release.contains(manifest::MFLUX_VERSION), "{release}");
+        assert!(release.contains(manifest::MFLUX_PYTHON), "{release}");
+    }
+
+    #[test]
+    fn uv_is_told_to_keep_everything_in_mfluxs_folder() {
+        let dir = Path::new("/somewhere/folderskin-localgen/bin/mlx");
+        let cmd = uv_command(&dir.join("uv"), dir, &["python", "install", "3.13"]);
+        assert_eq!(cmd.get_program(), dir.join("uv").as_os_str());
+        assert_eq!(cmd.get_current_dir(), Some(dir), "no project's settings");
+        let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
+        let set = |name: &str| envs.get(std::ffi::OsStr::new(name)).copied().flatten();
+        for (name, folder) in [
+            ("UV_PYTHON_INSTALL_DIR", "python"),
+            ("UV_TOOL_DIR", "tools"),
+            ("UV_TOOL_BIN_DIR", "bin"),
+            ("UV_CACHE_DIR", "cache"),
+        ] {
+            assert_eq!(set(name), Some(dir.join(folder).as_os_str()), "{name}");
+        }
+        // Taken away, not set: a terminal's own choice of Python can't undo --managed-python.
+        for name in ["UV_PYTHON", "UV_NO_MANAGED_PYTHON", "UV_PYTHON_DOWNLOADS"] {
+            assert!(envs.contains_key(std::ffi::OsStr::new(name)), "{name}");
+            assert_eq!(set(name), None, "{name}");
+        }
+        // mflux's programs are where painting looks first.
+        assert_eq!(
+            paths::mflux_dir().join("bin"),
+            paths::home().join("bin").join("mlx").join("bin")
+        );
+    }
+
+    /// A .tar.gz like Astral's: a folder, uvx, then uv.
+    fn uv_release(dir: &Path, files: &[(&str, &[u8])]) -> PathBuf {
+        let archive = dir.join("uv.tar.gz");
+        let gz = flate2::write::GzEncoder::new(
+            std::fs::File::create(&archive).unwrap(),
+            flate2::Compression::fast(),
+        );
+        let mut tar = tar::Builder::new(gz);
+        let mut folder = tar::Header::new_gnu();
+        folder.set_entry_type(tar::EntryType::Directory);
+        folder.set_size(0);
+        folder.set_mode(0o755);
+        tar.append_data(&mut folder, "uv-aarch64-apple-darwin/", std::io::empty())
+            .unwrap();
+        for (name, bytes) in files {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            tar.append_data(&mut header, name, *bytes).unwrap();
+        }
+        tar.into_inner().unwrap().finish().unwrap();
+        archive
+    }
+
+    #[test]
+    fn uv_is_taken_out_of_its_release_archive_ready_to_run() {
+        let dir = std::env::temp_dir().join(format!("fs-uv-archive-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let archive = uv_release(
+            &dir,
+            &[
+                ("uv-aarch64-apple-darwin/uvx", b"uvx"),
+                ("uv-aarch64-apple-darwin/uv", b"the uv program"),
+            ],
+        );
+        let uv = dir.join("mlx").join("uv");
+        std::fs::create_dir_all(uv.parent().unwrap()).unwrap();
+        extract_uv(&archive, &uv).unwrap();
+        assert_eq!(std::fs::read(&uv).unwrap(), b"the uv program");
+        assert!(!uv.with_file_name("uv.part").exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&uv).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o755);
+        }
+
+        // One without uv in it is damaged: setup deletes it and downloads it again.
+        let archive = uv_release(&dir, &[("uv-aarch64-apple-darwin/uvx", b"uvx")]);
+        let e = extract_uv(&archive, &dir.join("elsewhere")).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::InvalidData, "{e}");
+        let e = unpack_error(&archive, "uv", &e);
+        assert_eq!(e.code, "unpack_failed");
+        assert_eq!(e.what, "uv's archive couldn't be unpacked.");
+        assert!(!archive.exists(), "deleted");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

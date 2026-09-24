@@ -252,29 +252,58 @@ pub fn keep_reference(dir: &Path, id: &str, source: &Path) -> Result<ChatRefDto,
 }
 
 // ---------- commands ----------
+//
+// On blocking threads, like chat_keep_reference: a save waits for the disk (write_atomic syncs
+// it), which on the main thread held up the window and any file dialog waiting to open, and on
+// the async runtime would hold up other commands.
 
-#[tauri::command]
-pub fn chats_list(chats: State<'_, Chats>) -> Result<Vec<ChatSummary>, String> {
-    Ok(index(&chats.dir()?))
+/// Held while a chat and the index are written: saves and deletes run on threads of their own,
+/// and two at once would each write an index without the other's change.
+static WRITING: Mutex<()> = Mutex::new(());
+
+fn writing() -> std::sync::MutexGuard<'static, ()> {
+    WRITING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// `work` on a blocking thread, its panic reported as an error.
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn chat_read(chats: State<'_, Chats>, id: String) -> Result<Value, String> {
-    read(&chats.dir()?, &id)
-}
-
-#[tauri::command]
-pub fn chat_save(chats: State<'_, Chats>, chat: Value) -> Result<ChatSummary, String> {
+pub async fn chats_list(chats: State<'_, Chats>) -> Result<Vec<ChatSummary>, String> {
     let dir = chats.dir()?;
-    // Chats are saved as they change; one at a time, so two saves never race over the index.
-    static WRITING: Mutex<()> = Mutex::new(());
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    save(&dir, &chat)
+    blocking(move || Ok(index(&dir))).await
 }
 
 #[tauri::command]
-pub fn chat_delete(chats: State<'_, Chats>, id: String) -> Result<(), String> {
-    delete(&chats.dir()?, &id)
+pub async fn chat_read(chats: State<'_, Chats>, id: String) -> Result<Value, String> {
+    let dir = chats.dir()?;
+    blocking(move || read(&dir, &id)).await
+}
+
+#[tauri::command]
+pub async fn chat_save(chats: State<'_, Chats>, chat: Value) -> Result<ChatSummary, String> {
+    let dir = chats.dir()?;
+    blocking(move || {
+        let _one = writing();
+        save(&dir, &chat)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn chat_delete(chats: State<'_, Chats>, id: String) -> Result<(), String> {
+    let dir = chats.dir()?;
+    blocking(move || {
+        let _one = writing();
+        delete(&dir, &id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -284,9 +313,7 @@ pub async fn chat_keep_reference(
     path: String,
 ) -> Result<ChatRefDto, String> {
     let dir = chats.dir()?;
-    tauri::async_runtime::spawn_blocking(move || keep_reference(&dir, &id, Path::new(&path)))
-        .await
-        .map_err(|e| e.to_string())?
+    blocking(move || keep_reference(&dir, &id, Path::new(&path))).await
 }
 
 #[cfg(test)]
