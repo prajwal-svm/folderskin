@@ -9,7 +9,7 @@ use folderskin_core::apply::{refresh_shell_icons, revert_icon};
 use folderskin_core::compositor::{self, render_preview_png, Artwork, SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_core::matte;
 use folderskin_tools::cli::PacksCommand;
-use folderskin_tools::{make, packs};
+use folderskin_tools::{catalog, make, packs};
 use image::RgbaImage;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -209,6 +209,56 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 "index",
                 json!({"written": changes.written, "removed": changes.removed}),
                 &lines.join("\n"),
+                false,
+            );
+            Ok(())
+        }
+        PacksCommand::Catalog {
+            dir,
+            out: to,
+            mirrors,
+        } => {
+            let report = packs::check(&dir).map_err(|why| unreadable_packs(&dir, why))?;
+            for problem in &report.problems {
+                out.warn(problem);
+            }
+            let opts = catalog::CatalogOptions {
+                out: to,
+                mirrors,
+                cwebp: make::find_cwebp().or_else(folderskin_local::paths::cwebp),
+                dates: catalog::git_dates(&dir),
+            };
+            if opts.cwebp.is_none() {
+                out.warn("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger");
+            }
+            let built = catalog::write_catalog(&dir, &report, &opts).map_err(|why| {
+                CliError::fixable(
+                    "catalog_failed",
+                    "The catalog couldn't be written.",
+                    sentence(&why),
+                )
+            })?;
+            let unchanged = if built.changes.is_empty() {
+                ", nothing changed"
+            } else {
+                ""
+            };
+            out.result(
+                Some(&opts.out),
+                "catalog",
+                json!({
+                    "generation": built.head.generation,
+                    "written": built.changes.written,
+                    "removed": built.changes.removed,
+                }),
+                &format!(
+                    "{}: generation {}, a {} KB catalog; {} files written, {} removed{unchanged}",
+                    report.totals(),
+                    built.head.generation,
+                    built.head.catalog.bytes.div_ceil(1024),
+                    built.changes.written.len(),
+                    built.changes.removed.len(),
+                ),
                 false,
             );
             Ok(())
