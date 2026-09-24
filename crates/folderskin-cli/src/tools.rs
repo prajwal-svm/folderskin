@@ -384,9 +384,10 @@ fn make_pack(
     let total: usize = made.iter().map(|m| m.bytes).sum();
     let folders = made.iter().filter(|m| m.folder).count();
     lines.push(format!(
-        "wrote {}: {} skins ({folders} finished folders, {} artwork), {} KB",
+        "wrote {}: {} ({}, {} artwork), {} KB",
         folder.display(),
-        made.len(),
+        crate::ai::count(made.len(), "skin"),
+        crate::ai::count(folders, "finished folder"),
         made.len() - folders,
         total.div_ceil(1024)
     ));

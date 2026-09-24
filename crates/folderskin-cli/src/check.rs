@@ -116,9 +116,9 @@ pub fn check(img: &RgbaImage, bytes: usize, name: &str) -> Report {
     if bytes > MAX_PICTURE_BYTES {
         // Only a pack has a size limit, and making one shrinks the picture anyway.
         findings.push(ok(format!(
-            "The file is {:.1} MB: fine for your own folders, and `folderskin packs make` \
+            "The file is {}: fine for your own folders, and `folderskin packs make` \
              shrinks it for a pack, whose limit is 2 MB.",
-            bytes as f64 / 1e6
+            crate::images::file_size(bytes)
         )));
     }
     if w.max(h) > 4096 {

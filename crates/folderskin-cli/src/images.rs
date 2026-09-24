@@ -80,6 +80,11 @@ fn is_stdio(path: &Path) -> bool {
 
 /// A picture from a file, or from standard input for `-`, with its size in bytes.
 pub fn load(path: &Path) -> Result<(RgbaImage, usize), CliError> {
+    load_with_bytes(path).map(|(img, bytes)| (img, bytes.len()))
+}
+
+/// [`load`], keeping the file's bytes, which say what format it is when standard input can't.
+fn load_with_bytes(path: &Path) -> Result<(RgbaImage, Vec<u8>), CliError> {
     if !is_stdio(path) {
         if path.is_dir() {
             return Err(CliError::folder_not_file("read the picture", path));
@@ -88,7 +93,7 @@ pub fn load(path: &Path) -> Result<(RgbaImage, usize), CliError> {
         let img = image::load_from_memory(&bytes)
             .map_err(|e| preview::unreadable(path, &e))?
             .to_rgba8();
-        return Ok((img, bytes.len()));
+        return Ok((img, bytes));
     }
     let mut bytes = Vec::new();
     std::io::stdin()
@@ -105,7 +110,17 @@ pub fn load(path: &Path) -> Result<(RgbaImage, usize), CliError> {
     let img = image::load_from_memory(&bytes)
         .map_err(|e| preview::unreadable(Path::new("standard input"), &e))?
         .to_rgba8();
-    Ok((img, bytes.len()))
+    Ok((img, bytes))
+}
+
+/// A file's size as a person reads it: kilobytes below a megabyte, so a small picture isn't
+/// "0.00 MB".
+pub fn file_size(bytes: usize) -> String {
+    if bytes < 1_000_000 {
+        format!("{} KB", bytes.div_ceil(1000))
+    } else {
+        format!("{:.1} MB", bytes as f64 / 1e6)
+    }
 }
 
 /// Where a command's picture goes: the `--out` given, standard output when the picture came from
@@ -421,6 +436,15 @@ fn clip(args: &OneImage, out: &Arc<Out>) -> Result<(), CliError> {
 
 fn cutout(args: &CutoutArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let (img, _) = load(&args.image.input)?;
+    if matte::alpha_bounds(&img, 8).is_none() {
+        // Trimming nothing to its subject would write the same empty picture and call it done.
+        return Err(CliError::fixable(
+            "image_empty",
+            "There is nothing in that picture to cut out.",
+            format!("{} is completely transparent.", args.image.input.display()),
+        )
+        .fix("Use another picture."));
+    }
     let dest = target(&args.image.input, args.image.out.as_deref(), "cutout");
     let (cut, what) = if args.flat_backdrop {
         let Some(key) = matte::flat_backdrop(&img) else {
@@ -552,11 +576,11 @@ fn check(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
     // The fixes are commands to paste, so they name it the way a shell reads it.
     let report = check::check(&img, bytes, &pasted);
     let mut lines = vec![format!(
-        "{name}: {}, {} × {}, {:.1} MB",
+        "{name}: {}, {} × {}, {}",
         report.kind,
         report.width,
         report.height,
-        bytes as f64 / 1e6
+        file_size(bytes)
     )];
     for f in &report.findings {
         let label = match f.verdict {
@@ -613,16 +637,15 @@ fn check(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
 }
 
 fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
-    let (img, bytes) = load(input)?;
+    let (img, data) = load_with_bytes(input)?;
+    let bytes = data.len();
     let (w, h) = img.dimensions();
-    let format = if is_stdio(input) {
-        None
-    } else {
-        std::fs::read(input)
-            .ok()
-            .and_then(|b| image::guess_format(&b).ok())
-            .map(|f| format!("{f:?}").to_uppercase())
-    };
+    // From the bytes themselves, so standard input says what it is as a file does.
+    let format = image::guess_format(&data)
+        .ok()
+        .map(|f| format!("{f:?}").to_uppercase());
+    // What render and apply refuse, so nothing to become.
+    let empty = matte::alpha_bounds(&img, 8).is_none();
     let surround = matte::surround(&img, MAGENTA);
     let transparent = img.pixels().filter(|p| p.0[3] < 255).count();
     let finished = matte::finished_cutout(&img, MAGENTA);
@@ -632,6 +655,9 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
         None => painted::find_border(&img).or_else(|| painted::find_bands(&img)),
     };
     let kind = match &finished {
+        _ if empty => {
+            "nothing: it is completely transparent, so it can't go on a folder".to_string()
+        }
         Some(cut) => format!(
             "a finished folder ({} × {} once cut out): used as it is",
             cut.width(),
@@ -645,12 +671,12 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
         .collect();
     let mut lines = vec![
         format!(
-            "size:        {w} × {h}{}, {:.2} MB",
+            "size:        {w} × {h}{}, {}",
             format
                 .as_deref()
                 .map(|f| format!(" {f}"))
                 .unwrap_or_default(),
-            bytes as f64 / 1e6
+            file_size(bytes)
         ),
         format!("becomes:     {kind}"),
         format!(
@@ -683,7 +709,7 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
     }
     let meta = json!({
         "width": w, "height": h, "bytes": bytes, "format": format,
-        "kind": if finished.is_some() { "folder" } else { "artwork" },
+        "kind": if empty { "empty" } else if finished.is_some() { "folder" } else { "artwork" },
         "surround": format!("{surround:?}").to_lowercase(),
         "transparent_share": transparent as f64 / n,
         "mean_rgb": mean.iter().map(|v| v.round() as u8).collect::<Vec<_>>(),
@@ -838,6 +864,32 @@ mod tests {
         save(&clipped, &dir.join("f.jpg")).unwrap();
         let back = image::open(dir.join("f.jpg")).unwrap().to_rgba8();
         assert_eq!(matte::surround(&back, MAGENTA), Surround::Keyed);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn sizes_read_in_kilobytes_below_a_megabyte() {
+        assert_eq!(file_size(33_000), "33 KB");
+        assert_eq!(file_size(1), "1 KB");
+        assert_eq!(file_size(999_999), "1000 KB");
+        assert_eq!(file_size(2_345_678), "2.3 MB");
+    }
+
+    #[test]
+    fn an_empty_picture_is_not_cut_out_or_called_artwork() {
+        let dir = temp_dir("empty");
+        let input = dir.join("clear.png");
+        std::fs::write(&input, encode_png(&RgbaImage::new(64, 64))).unwrap();
+        let args = CutoutArgs {
+            image: OneImage {
+                input: input.clone(),
+                out: Some(dir.join("clear-cutout.png")),
+            },
+            flat_backdrop: false,
+        };
+        let e = cutout(&args, &Out::new(true, false)).unwrap_err();
+        assert_eq!(e.code, "image_empty");
+        assert!(!dir.join("clear-cutout.png").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

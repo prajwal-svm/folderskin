@@ -561,7 +561,7 @@ fn batch(args: &BatchArgs, out: &Arc<Out>) -> Result<(), CliError> {
 }
 
 /// "1 picture", "3 pictures".
-fn count(n: usize, noun: &str) -> String {
+pub(crate) fn count(n: usize, noun: &str) -> String {
     if n == 1 {
         format!("1 {noun}")
     } else {
