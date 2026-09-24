@@ -17,6 +17,9 @@
  *
  * `?packs=10000` adds that many made-up packs to Community (mockCommunity.ts), searched the way
  * the app searches its catalog, to see and test the view at the size it is built for.
+ * Sharing without GitHub works in the preview against a made-up service: `?noshare` shows it as a
+ * build without one, `?offline` as one that can't reach it, and `?shared` starts with a few packs
+ * already sent, one of them turned down.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
@@ -39,9 +42,14 @@ import type {
   GithubAccount,
   IconPackProgress,
   InstalledIconPack,
+  MySubmission,
   PackProgress,
   PackToPublish,
+  PackToShare,
   PublishProgress,
+  SharedPack,
+  ShareProgress,
+  ShareStatus,
   PackSkinPreview,
   PackUpdate,
   PathInfo,
@@ -441,6 +449,64 @@ function mockPhoto(): ComposerImage {
 
 /** Who the mock is pretending is signed in. */
 const mockGithub: { account: GithubAccount | null } = { account: null };
+
+/** The made-up community service: this computer's key and handle, and the packs it has sent. */
+const mockShare: { key: boolean; handle: string | null; wanted: string; waiting: boolean; submissions: MySubmission[] } = {
+  key: false,
+  handle: null,
+  wanted: "",
+  waiting: false,
+  submissions: [],
+};
+const SHARE_NOT_YET =
+  "Sharing without GitHub isn't available yet. It will be in a later version of FolderSkin; until then, share through GitHub or save a folder.";
+const SHARE_UNREACHABLE = "FolderSkin's sharing service can't be reached right now. Check your connection, or share through GitHub instead.";
+
+/** `?shared` starts as a computer that has shared before: verified, one pack approved and one turned down. */
+function seedShared() {
+  if (!new URLSearchParams(location.search).has("shared") || mockShare.key) return;
+  const day = 86400;
+  const now = Math.floor(Date.now() / 1000);
+  mockShare.key = true;
+  mockShare.handle = "sunny-otter";
+  mockShare.submissions = [
+    {
+      id: "sub_mockturneddown00000",
+      name: "Neon cats",
+      status: "rejected",
+      pictures: 6,
+      license: "CC0-1.0",
+      created_at: now - 3 * day,
+      decided_at: now - 2 * day,
+      pack_id: null,
+      pulled: false,
+      reasons: [{ code: "brand", term: 13, message: "The pictures use someone else's logo, trade mark or characters." }],
+      note: "The cat in the third picture is a cartoon character that belongs to a studio.",
+    },
+    {
+      id: "sub_mockapproved0000000",
+      name: "Night prints",
+      status: "approved",
+      pictures: 12,
+      license: "CC-BY-4.0",
+      created_at: now - 9 * day,
+      decided_at: now - 7 * day,
+      pack_id: "night-prints",
+      pulled: true,
+      reasons: [],
+      note: "",
+    },
+  ];
+}
+
+function mockShareStatus(): ShareStatus {
+  seedShared();
+  const params = new URLSearchParams(location.search);
+  const unavailable = (reason: string): ShareStatus => ({ available: false, reason, verified: false, handle: null, has_key: mockShare.key });
+  if (params.has("noshare")) return unavailable(SHARE_NOT_YET);
+  if (offline()) return unavailable(SHARE_UNREACHABLE);
+  return { available: true, reason: null, verified: mockShare.handle !== null, handle: mockShare.handle, has_key: mockShare.key };
+}
 
 export const mockApi = {
   listSkins: async (): Promise<SkinList> => ({
@@ -916,5 +982,81 @@ export const mockApi = {
   },
   iconPackRemove: async (id: string): Promise<void> => {
     mockIconPacks.delete(id);
+  },
+  shareStatus: async (): Promise<ShareStatus> => {
+    await sleep(300);
+    return mockShareStatus();
+  },
+  shareVerify: async (handle: string): Promise<string> => {
+    await sleep(200);
+    if (!/^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/.test(handle) || handle.length < 3 || handle.length > 39) {
+      throw "A name is 3 to 39 letters, digits and single dashes, not starting or ending with a dash.";
+    }
+    mockShare.key = true;
+    mockShare.wanted = handle;
+    mockShare.waiting = true;
+    return `https://community.example.org/verify?h=${handle}`;
+  },
+  shareWait: async (): Promise<ShareStatus> => {
+    // As long as the check in the browser takes, give or take.
+    for (let waited = 0; waited < 1800; waited += 100) {
+      await sleep(100);
+      if (!mockShare.waiting) throw "Verifying was stopped.";
+    }
+    mockShare.waiting = false;
+    mockShare.handle = mockShare.handle ?? mockShare.wanted;
+    return mockShareStatus();
+  },
+  shareCancel: async () => {
+    mockShare.waiting = false;
+  },
+  shareSaveKey: async (_path: string) => {
+    await sleep(200);
+    if (!mockShare.key) throw "This computer has no sharing key yet.";
+  },
+  shareLoadKey: async (_path: string): Promise<ShareStatus> => {
+    await sleep(300);
+    mockShare.key = true;
+    mockShare.handle = "sunny-otter";
+    return mockShareStatus();
+  },
+  shareSubmit: async (pack: PackToShare, onProgress: (p: ShareProgress) => void): Promise<SharedPack> => {
+    if (!mockShare.handle) throw "Verify this computer first, so the service knows the pack is yours.";
+    onProgress({ stage: "preparing" });
+    await sleep(500);
+    onProgress({ stage: "checking" });
+    await sleep(400);
+    const total = pack.skinIds.length;
+    for (let done = 0; done <= total; done++) {
+      onProgress({ stage: "uploading", done, total });
+      await sleep(90);
+    }
+    onProgress({ stage: "finishing" });
+    await sleep(500);
+    const shared: SharedPack = { submission_id: `sub_mock${Date.now().toString(36)}`, name: cleanName(pack.name), pictures: total };
+    mockShare.submissions.unshift({
+      id: shared.submission_id,
+      name: shared.name,
+      status: "in_review",
+      pictures: total,
+      license: pack.license,
+      created_at: Math.floor(Date.now() / 1000),
+      decided_at: null,
+      pack_id: null,
+      pulled: false,
+      reasons: [],
+      note: "",
+    });
+    return shared;
+  },
+  shareSubmissions: async (): Promise<MySubmission[]> => {
+    await sleep(400);
+    seedShared();
+    if (offline()) throw SHARE_UNREACHABLE;
+    return mockShare.submissions.map((s) => ({ ...s }));
+  },
+  shareWithdraw: async (id: string) => {
+    await sleep(300);
+    mockShare.submissions = mockShare.submissions.map((s) => (s.id === id ? { ...s, status: "withdrawn", pack_id: null } : s));
   },
 };

@@ -12,6 +12,7 @@ pub mod icons;
 pub mod onboarding;
 pub mod pack_views;
 pub mod previews;
+pub mod share;
 pub mod state;
 pub mod store;
 pub mod tree;
@@ -75,6 +76,7 @@ pub fn run() {
         .manage(catalog::Community::default())
         // Community strips and thumbnails, fetched as the cards that show them scroll in.
         .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
+        .manage(share::Waiting::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -129,6 +131,15 @@ pub fn run() {
             community::community_search,
             community::community_refresh,
             community::community_installed,
+            share::share_status,
+            share::share_verify,
+            share::share_wait,
+            share::share_cancel,
+            share::share_save_key,
+            share::share_load_key,
+            share::share_submit,
+            share::share_submissions,
+            share::share_withdraw,
         ])
         .setup(|app| {
             // Before anything that could panic, so a crash report has somewhere to land.

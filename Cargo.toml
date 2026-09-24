@@ -9,6 +9,7 @@ members = [
     "crates/folderskin-local",
     "crates/folderskin-cli",
     "crates/folderskin-catalog",
+    "crates/folderskin-share",
 ]
 
 [workspace.package]

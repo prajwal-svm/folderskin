@@ -1,20 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type GithubAccount, type Published, type PublishProgress, type Skin } from "../lib/tauri";
+import {
+  api,
+  errorMessage,
+  type GithubAccount,
+  type Published,
+  type PublishProgress,
+  type SharedPack,
+  type ShareProgress,
+  type ShareStatus,
+  type Skin,
+} from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { cleanName } from "../lib/names";
 import { LICENSES, loadSharingPrefs, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, packSlug, PACKS_GUIDE_URL, saveSharingPrefs, UPLOAD_URL } from "../lib/packs";
+import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, shareProgressLabel, type PictureSource } from "../lib/share";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
 import { GithubAvatar } from "./GithubAvatar";
 import { GithubConnect } from "./GithubConnect";
 import { Modal } from "./Modal";
+import { MySubmissions } from "./MySubmissions";
+import { ShareVerify } from "./ShareVerify";
 import { TagInput } from "./TagInput";
 import { CheckIcon } from "./icons/check";
+import { EarthIcon } from "./icons/earth";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { GithubIcon } from "./icons/github";
 import { LoaderIcon } from "./icons/loader";
+
+/** Which way a pack goes: a pull request on GitHub, or FolderSkin's review queue for anyone without an account. */
+type Route = "github" | "direct";
 
 /** What FolderSkin is doing, in the words it says while doing it. */
 function progressLabel(p: PublishProgress): string {
@@ -49,6 +66,12 @@ function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; cou
  * A pack holds up to {@link MAX_PACK_SKINS} skins, so the picker is a grid of ticks rather than a
  * single choice — sharing one skin and sharing twenty are the same dialog. Saving a folder is
  * still here for anyone who would rather do the GitHub part themselves.
+ *
+ * Without a GitHub account, the same pack goes to FolderSkin's review queue instead
+ * (src-tauri/src/share.rs): the computer is verified once in the browser, under a name the packs
+ * are credited to, and a person approves every pack before anyone else can see it. The dialog says
+ * that, and what becomes public, before anything is sent; when this build has no service, or it
+ * can't be reached, the choice says so rather than failing.
  */
 export function SharePack({
   yours,
@@ -87,6 +110,20 @@ export function SharePack({
   const [progress, setProgress] = useState<PublishProgress | null>(null);
   const [published, setPublished] = useState<Published | null>(null);
 
+  const [route, setRoute] = useState<Route>("github");
+  /** What the sharing service says about this computer; asked for once the route is picked. */
+  const [direct, setDirect] = useState<ShareStatus | null>(null);
+  /** The name packs will be credited to, typed before this computer is verified. */
+  const [handle, setHandle] = useState(loadHandle);
+  const [source, setSource] = useState<PictureSource | "">("");
+  /** Set while the check runs in the browser; the pack is sent once it's passed. */
+  const [verifying, setVerifying] = useState(false);
+  const [sending, setSending] = useState<ShareProgress | null>(null);
+  const [sent, setSent] = useState<SharedPack | null>(null);
+  const [showMine, setShowMine] = useState(false);
+  /** What happened to the recovery file, said under the name. */
+  const [keyNote, setKeyNote] = useState<{ text: string; error?: boolean } | null>(null);
+
   // Whether they are already signed in decides what the publish button does, so it is worth
   // knowing before they press it.
   useEffect(() => {
@@ -103,12 +140,26 @@ export function SharePack({
     };
   }, []);
 
+  // Asked only once someone picks the route: most people share through GitHub, and opening the
+  // dialog shouldn't reach out to a service they aren't using.
+  useEffect(() => {
+    if (route !== "direct" || direct) return;
+    let live = true;
+    void api
+      .shareStatus()
+      .then((status) => live && setDirect(status))
+      .catch((e) => live && setDirect({ available: false, reason: errorMessage(e), verified: false, handle: null, has_key: false }));
+    return () => {
+      live = false;
+    };
+  }, [route, direct]);
+
   const shown = filter ? yours.filter((s) => s.tags.includes(filter)) : yours;
   const chosen = yours.filter((s) => picked.includes(s.id));
   const allShown = shown.length > 0 && shown.every((s) => picked.includes(s.id));
   const clean = cleanName(name);
   // Short enough for the one line beside the buttons: the field itself says the rest.
-  const problem =
+  const packProblem =
     yours.length === 0
       ? "No skins of your own yet"
       : chosen.length === 0
@@ -119,9 +170,22 @@ export function SharePack({
             ? "Give the pack a name"
             : packTags.length === 0
               ? "Add at least one tag"
-              : !account
-                ? "Connect to GitHub first"
-                : null;
+              : null;
+  const routeProblem =
+    route === "github"
+      ? !account
+        ? "Connect to GitHub first"
+        : null
+      : !direct
+        ? "Checking whether it's available"
+        : !direct.available
+          ? "Not available right now"
+          : !source
+            ? "Say where the pictures came from"
+            : !direct.verified && !isHandle(handle)
+              ? "Choose the name your packs show"
+              : null;
+  const problem = packProblem ?? routeProblem;
   /** The thing FolderSkin can't check for them, which is why they are asked rather than told. */
   const unconfirmed = !mine ? "Agree to the terms" : null;
 
@@ -196,6 +260,134 @@ export function SharePack({
     setConnecting(null);
     if (go) void publishRef.current();
   }, []);
+
+  // ---- without GitHub ----
+
+  const send = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    setSending({ stage: "preparing" });
+    try {
+      const out = await api.shareSubmit(
+        { name: clean, license, tags: packTags, skinIds: chosen.map((s) => s.id), notes, source, termsVersion: PACK_TERMS_VERSION },
+        setSending,
+      );
+      saveSharingPrefs({ ...loadSharingPrefs(), license });
+      setSent(out);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+      setSending(null);
+    }
+  }, [license, notes, packTags, clean, chosen, source]);
+
+  // Verifying carries on and sends, the way connecting to GitHub carries on and publishes. A ref
+  // keeps the callback itself stable, so the check open in the browser isn't started over.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const onVerified = useCallback((status: ShareStatus) => {
+    setDirect(status);
+    setVerifying(false);
+    if (status.handle) saveHandle(status.handle);
+    if (status.verified) void sendRef.current();
+  }, []);
+
+  const verifyAndSend = () => {
+    setError(null);
+    saveHandle(handle);
+    setVerifying(true);
+  };
+
+  /** Saves this computer's key, so the same name can share from another computer or after a reinstall. */
+  const saveKey = async () => {
+    const path = isTauri()
+      ? await saveDialog({ title: "Save your recovery file", defaultPath: "folderskin-sharing-key.json", filters: [{ name: "Recovery file", extensions: ["json"] }] }).catch(() => null)
+      : "/Users/you/Documents/folderskin-sharing-key.json";
+    if (typeof path !== "string") return;
+    try {
+      await api.shareSaveKey(path);
+      setKeyNote({ text: "Saved. Keep it private: anyone who has it can share as you." });
+    } catch (e) {
+      setKeyNote({ text: errorMessage(e), error: true });
+    }
+  };
+
+  /** Takes the key from a recovery file saved on another computer. */
+  const loadKey = async () => {
+    const path = isTauri()
+      ? await open({ multiple: false, title: "Choose your recovery file", filters: [{ name: "Recovery file", extensions: ["json"] }] }).catch(() => null)
+      : "/Users/you/Documents/folderskin-sharing-key.json";
+    if (typeof path !== "string") return;
+    try {
+      setDirect(await api.shareLoadKey(path));
+      setKeyNote(null);
+    } catch (e) {
+      setKeyNote({ text: errorMessage(e), error: true });
+    }
+  };
+
+  // ---- sent for review ----
+  if (sent) {
+    return (
+      <Modal
+        narrow
+        title="Your pack is waiting for review"
+        sub={`${sent.name} is in FolderSkin's review queue.`}
+        onClose={onClose}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              Done
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setSent(null);
+                setShowMine(true);
+              }}
+            >
+              See your submissions
+            </button>
+          </>
+        }
+      >
+        <p className="field-note">
+          A person looks at every pack before anyone else can see it. Once it's approved it joins the Community view for everyone, credited to{" "}
+          <strong>{direct?.handle ?? handle}</strong>. If it's turned down, Your submissions says why.
+        </p>
+      </Modal>
+    );
+  }
+
+  // ---- verifying this computer ----
+  if (verifying) {
+    return (
+      <Modal narrow title="Verify this computer" sub="So only people, not scripts, can send packs for review." onClose={onClose}>
+        <ShareVerify handle={handle} onVerified={onVerified} onCancel={() => setVerifying(false)} />
+      </Modal>
+    );
+  }
+
+  // ---- what happened to the packs sent before ----
+  if (showMine) {
+    return (
+      <Modal
+        className="modal-share-subs"
+        title="Your submissions"
+        sub="Packs you've shared without GitHub, and where each one is."
+        onClose={onClose}
+        footer={
+          <button type="button" className="btn btn-ghost" onClick={() => setShowMine(false)}>
+            Back to sharing
+          </button>
+        }
+      >
+        <MySubmissions />
+      </Modal>
+    );
+  }
 
   // ---- it went up ----
   if (published) {
@@ -276,11 +468,16 @@ export function SharePack({
   }
 
   const stop = problem ?? unconfirmed;
+  const verified = route === "direct" && direct?.verified === true;
   return (
     <Modal
       className="modal-share"
       title="Share a pack"
-      sub="Packs are free. They live on GitHub, and anyone can add one to FolderSkin."
+      sub={
+        route === "github"
+          ? "Packs are free. They live on GitHub, and anyone can add one to FolderSkin."
+          : "Packs are free. Anyone can add one to FolderSkin once a person has reviewed it."
+      }
       onClose={onClose}
       footer={
         <>
@@ -289,19 +486,34 @@ export function SharePack({
               {stop}
             </span>
           )}
-          <button type="button" className="btn btn-ghost" disabled={busy || !account} onClick={() => void save()}>
-            Save a folder
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={Boolean(stop) || busy}
-            aria-busy={busy}
-            onClick={() => (account ? void publish() : setConnecting("publish"))}
-          >
-            {busy ? <LoaderIcon /> : <GithubIcon size={15} />}
-            {busy ? "Publishing" : account ? "Publish" : "Connect and publish"}
-          </button>
+          {route === "github" ? (
+            <>
+              <button type="button" className="btn btn-ghost" disabled={busy || !account} onClick={() => void save()}>
+                Save a folder
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={Boolean(stop) || busy}
+                aria-busy={busy}
+                onClick={() => (account ? void publish() : setConnecting("publish"))}
+              >
+                {busy ? <LoaderIcon /> : <GithubIcon size={15} />}
+                {busy ? "Publishing" : account ? "Publish" : "Connect and publish"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={Boolean(stop) || busy}
+              aria-busy={busy}
+              onClick={() => (verified ? void send() : verifyAndSend())}
+            >
+              {busy ? <LoaderIcon /> : <EarthIcon size={15} />}
+              {busy ? "Sending" : verified ? "Send for review" : "Verify and send"}
+            </button>
+          )}
         </>
       }
     >
@@ -379,24 +591,119 @@ export function SharePack({
             </select>
           </label>
           <div className="field">
-            <span className="field-label">Author</span>
-            {account ? (
-              <div className="gh-account">
-                <GithubAvatar account={account} />
-                <span className="gh-account-who">
-                  <strong title={account.login}>{account.login}</strong>
-                </span>
-                <button type="button" className="link-btn" onClick={useAnother}>
-                  Use another
-                </button>
+            <div className="share-author-head">
+              <span className="field-label">Author</span>
+              <div className="seg seg-sm share-route" role="radiogroup" aria-label="how to share">
+                {(
+                  [
+                    ["github", "GitHub"],
+                    ["direct", "Without GitHub"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={route === id}
+                    className={route === id ? "seg-btn is-active" : "seg-btn"}
+                    disabled={busy}
+                    onClick={() => {
+                      setRoute(id);
+                      setError(null);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+            </div>
+            {route === "github" ? (
+              account ? (
+                <div className="gh-account">
+                  <GithubAvatar account={account} />
+                  <span className="gh-account-who">
+                    <strong title={account.login}>{account.login}</strong>
+                  </span>
+                  <button type="button" className="link-btn" onClick={useAnother}>
+                    Use another
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="btn btn-ghost gh-pick" onClick={() => setConnecting("sign-in")}>
+                  <GithubIcon size={15} />
+                  Connect to GitHub
+                </button>
+              )
+            ) : !direct ? (
+              <p className="gh-waiting">
+                <LoaderIcon />
+                Checking whether sharing without GitHub is available
+              </p>
+            ) : !direct.available ? (
+              <p className="field-note share-unavailable" role="status">
+                {direct.reason ?? "Sharing without GitHub isn't available right now."}
+              </p>
+            ) : direct.verified && direct.handle ? (
+              <>
+                <div className="gh-account">
+                  <span className="gh-avatar is-letter" aria-hidden="true">
+                    {direct.handle.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="gh-account-who">
+                    <strong title={direct.handle}>{direct.handle}</strong>
+                    <span>Verified on this computer</span>
+                  </span>
+                  <button type="button" className="link-btn" onClick={() => setShowMine(true)}>
+                    Your submissions
+                  </button>
+                </div>
+                <span className="field-note">
+                  <button type="button" className="link-btn" onClick={() => void saveKey()}>
+                    Save a recovery file
+                  </button>{" "}
+                  to share under this name from another computer.
+                </span>
+              </>
             ) : (
-              <button type="button" className="btn btn-ghost gh-pick" onClick={() => setConnecting("sign-in")}>
-                <GithubIcon size={15} />
-                Connect to GitHub
-              </button>
+              <>
+                <input
+                  className="input"
+                  value={handle}
+                  maxLength={39}
+                  placeholder="your-name"
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-label="the name your packs show"
+                  onChange={(e) => setHandle(handleFrom(e.target.value))}
+                  onBlur={() => setHandle((h) => h.replace(/-+$/, ""))}
+                />
+                <span className="field-note">
+                  The name your packs show: letters, digits and dashes. You'll confirm it in your browser once.{" "}
+                  {direct.has_key ? null : (
+                    <button type="button" className="link-btn" onClick={() => void loadKey()}>
+                      Use a recovery file
+                    </button>
+                  )}
+                </span>
+              </>
             )}
+            {keyNote && <span className={keyNote.error ? "field-note is-error" : "field-note"}>{keyNote.text}</span>}
           </div>
+          {route === "direct" && direct?.available && (
+            <label className="field">
+              <span className="field-label">The pictures</span>
+              <select className="input" value={source} onChange={(e) => setSource(e.target.value as PictureSource)}>
+                <option value="" disabled>
+                  Where did they come from?
+                </option>
+                {PICTURE_SOURCES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="field">
             <span className="field-label">Credits</span>
             <textarea
@@ -410,6 +717,26 @@ export function SharePack({
           </label>
         </div>
       </div>
+
+      {route === "direct" && direct?.available && (
+        <ul className="share-direct" aria-label="how sharing without GitHub works">
+          <li>
+            <strong>Reviewed first.</strong> A person at FolderSkin looks at every pack. Nothing is public until it's approved.
+          </li>
+          <li>
+            <strong>Public once approved.</strong> The pictures, the pack's name and tags, and your name go to everyone under the licence
+            you chose, and a licence can't be taken back from copies people already have.
+          </li>
+          <li>
+            <strong>No account.</strong> The service keeps this computer's key and your name. Your network address is only ever kept
+            scrambled.
+          </li>
+          <li>
+            <strong>Yours to withdraw.</strong> Your submissions shows where each pack is, says why if one is turned down, and takes one
+            back.
+          </li>
+        </ul>
+      )}
 
       <div className="share-terms">
         <ul className="share-terms-list">
@@ -433,6 +760,12 @@ export function SharePack({
         <p className="gh-waiting">
           <LoaderIcon />
           {progressLabel(progress)}
+        </p>
+      )}
+      {sending && (
+        <p className="gh-waiting" role="status">
+          <LoaderIcon />
+          {shareProgressLabel(sending)}
         </p>
       )}
       {error && !busy && <p className="field-note is-error">{error}</p>}

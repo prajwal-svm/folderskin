@@ -1,0 +1,7 @@
+# The community service is its own workspace, with its own lockfile: its tools (wrangler, workerd,
+# the Workers test pool) never reach the app's dependency tree, and the app's never reach the
+# Worker. Run pnpm from this folder, or `pnpm --dir services/community <script>` from the root.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: false

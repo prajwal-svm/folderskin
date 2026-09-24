@@ -330,3 +330,36 @@ jobs:
           path: target/release/bundle/**
           if-no-files-found: error
           retention-days: 14
+
+  # The community service (services/community): a Cloudflare Worker with a lockfile of its own.
+  # Its tests run inside workerd with local D1 and R2, offline.
+  community-service:
+    name: Community service (typecheck, test)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/community
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: services/community/package.json
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/community/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test

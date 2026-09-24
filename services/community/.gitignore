@@ -1,0 +1,3 @@
+# wrangler's local state (D1, R2) and the secrets `wrangler dev` reads.
+.wrangler/
+.dev.vars*

@@ -1,6 +1,6 @@
 //! Command-line surface of folderskin-tools (clap derive).
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -87,6 +87,96 @@ pub enum Command {
     Packs {
         #[command(subcommand)]
         command: PacksCommand,
+    },
+    /// Look after the community service: packs shared without GitHub, their review, and pulling
+    /// approved ones into community/packs
+    Community {
+        #[command(subcommand)]
+        command: CommunityCommand,
+    },
+}
+
+/// The community service and the maintainer's key, for every command that talks to it.
+#[derive(Args, Debug)]
+pub struct Service {
+    /// The service's address, e.g. https://community.example.org
+    #[arg(long, env = "FOLDERSKIN_COMMUNITY_API")]
+    pub api: String,
+    /// The maintainer's key, from `community keygen`
+    #[arg(long, env = "FOLDERSKIN_ADMIN_KEY", value_name = "FILE")]
+    pub key: PathBuf,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CommunityCommand {
+    /// Make a maintainer's signing key; its public half goes in ADMIN_KEYS in wrangler.toml
+    Keygen {
+        /// Where to save it. Whoever has this file can approve packs, so keep it private
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// List packs waiting for review, flagged ones first
+    Queue {
+        /// waiting, flagged, pending, approved or open
+        #[arg(long, default_value = "waiting")]
+        status: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Approve a pack, or turn it down with reasons from docs/PACK-TERMS.md
+    Decide {
+        /// The submission, sub_…
+        id: String,
+        #[arg(value_parser = ["approve", "reject"])]
+        decision: String,
+        /// A reason code such as quality, brand or sexual; repeat for more. Needed to reject
+        #[arg(long = "reason")]
+        reasons: Vec<String>,
+        /// A note the author reads
+        #[arg(long, default_value = "")]
+        note: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Take a pack down at once, published or still waiting
+    Takedown {
+        id: String,
+        /// A reason code from docs/PACK-TERMS.md; repeat for more
+        #[arg(long = "reason", required = true)]
+        reasons: Vec<String>,
+        #[arg(long, default_value = "")]
+        note: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// List the reports people sent, newest first, with how to reach whoever sent each one
+    Reports {
+        /// How many days back to look, up to 180
+        #[arg(long, default_value_t = 7, value_parser = clap::value_parser!(u32).range(1..=180))]
+        days: u32,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Stop taking new packs and verifications: the kill switch
+    Pause {
+        /// Said to anyone who tries to share while it's paused
+        #[arg(long, default_value = "")]
+        message: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Take new packs and verifications again
+    Resume {
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Write approved packs into community/packs as ordinary pack folders, checked like any other
+    Pull {
+        /// The packs folder
+        #[arg(long, default_value = "community/packs")]
+        out: PathBuf,
+        #[command(flatten)]
+        service: Service,
     },
 }
 
@@ -349,6 +439,65 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_community_commands_with_the_service_and_key() {
+        let service = [
+            "--api",
+            "https://community.example.org",
+            "--key",
+            "admin.key",
+        ];
+        let parse = |args: &[&str]| {
+            Cli::try_parse_from([&["folderskin-tools", "community"], args, &service].concat())
+                .map(|cli| cli.command)
+        };
+        match parse(&["pull"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Pull { out, service },
+            } => {
+                assert_eq!(out, PathBuf::from("community/packs"));
+                assert_eq!(service.api, "https://community.example.org");
+                assert_eq!(service.key, PathBuf::from("admin.key"));
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse(&[
+            "decide",
+            "sub_aaaaaaaaaaaaaaaaaaaa",
+            "reject",
+            "--reason",
+            "quality",
+            "--reason",
+            "brand",
+        ])
+        .unwrap()
+        {
+            Command::Community {
+                command:
+                    CommunityCommand::Decide {
+                        decision, reasons, ..
+                    },
+            } => {
+                assert_eq!(decision, "reject");
+                assert_eq!(reasons, ["quality", "brand"]);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&["decide", "sub_x", "maybe"]).is_err());
+        assert!(
+            parse(&["takedown", "sub_x"]).is_err(),
+            "a takedown says why"
+        );
+        match parse(&["reports"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Reports { days, .. },
+            } => assert_eq!(days, 7),
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&["reports", "--days", "0"]).is_err());
+        assert!(Cli::try_parse_from(["folderskin-tools", "community", "keygen"]).is_err());
     }
 
     #[test]
