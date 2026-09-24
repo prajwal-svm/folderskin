@@ -34,7 +34,7 @@ pub fn main() -> ExitCode {
     let json = args.iter().any(|a| a == "--json");
     let cli = match Cli::try_parse_from(&args) {
         Ok(cli) => cli,
-        Err(e) => return usage(e, json, &command),
+        Err(e) => return usage(e, json, &command, &args),
     };
     let out = Out::new(cli.json, cli.verbose);
     preview::set_look(match cli.look {
@@ -81,7 +81,7 @@ pub(crate) fn runtime() -> Result<tokio::runtime::Runtime, CliError> {
 /// A command line clap couldn't read. Help and the version are printed as asked; a mistake is
 /// clap's own message (which says what was wrong and how the command goes), then the same
 /// request for help every error ends with.
-fn usage(e: clap::Error, json: bool, command: &str) -> ExitCode {
+fn usage(e: clap::Error, json: bool, command: &str, args: &[std::ffi::OsString]) -> ExitCode {
     use clap::error::ErrorKind;
     let code = e.exit_code();
     let informational = matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion);
@@ -89,7 +89,7 @@ fn usage(e: clap::Error, json: bool, command: &str) -> ExitCode {
         let _ = e.print();
         return ExitCode::from(code as u8);
     }
-    let error = usage_error(&e);
+    let error = usage_error(&e, args);
     if json {
         let out = Out::new(true, false);
         out.error(&error, command);
@@ -100,8 +100,50 @@ fn usage(e: clap::Error, json: bool, command: &str) -> ExitCode {
     ExitCode::from(Exit::Usage as u8)
 }
 
-/// clap's complaint as an error: its message, up to the usage line after it, as one sentence.
-fn usage_error(e: &clap::Error) -> CliError {
+/// The subcommands `args` name, in order (`["image", "render"]`), and the command they reach.
+fn reached(args: &[std::ffi::OsString]) -> (Vec<String>, clap::Command) {
+    use clap::CommandFactory;
+    let mut command = Cli::command();
+    let mut path = Vec::new();
+    for arg in args.iter().skip(1) {
+        let arg = arg.to_string_lossy();
+        if arg.starts_with('-') {
+            continue;
+        }
+        let Some(sub) = command.find_subcommand(arg.as_ref()).cloned() else {
+            break;
+        };
+        path.push(arg.into_owned());
+        command = sub;
+    }
+    (path, command)
+}
+
+/// clap's complaint as an error: its message, up to the usage line after it, as one sentence,
+/// pointing at the help of the command that was being typed.
+fn usage_error(e: &clap::Error, args: &[std::ffi::OsString]) -> CliError {
+    let (path, reached) = reached(args);
+    let named = std::iter::once("folderskin")
+        .chain(path.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let fix = format!("See what it takes: {named} --help");
+    if e.kind() == clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
+        // clap's message here is the command's whole help, not what was wrong with it.
+        let commands: Vec<&str> = reached
+            .get_subcommands()
+            .map(clap::Command::get_name)
+            .filter(|n| *n != "help")
+            .collect();
+        return CliError::usage(
+            "That command isn't quite right.",
+            format!(
+                "{named} needs one of its commands: {}.",
+                commands.join(", ")
+            ),
+        )
+        .fix(fix);
+    }
     let text = e.render().to_string();
     let message = text
         .lines()
@@ -122,8 +164,7 @@ fn usage_error(e: &clap::Error) -> CliError {
         ),
         None => "The command line couldn't be read.".to_string(),
     };
-    CliError::usage("That command isn't quite right.", why)
-        .fix("See what it takes with --help, e.g. folderskin ai gen --help")
+    CliError::usage("That command isn't quite right.", why).fix(fix)
 }
 
 /// The last panic's message and place, kept by the hook for the bug report.
@@ -156,19 +197,58 @@ fn panicked() -> CliError {
 mod tests {
     use super::*;
 
+    fn args(words: &[&str]) -> Vec<std::ffi::OsString> {
+        words.iter().map(Into::into).collect()
+    }
+
     #[test]
     fn a_wrong_command_line_says_what_was_wrong_in_a_sentence() {
-        let e = Cli::try_parse_from(["folderskin", "ai", "gen"]).unwrap_err();
-        let error = usage_error(&e);
+        let typed = args(&["folderskin", "ai", "gen"]);
+        let e = Cli::try_parse_from(&typed).unwrap_err();
+        let error = usage_error(&e, &typed);
         assert_eq!(error.exit, Exit::Usage);
         assert_eq!(
             error.why,
             "The following required arguments were not provided: <IDEA>."
         );
-        let e = Cli::try_parse_from(["folderskin", "ai", "gen", "x", "--tier", "q5"]).unwrap_err();
-        assert!(usage_error(&e)
+        assert_eq!(error.fix, ["See what it takes: folderskin ai gen --help"]);
+        let typed = args(&["folderskin", "ai", "gen", "x", "--tier", "q5"]);
+        let e = Cli::try_parse_from(&typed).unwrap_err();
+        assert!(usage_error(&e, &typed)
             .why
             .starts_with("Invalid value 'q5' for '--tier <TIER>'"));
+    }
+
+    #[test]
+    fn help_is_offered_for_the_command_that_was_typed() {
+        let typed = args(&[
+            "folderskin",
+            "image",
+            "render",
+            "a.png",
+            "--solid",
+            "2A9D8F",
+        ]);
+        let e = Cli::try_parse_from(&typed).unwrap_err();
+        assert_eq!(
+            usage_error(&e, &typed).fix,
+            ["See what it takes: folderskin image render --help"]
+        );
+    }
+
+    #[test]
+    fn a_missing_subcommand_is_said_as_that_not_as_the_help() {
+        let typed = args(&["folderskin", "--json", "image"]);
+        let e = Cli::try_parse_from(&typed).unwrap_err();
+        let error = usage_error(&e, &typed);
+        assert!(
+            error
+                .why
+                .starts_with("folderskin image needs one of its commands: crop, trim,"),
+            "{error:?}"
+        );
+        assert!(!error.why.contains("help"), "{error:?}");
+        assert_eq!(error.fix, ["See what it takes: folderskin image --help"]);
     }
 
     #[test]

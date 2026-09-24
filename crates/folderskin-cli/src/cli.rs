@@ -344,7 +344,7 @@ pub struct CropArgs {
     #[arg(long, value_parser = parse_focus)]
     pub focus: Option<(f32, f32)>,
     /// An exact box instead, in pixels: X,Y,WIDTH,HEIGHT
-    #[arg(long = "box", value_name = "X,Y,W,H", value_parser = parse_box)]
+    #[arg(long = "box", value_name = "X,Y,W,H", value_parser = parse_box, conflicts_with = "focus")]
     pub crop_box: Option<(u32, u32, u32, u32)>,
 }
 
@@ -374,7 +374,7 @@ pub struct InvertArgs {
     #[command(flatten)]
     pub image: OneImage,
     /// How far, from 0 to 100
-    #[arg(long, default_value_t = 100.0, value_parser = parse_share)]
+    #[arg(long, default_value_t = 100.0, allow_negative_numbers = true, value_parser = parse_share)]
     pub amount: f64,
 }
 
@@ -409,6 +409,7 @@ pub struct AdjustArgs {
 pub struct RenderArgs {
     /// The picture (PNG, JPEG, WebP). A finished folder, cut out or on magenta, is used as it
     /// is; anything else is wrapped onto FolderSkin's folder, as the app does
+    #[arg(conflicts_with = "solid")]
     pub image: Option<PathBuf>,
     /// A solid colour instead of a picture, e.g. 2A9D8F
     #[arg(long, value_name = "RRGGBB")]
@@ -720,15 +721,7 @@ mod tests {
     #[test]
     fn crops_take_an_aspect_a_focus_or_a_box() {
         let Command::Image(ImageCommand::Crop(c)) = parse(&[
-            "image",
-            "crop",
-            "in.png",
-            "--aspect",
-            "16:9",
-            "--focus",
-            "0.5,0.3",
-            "--box",
-            "0,40,1024,958",
+            "image", "crop", "in.png", "--aspect", "16:9", "--focus", "0.5,0.3",
         ])
         .unwrap()
         .command
@@ -737,6 +730,13 @@ mod tests {
         };
         assert_eq!(c.aspect, "16:9");
         assert_eq!(c.focus, Some((0.5, 0.3)));
+        let Command::Image(ImageCommand::Crop(c)) =
+            parse(&["image", "crop", "in.png", "--box", "0,40,1024,958"])
+                .unwrap()
+                .command
+        else {
+            panic!("not crop");
+        };
         assert_eq!(c.crop_box, Some((0, 40, 1024, 958)));
         assert_eq!(
             parse_box("1,2,3"),
@@ -771,6 +771,36 @@ mod tests {
                 .command,
             Command::Image(ImageCommand::Render(_))
         ));
+    }
+
+    #[test]
+    fn options_that_would_be_ignored_are_refused_instead() {
+        use clap::error::ErrorKind;
+        for args in [
+            &["render", "a.png", "--solid", "2A9D8F"][..],
+            &[
+                "image",
+                "crop",
+                "a.png",
+                "--focus",
+                "0.5,0.5",
+                "--box",
+                "0,0,10,10",
+            ],
+        ] {
+            assert_eq!(
+                parse(args).unwrap_err().kind(),
+                ErrorKind::ArgumentConflict,
+                "{args:?}"
+            );
+        }
+        // A negative amount is out of range, said as it is for the other amounts.
+        let e = parse(&["image", "invert", "a.png", "--amount", "-5"]).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::ValueValidation);
+        assert!(
+            e.to_string().contains("the amount goes from 0 to 100"),
+            "{e}"
+        );
     }
 
     #[test]

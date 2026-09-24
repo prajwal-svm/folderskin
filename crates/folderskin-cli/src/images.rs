@@ -536,6 +536,9 @@ fn adjusted(args: &OneImage, fx: Fx, what: &str, out: &Arc<Out>) -> Result<(), C
     .map(|(k, v)| format!("{k} {v:+}"))
     .collect();
     let mut said = settings.join(", ");
+    if said.is_empty() {
+        said.push_str("unchanged: the amount is 0");
+    }
     if cut_out {
         said.push_str(
             " (a finished folder on the key colour: cut out first, so the backdrop stays one the \
