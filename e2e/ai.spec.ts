@@ -25,6 +25,10 @@ async function sendIdea(page: Page, idea: string) {
   await box(page).press("Enter");
 }
 
+/** The chats the preview has saved (devMock's chats), as they'd be read after a restart. */
+const savedChats = (page: Page) =>
+  page.evaluate(() => Object.values((JSON.parse(localStorage.getItem("folderskin.mock.chats") ?? "null") ?? { chats: {} }).chats) as { title: string; turns: { status: string }[] }[]);
+
 /** Chats saved before the app opens, newest first, as the preview keeps them (devMock's chats). */
 async function seedChats(page: Page, titles: string[]) {
   await page.addInitScript((titles) => {
@@ -97,7 +101,8 @@ test.describe("the AI chat", () => {
     await expect(chat(page).locator(".turn-result:not(.is-developing)")).toHaveCount(1, { timeout: 10_000 });
     await chat(page).getByRole("button", { name: "new chat" }).click();
     await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
-    await page.waitForTimeout(500);
+    // Saved a moment after its request finished.
+    await expect.poll(async () => (await savedChats(page)).some((c) => c.title === "Pop art cats" && c.turns.every((t) => t.status === "done"))).toBe(true);
     await page.reload();
     await openView(page, /generate with ai/i);
     // A restart starts a new chat, and the one before waits in the history, with what was asked
@@ -296,7 +301,7 @@ test.describe("the AI chat", () => {
     await drawer.getByLabel("chat name").press("Enter");
     await expect(drawer.getByRole("button", { name: "rename Boats for the desktop" })).toBeVisible();
     // It stays renamed, and is saved so.
-    await page.waitForTimeout(500);
+    await expect.poll(async () => (await savedChats(page)).map((c) => c.title)).toContain("Boats for the desktop");
     await expect(drawer.getByRole("button", { name: "rename Older chat" })).toHaveCount(0);
     await drawer.locator(".chat-open", { hasText: "Boats for the desktop" }).click();
     await expect(chat(page).locator(".studio-chat-title")).toHaveText("Boats for the desktop");
@@ -349,7 +354,8 @@ test.describe("the AI chat", () => {
         const box = c.getBoundingClientRect();
         return `${Math.round(img.top - box.top)},${Math.round(img.left - box.left)}`;
       });
-    await page.waitForTimeout(1000); // the picture's entrance
+    // Once the picture's entrance is over.
+    await card.evaluate((c) => Promise.all(c.getAnimations({ subtree: true }).filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished)));
     const closed = await offset();
     await card.getByRole("button", { name: "Details" }).click();
     await expect(card.locator(".turn-log-lines")).toBeVisible();
