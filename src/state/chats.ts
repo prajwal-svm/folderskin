@@ -83,7 +83,7 @@ export function titleFrom(idea: string): string {
   if (title.length > TITLE_CHARS) {
     const cut = title.slice(0, TITLE_CHARS + 1);
     const at = cut.lastIndexOf(" ");
-    title = `${(at > 16 ? cut.slice(0, at) : cut.slice(0, TITLE_CHARS)).replace(/[\s,.;:!?-]+$/, "")}…`;
+    title = (at > 16 ? cut.slice(0, at) : cut.slice(0, TITLE_CHARS)).replace(/[\s,.;:!?-]+$/, "");
   }
   return title.charAt(0).toUpperCase() + title.slice(1);
 }

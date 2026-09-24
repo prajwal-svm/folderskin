@@ -95,7 +95,7 @@ describe("the design document", () => {
     expect(layerLabel(d.layers[0], 0)).toBe("Background");
     expect(layerLabel(makeFill(linear(90, "#000", "#fff")), 3)).toBe("Gradient");
     expect(layerLabel(d.layers[1])).toBe("Hello");
-    expect(layerLabel(makeText("A very long label that keeps on going", 0, 0, "#fff"))).toBe("A very long label tha…");
+    expect(layerLabel(makeText("A very long label that keeps on going", 0, 0, "#fff"))).toBe("A very long label that");
     expect(layerLabel(makeShape("star", 0, 0, "#fff"))).toBe("Star");
     expect(layerLabel({ ...makeShape("star", 0, 0, "#fff"), name: "Logo" })).toBe("Logo");
   });

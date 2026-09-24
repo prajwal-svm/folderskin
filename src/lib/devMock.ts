@@ -76,7 +76,7 @@ const mockStopped = new Set<string>();
 
 const MOCK_LABELS: Record<string, string> = { openai: "OpenAI", xai: "xAI Grok", recraft: "Recraft", google: "Google Gemini", bfl: "Black Forest Labs", stability: "Stability AI", ideogram: "Ideogram" };
 
-/** Whether "this computer" is set up in the preview (`?localready` starts it set up), and how long
+/** Whether the Local Model is set up in the preview (`?localready` starts it set up), and how long
  *  its last picture took: unknown until one is painted, as the app only knows once it has. */
 const mockLocal = { ready: new URLSearchParams(location.search).has("localready"), seconds: null as number | null };
 
@@ -93,6 +93,7 @@ function mockLocalStatus(): LocalStatus {
     device: "NVIDIA GeForce RTX 3050 Ti, 4 GB",
     download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
     installs: null,
+    kept_bytes: mockLocal.ready ? 5_380_000_000 : 0,
     seconds_per_image: mockLocal.seconds,
     home: "C:\\Users\\you\\AppData\\Local\\folderskin-localgen",
     note: null,
@@ -779,7 +780,7 @@ export const mockApi = {
     providers: [
       {
         id: "local",
-        label: "This computer",
+        label: "Local Model",
         kind: "local",
         models: [
           { id: "klein", label: "FLUX.2 klein 4B", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "Free" },
@@ -884,7 +885,7 @@ export const mockApi = {
   composerDesign: async (skinId: string): Promise<unknown> => mockDesigns.get(skinId) ?? null,
   aiGenerate: async (req: AiGenerateRequest, onEvent: (event: AiEvent) => void = () => {}): Promise<Skin> => {
     const local = req.provider === "local";
-    const who = local ? "this computer" : (MOCK_LABELS[req.provider] ?? req.provider);
+    const who = local ? "the local model" : (MOCK_LABELS[req.provider] ?? req.provider);
     const job = req.job ?? "";
     // Waits `ms`, or gives up the moment the run is stopped.
     const wait = async (ms: number) => {
@@ -897,7 +898,7 @@ export const mockApi = {
     // The errors are the objects ai/failure.rs returns, with its codes and words.
     if (local) {
       if (!mockLocal.ready) {
-        throw { code: "local_not_ready", message: "Pictures can't be made on this computer until it's set up.", fix: ["The models aren't downloaded yet. Set it up in the provider settings."] };
+        throw { code: "local_not_ready", message: "Skins can't be generated with the local model until it's set up.", fix: ["The models aren't downloaded yet. Set it up in the provider settings."] };
       }
       onEvent({ type: "log", level: "info", message: "backend: CUDA (NVIDIA GeForce RTX 3050 Ti, 4 GB)" });
       onEvent({ type: "log", level: "info", message: "model: FLUX.2 [klein] 4B, q4 weights" });
@@ -917,7 +918,7 @@ export const mockApi = {
             "Close apps that use the graphics card, such as games or video editors, then try again.",
             "If it keeps happening, restart the computer: something may still be holding the graphics card's memory.",
           ],
-          ask: `claude "On windows x86_64 with FolderSkin 0.1.3, painting ${req.shape === "folder" ? "a whole folder" : "folder artwork"} on this computer (CUDA, NVIDIA GeForce RTX 3050 Ti, 4 GB) failed with out_of_memory: The graphics card ran out of memory while painting. stable-diffusion.cpp stopped with exit code 1. Help me fix it."`,
+          ask: `claude "On windows x86_64 with FolderSkin 0.1.3, painting ${req.shape === "folder" ? "a whole folder" : "folder artwork"} with the local model (CUDA, NVIDIA GeForce RTX 3050 Ti, 4 GB) failed with out_of_memory: The graphics card ran out of memory while painting. stable-diffusion.cpp stopped with exit code 1. Help me fix it."`,
         };
       }
       // Painted: now the settings can say how long a picture takes here (ai/local.rs Timing).
@@ -950,7 +951,7 @@ export const mockApi = {
       source: "ai",
       created_at: Date.now(),
       tags: cleanTags(req.tags),
-      made_with: local ? "On this computer · FLUX.2 klein 4B" : `${who} · ${req.model}`,
+      made_with: local ? "Local Model · FLUX.2 klein 4B" : `${who} · ${req.model}`,
       idea: req.idea,
     };
     keep([skin]);
@@ -960,6 +961,14 @@ export const mockApi = {
     mockStopped.add(job);
   },
   aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
+  aiLocalRemove: async (): Promise<LocalStatus> => {
+    // As ai_local_remove: refused while it's being set up; otherwise what was downloaded goes.
+    if (mockSetup) throw { code: "busy", message: "The local model is being set up.", fix: ["Stop the setup, then remove the model."] };
+    await sleep(300);
+    // How long a picture took here stays: it belongs to the machine, not to the files.
+    mockLocal.ready = false;
+    return mockLocalStatus();
+  },
   aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {
     // Asked while one runs (the panel was closed and opened again), it joins that one.
     if (mockSetup) {
@@ -990,7 +999,7 @@ export const mockApi = {
       // `?slowsetup`: a setup of a few seconds, for a test that has to find it still under way on
       // a busy machine.
       const pace = new URLSearchParams(location.search).has("slowsetup") ? 250 : 90;
-      tell({ type: "stage", stage: "download", message: "Downloading what this computer needs" });
+      tell({ type: "stage", stage: "download", message: "Downloading what the local model needs" });
       for (const [file, total] of files) {
         for (let i = 1; i <= 5; i++) {
           await sleep(pace);

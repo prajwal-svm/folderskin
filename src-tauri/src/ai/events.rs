@@ -54,7 +54,7 @@ pub fn from_engine(event: Event) -> Vec<AiEvent> {
         Event::Stage { stage, message } => {
             let id = stage_id(stage);
             let plain = match stage {
-                Stage::Check => "Looking at this computer",
+                Stage::Check => "Looking at your machine",
                 Stage::Load => "Loading the model",
                 Stage::Paint => "Painting",
                 Stage::Decode => "Turning the painting into pixels",

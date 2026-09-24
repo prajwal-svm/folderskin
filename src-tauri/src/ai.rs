@@ -198,14 +198,14 @@ pub fn ai_cancel(jobs: State<'_, Jobs>, job: String) {
     jobs.cancel(&job);
 }
 
-/// Whether pictures can be made on this computer, what setting it up takes, and whether a setup
-/// is under way (which `ai_local_setup` then joins).
+/// Whether the local model can paint here, what setting it up takes, and whether a setup is under
+/// way (which `ai_local_setup` then joins).
 #[tauri::command]
 pub async fn ai_local_status(local: State<'_, Local>) -> Result<LocalStatusDto, AiFailure> {
     let here = local.inner().clone();
     tauri::async_runtime::spawn_blocking(move || here.status())
         .await
-        .map_err(|e| AiFailure::bug(format!("Looking at this computer stopped: {e}.")))
+        .map_err(|e| AiFailure::bug(format!("Looking at your machine stopped: {e}.")))
 }
 
 /// Downloads and checks what this computer needs to paint, telling `on_event` as it goes, and
@@ -227,16 +227,46 @@ pub async fn ai_local_setup(
     lead.finish(outcome)
 }
 
-/// Sets this computer up, telling `send` how it goes.
+/// Removes what setting up downloaded (the model's files, the runtimes and their downloads, and
+/// mflux when setup installed it) and says how the local model stands afterwards. Refused while a
+/// setup is under way or a picture is being painted, which both use those files; the painting
+/// turn is held meanwhile, so none starts half-way through.
+#[tauri::command]
+pub async fn ai_local_remove(local: State<'_, Local>) -> Result<LocalStatusDto, AiFailure> {
+    if local.is_setting_up() {
+        return Err(AiFailure::new("busy", "The local model is being set up.")
+            .fix("Stop the setup, then remove the model."));
+    }
+    let Some(_turn) = local.try_turn() else {
+        return Err(
+            AiFailure::new("busy", "The local model is painting a picture.")
+                .fix("Wait for it to finish, or stop it, then remove the model."),
+        );
+    };
+    let here = local.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let doing = Doing {
+            what: "removing the local model".into(),
+            setup: true,
+        };
+        folderskin_local::remove(&folderskin_local::Reporter::silent())
+            .map_err(|e| failure::from_engine(e, &doing))?;
+        Ok(here.status())
+    })
+    .await
+    .map_err(|e| AiFailure::bug(format!("Removing the local model stopped: {e}.")))?
+}
+
+/// Sets the local model up, telling `send` how it goes.
 async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusDto, AiFailure> {
     // Only one setup is let through join_setup, so this is only a guard.
     let Some(running) = jobs.try_start(jobs::LOCAL_SETUP) else {
         return Err(
-            AiFailure::new("busy", "This computer is already being set up.")
+            AiFailure::new("busy", "The local model is already being set up.")
                 .fix("Wait for it to finish, then try again."),
         );
     };
-    send(AiEvent::stage("check", "Looking at this computer"));
+    send(AiEvent::stage("check", "Looking at your machine"));
     let here = local.clone();
     let (machine, settings) = tauri::async_runtime::spawn_blocking(move || {
         let machine = here.machine();
@@ -244,7 +274,7 @@ async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusD
         (machine, settings)
     })
     .await
-    .map_err(|e| AiFailure::bug(format!("Looking at this computer stopped: {e}.")))?;
+    .map_err(|e| AiFailure::bug(format!("Looking at your machine stopped: {e}.")))?;
     let on = format!(
         "{}, {}",
         local::backend_name(settings.backend),
@@ -257,7 +287,7 @@ async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusD
         settings.tier
     )));
     let doing = Doing {
-        what: format!("setting this computer up to paint ({on})"),
+        what: format!("setting the local model up ({on})"),
         setup: true,
     };
     folderskin_local::setup(
@@ -427,7 +457,7 @@ async fn paint_here(
     let (machine, settings) =
         tauri::async_runtime::spawn_blocking(move || (here.machine(), here.settings()))
             .await
-            .map_err(|e| AiFailure::bug(format!("Looking at this computer stopped: {e}.")))?;
+            .map_err(|e| AiFailure::bug(format!("Looking at your machine stopped: {e}.")))?;
     // One painting at a time: two would share a graphics card that has room for one.
     let _turn = local.wait_turn(&*send, cancel).await?;
     let refs = req.references();
@@ -723,7 +753,7 @@ mod tests {
             vram_gb: 4.0,
         };
         let doing = Doing {
-            what: "setting this computer up to paint (CUDA, RTX 3050 Ti)".into(),
+            what: "setting the local model up (CUDA, RTX 3050 Ti)".into(),
             setup: true,
         };
         let vc = runtime_wont_start(

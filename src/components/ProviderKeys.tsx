@@ -142,7 +142,7 @@ export function ProviderKeys({
 
       {provider.kind === "local" ? (
         <div className="field">
-          <span className="field-label">On this computer</span>
+          <span className="field-label">On your machine</span>
           <LocalSetup onChanged={onChanged} copy={copy} />
         </div>
       ) : (
@@ -189,7 +189,7 @@ export function ProviderKeys({
 
       <p className="field-note">
         {provider.kind === "local"
-          ? "Pictures made on this computer never leave it, and cost nothing."
+          ? "Skins generated on this machine stay on it until you decide to share them with the community."
           : isTauri()
             ? "Your API keys are securely stored on this device."
             : "In this browser preview, keys last until you reload."}

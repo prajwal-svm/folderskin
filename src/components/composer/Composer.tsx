@@ -122,9 +122,20 @@ function loadLook(): IconLook {
 const SAVE_PX = 2048;
 const PREVIEW_SIZES = [128, 64, 32];
 
+/**
+ * The design being made, kept for this run of the app only (sessionStorage): leaving the canvas
+ * and coming back finds it as it was, and every launch starts afresh from the new-design dialog.
+ * Saved designs are in the library; this is only the one on the canvas.
+ */
 function loadDraft(): Draft | null {
   try {
-    const raw = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as Partial<Draft> | null;
+    // Earlier builds kept it for good; one of those mustn't come back now.
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null") as Partial<Draft> | null;
     const doc = raw ? parseDoc(raw.doc) : null;
     if (!raw || !doc) return null;
     const editing = raw.editing && typeof raw.editing.skinId === "string" ? { skinId: raw.editing.skinId, tags: Array.isArray(raw.editing.tags) ? raw.editing.tags : [] } : null;
@@ -526,12 +537,12 @@ export function Composer({
     const t = window.setTimeout(() => {
       try {
         const d: Draft = { doc, name, nameTouched, editing, dirty };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
       } catch {
-        // A design with big pictures can be too much for storage. It still lasts until the app
-        // quits; an older copy mustn't come back in its place after a restart.
+        // A design with big pictures can be too much for storage. It still lasts while the canvas
+        // is open; an older copy mustn't come back in its place.
         try {
-          localStorage.removeItem(DRAFT_KEY);
+          sessionStorage.removeItem(DRAFT_KEY);
         } catch {
           // Nothing kept, nothing to forget.
         }
@@ -562,10 +573,10 @@ export function Composer({
     assets.prune([next]);
   }, [assets]);
 
-  /** Forgets the stored draft, for a fresh start that shouldn't come back after a restart. */
+  /** Forgets the stored draft, for a fresh start that shouldn't come back. */
   const forgetDraft = useCallback(() => {
     try {
-      localStorage.removeItem(DRAFT_KEY);
+      sessionStorage.removeItem(DRAFT_KEY);
     } catch {
       // The next autosave writes over it anyway.
     }
@@ -1314,7 +1325,7 @@ export function Composer({
             {folder && folderIcon ? <img src={folderIcon} alt="" draggable={false} /> : <FolderIcon size={18} />}
             <span className="cmp-target-text">
               <span className="cmp-target-label">{folder ? "Apply to" : "No folder chosen"}</span>
-              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder…"}</span>
+              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder"}</span>
             </span>
           </button>
           {folder && subfolders && subfolders.count > 0 && (

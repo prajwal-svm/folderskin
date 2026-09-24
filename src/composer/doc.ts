@@ -6,6 +6,7 @@
  * Everything in this file is pure: the document is plain data (it is saved beside the skin as
  * JSON and read back to edit it again), and every change makes a new document.
  */
+import { clip } from "../lib/names";
 import { normalizeColor } from "./color";
 import { centreOf, type FolderStyle, type Parts } from "./parts";
 
@@ -411,8 +412,8 @@ export function layerLabel(layer: Layer, index = 1): string {
       return patternLabel(layer.pattern);
     case "text": {
       const line = layer.text.split("\n").find((l) => l.trim()) ?? "";
-      const words = Array.from(line.trim());
-      return words.length === 0 ? "Text" : words.length > 22 ? `${words.slice(0, 21).join("")}…` : words.join("");
+      const text = line.trim();
+      return text ? clip(text, 22) : "Text";
     }
     case "emoji":
       return `${layer.char} Emoji`;

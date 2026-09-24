@@ -2,22 +2,26 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { api, LOCAL_SETUP_JOB, type LocalStatus } from "../../lib/tauri";
 import { aiFailure, worthRetrying } from "../../lib/aiError";
 import { formatBytes } from "../../lib/tree";
-import { whatItTakes } from "../../lib/localSetup";
+import { machineDetails, whatItTakes } from "../../lib/localSetup";
 import type { AiEvent, TurnError } from "../../state/chats";
+import { Confirm } from "../Confirm";
 import { OkBadge } from "../OkBadge";
 import { CpuIcon, TerminalIcon } from "../icons/composer";
 import { CopyIcon } from "../icons/copy";
+import { DeleteIcon } from "../icons/delete";
+import { InfoIcon } from "../icons/info";
 import { LoaderIcon } from "../icons/loader";
 
 type Setup = { stage: string; file: string | null; done: number; total: number; log: string[] };
 
 /**
- * Pictures made on this computer, with no key and no account: what it runs on here and how long a
- * picture takes, and one button that downloads and checks everything it needs, showing each file
- * as it comes and a log for anyone who wants to see what it's doing. It can be stopped part-way;
- * what was downloaded is kept, and setting up again carries on from there. A setup that was
- * already under way when the panel opened (it was closed, or another provider picked) is joined,
- * so its progress and its Stop are back.
+ * The Local Model, with no key and no account: the machine it runs on (and, behind the info
+ * button, what it runs with, how long the last picture took here and where it is kept), and one
+ * button that downloads and checks everything it needs, showing each file as it comes and a log
+ * for anyone who wants to see what it's doing. It can be stopped part-way; what was downloaded
+ * is kept, and setting up again carries on from there. A setup that was already under way when
+ * the panel opened (it was closed, or another provider picked) is joined, so its progress and its
+ * Stop are back. Once anything is downloaded, the model can be removed again to free the space.
  */
 export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
   const [status, setStatus] = useState<LocalStatus | null>(null);
@@ -25,6 +29,8 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
   const [setup, setSetup] = useState<Setup | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  /** Asking whether to remove the model, removing it, or what removing it freed. */
+  const [removal, setRemoval] = useState<{ step: "ask" | "removing" } | { step: "done"; freed: number } | null>(null);
   const looked = useRef<(status: LocalStatus) => void>(() => {});
 
   useEffect(() => {
@@ -90,10 +96,24 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     api.aiCancel(LOCAL_SETUP_JOB).catch(() => setStopping(false));
   }, []);
 
+  const remove = useCallback(async () => {
+    const freed = status?.kept_bytes ?? 0;
+    setProblem(null);
+    setRemoval({ step: "removing" });
+    try {
+      setStatus(await api.aiLocalRemove());
+      setRemoval({ step: "done", freed });
+      onChanged();
+    } catch (e) {
+      setRemoval(null);
+      setProblem(aiFailure(e));
+    }
+  }, [status, onChanged]);
+
   if (!status && !problem) {
     return (
       <p className="local-note">
-        <LoaderIcon size={14} /> Looking at this computer…
+        <LoaderIcon size={14} /> Looking at your machine
       </p>
     );
   }
@@ -103,40 +123,33 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     <div className="local-setup">
       {status && (
         <div className="local-facts">
-          <span className="local-chip">
-            <CpuIcon size={15} />
-            {status.device}
-          </span>
-          <dl className="local-list">
-            <div>
-              <dt>Runs with</dt>
-              <dd>{status.backend}</dd>
-            </div>
-            {status.seconds_per_image !== null && (
-              <div>
-                <dt>A picture takes</dt>
-                <dd>about {status.seconds_per_image < 60 ? `${Math.round(status.seconds_per_image)} seconds` : `${Math.round(status.seconds_per_image / 60)} minutes`}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Kept in</dt>
-              <dd className="local-path" data-tip={status.home} data-tip-overflow>
-                {status.home}
-              </dd>
-            </div>
-          </dl>
+          <div className="local-machine">
+            <span className="local-chip">
+              <CpuIcon size={15} />
+              {status.device}
+            </span>
+            <button
+              type="button"
+              className="icon-btn local-info"
+              aria-label={`about your machine: ${machineDetails(status).replaceAll("\n", ", ")}`}
+              data-tip={machineDetails(status)}
+              data-tip-side="left"
+            >
+              <InfoIcon size={15} />
+            </button>
+          </div>
           {status.note && <p className="local-note">{status.note}</p>}
         </div>
       )}
       {status?.ready && !setup && (
         <p className="local-ready">
-          <OkBadge size={17} playOnMount /> Set up and ready. Nothing you make here leaves this computer.
+          <OkBadge size={17} playOnMount /> Set up and ready.
         </p>
       )}
       {status && !status.ready && status.can_set_up && !setup && (
         <div className="local-go">
           <button type="button" className="btn btn-primary" onClick={() => void start()}>
-            Set up this computer
+            Set up the local model
           </button>
           <span className="local-note">{whatItTakes(status)}</span>
         </div>
@@ -190,6 +203,30 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
             )}
           </div>
         </div>
+      )}
+      {status && !setup && (status.kept_bytes > 0 || removal !== null) && (
+        <div className="local-remove">
+          {removal?.step === "done" ? (
+            <p className="local-note">Removed. {removal.freed > 0 ? `${formatBytes(removal.freed)} is free again.` : "Nothing was left to remove."}</p>
+          ) : (
+            <>
+              <button type="button" className="btn btn-ghost btn-sm local-remove-btn" disabled={removal?.step === "removing"} onClick={() => setRemoval({ step: "ask" })}>
+                {removal?.step === "removing" ? <LoaderIcon size={13} /> : <DeleteIcon size={13} />}
+                {removal?.step === "removing" ? "Removing the model" : "Remove the model"}
+              </button>
+              <span className="local-note">Frees {formatBytes(status.kept_bytes)} on your machine.</span>
+            </>
+          )}
+        </div>
+      )}
+      {removal?.step === "ask" && status && (
+        <Confirm
+          title="Remove the local model?"
+          text={`This deletes the model and everything its setup downloaded (${formatBytes(status.kept_bytes)}). Your skins stay, and you can set it up again whenever you like.`}
+          action="Remove"
+          onCancel={() => setRemoval(null)}
+          onConfirm={() => void remove()}
+        />
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { REPO_URL } from "../lib/packs";
 import type { UpdateStatus } from "../hooks/useUpdates";
 import { UpdateButton } from "./UpdateDialog";
 import { BadgeAlertIcon } from "./icons/badge-alert";
-import { GithubIcon } from "./icons/github";
+import { GithubMark } from "./icons/githubMark";
 import { StarIcon } from "./icons/star";
 
 const open = (url: string) => void openUrl(url).catch(() => {});
@@ -14,7 +14,6 @@ const open = (url: string) => void openUrl(url).catch(() => {});
  * or focused and stays open while the pointer is over it, so its links can be reached.
  */
 export function AboutMenu({
-  note,
   open: shown,
   onHover,
   onClose,
@@ -22,7 +21,6 @@ export function AboutMenu({
   onCheckUpdates,
   onShowUpdate,
 }: {
-  note: string;
   open: boolean;
   /** The pointer or focus came into the popover (true) or left it (false). */
   onHover: (inside: boolean) => void;
@@ -74,10 +72,10 @@ export function AboutMenu({
           <p className="about-line">Free and open source · MIT</p>
         </div>
         <button type="button" className="icon-btn about-source" aria-label="View Source" data-tip="View source" onClick={() => open(REPO_URL)}>
-          <GithubIcon size={18} />
+          <GithubMark size={17} />
         </button>
       </div>
-      {note && <p className="about-note">{note}</p>}
+      <p className="about-note">Give any folder a skin: a photo, a painting, a design of your own, or a style you describe.</p>
       <div className="about-links">
         {link(`${REPO_URL}/issues`, "Report issues", <BadgeAlertIcon size={15} />)}
         {link(REPO_URL, "Star project", <StarIcon size={15} className="about-star" />)}

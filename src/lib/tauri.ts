@@ -207,6 +207,8 @@ export type LocalStatus = {
   download_bytes: number;
   /** The runtime setting up installs besides that, while it isn't installed: "mflux" on Apple Silicon, whose packages uv fetches and `download_bytes` can't count. */
   installs: string | null;
+  /** What setup's files take on disk now, partial downloads included: what removing the model gives back. */
+  kept_bytes: number;
   /** How long the last picture painted here took, once one has been. */
   seconds_per_image: number | null;
   /** Where the runtime and models are kept. */
@@ -399,8 +401,10 @@ const tauriApi = {
     invoke<Skin>("ai_generate", { req, onEvent: new Channel<AiEvent>(onEvent) }),
   /** Stops the run named `job`: its request is dropped, or its local model stopped; {@link LOCAL_SETUP_JOB} stops setting up. */
   aiCancel: (job: string) => invoke<void>("ai_cancel", { job }),
-  /** Whether pictures can be made on this computer, and what setting that up takes. */
+  /** Whether the local model can paint on this machine, and what setting it up takes. */
   aiLocalStatus: () => invoke<LocalStatus>("ai_local_status"),
+  /** Removes the local model: what setup downloaded, and mflux when setup installed it. Refused ("busy") while it is being set up or is painting. */
+  aiLocalRemove: () => invoke<LocalStatus>("ai_local_remove"),
   /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes.
    *  Stopped with `aiCancel(LOCAL_SETUP_JOB)` (it fails with the code "stopped"); what was downloaded is kept.
    *  Asked while a setup is under way, it joins that one: `onEvent` hears where it has got to, and it settles as that one does. */

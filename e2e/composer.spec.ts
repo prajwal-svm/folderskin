@@ -91,6 +91,29 @@ test.describe("starting a new design", () => {
   });
 });
 
+test.describe("a new session", () => {
+  test("keeps the design while the app runs, and starts afresh the next time it opens", async ({ page, context }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await composer(page).getByRole("button", { name: "Text" }).click();
+    await expect(layerNames(page)).toHaveText(["Your words", "Projects", "Background"]);
+    // Away to the library and back, and even a reload: the same run, the same design.
+    await openView(page, /all skins/i);
+    await openView(page, /design your own/i);
+    await expect(layerNames(page)).toHaveText(["Your words", "Projects", "Background"]);
+    await page.waitForTimeout(900); // the design is kept 700 ms after its last change
+    await page.reload();
+    await openView(page, /design your own/i);
+    await expect(layerNames(page)).toHaveText(["Your words", "Projects", "Background"]);
+    // The app opened again (a new window, as a relaunch is): the new-design dialog, not the old one.
+    const next = await context.newPage();
+    await openApp(next);
+    await openView(next, /design your own/i);
+    await expect(newDialog(next)).toBeVisible();
+    await expect(newDialog(next).getByText("Your current design isn't saved.")).toHaveCount(0);
+  });
+});
+
 test.describe("layer names and words", () => {
   test("renaming a text layer names it in the list and leaves the words alone", async ({ page }) => {
     await openApp(page);

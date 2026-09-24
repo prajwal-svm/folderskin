@@ -106,7 +106,7 @@ function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
       : error.code === "unauthorized"
         ? { label: "Check the key", run: () => act.settings(turn.provider) }
         : error.code === "local_not_ready" || error.code === "runtime_failed_to_start"
-          ? { label: "Set up this computer", run: () => act.settings("local") }
+          ? { label: "Set up the local model", run: () => act.settings("local") }
           : error.code === "refused"
             ? { label: "Reword it", run: () => act.reword(turn) }
             : null;
@@ -245,7 +245,7 @@ export function TurnCard({
                   )
                 ) : (
                   <button type="button" className="btn btn-primary btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={act.chooseFolder}>
-                    Choose a folder…
+                    Choose a folder
                   </button>
                 )}
                 {folderName && !applied && (

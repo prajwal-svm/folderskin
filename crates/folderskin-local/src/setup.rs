@@ -100,7 +100,7 @@ pub fn can_set_up(machine: &Machine, backend: Backend) -> bool {
 /// Holds `setup.lock` in `home` for as long as the file is kept, so two setups (the app's and
 /// `folderskin ai setup` in a terminal, or two terminals) never write into the same download.
 /// The system lets go of it when the process ends, however it ends.
-fn lock(home: &Path) -> Result<std::fs::File, Error> {
+pub(crate) fn lock(home: &Path) -> Result<std::fs::File, Error> {
     std::fs::create_dir_all(home).map_err(|e| Error::io("make the models' folder", home, &e))?;
     let path = home.join("setup.lock");
     let file = std::fs::OpenOptions::new()
@@ -478,6 +478,14 @@ async fn install_mlx(reporter: &Reporter, cancel: &CancelToken) -> Result<(), Er
                 Level::Info,
                 format!("installed mflux {}", manifest::MFLUX_VERSION),
             );
+            // So removing the model later takes away this mflux, and never one installed by hand.
+            let marker = paths::home().join(crate::remove::MFLUX_MARKER);
+            if let Err(e) = std::fs::write(&marker, manifest::MFLUX_VERSION) {
+                reporter.log(
+                    Level::Warn,
+                    format!("{} couldn't be written: {e}", marker.display()),
+                );
+            }
             Ok(())
         }
         _ => Err(Error::environment(
@@ -755,7 +763,19 @@ mod tests {
         assert_eq!(err.code, "busy", "{err:?}");
         assert!(err.fix[0].contains("run the command again"), "{err:?}");
         drop(first);
-        let again = lock(&home).expect("the first let go");
+        // Other tests start programs meanwhile, and a program forked in the instant the lock was
+        // held shares its file until it execs: give the lock a moment to be free everywhere.
+        let started = std::time::Instant::now();
+        let again = loop {
+            match lock(&home) {
+                Ok(file) => break file,
+                Err(e) if started.elapsed() < std::time::Duration::from_secs(2) => {
+                    assert_eq!(e.code, "busy", "{e:?}");
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(e) => panic!("the first never let go: {e:?}"),
+            }
+        };
         drop(again);
         std::fs::remove_dir_all(&home).unwrap();
     }

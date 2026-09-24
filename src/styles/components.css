@@ -155,6 +155,8 @@
 .tip-text {
   min-width: 0;
   overflow-wrap: anywhere;
+  /* A tip of a few facts puts each on its own line (data-tip with "\n"). */
+  white-space: pre-line;
 }
 
 .tip-kbd {

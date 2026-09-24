@@ -34,7 +34,7 @@ import { PlusIcon, TrashIcon } from "./icons/composer";
 import { DownloadIcon } from "./icons/download";
 import { EarthIcon } from "./icons/earth";
 import { ExternalLinkIcon } from "./icons/external-link";
-import { GithubIcon } from "./icons/github";
+import { GithubMark } from "./icons/githubMark";
 import { InfoIcon } from "./icons/info";
 import { LoaderIcon } from "./icons/loader";
 import { MonitorCheckIcon } from "./icons/monitor-check";
@@ -64,7 +64,7 @@ const PAGES: { id: SettingsTab; label: string; Icon: typeof SunIcon; find: strin
     id: "ai",
     label: "AI",
     Icon: SparklesIcon,
-    find: "ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local this computer set up model generate free",
+    find: "ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
   },
   {
     id: "sharing",
@@ -76,7 +76,7 @@ const PAGES: { id: SettingsTab; label: string; Icon: typeof SunIcon; find: strin
     id: "about",
     label: "About",
     Icon: InfoIcon,
-    find: "about version newer versions update updates release releases this computer folder icons links source code issues star",
+    find: "about folderskin what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star",
   },
 ];
 
@@ -109,7 +109,6 @@ export function Settings({
   onRail,
   fileBrowser,
   savedCount,
-  note,
   onKeysChanged,
   onClose,
   toast,
@@ -128,8 +127,6 @@ export function Settings({
   fileBrowser: string;
   /** Skins saved on this computer: your own and community ones. */
   savedCount: number;
-  /** How this OS keeps a folder's icon. */
-  note: string;
   /** A key was saved or removed, so the studio reloads its providers. */
   onKeysChanged: () => void;
   onClose: () => void;
@@ -237,7 +234,7 @@ export function Settings({
             )}
             {tab === "ai" && <AiPage onKeysChanged={onKeysChanged} toast={toast} />}
             {tab === "sharing" && <Sharing toast={toast} onBusy={setBusy} />}
-            {tab === "about" && <About note={note} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
+            {tab === "about" && <About fileBrowser={fileBrowser} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
           </Query.Provider>
         </div>
       </div>
@@ -464,7 +461,7 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
     <Section
       title="Where pictures are made"
       find={`key keys api provider providers model ${catalogue?.providers.map((p) => p.label).join(" ") ?? ""}`}
-      note="FolderSkin has no server. With a key, Generate with AI sends your request straight from this computer to the provider, billed to your account. This computer makes them for free, once it's set up."
+      note="FolderSkin has no server. With a key, Generate with AI sends your request straight from your machine to the provider, billed to your account. The Local Model makes them for free, once it's set up."
     >
       <div className="set-block">
         {error ? (
@@ -588,7 +585,7 @@ function Sharing({ toast, onBusy }: { toast: Toast; onBusy: (busy: boolean) => v
             find="github account connect sign in"
             lead={
               <span className="set-row-lead" aria-hidden="true">
-                <GithubIcon size={17} />
+                <GithubMark size={17} />
               </span>
             }
           >
@@ -857,7 +854,7 @@ function ProfileForm({
           className="input"
           value={name}
           maxLength={MAX_PROFILE_NAME}
-          placeholder="Personal, For work…"
+          placeholder="Personal, or For work"
           onChange={(e) => setName(e.target.value)}
           {...marks("name")}
         />
@@ -908,12 +905,12 @@ function ProfileForm({
 // ---------- About ----------
 
 function About({
-  note,
+  fileBrowser,
   updates,
   onCheckUpdates,
   onShowUpdate,
 }: {
-  note: string;
+  fileBrowser: string;
   updates: UpdateStatus;
   onCheckUpdates: () => void;
   onShowUpdate: () => void;
@@ -935,19 +932,28 @@ function About({
           <p className="about-line">Free and open source · MIT</p>
         </div>
       </div>
+      <div className="set-block about-pitch">
+        <p className="about-tagline">Give any folder a skin.</p>
+        <p className="about-intro">
+          Your wedding folder looks exactly like your tax folder. FolderSkin gives every folder a look that fits what&apos;s inside: a
+          golden-hour film still for the wedding, a vintage travel poster for the trip, pop art for the vlog, soft pastels for the
+          baby&apos;s first year.
+        </p>
+        <ul className="about-points">
+          <li>Skins from free community packs, from your own photos, or designed by you.</li>
+          <li>Describe a style and AI paints it, with your own key or free with the Local Model.</li>
+          <li>Skins show up right in {fileBrowser}, and any folder gets its own icon back in one click.</li>
+          <li>Free and open source. No account, no tracking.</li>
+        </ul>
+      </div>
       <Section title="Updates">
         <Row label="Newer versions" note="They come from FolderSkin's releases on GitHub, and install when you say so." find="update updates release version">
           <UpdateButton status={updates} onCheck={onCheckUpdates} onShow={onShowUpdate} />
         </Row>
       </Section>
-      {note && (
-        <Section title="This computer">
-          <Row label="Folder icons" note={note} find="icon desktop.ini finder explorer" />
-        </Section>
-      )}
       <Section title="Links">
         <div className="set-block about-links">
-          {link(REPO_URL, "Source code", <GithubIcon size={15} />)}
+          {link(REPO_URL, "Source code", <GithubMark size={15} />)}
           {link(`${REPO_URL}/issues`, "Report issues", <BadgeAlertIcon size={15} />)}
           {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
           {link(REPO_URL, "Star project", <StarIcon size={15} className="about-star" />)}

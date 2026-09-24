@@ -79,10 +79,10 @@ test.describe("the AI chat", () => {
     const card = chat(page).locator("article.turn").last();
     await expect(card.locator(".turn-name")).toHaveText(/Sending your idea to OpenAI|OpenAI is painting it/);
     await expect(card.getByRole("button", { name: "Stop" })).toBeVisible();
-    await expect(card.getByRole("button", { name: "Choose a folder…" })).toBeVisible({ timeout: 10_000 });
+    await expect(card.getByRole("button", { name: "Choose a folder" })).toBeVisible({ timeout: 10_000 });
     // Named after its first words, never ending on a little one.
     await expect(card.locator(".turn-name")).toHaveText("A lighthouse at dusk");
-    await card.getByRole("button", { name: "Choose a folder…" }).click();
+    await card.getByRole("button", { name: "Choose a folder" }).click();
     await card.getByRole("button", { name: "Preview" }).click();
     await expect(card.getByRole("button", { name: "On show" })).toBeDisabled();
     await card.getByRole("button", { name: "Apply to Projects" }).click();
@@ -98,13 +98,17 @@ test.describe("the AI chat", () => {
     await page.waitForTimeout(500);
     await page.reload();
     await openView(page, /generate with ai/i);
-    // The last chat with something in it opens again, with what was asked in it. (The preview's
-    // library doesn't outlive a reload, so its card says the picture has gone, as the app does.)
+    // A restart starts a new chat, and the one before waits in the history, with what was asked
+    // in it. (The preview's library doesn't outlive a reload, so its card says the picture has
+    // gone, as the app does.)
+    await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
+    const drawer = page.getByRole("complementary", { name: "chats" });
+    await drawer.locator(".chat-open", { hasText: "Pop art cats" }).click();
     await expect(chat(page).locator(".studio-chat-title")).toHaveText("Pop art cats");
     await expect(chat(page).locator(".turn-ask")).toContainText("pop art cats");
     await expect(chat(page).getByText("This picture has been deleted from your library.")).toBeVisible();
-    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
-    const drawer = page.getByRole("complementary", { name: "chats" });
+    if (!(await drawer.isVisible())) await chat(page).getByRole("button", { name: "chats", exact: true }).click();
     await drawer.getByLabel("search chats").fill("lighthouse");
     await expect(drawer.getByText(/No chat is called anything like/)).toBeVisible();
     await drawer.getByLabel("search chats").fill("cats");
@@ -115,6 +119,44 @@ test.describe("the AI chat", () => {
     await drawer.getByRole("button", { name: "delete Cats for the desktop" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
     await expect(drawer.getByText(/Your chats will be here|No chat is called/)).toBeVisible();
+  });
+
+  test("starts a new chat each time it's opened, with the last one in the history", async ({ page }) => {
+    await withKey(page);
+    await sendIdea(page, "a paper boat");
+    await expect(chat(page).locator(".turn-result:not(.is-developing)")).toHaveCount(1, { timeout: 10_000 });
+    await openView(page, /all skins/i);
+    await openView(page, /generate with ai/i);
+    await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
+    await expect(chat(page).locator("article.turn")).toHaveCount(0);
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
+    const drawer = page.getByRole("complementary", { name: "chats" });
+    await expect(drawer.getByRole("button", { name: "rename A paper boat" })).toBeVisible();
+    // Going back and forth without asking anything doesn't pile up empty chats.
+    await openView(page, /all skins/i);
+    await openView(page, /generate with ai/i);
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
+    await expect(page.getByRole("complementary", { name: "chats" }).locator(".chat-open")).toHaveCount(1);
+  });
+
+  test("the local model can be removed, after asking, and set up again", async ({ page }) => {
+    await openApp(page, { query: "localready" });
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    await expect(settings(page).getByText("Set up and ready.")).toBeVisible();
+    await expect(settings(page).getByText(/Nothing you make here leaves/)).toHaveCount(0);
+    // What the machine runs with and how long a picture took are behind the info button.
+    await expect(settings(page).getByRole("button", { name: /about your machine/ })).toHaveAttribute("data-tip", /Runs with CUDA/);
+    await settings(page).getByRole("button", { name: "Remove the model" }).click();
+    const ask = page.getByRole("dialog", { name: "Remove the local model?" });
+    await expect(ask).toContainText("5.4 GB");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(settings(page).getByText("Set up and ready.")).toBeVisible();
+    await settings(page).getByRole("button", { name: "Remove the model" }).click();
+    await page.getByRole("dialog", { name: "Remove the local model?" }).getByRole("button", { name: "Remove" }).click();
+    await expect(settings(page).getByText("Removed. 5.4 GB is free again.")).toBeVisible();
+    await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toBeVisible();
   });
 
   test("a request can be stopped", async ({ page }) => {
@@ -146,17 +188,17 @@ test.describe("the AI chat", () => {
     await expect(card.getByRole("button", { name: /Check the key/ })).toHaveCount(0);
   });
 
-  test("sets this computer up in one click, then paints on it with its progress and log", async ({ page }) => {
+  test("sets the local model up in one click, then paints with it, with its progress and log", async ({ page }) => {
     await openApp(page, { query: "aifail=memory" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
-    await settings(page).getByRole("radio", { name: /This computer/ }).click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
     await expect(settings(page).getByText("NVIDIA GeForce RTX 3050 Ti, 4 GB")).toBeVisible();
-    await settings(page).getByRole("button", { name: "Set up this computer" }).click();
-    await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
+    await settings(page).getByRole("button", { name: "Set up the local model" }).click();
+    await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
     await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
     await settings(page).getByRole("button", { name: "close" }).click();
-    await expect(chat(page).locator(".studio-foot")).toContainText("nothing leaves this computer");
+    await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
     await sendIdea(page, "a paper boat");
     const card = chat(page).locator("article.turn").last();
     await expect(card.locator(".turn-where")).toContainText(/Step \d of 4/, { timeout: 10_000 });
@@ -172,9 +214,11 @@ test.describe("the AI chat", () => {
     await seedChats(page, ["A lighthouse", "Older chat"]);
     await openApp(page);
     await openView(page, /generate with ai/i);
-    await expect(chat(page).locator(".studio-chat-title")).toHaveText("A lighthouse");
+    // The app opens on a new chat; the saved ones are in the history.
+    await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
     await chat(page).getByRole("button", { name: "chats", exact: true }).click();
     const drawer = page.getByRole("complementary", { name: "chats" });
+    await expect(drawer.getByRole("button", { name: "rename A lighthouse" })).toBeVisible();
     await drawer.getByRole("button", { name: "rename Older chat" }).click();
     await drawer.getByLabel("chat name").fill("Boats for the desktop");
     await drawer.getByLabel("chat name").press("Enter");
@@ -200,17 +244,17 @@ test.describe("the AI chat", () => {
     await expect(chat(page).getByRole("button", { name: "remove Reference.jpg" })).toHaveCount(0);
   });
 
-  test("this computer paints one picture at a time, whichever chat asks", async ({ page }) => {
+  test("the local model paints one picture at a time, whichever chat asks", async ({ page }) => {
     await openApp(page, { query: "localready" });
     await openView(page, /generate with ai/i);
-    await expect(chat(page).locator(".studio-foot")).toContainText("nothing leaves this computer");
+    await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
     await sendIdea(page, "a paper boat");
     await expect(chat(page).locator("article.turn").last().getByRole("button", { name: "Stop" })).toBeVisible();
     await chat(page).getByRole("button", { name: "new chat" }).click();
     await box(page).fill("a lighthouse at dusk");
     const generate = chat(page).getByRole("button", { name: "generate" });
     await expect(generate).toBeDisabled();
-    await expect(generate).toHaveAttribute("data-tip", "This computer is still painting the last one");
+    await expect(generate).toHaveAttribute("data-tip", "The local model is still painting the last one");
     // Free again once the first one is done.
     await expect(generate).toBeEnabled({ timeout: 10_000 });
   });
@@ -230,13 +274,13 @@ test.describe("the AI chat", () => {
     await expect(chat(page).getByRole("button", { name: /for the folder Wedding/ })).toBeVisible();
   });
 
-  test("setting this computer up can be stopped, and carried on", async ({ page }) => {
+  test("setting the local model up can be stopped, and carried on", async ({ page }) => {
     await openApp(page);
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
-    await settings(page).getByRole("radio", { name: /This computer/ }).click();
-    await settings(page).getByRole("button", { name: "Set up this computer" }).click();
-    await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    await settings(page).getByRole("button", { name: "Set up the local model" }).click();
+    await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
@@ -247,15 +291,15 @@ test.describe("the AI chat", () => {
     await openApp(page, { query: "slowsetup" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
-    await settings(page).getByRole("radio", { name: /This computer/ }).click();
-    await settings(page).getByRole("button", { name: "Set up this computer" }).click();
-    await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    await settings(page).getByRole("button", { name: "Set up the local model" }).click();
+    await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
     await settings(page).getByRole("button", { name: "close" }).click();
     await chat(page).locator(".model-pill").click();
-    await settings(page).getByRole("radio", { name: /This computer/ }).click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
     // Where it has got to, with its Stop; it isn't offered as if nothing were running.
-    await expect(settings(page).getByText(/Downloading what this computer needs/)).toBeVisible();
-    await expect(settings(page).getByRole("button", { name: "Set up this computer" })).toHaveCount(0);
+    await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
+    await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();

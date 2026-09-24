@@ -1,4 +1,4 @@
-//! "This computer": pictures painted here by folderskin-local's open-weight models, with no key
+//! The Local Model: pictures painted here by folderskin-local's open-weight models, with no key
 //! and no account. What the provider list shows for it, what setting it up takes, and one
 //! painting turned into what the library keeps.
 
@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tokio::sync::watch;
 
-/// The provider id the chat sends for "This computer".
+/// The provider id the chat sends for the Local Model.
 pub const PROVIDER_ID: &str = "local";
 
 /// The model on offer, as the provider list shows it: klein, which paints from words and from
@@ -83,6 +83,11 @@ impl Local {
     /// Whether a setup is under way.
     pub fn is_setting_up(&self) -> bool {
         lock(&self.0.setup).is_some()
+    }
+
+    /// The turn to paint, when no picture is being painted; while it is held none can start.
+    pub fn try_turn(&self) -> Option<tokio::sync::MutexGuard<'_, ()>> {
+        self.0.turn.try_lock().ok()
     }
 
     /// Joins the setup under way, which `listener` then hears from where it has got to; or, when
@@ -232,7 +237,7 @@ impl SetupLead {
 impl Drop for SetupLead {
     fn drop(&mut self) {
         self.end(Err(AiFailure::bug(
-            "Setting this computer up stopped unexpectedly.",
+            "Setting the local model up stopped unexpectedly.",
         )));
     }
 }
@@ -246,21 +251,21 @@ impl SetupJoin {
         match self.0.wait_for(Option::is_some).await {
             Ok(ended) => ended.clone().unwrap_or_else(|| {
                 Err(AiFailure::bug(
-                    "Setting this computer up stopped unexpectedly.",
+                    "Setting the local model up stopped unexpectedly.",
                 ))
             }),
             Err(_) => Err(AiFailure::bug(
-                "Setting this computer up stopped unexpectedly.",
+                "Setting the local model up stopped unexpectedly.",
             )),
         }
     }
 }
 
-/// "This computer" as the provider list shows it; `ready` is shown as its key being saved.
+/// The Local Model as the provider list shows it; `ready` is shown as its key being saved.
 pub fn provider(ready: bool) -> AiProviderDto {
     AiProviderDto {
         id: PROVIDER_ID.into(),
-        label: "This computer".into(),
+        label: "Local Model".into(),
         kind: "local",
         models: MODELS
             .iter()
@@ -286,13 +291,13 @@ pub fn model_choice(id: &str) -> Result<Option<ModelId>, AiFailure> {
     match id {
         "auto" | "" | "zimage" => Ok(None),
         other => ModelId::parse(other).map(Some).ok_or_else(|| {
-            AiFailure::failed(format!("This computer has no model called {other:?}."))
+            AiFailure::failed(format!("There is no local model called {other:?}."))
                 .fix("Choose another model in the provider settings.")
         }),
     }
 }
 
-/// The name a local model goes by in the library ("On this computer · FLUX.2 klein 4B"), a
+/// The name a local model goes by in the library ("Local Model · FLUX.2 klein 4B"), a
 /// retired one's too.
 pub fn model_label(id: &str) -> Option<&'static str> {
     MODELS
@@ -343,6 +348,9 @@ pub struct LocalStatusDto {
     /// The runtime setting up installs besides that, when it isn't installed yet: "mflux" on
     /// Apple Silicon, whose packages uv fetches and `download_bytes` can't count.
     pub installs: Option<String>,
+    /// What setup's files take on disk now, partial downloads included: what removing the model
+    /// gives back (besides mflux, when setup installed it).
+    pub kept_bytes: u64,
     pub seconds_per_image: Option<f64>,
     pub home: String,
     pub note: Option<String>,
@@ -428,6 +436,7 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         },
         installs: (settings.backend == Backend::Mlx && !runtime.installed && can_set_up)
             .then(|| runtime.name.clone()),
+        kept_bytes: folderskin_local::kept_bytes(),
         seconds_per_image: Timing::read().seconds_for(settings),
         home: status.home.display().to_string(),
         note: (!notes.is_empty()).then(|| notes.join(" ")),
@@ -524,7 +533,7 @@ pub async fn paint(
     let model = job.model().id;
     let doing = Doing {
         what: format!(
-            "painting {} on this computer ({}, {})",
+            "painting {} with the local model ({}, {})",
             match order.shape {
                 Shape::Folder => "a whole folder",
                 Shape::Artwork => "folder artwork",
@@ -680,7 +689,7 @@ mod tests {
         let p = provider(true);
         assert_eq!(
             (p.id.as_str(), p.label.as_str(), p.kind),
-            ("local", "This computer", "local")
+            ("local", "Local Model", "local")
         );
         assert!(p.has_key, "set up and ready shows as ready");
         assert!(!provider(false).has_key);

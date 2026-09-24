@@ -70,7 +70,7 @@ impl AiFailure {
             env!("CARGO_PKG_VERSION"),
             self.code,
             self.message,
-            truncate(why.trim(), 500),
+            folderskin_ai::error::shorten(why.trim(), 500),
         );
         self.ask = Some(format!("claude \"{}\"", shell_safe(&prompt)));
         self
@@ -130,7 +130,7 @@ pub fn from_provider(e: AiError, label: &str, doing: &str) -> AiFailure {
 
 /// What the local engine was doing when it failed, for the words around its failure.
 pub struct Doing {
-    /// "painting a folder picture on this computer", for the request for help.
+    /// "painting a folder picture with the local model", for the request for help.
     pub what: String,
     /// Setting up rather than painting: a missing runtime is then a failed install, not a
     /// computer that isn't set up.
@@ -149,7 +149,7 @@ pub fn from_engine(e: EngineError, doing: &Doing) -> AiFailure {
         "runtime_missing" | "models_missing" | "mflux_missing" if !doing.setup => {
             return AiFailure::new(
                 "local_not_ready",
-                "Pictures can't be made on this computer until it's set up.",
+                "Skins can't be generated with the local model until it's set up.",
             )
             .fix(format!("{} Set it up in the provider settings.", e.what));
         }
@@ -186,7 +186,7 @@ pub fn from_engine(e: EngineError, doing: &Doing) -> AiFailure {
                     failure.fix("Or make pictures with a provider and your own key instead.")
                 }
                 "runtime_failed_to_start" | "runtime_missing" | "mflux_missing" => {
-                    failure.fix("Set this computer up again in the provider settings.")
+                    failure.fix("Set the local model up again in the provider settings.")
                 }
                 "blank_picture" => failure.fix("Try again: each picture starts from a new seed."),
                 _ => failure,
@@ -209,8 +209,8 @@ pub fn app_fixes(fixes: &[String]) -> Vec<String> {
                 ("run the same command again", "try again"),
                 ("Run the command again", "Try again"),
                 ("run the command again", "try again"),
-                ("Run setup again", "Set this computer up again"),
-                ("run setup again", "set this computer up again"),
+                ("Run setup again", "Set the local model up again"),
+                ("run setup again", "set the local model up again"),
             ] {
                 f = f.replace(from, to);
             }
@@ -257,14 +257,6 @@ pub fn sentence(text: &str) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let cut: String = s.chars().take(max).collect();
-    format!("{}…", cut.trim_end())
-}
-
 /// Text that can sit inside double quotes in bash, zsh, PowerShell and cmd without anything in
 /// it being run or expanded, by the command line's rules (folderskin-cli's `shell_safe`): no
 /// quotes of any kind, no `$`, backticks, `!` or `%`, no line breaks, and no backslash just
@@ -293,7 +285,7 @@ mod tests {
 
     fn painting() -> Doing {
         Doing {
-            what: "painting a folder picture on this computer (CUDA, RTX 3050 Ti, 4 GB)".into(),
+            what: "painting a folder picture with the local model (CUDA, RTX 3050 Ti, 4 GB)".into(),
             setup: false,
         }
     }
@@ -383,7 +375,7 @@ mod tests {
         assert_eq!(f.ask, None);
         // While setting up, it is what went wrong with the setup instead.
         let during_setup = Doing {
-            what: "setting this computer up".into(),
+            what: "setting the local model up".into(),
             setup: true,
         };
         assert_eq!(from_engine(e, &during_setup).code, "models_missing");
@@ -436,7 +428,7 @@ mod tests {
         )
         .fix("Wait for it to finish, then run the command again.");
         let during_setup = Doing {
-            what: "setting this computer up".into(),
+            what: "setting the local model up".into(),
             setup: true,
         };
         let f = from_engine(e, &during_setup);

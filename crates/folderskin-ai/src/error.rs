@@ -78,11 +78,25 @@ impl AiError {
 /// Keeps a provider message short enough to read in a toast and free of stray whitespace.
 pub fn trim_message(message: &str) -> String {
     let flat = message.split_whitespace().collect::<Vec<_>>().join(" ");
-    if flat.chars().count() <= 200 {
-        return flat;
+    shorten(&flat, 200)
+}
+
+/// `text` in at most `max` characters: its whole sentences when they fill more than half of that,
+/// otherwise its whole words, and never "…" after them (the app's words don't trail off in dots).
+pub fn shorten(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
     }
-    let cut: String = flat.chars().take(200).collect();
-    format!("{cut}…")
+    let cut: String = text.chars().take(max).collect();
+    if let Some(end) = cut.rfind(". ").filter(|&at| at + 1 >= max / 2) {
+        return cut[..=end].to_string();
+    }
+    match cut.rfind(' ') {
+        Some(space) if space > 0 => cut[..space]
+            .trim_end_matches([',', ';', ':', '-'])
+            .to_string(),
+        _ => cut,
+    }
 }
 
 fn looks_like_refusal(message: &str) -> bool {
@@ -149,7 +163,29 @@ mod tests {
     fn long_provider_messages_are_trimmed() {
         let long = "x".repeat(500);
         let out = trim_message(&long);
-        assert!(out.chars().count() <= 201, "{}", out.chars().count());
+        assert!(out.chars().count() <= 200, "{}", out.chars().count());
         assert_eq!(trim_message("  a   b \n c "), "a b c");
+    }
+
+    #[test]
+    fn a_long_message_ends_on_a_sentence_or_a_word_without_dots() {
+        let words = "the request was rejected because the prompt asks for something the model \
+                     will not paint, ";
+        let long = words.repeat(6);
+        let out = shorten(&long, 200);
+        assert!(out.chars().count() <= 200, "{out}");
+        assert!(!out.contains('…') && !out.ends_with("..."), "{out}");
+        assert!(
+            out.ends_with("paint") || long.starts_with(&format!("{out} ")),
+            "{out}"
+        );
+        let sentences = "The key was refused. It may have been revoked or mistyped. ".repeat(5);
+        let out = shorten(&sentences, 100);
+        assert!(
+            out.ends_with("mistyped.") || out.ends_with("refused."),
+            "{out}"
+        );
+        // No space at all: the characters it has room for.
+        assert_eq!(shorten(&"é".repeat(50), 10), "é".repeat(10));
     }
 }

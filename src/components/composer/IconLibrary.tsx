@@ -381,7 +381,7 @@ export function IconLibrary({
         <p className="icon-empty">{failed}</p>
       ) : !pack ? (
         <p className="icon-empty">
-          <LoaderIcon size={15} /> Opening {info?.name ?? "the icons"}…
+          <LoaderIcon size={15} /> Opening {info?.name ?? "the icons"}
         </p>
       ) : (
         <div className="icon-grid-wrap" onKeyDown={onKey} onPointerMove={() => keyed && setKeyed(false)}>

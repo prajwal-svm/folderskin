@@ -1020,6 +1020,30 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   color: var(--muted);
 }
 
+.local-machine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.local-info {
+  flex: none;
+  color: var(--muted);
+}
+
+.local-remove {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.local-remove-btn {
+  gap: 6px;
+  color: var(--danger, var(--ink-2));
+}
+
 .local-list {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

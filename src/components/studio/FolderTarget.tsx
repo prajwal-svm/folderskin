@@ -62,7 +62,7 @@ export function FolderTarget({
               }}
             >
               <FolderOpenIcon size={15} />
-              Choose another folder…
+              Choose another folder
             </button>
             <button
               type="button"

@@ -19,8 +19,8 @@ function WindowsMark() {
 }
 
 const LOOKS: { value: FolderStyle; label: string; tip: string; Mark: typeof AppleMark }[] = [
-  { value: "mac", label: "Mac", tip: "The folder a Mac shows", Mark: AppleMark },
-  { value: "windows", label: "Windows", tip: "The folder Windows shows", Mark: WindowsMark },
+  { value: "mac", label: "Mac", tip: "Switch to Mac folder as base", Mark: AppleMark },
+  { value: "windows", label: "Windows", tip: "Switch to Windows folder as base", Mark: WindowsMark },
 ];
 
 /**

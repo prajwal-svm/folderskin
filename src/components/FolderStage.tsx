@@ -16,7 +16,7 @@ import { RotateCcwIcon } from "./icons/rotate-ccw";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
-import { clip, trailOff } from "../lib/names";
+import { clip } from "../lib/names";
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 
@@ -168,7 +168,8 @@ export function FolderStage({
 
         <StageCopy state={state} skin={skin} browseLabel={browseLabel} />
 
-        {!folder && !drag && onLook && <StageLook onLook={onLook} />}
+        {/* Under the empty folder only: while a skin is previewed, the preview is what's shown. */}
+        {!folder && !skin && !drag && onLook && <StageLook onLook={onLook} />}
 
         {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} />}
 
@@ -201,7 +202,7 @@ export function FolderStage({
   );
 }
 
-/** Which folder skins go on, chosen while there's no folder yet: the empty one above shows it. */
+/** Which folder skins go on, chosen while there's no folder and no skin yet: the empty one above shows it. */
 function StageLook({ onLook }: { onLook: (look: FolderStyle) => void }) {
   return <LookSwitch className="stage-look" label="which folder skins go on" value={useLook()} onChange={onLook} />;
 }
@@ -578,7 +579,7 @@ function statusLine(state: State, skin: Skin | null, fileBrowser: string, custom
     case "ready":
       return state.arriving && customIcon ? "It has an icon of its own." : "Nothing changes on disk until you apply.";
     case "applying":
-      return trailOff(`Writing ${skin ? clip(skin.name) : "the skin"} into ${clip(state.folder?.name ?? "the folder")}`);
+      return `Writing ${skin ? clip(skin.name) : "the skin"} into ${clip(state.folder?.name ?? "the folder")}`;
     case "applied":
       return `${fileBrowser} can take a second to catch up.`;
     case "reverting":
