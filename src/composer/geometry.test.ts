@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, boxTargets, contains, cursorFor, freeSpot, handlePoint, hitHandle, MIN_SIZE, normAngle, placeIcon, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
+import { bounds, boxTargets, contains, cursorFor, fitSpot, freeSpot, handlePoint, hitHandle, MIN_SIZE, normAngle, placeIcon, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
 import { FALLBACK_PARTS, WINDOWS_PARTS, centreOf } from "./parts";
 
 const box: Box = { x: 500, y: 400, w: 200, h: 100, rotation: 0 };
@@ -142,5 +142,39 @@ describe("where something new goes on the folder", () => {
     expect(apart([label, { ...at, w: 620, h: 180, rotation: 0 }])).toBe(true);
     // With nothing there, the middle.
     expect(freeSpot(front, centreOf(front), 620, 180, [])).toEqual(centreOf(front));
+  });
+
+  it("puts a shape and an emoji beside a label and its new words, a little smaller if it must", () => {
+    for (const front of [FALLBACK_PARTS.front, WINDOWS_PARTS.front]) {
+      const c = centreOf(front);
+      const label: Box = { ...c, w: 640, h: 165, rotation: 0 };
+      const words: Box = { x: c.x, y: c.y - 190, w: 760, h: 165, rotation: 0 };
+      const placed = [label, words];
+      for (const size of [380, 420]) {
+        const at = fitSpot(front, c, size, size, placed);
+        expect(at, `${size} on ${front}`).not.toBeNull();
+        placed.push({ x: at!.x, y: at!.y, w: size * at!.scale, h: size * at!.scale, rotation: 0 });
+      }
+      expect(apart(placed), JSON.stringify(placed)).toBe(true);
+      const [x0, y0, x1, y1] = front;
+      for (const b of placed.slice(2)) {
+        expect(b.w).toBeGreaterThanOrEqual(160);
+        expect([b.x - b.w / 2 >= x0, b.x + b.w / 2 <= x1, b.y - b.h / 2 >= y0, b.y + b.h / 2 <= y1]).toEqual([true, true, true, true]);
+      }
+    }
+  });
+
+  it("looks right beside what's there once every step from the middle is taken", () => {
+    const front = FALLBACK_PARTS.front;
+    const c = centreOf(front);
+    // A wide label in the middle and a heart under it: the steps across clear the label's width,
+    // off the front, but the heart has room at its sides.
+    const label: Box = { ...c, w: 900, h: 165, rotation: 0 };
+    const heart: Box = { x: c.x, y: c.y + 250, w: 260, h: 260, rotation: 0 };
+    const at = freeSpot(front, c, 260, 260, [label, heart])!;
+    expect(at).not.toBeNull();
+    expect(apart([label, heart, { ...at, w: 260, h: 260, rotation: 0 }])).toBe(true);
+    // Nowhere at all, and it says so.
+    expect(fitSpot(front, c, 900, 900, [label], 900)).toBeNull();
   });
 });

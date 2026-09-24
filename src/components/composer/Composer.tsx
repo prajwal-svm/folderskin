@@ -55,7 +55,7 @@ import {
   type PatternKind,
   type ShapeKind,
 } from "../../composer/doc";
-import { freeSpot, placeIcon } from "../../composer/geometry";
+import { fitSpot, placeIcon, type Box } from "../../composer/geometry";
 import { canRedo, canUndo, historyReducer, startHistory } from "../../composer/history";
 import { boxOf, renderDoc } from "../../composer/render";
 import { TEMPLATES, type Picture } from "../../composer/templates";
@@ -123,6 +123,9 @@ function loadLook(): IconLook {
 /** The size the saved design is drawn at: the compositor's master size, so nothing is scaled up. */
 const SAVE_PX = 2048;
 const PREVIEW_SIZES = [128, 64, 32];
+
+/** How small new words may be drawn, across their height, to find them a free spot. */
+const SMALLEST_WORDS = 80;
 
 /**
  * The design being made, kept for this run of the app only (sessionStorage): leaving the canvas
@@ -755,17 +758,27 @@ export function Composer({
 
   const addText = () => {
     const text = makeText("Your words", front.x, front.y, ink);
-    // Beside what's there already, as an icon goes, not over a label's own words.
+    // Beside what's there already, as an icon goes, not over a label's own words: a size smaller
+    // where the front is too narrow for them at their own (Windows' is).
     const { w, h } = boxOf(text, assets);
-    const at = freeSpot(parts.front, front, w, h, taken);
-    add(at ? { ...text, x: at.x, y: at.y } : text);
+    const at = fitSpot(parts.front, front, w, h, taken, SMALLEST_WORDS);
+    add(at ? { ...text, x: at.x, y: at.y, size: Math.round(text.size * at.scale) } : text);
     window.setTimeout(() => {
       textRef.current?.focus();
       textRef.current?.select();
     }, 60);
   };
-  const addEmoji = (char: string) => add(makeEmoji(char, front.x, front.y + 6));
-  const addShape = (shape: ShapeKind) => add(makeShape(shape, front.x, front.y, accent));
+  // Emoji and shapes find a free spot too, a little smaller if that's what it takes.
+  const addEmoji = (char: string) => {
+    const emoji = makeEmoji(char, front.x, front.y + 6);
+    const at = fitSpot(parts.front, { x: front.x, y: front.y + 6 }, emoji.size, emoji.size, taken);
+    add(at ? { ...emoji, x: at.x, y: at.y, size: Math.round(emoji.size * at.scale) } : emoji);
+  };
+  const addShape = (kind: ShapeKind) => {
+    const shape = makeShape(kind, front.x, front.y, accent);
+    const at = fitSpot(parts.front, front, shape.w, shape.h, taken);
+    add(at ? { ...shape, x: at.x, y: at.y, w: Math.round(shape.w * at.scale), h: Math.round(shape.h * at.scale) } : shape);
+  };
   const addPattern = (pattern: PatternKind) => add(makePattern(pattern, bg && luminance(bg) > 0.6 ? "#1b1f2733" : "#ffffff59"), coveringTop(latestDoc.current));
   const addBackground = () => {
     const first = latestDoc.current.layers[0];
@@ -811,11 +824,18 @@ export function Composer({
    * the front already covers, so icons added one after another sit side by side rather than on top
    * of each other. The first is the size of a folder's symbol, the ones after a little smaller.
    */
-  /** What a new icon or text should keep clear of: the icons, emoji and words already there. */
-  const taken = useMemo(
-    () => doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && (l.kind === "icon" || l.kind === "emoji" || l.kind === "text")).map((l) => boxOf(l, assets)),
-    [doc.layers, assets],
-  );
+  /**
+   * What something new should keep clear of: the icons, emoji and words already there, and the
+   * shapes, but not a shape as wide or as tall as the front, which is what everything sits on.
+   */
+  const taken = useMemo(() => {
+    const [fx0, fy0, fx1, fy1] = parts.front;
+    const backdrop = (b: Box) => b.w >= fx1 - fx0 || b.h >= fy1 - fy0;
+    return doc.layers
+      .filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && (l.kind === "icon" || l.kind === "emoji" || l.kind === "text" || l.kind === "shape"))
+      .map((l) => boxOf(l, assets))
+      .filter((b) => !backdrop(b));
+  }, [doc.layers, assets, parts.front]);
   const iconSpot = useMemo(() => {
     const n = doc.layers.filter((l) => l.kind === "icon").length;
     return { ...placeIcon(parts.front, { x: front.x, y: front.y }, taken, n), color: ink };

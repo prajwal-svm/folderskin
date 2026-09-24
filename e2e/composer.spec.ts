@@ -317,6 +317,32 @@ test.describe("the icon library", () => {
     expect(Math.abs(words.y - label.y) * 2).toBeGreaterThanOrEqual(labelSize + wordsSize);
   });
 
+  for (const look of ["Mac", "Windows"]) {
+    test(`new words, a shape and an emoji go beside what's there on the ${look} folder, not over it`, async ({ page }) => {
+      await openApp(page);
+      await startFrom(page, "Label");
+      if (look === "Windows") await composer(page).getByRole("radiogroup", { name: "which folder" }).getByRole("radio", { name: "Windows" }).click();
+      const words = async (name: string) => {
+        await side(page).locator(".cmp-layer", { hasText: name }).click();
+        const size = Number(await side(page).getByLabel("Size, typed", { exact: true }).inputValue());
+        // Words are wide: what goes beside them goes above or below, a line apart.
+        return { ...(await layerAt(page)), w: 2048, h: size * 1.1 };
+      };
+      await composer(page).getByRole("button", { name: "Text" }).click();
+      await expect(side(page).locator(".cmp-layer.is-on .cmp-layer-label")).toHaveText("Your words");
+      await composer(page).getByRole("button", { name: "Shape" }).click();
+      await page.locator(".cmp-grid-btn[data-tip='Heart']").click();
+      const heart = { ...(await layerAt(page)), w: Number(await side(page).getByLabel("W", { exact: true }).inputValue()), h: Number(await side(page).getByLabel("H", { exact: true }).inputValue()) };
+      await composer(page).getByRole("button", { name: "Emoji" }).click();
+      await page.locator(".cmp-emoji-btn").first().click();
+      const size = Number(await side(page).getByLabel("Size, typed", { exact: true }).inputValue());
+      const emoji = { ...(await layerAt(page)), w: size, h: size };
+      const boxes = [await words("Projects"), await words("Your words"), heart, emoji];
+      for (const [i, a] of boxes.entries())
+        for (const b of boxes.slice(i + 1)) expect(Math.abs(a.x - b.x) * 2 >= a.w + b.w || Math.abs(a.y - b.y) * 2 >= a.h + b.h, JSON.stringify([a, b])).toBe(true);
+    });
+  }
+
   test("tries the icon pointed at on the canvas itself, and puts it back after", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
