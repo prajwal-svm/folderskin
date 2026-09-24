@@ -169,6 +169,9 @@ pub struct GenArgs {
     /// Don't draw each picture as the folder the app makes of it
     #[arg(long)]
     pub no_preview: bool,
+    /// Say what would be painted, and where it would go, without painting anything
+    #[arg(long)]
+    pub dry_run: bool,
     #[command(flatten)]
     pub machine: MachineArgs,
 }
@@ -186,6 +189,9 @@ pub struct BatchArgs {
     pub provider: Option<String>,
     #[arg(long, default_value = "folderskin-out")]
     pub out: PathBuf,
+    /// Say what every brief would paint, without painting anything
+    #[arg(long)]
+    pub dry_run: bool,
     #[command(flatten)]
     pub machine: MachineArgs,
 }
@@ -218,6 +224,10 @@ pub struct ThemeArgs {
     /// Where the pictures go (default folderskin-out/theme-<root>)
     #[arg(long)]
     pub out: Option<PathBuf>,
+    /// List the folders it would paint (and, with --apply, change), without painting or
+    /// applying anything
+    #[arg(long)]
+    pub dry_run: bool,
     #[command(flatten)]
     pub machine: MachineArgs,
 }
@@ -598,6 +608,23 @@ mod tests {
         assert_eq!(s.runtime, RuntimeArg::Latest);
         assert!(parse(&["ai", "doctor", "--backend", "rocm"]).is_err());
         assert!(parse(&["ai", "doctor", "--tier", "q5"]).is_err());
+    }
+
+    #[test]
+    fn gen_batch_and_theme_can_be_tried_dry() {
+        for args in [
+            &["ai", "gen", "x", "--dry-run"][..],
+            &["ai", "batch", "b.json", "--dry-run"],
+            &["ai", "theme", "D:/Projects", "--apply", "--dry-run"],
+        ] {
+            let dry = match parse(args).unwrap().command {
+                Command::Ai(AiCommand::Gen(g)) => g.dry_run,
+                Command::Ai(AiCommand::Batch(b)) => b.dry_run,
+                Command::Ai(AiCommand::Theme(t)) => t.dry_run,
+                other => panic!("{other:?}"),
+            };
+            assert!(dry, "{args:?}");
+        }
     }
 
     #[test]

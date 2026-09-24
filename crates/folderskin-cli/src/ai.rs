@@ -216,8 +216,9 @@ fn paint_all(
     Ok(made)
 }
 
-/// The contact sheet of every picture's preview, when there is more than one.
-fn sheet(made: &[PathBuf], out_dir: &Path, out: &Arc<Out>) {
+/// The contact sheet of every picture's preview, when there is more than one. Says whether it
+/// made one.
+fn sheet(made: &[PathBuf], out_dir: &Path, out: &Arc<Out>) -> bool {
     let previews: Vec<PathBuf> = made
         .iter()
         .filter_map(|p| p.file_name())
@@ -225,13 +226,52 @@ fn sheet(made: &[PathBuf], out_dir: &Path, out: &Arc<Out>) {
         .filter(|p| p.is_file())
         .collect();
     if previews.len() < 2 {
-        return;
+        return false;
     }
     let dest = out_dir.join("previews").join("_sheet.png");
     match preview::contact_sheet(&previews, &dest) {
-        Ok(()) => out.note(&format!("contact sheet: {}", dest.display())),
-        Err(e) => out.warn(&format!("no contact sheet: {} {}", e.what, e.why)),
+        Ok(()) => {
+            out.note(&format!("contact sheet: {}", dest.display()));
+            true
+        }
+        Err(e) => {
+            out.warn(&format!("no contact sheet: {} {}", e.what, e.why));
+            false
+        }
     }
+}
+
+/// Says what `order` would paint, for --dry-run, without painting it.
+fn plan(order: &Order, out: &Arc<Out>) {
+    let what = match &order.name {
+        Some(name) => format!("{name}.png"),
+        None => format!("{:?}", order.idea),
+    };
+    let style = match order.style.as_str() {
+        "none" => String::new(),
+        style => format!(", {style}"),
+    };
+    out.result(
+        None,
+        "plan",
+        json!({"idea": order.idea, "style": order.style, "shape": order.shape,
+               "refs": order.refs, "seed": order.seed, "name": order.name}),
+        &format!(
+            "would paint {what} ({}{style}, seed {})",
+            order.shape.id(),
+            order.seed
+        ),
+        false,
+    );
+}
+
+/// The line a --dry-run starts with.
+fn dry_run_note(pictures: usize, painter: &Painter, out: &Arc<Out>) {
+    out.note(&format!(
+        "dry run: {} with {}; nothing is painted or applied",
+        count(pictures, "picture"),
+        painter.describe()
+    ));
 }
 
 fn absolute(path: &Path) -> PathBuf {
@@ -283,7 +323,6 @@ fn gen(args: GenArgs, out: &Arc<Out>) -> Result<(), CliError> {
             raw: args.raw,
         })
         .collect();
-    painter.check_ready(&orders[0])?;
     if let Some(folder) = &args.apply {
         if !folder.is_dir() {
             return Err(preview::apply_error(
@@ -292,6 +331,23 @@ fn gen(args: GenArgs, out: &Arc<Out>) -> Result<(), CliError> {
             ));
         }
     }
+    if args.dry_run {
+        dry_run_note(orders.len(), &painter, out);
+        for order in &orders {
+            plan(order, out);
+        }
+        if let Some(folder) = &args.apply {
+            out.result(
+                Some(folder),
+                "plan",
+                json!({"apply": folder}),
+                &format!("would put the first on {}", folder.display()),
+                false,
+            );
+        }
+        return Ok(());
+    }
+    painter.check_ready(&orders[0])?;
     let out_dir = absolute(&args.out);
     out.note(&format!(
         "painting {} with {}",
@@ -342,6 +398,9 @@ pub struct Brief {
     pub model: Option<String>,
 }
 
+/// The most pictures one brief may ask for, as with `ai gen -n`.
+const MAX_PICTURES: u32 = 100;
+
 /// Reads and checks a batch file; reference paths are made relative to it.
 pub fn read_briefs(path: &Path) -> Result<Vec<Brief>, CliError> {
     let bytes = std::fs::read(path).map_err(|e| CliError::io("read the briefs", path, &e))?;
@@ -356,6 +415,15 @@ pub fn read_briefs(path: &Path) -> Result<Vec<Brief>, CliError> {
              each brief can have idea, style, shape, refs, n, name, seed and model.",
         )
     })?;
+    if briefs.is_empty() {
+        // As an empty idea is for `ai gen`: there is nothing to paint, so say so.
+        return Err(CliError::fixable(
+            "bad_briefs",
+            "There is nothing to paint.",
+            format!("{} is an empty list.", path.display()),
+        )
+        .fix("Add a brief: [{\"idea\": \"a lighthouse\", \"style\": \"woodblock\", \"n\": 2}]"));
+    }
     let base = path.parent().unwrap_or(Path::new("."));
     for (i, brief) in briefs.iter_mut().enumerate() {
         let which = format!("Brief {} ({:?})", i + 1, brief.idea);
@@ -375,12 +443,23 @@ pub fn read_briefs(path: &Path) -> Result<Vec<Brief>, CliError> {
                 ));
             }
         }
-        if brief.n == Some(0) {
-            return Err(CliError::fixable(
-                "bad_briefs",
-                format!("{which} asks for no pictures."),
-                "n is how many to paint, at least 1.",
-            ));
+        match brief.n {
+            Some(0) => {
+                return Err(CliError::fixable(
+                    "bad_briefs",
+                    format!("{which} asks for no pictures."),
+                    "n is how many to paint, at least 1.",
+                ))
+            }
+            Some(n) if n > MAX_PICTURES => {
+                return Err(CliError::fixable(
+                    "bad_briefs",
+                    format!("{which} asks for {n} pictures."),
+                    format!("n goes up to {MAX_PICTURES}, as ai gen's -n does."),
+                )
+                .fix("Split it into several briefs, or ask for fewer."))
+            }
+            _ => {}
         }
         if let Some(seed) = brief.seed {
             if let Err(e) = paint::seeds(seed, u64::from(brief.n.unwrap_or(1))) {
@@ -439,9 +518,18 @@ fn batch(args: &BatchArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 name,
                 raw: false,
             };
-            painter.check_ready(&order)?;
+            if !args.dry_run {
+                painter.check_ready(&order)?;
+            }
             work.push((painter.clone(), order));
         }
+    }
+    if args.dry_run {
+        dry_run_note(work.len(), &painter, out);
+        for (_, order) in &work {
+            plan(order, out);
+        }
+        return Ok(());
     }
     let out_dir = absolute(&args.out);
     out.note(&format!(
@@ -612,16 +700,7 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let names = theme_names(&root, &folders);
     let seeds = paint::seeds(seed, folders.len() as u64)?;
     if folders.is_empty() {
-        return Err(CliError::fixable(
-            "no_folders",
-            "There are no folders to paint there.",
-            format!(
-                "{} has no folders {} down, leaving out hidden, system and tool folders.",
-                root.display(),
-                count(args.depth as usize, "level")
-            ),
-        )
-        .fix("Point it at the folder that holds the folders, or go deeper with --depth 2."));
+        return Err(no_folders(&root, args.depth));
     }
     out.note(&format!(
         "{} under {}, style {:?}, seed {seed}, with {}",
@@ -630,6 +709,28 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
         args.style,
         painter.describe()
     ));
+    if args.dry_run {
+        out.note("dry run: nothing is painted or applied");
+        for (folder, name) in folders.iter().zip(&names) {
+            let picture = out_dir.join(format!("{name}.png"));
+            let painted = picture.is_file();
+            let what = match (painted, args.apply) {
+                (true, true) => "already painted; would be put on the folder",
+                (true, false) => "already painted, kept",
+                (false, true) => "would be painted and put on the folder",
+                (false, false) => "would be painted",
+            };
+            out.result(
+                Some(folder),
+                "plan",
+                json!({"folder": folder, "picture": picture, "painted": painted,
+                       "apply": args.apply}),
+                &format!("{}: {} {what}", folder.display(), picture.display()),
+                false,
+            );
+        }
+        return Ok(());
+    }
     let cancel = terminal::stop_on_ctrl_c();
     let mut first_check = true;
     for ((folder, name), seed) in folders.iter().zip(&names).zip(seeds) {
@@ -660,6 +761,14 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
             )?;
         } else {
             out.note(&format!("{name}: already painted, kept"));
+            // Painted by an earlier run that was told not to preview, or put there by hand:
+            // the sheet needs its preview all the same.
+            let previews = out_dir.join("previews");
+            if !previews.join(format!("{name}.png")).is_file() {
+                if let Err(e) = preview::preview(&picture, &previews) {
+                    out.warn(&format!("no preview of {name}: {} {}", e.what, e.why));
+                }
+            }
         }
         if args.apply {
             cancel_check(&cancel)?;
@@ -684,12 +793,40 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
         .iter()
         .map(|n| out_dir.join(format!("{n}.png")))
         .collect();
-    sheet(&previews, &out_dir, out);
+    let look_at = if sheet(&previews, &out_dir, out) {
+        "the sheet".to_string()
+    } else {
+        out_dir.join("previews").display().to_string()
+    };
     if !args.apply {
-        out.note("nothing applied; look at the sheet, then run again with --apply (undo one with folderskin revert <folder>)");
+        out.note(&format!("nothing applied; look at {look_at}, then run again with --apply (undo one with folderskin revert <folder>)"));
     }
     Ok(())
 }
+
+/// No folders `depth` levels under `root`, and what to try.
+fn no_folders(root: &Path, depth: u32) -> CliError {
+    let error = CliError::fixable(
+        "no_folders",
+        "There are no folders to paint there.",
+        format!(
+            "{} has no folders {} down, leaving out hidden, system and tool folders.",
+            root.display(),
+            count(depth as usize, "level")
+        ),
+    );
+    if depth < MAX_DEPTH {
+        error.fix(format!(
+            "Point it at the folder that holds the folders, or go deeper with --depth {}.",
+            depth + 1
+        ))
+    } else {
+        error.fix("Point it at the folder that holds the folders.")
+    }
+}
+
+/// The deepest `ai theme --depth` goes.
+const MAX_DEPTH: u32 = 5;
 
 fn cancel_check(cancel: &CancelToken) -> Result<(), CliError> {
     cancel.check().map_err(CliError::from)
@@ -1029,7 +1166,28 @@ mod tests {
         assert!(e.why.contains("gone.jpg"));
         let e = check("not json");
         assert!(e.fix[0].contains("JSON list"));
+        // Nothing to paint is a mistake, as an empty idea is for gen; so is more than gen allows.
+        let e = check("[]");
+        assert_eq!(
+            (e.code.as_str(), e.what.as_str()),
+            ("bad_briefs", "There is nothing to paint.")
+        );
+        let e = check(r#"[{"idea": "x", "n": 101}]"#);
+        assert!(e.why.contains("up to 100"), "{e:?}");
+        assert!(read_briefs(&{
+            std::fs::write(dir.join("ok.json"), r#"[{"idea": "x", "n": 100}]"#).unwrap();
+            dir.join("ok.json")
+        })
+        .is_ok());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn no_folders_suggests_the_next_depth_down() {
+        let root = Path::new("D:/Empty");
+        assert!(no_folders(root, 1).fix[0].ends_with("--depth 2."));
+        assert!(no_folders(root, 3).fix[0].ends_with("--depth 4."));
+        assert!(!no_folders(root, 5).fix[0].contains("--depth"));
     }
 
     #[test]
