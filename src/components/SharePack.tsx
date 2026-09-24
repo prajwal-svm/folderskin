@@ -14,14 +14,15 @@ import {
 } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { cleanName } from "../lib/names";
-import { creditDefaultProfile, LICENSES, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, packSlug, PACKS_GUIDE_URL, UPLOAD_URL } from "../lib/packs";
-import { defaultProfile, loadProfiles } from "../lib/profiles";
+import { creditDefaultProfile, LICENSES, licenseLabel, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, packSlug, PACKS_GUIDE_URL, UPLOAD_URL } from "../lib/packs";
+import { defaultProfile, loadProfiles, type LicenceProfile, type LicenseId } from "../lib/profiles";
 import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, shareProgressLabel, type PictureSource } from "../lib/share";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
 import { GithubAvatar } from "./GithubAvatar";
 import { GithubConnect } from "./GithubConnect";
 import { Modal } from "./Modal";
 import { MySubmissions } from "./MySubmissions";
+import { Select } from "./Select";
 import { ShareVerify } from "./ShareVerify";
 import { TagInput } from "./TagInput";
 import { CheckIcon } from "./icons/check";
@@ -50,6 +51,13 @@ function progressLabel(p: PublishProgress): string {
   }
 }
 
+const LICENCE_OPTIONS = LICENSES.map((l) => ({ value: l.id as LicenseId, label: `${l.label}: ${l.note}` }));
+
+/** A profile as the choice of them names it: "Personal · credited to jane · CC0". */
+function profileLabel(p: LicenceProfile): string {
+  return [p.name, p.author && `credited to ${p.author}`, licenseLabel(p.license)].filter(Boolean).join(" · ");
+}
+
 /** Where the dialog starts: the skin they asked to share, all of theirs, or a tag small enough. */
 function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; count: number }[]) {
   if (only) return { ids: [only.id], name: only.name, tags: only.tags.slice(0, MAX_PACK_TAGS), filter: "" };
@@ -61,8 +69,9 @@ function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; cou
 
 /**
  * Shares the user's own skins with everyone. They choose which skins go in, name the pack, tag it
- * and pick a licence, then press publish: FolderSkin signs them in to GitHub once, forks the
- * repository if they can't push to it, and opens the pull request for them.
+ * and pick one of their licence profiles from Settings (or just a licence for this pack), then
+ * press publish: FolderSkin signs them in to GitHub once, forks the repository if they can't push
+ * to it, and opens the pull request for them.
  *
  * A pack holds up to {@link MAX_PACK_SKINS} skins, so the picker is a grid of ticks rather than a
  * single choice — sharing one skin and sharing twenty are the same dialog. Saving a folder is
@@ -96,7 +105,12 @@ export function SharePack({
   const [name, setName] = useState(start.name);
   const [packTags, setPackTags] = useState<string[]>(start.tags);
 
-  const [license, setLicense] = useState<string>(() => defaultProfile(loadProfiles()).license);
+  /** The licence profiles kept in Settings. The dialog only reads them. */
+  const [profiles] = useState(loadProfiles);
+  const [profileId, setProfileId] = useState(profiles.defaultId);
+  const profile = profiles.list.find((p) => p.id === profileId) ?? defaultProfile(profiles);
+  /** The profile's licence to start with. Changed here, it's changed for this pack only. */
+  const [license, setLicense] = useState<LicenseId>(() => defaultProfile(profiles).license);
   const [notes, setNotes] = useState("");
   const [mine, setMine] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -114,8 +128,9 @@ export function SharePack({
   const [route, setRoute] = useState<Route>("github");
   /** What the sharing service says about this computer; asked for once the route is picked. */
   const [direct, setDirect] = useState<ShareStatus | null>(null);
-  /** The name packs will be credited to, typed before this computer is verified. */
-  const [handle, setHandle] = useState(loadHandle);
+  /** The name packs will be credited to, typed before this computer is verified: the one typed
+   *  last time, or else the name the default profile credits. */
+  const [handle, setHandle] = useState(() => loadHandle() || handleFrom(defaultProfile(profiles).author));
   const [source, setSource] = useState<PictureSource | "">("");
   /** Set while the check runs in the browser; the pack is sent once it's passed. */
   const [verifying, setVerifying] = useState(false);
@@ -208,6 +223,20 @@ export function SharePack({
     setFilter(tag);
     if (tag && !name.trim()) setName(tagLabel(tag));
   };
+
+  // A profile gives the pack its licence, and the name it credits becomes the name typed for a
+  // computer not yet verified. GitHub, and a verified computer, say who a pack is credited to.
+  const pickProfile = (id: string) => {
+    const p = profiles.list.find((x) => x.id === id);
+    if (!p) return;
+    setProfileId(p.id);
+    setLicense(p.license);
+    if (p.author) setHandle(handleFrom(p.author));
+  };
+  /** Who the pack goes out credited to, once that's settled: the GitHub account, or the name this
+   *  computer was verified under. */
+  const creditedTo = route === "github" ? account?.login : direct?.verified ? direct.handle : null;
+  const otherCredit = Boolean(profile.author && creditedTo && creditedTo.toLowerCase() !== profile.author.toLowerCase());
 
   // Crediting a different account means signing in as it, not signing out of this one: cancelling
   // half way leaves them where they were rather than logged out of a dialog they came here to use.
@@ -582,16 +611,25 @@ export function SharePack({
             <TagInput value={packTags} onChange={setPackTags} suggestions={tags.map((t) => t.tag)} max={MAX_PACK_TAGS} label="add a tag for the pack" />
             <span className="field-note">The first one names the pack in everyone's filters.</span>
           </div>
-          <label className="field">
+          <div className="field">
+            <span className="field-label">Profile</span>
+            <Select
+              label="profile"
+              className="is-field"
+              value={profile.id}
+              onChange={pickProfile}
+              options={profiles.list.map((p) => ({ value: p.id, label: profileLabel(p) }))}
+            />
+          </div>
+          <div className="field">
             <span className="field-label">Licence</span>
-            <select className="input" value={license} onChange={(e) => setLicense(e.target.value)}>
-              {LICENSES.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.label}: {l.note}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select label="licence" className="is-field" value={license} onChange={setLicense} options={LICENCE_OPTIONS} />
+            {license !== profile.license && (
+              <span className="field-note">
+                For this pack only: the {profile.name} profile stays {licenseLabel(profile.license)}.
+              </span>
+            )}
+          </div>
           <div className="field">
             <div className="share-author-head">
               <span className="field-label">Author</span>
@@ -688,6 +726,14 @@ export function SharePack({
                   )}
                 </span>
               </>
+            )}
+            {otherCredit && (
+              <span className="field-note">
+                The {profile.name} profile credits {profile.author}.{" "}
+                {route === "github"
+                  ? "Through GitHub, packs are credited to the account connected here."
+                  : "Packs sent from this computer are credited to the name it was verified under."}
+              </span>
             )}
             {keyNote && <span className={keyNote.error ? "field-note is-error" : "field-note"}>{keyNote.text}</span>}
           </div>

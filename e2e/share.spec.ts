@@ -114,3 +114,77 @@ test("the send button says what is still missing", async ({ page }) => {
   await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("abc");
   await expect(dialog.getByText("Agree to the terms")).toBeVisible();
 });
+
+test.describe("licence profiles", () => {
+  const PROFILES_KEY = "folderskin.sharing.profiles";
+  const profiles = {
+    list: [
+      { id: "a", name: "Personal", author: "", license: "CC0-1.0" },
+      { id: "b", name: "For work", author: "acme-studio", license: "CC-BY-4.0" },
+    ],
+    defaultId: "a",
+  };
+  const kept = (page: Page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), PROFILES_KEY);
+
+  /** Opens the share dialog with the two profiles above kept in Settings. */
+  async function openShare(page: Page, query = "") {
+    await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PROFILES_KEY, JSON.stringify(profiles)]);
+    await openApp(page, { query });
+    await openView(page, /community/i);
+    await page.getByRole("button", { name: "Share your skins" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share a pack" });
+    await expect(dialog).toBeVisible();
+    return dialog;
+  }
+
+  test("give the pack its credit and licence, and a licence changed here is for this pack only", async ({ page }) => {
+    const dialog = await openShare(page);
+    const profile = dialog.getByRole("button", { name: /^profile:/ });
+    const licence = dialog.getByRole("button", { name: /^licence:/ });
+    // The default first.
+    await expect(profile).toHaveAccessibleName("profile: Personal · CC0");
+    await expect(licence).toHaveAccessibleName(/^licence: CC0:/);
+
+    await profile.click();
+    const options = page.getByRole("listbox", { name: "profile" }).getByRole("option");
+    await expect(options).toHaveText(["Personal · CC0", "For work · credited to acme-studio · CC BY 4.0"]);
+    await options.filter({ hasText: "For work" }).click();
+    await expect(licence).toHaveAccessibleName(/^licence: CC BY 4.0:/);
+
+    await licence.click();
+    await page.getByRole("listbox", { name: "licence" }).getByRole("option", { name: /^MIT/ }).click();
+    await expect(dialog.getByText("For this pack only: the For work profile stays CC BY 4.0.")).toBeVisible();
+
+    // Without GitHub, the name it credits is the one typed for a computer not yet verified.
+    await dialog.getByRole("radio", { name: "Without GitHub" }).click();
+    await expect(dialog.getByRole("textbox", { name: "the name your packs show" })).toHaveValue("acme-studio");
+    expect(await kept(page)).toEqual(profiles);
+  });
+
+  test("say when the pack is credited to someone else, and publishing changes none of them", async ({ page }) => {
+    const dialog = await openShare(page, "shared");
+    await dialog.getByRole("button", { name: /^profile:/ }).click();
+    await page.getByRole("listbox", { name: "profile" }).getByRole("option", { name: /For work/ }).click();
+    await dialog.getByRole("button", { name: /^licence:/ }).click();
+    await page.getByRole("listbox", { name: "licence" }).getByRole("option", { name: /^MIT/ }).click();
+
+    // A verified computer sends under the name it was verified as.
+    await dialog.getByRole("radio", { name: "Without GitHub" }).click();
+    await expect(dialog.getByText("Verified on this computer")).toBeVisible();
+    await expect(dialog.getByText(/The For work profile credits acme-studio\. Packs sent from this computer are credited to the name it was verified under\./)).toBeVisible();
+
+    // Through GitHub, the pack is credited to the account connected.
+    await dialog.getByRole("radio", { name: "GitHub", exact: true }).click();
+    await dialog.getByRole("button", { name: "Connect to GitHub" }).click();
+    await expect(dialog.getByText(/The For work profile credits acme-studio\. Through GitHub, packs are credited to the account connected here\./)).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByText("octocat")).toBeVisible();
+    await dialog.getByPlaceholder("Neon nights").fill("Night prints");
+    await dialog.getByRole("button", { name: "+ photo" }).click();
+    await dialog.getByText("I've read the pack terms and this pack follows them.").click();
+    await dialog.getByRole("button", { name: "Publish" }).click();
+    await expect(page.getByRole("dialog", { name: "Your pack is on its way" })).toBeVisible({ timeout: 20_000 });
+
+    // The default profile, which credited no one, now credits that account; nothing else changed.
+    expect(await kept(page)).toEqual({ ...profiles, list: [{ ...profiles.list[0], author: "octocat" }, profiles.list[1]] });
+  });
+});
