@@ -13,7 +13,7 @@ import { throttle } from "./lib/throttle";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
-import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RIGHT, saveLayout, type Layout } from "./state/layout";
+import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RAIL, RIGHT, saveLayout, stepSidebar, type Layout } from "./state/layout";
 import { IslandResizer } from "./components/IslandResizer";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
@@ -124,17 +124,18 @@ function useLayout() {
     setFolding(true);
     setLayout((l) => ({ ...l, rail: !l.rail }));
   }, []);
-  // A drag that folds or opens the sidebar animates too, rather than jumping.
+  // A drag or an arrow key that folds or opens the sidebar animates too, rather than jumping.
   const latest = useRef(layout);
   latest.current = layout;
-  const resizeSidebar = useCallback((to: number) => {
-    const next = dragSidebar(latest.current, to);
+  const moveSidebar = useCallback((next: Layout) => {
     if (next === latest.current) return;
     if (next.rail !== latest.current.rail) setFolding(true);
     latest.current = next;
     setLayout(next);
   }, []);
-  return { layout, setLayout, width, folding, toggleRail, resizeSidebar };
+  const resizeSidebar = useCallback((to: number) => moveSidebar(dragSidebar(latest.current, to)), [moveSidebar]);
+  const stepSidebarEdge = useCallback((from: number, by: number) => moveSidebar(stepSidebar(latest.current, from, by)), [moveSidebar]);
+  return { layout, setLayout, width, folding, toggleRail, resizeSidebar, stepSidebarEdge };
 }
 
 /** Newest first. A pack keeps its own order: the app gives its first skin the newest time. */
@@ -185,7 +186,7 @@ export default function App() {
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null);
   const requestSeq = useRef(0);
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleThemePref } = useTheme();
-  const { layout, setLayout, width: windowWidth, folding, toggleRail, resizeSidebar } = useLayout();
+  const { layout, setLayout, width: windowWidth, folding, toggleRail, resizeSidebar, stepSidebarEdge } = useLayout();
 
   // ⌘\ (Ctrl+\ elsewhere) folds the sidebar and opens it again, as its button's tooltip says.
   useEffect(() => {
@@ -820,10 +821,11 @@ export default function App() {
         label="sidebar width"
         className="is-left"
         width={cols.left}
-        min={LEFT.min}
+        min={layout.rail ? RAIL : LEFT.min}
         max={LEFT.max}
         grows="right"
         onWidth={resizeSidebar}
+        onStep={(by) => stepSidebarEdge(cols.left, by)}
         onReset={() => setLayout((l) => ({ ...l, rail: false, left: DEFAULT_LAYOUT.left }))}
       />
       {rightShown && (

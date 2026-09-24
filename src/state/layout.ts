@@ -85,6 +85,17 @@ export function dragSidebar(layout: Layout, width: number): Layout {
   return { ...layout, left: clamp(Math.round(width), LEFT.min, LEFT.max) };
 }
 
+/**
+ * The sidebar's edge moved `by` with the arrow keys from `width`, the width it has now. A step
+ * narrower from its narrowest folds it and a step wider from the rail opens it again, at the
+ * width it had; a drag keeps its own thresholds, so a slight one from the rail doesn't open it.
+ */
+export function stepSidebar(layout: Layout, width: number, by: number): Layout {
+  if (layout.rail) return by > 0 ? { ...layout, rail: false } : layout;
+  if (by < 0 && width <= LEFT.min) return { ...layout, rail: true };
+  return dragSidebar(layout, width + by);
+}
+
 /** The right island dragged to `width`, within its limits and the room the window has. */
 export function dragRight(layout: Layout, width: number, windowWidth: number): Layout {
   const left = layout.rail ? RAIL : layout.left;

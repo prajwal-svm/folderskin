@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CENTRE_MIN, columns, DEFAULT_LAYOUT, defaultRight, dragRight, dragSidebar, FOLD_AT, GAP, LEFT, RAIL, readLayout, RIGHT } from "./layout";
+import { CENTRE_MIN, columns, DEFAULT_LAYOUT, defaultRight, dragRight, dragSidebar, FOLD_AT, GAP, LEFT, RAIL, readLayout, RIGHT, stepSidebar } from "./layout";
 
 describe("readLayout", () => {
   it("falls back to the defaults for nothing, junk or the wrong types", () => {
@@ -49,6 +49,25 @@ describe("dragging the sidebar", () => {
     const rail = { ...DEFAULT_LAYOUT, rail: true };
     expect(dragSidebar(rail, 100)).toBe(rail);
     expect(dragSidebar(rail, 240)).toEqual({ ...DEFAULT_LAYOUT, left: 240 });
+  });
+});
+
+describe("moving the sidebar's edge with the arrow keys", () => {
+  it("steps within its limits", () => {
+    expect(stepSidebar(DEFAULT_LAYOUT, LEFT.initial, 16)).toEqual({ ...DEFAULT_LAYOUT, left: LEFT.initial + 16 });
+    expect(stepSidebar({ ...DEFAULT_LAYOUT, left: 200 }, 200, -16)).toEqual({ ...DEFAULT_LAYOUT, left: LEFT.min });
+  });
+
+  it("folds with a step narrower from its narrowest", () => {
+    expect(stepSidebar({ ...DEFAULT_LAYOUT, left: LEFT.min }, LEFT.min, -16)).toEqual({ ...DEFAULT_LAYOUT, left: LEFT.min, rail: true });
+    // Squeezed to its narrowest by a small window, it folds from there too.
+    expect(stepSidebar({ ...DEFAULT_LAYOUT, left: 300 }, LEFT.min, -16)).toEqual({ ...DEFAULT_LAYOUT, left: 300, rail: true });
+  });
+
+  it("opens the rail with a step wider, at the width it had", () => {
+    const rail = { ...DEFAULT_LAYOUT, left: 250, rail: true };
+    expect(stepSidebar(rail, RAIL, 16)).toEqual({ ...DEFAULT_LAYOUT, left: 250 });
+    expect(stepSidebar(rail, RAIL, -16)).toBe(rail);
   });
 });
 

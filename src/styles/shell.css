@@ -102,8 +102,11 @@
   background: color-mix(in srgb, var(--ink) 36%, transparent);
 }
 
+/* Hidden while the sidebar folds or opens, but not taken out of reach: an edge folded with the
+   arrow keys keeps the focus, so the next key can open it again. */
 .app.is-folding .island-resizer {
-  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .is-resizing-islands,

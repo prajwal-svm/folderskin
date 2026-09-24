@@ -82,6 +82,31 @@ test.describe("the edges between islands", () => {
     await page.keyboard.press("ArrowRight");
     await expect(edge).toHaveAttribute("aria-valuenow", String(before + 16));
   });
+
+  test("fold the sidebar with a step narrower from its narrowest, and open it with a step wider", async ({ page }) => {
+    await openApp(page);
+    const edge = page.getByRole("separator", { name: "sidebar width" });
+    await edge.focus();
+    await expect(edge).toHaveAttribute("aria-valuenow", "228");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(edge).toHaveAttribute("aria-valuenow", "196");
+    await expect(sidebar(page)).not.toHaveClass(/is-rail/);
+    await page.keyboard.press("ArrowLeft");
+    await expect(sidebar(page)).toHaveClass(/is-rail/);
+    // The edge keeps the focus while the sidebar folds, so the next key still moves it.
+    await page.waitForTimeout(450);
+    await expect(edge).toBeFocused();
+    // Its value stays within the range it gives.
+    await expect(edge).toHaveAttribute("aria-valuenow", "64");
+    await expect(edge).toHaveAttribute("aria-valuemin", "64");
+    await page.keyboard.press("ArrowLeft");
+    await expect(sidebar(page)).toHaveClass(/is-rail/);
+    await page.keyboard.press("ArrowRight");
+    await expect(sidebar(page)).not.toHaveClass(/is-rail/);
+    await expect(edge).toHaveAttribute("aria-valuenow", "196");
+    await expect(edge).toBeFocused();
+  });
 });
 
 test.describe("tooltips", () => {
