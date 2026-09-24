@@ -678,11 +678,12 @@ mod tests {
                 .backend,
             Backend::Cuda
         );
-        // `auto` on the command line beats what ai config says, as any other flag does.
+        // `auto` on the command line beats what ai config says, as any other flag does: the
+        // config's vulkan and q8 give way to what this computer is given, cuda at 4-bit.
         let (s, b, t) = settings(&machine(), &auto, &config).unwrap();
         assert_eq!(
             (s.backend, s.tier, b, t),
-            (Backend::Cuda, Tier::Q8, Source::Detected, Source::Detected)
+            (Backend::Cuda, Tier::Q4, Source::Detected, Source::Detected)
         );
     }
 
