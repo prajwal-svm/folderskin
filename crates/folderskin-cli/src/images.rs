@@ -105,7 +105,7 @@ fn load_with_bytes(path: &Path) -> Result<(RgbaImage, Vec<u8>), CliError> {
             "No picture came in.",
             "Standard input was empty.",
         )
-        .fix("Pipe a picture in, e.g. folderskin image trim a.png --out - | folderskin image check -"));
+        .fix("Pipe a picture in, from another command's --out -, or give its path instead of -."));
     }
     let img = image::load_from_memory(&bytes)
         .map_err(|e| preview::unreadable(Path::new("standard input"), &e))?
@@ -706,9 +706,19 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
         None => "artwork: wrapped onto FolderSkin's folder".to_string(),
     };
     let n = (w as f64 * h as f64).max(1.0);
-    let mean: Vec<f64> = (0..3)
-        .map(|c| img.pixels().map(|p| p.0[c] as f64).sum::<f64>() / n)
-        .collect();
+    // The colour of what shows: see-through pixels count as much as they show, and a picture with
+    // nothing showing has none.
+    let shown: f64 = img.pixels().map(|p| f64::from(p.0[3])).sum();
+    let mean: Option<Vec<f64>> = (shown > 0.0).then(|| {
+        (0..3)
+            .map(|c| {
+                img.pixels()
+                    .map(|p| f64::from(p.0[c]) * f64::from(p.0[3]))
+                    .sum::<f64>()
+                    / shown
+            })
+            .collect()
+    });
     let mut lines = vec![
         format!(
             "size:        {w} × {h}{}, {}",
@@ -731,12 +741,15 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
             "see-through: {:.1}% of pixels",
             transparent as f64 / n * 100.0
         ),
-        format!(
-            "mean colour: #{:02X}{:02X}{:02X}",
-            mean[0].round() as u8,
-            mean[1].round() as u8,
-            mean[2].round() as u8
-        ),
+        match &mean {
+            Some(mean) => format!(
+                "mean colour: #{:02X}{:02X}{:02X}",
+                mean[0].round() as u8,
+                mean[1].round() as u8,
+                mean[2].round() as u8
+            ),
+            None => "mean colour: none, nothing shows".to_string(),
+        },
     ];
     if let Some(b) = border {
         lines.push(format!(
@@ -744,7 +757,9 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
             b.top, b.bottom, b.left, b.right
         ));
     }
-    if painted::is_blank(&img) {
+    // A picture with nothing in it says so above; it isn't a flat colour.
+    let blank = !empty && painted::is_blank(&img);
+    if blank {
         lines.push("note:        it is one flat colour".into());
     }
     let meta = json!({
@@ -752,9 +767,9 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
         "kind": if empty { "empty" } else if finished.is_some() { "folder" } else { "artwork" },
         "surround": format!("{surround:?}").to_lowercase(),
         "transparent_share": transparent as f64 / n,
-        "mean_rgb": mean.iter().map(|v| v.round() as u8).collect::<Vec<_>>(),
+        "mean_rgb": mean.map(|m| m.iter().map(|v| v.round() as u8).collect::<Vec<_>>()),
         "border": border.map(|b| [b.top, b.bottom, b.left, b.right]),
-        "blank": painted::is_blank(&img),
+        "blank": blank,
     });
     out.result(
         (!is_stdio(input)).then_some(input),

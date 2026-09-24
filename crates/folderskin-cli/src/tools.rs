@@ -222,6 +222,10 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                     "The index couldn't be written.",
                     sentence(&why),
                 )
+                .fix(format!(
+                    "Check that {} can be written to, then run it again.",
+                    dir.display()
+                ))
             })?;
             let unchanged = if changes.is_empty() {
                 ", nothing changed"
@@ -306,6 +310,10 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                     "The catalog couldn't be written.",
                     sentence(&why),
                 )
+                .fix(format!(
+                    "Check that {} can be written to, then run it again.",
+                    opts.out.display()
+                ))
             })?;
             let unchanged = if built.changes.is_empty() {
                 ", nothing changed"
@@ -389,12 +397,43 @@ pub(crate) fn sentence_about(text: &str, given: &[&Path]) -> String {
     }
 }
 
+/// Pictures in the folders given that a pack leaves out: a pack takes PNG, JPEG and WebP only.
+fn left_out(pictures: &[PathBuf]) -> Vec<String> {
+    const OTHER_PICTURES: [&str; 11] = [
+        "bmp", "gif", "tif", "tiff", "heic", "heif", "avif", "jxl", "ico", "svg", "psd",
+    ];
+    let mut names: Vec<String> = pictures
+        .iter()
+        .filter(|p| p.is_dir())
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flat_map(|entries| entries.flatten().map(|e| e.path()))
+        .filter(|p| {
+            let ext = p
+                .extension()
+                .map(|e| e.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            p.is_file() && OTHER_PICTURES.contains(&ext.as_str())
+        })
+        .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .filter(|n| !n.starts_with('.'))
+        .collect();
+    names.sort();
+    names
+}
+
 fn make_pack(
     pictures: &[PathBuf],
     opts: &make::MakeOptions,
     preview: Option<&Path>,
     out: &Arc<Out>,
 ) -> Result<(), CliError> {
+    let skipped = left_out(pictures);
+    if !skipped.is_empty() {
+        out.warn(&format!(
+            "left out {}: a pack takes PNG, JPEG and WebP pictures",
+            skipped.join(", ")
+        ));
+    }
     let (folder, made) = make::make(pictures, opts).map_err(|why| {
         let given: Vec<&Path> = pictures
             .iter()
@@ -467,6 +506,27 @@ fn make_pack(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pack_says_which_pictures_it_leaves_out() {
+        let dir = std::env::temp_dir().join(format!("fs-left-out-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in [
+            "a.png",
+            "b.jpg",
+            "app.bmp",
+            "c.GIF",
+            ".hidden.bmp",
+            "notes.txt",
+        ] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        assert_eq!(left_out(std::slice::from_ref(&dir)), ["app.bmp", "c.GIF"]);
+        // A picture named on its own is the pack maker's to take or refuse.
+        assert!(left_out(&[dir.join("app.bmp")]).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn colours_are_six_hex_digits() {

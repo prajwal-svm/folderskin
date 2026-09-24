@@ -79,7 +79,7 @@ impl CliError {
         )
         .fix(format!(
             "Give a file's path instead, such as {}",
-            path.join("picture.png").display()
+            inside(path, "picture.png")
         ))
     }
 
@@ -148,6 +148,18 @@ impl CliError {
             },
         }
     }
+}
+
+/// `name` inside the folder `path`, with the separator `path` was written with, so an example
+/// reads `pics/afolder.png/picture.png` rather than mixing the two.
+fn inside(path: &std::path::Path, name: &str) -> String {
+    let written = path.display().to_string();
+    let separator = if written.contains('/') {
+        '/'
+    } else {
+        std::path::MAIN_SEPARATOR
+    };
+    format!("{}{separator}{name}", written.trim_end_matches(['/', '\\']))
 }
 
 impl From<folderskin_local::Error> for CliError {
@@ -251,6 +263,18 @@ pub fn command_line(args: &[std::ffi::OsString]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_example_path_keeps_the_separator_it_was_given_with() {
+        let e =
+            CliError::folder_not_file("read the picture", std::path::Path::new("pics/afolder.png"));
+        assert_eq!(
+            e.fix,
+            ["Give a file's path instead, such as pics/afolder.png/picture.png"]
+        );
+        let e = CliError::folder_not_file("read the picture", std::path::Path::new(r"D:\pics\"));
+        assert!(e.fix[0].ends_with(&format!("pics{}picture.png", std::path::MAIN_SEPARATOR)));
+    }
 
     fn models_missing() -> CliError {
         CliError::environment(

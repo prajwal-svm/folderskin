@@ -232,8 +232,7 @@ pub struct ThemeArgs {
     pub style: String,
     #[arg(long, value_enum, default_value_t = ShapeArg::Artwork)]
     pub shape: ShapeArg,
-    /// Local: klein unless told (twice as fast, and a drive has many folders). With --provider:
-    /// its model id
+    /// Local: auto or klein, the one local model. With --provider: its model id
     #[arg(long)]
     pub model: Option<String>,
     /// local (the default), or a provider for your own key
