@@ -7,6 +7,7 @@ describe("appearance preferences", () => {
     expect(readPrefs({ accent: "chartreuse", motion: "wild" })).toEqual({ accent: "blue", motion: "system" });
     expect(readPrefs(null)).toEqual({ accent: "blue", motion: "system" });
     expect(readPrefs("blue")).toEqual({ accent: "blue", motion: "system" });
+    expect(readPrefs({ accent: "graphite" }).accent).toBe("mono");
   });
 
   it("set the attributes the stylesheets read, and none for the defaults", () => {

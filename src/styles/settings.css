@@ -350,6 +350,19 @@
   transform: scale(1.1);
 }
 
+/* Black and white: half of each, since it's black on a light window and white on a dark one. */
+.set-swatch.is-mono {
+  background: linear-gradient(135deg, #1d1d1f 0 50%, #ffffff 50% 100%);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.set-swatch.is-mono.is-on {
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 0 0 2px var(--island),
+    0 0 0 4px var(--ink);
+}
+
 .set-swatch.is-on {
   box-shadow:
     0 0 0 2px var(--island),

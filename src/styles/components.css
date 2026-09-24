@@ -616,6 +616,11 @@ select.input {
   background: var(--accent);
 }
 
+/* White on the accent, or dark when the accent is white itself. */
+.switch.is-on .knob {
+  background: var(--on-accent);
+}
+
 .switch.is-on .knob {
   transform: translateX(14px);
 }
@@ -1035,7 +1040,7 @@ select.input {
   height: 16px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* Connecting from the author row, when they have not already. It stands where the account row

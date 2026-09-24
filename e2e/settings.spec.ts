@@ -48,6 +48,17 @@ test.describe("settings", () => {
     expect(await html(page, "data-accent")).toBe("purple");
     expect(await html(page, "data-motion")).toBe("reduced");
 
+    // Black and white is black on the light window and white on the dark one, with dark words on it.
+    await dialog(page).getByRole("radio", { name: "Black and white" }).click();
+    const mono = () =>
+      page.evaluate(() => {
+        const css = getComputedStyle(document.documentElement);
+        return [css.getPropertyValue("--accent").trim(), css.getPropertyValue("--on-accent").trim()];
+      });
+    expect(await mono()).toEqual(["#f2eeed", "#1f1c1c"]);
+    await dialog(page).getByRole("radiogroup", { name: "theme" }).getByRole("radio", { name: "Light" }).click();
+    await expect.poll(mono).toEqual(["#1d1d1f", "#ffffff"]);
+
     // Back to the defaults: no attributes left behind.
     await openSettings(page);
     await dialog(page).getByRole("radio", { name: "Blue" }).click();
@@ -65,7 +76,7 @@ test.describe("settings", () => {
     await expect(dialog(page).getByRole("radio", { name: "Purple" })).toBeFocused();
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");
-    await expect(dialog(page).getByRole("radio", { name: "Graphite" })).toHaveAttribute("aria-checked", "true");
+    await expect(dialog(page).getByRole("radio", { name: "Black and white" })).toHaveAttribute("aria-checked", "true");
   });
 
   test("folds the sidebar to its icons and back", async ({ page }) => {

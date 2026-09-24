@@ -11,7 +11,8 @@ export const ACCENTS = [
   { id: "pink", label: "Pink", swatch: "#ec4899" },
   { id: "orange", label: "Orange", swatch: "#f97316" },
   { id: "green", label: "Green", swatch: "#16a34a" },
-  { id: "graphite", label: "Graphite", swatch: "#6b7280" },
+  /** Black on a light window, white on a dark one. */
+  { id: "mono", label: "Black and white", swatch: "mono" },
 ] as const;
 
 export type Accent = (typeof ACCENTS)[number]["id"];
@@ -28,7 +29,9 @@ const DEFAULTS: Prefs = { accent: "blue", motion: "system" };
 export function readPrefs(raw: unknown): Prefs {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULTS };
   const v = raw as Record<string, unknown>;
-  const accent = ACCENTS.some((a) => a.id === v.accent) ? (v.accent as Accent) : DEFAULTS.accent;
+  // Graphite became black and white.
+  const saved = v.accent === "graphite" ? "mono" : v.accent;
+  const accent = ACCENTS.some((a) => a.id === saved) ? (saved as Accent) : DEFAULTS.accent;
   const motion = v.motion === "reduced" ? "reduced" : "system";
   return { accent, motion };
 }

@@ -196,21 +196,26 @@
   --accent-glow: rgba(22, 163, 74, 0.55);
 }
 
-:root[data-accent="graphite"] {
-  --accent: #6b7280;
-  --accent-hover: #4b5563;
-  --accent-ink: #4b5563;
-  --accent-soft: #eceef1;
-  --accent-wash: rgba(107, 114, 128, 0.1);
-  --accent-glow: rgba(107, 114, 128, 0.5);
+:root[data-accent="mono"] {
+  --accent: #1d1d1f;
+  --accent-hover: #000000;
+  --accent-ink: #1d1d1f;
+  --accent-soft: #e9e9ec;
+  --accent-wash: rgba(29, 29, 31, 0.08);
+  --accent-glow: rgba(29, 29, 31, 0.4);
+  --stage-colour: #2b2b2f;
 }
 
-:root[data-theme="dark"][data-accent="graphite"] {
-  --accent-hover: #7b818c;
-  --accent-ink: #c2c6cc;
-  --accent-soft: #403c3c;
-  --accent-wash: rgba(107, 114, 128, 0.14);
-  --accent-glow: rgba(107, 114, 128, 0.55);
+/* In the dark it turns white, with dark words and ticks on it. */
+:root[data-theme="dark"][data-accent="mono"] {
+  --accent: #f2eeed;
+  --accent-hover: #ffffff;
+  --accent-ink: #f2eeed;
+  --accent-soft: #4a4545;
+  --accent-wash: rgba(255, 255, 255, 0.1);
+  --accent-glow: rgba(255, 255, 255, 0.45);
+  --stage-colour: #3a3636;
+  --on-accent: #1f1c1c;
 }
 
 @font-face {

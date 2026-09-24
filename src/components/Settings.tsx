@@ -349,8 +349,8 @@ function General({
                 aria-label={a.label}
                 tabIndex={prefs.accent === a.id ? 0 : -1}
                 data-tip={a.label}
-                className={prefs.accent === a.id ? "set-swatch is-on" : "set-swatch"}
-                style={{ "--swatch": a.swatch } as CSSProperties}
+                className={["set-swatch", a.id === "mono" && "is-mono", prefs.accent === a.id && "is-on"].filter(Boolean).join(" ")}
+                style={a.id === "mono" ? undefined : ({ "--swatch": a.swatch } as CSSProperties)}
                 onClick={() => setPrefs({ accent: a.id })}
                 onKeyDown={(e) => onSwatchKey(e, i)}
               />
