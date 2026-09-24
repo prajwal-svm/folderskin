@@ -111,6 +111,24 @@ fn lock(home: &Path) -> Result<std::fs::File, Error> {
     }
 }
 
+/// Whether a setup holds `setup.lock` in `home` right now: the app's, or `folderskin ai setup`
+/// in another terminal. It asks by trying the lock, and lets go of it at once if it gets it.
+pub fn setting_up_in(home: &Path) -> bool {
+    let Ok(file) = std::fs::OpenOptions::new()
+        .write(true)
+        .open(home.join("setup.lock"))
+    else {
+        // No lock file: nothing has ever set this computer up, let alone now.
+        return false;
+    };
+    matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock))
+}
+
+/// [`setting_up_in`] the models' folder.
+pub fn setting_up() -> bool {
+    setting_up_in(&paths::home())
+}
+
 /// One release asset to install.
 struct Download {
     name: String,
@@ -713,13 +731,16 @@ mod tests {
     fn a_second_setup_is_turned_away_while_the_first_holds_the_lock() {
         let home = std::env::temp_dir().join(format!("fs-setup-lock-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
+        assert!(!setting_up_in(&home), "never set up");
         let first = lock(&home).expect("nothing else is setting up");
+        assert!(setting_up_in(&home), "doctor can tell");
         // A second open of the file, as another process's would be.
         let err = lock(&home).unwrap_err();
         assert_eq!(err.code, "busy", "{err:?}");
         assert!(err.fix[0].contains("run the command again"), "{err:?}");
         drop(first);
-        let again = lock(&home).expect("the first let go");
+        assert!(!setting_up_in(&home), "finished");
+        let again = lock(&home).expect("the first let go, and so did the question");
         drop(again);
         std::fs::remove_dir_all(&home).unwrap();
     }

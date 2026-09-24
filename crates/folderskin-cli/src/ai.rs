@@ -51,14 +51,24 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
     ];
     let runtime = &status.runtime;
     let mut next = Vec::new();
+    // Files half-written by a setup under way aren't missing: that setup is bringing them, and
+    // a second would be turned away with "busy".
+    let setting_up = folderskin_local::setup::setting_up();
+    if setting_up {
+        lines.push(
+            "setup:    under way, in FolderSkin or another terminal; what follows may still change"
+                .into(),
+        );
+        next.push("wait for that setup to finish, then run folderskin ai doctor again".into());
+    }
     match (&runtime.path, runtime.installed) {
         (Some(path), true) => lines.push(format!(
-            "runtime:  {} {}",
+            "runtime:  {}{}",
             path.display(),
             runtime
                 .release
                 .as_deref()
-                .map(|r| format!("({r})"))
+                .map(|r| format!(" ({r})"))
                 .unwrap_or_default()
         )),
         (None, true) => lines.push(format!("runtime:  {} is installed", runtime.name)),
@@ -71,10 +81,12 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
         }
         _ => {
             lines.push(format!("runtime:  {} is not installed", runtime.name));
-            next.push(format!(
-                "folderskin ai setup --backend {} --tier {}",
-                settings.backend, settings.tier
-            ));
+            if next.is_empty() {
+                next.push(format!(
+                    "folderskin ai setup --backend {} --tier {}",
+                    settings.backend, settings.tier
+                ));
+            }
         }
     }
     if let Some(problem) = &runtime.problem {
