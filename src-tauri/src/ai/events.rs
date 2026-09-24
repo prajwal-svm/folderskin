@@ -3,6 +3,7 @@
 
 use folderskin_local::{Event, Level, Stage};
 use serde::Serialize;
+use std::path::Path;
 
 /// One report, tagged the way the chat reads it: `{"type":"progress","step":3,"steps":8}`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -68,7 +69,7 @@ pub fn from_engine(event: Event) -> Vec<AiEvent> {
             if message == plain {
                 vec![AiEvent::stage(id, plain)]
             } else {
-                vec![AiEvent::stage(id, plain), AiEvent::info(message)]
+                vec![AiEvent::stage(id, plain), AiEvent::info(veiled(message))]
             }
         }
         Event::Progress { step, steps } => vec![AiEvent::Progress { step, steps }],
@@ -80,10 +81,39 @@ pub fn from_engine(event: Event) -> Vec<AiEvent> {
                 Level::Warn => "warn",
                 Level::Error => "error",
             },
-            message,
+            message: veiled(message),
         }],
         Event::Result { .. } | Event::Error { .. } => Vec::new(),
     }
+}
+
+/// `message` with the user's home folder written as `~`. The details are shown in the chat, kept
+/// with it and can be copied, and a path in them names the user, as the Local Model's panel,
+/// which veils the same folder, knows.
+fn veiled(message: String) -> String {
+    veil_home(message, std::env::home_dir().as_deref())
+}
+
+/// `message` with `home` written as `~`, however a runtime wrote the path: as it is
+/// (`C:\Users\ana\…`), with its backslashes doubled as sd-cli quotes it, or with forward slashes.
+pub fn veil_home(message: String, home: Option<&Path>) -> String {
+    let Some(home) = home
+        .and_then(Path::to_str)
+        .map(|h| h.trim_end_matches(['\\', '/']))
+    else {
+        return message;
+    };
+    // A home at the root of a drive, or none, would veil every path: leave those as they are.
+    if home.len() < 4 {
+        return message;
+    }
+    [
+        home.replace('\\', r"\\"),
+        home.to_string(),
+        home.replace('\\', "/"),
+    ]
+    .iter()
+    .fold(message, |text, form| text.replace(form.as_str(), "~"))
 }
 
 /// The engine's name for a stage, as the chat's `stage` field carries it.
@@ -194,6 +224,34 @@ mod tests {
         assert_eq!(log(Level::Debug), vec![AiEvent::info("x")]);
         assert_eq!(log(Level::Warn), vec![AiEvent::warn("x")]);
         assert!(json(&log(Level::Error)[0]).contains(r#""level":"error""#));
+    }
+
+    #[test]
+    fn the_home_folder_in_the_details_is_written_as_a_tilde() {
+        let home = Path::new(r"C:\Users\ana");
+        let veil = |s: &str| veil_home(s.to_string(), Some(home));
+        assert_eq!(
+            veil(r"save result image 0 to 'C:\\Users\\ana\\AppData\\Local\\app\\p.png'"),
+            r"save result image 0 to '~\\AppData\\Local\\app\\p.png'"
+        );
+        assert_eq!(
+            veil(r"loading C:\Users\ana\AppData\m.gguf and C:/Users/ana/x"),
+            r"loading ~\AppData\m.gguf and ~/x"
+        );
+        assert_eq!(veil("nothing of theirs"), "nothing of theirs");
+        // A home that is a drive's root would veil every path on it.
+        assert_eq!(veil_home(r"C:\x".into(), Some(Path::new(r"C:\"))), r"C:\x");
+        assert_eq!(veil_home("x".into(), None), "x");
+        // And the runtime's own lines reach the chat veiled.
+        let home = std::env::home_dir().unwrap();
+        let line = format!("wrote {}", home.join("p.png").display());
+        let AiEvent::Log { message, .. } = &from_engine(Event::Log {
+            level: Level::Info,
+            message: line,
+        })[0] else {
+            panic!("a log line");
+        };
+        assert!(message.starts_with("wrote ~"), "{message}");
     }
 
     #[test]
