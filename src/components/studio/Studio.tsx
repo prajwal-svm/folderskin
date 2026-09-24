@@ -327,6 +327,9 @@ export const Studio = forwardRef<
       : provider.has_key
         ? `${model?.price_hint ?? "Priced by the picture"}, billed to your ${provider.label} account.`
         : `Add your ${provider.label} key to start. It stays on this computer.`;
+  // Once a chat has started the box sits at the bottom with nothing under it, unless the
+  // provider can't paint yet: then the line says why, and offers the way without a key.
+  const showFoot = !hasThread || !provider?.has_key;
 
   return (
     <section className={hasThread ? "studio has-thread" : "studio"} hidden={!active} aria-label="generate with AI">
@@ -440,14 +443,16 @@ export const Studio = forwardRef<
             </button>
           </div>
         )}
-        <p className="studio-foot">
-          {foot && <span>{foot}</span>}
-          {!local && (
-            <button type="button" className="link-btn" onClick={() => setHelperOpen(true)}>
-              No API key? Use Grok or ChatGPT's chat
-            </button>
-          )}
-        </p>
+        {showFoot && (
+          <p className="studio-foot">
+            {foot && <span>{foot}</span>}
+            {!local && (
+              <button type="button" className="link-btn" onClick={() => setHelperOpen(true)}>
+                No API key? Use Grok or ChatGPT's chat
+              </button>
+            )}
+          </p>
+        )}
       </div>
 
       <ChatDrawer

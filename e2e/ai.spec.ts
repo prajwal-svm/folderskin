@@ -265,12 +265,15 @@ test.describe("the AI chat", () => {
 
   test("a new chat starts without the last one's reference pictures", async ({ page }) => {
     await withKey(page);
+    await expect(chat(page).locator(".studio-foot")).toContainText("billed to your");
     await sendIdea(page, "a paper boat");
+    await expect(chat(page).locator(".studio-foot")).toHaveCount(0);
     await chat(page).getByRole("button", { name: "add a reference picture" }).click();
     await expect(chat(page).getByRole("button", { name: "remove Reference.jpg" })).toBeVisible();
     await chat(page).getByRole("button", { name: "new chat" }).click();
     await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
     await expect(chat(page).getByRole("button", { name: "remove Reference.jpg" })).toHaveCount(0);
+    await expect(chat(page).locator(".studio-foot")).toContainText("billed to your");
   });
 
   test("the local model paints one picture at a time, whichever chat asks", async ({ page }) => {
@@ -278,6 +281,8 @@ test.describe("the AI chat", () => {
     await openView(page, /generate with ai/i);
     await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
     await sendIdea(page, "a paper boat");
+    // In a chat the box sits at the bottom with nothing under it.
+    await expect(chat(page).locator(".studio-foot")).toHaveCount(0);
     await expect(chat(page).locator("article.turn").last().getByRole("button", { name: "Stop" })).toBeVisible();
     await chat(page).getByRole("button", { name: "new chat" }).click();
     await box(page).fill("a lighthouse at dusk");
