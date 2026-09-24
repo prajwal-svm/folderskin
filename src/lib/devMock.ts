@@ -547,15 +547,26 @@ function mockShareStatus(): ShareStatus {
   return { available: true, reason: null, verified: mockShare.handle !== null, handle: mockShare.handle, has_key: mockShare.key };
 }
 
+/** Set when the folder look changes, so the next list of skins takes as long as a redraw would. */
+let mockRedraw = false;
+
 export const mockApi = {
   folderLook: async (): Promise<FolderStyle> => (localStorage.getItem(MOCK_LOOK_KEY) === "windows" ? "windows" : "mac"),
   setFolderLook: async (look: FolderStyle): Promise<void> => {
     localStorage.setItem(MOCK_LOOK_KEY, look);
+    mockRedraw = true;
   },
-  listSkins: async (): Promise<SkinList> => ({
-    skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
-    default_thumbnail: COLOUR_FOLDERS[0],
-  }),
+  listSkins: async (): Promise<SkinList> => {
+    // The app draws every thumbnail again on the other folder, which takes a moment.
+    if (mockRedraw) {
+      mockRedraw = false;
+      await sleep(700);
+    }
+    return {
+      skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
+      default_thumbnail: COLOUR_FOLDERS[0],
+    };
+  },
   githubAccount: async () => mockGithub.account,
   githubConnect: async () => {
     mockGithub.account = null;

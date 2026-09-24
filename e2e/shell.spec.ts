@@ -181,3 +181,21 @@ test.describe("tooltips", () => {
     await expect(page.getByRole("tooltip")).toHaveCount(0);
   });
 });
+
+test.describe("the folder skins go on", () => {
+  test("switching it says the library is being drawn again, and dims the old thumbnails until then", async ({ page }) => {
+    await openApp(page);
+    const look = page.getByRole("radiogroup", { name: "which folder skins go on" });
+    const note = page.getByRole("status").filter({ hasText: "Drawing your skins on Windows' folder" });
+    const gallery = page.locator(".gallery-scroll");
+    await look.getByRole("radio", { name: "Windows" }).click();
+    await expect(note).toBeVisible();
+    await expect(gallery).toHaveAttribute("aria-busy", "true");
+    await expect(note).toBeHidden();
+    await expect(gallery).not.toHaveAttribute("aria-busy", "true");
+    // And back, which says so too.
+    await look.getByRole("radio", { name: "Mac" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Drawing your skins on the Mac's folder" })).toBeVisible();
+    await expect(gallery).not.toHaveAttribute("aria-busy", "true");
+  });
+});

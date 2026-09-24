@@ -76,6 +76,32 @@
   /* content slides under the toolbar instead of being cut off by it */
   mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  transition: opacity var(--t-base) ease;
+}
+
+/* The thumbnails being drawn on the other folder: the old ones dimmed until the new ones come. */
+.gallery-scroll[aria-busy="true"] {
+  opacity: 0.45;
+}
+
+.gallery-redraw {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: fade-up var(--t-base) var(--ease-out) both;
 }
 
 .gallery {

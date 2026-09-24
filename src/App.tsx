@@ -18,6 +18,7 @@ import { chooseLook } from "./state/look";
 import type { FolderStyle } from "./composer/parts";
 import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RAIL, RIGHT, saveLayout, stepSidebar, type Layout } from "./state/layout";
 import { IslandResizer } from "./components/IslandResizer";
+import { LoaderIcon } from "./components/icons/loader";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
 import { useUpdates } from "./hooks/useUpdates";
@@ -217,15 +218,26 @@ export default function App() {
 
   // Skins go on the Mac's folder or Windows' (state/look.ts). After a switch the library's
   // thumbnails and the plain folder are drawn again on the new one.
+  /** The folder the library's thumbnails are being drawn on again, until they arrive. */
+  const [redrawing, setRedrawing] = useState<FolderStyle | null>(null);
+  const lookRun = useRef(0);
   const chooseFolderLook = useCallback(
     (look: FolderStyle) => {
+      // Every thumbnail is drawn again, which takes a moment; until then the old ones are dimmed
+      // and a note says so. Only the last switch's thumbnails are kept, if two cross.
+      const run = ++lookRun.current;
+      setRedrawing(look);
       chooseLook(look)
         .then(() => api.listSkins())
         .then((list) => {
+          if (run !== lookRun.current) return;
           setSkins(newestFirst(list.skins));
           setDefaultThumb(list.default_thumbnail);
         })
-        .catch((e) => toast(`Couldn't switch the folder: ${errorMessage(e)}`, { tone: "danger" }));
+        .catch((e) => toast(`Couldn't switch the folder: ${errorMessage(e)}`, { tone: "danger" }))
+        .finally(() => {
+          if (run === lookRun.current) setRedrawing(null);
+        });
     },
     [toast],
   );
@@ -938,7 +950,7 @@ export default function App() {
                 />
               }
             />
-            <div className="gallery-scroll">
+            <div className="gallery-scroll" aria-busy={redrawing ? true : undefined}>
               <Gallery
                 skins={visible}
                 selectedId={state.skinId}
@@ -953,6 +965,12 @@ export default function App() {
                 menuFor={menu?.skin.id ?? null}
               />
             </div>
+            {redrawing && (
+              <div className="gallery-redraw" role="status">
+                <LoaderIcon size={15} />
+                <span>Drawing your skins on {redrawing === "windows" ? "Windows'" : "the Mac's"} folder</span>
+              </div>
+            )}
           </>
         )}
         {view === "community" && (
