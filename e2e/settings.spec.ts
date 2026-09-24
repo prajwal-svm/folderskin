@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp } from "./app";
+import { letGo, openApp } from "./app";
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Settings" });
 
@@ -88,18 +88,36 @@ test.describe("settings", () => {
     await openSettings(page);
     // The globe on the Sharing tab draws itself again when pointed at, unless motion is reduced.
     const globe = dialog(page).getByRole("tab", { name: "Sharing" }).locator("svg");
-    const drawn = async () => {
-      // Its way back from being drawn takes a little over a second.
-      await page.mouse.move(0, 0);
-      await page.waitForTimeout(1500);
-      const before = await globe.evaluate((s) => s.outerHTML);
-      await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
-      await page.waitForTimeout(250);
-      return before !== (await globe.evaluate((s) => s.outerHTML));
-    };
-    expect(await drawn()).toBe(true);
+    // At rest it's drawn in full: as it first is, or with all of each stroke there once it has
+    // drawn itself. (Its way there waits half a second before it starts, so it can't be told by
+    // its look holding still for a moment.)
+    const atRest = () =>
+      globe.evaluate((svg) => [...svg.children].every((part) => ["1 1", null].includes(part.getAttribute("stroke-dasharray")) && ["0", null].includes(part.getAttribute("stroke-dashoffset"))));
+    // Whether it draws itself from now on: any moment a stroke isn't all there is seen.
+    const watch = () =>
+      globe.evaluate((svg) => {
+        const w = window as unknown as { globeDrew?: boolean; globeWatch?: MutationObserver };
+        w.globeWatch?.disconnect();
+        w.globeDrew = false;
+        w.globeWatch = new MutationObserver(() => {
+          if (![...svg.children].every((part) => ["1 1", null].includes(part.getAttribute("stroke-dasharray")))) w.globeDrew = true;
+        });
+        w.globeWatch.observe(svg, { attributes: true, subtree: true });
+      });
+    const drew = () => page.evaluate(() => (window as unknown as { globeDrew?: boolean }).globeDrew);
+    await page.mouse.move(0, 0);
+    await expect.poll(atRest).toBe(true);
+    await watch();
+    await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
+    await expect.poll(drew).toBe(true);
     await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "Reduced" }).click();
-    expect(await drawn()).toBe(false);
+    await page.mouse.move(0, 0);
+    await expect.poll(atRest).toBe(true);
+    await watch();
+    await dialog(page).getByRole("tab", { name: "Sharing" }).hover();
+    // A moment later it hasn't moved.
+    await page.waitForTimeout(250);
+    expect(await drew()).toBe(false);
 
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
@@ -357,6 +375,34 @@ test.describe("settings", () => {
     await expect(change).toBeFocused();
   });
 
+  test("a profile deleted just as the last one's Undo goes gives the focus to its own Undo", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    for (const name of ["Work", "Home"]) {
+      await dialog(page).getByRole("button", { name: "Add a profile" }).click();
+      await dialog(page).getByRole("form").getByLabel("Name").fill(name);
+      await page.keyboard.press("Enter");
+      await expect(dialog(page).getByRole("button", { name: `change ${name}` })).toBeVisible();
+    }
+    await dialog(page).getByRole("button", { name: "delete Work" }).click();
+    const undo = dialog(page).getByRole("button", { name: "Undo" });
+    await expect(undo).toBeVisible();
+    // The moment Work's Undo goes, Home is deleted, before what that change set off has run: as
+    // a busy machine can have it, a press arriving between a render and its effects.
+    await page.evaluate(() => {
+      const status = document.querySelector('.modal [role="status"]')!;
+      const seen = new MutationObserver(() => {
+        if (status.querySelector("button")) return;
+        seen.disconnect();
+        document.querySelector<HTMLButtonElement>('[aria-label="delete Home"]')!.click();
+      });
+      seen.observe(status, { childList: true, subtree: true });
+    });
+    await expect(dialog(page).getByRole("status")).toHaveText(/Deleted Home\./, { timeout: 15_000 });
+    await expect(undo).toBeFocused();
+  });
+
   test("a new profile isn't lost to a list that filled up while it was being written", async ({ page }) => {
     await page.addInitScript(() => {
       const list = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, author: "", license: "CC0-1.0" }));
@@ -407,7 +453,8 @@ test.describe("settings", () => {
   });
 
   test("GitHub connects in its own section, keeps the focus, and credits the default profile", async ({ page }) => {
-    await openApp(page);
+    // The code is approved once the test has looked at it waiting.
+    await openApp(page, { query: "holdgithub" });
     await openSettings(page);
     await dialog(page).getByRole("tab", { name: "Sharing" }).click();
     await dialog(page).getByRole("button", { name: "Connect", exact: true }).focus();
@@ -415,8 +462,9 @@ test.describe("settings", () => {
     await expect(dialog(page).getByRole("button", { name: "Open GitHub" })).toBeFocused();
     // The profiles stay below while it waits.
     await expect(dialog(page).getByRole("heading", { name: "Licence profiles" })).toBeVisible();
+    await letGo(page, "mockApprove");
     const disconnect = dialog(page).getByRole("button", { name: "Disconnect" });
-    await expect(disconnect).toBeFocused({ timeout: 10_000 });
+    await expect(disconnect).toBeFocused();
     const rows = dialog(page).locator(".set-profile");
     await expect(rows.first()).toContainText("Credited to octocat");
 

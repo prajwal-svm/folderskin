@@ -143,6 +143,10 @@ pub struct PartsDto {
     /// The front panel, a rectangle with corners of `front_radius`.
     pub front: [f32; 4],
     pub front_radius: f32,
+    /// The corner of `front` that isn't front: on Windows' folder the front's top edge steps down
+    /// under the tab, so left of where it steps up the front starts lower. `None` on FolderSkin's
+    /// own, whose top runs straight across.
+    pub front_step: Option<[f32; 4]>,
     /// The back panel, tab included.
     pub back: [f32; 4],
     /// The paper sheet between the panels. Windows' folder has none: there it's where the back
@@ -162,6 +166,12 @@ impl PartsDto {
                 folder: corners(gw::BACK_BBOX),
                 front: corners(gw::FRONT),
                 front_radius: gw::CORNER,
+                front_step: Some([
+                    gw::LEFT,
+                    gw::FRONT_TOP,
+                    gw::FRONT_STEP_X1,
+                    gw::FRONT_TOP_LEFT,
+                ]),
                 back: corners(gw::BACK_BBOX),
                 paper: [gw::LEFT, gw::BODY_TOP, gw::RIGHT, gw::BOTTOM],
                 tab: [gw::LEFT, gw::TAB_TOP, gw::BODY_STEP_X, gw::BODY_TOP],
@@ -172,6 +182,7 @@ impl PartsDto {
             folder: [g::FRONT.x0, g::TAB_TOP, g::FRONT.x1, g::FRONT.y1],
             front: corners(g::FRONT),
             front_radius: g::FRONT_RADIUS,
+            front_step: None,
             back: corners(g::BACK_BBOX),
             paper: corners(g::PAPER),
             tab: [
@@ -827,6 +838,7 @@ mod tests {
         assert_eq!(parts["folder"], json!([15.0, 36.5, 1009.0, 973.5]));
         assert_eq!(parts["front"], json!([15.0, 160.5, 1009.0, 973.5]));
         assert_eq!(parts["front_radius"], 55.0);
+        assert_eq!(parts["front_step"], json!(null));
         assert_eq!(parts["back"], json!([29.0, 36.5, 995.0, 973.5]));
         assert_eq!(parts["paper"].as_array().unwrap().len(), 4);
         let tab: Vec<f64> = serde_json::from_value(parts["tab"].clone()).unwrap();
@@ -848,6 +860,7 @@ mod tests {
         assert_eq!(parts["folder"], json!([64.0, 136.0, 960.0, 840.0]));
         assert_eq!(parts["front"], json!([64.0, 248.0, 960.0, 840.0]));
         assert_eq!(parts["front_radius"], 36.0);
+        assert_eq!(parts["front_step"], json!([64.0, 248.0, 464.0, 296.0]));
         assert_eq!(parts["tab"], json!([64.0, 136.0, 464.0, 232.0]));
     }
 

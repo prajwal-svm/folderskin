@@ -33,6 +33,8 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
   const [removal, setRemoval] = useState<"ask" | "removing" | null>(null);
   /** Likewise for the model files an earlier setup left that the model doesn't use now. */
   const [leftovers, setLeftovers] = useState<"ask" | "removing" | null>(null);
+  /** A setup that ended short is being asked what's left of the download, which the next one counts. */
+  const [recounting, setRecounting] = useState(false);
   const looked = useRef<(status: LocalStatus) => void>(() => {});
   const factsId = useId();
 
@@ -62,11 +64,14 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
     } catch (e) {
       setProblem(aiFailure(e));
       // What a stopped or failed setup downloaded is kept: the line beside the button should say
-      // what is left, not what there was before it started.
+      // what is left, not what there was before it started, and setting up again counts what is
+      // left, so it waits for that.
+      setRecounting(true);
       api
         .aiLocalStatus()
         .then(setStatus)
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setRecounting(false));
     } finally {
       ended();
       setStopping(false);
@@ -201,7 +206,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       {status && !status.ready && status.can_set_up && !setup && !stopped && (
         <div className="local-go">
           <span className={short ? "local-note is-warn" : "local-note"}>{short ?? whatItTakes(status)}</span>
-          <button type="button" className="btn btn-primary" disabled={short !== null} onClick={() => void start()}>
+          <button type="button" className="btn btn-primary" disabled={short !== null || recounting} onClick={() => void start()}>
             Set up the local model
           </button>
         </div>
@@ -232,7 +237,8 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
         <div className="local-go" role="status">
           <span className="local-note">{problem.message}</span>
           {status?.can_set_up && (
-            <button type="button" className="btn btn-primary" onClick={() => void start()}>
+            <button type="button" className="btn btn-primary" disabled={recounting} onClick={() => void start()}>
+              {recounting && <LoaderIcon size={15} />}
               Carry on setting up
             </button>
           )}
@@ -250,7 +256,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           )}
           <div className="turn-actions">
             {status?.can_set_up && worthRetrying(problem.code) && (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void start()}>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={recounting} onClick={() => void start()}>
                 Try again
               </button>
             )}

@@ -1,11 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, openView } from "./app";
+import { held, letGo, openApp, openView } from "./app";
 
 const chat = (page: Page) => page.locator('section[aria-label="generate with AI"]:not([hidden])');
 const settings = (page: Page) => page.getByRole("dialog", { name: "Where pictures are made" });
 /** The Local Model's tile, whose check says it's set up and ready. */
 const localReady = (page: Page) => settings(page).getByRole("radio", { name: /Local Model/ }).getByRole("img", { name: "Set up" });
 const box = (page: Page) => chat(page).getByLabel("describe the folder");
+/** Lets the preview's setup, held where it waits (?holdsetup), go on each time, until it's ready. */
+const finishSetup = (page: Page) =>
+  expect
+    .poll(
+      async () => {
+        await page.evaluate(() => (window as { mockSetupGo?: () => void }).mockSetupGo?.());
+        return localReady(page).count();
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(1);
 const folderPanel = (page: Page) => page.locator(".right-slot");
 
 /** Opens the AI view with an OpenAI key saved (the preview keeps keys for the page's life). */
@@ -24,6 +35,10 @@ async function sendIdea(page: Page, idea: string) {
   await box(page).fill(idea);
   await box(page).press("Enter");
 }
+
+/** The chats the preview has saved (devMock's chats), as they'd be read after a restart. */
+const savedChats = (page: Page) =>
+  page.evaluate(() => Object.values((JSON.parse(localStorage.getItem("folderskin.mock.chats") ?? "null") ?? { chats: {} }).chats) as { title: string; turns: { status: string }[] }[]);
 
 /** Chats saved before the app opens, newest first, as the preview keeps them (devMock's chats). */
 async function seedChats(page: Page, titles: string[]) {
@@ -76,11 +91,12 @@ test.describe("the AI chat", () => {
   });
 
   test("shows what's happening while it paints, and the result can be applied from the chat", async ({ page }) => {
-    await withKey(page);
+    await withKey(page, "holdpaint");
     await sendIdea(page, "a lighthouse at dusk, oil painting");
     const card = chat(page).locator("article.turn").last();
     await expect(card.locator(".turn-name")).toHaveText(/Sending your idea to OpenAI|OpenAI is painting it/);
     await expect(card.getByRole("button", { name: "Stop" })).toBeVisible();
+    await letGo(page, "mockPaintGo");
     await expect(card.getByRole("button", { name: "Choose a folder" })).toBeVisible({ timeout: 10_000 });
     // Named after its first words, never ending on a little one.
     await expect(card.locator(".turn-name")).toHaveText("A lighthouse at dusk");
@@ -97,7 +113,8 @@ test.describe("the AI chat", () => {
     await expect(chat(page).locator(".turn-result:not(.is-developing)")).toHaveCount(1, { timeout: 10_000 });
     await chat(page).getByRole("button", { name: "new chat" }).click();
     await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
-    await page.waitForTimeout(500);
+    // Saved a moment after its request finished.
+    await expect.poll(async () => (await savedChats(page)).some((c) => c.title === "Pop art cats" && c.turns.every((t) => t.status === "done"))).toBe(true);
     await page.reload();
     await openView(page, /generate with ai/i);
     // A restart starts a new chat, and the one before waits in the history, with what was asked
@@ -139,6 +156,21 @@ test.describe("the AI chat", () => {
     await expect(chat(page).locator("article.turn")).toHaveCount(1, { timeout: 5_000 });
     await expect(chat(page).locator(".turn-ask")).toContainText("a small cactus in a pot");
     await expect(box(page)).toHaveValue("");
+  });
+
+  test("while the providers load, it doesn't speak as if a provider with a key were chosen", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("folderskin.ai.choice", JSON.stringify({ provider: "local", model: "klein", shape: "folder" })));
+    await openApp(page, { query: "holdcatalogue&localready" });
+    await openView(page, /generate with ai/i);
+    const pill = chat(page).locator(".model-pill");
+    const sub = chat(page).locator(".studio-sub");
+    await expect(pill).toContainText("Loading the providers");
+    await expect(sub).toHaveText("Describe a scene, or tap a style below for an idea to start from.");
+    await expect(chat(page).getByRole("button", { name: /No API key/ })).toHaveCount(0);
+    await letGo(page, "mockCatalogueIn");
+    await expect(pill).toContainText("Local Model · FLUX.2 klein 4B");
+    await expect(sub).toContainText("It's generated right here, on your machine.");
+    await expect(chat(page).getByRole("button", { name: /No API key/ })).toHaveCount(0);
   });
 
   test("names the whole model in its pill where there's room, and in the pill's tip", async ({ page }) => {
@@ -213,7 +245,7 @@ test.describe("the AI chat", () => {
   });
 
   test("a request can be stopped", async ({ page }) => {
-    await withKey(page);
+    await withKey(page, "holdpaint");
     await sendIdea(page, "a quiet harbour");
     const card = chat(page).locator("article.turn").last();
     await card.getByRole("button", { name: "Stop" }).click();
@@ -242,7 +274,7 @@ test.describe("the AI chat", () => {
   });
 
   test("sets the local model up in one click, then paints with it, with its progress and log", async ({ page }) => {
-    await openApp(page, { query: "aifail=memory" });
+    await openApp(page, { query: "aifail=memory&holdsetup&holdpaint" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
@@ -252,7 +284,7 @@ test.describe("the AI chat", () => {
     // The Local Model's tile says it's downloading, and stops saying so once it's ready.
     const tile = settings(page).getByRole("radio", { name: /Local Model/ });
     await expect(tile.getByRole("img", { name: "downloading" })).toBeVisible();
-    await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
+    await finishSetup(page);
     await expect(tile.getByRole("img", { name: "downloading" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "close" }).click();
     await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
@@ -261,6 +293,7 @@ test.describe("the AI chat", () => {
     await expect(card.locator(".turn-where")).toContainText(/Step \d of 4/, { timeout: 10_000 });
     await card.getByRole("button", { name: "Details" }).click();
     await expect(card.locator(".turn-log-lines")).toContainText("backend: CUDA");
+    await letGo(page, "mockPaintGo");
     // Out of memory: what happened, what to do, and a question ready for Claude.
     await expect(card.getByRole("alert")).toContainText("ran out of memory", { timeout: 10_000 });
     await expect(card.locator(".turn-fix li")).toHaveCount(2);
@@ -281,7 +314,7 @@ test.describe("the AI chat", () => {
     await drawer.getByLabel("chat name").press("Enter");
     await expect(drawer.getByRole("button", { name: "rename Boats for the desktop" })).toBeVisible();
     // It stays renamed, and is saved so.
-    await page.waitForTimeout(500);
+    await expect.poll(async () => (await savedChats(page)).map((c) => c.title)).toContain("Boats for the desktop");
     await expect(drawer.getByRole("button", { name: "rename Older chat" })).toHaveCount(0);
     await drawer.locator(".chat-open", { hasText: "Boats for the desktop" }).click();
     await expect(chat(page).locator(".studio-chat-title")).toHaveText("Boats for the desktop");
@@ -305,7 +338,7 @@ test.describe("the AI chat", () => {
   });
 
   test("the local model paints one picture at a time, whichever chat asks", async ({ page }) => {
-    await openApp(page, { query: "localready" });
+    await openApp(page, { query: "localready&holdpaint" });
     await openView(page, /generate with ai/i);
     await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
     await sendIdea(page, "a paper boat");
@@ -318,6 +351,7 @@ test.describe("the AI chat", () => {
     await expect(generate).toBeDisabled();
     await expect(generate).toHaveAttribute("data-tip", "The local model is still painting the last one");
     // Free again once the first one is done.
+    await letGo(page, "mockPaintGo");
     await expect(generate).toBeEnabled({ timeout: 10_000 });
   });
 
@@ -334,7 +368,8 @@ test.describe("the AI chat", () => {
         const box = c.getBoundingClientRect();
         return `${Math.round(img.top - box.top)},${Math.round(img.left - box.left)}`;
       });
-    await page.waitForTimeout(1000); // the picture's entrance
+    // Once the picture's entrance is over.
+    await card.evaluate((c) => Promise.all(c.getAnimations({ subtree: true }).filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished)));
     const closed = await offset();
     await card.getByRole("button", { name: "Details" }).click();
     await expect(card.locator(".turn-log-lines")).toBeVisible();
@@ -360,7 +395,7 @@ test.describe("the AI chat", () => {
   });
 
   test("setting the local model up can be stopped, and carried on", async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { query: "holdsetup" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
@@ -372,11 +407,29 @@ test.describe("the AI chat", () => {
     await expect(settings(page).getByRole("alert")).toHaveCount(0);
     await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
-    await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
+    await finishSetup(page);
+  });
+
+  test("carried on at once after a stop, setting up counts what was left, not the whole download again", async ({ page }) => {
+    // Stopped with the runtime and three fifths of the model in.
+    await openApp(page, { query: "holdsetup=8" });
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    await settings(page).getByRole("button", { name: "Set up the local model" }).click();
+    const progress = settings(page).locator(".local-progress");
+    await expect(progress).toContainText("of 5.4 GB in all");
+    await held(page, "mockSetupGo");
+    await settings(page).getByRole("button", { name: "Stop" }).click();
+    await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
+    const whole = async () => parseFloat((await progress.textContent())?.match(/of ([\d.]+) GB in all/)?.[1] ?? "0");
+    await expect.poll(whole).toBeGreaterThan(0);
+    expect(await whole()).toBeLessThan(5.2);
+    await finishSetup(page);
   });
 
   test("before it is set up, the Local Model says so, and setting up counts the whole download", async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { query: "holdsetup" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     const tile = settings(page).getByRole("radio", { name: /Local Model/ });
@@ -389,7 +442,7 @@ test.describe("the AI chat", () => {
     // Each file as it comes, and how far the whole download has got.
     await expect(settings(page).locator(".local-progress")).toContainText(/of \d+(\.\d+)? GB in all/);
     // Ready shows on the tile, and nothing else needs to say so.
-    await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
+    await finishSetup(page);
     await expect(settings(page).getByText(/Set up and ready/)).toHaveCount(0);
   });
 
@@ -408,7 +461,8 @@ test.describe("the AI chat", () => {
   });
 
   test("a setup under way is found again when its settings are opened again", async ({ page }) => {
-    await openApp(page, { query: "slowsetup" });
+    // Held with the runtime and a fifth of the model in, and again once it's all in.
+    await openApp(page, { query: "holdsetup=6" });
     await openView(page, /generate with ai/i);
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
@@ -417,10 +471,11 @@ test.describe("the AI chat", () => {
     // How far the whole download has got, from the bar.
     const bar = settings(page).locator(".local-progress .turn-progress");
     const share = async () => parseFloat((await bar.getAttribute("style"))?.match(/--done:\s*([\d.]+)%/)?.[1] ?? "0");
-    await expect.poll(share).toBeGreaterThan(15);
+    await held(page, "mockSetupGo");
     const before = await share();
     await settings(page).getByRole("button", { name: "close" }).click();
-    await page.waitForTimeout(600);
+    // It goes on while the settings are closed.
+    await letGo(page, "mockSetupGo");
     await chat(page).locator(".model-pill").click();
     await settings(page).getByRole("radio", { name: /Local Model/ }).click();
     // Where it has got to, with its Stop; it isn't offered as if nothing were running.
@@ -431,7 +486,7 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Stop" }).click();
     await expect(settings(page).getByRole("status").filter({ hasText: "What was downloaded is kept" })).toBeVisible();
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
-    await expect(localReady(page)).toBeVisible({ timeout: 20_000 });
+    await finishSetup(page);
   });
 
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {

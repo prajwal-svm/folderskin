@@ -227,20 +227,22 @@ fn remove(args: &RemoveArgs, out: &Arc<Out>) -> Result<(), CliError> {
         let (settings, _, _) = paint::settings(&machine, &args.machine, &config)?;
         let files = folderskin_local::unused(&settings);
         let bytes: u64 = files.iter().map(|f| f.bytes).sum();
-        let at = format!("{} at {}", settings.backend, settings.tier);
+        // The model is what uses the files or doesn't, as doctor and the app say; on which
+        // backend and at which tier follows it.
+        let on = format!("({}, {})", settings.backend, settings.tier);
         if files.is_empty() {
             out.result(
                 Some(&home),
                 "removed",
                 json!({"bytes": 0, "files": files}),
-                &format!("Nothing to remove: every model file here is one {at} uses."),
+                &format!("Nothing to remove: the model uses every model file here {on}."),
                 false,
             );
             return Ok(());
         }
         if args.dry_run {
             out.note(&format!(
-                "dry run: {} of model files {at} doesn't use; nothing is deleted",
+                "dry run: {} of model files the model doesn't use {on}; nothing is deleted",
                 gb(bytes)
             ));
             for file in &files {
@@ -261,7 +263,7 @@ fn remove(args: &RemoveArgs, out: &Arc<Out>) -> Result<(), CliError> {
             "removed",
             json!({"bytes": freed, "files": files}),
             &format!(
-                "Deleted {} that {at} doesn't use: {} back. What it paints with stays.",
+                "Deleted {} the model doesn't use {on}: {} back. What it paints with stays.",
                 count(files.len(), "model file"),
                 gb(freed)
             ),

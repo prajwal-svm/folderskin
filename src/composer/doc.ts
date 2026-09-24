@@ -450,11 +450,14 @@ export function mainColor(paint: Paint): string {
 
 /**
  * The colour at the bottom of the design, which new text and shapes are made to stand out from:
- * the front panel's own colour when it has one, since that's where they land.
+ * the front panel's own colour when it has one, since that's where they land. Given the front's
+ * box, a rectangle that covers all of it (Two-tone's front) is the front's colour too.
  */
-export function backgroundColor(doc: Doc): string | null {
-  const front = doc.layers.find((l) => !l.hidden && l.kind === "fill" && l.part === "front");
-  if (front?.kind === "fill") return mainColor(front.paint);
+export function backgroundColor(doc: Doc, front?: [number, number, number, number]): string | null {
+  const covers = (l: ShapeLayer, [x0, y0, x1, y1]: [number, number, number, number]) =>
+    l.shape === "rect" && l.rotation % 180 === 0 && l.x - l.w / 2 <= x0 + 1 && l.x + l.w / 2 >= x1 - 1 && l.y - l.h / 2 <= y0 + 1 && l.y + l.h / 2 >= y1 - 1;
+  const panel = doc.layers.find((l) => !l.hidden && ((l.kind === "fill" && l.part === "front") || (front && l.kind === "shape" && covers(l, front))));
+  if (panel?.kind === "fill" || panel?.kind === "shape") return mainColor(panel.paint);
   const base = doc.layers.find((l) => !l.hidden && (l.kind === "fill" || l.kind === "image"));
   if (!base) return null;
   if (base.kind === "fill") return mainColor(base.paint);

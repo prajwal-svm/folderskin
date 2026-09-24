@@ -83,7 +83,19 @@ const mockLocal = {
   ready: new URLSearchParams(location.search).has("localready"),
   seconds: null as number | null,
   unused: new URLSearchParams(location.search).has("leftovers") ? 15_158_000_000 : 0,
+  /** How much of each of setup's files is on the disk: a stopped setup keeps what came, and the next carries on from there. */
+  got: {} as Record<string, number>,
 };
+
+/** What setting up downloads in the preview, file by file. */
+const MOCK_SETUP_FILES: [string, number][] = [
+  ["stable-diffusion.cpp (CUDA)", 150_000_000],
+  ["FLUX.2 klein 4B, q4", 2_400_000_000],
+  ["Qwen3 4B text encoder, q4", 2_500_000_000],
+  ["FLUX.2 autoencoder", 330_000_000],
+];
+const MOCK_SETUP_BYTES = MOCK_SETUP_FILES.reduce((sum, [, bytes]) => sum + bytes, 0);
+const mockGot = () => Object.values(mockLocal.got).reduce((sum, n) => sum + n, 0);
 
 /** The preview's setup under way, which a second aiLocalSetup joins as ai_local_setup does: it
  *  hears where the setup has got to, then what comes next, and settles as the setup does. */
@@ -96,9 +108,9 @@ function mockLocalStatus(): LocalStatus {
     setting_up: mockSetup !== null,
     backend: "CUDA",
     device: "NVIDIA GeForce RTX 3050 Ti, 4 GB",
-    download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
+    download_bytes: mockLocal.ready ? 0 : MOCK_SETUP_BYTES - mockGot(),
     installs: null,
-    kept_bytes: (mockLocal.ready ? 5_380_000_000 : 0) + mockLocal.unused,
+    kept_bytes: (mockLocal.ready ? MOCK_SETUP_BYTES : mockGot()) + mockLocal.unused,
     unused_bytes: mockLocal.unused,
     model: "FLUX.2 [klein] 4B",
     quality: "4-bit",
@@ -566,6 +578,35 @@ function mockShareStatus(): ShareStatus {
 /** Set when the folder look changes, so the next list of skins takes as long as a redraw would. */
 let mockRedraw = false;
 
+/**
+ * For the `?hold…` switches, which keep something under way for a test to look at, however busy
+ * the machine: whether `switch` is on, and if so, waits until the page calls `window[go]()`.
+ * `stop` is asked as it waits, and throws to give up (a Stop pressed meanwhile).
+ */
+async function held(switchName: string, go: string, stop: () => void = () => {}): Promise<boolean> {
+  if (!new URLSearchParams(location.search).has(switchName)) return false;
+  const w = window as unknown as Record<string, (() => void) | undefined>;
+  let went = false;
+  w[go] = () => {
+    went = true;
+  };
+  try {
+    while (!went) {
+      await sleep(50);
+      stop();
+    }
+  } finally {
+    delete w[go];
+  }
+  return true;
+}
+
+/** How long a redraw takes: a moment, or with `?holdredraw` until the page calls `mockRedrawn()`,
+ *  so a test can look at the library while it's drawn again, however busy the machine. */
+async function redrawTime(): Promise<void> {
+  if (!(await held("holdredraw", "mockRedrawn"))) await sleep(700);
+}
+
 export const mockApi = {
   folderLook: async (): Promise<FolderStyle> => (localStorage.getItem(MOCK_LOOK_KEY) === "windows" ? "windows" : "mac"),
   setFolderLook: async (look: FolderStyle): Promise<void> => {
@@ -576,7 +617,7 @@ export const mockApi = {
     // The app draws every thumbnail again on the other folder, which takes a moment.
     if (mockRedraw) {
       mockRedraw = false;
-      await sleep(700);
+      await redrawTime();
     }
     return {
       skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
@@ -589,7 +630,9 @@ export const mockApi = {
     return { user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900 };
   },
   githubWait: async () => {
-    await new Promise((r) => setTimeout(r, 2500));
+    // Approved a moment after the code is asked for, or with `?holdgithub` once the page calls
+    // `mockApprove()`, so a test can look at the code while it waits, however busy the machine.
+    if (!(await held("holdgithub", "mockApprove"))) await sleep(2500);
     mockGithub.account = { login: "octocat", name: "The Octocat", avatar_url: "" };
     return mockGithub.account;
   },
@@ -739,6 +782,8 @@ export const mockApi = {
       }
       onProgress?.({ stage: "download", done, total });
     }
+    // `?holdpacks`: downloaded, it waits to be saved until the page calls `mockPackGo()`.
+    await held("holdpacks", "mockPackGo");
     for (let done = 0; done <= total; done += 4) {
       onProgress?.({ stage: "save", done: Math.min(done, total), total });
       await sleep(80);
@@ -764,6 +809,7 @@ export const mockApi = {
       onProgress?.({ stage: "download", done, total: pack.count });
       await sleep(1200 / Math.max(pack.count, 1));
     }
+    await held("holdpacks", "mockPackGo");
     onProgress?.({ stage: "save", done: pack.count, total: pack.count });
     mockStale.delete(packId);
     mockStale.add(`${packId}-updated`);
@@ -806,6 +852,7 @@ export const mockApi = {
     // `?slowcatalogue`: as the app's first catalogue of a session, which asks the local runtime
     // whether it starts and takes a couple of seconds.
     if (new URLSearchParams(location.search).has("slowcatalogue")) await sleep(1500);
+    await catalogueHeld;
     return mockProviders();
   },
   aiSetKey: async (provider: string) => {
@@ -858,13 +905,18 @@ export const mockApi = {
     const local = req.provider === "local";
     const who = local ? "the local model" : (MOCK_LABELS[req.provider] ?? req.provider);
     const job = req.job ?? "";
+    const stop = () => {
+      if (mockStopped.has(job)) throw { code: "stopped", message: "Stopped before it finished." };
+    };
     // Waits `ms`, or gives up the moment the run is stopped.
     const wait = async (ms: number) => {
       for (let t = 0; t < ms; t += 100) {
-        if (mockStopped.has(job)) throw { code: "stopped", message: "Stopped before it finished." };
+        stop();
         await sleep(100);
       }
     };
+    // `?holdpaint`: painted, the picture waits until the page calls `mockPaintGo()`.
+    const painted = () => held("holdpaint", "mockPaintGo", stop);
     const fail = new URLSearchParams(location.search).get("aifail");
     // The errors are the objects ai/failure.rs returns, with its codes and words.
     if (local) {
@@ -881,6 +933,7 @@ export const mockApi = {
         onEvent({ type: "progress", step, steps: 4 });
         onEvent({ type: "log", level: "info", message: `[INFO ] sampling step ${step}/4, 0.9 s/it` });
       }
+      await painted();
       if (fail === "memory") {
         throw {
           code: "out_of_memory",
@@ -905,6 +958,7 @@ export const mockApi = {
       }
       onEvent({ type: "stage", stage: "paint", message: `${who} is painting it` });
       await wait(1800);
+      await painted();
     }
     if (req.shape === "folder") {
       onEvent({ type: "stage", stage: "cut", message: "Cutting it out of the background" });
@@ -931,7 +985,12 @@ export const mockApi = {
   aiCancel: async (job: string): Promise<void> => {
     mockStopped.add(job);
   },
-  aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
+  aiLocalStatus: async (): Promise<LocalStatus> => {
+    // Once the runtime is installed, ai_local_status asks it whether it starts, which takes a moment.
+    const [runtime, size] = MOCK_SETUP_FILES[0];
+    if (mockLocal.ready || mockLocal.got[runtime] === size) await sleep(500);
+    return mockLocalStatus();
+  },
   aiLocalRemoveUnused: async (): Promise<LocalStatus> => {
     if (mockSetup) throw { code: "busy", message: "The local model is being set up.", fix: ["Stop the setup, then remove the files."] };
     await sleep(300);
@@ -945,6 +1004,7 @@ export const mockApi = {
     // How long a picture took here stays: it belongs to the machine, not to the files.
     mockLocal.ready = false;
     mockLocal.unused = 0;
+    mockLocal.got = {};
     return mockLocalStatus();
   },
   aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {
@@ -968,29 +1028,34 @@ export const mockApi = {
       else if (event.type === "log") log.push(event);
       for (const listener of listeners) listener(event);
     };
+    const stopped = () => ({ code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." });
+    // `?holdsetup`: the setup waits once it has downloaded everything, and with `?holdsetup=n`
+    // after its first n pieces too, until the page calls `mockSetupGo()`, so a test finds it
+    // under way, and where it expects, however busy the machine. Stop still stops it there.
+    const holding = new URLSearchParams(location.search).get("holdsetup");
+    const holdAfter = holding === null ? null : Number(holding);
+    const hold = () =>
+      held("holdsetup", "mockSetupGo", () => {
+        if (mockStopped.delete(SETUP)) throw stopped();
+      });
     const run = async (): Promise<LocalStatus> => {
-      const files: [string, number][] = [
-        ["stable-diffusion.cpp (CUDA)", 150_000_000],
-        ["FLUX.2 klein 4B, q4", 2_400_000_000],
-        ["Qwen3 4B text encoder, q4", 2_500_000_000],
-        ["FLUX.2 autoencoder", 330_000_000],
-      ];
-      // `?slowsetup`: a setup of a few seconds, for a test that has to find it still under way on
-      // a busy machine.
-      const pace = new URLSearchParams(location.search).has("slowsetup") ? 250 : 90;
       tell({ type: "stage", stage: "download", message: "Downloading what the local model needs" });
-      for (const [file, total] of files) {
-        // Where it starts from first, as download.rs says before the first chunk.
-        tell({ type: "download", file, done: 0, total });
-        for (let i = 1; i <= 5; i++) {
-          await sleep(pace);
-          if (mockStopped.delete(SETUP)) {
-            throw { code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." };
-          }
-          tell({ type: "download", file, done: Math.round((total * i) / 5), total });
+      let pieces = 0;
+      for (const [file, total] of MOCK_SETUP_FILES) {
+        // Where it starts from first, as download.rs says before the first chunk: where the last
+        // setup left it.
+        const from = mockLocal.got[file] ?? 0;
+        tell({ type: "download", file, done: from, total });
+        for (let i = 1; i <= 5 && from < total; i++) {
+          await sleep(90);
+          if (mockStopped.delete(SETUP)) throw stopped();
+          mockLocal.got[file] = from + Math.round(((total - from) * i) / 5);
+          tell({ type: "download", file, done: mockLocal.got[file], total });
+          if (++pieces === holdAfter) await hold();
         }
         tell({ type: "log", level: "info", message: `checked ${file}` });
       }
+      if (holdAfter !== null) await hold();
       tell({ type: "stage", stage: "check", message: "Checking it runs" });
       await sleep(400);
       mockLocal.ready = true;
@@ -1143,6 +1208,12 @@ export const mockApi = {
     mockShare.submissions = mockShare.submissions.map((s) => (s.id === id ? { ...s, status: "withdrawn", pack_id: null } : s));
   },
 };
+
+/** `?holdcatalogue`: the providers don't come until the page calls `mockCatalogueIn()`, so a test
+ *  can look at the AI view while they load, however busy the machine. */
+const catalogueHeld = new URLSearchParams(location.search).has("holdcatalogue")
+  ? new Promise<void>((resolve) => ((window as { mockCatalogueIn?: () => void }).mockCatalogueIn = resolve))
+  : Promise.resolve();
 
 /** The providers and models, as ai_catalogue lists them, with the keys saved in this preview. */
 function mockProviders(): AiCatalogue {

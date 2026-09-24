@@ -409,9 +409,12 @@ export const Studio = forwardRef<
             </span>
             <h2 className="studio-title">What should your folder look like?</h2>
             <p className="studio-sub">
-              {local
-                ? "Describe a scene, or tap a style below for an idea to start from. It's generated right here, on your machine."
-                : `Describe a scene, or tap a style below for an idea to start from. It goes straight from this computer to ${provider?.label ?? "the provider"} with your own key.`}
+              {/* Where it goes once the providers are in: until then, nothing that might not be so. */}
+              {!catalogue
+                ? "Describe a scene, or tap a style below for an idea to start from."
+                : local
+                  ? "Describe a scene, or tap a style below for an idea to start from. It's generated right here, on your machine."
+                  : `Describe a scene, or tap a style below for an idea to start from. It goes straight from this computer to ${provider?.label ?? "the provider"} with your own key.`}
             </p>
           </div>
         )}
@@ -462,7 +465,7 @@ export const Studio = forwardRef<
         {showFoot && (
           <p className="studio-foot">
             {foot && <span>{foot}</span>}
-            {!local && (
+            {catalogue && !local && (
               <button type="button" className="link-btn" onClick={() => setHelperOpen(true)}>
                 No API key? Use Grok or ChatGPT's chat
               </button>

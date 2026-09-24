@@ -14,6 +14,21 @@ async function startFrom(page: Page, template: string) {
   await expect(newDialog(page)).toBeHidden();
 }
 
+/** What `read` finds on the canvas once it has settled: the folder in, and drawn the same twice running. */
+async function settled(page: Page, read: () => Promise<string>) {
+  await expect(composer(page).locator(".cmp-stage")).not.toHaveAttribute("data-waiting");
+  let last: string | null = null;
+  await expect
+    .poll(async () => {
+      const now = await read();
+      const same = now === last;
+      last = now;
+      return same;
+    })
+    .toBe(true);
+  return last!;
+}
+
 /** Where the selected layer is, from its X and Y in the settings. */
 async function layerAt(page: Page) {
   return { x: Number(await side(page).getByLabel("X", { exact: true }).inputValue()), y: Number(await side(page).getByLabel("Y", { exact: true }).inputValue()) };
@@ -117,8 +132,7 @@ test.describe("the Mac's and Windows' own folders", () => {
     await side(page).locator(".cmp-layer", { hasText: "Front" }).click();
     const covers = side(page).getByRole("radiogroup", { name: "what the colour covers" });
     await expect(covers.getByRole("radio", { name: "Front" })).toHaveAttribute("aria-checked", "true");
-    await page.waitForTimeout(300);
-    const golden = await tab();
+    const golden = await settled(page, tab);
     await covers.getByRole("radio", { name: "Whole folder" }).click();
     await expect.poll(tab).not.toBe(golden);
     await covers.getByRole("radio", { name: "Front" }).click();
@@ -143,7 +157,8 @@ test.describe("a new session", () => {
     await openView(page, /all skins/i);
     await openView(page, /design your own/i);
     await expect(layerNames(page)).toHaveText(["Your words", "Projects", "Background"]);
-    await page.waitForTimeout(900); // the design is kept 700 ms after its last change
+    // The design is kept a moment after its last change.
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("folderskin.composer.draft.v1") ?? "")).toContain("Your words");
     await page.reload();
     await openView(page, /design your own/i);
     await expect(layerNames(page)).toHaveText(["Your words", "Projects", "Background"]);
@@ -303,6 +318,16 @@ test.describe("the icon library", () => {
     for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(Math.abs(a.x - b.x) * 2).toBeGreaterThanOrEqual(a.w + b.w);
   });
 
+  test("new words and shapes on Two-tone stand out from its dark front, not the yellow under it", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Two-tone");
+    await composer(page).getByRole("button", { name: "Text" }).click();
+    await expect(side(page).getByRole("button", { name: "Text colour: #FFFFFF" })).toBeVisible();
+    await composer(page).getByRole("button", { name: "Shape" }).click();
+    await page.locator(".cmp-grid-btn[data-tip='Heart']").click();
+    await expect(side(page).getByRole("button", { name: "Shape colour: #FFFFFF" })).toBeVisible();
+  });
+
   test("new words go beside the label's own, not over them", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Label");
@@ -349,8 +374,7 @@ test.describe("the icon library", () => {
     await composer(page).getByRole("button", { name: "Icon" }).click();
     const canvas = composer(page).locator("canvas.cmp-canvas");
     const picture = () => canvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
-    await page.waitForTimeout(400);
-    const before = await picture();
+    const before = await settled(page, picture);
     await side(page).getByLabel("search icons").fill("camera");
     await side(page).getByRole("button", { name: "Camera", exact: true }).hover();
     await expect.poll(picture).not.toBe(before);
@@ -443,7 +467,10 @@ test.describe("the icon library", () => {
     await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
     const before = await layerAt(page);
     await composer(page).getByRole("button", { name: "Icon" }).click();
+    // The icons come in a moment after the library opens; the keys work on them once they have.
+    await expect(side(page).locator(".icon-cell").first()).toBeVisible();
     await side(page).getByLabel("search icons").press("ArrowDown");
+    await expect(side(page).locator(".icon-cell.is-active")).toBeFocused();
     for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowDown"]) await page.keyboard.press(key);
     await expect(side(page).locator(".icon-cell.is-active")).toBeFocused();
     await side(page).getByRole("radio", { name: /^Layers/ }).click();
@@ -547,8 +574,7 @@ test.describe("the canvas and its panels", () => {
     await which.getByRole("radio", { name: "Mac" }).click();
     await side(page).locator(".cmp-layer", { hasText: "IDEAS" }).click();
     const onMac = await at();
-    await page.waitForTimeout(400);
-    const macPicture = await picture();
+    const macPicture = await settled(page, picture);
 
     await which.getByRole("radio", { name: "Windows" }).click();
     await expect(which.getByRole("radio", { name: "Windows" })).toHaveAttribute("aria-checked", "true");
@@ -592,6 +618,31 @@ test.describe("the canvas and its panels", () => {
     held[onMac ? "windows" : "mac"].open();
     await expect(loader).toBeHidden();
     await expect(canvas).toBeVisible();
+  });
+
+  test("keeps the canvas its size when the icon at its real sizes comes in under it", async ({ page }) => {
+    // The previews aren't drawn until they're let through.
+    await page.addInitScript(() => {
+      const toBlob = HTMLCanvasElement.prototype.toBlob;
+      let open = false;
+      const held: (() => void)[] = [];
+      (window as unknown as { letThrough: () => void }).letThrough = () => {
+        open = true;
+        held.splice(0).forEach((go) => go());
+      };
+      HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement["toBlob"]>) {
+        if (open) toBlob.apply(this, args);
+        else held.push(() => toBlob.apply(this, args));
+      };
+    });
+    await openApp(page);
+    await startFrom(page, "Plain");
+    const size = () => composer(page).locator("canvas.cmp-canvas").evaluate((c: HTMLCanvasElement) => `${c.style.width} ${c.style.height}`);
+    await expect(composer(page).locator(".cmp-stage")).not.toHaveAttribute("data-waiting");
+    const before = await size();
+    await page.evaluate(() => (window as unknown as { letThrough: () => void }).letThrough());
+    await expect(composer(page).locator(".cmp-size")).toHaveCount(3);
+    expect(await size()).toBe(before);
   });
 
   test("shows a loader, not the design without its photo, while the photo is still being read", async ({ page }) => {
