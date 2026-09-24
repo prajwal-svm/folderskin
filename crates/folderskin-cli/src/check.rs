@@ -101,9 +101,12 @@ pub fn check(img: &RgbaImage, bytes: usize, name: &str) -> Report {
         };
     }
     if painted::is_blank(img) {
-        findings.push(problem(
-            "It is one flat colour, so the folder would look plain.",
-            "Paint it again, or use another picture.",
+        // A warning, not a problem: a plain colour is a skin people choose on purpose (whole
+        // packs are made of them, and `packs check` passes them), but a painting that came out
+        // flat is usually a failed one.
+        findings.push(warning(
+            "It is one flat colour, so the folder will look plain.",
+            "Fine if a plain colour is what you want; otherwise paint it again or use another picture.",
         ));
     }
     let report = match matte::finished_cutout(img, MAGENTA) {
@@ -431,7 +434,12 @@ mod tests {
         assert!(flat
             .findings
             .iter()
-            .any(|f| f.what.contains("one flat colour")));
+            .any(|f| f.what.contains("one flat colour") && f.verdict == Verdict::Warning));
+        assert_eq!(
+            flat.problems(),
+            0,
+            "a plain colour is a skin, as packs check agrees"
+        );
     }
 
     #[test]
