@@ -6,7 +6,7 @@ export interface Env {
   DB: D1Database;
   /** Private: pictures waiting for review, and the contact sheets the review looks at. */
   HOLD: R2Bucket;
-  /** Public: approved packs, laid out the way community/packs is. */
+  /** Public: approved packs, laid out the way folderskin-community's packs/ is. */
   PUBLIC: R2Bucket;
   /** Workers AI, for a first look at contact sheets. Optional: without it every pack waits for a person. */
   AI?: Vision;

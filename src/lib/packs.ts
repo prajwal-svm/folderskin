@@ -1,12 +1,14 @@
 import { isGithubUser } from "./licences";
 import { defaultProfile, loadProfiles, saveProfiles, upsertProfile } from "./profiles";
 
-/** Community packs live in the FolderSkin repository on GitHub, under community/. */
+/** FolderSkin's own repository on GitHub: the source, the issues, the releases and the pack docs. */
 export const REPO_URL = "https://github.com/prajwal-svm/folderskin";
+/** Community packs live in a repository of their own, under packs/. */
+export const COMMUNITY_REPO_URL = "https://github.com/prajwal-svm/folderskin-community";
 /** The pack folders, to look through on GitHub. */
-export const PACKS_URL = `${REPO_URL}/tree/main/community/packs`;
+export const PACKS_URL = `${COMMUNITY_REPO_URL}/tree/main/packs`;
 /** GitHub's upload page for that folder: drop a pack folder there to propose it. */
-export const UPLOAD_URL = `${REPO_URL}/upload/main/community/packs`;
+export const UPLOAD_URL = `${COMMUNITY_REPO_URL}/upload/main/packs`;
 /** The pack contract and how to share one. */
 export const PACKS_GUIDE_URL = `${REPO_URL}/blob/main/docs/PACKS.md`;
 

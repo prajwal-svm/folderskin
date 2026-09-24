@@ -105,7 +105,7 @@ export async function actOnLink(request: Request, env: Env, token: string): Prom
         return html(messagePage("Turned down", "The author sees the reason in FolderSkin, and the pictures are deleted."));
       case "takedown": {
         const { folder } = await takedown(env, link.subject, reasons, "");
-        const repo = folder ? ` It was pulled into the repository already, so remove community/packs/${folder} there too.` : "";
+        const repo = folder ? ` It was pulled into folderskin-community already, so remove packs/${folder} there too.` : "";
         return html(messagePage("Taken down", `It's gone from FolderSkin's storage.${repo}`));
       }
       case "pause":

@@ -351,7 +351,7 @@ fn unreadable_packs(dir: &Path, why: String) -> CliError {
             "There are no packs here to read.",
             format!("There is no {} folder.", packs.display()),
         )
-        .fix("Run it from a FolderSkin checkout, where they are in community/packs.")
+        .fix("Run it inside a checkout of github.com/prajwal-svm/folderskin-community, which holds packs/.")
         .fix("Or point it at the folder that holds packs/: --dir <folder>");
     }
     CliError::fixable(

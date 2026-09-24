@@ -159,11 +159,12 @@ Say which check failed before painting again.
 ## Step 5: make it a pack
 
 The pictures in the output folder (not `previews/`, not `raw/`) are ready for the other skill.
+Packs live in github.com/prajwal-svm/folderskin-community; `--dir` names its checkout.
 `folderskin packs make` makes the pack, and uses the `cwebp` setup installed (on Windows) when
 there is none on the PATH, which whole-folder pictures need to fit in a pack:
 
 ```sh
-folderskin packs make renders/night-prints --id night-prints \
+folderskin packs make renders/night-prints --dir ../folderskin-community --id night-prints \
   --name "Night prints" --tags woodblock,night --author <github-name> --preview /tmp/night-prints.png
 ```
 

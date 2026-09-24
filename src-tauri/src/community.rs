@@ -1,12 +1,12 @@
 //! Community skin packs: searching them, each pack's preview, adding and removing a pack,
 //! adding one from a folder on this computer, and saving your own skins as a pack to share.
 //!
-//! Packs live in the FolderSkin repository under `community/`, so reading them needs no account
-//! and no server. The app searches a catalog of all of them on this computer (catalog.rs), and
-//! fetches pictures from the published tree, `community/v2`, where each file is named after its
-//! contents; until that tree is published it reads `index.json`, `previews/<id>.png` and
-//! `packs/<id>/` as it always has. The rules every pack follows are in `folderskin_core::pack`,
-//! and docs/PACKS.md says the same in prose.
+//! Packs live in their own repository, github.com/prajwal-svm/folderskin-community, so reading them
+//! needs no account and no server. The app searches a catalog of all of them on this computer
+//! (catalog.rs), and fetches pictures from the published tree, `v2/`, where each file is named
+//! after its contents; until that tree is published it reads `index.json`, `previews/<id>.png`
+//! and `packs/<id>/` as it always has. The rules every pack follows are in
+//! `folderskin_core::pack`, and docs/PACKS.md says the same in prose.
 
 use crate::catalog::{Community, Source};
 use crate::commands::{data_url, prepare_import, SkinDto};
@@ -29,10 +29,10 @@ use std::time::{Duration, SystemTime};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 
-/// The `community/` folder of the repository on GitHub. Set `FOLDERSKIN_COMMUNITY_URL` to read
-/// another copy of it instead, such as a checkout served locally while testing.
+/// The packs repository on GitHub. Set `FOLDERSKIN_COMMUNITY_URL` to read another copy of it
+/// instead, such as a checkout served locally while testing.
 const COMMUNITY_URL: &str =
-    "https://raw.githubusercontent.com/prajwal-svm/folderskin/main/community";
+    "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
 /// How many of a pack's pictures download at once.
 const PARALLEL_DOWNLOADS: usize = 4;
 /// How many packs the first launch offers when no packs are featured.
@@ -847,7 +847,7 @@ pub(crate) fn uncached(url: &str, fresh: bool) -> String {
     }
 }
 
-/// The community folder: the repository's on GitHub, or `FOLDERSKIN_COMMUNITY_URL`.
+/// Where the packs are: the packs repository on GitHub, or `FOLDERSKIN_COMMUNITY_URL`.
 pub(crate) fn base_url() -> String {
     std::env::var("FOLDERSKIN_COMMUNITY_URL")
         .ok()
@@ -2246,7 +2246,7 @@ pub(crate) mod tests {
     #[test]
     fn errors_name_whoever_serves_the_packs() {
         for github in [
-            "https://raw.githubusercontent.com/prajwal-svm/folderskin/main/community/index.json",
+            "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main/index.json",
             "https://github.com/prajwal-svm/folderskin/releases/download/x/y",
             "https://objects.githubusercontent.com/x",
         ] {

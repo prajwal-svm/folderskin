@@ -233,7 +233,7 @@ export async function exportFile(request: Request, env: Env, id: string, file: s
 }
 
 /**
- * Records that a pack is in community/packs now, and under which folder: `pull` numbers the name
+ * Records that a pack is in folderskin-community now, and under which folder: `pull` numbers the name
  * when a pack from GitHub has it already, and reports, takedowns and the author all have to go by
  * the folder it is really in.
  */

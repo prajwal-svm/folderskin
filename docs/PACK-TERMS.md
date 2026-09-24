@@ -68,7 +68,7 @@ break them after it was merged is removed.
 ## Reporting a pack
 
 If a pack that is already merged breaks any of this, open an issue on
-[the repository](https://github.com/prajwal-svm/folderskin/issues) with a link to it. For anything
+[the packs repository](https://github.com/prajwal-svm/folderskin-community/issues) with a link to it. For anything
 involving a child, report it to GitHub directly as well — GitHub acts faster than a maintainer
 reading issues, and the content needs to be taken down at the platform level.
 

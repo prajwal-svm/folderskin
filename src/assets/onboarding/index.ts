@@ -10,9 +10,10 @@
  *
  * They're the only pictures the app ships, so each is drawn at the size it's shown at: 512 px for
  * the middle folder, 384 px beside it, 288 px at the ends, and 320 px for the quick flips, whose
- * frames are gone in 75 ms. The app's own compositor draws them (the gallery's pixels):
+ * frames are gone in 75 ms. The app's own compositor draws them (the gallery's pixels), from the
+ * pack pictures in a checkout of github.com/prajwal-svm/folderskin-community beside this repository:
  *
- *   cargo run -p folderskin-tools -- render community/packs/classic-art/mona-lisa.webp --size 384 --out mona-lisa.png
+ *   cargo run -p folderskin-tools -- render ../folderskin-community/packs/classic-art/mona-lisa.webp --size 384 --out mona-lisa.png
  *   cwebp -q 78 -alpha_q 90 -m 6 -sharp_yuv mona-lisa.png -o src/assets/onboarding/mona-lisa.webp
  *
  * (-q 70 for the flips; the logo is assets/logo/folderskin-logo-cutout.png at -q 88 -alpha_q 100.)

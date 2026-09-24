@@ -65,7 +65,7 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
     let out = &opts.out;
     if same_folder(out, dir) || same_folder(&out.join(PACKS_DIR), &dir.join(PACKS_DIR)) {
         return Err(format!(
-            "{} is the community folder itself; write the tree into a folder of its own, such as {}",
+            "{} is the packs folder itself; write the tree into a folder of its own, such as {}",
             out.display(),
             dir.join("v2").display()
         ));
@@ -852,7 +852,7 @@ mod tests {
                 ..CatalogOptions::default()
             };
             let err = write_catalog(&c.0, &report, &opts).unwrap_err();
-            assert!(err.contains("community folder itself"), "{err}");
+            assert!(err.contains("packs folder itself"), "{err}");
         }
         let opts = CatalogOptions {
             out: c.out(),

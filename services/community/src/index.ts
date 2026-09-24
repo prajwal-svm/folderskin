@@ -3,7 +3,7 @@
  *
  * The app verifies the computer once (a Turnstile check in the browser, bound to the computer's
  * Ed25519 key), then sends packs here, signed with that key. Every pack waits in a private bucket
- * until the maintainer approves it; approved packs are pulled into community/packs with
+ * until the maintainer approves it; approved packs are pulled into folderskin-community's packs/ with
  * `folderskin-tools community pull` and published the same way every other pack is.
  *
  * Built for the Workers free plan: no picture is ever decoded here (10 ms of CPU per request), the

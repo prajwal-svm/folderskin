@@ -89,7 +89,7 @@ pub enum Command {
         command: PacksCommand,
     },
     /// Look after the community service: packs shared without GitHub, their review, and pulling
-    /// approved ones into community/packs
+    /// approved ones into the packs repository (github.com/prajwal-svm/folderskin-community)
     Community {
         #[command(subcommand)]
         command: CommunityCommand,
@@ -170,10 +170,11 @@ pub enum CommunityCommand {
         #[command(flatten)]
         service: Service,
     },
-    /// Write approved packs into community/packs as ordinary pack folders, checked like any other
+    /// Write approved packs into a folderskin-community checkout's packs/ as ordinary pack folders,
+    /// checked like any other
     Pull {
         /// The packs folder
-        #[arg(long, default_value = "community/packs")]
+        #[arg(long, default_value = "packs")]
         out: PathBuf,
         #[command(flatten)]
         service: Service,
@@ -184,8 +185,8 @@ pub enum CommunityCommand {
 pub enum PacksCommand {
     /// Check every pack in <dir>/packs the way the app will; exit 1 on problems
     Check {
-        /// The community folder, holding packs/
-        #[arg(long, default_value = "community")]
+        /// The folderskin-community checkout, holding packs/
+        #[arg(long, default_value = ".")]
         dir: PathBuf,
         /// The largest a picture may be, in KB, if less than the pack limit of 2048
         #[arg(long, value_name = "KB")]
@@ -212,8 +213,8 @@ pub enum PacksCommand {
         /// CC0-1.0, CC-BY-4.0 or MIT
         #[arg(long, default_value = "CC0-1.0")]
         license: String,
-        /// The community folder, holding packs/
-        #[arg(long, default_value = "community")]
+        /// The folderskin-community checkout, holding packs/
+        #[arg(long, default_value = ".")]
         dir: PathBuf,
         /// The largest a picture may be, in KB. The pack limit is 2048; smaller pictures make a
         /// pack quicker to add
@@ -229,18 +230,18 @@ pub enum PacksCommand {
     },
     /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic)
     Index {
-        /// The community folder, holding packs/
-        #[arg(long, default_value = "community")]
+        /// The folderskin-community checkout, holding packs/
+        #[arg(long, default_value = ".")]
         dir: PathBuf,
     },
     /// Check every pack, then write the tree the app searches: a SQLite catalog, thumbnails,
     /// preview strips, pictures and manifests named after their contents, and head.json last
     /// (deterministic; only what changed is written)
     Catalog {
-        /// The community folder, holding packs/ and, if there is one, featured.json
-        #[arg(long, default_value = "community")]
+        /// The folderskin-community checkout, holding packs/ and, if there is one, featured.json
+        #[arg(long, default_value = ".")]
         dir: PathBuf,
-        /// Where the tree goes (default: v2 in the community folder, beside packs/)
+        /// Where the tree goes (default: v2 in that folder, beside packs/)
         #[arg(long)]
         out: Option<PathBuf>,
         /// Another https:// folder serving the same tree, which the app tries first; repeatable
@@ -249,7 +250,7 @@ pub enum PacksCommand {
     },
 }
 
-/// Where `packs catalog` writes its tree: `--out`, or `v2` in the community folder it reads, as
+/// Where `packs catalog` writes its tree: `--out`, or `v2` in the packs folder it reads, as
 /// `packs index` writes into that folder too.
 pub fn catalog_out(dir: &std::path::Path, out: Option<PathBuf>) -> PathBuf {
     out.unwrap_or_else(|| dir.join("v2"))
@@ -395,12 +396,12 @@ mod tests {
     }
 
     #[test]
-    fn parses_packs_commands_with_community_as_the_default_folder() {
+    fn parses_packs_commands_run_inside_a_skins_checkout_by_default() {
         match Cli::parse_from(["folderskin-tools", "packs", "check"]).command {
             Command::Packs {
                 command: PacksCommand::Check { dir, max_kb },
             } => {
-                assert_eq!(dir, PathBuf::from("community"));
+                assert_eq!(dir, PathBuf::from("."));
                 assert_eq!(max_kb, None);
             }
             other => panic!("{other:?}"),
@@ -414,16 +415,13 @@ mod tests {
     }
 
     #[test]
-    fn parses_packs_catalog_into_community_v2_by_default() {
+    fn parses_packs_catalog_into_v2_beside_packs_by_default() {
         match Cli::parse_from(["folderskin-tools", "packs", "catalog"]).command {
             Command::Packs {
                 command: PacksCommand::Catalog { dir, out, mirrors },
             } => {
-                assert_eq!(dir, PathBuf::from("community"));
-                assert_eq!(
-                    catalog_out(&dir, out),
-                    PathBuf::from("community").join("v2")
-                );
+                assert_eq!(dir, PathBuf::from("."));
+                assert_eq!(catalog_out(&dir, out), PathBuf::from(".").join("v2"));
                 assert!(mirrors.is_empty());
             }
             other => panic!("{other:?}"),
@@ -451,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_goes_into_the_community_folder_it_was_given() {
+    fn the_catalog_goes_into_the_packs_folder_it_was_given() {
         let cli = Cli::parse_from([
             "folderskin-tools",
             "packs",
@@ -486,7 +484,7 @@ mod tests {
             Command::Community {
                 command: CommunityCommand::Pull { out, service },
             } => {
-                assert_eq!(out, PathBuf::from("community/packs"));
+                assert_eq!(out, PathBuf::from("packs"));
                 assert_eq!(service.api, "https://community.example.org");
                 assert_eq!(service.key, PathBuf::from("admin.key"));
             }
@@ -564,7 +562,7 @@ mod tests {
                     [PathBuf::from("renders/"), PathBuf::from("extra.png")]
                 );
                 assert_eq!(tags, ["3d", "glossy"]);
-                assert_eq!(dir, PathBuf::from("community"));
+                assert_eq!(dir, PathBuf::from("."));
                 assert_eq!(max_kb, 400);
                 assert_eq!(license, "CC0-1.0");
                 assert!(!flat_backdrop);
