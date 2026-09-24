@@ -372,6 +372,34 @@ test.describe("settings", () => {
     await expect(change).toBeFocused();
   });
 
+  test("a profile deleted just as the last one's Undo goes gives the focus to its own Undo", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    for (const name of ["Work", "Home"]) {
+      await dialog(page).getByRole("button", { name: "Add a profile" }).click();
+      await dialog(page).getByRole("form").getByLabel("Name").fill(name);
+      await page.keyboard.press("Enter");
+      await expect(dialog(page).getByRole("button", { name: `change ${name}` })).toBeVisible();
+    }
+    await dialog(page).getByRole("button", { name: "delete Work" }).click();
+    const undo = dialog(page).getByRole("button", { name: "Undo" });
+    await expect(undo).toBeVisible();
+    // The moment Work's Undo goes, Home is deleted, before what that change set off has run: as
+    // a busy machine can have it, a press arriving between a render and its effects.
+    await page.evaluate(() => {
+      const status = document.querySelector('.modal [role="status"]')!;
+      const seen = new MutationObserver(() => {
+        if (status.querySelector("button")) return;
+        seen.disconnect();
+        document.querySelector<HTMLButtonElement>('[aria-label="delete Home"]')!.click();
+      });
+      seen.observe(status, { childList: true, subtree: true });
+    });
+    await expect(dialog(page).getByRole("status")).toHaveText(/Deleted Home\./, { timeout: 15_000 });
+    await expect(undo).toBeFocused();
+  });
+
   test("a new profile isn't lost to a list that filled up while it was being written", async ({ page }) => {
     await page.addInitScript(() => {
       const list = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, author: "", license: "CC0-1.0" }));

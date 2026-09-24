@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type AiCatalogue, type GithubAccount } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
@@ -535,11 +535,12 @@ function Sharing({ toast, onBusy }: { toast: Toast; onBusy: (busy: boolean) => v
   }, [creditTo]);
 
   // Connecting, cancelling and disconnecting each take away the button that had the focus; it
-  // goes to the one in the GitHub row now.
+  // goes to the one in the GitHub row now. As the render that shows it is put on screen: an
+  // earlier render's effects still waiting to run would find the old row.
   const connectBox = useRef<HTMLDivElement>(null);
   const githubButton = useRef<HTMLButtonElement>(null);
   const refocus = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!refocus.current) return;
     refocus.current = false;
     githubButton.current?.focus();
@@ -637,14 +638,16 @@ function ProfileList({
 
   // Saving, cancelling, deleting and undoing each take away the button that had the focus. The
   // buttons it can go to instead are kept here by name ("add", "undo", "change <id>"), and
-  // `focusNext` lists where it goes after the next render, the first that's there.
+  // `focusNext` lists where it goes after the next render, the first that's there. It goes as
+  // that render is put on screen: an earlier render's effects still waiting to run, as they can
+  // be on a busy machine, would take the list before what it names is there.
   const buttons = useRef(new Map<string, HTMLElement>());
   const hold = (key: string) => (el: HTMLElement | null) => {
     if (el) buttons.current.set(key, el);
     else buttons.current.delete(key);
   };
   const focusNext = useRef<string[] | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const want = focusNext.current;
     if (!want) return;
     focusNext.current = null;
