@@ -269,6 +269,20 @@ test.describe("the icon library", () => {
     await expect(layerNames(page)).toHaveText(["Camera", "Background"]);
   });
 
+  test("the arrow keys move through the grid and leave the selected layer where it is", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    const before = await layerAt(page);
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").press("ArrowDown");
+    for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowDown"]) await page.keyboard.press(key);
+    await expect(side(page).locator(".icon-cell.is-active")).toBeFocused();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    expect(await layerAt(page)).toEqual(before);
+  });
+
   test("shows each pack with its logo and no licence small print", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");

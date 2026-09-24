@@ -860,6 +860,8 @@ export function Composer({
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       if (typingIn(e.target)) return;
+      // A control used the key itself: the icon grid's arrows, Enter and Space move through it and pick.
+      if (e.defaultPrevented) return;
       // A dialog is open over the design: nothing here may change what's behind it.
       if (document.querySelector(".modal-backdrop")) return;
       if (mod && k === "z") {
