@@ -1064,6 +1064,8 @@ export const mockApi = {
   iconPackRemove: async (id: string): Promise<void> => {
     mockIconPacks.delete(id);
   },
+  // `?noshare` is a build without a service, like a release before the service is deployed.
+  shareOffered: async (): Promise<boolean> => !new URLSearchParams(location.search).has("noshare"),
   shareStatus: async (): Promise<ShareStatus> => {
     await sleep(300);
     return mockShareStatus();

@@ -142,6 +142,7 @@ pub fn run() {
             community::community_search,
             community::community_refresh,
             community::community_installed,
+            share::share_offered,
             share::share_status,
             share::share_verify,
             share::share_wait,

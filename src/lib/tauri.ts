@@ -455,6 +455,8 @@ const tauriApi = {
   composerDesign: (skinId: string) => invoke<unknown>("composer_design", { skinId }),
 
   // ---- sharing a pack without GitHub (src-tauri/src/share.rs) ----
+  /** Whether this build has a sharing service at all; asks nothing over the network. */
+  shareOffered: () => invoke<boolean>("share_offered"),
   /** Whether it can be used here, and who this computer is to the service. */
   shareStatus: () => invoke<ShareStatus>("share_status"),
   /** The signed page that verifies this computer under `handle`, to open in the browser. */

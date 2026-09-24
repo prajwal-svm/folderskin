@@ -86,20 +86,20 @@ test("a verified computer sends straight away, and sees why a pack was turned do
   await expect(page.getByRole("dialog", { name: "Your pack is waiting for review" })).toBeVisible({ timeout: 15_000 });
 });
 
-test("a build without the service says so instead of failing", async ({ page }) => {
-  const dialog = await shareWithoutGithub(page, "noshare");
-  await expect(dialog.getByText(/Sharing without GitHub isn't available yet/)).toBeVisible();
-  // Nothing asks for what couldn't be sent anyway.
-  await expect(dialog.getByRole("button", { name: /^the pictures:/ })).toHaveCount(0);
-  await expect(dialog.getByText("Reviewed first.")).toHaveCount(0);
+test("a build without the service shares only through GitHub", async ({ page }) => {
+  await openApp(page, { query: "noshare" });
+  await openView(page, /community/i);
+  await page.getByRole("button", { name: "Share your skins" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share a pack" });
+  await expect(dialog).toBeVisible();
+  // No way on offer that the build can't use: the pack goes to folderskin-community on GitHub.
+  await expect(dialog.getByRole("radiogroup", { name: "how to share" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Without GitHub" })).toHaveCount(0);
+  await expect(dialog.getByText(/Sharing without GitHub/)).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Connect to GitHub" })).toBeVisible();
   await dialog.getByPlaceholder("Neon nights").fill("Night prints");
   await dialog.getByRole("button", { name: "+ photo" }).click();
   await dialog.getByText("I've read the pack terms and this pack follows them.").click();
-  await expect(dialog.getByRole("button", { name: "Verify and send" })).toBeDisabled();
-  await expect(dialog.getByText("Not available right now")).toBeVisible();
-  // GitHub is still there, unchanged.
-  await dialog.getByRole("radio", { name: "GitHub", exact: true }).click();
-  await expect(dialog.getByRole("button", { name: "Connect to GitHub" })).toBeVisible();
   await expect(dialog.getByText("Connect to GitHub first")).toBeVisible();
 });
 

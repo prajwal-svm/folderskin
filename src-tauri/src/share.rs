@@ -177,6 +177,14 @@ pub async fn share_status(keys: State<'_, Keys>) -> Result<ShareStatus, String> 
     status_of(&keys).await
 }
 
+/// Whether this build knows a sharing service at all, without asking it anything. A build with
+/// none offers only GitHub: sharing a pack forks folderskin-community and opens a pull request
+/// there, and the dialog doesn't show a way it can't use.
+#[tauri::command]
+pub fn share_offered() -> bool {
+    api_base().is_some()
+}
+
 // ---------- verifying ----------
 
 /// Set while the app waits for the browser check, so closing the dialog stops the waiting.

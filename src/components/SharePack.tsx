@@ -127,6 +127,9 @@ export function SharePack({
   const [published, setPublished] = useState<Published | null>(null);
 
   const [route, setRoute] = useState<Route>("github");
+  /** Whether this build has a sharing service at all. Until it does, a pack goes to GitHub: a
+   *  fork of folderskin-community and a pull request there, with no other way on offer. */
+  const [directOffered, setDirectOffered] = useState(false);
   /** What the sharing service says about this computer; asked for once the route is picked. */
   const [direct, setDirect] = useState<ShareStatus | null>(null);
   /** The name packs will be credited to, typed before this computer is verified: the one typed
@@ -152,6 +155,18 @@ export function SharePack({
         setAccount(who);
       })
       .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Only whether the build has a service: nothing goes over the network for this.
+  useEffect(() => {
+    let live = true;
+    void api
+      .shareOffered()
+      .then((offered) => live && setDirectOffered(offered))
+      .catch(() => live && setDirectOffered(false));
     return () => {
       live = false;
     };
@@ -636,29 +651,31 @@ export function SharePack({
           <div className="field">
             <div className="share-author-head">
               <span className="field-label">Author</span>
-              <div className="seg seg-sm share-route" role="radiogroup" aria-label="how to share">
-                {(
-                  [
-                    ["github", "GitHub"],
-                    ["direct", "Without GitHub"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={route === id}
-                    className={route === id ? "seg-btn is-active" : "seg-btn"}
-                    disabled={busy}
-                    onClick={() => {
-                      setRoute(id);
-                      setError(null);
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              {directOffered && (
+                <div className="seg seg-sm share-route" role="radiogroup" aria-label="how to share">
+                  {(
+                    [
+                      ["github", "GitHub"],
+                      ["direct", "Without GitHub"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={route === id}
+                      className={route === id ? "seg-btn is-active" : "seg-btn"}
+                      disabled={busy}
+                      onClick={() => {
+                        setRoute(id);
+                        setError(null);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {route === "github" ? (
               account ? (
