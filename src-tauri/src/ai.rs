@@ -192,42 +192,52 @@ pub async fn ai_test_key(keys: State<'_, Keys>, provider: String) -> Result<(), 
 
 /// Stops the run named `job`: a provider's request is dropped, this computer's painting or
 /// setting up ([`jobs::LOCAL_SETUP`]) is ended. A Stop that arrives just before its run starts
-/// stops it as it starts.
+/// stops it as it starts; one that arrives just after its run ended does nothing.
 #[tauri::command]
 pub fn ai_cancel(jobs: State<'_, Jobs>, job: String) {
     jobs.cancel(&job);
 }
 
-/// Whether pictures can be made on this computer, and what setting it up takes.
+/// Whether pictures can be made on this computer, what setting it up takes, and whether a setup
+/// is under way (which `ai_local_setup` then joins).
 #[tauri::command]
 pub async fn ai_local_status(local: State<'_, Local>) -> Result<LocalStatusDto, AiFailure> {
     let here = local.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let machine = here.machine();
-        local::status(&machine, &here.settings())
-    })
-    .await
-    .map_err(|e| AiFailure::bug(format!("Looking at this computer stopped: {e}.")))
+    tauri::async_runtime::spawn_blocking(move || here.status())
+        .await
+        .map_err(|e| AiFailure::bug(format!("Looking at this computer stopped: {e}.")))
 }
 
 /// Downloads and checks what this computer needs to paint, telling `on_event` as it goes, and
 /// says how it stands afterwards. Stopped with `ai_cancel("local-setup")`; what was downloaded
-/// is kept, and setting up again carries on from there.
+/// is kept, and setting up again carries on from there. Asked while a setup is under way (the
+/// window was closed and opened again), it joins that one: `on_event` hears where it has got to
+/// and what comes next, and the answer is how it ends.
 #[tauri::command]
 pub async fn ai_local_setup(
     local: State<'_, Local>,
     jobs: State<'_, Jobs>,
     on_event: Channel<AiEvent>,
 ) -> Result<LocalStatusDto, AiFailure> {
+    let lead = match local.join_setup(sender(on_event)) {
+        local::SetupTurn::Join(join) => return join.outcome().await,
+        local::SetupTurn::Lead(lead) => lead,
+    };
+    let outcome = set_up(local.inner(), &jobs, lead.listener()).await;
+    lead.finish(outcome)
+}
+
+/// Sets this computer up, telling `send` how it goes.
+async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusDto, AiFailure> {
+    // Only one setup is let through join_setup, so this is only a guard.
     let Some(running) = jobs.try_start(jobs::LOCAL_SETUP) else {
         return Err(
             AiFailure::new("busy", "This computer is already being set up.")
-                .fix("It carries on in the background; this shows it once it's done."),
+                .fix("Wait for it to finish, then try again."),
         );
     };
-    let send = sender(on_event);
     send(AiEvent::stage("check", "Looking at this computer"));
-    let here = local.inner().clone();
+    let here = local.clone();
     let (machine, settings) = tauri::async_runtime::spawn_blocking(move || {
         let machine = here.machine();
         let settings = here.settings();
@@ -267,19 +277,45 @@ pub async fn ai_local_setup(
         failure => failure,
     })?;
     send(AiEvent::stage("check", "Checking it runs"));
-    let status = tauri::async_runtime::spawn_blocking(move || local::status(&machine, &settings))
+    let here = local.clone();
+    let mut status = tauri::async_runtime::spawn_blocking(move || here.status())
         .await
         .map_err(|e| AiFailure::bug(format!("Checking the setup stopped: {e}.")))?;
+    // Done with, as far as the window is concerned.
+    status.setting_up = false;
+    if let Some(problem) = &status.problem {
+        return Err(runtime_wont_start(problem, &settings, &doing));
+    }
     if !status.ready {
-        let why = status
-            .note
-            .clone()
-            .unwrap_or_else(|| "Everything downloaded, but it still isn't ready to paint.".into());
-        return Err(AiFailure::new("local_not_ready", &why)
-            .fix("Set it up again; what was downloaded is kept.")
-            .asking(&doing.what, &why));
+        let why = "Everything downloaded, but it still isn't ready to paint.";
+        return Err(AiFailure::failed(why)
+            .fix("Try again; what was downloaded is kept.")
+            .asking(&doing.what, why));
     }
     Ok(status)
+}
+
+/// A runtime that setup installed but won't start. Setting up again leaves an installed runtime
+/// as it is, so the fix is what does change it.
+fn runtime_wont_start(
+    problem: &local::RuntimeProblem,
+    settings: &folderskin_local::Settings,
+    doing: &Doing,
+) -> AiFailure {
+    let failure = AiFailure::new(problem.code, &problem.message);
+    match problem.code {
+        "vc_runtime_missing" => failure
+            .fix("Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe, then try again."),
+        _ => failure
+            .fix(format!(
+                "Delete {} so it is installed afresh, then try again.",
+                folderskin_local::paths::sd_cli(settings.backend)
+                    .parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .display()
+            ))
+            .asking(&doing.what, &problem.message),
+    }
 }
 
 /// Makes one picture and saves it as a skin, like an imported picture, telling `on_event` how
@@ -678,6 +714,51 @@ mod tests {
         let name = short_name("桜桜桜桜桜桜桜桜桜桜 at night");
         assert_eq!(name, "桜".repeat(9));
         assert_eq!(short_name("🦊🦊🦊🦊🦊🦊🦊🦊"), "🦊".repeat(7));
+    }
+
+    #[test]
+    fn a_runtime_that_wont_start_says_what_changes_that_not_to_set_up_again() {
+        let settings = folderskin_local::Settings {
+            backend: folderskin_local::Backend::Cuda,
+            tier: folderskin_local::Tier::Q8,
+            vram_gb: 4.0,
+        };
+        let doing = Doing {
+            what: "setting this computer up to paint (CUDA, RTX 3050 Ti)".into(),
+            setup: true,
+            model: None,
+        };
+        let vc = runtime_wont_start(
+            &local::RuntimeProblem {
+                code: "vc_runtime_missing",
+                message: "stable-diffusion.cpp is installed but won't start: it needs the \
+                          Microsoft Visual C++ runtime."
+                    .into(),
+            },
+            &settings,
+            &doing,
+        );
+        assert_eq!(vc.code, "vc_runtime_missing");
+        assert!(vc.fix[0].contains("vc_redist.x64.exe"), "{vc:?}");
+        assert!(!vc.fix.iter().any(|f| f.contains("up again")), "{vc:?}");
+        assert_eq!(vc.ask, None, "installing it is the answer");
+        let broken = runtime_wont_start(
+            &local::RuntimeProblem {
+                code: "runtime_failed_to_start",
+                message: "stable-diffusion.cpp is installed but won't start: it stopped with \
+                          exit code Some(3)."
+                    .into(),
+            },
+            &settings,
+            &doing,
+        );
+        assert_eq!(broken.code, "runtime_failed_to_start");
+        let cuda = folderskin_local::paths::sd_cli(settings.backend);
+        assert!(
+            broken.fix[0].contains(&cuda.parent().unwrap().display().to_string()),
+            "{broken:?}"
+        );
+        assert!(broken.ask.is_some());
     }
 
     #[test]

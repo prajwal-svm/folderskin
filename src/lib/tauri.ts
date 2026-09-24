@@ -193,15 +193,21 @@ export const LOCAL_SETUP_JOB = "local-setup";
 
 /** Whether pictures can be made on this computer, and what it takes (the local engine). */
 export type LocalStatus = {
-  /** The runtime and a model are here and checked. */
+  /** The runtime and both models are here, and the runtime starts. */
   ready: boolean;
+  /** Setting up has something to install here; false on a computer the runtime has no build for (an Intel Mac, ARM64 Linux), where `note` says what to do instead. */
+  can_set_up: boolean;
+  /** A setup is under way, perhaps started before this panel opened: `aiLocalSetup` joins it. */
+  setting_up: boolean;
   /** How it runs here: CUDA, Vulkan, Metal, MLX or CPU. */
   backend: string;
   /** What it runs on, as people know it ("NVIDIA GeForce RTX 3050 Ti, 4 GB"). */
   device: string;
   /** What's still to download before it's ready; 0 once it is. */
   download_bytes: number;
-  /** Roughly how long one picture takes here, when known. */
+  /** The models download the first time each one paints (mflux on Apple Silicon), so `download_bytes` leaves them out. */
+  downloads_on_first_use: boolean;
+  /** How long the last picture painted here took, once one has been. */
   seconds_per_image: number | null;
   /** Where the runtime and models are kept. */
   home: string;
@@ -393,7 +399,8 @@ const tauriApi = {
   /** Whether pictures can be made on this computer, and what setting that up takes. */
   aiLocalStatus: () => invoke<LocalStatus>("ai_local_status"),
   /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes.
-   *  Stopped with `aiCancel(LOCAL_SETUP_JOB)` (it fails with the code "stopped"); what was downloaded is kept. */
+   *  Stopped with `aiCancel(LOCAL_SETUP_JOB)` (it fails with the code "stopped"); what was downloaded is kept.
+   *  Asked while a setup is under way, it joins that one: `onEvent` hears where it has got to, and it settles as that one does. */
   aiLocalSetup: (onEvent: (event: AiEvent) => void) => invoke<LocalStatus>("ai_local_setup", { onEvent: new Channel<AiEvent>(onEvent) }),
 
   // ---- the assistant's saved chats (chats.rs) ----

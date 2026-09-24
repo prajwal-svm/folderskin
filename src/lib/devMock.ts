@@ -76,19 +76,55 @@ const mockStopped = new Set<string>();
 
 const MOCK_LABELS: Record<string, string> = { openai: "OpenAI", xai: "xAI Grok", recraft: "Recraft", google: "Google Gemini", bfl: "Black Forest Labs", stability: "Stability AI", ideogram: "Ideogram" };
 
-/** Whether "this computer" is set up in the preview; `?localready` starts it set up. */
-const mockLocal = { ready: new URLSearchParams(location.search).has("localready") };
+/** Whether "this computer" is set up in the preview (`?localready` starts it set up), and how long
+ *  its last picture took: unknown until one is painted, as the app only knows once it has. */
+const mockLocal = { ready: new URLSearchParams(location.search).has("localready"), seconds: null as number | null };
+
+/** The preview's setup under way, which a second aiLocalSetup joins as ai_local_setup does: it
+ *  hears where the setup has got to, then what comes next, and settles as the setup does. */
+let mockSetup: { listeners: ((event: AiEvent) => void)[]; heard: () => AiEvent[]; done: Promise<LocalStatus> } | null = null;
 
 function mockLocalStatus(): LocalStatus {
   return {
     ready: mockLocal.ready,
+    can_set_up: true,
+    setting_up: mockSetup !== null,
     backend: "CUDA",
     device: "NVIDIA GeForce RTX 3050 Ti, 4 GB",
     download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
-    seconds_per_image: 18,
+    downloads_on_first_use: false,
+    seconds_per_image: mockLocal.seconds,
     home: "C:\\Users\\you\\AppData\\Local\\folderskin-localgen",
     note: null,
   };
+}
+
+/** A skin's name as ai.rs `short_name` makes it: the idea's first four words, no more than 28
+ *  bytes of them (one long word cut to fit), never ending on a little one, the first letter a capital. */
+function mockShortName(idea: string): string {
+  const MAX_BYTES = 28;
+  const bytes = (s: string) => new TextEncoder().encode(s).length;
+  const words: string[] = [];
+  let len = 0;
+  for (const word of idea.replace(/[,.;:!?]/g, " ").split(/\s+/).filter(Boolean).slice(0, 4)) {
+    const add = bytes(word) + (words.length > 0 ? 1 : 0);
+    if (len + add > MAX_BYTES) {
+      if (words.length === 0) {
+        let cut = "";
+        for (const ch of word) {
+          if (bytes(cut + ch) > MAX_BYTES) break;
+          cut += ch;
+        }
+        words.push(cut);
+      }
+      break;
+    }
+    len += add;
+    words.push(word);
+  }
+  while (words.length > 1 && /^(a|an|the|at|of|in|on|with|and|for|to|by)$/i.test(words[words.length - 1])) words.pop();
+  const name = words.join(" ");
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Generated";
 }
 
 /** The preview's saved chats, in this browser's storage so they're there after a reload, as the app's are. */
@@ -882,6 +918,8 @@ export const mockApi = {
           ask: `claude "On windows x86_64 with FolderSkin 0.1.3, painting ${req.shape === "folder" ? "a whole folder" : "folder artwork"} on this computer (CUDA, NVIDIA GeForce RTX 3050 Ti, 4 GB) failed with out_of_memory: The graphics card ran out of memory while painting. stable-diffusion.cpp stopped with exit code 1. Help me fix it."`,
         };
       }
+      // Painted: now the settings can say how long a picture takes here (ai/local.rs Timing).
+      mockLocal.seconds = 18;
     } else {
       onEvent({ type: "stage", stage: "send", message: `Sending your idea to ${who}` });
       await wait(700);
@@ -900,13 +938,9 @@ export const mockApi = {
     }
     onEvent({ type: "stage", stage: "save", message: "Saving it to Yours" });
     await wait(200);
-    // As ai.rs names it: the first few words, never ending on a little one ("A lighthouse", not "A lighthouse at").
-    const words = req.idea.replace(/[,.;:!?]/g, " ").split(/\s+/).filter(Boolean).slice(0, 4);
-    while (words.length > 1 && /^(a|an|the|at|of|in|on|with|and|for|to|by)$/i.test(words[words.length - 1])) words.pop();
-    const name = words.join(" ");
     const skin: Skin = {
       id: `user:ai${Date.now().toString(16)}`,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
+      name: mockShortName(req.idea),
       collection: "yours",
       thumbnail: picture(library.length + 1),
       custom: true,
@@ -925,30 +959,54 @@ export const mockApi = {
   },
   aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
   aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {
+    // Asked while one runs (the panel was closed and opened again), it joins that one.
+    if (mockSetup) {
+      for (const event of mockSetup.heard()) onEvent(event);
+      mockSetup.listeners.push(onEvent);
+      return mockSetup.done;
+    }
     // aiCancel(LOCAL_SETUP_JOB) stops it, as ai_local_setup does; a Stop from an earlier setup doesn't count.
     const SETUP = "local-setup";
     mockStopped.delete(SETUP);
-    const files: [string, number][] = [
-      ["stable-diffusion.cpp (CUDA)", 150_000_000],
-      ["FLUX.2 klein 4B, q4", 2_400_000_000],
-      ["Qwen3 4B text encoder, q4", 2_500_000_000],
-      ["FLUX.2 autoencoder", 330_000_000],
-    ];
-    onEvent({ type: "stage", stage: "download", message: "Downloading what this computer needs" });
-    for (const [file, total] of files) {
-      for (let i = 1; i <= 5; i++) {
-        await sleep(90);
-        if (mockStopped.delete(SETUP)) {
-          throw { code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." };
+    const listeners = [onEvent];
+    let stage: AiEvent | null = null;
+    let download: AiEvent | null = null;
+    const log: AiEvent[] = [];
+    const tell = (event: AiEvent) => {
+      if (event.type === "stage") stage = event;
+      else if (event.type === "download") download = event;
+      else if (event.type === "log") log.push(event);
+      for (const listener of listeners) listener(event);
+    };
+    const run = async (): Promise<LocalStatus> => {
+      const files: [string, number][] = [
+        ["stable-diffusion.cpp (CUDA)", 150_000_000],
+        ["FLUX.2 klein 4B, q4", 2_400_000_000],
+        ["Qwen3 4B text encoder, q4", 2_500_000_000],
+        ["FLUX.2 autoencoder", 330_000_000],
+      ];
+      tell({ type: "stage", stage: "download", message: "Downloading what this computer needs" });
+      for (const [file, total] of files) {
+        for (let i = 1; i <= 5; i++) {
+          await sleep(90);
+          if (mockStopped.delete(SETUP)) {
+            throw { code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." };
+          }
+          tell({ type: "download", file, done: Math.round((total * i) / 5), total });
         }
-        onEvent({ type: "download", file, done: Math.round((total * i) / 5), total });
+        tell({ type: "log", level: "info", message: `checked ${file}` });
       }
-      onEvent({ type: "log", level: "info", message: `checked ${file}` });
-    }
-    onEvent({ type: "stage", stage: "check", message: "Checking it runs" });
-    await sleep(400);
-    mockLocal.ready = true;
-    return mockLocalStatus();
+      tell({ type: "stage", stage: "check", message: "Checking it runs" });
+      await sleep(400);
+      mockLocal.ready = true;
+      mockSetup = null;
+      return mockLocalStatus();
+    };
+    const done = run().finally(() => {
+      mockSetup = null;
+    });
+    mockSetup = { listeners, heard: () => [...log, ...(stage ? [stage] : []), ...(download ? [download] : [])], done };
+    return done;
   },
   chatsList: async (): Promise<ChatSummaryDto[]> => mockChats().index,
   chatRead: async (id: string): Promise<unknown> => {

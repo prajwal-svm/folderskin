@@ -44,8 +44,22 @@ function sentence(text: string): string {
   return /[.!?…)]$/.test(s) ? s : `${s}.`;
 }
 
-/** Whether trying again, as it was, can help: not when the key, the words or the setup are what's
- *  wrong, nor on a computer the local runtime has no build for (ai/failure.rs passes that code on). */
+/** Codes where the same request fails the same way again: the key, the words, the setup or a
+ *  reference picture is what's wrong, or the computer has no local runtime build (ai/failure.rs
+ *  passes the engine's codes on). A "busy" setup is worth trying again once the other one ends. */
+const NOT_WORTH_RETRYING = [
+  "missing_key",
+  "unauthorized",
+  "refused",
+  "no_idea",
+  "local_not_ready",
+  "no_build_for_platform",
+  "reference_unreadable",
+  "reference_missing",
+  "path_not_ascii",
+];
+
+/** Whether trying again, as it was, can help. */
 export function worthRetrying(code: string): boolean {
-  return !["missing_key", "unauthorized", "refused", "local_not_ready", "no_build_for_platform"].includes(code);
+  return !NOT_WORTH_RETRYING.includes(code);
 }
