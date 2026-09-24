@@ -2,8 +2,9 @@
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
-| **CI** (`ci.yml`) | pushes and pull requests to `main`, except ones that only touch docs | the jobs below |
+| **CI** (`ci.yml`) | every pull request to `main`, and pushes to it except ones that only touch docs | the jobs below |
 | **CodeQL** (`codeql.yml`) | pushes and pull requests to `main`, once the repository is public | code scanning for TypeScript and the workflows |
+| **Downloads** (`downloads.yml`) | daily, when a release is published, or by hand | counts the installers downloaded, for the README's badge (below) |
 | **Release** (`release.yml`) | a `v*.*.*` tag, or by hand | draft release with installers for every platform ([RELEASING.md](RELEASING.md)) |
 | **Dependabot** (`.github/dependabot.yml`) | Mondays | one pull request of minor and patch updates per ecosystem |
 
@@ -27,6 +28,22 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo deny --workspace --all-features check
 ```
+
+## Protecting `main`
+
+A repository ruleset, "Protect main", keeps `main` from being deleted or force-pushed and
+takes changes into it through pull requests whose checks have passed: the seven CI jobs
+(Frontend, End-to-end, Rust, Rust (macOS), Rust (Windows), cargo-deny, Community service) and
+CodeQL's two (`Analyze (javascript-typescript)`, `Analyze (actions)`). That is also what lets
+GitHub offer auto-merge. Admins can bypass it, for a fix that can't wait.
+
+Two things follow from it:
+
+- CI runs on every pull request, even one that only changes docs. A required check that a
+  workflow's path filters skip is never reported, and the pull request waits for it forever.
+- Nothing pushes to `main` from a workflow. The downloads badge, which a workflow updates every
+  day, lives on a branch of its own, `badges`, holding only `downloads.json`: a ruleset on a
+  repository owned by a person, not an organisation, can't let GitHub Actions bypass it.
 
 ## The Rust version
 

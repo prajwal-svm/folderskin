@@ -8,6 +8,10 @@ name: Downloads
 # Shields has no way to say "everything except that file" — asset names there are matched
 # literally, with no wildcards — so the total is worked out here and published as a shields
 # endpoint file the README points at.
+#
+# The file lives on a branch of its own, `badges`, which holds nothing else. `main` is protected
+# (its changes come through pull requests that pass CI), and a ruleset on a repository owned by a
+# person, not an organisation, can't let GitHub Actions push past that.
 on:
   schedule:
     # Once a day. Download counts don't need to be live, and this keeps the history quiet.
@@ -30,12 +34,6 @@ jobs:
       group: downloads-badge
       cancel-in-progress: false
     steps:
-      # The default branch by name, never `github.ref`: on a `release: published` run that is the
-      # tag, and the commit below would try to move the tag instead of the branch.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-
       - name: Add up the installers
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,22 +46,28 @@ jobs:
             --jq '.[].assets[] | select(.name | test("\\.(dmg|exe|msi|AppImage|deb|rpm)$")) | .download_count' \
             | awk '{ n += $1 } END { print n + 0 }')
           echo "Installers downloaded: $total"
-          mkdir -p .github/badges
-          printf '{\n  "schemaVersion": 1,\n  "label": "downloads",\n  "message": "%s",\n  "color": "3A86FF"\n}\n' "$total" > .github/badges/downloads.json
+          printf '{\n  "schemaVersion": 1,\n  "label": "downloads",\n  "message": "%s",\n  "color": "3A86FF"\n}\n' "$total" > "$RUNNER_TEMP/downloads.json"
 
-      # A push made with the workflow's own token starts no other workflow, so this commit
-      # cannot start another run.
-      - name: Commit it if it changed
+      # Onto the `badges` branch, made by the first run with nothing on it but this file. A push
+      # made with the workflow's own token starts no other workflow, so it cannot start another run.
+      - name: Publish it if it changed
         env:
-          BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$(git status --porcelain -- .github/badges/downloads.json)" ]; then
+          set -euo pipefail
+          git init -q -b badges badges
+          cd badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin badges 2>/dev/null; then
+            git reset -q --hard FETCH_HEAD
+          fi
+          cp "$RUNNER_TEMP/downloads.json" downloads.json
+          if [ -z "$(git status --porcelain -- downloads.json)" ]; then
             echo "The downloads badge is up to date."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- .github/badges/downloads.json
-          git commit -m "Update the downloads count"
-          git pull --rebase origin "$BRANCH"
-          git push origin "HEAD:$BRANCH"
+          git add -- downloads.json
+          git commit -q -m "Update the downloads count"
+          git push -q origin badges
