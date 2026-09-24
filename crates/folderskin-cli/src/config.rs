@@ -56,7 +56,7 @@ impl Config {
                     "The command line's settings can't be read.",
                     format!("{} isn't valid: {e}.", path.display()),
                 )
-                .fix("Fix the file, or start again with: folderskin ai config unset provider (and the same for model, tier and backend)")
+                .fix("Fix the file, or start again from the defaults: folderskin ai config unset provider")
                 .fix(format!("Or delete {}", path.display()))
             }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),

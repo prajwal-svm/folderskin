@@ -764,8 +764,29 @@ fn models(out: &Arc<Out>) -> Result<(), CliError> {
 
 // ---------- settings and keys ----------
 
+/// The settings `command` works on: the saved ones, or the defaults when they can't be read and
+/// the command is `unset`, which is what the unreadable file's error says to run (it would
+/// otherwise fail on the very file it is meant to mend), or `path`, which needs no file at all.
+/// Says whether it started again.
+fn config_to_change(
+    loaded: Result<Config, CliError>,
+    command: Option<&ConfigCommand>,
+) -> Result<(Config, bool), CliError> {
+    match (loaded, command) {
+        (Err(e), Some(ConfigCommand::Unset { .. } | ConfigCommand::Path))
+            if e.code == "config_unreadable" =>
+        {
+            Ok((Config::default(), true))
+        }
+        (loaded, _) => loaded.map(|c| (c, false)),
+    }
+}
+
 fn config(command: Option<ConfigCommand>, out: &Arc<Out>) -> Result<(), CliError> {
-    let mut config = Config::load()?;
+    let (mut config, afresh) = config_to_change(Config::load(), command.as_ref())?;
+    if afresh && matches!(command, Some(ConfigCommand::Unset { .. })) {
+        out.warn("the settings couldn't be read, so they start again from the defaults");
+    }
     let show = |config: &Config, keys: &[ConfigKey]| {
         let meta: serde_json::Map<String, serde_json::Value> = keys
             .iter()
@@ -1018,6 +1039,39 @@ mod tests {
             .collect();
         assert_eq!(words, ["photos", "taxes-2025", "photos-holidays"]);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn unreadable_settings_can_be_unset_but_not_used() {
+        let unreadable = || {
+            Err(CliError::fixable(
+                "config_unreadable",
+                "The command line's settings can't be read.",
+                "cli.json isn't valid.",
+            ))
+        };
+        let unset = ConfigCommand::Unset {
+            key: ConfigKey::Tier,
+        };
+        assert_eq!(
+            config_to_change(unreadable(), Some(&unset)).unwrap(),
+            (Config::default(), true)
+        );
+        assert!(config_to_change(unreadable(), Some(&ConfigCommand::Path)).is_ok());
+        for command in [
+            None,
+            Some(ConfigCommand::Get { key: None }),
+            Some(ConfigCommand::Set {
+                key: ConfigKey::Tier,
+                value: "q4".into(),
+            }),
+        ] {
+            let e = config_to_change(unreadable(), command.as_ref()).unwrap_err();
+            assert_eq!(e.code, "config_unreadable", "{command:?}");
+        }
+        // Any other failure, such as a file that can't be opened, isn't papered over.
+        let locked = Err(CliError::fixable("io", "Couldn't read the settings.", ""));
+        assert!(config_to_change(locked, Some(&unset)).is_err());
     }
 
     #[test]
