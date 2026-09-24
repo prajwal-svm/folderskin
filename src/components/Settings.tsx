@@ -8,6 +8,7 @@ import {
   defaultProfile,
   loadProfiles,
   makeDefault,
+  MAX_PROFILE_NAME,
   MAX_PROFILES,
   newProfileId,
   profileProblem,
@@ -48,29 +49,35 @@ import { SunIcon } from "./icons/sun";
 export type SettingsTab = "general" | "ai" | "sharing" | "about";
 
 /**
- * The pages down the side, and the words each answers to in the search above them. A row's own
- * words (its label and `find`) light it up on its page.
+ * The pages down the side, and the words each answers to in the search above them: its section
+ * titles and the words of its settings. A section's title, and a row's own words (its label and
+ * `find`), light it up on its page.
  */
 const PAGES: { id: SettingsTab; label: string; Icon: typeof SunIcon; find: string }[] = [
   {
     id: "general",
     label: "General",
     Icon: SlidersHorizontalIcon,
-    find: "appearance theme dark light system mode accent colour color motion animation reduce sidebar rail icons window skins folder storage backup",
+    find: "appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
   },
   {
     id: "ai",
     label: "AI",
     Icon: SparklesIcon,
-    find: "ai key keys provider providers api openai gemini google fal replicate flux ideogram local this computer model generate pictures",
+    find: "ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local this computer set up model generate free",
   },
   {
     id: "sharing",
     label: "Sharing",
     Icon: EarthIcon,
-    find: "sharing share github connect account author credit licence license profile profiles cc0 cc by mit community pack",
+    find: "sharing share github connect account author credit credited licence license profile profiles cc0 cc by mit community pack",
   },
-  { id: "about", label: "About", Icon: InfoIcon, find: "about version update updates release releases source code issues star" },
+  {
+    id: "about",
+    label: "About",
+    Icon: InfoIcon,
+    find: "about version newer versions update updates release releases this computer folder icons links source code issues star",
+  },
 ];
 
 type Toast = (text: string, opts?: { tone?: ToastTone }) => void;
@@ -78,7 +85,14 @@ type Toast = (text: string, opts?: { tone?: ToastTone }) => void;
 /** What's typed in the search, lowercased, so rows on the page can light up when they match. */
 const Query = createContext("");
 
-const matches = (query: string, text: string) => query !== "" && text.toLowerCase().includes(query);
+/** Every word typed is somewhere in `text`, in any order. */
+const hasWords = (query: string, text: string) => {
+  const t = text.toLowerCase();
+  return query.split(/\s+/).every((w) => t.includes(w));
+};
+
+/** Whether a setting lights up: from two letters on, as one is in nearly everything. */
+const matches = (query: string, text: string) => query.length >= 2 && hasWords(query, text);
 
 /**
  * Every setting in one dialog, its pages down the left and the chosen one on the right: how the
@@ -123,15 +137,21 @@ export function Settings({
 }) {
   const [tab, setTab] = useState<SettingsTab>(first);
   const [search, setSearch] = useState("");
+  /** The page open has something leaving it would lose: a profile being changed, an Undo, a connection to GitHub. */
+  const [busy, setBusy] = useState(false);
   const query = search.trim().toLowerCase();
-  const shown = useMemo(() => PAGES.filter((p) => !query || `${p.label} ${p.find}`.toLowerCase().includes(query)), [query]);
-  // Searching moves to the first page that has it, unless the one open has it too.
+  const shown = useMemo(() => PAGES.filter((p) => !query || hasWords(query, `${p.label} ${p.find}`)), [query]);
+  // Searching moves to the first page that has it, unless the one open has it too, or has
+  // something open that moving would lose.
   useEffect(() => {
-    if (shown.length > 0 && !shown.some((p) => p.id === tab)) setTab(shown[0].id);
-  }, [shown, tab]);
+    if (!busy && shown.length > 0 && !shown.some((p) => p.id === tab)) setTab(shown[0].id);
+  }, [shown, tab, busy]);
   const tabs = useRef<Record<string, HTMLButtonElement | null>>({});
   const page = PAGES.find((p) => p.id === tab) ?? PAGES[0];
   const panelId = useId();
+  /** The open page's tab is in the list; when it isn't, the page is named without it. */
+  const listed = shown.some((p) => p.id === tab);
+  const empty = shown.length === 0;
 
   /** Up and down the pages, as a list of tabs goes, choosing as it moves. */
   const onNavKey = (e: KeyboardEvent<HTMLButtonElement>) => {
@@ -167,7 +187,7 @@ export function Settings({
           </label>
           <p className="settings-nav-label">Settings</p>
           <div className="settings-nav-list" role="tablist" aria-orientation="vertical" aria-label="settings pages">
-            {shown.map((p) => (
+            {shown.map((p, i) => (
               <button
                 key={p.id}
                 ref={(el) => {
@@ -178,7 +198,7 @@ export function Settings({
                 id={`${panelId}-${p.id}`}
                 aria-selected={p.id === tab}
                 aria-controls={panelId}
-                tabIndex={p.id === tab ? 0 : -1}
+                tabIndex={p.id === tab || (!listed && i === 0) ? 0 : -1}
                 data-modal-focus={p.id === tab ? "" : undefined}
                 className={p.id === tab ? "settings-nav-btn is-active" : "settings-nav-btn"}
                 onClick={() => setTab(p.id)}
@@ -188,14 +208,31 @@ export function Settings({
                 <span className="settings-nav-text">{p.label}</span>
               </button>
             ))}
-            {shown.length === 0 && <p className="settings-nav-empty">No setting matches “{search.trim()}”</p>}
           </div>
         </nav>
-        <div className="settings-main" role="tabpanel" id={panelId} aria-labelledby={`${panelId}-${page.id}`} key={tab}>
+        {/* With nothing found the page stays, out of sight, so nothing open on it is lost. */}
+        <div
+          className={empty ? "settings-main is-empty" : "settings-main"}
+          role="tabpanel"
+          id={panelId}
+          aria-labelledby={listed ? `${panelId}-${page.id}` : undefined}
+          aria-label={listed ? undefined : empty ? "settings" : page.label}
+          key={tab}
+        >
+          {empty && <p className="settings-empty">No setting matches “{search.trim()}”</p>}
           <Query.Provider value={query}>
-            {tab === "general" && <General themePref={themePref} onThemePref={onThemePref} rail={rail} onRail={onRail} fileBrowser={fileBrowser} savedCount={savedCount} />}
+            {tab === "general" && (
+              <General
+                themePref={themePref}
+                onThemePref={onThemePref}
+                rail={rail}
+                onRail={onRail}
+                fileBrowser={fileBrowser}
+                savedCount={savedCount}
+              />
+            )}
             {tab === "ai" && <AiPage onKeysChanged={onKeysChanged} toast={toast} />}
-            {tab === "sharing" && <Sharing toast={toast} />}
+            {tab === "sharing" && <Sharing toast={toast} onBusy={setBusy} />}
             {tab === "about" && <About note={note} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
           </Query.Provider>
         </div>
@@ -206,13 +243,12 @@ export function Settings({
 
 // ---------- the pieces every page is made of ----------
 
-function Section({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
-  const id = useId();
+/** A part of a page under its title. `find` is more words search lights the title for. */
+function Section({ title, note, find = "", children }: { title: string; note?: ReactNode; find?: string; children: ReactNode }) {
+  const lit = matches(useContext(Query), `${title} ${find}`);
   return (
-    <section className="set-section" aria-labelledby={id}>
-      <h3 className="set-section-title" id={id}>
-        {title}
-      </h3>
+    <section className="set-section">
+      <h2 className={lit ? "set-section-title is-match" : "set-section-title"}>{title}</h2>
       {note && <p className="set-section-note">{note}</p>}
       <div className="set-rows">{children}</div>
     </section>
@@ -433,6 +469,7 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
   return (
     <Section
       title="Where pictures are made"
+      find={`key keys api provider providers model ${catalogue?.providers.map((p) => p.label).join(" ") ?? ""}`}
       note="FolderSkin has no server. With a key, Generate with AI sends your request straight from this computer to the provider, billed to your account. This computer makes them for free, once it's set up."
     >
       <div className="set-block">
@@ -461,58 +498,89 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
 
 // ---------- Sharing ----------
 
-function Sharing({ toast }: { toast: Toast }) {
+/** Whether the focus is nowhere, having gone with what it was on, or inside `el`. */
+const focusIsIn = (el: HTMLElement | null) => {
+  const at = document.activeElement;
+  return !at || at === document.body || !!el?.contains(at);
+};
+
+function Sharing({ toast, onBusy }: { toast: Toast; onBusy: (busy: boolean) => void }) {
   const [profiles, setProfiles] = useState<Profiles>(loadProfiles);
-  const change = (next: Profiles) => {
+  // The profiles as last changed, for what finishes later than the render that started it.
+  const latest = useRef(profiles);
+  const change = useCallback((next: Profiles) => {
+    latest.current = next;
     setProfiles(next);
     saveProfiles(next);
-  };
+  }, []);
+  /** The default profile takes the GitHub name when it has none yet. */
+  const creditTo = useCallback(
+    (login: string) => {
+      const p = defaultProfile(latest.current);
+      if (!p.author) change(upsertProfile(latest.current, { ...p, author: login }));
+    },
+    [change],
+  );
 
   const [account, setAccount] = useState<GithubAccount | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [listBusy, setListBusy] = useState(false);
+  useEffect(() => onBusy(connecting || listBusy), [connecting, listBusy, onBusy]);
+  useEffect(() => () => onBusy(false), [onBusy]);
   useEffect(() => {
     let live = true;
     void api
       .githubAccount()
       .then((who) => {
-        if (live && who) setAccount(who);
+        if (!live || !who) return;
+        setAccount(who);
+        creditTo(who.login);
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, []);
+  }, [creditTo]);
 
-  if (connecting) {
-    return (
-      <Section title="Connect to GitHub">
-        <div className="set-block">
-          <GithubConnect
-            onConnected={(who) => {
-              setAccount(who);
-              setConnecting(false);
-              // The default profile takes the GitHub name when it has none yet.
-              const p = defaultProfile(profiles);
-              if (!p.author) change(upsertProfile(profiles, { ...p, author: who.login }));
-              toast(`Connected to GitHub as ${who.login}`, { tone: "ok" });
-            }}
-            onCancel={() => setConnecting(false)}
-          />
-        </div>
-      </Section>
-    );
-  }
+  // Connecting, cancelling and disconnecting each take away the button that had the focus; it
+  // goes to the one in the GitHub row now.
+  const connectBox = useRef<HTMLDivElement>(null);
+  const githubButton = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    githubButton.current?.focus();
+  });
 
   return (
     <>
       <Section title="GitHub">
-        {account ? (
+        {connecting ? (
+          <div className="set-block" ref={connectBox}>
+            <GithubConnect
+              onConnected={(who) => {
+                refocus.current = focusIsIn(connectBox.current);
+                setAccount(who);
+                setConnecting(false);
+                creditTo(who.login);
+                toast(`Connected to GitHub as ${who.login}`, { tone: "ok" });
+              }}
+              onCancel={() => {
+                refocus.current = focusIsIn(connectBox.current);
+                setConnecting(false);
+              }}
+            />
+          </div>
+        ) : account ? (
           <Row label={account.login} note={account.name || "Connected"} find="github account connected disconnect" lead={<GithubAvatar account={account} />}>
             <button
+              ref={githubButton}
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={() => {
                 void api.githubSignOut().catch(() => {});
+                refocus.current = true;
                 setAccount(null);
               }}
             >
@@ -530,7 +598,7 @@ function Sharing({ toast }: { toast: Toast }) {
               </span>
             }
           >
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setConnecting(true)}>
+            <button ref={githubButton} type="button" className="btn btn-primary btn-sm" onClick={() => setConnecting(true)}>
               Connect
             </button>
           </Row>
@@ -541,7 +609,7 @@ function Sharing({ toast }: { toast: Toast }) {
         title="Licence profiles"
         note="A pack you share says who made it and how others may use it. Keep a profile for each way you share: sharing starts from the default one."
       >
-        <ProfileList profiles={profiles} account={account} onChange={change} />
+        <ProfileList profiles={profiles} account={account} onChange={change} onBusy={setListBusy} />
       </Section>
 
       <button type="button" className="link-btn set-link" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
@@ -557,14 +625,48 @@ const UNDO_MS = 8000;
 const LICENCE_OPTIONS = LICENSES.map((l) => ({ value: l.id as LicenseId, label: `${l.label}: ${l.note}` }));
 const licenceName = (id: LicenseId) => LICENSES.find((l) => l.id === id)?.label ?? id;
 
-function ProfileList({ profiles, account, onChange }: { profiles: Profiles; account: GithubAccount | null; onChange: (p: Profiles) => void }) {
+function ProfileList({
+  profiles,
+  account,
+  onChange,
+  onBusy,
+}: {
+  profiles: Profiles;
+  account: GithubAccount | null;
+  onChange: (p: Profiles) => void;
+  /** A profile is open for changes, or Undo is offered. */
+  onBusy: (busy: boolean) => void;
+}) {
   /** The profile open for changes, or a new one not yet kept. */
   const [editing, setEditing] = useState<{ profile: LicenceProfile; isNew: boolean } | null>(null);
-  /** The profiles as they were before one was deleted, and its name, while Undo is offered. */
-  const [deleted, setDeleted] = useState<{ before: Profiles; name: string } | null>(null);
+  /** The profiles as they were before one was deleted, and that one, while Undo is offered. */
+  const [deleted, setDeleted] = useState<{ before: Profiles; id: string; name: string } | null>(null);
+  useEffect(() => onBusy(editing !== null || deleted !== null), [editing, deleted, onBusy]);
+
+  // Saving, cancelling, deleting and undoing each take away the button that had the focus. The
+  // buttons it can go to instead are kept here by name ("add", "undo", "change <id>"), and
+  // `focusNext` lists where it goes after the next render, the first that's there.
+  const buttons = useRef(new Map<string, HTMLElement>());
+  const hold = (key: string) => (el: HTMLElement | null) => {
+    if (el) buttons.current.set(key, el);
+    else buttons.current.delete(key);
+  };
+  const focusNext = useRef<string[] | null>(null);
+  useEffect(() => {
+    const want = focusNext.current;
+    if (!want) return;
+    focusNext.current = null;
+    const found = want.map((key) => buttons.current.get(key)).find(Boolean);
+    (found ?? [...buttons.current].find(([key]) => key.startsWith("change "))?.[1])?.focus();
+  });
+
   useEffect(() => {
     if (!deleted) return;
-    const t = window.setTimeout(() => setDeleted(null), UNDO_MS);
+    const t = window.setTimeout(() => {
+      // Undo goes; if it had the focus, the focus goes on to adding a profile.
+      if (document.activeElement === buttons.current.get("undo")) focusNext.current = ["add"];
+      setDeleted(null);
+    }, UNDO_MS);
     return () => window.clearTimeout(t);
   }, [deleted]);
   // Anything else that changes the list takes the Undo away: it would undo that too.
@@ -579,6 +681,14 @@ function ProfileList({ profiles, account, onChange }: { profiles: Profiles; acco
       profile: { id: newProfileId(), name: "", author: defaultProfile(profiles).author || account?.login || "", license: LICENSES[0].id },
       isNew: true,
     });
+  const close = (id: string, isNew: boolean) => {
+    setEditing(null);
+    focusNext.current = isNew ? ["add", `change ${id}`] : [`change ${id}`];
+  };
+  const save = (saved: LicenceProfile, isNew: boolean) => {
+    set(upsertProfile(profiles, saved));
+    close(saved.id, isNew);
+  };
 
   return (
     <>
@@ -590,11 +700,8 @@ function ProfileList({ profiles, account, onChange }: { profiles: Profiles; acco
               profile={editing.profile}
               others={profiles.list.filter((o) => o.id !== p.id)}
               account={account}
-              onCancel={() => setEditing(null)}
-              onSave={(saved) => {
-                set(upsertProfile(profiles, saved));
-                setEditing(null);
-              }}
+              onCancel={() => close(p.id, false)}
+              onSave={(saved) => save(saved, false)}
             />
           ) : (
             <div key={p.id} className={matches(query, `${p.name} ${p.author} ${licenceName(p.license)}`) ? "set-profile is-match" : "set-profile"}>
@@ -609,11 +716,27 @@ function ProfileList({ profiles, account, onChange }: { profiles: Profiles; acco
               </span>
               <span className="set-profile-actions">
                 {p.id !== profiles.defaultId && (
-                  <button type="button" className="icon-btn" aria-label={`make ${p.name} the default`} data-tip="Make default" onClick={() => set(makeDefault(profiles, p.id))}>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`make ${p.name} the default`}
+                    data-tip="Make default"
+                    onClick={() => {
+                      set(makeDefault(profiles, p.id));
+                      focusNext.current = [`change ${p.id}`];
+                    }}
+                  >
                     <StarIcon size={15} />
                   </button>
                 )}
-                <button type="button" className="icon-btn" aria-label={`change ${p.name}`} data-tip="Change" onClick={() => setEditing({ profile: p, isNew: false })}>
+                <button
+                  ref={hold(`change ${p.id}`)}
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`change ${p.name}`}
+                  data-tip="Change"
+                  onClick={() => setEditing({ profile: p, isNew: false })}
+                >
                   <PencilIcon size={15} />
                 </button>
                 {profiles.list.length > 1 && (
@@ -624,7 +747,8 @@ function ProfileList({ profiles, account, onChange }: { profiles: Profiles; acco
                     data-tip="Delete"
                     onClick={() => {
                       onChange(removeProfile(profiles, p.id));
-                      setDeleted({ before: profiles, name: p.name });
+                      setDeleted({ before: profiles, id: p.id, name: p.name });
+                      focusNext.current = ["undo"];
                     }}
                   >
                     <TrashIcon size={15} />
@@ -639,31 +763,33 @@ function ProfileList({ profiles, account, onChange }: { profiles: Profiles; acco
             profile={editing.profile}
             others={profiles.list}
             account={account}
-            onCancel={() => setEditing(null)}
-            onSave={(saved) => {
-              set(upsertProfile(profiles, saved));
-              setEditing(null);
-            }}
+            onCancel={() => close(editing.profile.id, true)}
+            onSave={(saved) => save(saved, true)}
           />
         )}
       </div>
-      {deleted && (
-        <p className="set-undo" role="status">
-          Deleted {deleted.name}.
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => {
-              onChange(deleted.before);
-              setDeleted(null);
-            }}
-          >
-            Undo
-          </button>
-        </p>
-      )}
+      {/* Always there, so what comes into it is read out as it comes. */}
+      <div role="status">
+        {deleted && (
+          <p className="set-undo">
+            Deleted {deleted.name}.
+            <button
+              ref={hold("undo")}
+              type="button"
+              className="link-btn"
+              onClick={() => {
+                onChange(deleted.before);
+                setDeleted(null);
+                focusNext.current = [`change ${deleted.id}`];
+              }}
+            >
+              Undo
+            </button>
+          </p>
+        )}
+      </div>
       {!editing && profiles.list.length < MAX_PROFILES && (
-        <button type="button" className="btn btn-secondary btn-sm set-add" onClick={add}>
+        <button ref={hold("add")} type="button" className="btn btn-secondary btn-sm set-add" onClick={add}>
           <PlusIcon size={14} />
           Add a profile
         </button>
@@ -691,17 +817,35 @@ function ProfileForm({
   const [tried, setTried] = useState(false);
   const problem = profileProblem({ name, author: author.trim() }, others);
   const id = useId();
+  const form = useRef<HTMLFormElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  useEffect(() => nameRef.current?.focus(), []);
+  const authorRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameRef.current?.focus({ preventScroll: true });
+    // All of it in view, its buttons too, not only the field that has the focus.
+    form.current?.scrollIntoView({ block: "nearest" });
+  }, []);
 
   const save = () => {
     setTried(true);
-    if (problem) return;
-    onSave({ ...profile, name, author: author.trim(), license });
+    if (!problem) onSave({ ...profile, name, author: author.trim(), license });
+    else if (problem.field === "name") nameRef.current?.focus();
+    else if (problem.field === "author") authorRef.current?.focus();
   };
+
+  /** What's wrong with `field`, under it, and the attributes that tie its input to it. */
+  const wrong = (field: "name" | "author" | "list") => (tried && problem?.field === field ? problem.text : null);
+  const note = (field: "name" | "author" | "list") =>
+    wrong(field) && (
+      <p id={`${id}-problem`} className="field-note is-error" role="alert">
+        {wrong(field)}
+      </p>
+    );
+  const marks = (field: "name" | "author") => (wrong(field) ? { "aria-invalid": true, "aria-describedby": `${id}-problem` } : {});
 
   return (
     <form
+      ref={form}
       className="set-profile-form"
       aria-label={profile.name ? `change ${profile.name}` : "new profile"}
       onSubmit={(e) => {
@@ -709,16 +853,29 @@ function ProfileForm({
         save();
       }}
     >
-      <label className="field" htmlFor={`${id}-name`}>
-        <span className="field-label">Name</span>
-        <input ref={nameRef} id={`${id}-name`} className="input" value={name} maxLength={60} placeholder="Personal, For work…" onChange={(e) => setName(e.target.value)} />
-      </label>
+      <div className="field">
+        <label className="field-label" htmlFor={`${id}-name`}>
+          Name
+        </label>
+        <input
+          ref={nameRef}
+          id={`${id}-name`}
+          className="input"
+          value={name}
+          maxLength={MAX_PROFILE_NAME}
+          placeholder="Personal, For work…"
+          onChange={(e) => setName(e.target.value)}
+          {...marks("name")}
+        />
+        {note("name")}
+      </div>
       <div className="field">
         <label className="field-label" htmlFor={`${id}-author`}>
           Credited to
         </label>
         <div className="set-author">
           <input
+            ref={authorRef}
             id={`${id}-author`}
             className="input"
             value={author}
@@ -727,23 +884,21 @@ function ProfileForm({
             autoCapitalize="off"
             placeholder="A GitHub user name"
             onChange={(e) => setAuthor(e.target.value)}
+            {...marks("author")}
           />
           {account && author.trim() !== account.login && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAuthor(account.login)}>
-              Use {account.login}
+            <button type="button" className="btn btn-ghost btn-sm" data-tip={account.login} onClick={() => setAuthor(account.login)}>
+              Use GitHub name
             </button>
           )}
         </div>
+        {note("author")}
       </div>
       <div className="field">
         <span className="field-label">Licence</span>
         <Select label="licence" className="is-field" value={license} onChange={setLicense} options={LICENCE_OPTIONS} />
       </div>
-      {tried && problem && (
-        <p className="field-note is-error" role="alert">
-          {problem}
-        </p>
-      )}
+      {note("list")}
       <div className="set-form-actions">
         <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
           Cancel
@@ -792,7 +947,7 @@ function About({
         </Row>
       </Section>
       {note && (
-        <Section title="On this computer">
+        <Section title="This computer">
           <Row label="Folder icons" note={note} find="icon desktop.ini finder explorer" />
         </Section>
       )}

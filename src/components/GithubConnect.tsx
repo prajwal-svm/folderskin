@@ -24,6 +24,14 @@ export function GithubConnect({ onConnected, onCancel }: { onConnected: (account
   // effect below and ask GitHub for a second code while they are typing in the first one.
   const connected = useRef(onConnected);
   connected.current = onConnected;
+  // Once the code or a problem arrives, the focus goes to what to do next, unless it's already
+  // somewhere else: whatever started this has gone, taking the focus with it.
+  const box = useRef<HTMLDivElement>(null);
+  const next = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const at = document.activeElement;
+    if (!at || at === document.body || box.current?.contains(at)) next.current?.focus();
+  }, [code, error]);
 
   useEffect(() => {
     let live = true;
@@ -60,9 +68,9 @@ export function GithubConnect({ onConnected, onCancel }: { onConnected: (account
 
   if (error) {
     return (
-      <div className="gh-connect">
+      <div className="gh-connect" ref={box}>
         <p className="field-note is-error">{error}</p>
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
+        <button ref={next} type="button" className="btn btn-ghost" onClick={onCancel}>
           Back
         </button>
       </div>
@@ -71,7 +79,7 @@ export function GithubConnect({ onConnected, onCancel }: { onConnected: (account
 
   if (!code) {
     return (
-      <div className="gh-connect">
+      <div className="gh-connect" ref={box}>
         <p className="gh-waiting">
           <LoaderIcon />
           Asking GitHub for a code
@@ -81,7 +89,7 @@ export function GithubConnect({ onConnected, onCancel }: { onConnected: (account
   }
 
   return (
-    <div className="gh-connect">
+    <div className="gh-connect" ref={box}>
       <div className="gh-code">
         <span className="gh-code-value" aria-label={`your code is ${code.user_code.split("").join(" ")}`}>
           {code.user_code}
@@ -92,6 +100,7 @@ export function GithubConnect({ onConnected, onCancel }: { onConnected: (account
         </button>
       </div>
       <button
+        ref={next}
         type="button"
         className="btn btn-primary gh-open"
         onClick={() => {

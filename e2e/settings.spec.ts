@@ -127,10 +127,39 @@ test.describe("settings", () => {
     await search.fill("accent");
     await expect(dialog(page).getByRole("tab")).toHaveText(["General"]);
     await expect(dialog(page).locator(".set-row.is-match")).toHaveText(/Accent colour/);
+    // Nothing found: the page gives way to saying so, and the panel isn't named after a tab that's gone.
     await search.fill("zzzz");
-    await expect(dialog(page).getByText(/No setting matches/)).toBeVisible();
+    const panel = dialog(page).getByRole("tabpanel");
+    await expect(panel).toHaveText(/No setting matches “zzzz”/);
+    await expect(panel).toHaveAccessibleName("settings");
+    await expect(dialog(page).getByRole("heading", { name: "Appearance" })).toBeHidden();
     await search.fill("");
     await expect(dialog(page).getByRole("tab")).toHaveCount(4);
+    await expect(dialog(page).getByRole("heading", { name: "Appearance" })).toBeVisible();
+  });
+
+  test("search finds a page's headings and a setting's words in any order", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    const search = dialog(page).getByLabel("search settings");
+    const lit = dialog(page).locator(".is-match");
+    for (const [words, tab, found] of [
+      ["licence profiles", "Sharing", "Licence profiles"],
+      ["dark mode", "General", "Theme"],
+      ["accent color", "General", "Accent colour"],
+      ["your skins", "General", "Your skins"],
+      ["reduce motion", "General", "Motion"],
+      ["where pictures are made", "AI", "Where pictures are made"],
+      ["openai", "AI", "Where pictures are made"],
+    ]) {
+      await search.fill(words);
+      await expect(dialog(page).getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
+      await expect(lit.first()).toContainText(found);
+    }
+    // One letter keeps the pages that have it, but lights nothing: it's in nearly everything.
+    await search.fill("e");
+    await expect(dialog(page).getByRole("tab")).toHaveCount(4);
+    await expect(lit).toHaveCount(0);
   });
 
   test("licence profiles are added, made the default, checked, deleted and brought back", async ({ page }) => {
@@ -146,11 +175,18 @@ test.describe("settings", () => {
     const form = dialog(page).getByRole("form", { name: "new profile" });
     await form.getByLabel("Name").fill("personal");
     await form.getByRole("button", { name: "Add profile" }).click();
+    // The problem shows under the field it's about, which is marked and has the focus.
     await expect(form.getByRole("alert")).toHaveText(/already/);
+    await expect(form.getByLabel("Name")).toHaveAttribute("aria-invalid", "true");
+    await expect(form.getByLabel("Name")).toBeFocused();
+    await expect(form.getByLabel("Name")).toHaveAccessibleDescription(/already/);
     await form.getByLabel("Name").fill("For work");
     await form.getByLabel("Credited to").fill("acme studio");
     await form.getByRole("button", { name: "Add profile" }).click();
     await expect(form.getByRole("alert")).toHaveText(/GitHub user name/);
+    await expect(form.getByLabel("Credited to")).toHaveAttribute("aria-invalid", "true");
+    await expect(form.getByLabel("Credited to")).toBeFocused();
+    await expect(form.getByLabel("Name")).not.toHaveAttribute("aria-invalid");
     await form.getByLabel("Credited to").fill("acme-studio");
     await form.getByRole("button", { name: "licence" }).click();
     await page.getByRole("option", { name: /CC BY 4.0/ }).click();
@@ -176,6 +212,157 @@ test.describe("settings", () => {
     await dialog(page).getByRole("tab", { name: "Sharing" }).click();
     await expect(rows).toHaveCount(2);
     await expect(rows.nth(1)).toContainText("Default");
+  });
+
+  test("the keyboard's place shows on the chosen page and the chosen option", async ({ page }) => {
+    // Still, so every colour is read where it ends up rather than on its way.
+    await page.addInitScript(() => localStorage.setItem("folderskin.prefs", JSON.stringify({ accent: "blue", motion: "reduced" })));
+    await openApp(page);
+    await openSettings(page);
+    const look = async (el: ReturnType<typeof dialog>) => {
+      await page.waitForTimeout(100);
+      return el.evaluate((e) => ((s) => `${s.backgroundColor} ${s.color} ${s.borderColor}`)(getComputedStyle(e)));
+    };
+    const away = () => dialog(page).getByLabel("search settings").click();
+    // Onto another page and back with the keyboard, then away with the pointer.
+    const general = dialog(page).getByRole("tab", { name: "General" });
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowUp");
+    await expect(general).toBeFocused();
+    const generalFocused = await look(general);
+    await away();
+    await expect.poll(() => look(general)).not.toBe(generalFocused);
+    // The same for the chosen one of a few, chosen with the arrow keys.
+    const sidebar = dialog(page).getByRole("radiogroup", { name: "sidebar" });
+    await sidebar.getByRole("radio", { name: "Full" }).focus();
+    await page.keyboard.press("ArrowRight");
+    const icons = sidebar.getByRole("radio", { name: "Icons only" });
+    await expect(icons).toBeFocused();
+    await expect(icons).toHaveAttribute("aria-checked", "true");
+    const iconsFocused = await look(icons);
+    await away();
+    await expect.poll(() => look(icons)).not.toBe(iconsFocused);
+  });
+
+  test("the focus stays with the profiles as they're added, changed, deleted and brought back", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    const add = dialog(page).getByRole("button", { name: "Add a profile" });
+    const name = dialog(page).getByRole("form").getByLabel("Name");
+
+    await add.focus();
+    await page.keyboard.press("Enter");
+    await expect(name).toBeFocused();
+    await expect(name).toHaveAttribute("maxlength", "40");
+    await dialog(page).getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(add).toBeFocused();
+
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Work");
+    await page.keyboard.press("Enter");
+    await expect(dialog(page).locator(".set-profile")).toHaveCount(2);
+    await expect(add).toBeFocused();
+
+    const change = dialog(page).getByRole("button", { name: "change Work" });
+    await change.focus();
+    await page.keyboard.press("Enter");
+    await expect(name).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(change).toBeFocused();
+
+    // The note that it's gone is read out: its place is there before it comes.
+    const status = dialog(page).getByRole("status");
+    await expect(status).toHaveText("");
+    await dialog(page).getByRole("button", { name: "delete Work" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(status).toHaveText(/Deleted Work\./);
+    await expect(dialog(page).getByRole("button", { name: "Undo" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(change).toBeFocused();
+  });
+
+  test("a new profile isn't lost to a list that filled up while it was being written", async ({ page }) => {
+    await page.addInitScript(() => {
+      const list = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, author: "", license: "CC0-1.0" }));
+      if (!sessionStorage.getItem("seeded")) {
+        localStorage.setItem("folderskin.sharing.profiles", JSON.stringify({ list, defaultId: "p0" }));
+        sessionStorage.setItem("seeded", "1");
+      }
+    });
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    const rows = dialog(page).locator(".set-profile");
+    await expect(rows).toHaveCount(12);
+    await rows.last().hover();
+    await rows.last().getByRole("button", { name: "delete P11" }).click();
+    await dialog(page).getByRole("button", { name: "Add a profile" }).click();
+    const form = dialog(page).getByRole("form", { name: "new profile" });
+    // Below a long list, the whole form comes into view, its buttons too.
+    await expect(form.getByRole("button", { name: "Add profile" })).toBeInViewport({ ratio: 1 });
+    await form.getByLabel("Name").fill("Brand new");
+    await dialog(page).getByRole("button", { name: "Undo" }).click();
+    await expect(rows).toHaveCount(12);
+    await form.getByRole("button", { name: "Add profile" }).click();
+    await expect(form.getByRole("alert")).toHaveText(/12 profiles at most/);
+    await expect(form).toBeVisible();
+    await expect(form.getByLabel("Name")).toHaveValue("Brand new");
+  });
+
+  test("searching doesn't leave a profile half changed", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    await dialog(page).locator(".set-profile").first().hover();
+    await dialog(page).getByRole("button", { name: "change Personal" }).click();
+    const form = dialog(page).getByRole("form", { name: "change Personal" });
+    await form.getByLabel("Name").fill("Personal (edited)");
+    const search = dialog(page).getByLabel("search settings");
+    await search.fill("theme");
+    await expect(dialog(page).getByRole("tab")).toHaveText(["General"]);
+    // The page stays, named for itself, with the profile still open.
+    await expect(dialog(page).getByRole("tabpanel", { name: "Sharing" })).toBeVisible();
+    await expect(form.getByLabel("Name")).toHaveValue("Personal (edited)");
+    await search.fill("zzzz");
+    await search.fill("");
+    await expect(form.getByLabel("Name")).toHaveValue("Personal (edited)");
+    await form.getByRole("button", { name: "Save" }).click();
+    await expect(dialog(page).locator(".set-profile").first()).toContainText("Personal (edited)");
+  });
+
+  test("GitHub connects in its own section, keeps the focus, and credits the default profile", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    await dialog(page).getByRole("button", { name: "Connect", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog(page).getByRole("button", { name: "Open GitHub" })).toBeFocused();
+    // The profiles stay below while it waits.
+    await expect(dialog(page).getByRole("heading", { name: "Licence profiles" })).toBeVisible();
+    const disconnect = dialog(page).getByRole("button", { name: "Disconnect" });
+    await expect(disconnect).toBeFocused({ timeout: 10_000 });
+    const rows = dialog(page).locator(".set-profile");
+    await expect(rows.first()).toContainText("Credited to octocat");
+
+    // A new default with no one to credit takes the name when Sharing finds the account again.
+    await dialog(page).getByRole("button", { name: "Add a profile" }).click();
+    const form = dialog(page).getByRole("form", { name: "new profile" });
+    await form.getByLabel("Name").fill("Work");
+    await form.getByLabel("Credited to").fill("");
+    await form.getByRole("button", { name: "Add profile" }).click();
+    await rows.nth(1).hover();
+    await rows.nth(1).getByRole("button", { name: "make Work the default" }).click();
+    await expect(rows.nth(1)).toContainText("No one to credit yet");
+    await page.keyboard.press("Escape");
+    await openSettings(page);
+    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
+    await expect(rows.nth(1)).toContainText("Credited to octocat");
+
+    await disconnect.focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog(page).getByRole("button", { name: "Connect", exact: true })).toBeFocused();
   });
 
   test("every accent keeps the words on its buttons readable", async ({ page }) => {
