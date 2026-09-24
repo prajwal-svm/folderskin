@@ -165,7 +165,15 @@ async fn install_sdcpp(
         Runtime::Latest => latest_assets(client, machine.os, machine.arch, backend).await?,
     };
     let stamp = exe.with_file_name(".release");
+    // The archives, once unpacked, are only disk taken (the CUDA runtime's alone is 563 MB): they
+    // go once the build is in place and recorded, not before, so a setup stopped part-way
+    // still has what it already downloaded.
+    let zips: Vec<PathBuf> = assets
+        .iter()
+        .map(|a| paths::downloads_dir().join(&a.name))
+        .collect();
     if exe.is_file() && std::fs::read_to_string(&stamp).is_ok_and(|s| s.trim() == tag) {
+        zips.iter().for_each(|zip| download::discard(zip));
         reporter.log(
             Level::Info,
             format!("stable-diffusion.cpp {tag} ({backend}) is installed"),
@@ -205,6 +213,7 @@ async fn install_sdcpp(
     }
     std::fs::write(&stamp, &tag)
         .map_err(|e| Error::io("record the installed build", &stamp, &e))?;
+    zips.iter().for_each(|zip| download::discard(zip));
     reporter.log(
         Level::Info,
         format!(
@@ -381,6 +390,7 @@ async fn install_webp(
     .await
     .map_err(|e| Error::bug("Unpacking stopped unexpectedly.", e.to_string()))?
     .map_err(|e| unpack_error(&zip, &e))?;
+    download::discard(&zip);
     reporter.log(Level::Info, format!("installed cwebp in {}", dir.display()));
     Ok(())
 }

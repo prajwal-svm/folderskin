@@ -61,6 +61,18 @@ pub fn remaining(dest: &Path, size: u64) -> u64 {
     }
 }
 
+/// Removes a download that has served its purpose, an archive once unpacked, with the marker
+/// that says it was checked and any part left of it. Best effort: at worst it is downloaded again.
+pub fn discard(dest: &Path) {
+    for path in [
+        dest.to_path_buf(),
+        with_suffix(dest, ".ok"),
+        with_suffix(dest, ".part"),
+    ] {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 /// Downloads `remote` to `dest`, resuming a partial download, and checks its size and hash once.
 pub async fn fetch(
     client: &reqwest::Client,
@@ -402,6 +414,25 @@ mod tests {
 
     fn body(len: usize) -> Vec<u8> {
         (0..len).map(|i| (i * 31 % 251) as u8).collect()
+    }
+
+    #[test]
+    fn a_discarded_download_leaves_nothing_behind_and_counts_as_to_come() {
+        let dir = temp_dir("discard");
+        let zip = dir.join("sd.zip");
+        for path in [&zip, &with_suffix(&zip, ".ok"), &with_suffix(&zip, ".part")] {
+            std::fs::write(path, b"x").unwrap();
+        }
+        std::fs::write(dir.join("other.zip"), b"x").unwrap();
+        discard(&zip);
+        let left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left, ["other.zip"]);
+        assert_eq!(remaining(&zip, 10), 10);
+        discard(&zip); // and again, with nothing there
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn sha(bytes: &[u8]) -> String {
