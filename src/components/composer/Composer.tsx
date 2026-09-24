@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
 import { isTauri } from "../../lib/devMock";
@@ -329,6 +329,43 @@ function Tools({ tools }: { tools: ToolDef[] }) {
   );
 }
 
+/**
+ * Whether the canvas bar has room for its backdrops and its size previews beside its switches.
+ * The previews give way first, then the backdrops, so the bar never draws one cut off at the
+ * panel's edge, as the tools above move into ⋯. Each width is kept from when it was last shown,
+ * so it comes back as soon as there is room for it again.
+ */
+function useBarRoom(bar: RefObject<HTMLDivElement | null>, backdrops: RefObject<HTMLDivElement | null>, sizes: RefObject<HTMLDivElement | null>, layout: unknown) {
+  const [room, setRoom] = useState({ backdrops: true, sizes: true });
+  useLayoutEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const kept = new WeakMap<Element, number>();
+    const width = (k: HTMLElement) => {
+      if (!k.hidden && k.offsetWidth > 0) kept.set(k, k.offsetWidth);
+      return kept.get(k) ?? 0;
+    };
+    const measure = () => {
+      const style = getComputedStyle(el);
+      const gap = parseFloat(style.columnGap) || 0;
+      const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const b = backdrops.current;
+      const s = sizes.current;
+      const fixed = ([...el.children] as HTMLElement[]).filter((k) => k !== b && k !== s);
+      const base = fixed.reduce((sum, k) => sum + width(k), 0) + gap * Math.max(0, fixed.length - 1);
+      const withBackdrops = base + (b ? width(b) + gap : 0);
+      const next = { backdrops: withBackdrops <= inner, sizes: withBackdrops + (s ? width(s) + gap : 0) <= inner };
+      setRoom((r) => (r.backdrops === next.backdrops && r.sizes === next.sizes ? r : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    for (const k of el.children) ro.observe(k);
+    return () => ro.disconnect();
+  }, [bar, backdrops, sizes, layout]);
+  return room;
+}
+
 /** How to get around the canvas, behind the info button rather than taking room in the panel. */
 function TipsButton() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -506,6 +543,11 @@ export function Composer({
   const [replaceAnchor, setReplaceAnchor] = useState<HTMLElement | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const clip = useRef<Layer | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const backdropsRef = useRef<HTMLDivElement>(null);
+  const sizesRef = useRef<HTMLDivElement>(null);
+  // The look switch is only there on the folder skeleton, so the room is looked at again then.
+  const barRoom = useBarRoom(barRef, backdropsRef, sizesRef, doc.shape);
 
   // A saved design that's gone from the library (deleted) is a new design again.
   useEffect(() => {
@@ -1149,7 +1191,7 @@ export function Composer({
           />
         </div>
 
-        <div className="cmp-bar">
+        <div className="cmp-bar" ref={barRef}>
           <button
             type="button"
             role="switch"
@@ -1171,7 +1213,7 @@ export function Composer({
           {doc.shape === "folder" && (
             <LookSwitch value={doc.style} onChange={restyle} />
           )}
-          <div className="cmp-backdrops" role="radiogroup" aria-label="what's behind the folder">
+          <div className="cmp-backdrops" role="radiogroup" aria-label="what's behind the folder" ref={backdropsRef} hidden={!barRoom.backdrops}>
             {BACKDROPS.map((b) => (
               <button
                 key={b.id}
@@ -1185,7 +1227,7 @@ export function Composer({
               />
             ))}
           </div>
-          <div className="cmp-sizes" aria-label="the icon at its real sizes" data-tip={`How it looks in ${fileBrowserName()} at 64, 32 and 16 points`}>
+          <div className="cmp-sizes" aria-label="the icon at its real sizes" data-tip={`How it looks in ${fileBrowserName()} at 64, 32 and 16 points`} ref={sizesRef} hidden={!barRoom.sizes}>
             {previews.map((src, i) => {
               const pt = PREVIEW_SIZES[i] / 2;
               return <img key={i} src={src} alt="" width={pt} height={pt} draggable={false} className="cmp-size" />;

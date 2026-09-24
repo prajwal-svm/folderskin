@@ -496,6 +496,36 @@ test.describe("the canvas and its panels", () => {
     await expect(page.locator("select")).toHaveCount(0);
   });
 
+  test("the canvas bar gives way rather than drawing its previews or backdrops cut off", async ({ page }) => {
+    // The app's own window size, where the previews ran past the panel's edge.
+    await page.setViewportSize({ width: 1125, height: 687 });
+    await openApp(page);
+    await startFrom(page, "Plain");
+    const bar = composer(page).locator(".cmp-bar");
+    const whole = async () => {
+      const edge = (await bar.boundingBox())!;
+      for (const piece of await bar.locator(":scope > :visible").all()) {
+        const box = (await piece.boundingBox())!;
+        expect(box.x + box.width, await piece.evaluate((e) => e.className)).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+      }
+      for (const img of await bar.locator(".cmp-size:visible").all()) {
+        const box = (await img.boundingBox())!;
+        expect(box.x + box.width).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+      }
+    };
+    await whole();
+    // Narrower still, with the sidebar at its widest: the backdrops give way too, never cut.
+    await page.getByRole("separator", { name: "sidebar width" }).press("End");
+    await whole();
+    await expect(bar.locator(".cmp-sizes")).toBeHidden();
+    // And back as the room comes back.
+    await page.getByRole("separator", { name: "sidebar width" }).press("Home");
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await expect(bar.locator(".cmp-sizes")).toBeVisible();
+    await expect(bar.getByRole("radiogroup", { name: "what's behind the folder" })).toBeVisible();
+    await whole();
+  });
+
   test("tools that don't fit go into More", async ({ page }) => {
     await page.setViewportSize({ width: 1040, height: 700 });
     await openApp(page);

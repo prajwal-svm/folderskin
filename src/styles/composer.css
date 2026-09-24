@@ -403,6 +403,12 @@
   min-height: 36px;
 }
 
+/* Given way when the canvas is too narrow for them (useBarRoom), rather than drawn cut off. */
+.cmp-backdrops[hidden],
+.cmp-sizes[hidden] {
+  display: none;
+}
+
 .cmp-size {
   display: block;
   animation: fade-in var(--t-base) ease both;
