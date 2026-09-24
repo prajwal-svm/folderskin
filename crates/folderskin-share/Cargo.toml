@@ -1,0 +1,21 @@
+[package]
+name = "folderskin-share"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The app's and the maintainer's side of FolderSkin's community service: the computer's key, signed requests and the API"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+base64 = "0.22"
+# Ed25519 for the computer's key. Already built for rustls and for the sealed API keys, so this
+# adds no crate.
+aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys"] }
+
+[dev-dependencies]
+# A runtime to drive the client against a stand-in service on localhost.
+tokio = { version = "1", default-features = false, features = ["rt", "time"] }

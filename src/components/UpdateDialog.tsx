@@ -12,6 +12,7 @@ import { CheckIcon } from "./icons/check";
 import { DownloadIcon } from "./icons/download";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
+import { Brand } from "./Brand";
 
 type Phase =
   | { kind: "ready" }
@@ -90,7 +91,7 @@ export function UpdateDialog({ update, onClose }: { update: AvailableUpdate; onC
         <p className="update-problem is-done" role="status">
           <CheckIcon size={16} />
           <span>
-            FolderSkin {update.version} is installed. Quit FolderSkin and open it again to use it.
+            <Brand /> {update.version} is installed. Quit <Brand /> and open it again to use it.
           </span>
         </p>
       )}
@@ -204,7 +205,7 @@ export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus
         type="button"
         className={`about-link update-btn is-${s}`}
         aria-disabled={s === "checking" || undefined}
-        title={s === "current" ? "Check again" : undefined}
+        data-tip={s === "current" ? "Check again" : undefined}
         onClick={s === "checking" ? undefined : s === "available" ? onShow : onCheck}
       >
         {icon}

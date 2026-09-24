@@ -24,19 +24,27 @@ tauri-plugin-process = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["system-proxy"] }
 folderskin-core.workspace = true
 folderskin-ai = { path = "../crates/folderskin-ai" }
+# "This computer": open-weight models set up and run here, shared with the command line.
+folderskin-local = { path = "../crates/folderskin-local" }
+# Sharing without GitHub: the computer's key and signed requests to the community service.
+folderskin-share = { path = "../crates/folderskin-share" }
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true
-tokio.workspace = true
+# `sync` for the community catalog's load lock and download turns and the local painting's turn,
+# `rt` for a provider's request on a task Stop can drop; Tauri's own tokio already has both, so
+# they add nothing to the build.
+tokio = { workspace = true, features = ["sync", "rt"] }
 base64 = "0.22"
 sha2.workspace = true
 # A pack's pictures download a few at a time (`StreamExt::buffered`). Already in the tree through
 # reqwest, with the same features.
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
-# Seals the saved API keys (AES-256-GCM with an HKDF-SHA256 key; see keys.rs). Already built for
-# rustls, which reqwest uses, so this adds no crate.
-aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys"] }
+# The sealed API key store, shared with the `folderskin` command line.
+folderskin-keys = { path = "../crates/folderskin-keys" }
+# The community catalog: searched on this computer, and the published tree it comes with.
+folderskin-catalog = { path = "../crates/folderskin-catalog" }
 
 # Tauri's mock runtime, so a test can send a command the bytes a webview sends (composer.rs,
 # tree.rs). The feature adds no crate. Left off Windows: with it, the lib's test binary imports a
@@ -45,11 +53,9 @@ aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sy
 tauri = { version = "2", features = ["macos-private-api", "test"] }
 
 [target.'cfg(windows)'.dependencies]
-# The machine GUID that ties the saved API keys to this computer (keys.rs), and the icon a folder
-# already wears, drawn from the file its desktop.ini names (folder_icon.rs).
+# The icon a folder already wears, drawn from the file its desktop.ini names (folder_icon.rs).
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
-    "Win32_System_Registry",
     "Win32_Graphics_Gdi",
     "Win32_UI_WindowsAndMessaging",
 ] }

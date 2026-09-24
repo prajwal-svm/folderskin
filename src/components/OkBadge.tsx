@@ -9,7 +9,7 @@ export function OkBadge({ size = 16, playOnMount, label }: { size?: number; play
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      title={label}
+      data-tip={label}
     >
       <CheckIcon size={Math.round(size * 0.66)} playOnMount={playOnMount} />
     </span>

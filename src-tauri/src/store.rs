@@ -8,6 +8,7 @@
 //! ├── skins.json                 the index: {"version": 1, "skins": [...]}
 //! ├── 3f2a9c0b1d4e.png           a skin's picture, longest side at most 2048 px
 //! ├── 3f2a9c0b1d4e.thumb-v2.png  its gallery thumbnail, 512 px, so a launch renders nothing
+//! │                              (thumb-v2-windows.png on Windows, drawn on Windows' folder)
 //! └── 3f2a9c0b1d4e.design.json   a design from the composer: the document it was made from, so
 //!                                it can be edited again
 //! ```
@@ -191,10 +192,13 @@ impl SkinImage {
         }
     }
 
-    /// The icon at every requested size: composited for artwork, fitted for a finished folder.
+    /// The icon at every requested size: artwork composited onto the folder this computer draws
+    /// (Windows' own on Windows, FolderSkin's elsewhere), a finished folder fitted as it is.
     pub fn icon_set(&self, sizes: &[u32]) -> IconSet {
         match self {
-            SkinImage::Artwork(art) => compositor::render_icon_set(art, sizes),
+            SkinImage::Artwork(art) => {
+                compositor::render_icon_set_in(art, sizes, crate::look::current())
+            }
             SkinImage::Folder(img) => compositor::icon_set_from_image(img, sizes),
         }
     }
@@ -202,7 +206,9 @@ impl SkinImage {
     /// PNG preview at `size` px, through the same render as the applied icon.
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
         match self {
-            SkinImage::Artwork(art) => compositor::render_preview_png(art, size),
+            SkinImage::Artwork(art) => {
+                compositor::render_preview_png_in(art, size, crate::look::current())
+            }
             SkinImage::Folder(img) => compositor::preview_png_from_image(img, size),
         }
     }
@@ -285,7 +291,7 @@ fn image_file(stem: &str) -> String {
 }
 
 fn thumb_file(stem: &str) -> String {
-    format!("{stem}.thumb-v{}.png", crate::commands::THUMB_CACHE_VERSION)
+    format!("{stem}.thumb-{}.png", crate::commands::thumb_tag())
 }
 
 /// What follows the stem in the name of a composer design's document.

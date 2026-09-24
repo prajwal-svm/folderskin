@@ -5,12 +5,13 @@
 use clap::Parser;
 use folderskin_core::apply::{apply_icon, refresh_shell_icons, revert_icon};
 use folderskin_core::compositor::{
-    render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
+    self, render_preview_png, Artwork, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
 use folderskin_core::raster;
-use folderskin_tools::cli::{Cli, Command, PacksCommand};
+use folderskin_share::{Client, DeviceKey};
+use folderskin_tools::cli::{Cli, Command, CommunityCommand, PacksCommand, Service};
 use folderskin_tools::skin::Skin;
-use folderskin_tools::{composer, make, packs};
+use folderskin_tools::{catalog, composer, make, packs, pull};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -57,6 +58,13 @@ fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         Command::Guide { out } => guide(&out),
+        Command::Template {
+            out,
+            width,
+            height,
+            backdrop,
+            mask,
+        } => template(&out, (width, height), &backdrop, mask.as_deref()),
         Command::ComposerLayers { out, size } => composer_layers(&out, size),
         Command::AppIcon { input, out } => {
             let (w, h) = image::ImageReader::open(&input)
@@ -104,6 +112,10 @@ fn run(cli: Cli) -> Result<(), String> {
         Command::Packs { command } => match command {
             PacksCommand::Check { dir, max_kb } => packs_check(&dir, max_kb),
             PacksCommand::Index { dir } => packs_index(&dir),
+            PacksCommand::Catalog { dir, out, mirrors } => {
+                let out = folderskin_tools::cli::catalog_out(&dir, out);
+                packs_catalog(&dir, out, mirrors)
+            }
             PacksCommand::Make {
                 pictures,
                 id,
@@ -130,6 +142,289 @@ fn run(cli: Cli) -> Result<(), String> {
                 packs_make(&pictures, &opts, preview.as_deref())
             }
         },
+        Command::Community { command } => community(command),
+    }
+}
+
+// ---------- the community service ----------
+
+/// The maintainer's side of the community service: each command is one signed request, except
+/// `keygen`, which makes the key they are signed with, and `pull`.
+fn community(command: CommunityCommand) -> Result<(), String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?;
+    let show = |value: serde_json::Value| {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value).unwrap_or_default()
+        )
+    };
+    match command {
+        CommunityCommand::Keygen { out } => keygen(&out),
+        CommunityCommand::Queue { status, service } => {
+            let client = service_client(&service)?;
+            let queue = runtime
+                .block_on(client.queue(&status))
+                .map_err(|e| e.to_string())?;
+            print_queue(&queue);
+            Ok(())
+        }
+        CommunityCommand::Decide {
+            id,
+            decision,
+            reasons,
+            note,
+            service,
+        } => {
+            if decision == "reject" && reasons.is_empty() {
+                return Err("say why with --reason, using a code from docs/PACK-TERMS.md".into());
+            }
+            let client = service_client(&service)?;
+            let answer = runtime
+                .block_on(client.decide(&id, &decision, &reasons, &note))
+                .map_err(|e| e.to_string())?;
+            show(answer);
+            Ok(())
+        }
+        CommunityCommand::Takedown {
+            id,
+            reasons,
+            note,
+            service,
+        } => {
+            let client = service_client(&service)?;
+            let answer = runtime
+                .block_on(client.takedown(&id, &reasons, &note))
+                .map_err(|e| e.to_string())?;
+            // The folder it was pulled into, which isn't its name at the service when a pack from
+            // GitHub had that name first.
+            if let Some(folder) = answer["folder"].as_str() {
+                println!(
+                    "It was pulled into the repository already: remove community/packs/{folder} \
+                     there too, then run `folderskin-tools packs index`."
+                );
+            }
+            show(answer);
+            Ok(())
+        }
+        CommunityCommand::Reports { days, service } => {
+            let client = service_client(&service)?;
+            let reports = runtime
+                .block_on(client.reports(days))
+                .map_err(|e| e.to_string())?;
+            print_reports(&reports, days);
+            Ok(())
+        }
+        CommunityCommand::Pause { message, service } => {
+            let client = service_client(&service)?;
+            show(
+                runtime
+                    .block_on(client.pause(true, &message))
+                    .map_err(|e| e.to_string())?,
+            );
+            Ok(())
+        }
+        CommunityCommand::Resume { service } => {
+            let client = service_client(&service)?;
+            show(
+                runtime
+                    .block_on(client.pause(false, ""))
+                    .map_err(|e| e.to_string())?,
+            );
+            Ok(())
+        }
+        CommunityCommand::Pull { out, service } => {
+            let client = service_client(&service)?;
+            let mut source = ServiceExports { runtime, client };
+            let report = pull::pull(&mut source, &out)?;
+            for pulled in &report.pulled {
+                println!(
+                    "wrote {}: \"{}\" by {}, {} skins",
+                    pulled.folder.display(),
+                    pulled.name,
+                    pulled.author,
+                    pulled.skins
+                );
+            }
+            for problem in &report.problems {
+                println!("{problem}");
+            }
+            if report.pulled.is_empty() && report.problems.is_empty() {
+                println!("no approved packs are waiting to be pulled");
+            } else if !report.pulled.is_empty() {
+                println!("Check them over, then run `folderskin-tools packs index` and commit.");
+            }
+            if report.problems.is_empty() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{} packs couldn't be pulled",
+                    report.problems.len()
+                ))
+            }
+        }
+    }
+}
+
+/// A client signing with the maintainer's key from `service.key`.
+fn service_client(service: &Service) -> Result<Client, String> {
+    let text = std::fs::read_to_string(&service.key)
+        .map_err(|e| format!("couldn't read {}: {e}", service.key.display()))?;
+    let key = DeviceKey::from_recovery_file(&text).map_err(|e| e.to_string())?;
+    Client::new(&service.api, key).map_err(|e| e.to_string())
+}
+
+/// Makes the maintainer's signing key, never over an existing file, readable by its owner only.
+fn keygen(out: &Path) -> Result<(), String> {
+    use std::io::Write;
+    let key = DeviceKey::generate().map_err(|e| e.to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(out)
+        .map_err(|e| format!("couldn't write {}: {e}", out.display()))?;
+    file.write_all(key.recovery_file().as_bytes())
+        .map_err(|e| format!("couldn't write {}: {e}", out.display()))?;
+    println!(
+        "wrote {}. Keep it private: whoever has it can approve packs.\n\
+         Put its public key in ADMIN_KEYS in services/community/wrangler.toml:\n  {}",
+        out.display(),
+        key.public()
+    );
+    Ok(())
+}
+
+/// One line per pack in the review queue, flagged ones first as the service sorts them.
+fn print_queue(queue: &serde_json::Value) {
+    let empty = Vec::new();
+    let list = queue["submissions"].as_array().unwrap_or(&empty);
+    if list.is_empty() {
+        println!("nothing is waiting");
+        return;
+    }
+    for s in list {
+        let flags: Vec<&str> = s["flags"]
+            .as_array()
+            .unwrap_or(&empty)
+            .iter()
+            .filter_map(|f| f["code"].as_str())
+            .collect();
+        println!(
+            "{}  {:8}  \"{}\" by {} ({}), {} pictures{}{}",
+            s["id"].as_str().unwrap_or("?"),
+            s["status"].as_str().unwrap_or("?"),
+            s["name"].as_str().unwrap_or("?"),
+            s["handle"].as_str().unwrap_or("?"),
+            s["tier"].as_str().unwrap_or("?"),
+            s["pictures"].as_u64().unwrap_or(0),
+            if flags.is_empty() {
+                String::new()
+            } else {
+                format!(", flags: {}", flags.join(" "))
+            },
+            match s["reports"].as_u64() {
+                Some(0) | None => String::new(),
+                Some(n) => format!(", {n} reports"),
+            }
+        );
+    }
+}
+
+/// Each report: when, why and what about, then the reporter's words and how to reach them.
+fn print_reports(reports: &serde_json::Value, days: u32) {
+    let empty = Vec::new();
+    let list = reports["reports"].as_array().unwrap_or(&empty);
+    if list.is_empty() {
+        println!(
+            "no reports in the last {}",
+            if days == 1 {
+                "day".to_string()
+            } else {
+                format!("{days} days")
+            }
+        );
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    for r in list {
+        let text = |field: &str| r[field].as_str().unwrap_or("").trim().to_string();
+        let about = match r["submission"].as_str() {
+            Some(id) => format!(
+                " (\"{}\", {id}, {})",
+                text("name"),
+                r["status"].as_str().unwrap_or("?")
+            ),
+            None => String::new(),
+        };
+        println!(
+            "{}  {}  {}: {}{about}",
+            text("id"),
+            ago(now.saturating_sub(r["created_at"].as_u64().unwrap_or(now))),
+            text("reason"),
+            text("target"),
+        );
+        let details = text("details");
+        if !details.is_empty() {
+            for line in details.lines() {
+                println!("    {line}");
+            }
+        }
+        let contact = text("contact");
+        if !contact.is_empty() {
+            println!("    reach them at: {contact}");
+        }
+    }
+}
+
+/// "3 hours ago", for a report `seconds` old.
+fn ago(seconds: u64) -> String {
+    let (n, unit) = match seconds {
+        s if s < 3600 => (s / 60, "minute"),
+        s if s < 86_400 => (s / 3600, "hour"),
+        s => (s / 86_400, "day"),
+    };
+    match n {
+        0 => "just now".into(),
+        1 => format!("1 {unit} ago"),
+        n => format!("{n} {unit}s ago"),
+    }
+}
+
+/// The service as the source of approved packs for `pull`.
+struct ServiceExports {
+    runtime: tokio::runtime::Runtime,
+    client: Client,
+}
+
+impl pull::Exports for ServiceExports {
+    fn list(&mut self) -> Result<Vec<folderskin_share::api::Export>, String> {
+        self.runtime
+            .block_on(self.client.exports())
+            .map_err(|e| e.to_string())
+    }
+    fn manifest(&mut self, id: &str) -> Result<Vec<u8>, String> {
+        self.runtime
+            .block_on(self.client.export_manifest(id))
+            .map_err(|e| e.to_string())
+    }
+    fn file(&mut self, id: &str, file: &str) -> Result<Vec<u8>, String> {
+        self.runtime
+            .block_on(self.client.export_file(id, file))
+            .map_err(|e| e.to_string())
+    }
+    fn done(&mut self, id: &str, folder: &str) -> Result<(), String> {
+        self.runtime
+            .block_on(self.client.export_done(id, folder))
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -142,13 +437,55 @@ fn load_picture(path: &Path) -> Result<RgbaImage, String> {
 }
 
 fn solid_image(hex: &str) -> Result<RgbaImage, String> {
-    let v = u32::from_str_radix(hex.trim_start_matches('#'), 16)
-        .map_err(|_| format!("{hex:?} is not RRGGBB"))?;
+    let [r, g, b] = rgb(hex)?;
     Ok(RgbaImage::from_pixel(
         SKIN_WIDTH,
         SKIN_HEIGHT,
-        image::Rgba([(v >> 16) as u8, (v >> 8) as u8, v as u8, 255]),
+        image::Rgba([r, g, b, 255]),
     ))
+}
+
+/// `RRGGBB`, with or without a leading `#`.
+fn rgb(hex: &str) -> Result<[u8; 3], String> {
+    let digits = hex.trim_start_matches('#');
+    let v = u32::from_str_radix(digits, 16)
+        .ok()
+        .filter(|_| digits.len() == 6)
+        .ok_or_else(|| format!("{hex:?} is not RRGGBB"))?;
+    Ok([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+}
+
+/// The blank folder an image model repaints, and optionally its silhouette as a mask: white where
+/// the folder is, black around it, anti-aliased along the edge.
+fn template(
+    out: &Path,
+    (width, height): (u32, u32),
+    backdrop: &str,
+    mask: Option<&Path>,
+) -> Result<(), String> {
+    let backdrop = rgb(backdrop)?;
+    let cut = compositor::blank_template_cutout(width, height);
+    let write = |path: &Path, img: &RgbaImage| {
+        std::fs::write(path, raster::encode_png(img))
+            .map_err(|e| format!("couldn't write {}: {e}", path.display()))
+    };
+    write(out, &folderskin_core::matte::flatten(&cut, backdrop))?;
+    println!(
+        "wrote {} ({width}×{height}): the blank folder",
+        out.display()
+    );
+    if let Some(path) = mask {
+        let silhouette = RgbaImage::from_fn(width, height, |x, y| {
+            let a = cut.get_pixel(x, y).0[3];
+            image::Rgba([a, a, a, 255])
+        });
+        write(path, &silhouette)?;
+        println!(
+            "wrote {} ({width}×{height}): its silhouette",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// A picture as the app takes it: a finished folder, or artwork around `focus`.
@@ -240,14 +577,56 @@ fn packs_index(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Checks every community pack and, when all pass, brings the published tree up to date. Every
+/// file is named, so the counts are printed rather than a line for each.
+fn packs_catalog(dir: &Path, out: PathBuf, mirrors: Vec<String>) -> Result<(), String> {
+    let report = packs::check(dir)?;
+    for problem in &report.problems {
+        println!("{problem}");
+    }
+    let opts = catalog::CatalogOptions {
+        out,
+        mirrors,
+        cwebp: make::find_cwebp(),
+        dates: catalog::git_dates(dir),
+    };
+    if opts.cwebp.is_none() {
+        println!("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger");
+    }
+    if opts.dates.is_empty() && !report.packs.is_empty() {
+        println!("no git history for these packs, so Newest can't tell them apart");
+    }
+    let built = catalog::write_catalog(dir, &report, &opts)?;
+    let head = &built.head;
+    let unchanged = if built.changes.is_empty() {
+        ", nothing changed"
+    } else {
+        ""
+    };
+    println!(
+        "{}: generation {}, a {} KB catalog; {} files written, {} removed{unchanged}",
+        report.totals(),
+        head.generation,
+        head.catalog.bytes.div_ceil(1024),
+        built.changes.written.len(),
+        built.changes.removed.len(),
+    );
+    Ok(())
+}
+
 /// Writes the layers the composer draws a design between into `out`, one PNG each.
 fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
-    std::fs::create_dir_all(out).map_err(|e| format!("couldn't make {}: {e}", out.display()))?;
-    for (file, layer) in composer::layer_files(size) {
-        let path = out.join(file);
-        std::fs::write(&path, raster::encode_png(&layer))
-            .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
-        println!("wrote {} ({size}×{size})", path.display());
+    use folderskin_core::compositor::Style;
+    for style in [Style::Mac, Style::Windows] {
+        let dir = out.join(composer::style_dir(style));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
+        for (file, layer) in composer::layer_files(size, style) {
+            let path = dir.join(file);
+            std::fs::write(&path, raster::encode_png(&layer))
+                .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+            println!("wrote {} ({size}×{size})", path.display());
+        }
     }
     Ok(())
 }
@@ -323,5 +702,29 @@ mod tests {
         assert_eq!(img.dimensions(), (SKIN_WIDTH, SKIN_HEIGHT));
         assert_eq!(img.get_pixel(500, 400).0, [0x2A, 0x9D, 0x8F, 255]);
         assert!(solid_image("teal").is_err());
+        assert_eq!(rgb("FF00FF").unwrap(), [255, 0, 255]);
+        for bad in ["FFF", "FF00FF00", "#GG00FF", ""] {
+            assert!(rgb(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_template_and_its_mask_line_up() {
+        let dir = std::env::temp_dir().join(format!("fs-template-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (out, mask) = (dir.join("t.png"), dir.join("m.png"));
+        template(&out, (512, 480), "FF00FF", Some(&mask)).unwrap();
+        let t = image::open(&out).unwrap().to_rgba8();
+        let m = image::open(&mask).unwrap().to_rgba8();
+        assert_eq!((t.dimensions(), m.dimensions()), ((512, 480), (512, 480)));
+        assert_eq!(t.get_pixel(0, 0).0, [255, 0, 255, 255], "magenta around it");
+        assert_eq!(m.get_pixel(0, 0).0, [0, 0, 0, 255], "black around it");
+        assert_eq!(
+            m.get_pixel(256, 320).0,
+            [255, 255, 255, 255],
+            "white inside"
+        );
+        assert!(t.get_pixel(256, 320).0[1] > 150, "grey inside, not magenta");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

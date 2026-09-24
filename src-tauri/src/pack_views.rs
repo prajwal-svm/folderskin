@@ -16,9 +16,12 @@ use std::time::{Duration, SystemTime};
 /// How long a pack's drawings are kept after they are made.
 pub const TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
-/// Part of every file name. Bump it when the viewer draws skins differently, so drawings made
-/// the old way are never shown.
-const VERSION: &str = "view-v1";
+/// Part of every file name: the thumbnails' tag, which changes when skins are drawn differently
+/// and names the folder they go on, so drawings made the old way or on the other folder are never
+/// shown.
+fn version() -> String {
+    format!("view-{}", crate::commands::thumb_tag())
+}
 
 /// The kept drawings, in their own folder.
 #[derive(Clone)]
@@ -39,7 +42,8 @@ impl PackViews {
             && hash
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-        (pack::is_pack_id(id) && hex).then(|| self.dir.join(format!("{id}.{hash}.{VERSION}.json")))
+        (pack::is_pack_id(id) && hex)
+            .then(|| self.dir.join(format!("{id}.{hash}.{}.json", version())))
     }
 
     /// Pack `id`'s drawings at version `hash`, if they were made less than [`TTL`] before `now`.
@@ -70,13 +74,13 @@ impl PackViews {
         self.prune(now, id, &path);
     }
 
-    /// Deletes drawings past [`TTL`], ones made by an older [`VERSION`], and pack `id`'s other
+    /// Deletes drawings past [`TTL`], ones made another way ([`version`]), and pack `id`'s other
     /// versions: everything but `current`, the file just kept.
     fn prune(&self, now: SystemTime, id: &str, current: &Path) {
         let Ok(entries) = std::fs::read_dir(&self.dir) else {
             return;
         };
-        let ours = format!(".{VERSION}.json");
+        let ours = format!(".{}.json", version());
         let same_pack = format!("{id}.");
         for entry in entries.flatten() {
             let path = entry.path();
@@ -190,11 +194,12 @@ mod tests {
         v.0.put("colours-2", "2222222222222222", &skins(&["Red"]), now);
         std::fs::write(v.0.dir.join("colours.3333.view-v0.json"), b"[]").unwrap();
         v.0.put("colours", "4444444444444444", &skins(&["Green"]), now);
+        let tag = version();
         assert_eq!(
             v.files(),
             [
-                "colours-2.2222222222222222.view-v1.json",
-                "colours.4444444444444444.view-v1.json"
+                format!("colours-2.2222222222222222.{tag}.json"),
+                format!("colours.4444444444444444.{tag}.json")
             ]
         );
         // A week on, keeping another pack clears both.
@@ -204,7 +209,10 @@ mod tests {
             &skins(&["Mauve"]),
             now + TTL * 2,
         );
-        assert_eq!(v.files(), ["soft-rainbow.5555555555555555.view-v1.json"]);
+        assert_eq!(
+            v.files(),
+            [format!("soft-rainbow.5555555555555555.{tag}.json")]
+        );
     }
 
     #[test]

@@ -1,0 +1,25 @@
+{
+  "name": "folderskin-community",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply folderskin-community --local",
+    "migrate:remote": "wrangler d1 migrations apply folderskin-community --remote",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "obscenity": "^0.4.6"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260920.1",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.124.0"
+  }
+}

@@ -6,10 +6,11 @@
  * Everything in this file is pure: the document is plain data (it is saved beside the skin as
  * JSON and read back to edit it again), and every change makes a new document.
  */
+import { clip } from "../lib/names";
 import { normalizeColor } from "./color";
-import { centreOf, type Parts } from "./parts";
+import { centreOf, type FolderStyle, type Parts } from "./parts";
 
-export { centreOf, FALLBACK_PARTS, type Parts } from "./parts";
+export { centreOf, fallbackParts, FALLBACK_PARTS, WINDOWS_PARTS, type FolderStyle, type Parts } from "./parts";
 
 /** Edge of the design canvas, in the units every position and size below is measured in. */
 export const CANVAS = 1024;
@@ -132,8 +133,12 @@ type Placed = {
   edge: Edge | null;
 };
 
-/** Covers the whole canvas: a colour or a gradient. */
-export type FillLayer = Common & { kind: "fill"; paint: Paint };
+/**
+ * Covers the whole canvas with a colour or a gradient, or with `part: "front"` only the folder's
+ * front panel, cut to it exactly: a folder whose back and front are different colours, the way
+ * the Mac's and Windows' own folders are. On a free icon it covers the whole canvas.
+ */
+export type FillLayer = Common & { kind: "fill"; paint: Paint; part?: "front" };
 /** Covers the whole canvas: a repeating pattern. `background` may be transparent. */
 export type PatternLayer = Common & {
   kind: "pattern";
@@ -198,11 +203,56 @@ export type ImageLayer = Common &
     fx: ImageFx;
   };
 
-export type Layer = FillLayer | PatternLayer | TextLayer | EmojiLayer | ShapeLayer | ImageLayer;
-export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer;
+/**
+ * How an icon sits on the folder. "emboss" presses it into the folder the way macOS draws the
+ * symbol on a folder: a shade of the folder's own colour, with a lit lower lip and a shadowed top
+ * edge. "flat" paints it in one colour; "original" keeps the colour its pack gives it (a brand's).
+ */
+export type IconLook = "emboss" | "flat" | "original";
+export const ICON_LOOKS: { id: IconLook; label: string }[] = [
+  { id: "emboss", label: "Pressed in" },
+  { id: "flat", label: "Flat" },
+  { id: "original", label: "Original" },
+];
+
+/**
+ * An icon from an icon pack. Its drawing (path data in its pack's square grid) is kept in the
+ * layer, so a design opens again even after the pack is removed from this computer.
+ */
+export type IconLayer = Common &
+  Placed & {
+    kind: "icon";
+    /** The pack and the icon's name in it, to name the layer and find the icon again. */
+    pack: string;
+    icon: string;
+    paths: string[];
+    /** Line icons: which of the paths are filled shapes rather than lines. */
+    filled: number[];
+    style: "stroke" | "fill";
+    /** The side of the square grid the paths are drawn in: 24 for most packs. */
+    viewBox: number;
+    /** A line icon's line width, in grid units. */
+    strokeWidth: number;
+    evenOdd: boolean;
+    /** The side of its box on the canvas. */
+    size: number;
+    look: IconLook;
+    /** The flat look's colour, and the pressed-in look's when it doesn't follow the folder. */
+    paint: Paint;
+    /** The pressed-in look takes its colour from the folder's own, as macOS does. */
+    auto: boolean;
+    /** How deep the pressed-in look is, 0 to 100. */
+    depth: number;
+    /** The colour the pack gives this icon, such as a brand's, for the original look. */
+    brand?: string;
+  };
+
+export type Layer = FillLayer | PatternLayer | TextLayer | EmojiLayer | ShapeLayer | ImageLayer | IconLayer;
+export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer | IconLayer;
 export type LayerKind = Layer["kind"];
 
-export type Doc = { version: 1; shape: Shape; layers: Layer[] };
+/** A design: its layers, bottom first, and what it's cut to: a folder (a Mac's or Windows') or nothing. */
+export type Doc = { version: 1; shape: Shape; style: FolderStyle; layers: Layer[] };
 
 // ---------- making layers ----------
 
@@ -286,6 +336,48 @@ export function makeImage(src: string, iw: number, ih: number, box: { x: number;
   return { ...common(), ...placed(box.x, box.y), kind: "image", src, iw, ih, w: box.w, h: box.h, radius: 0, fx: { ...NO_FX } };
 }
 
+/** An icon from a pack as a pack stores it. */
+export type IconDrawing = {
+  pack: string;
+  icon: string;
+  paths: string[];
+  filled?: number[];
+  style: "stroke" | "fill";
+  viewBox: number;
+  strokeWidth: number;
+  evenOdd?: boolean;
+  brand?: string;
+};
+
+/** A new icon layer, pressed into the folder unless `look` says otherwise. */
+export function makeIcon(drawing: IconDrawing, x: number, y: number, look: IconLook = "emboss", color = "#ffffff", size = 340): IconLayer {
+  return {
+    ...common(),
+    ...placed(x, y),
+    kind: "icon",
+    pack: drawing.pack,
+    icon: drawing.icon,
+    paths: [...drawing.paths],
+    filled: [...(drawing.filled ?? [])],
+    style: drawing.style,
+    viewBox: drawing.viewBox,
+    strokeWidth: drawing.strokeWidth,
+    evenOdd: drawing.evenOdd === true,
+    size,
+    look: look === "original" && !drawing.brand ? "flat" : look,
+    paint: solid(color),
+    auto: true,
+    depth: 60,
+    ...(drawing.brand ? { brand: drawing.brand } : {}),
+  };
+}
+
+/** The icon's name as people say it: "arrow-big-up" is "Arrow big up". */
+export function iconName(icon: string): string {
+  const words = icon.replace(/[-_]+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Icon";
+}
+
 /** Where a picture goes: covering the whole folder, or a picture with its own shape (a logo, a cut-out) sitting on the front. */
 export function imageBox(iw: number, ih: number, parts: Parts, cover: boolean): { x: number; y: number; w: number; h: number } {
   const aspect = iw / Math.max(1, ih);
@@ -306,7 +398,7 @@ export function imageBox(iw: number, ih: number, parts: Parts, cover: boolean): 
 // ---------- reading a layer ----------
 
 export const isPlaced = (layer: Layer): layer is PlacedLayer =>
-  layer.kind === "text" || layer.kind === "emoji" || layer.kind === "shape" || layer.kind === "image";
+  layer.kind === "text" || layer.kind === "emoji" || layer.kind === "shape" || layer.kind === "image" || layer.kind === "icon";
 
 /** Whether a layer covers the whole canvas (it has no box of its own). */
 export const isCovering = (layer: Layer): layer is FillLayer | PatternLayer => layer.kind === "fill" || layer.kind === "pattern";
@@ -319,21 +411,35 @@ export function layerLabel(layer: Layer, index = 1): string {
   if (layer.name) return layer.name;
   switch (layer.kind) {
     case "fill":
+      if (layer.part === "front") return "Front";
       return index === 0 ? "Background" : layer.paint.type === "solid" ? "Colour" : "Gradient";
     case "pattern":
       return patternLabel(layer.pattern);
     case "text": {
       const line = layer.text.split("\n").find((l) => l.trim()) ?? "";
-      const words = Array.from(line.trim());
-      return words.length === 0 ? "Text" : words.length > 22 ? `${words.slice(0, 21).join("")}…` : words.join("");
+      const text = line.trim();
+      return text ? clip(text, 22) : "Text";
     }
     case "emoji":
-      return "Emoji";
+      return `${layer.char} Emoji`;
     case "shape":
       return shapeLabel(layer.shape);
     case "image":
       return "Picture";
+    case "icon":
+      return iconName(layer.icon);
   }
+}
+
+/**
+ * What a layer shows on the folder, when that's words: a text layer's first line. The layers
+ * list shows it beside a name the user gave the layer, so the two are never mistaken for each
+ * other.
+ */
+export function layerContent(layer: Layer): string | null {
+  if (layer.kind !== "text") return null;
+  const line = layer.text.split("\n").find((l) => l.trim())?.trim() ?? "";
+  return line || null;
 }
 
 /** The colour a paint mostly shows: a solid colour, or a gradient's middle stop. */
@@ -342,8 +448,13 @@ export function mainColor(paint: Paint): string {
   return paint.stops[Math.floor(paint.stops.length / 2)]?.color ?? "#000000";
 }
 
-/** The colour at the bottom of the design, which new text and shapes are made to stand out from. */
+/**
+ * The colour at the bottom of the design, which new text and shapes are made to stand out from:
+ * the front panel's own colour when it has one, since that's where they land.
+ */
 export function backgroundColor(doc: Doc): string | null {
+  const front = doc.layers.find((l) => !l.hidden && l.kind === "fill" && l.part === "front");
+  if (front?.kind === "fill") return mainColor(front.paint);
   const base = doc.layers.find((l) => !l.hidden && (l.kind === "fill" || l.kind === "image"));
   if (!base) return null;
   if (base.kind === "fill") return mainColor(base.paint);
@@ -364,8 +475,55 @@ export function suggestName(doc: Doc): string | null {
 
 // ---------- changing the document ----------
 
-export function emptyDoc(shape: Shape = "folder"): Doc {
-  return { version: DOC_VERSION, shape, layers: [] };
+export function emptyDoc(shape: Shape = "folder", style: FolderStyle = "mac"): Doc {
+  return { version: DOC_VERSION, shape, style, layers: [] };
+}
+
+/**
+ * The design moved from one folder onto another, a Mac's to Windows' or back. Each placed layer
+ * keeps its place on the folder (on the tab, on the front, in the middle of it) and its size for
+ * the folder's size; a picture that covered the whole folder still covers it, and a band across
+ * it (Two-tone's front, a caption) still runs across it from and to the same parts. What covers
+ * the canvas stays as it is.
+ */
+export function refit(doc: Doc, from: Parts, to: Parts, style: FolderStyle): Doc {
+  const [ax0, ay0, ax1, ay1] = from.folder;
+  const [bx0, by0, bx1, by1] = to.folder;
+  const sx = (bx1 - bx0) / (ax1 - ax0);
+  const sy = (by1 - by0) / (ay1 - ay0);
+  // Down the folder in three stretches: the tab, the back between it and the front, the front.
+  const ya = [ay0, from.tab[3], from.front[1], ay1];
+  const yb = [by0, to.tab[3], to.front[1], by1];
+  const mapY = (y: number) => {
+    const i = y < ya[1] ? 0 : y < ya[2] ? 1 : 2;
+    return yb[i] + ((y - ya[i]) * (yb[i + 1] - yb[i])) / (ya[i + 1] - ya[i]);
+  };
+  const area = (p: Parts) => (p.front[2] - p.front[0]) * (p.front[3] - p.front[1]);
+  const k = Math.sqrt(area(to) / area(from));
+  // A layer over the whole folder moves in step with the whole folder and grows by the more of
+  // its two stretches, so every edge that was past the folder's is still past it.
+  const kCover = Math.max(sx, sy);
+  const r = (n: number) => Math.round(n * 10) / 10;
+  const layers = doc.layers.map((l): Layer => {
+    if (!isPlaced(l)) return l;
+    const x = r(bx0 + (l.x - ax0) * sx);
+    if (l.kind === "shape" || l.kind === "image") {
+      const top = l.y - l.h / 2;
+      const bottom = l.y + l.h / 2;
+      const across = l.x - l.w / 2 <= ax0 + 1 && l.x + l.w / 2 >= ax1 - 1;
+      if (across && top <= ay0 + 1 && bottom >= ay1 - 1) {
+        return { ...l, x, y: r(by0 + (l.y - ay0) * sy), w: r(l.w * kCover), h: r(l.h * kCover) };
+      }
+      if (across && l.kind === "shape" && l.shape === "rect" && l.rotation === 0) {
+        const t = mapY(top);
+        const b = mapY(bottom);
+        return { ...l, x, y: r((t + b) / 2), w: r(l.w * sx), h: r(b - t) };
+      }
+      return { ...l, x, y: r(mapY(l.y)), w: r(l.w * k), h: r(l.h * k) };
+    }
+    return { ...l, x, y: r(mapY(l.y)), size: r(l.size * k) };
+  });
+  return { ...doc, style, layers };
 }
 
 export const indexOf = (doc: Doc, id: string) => doc.layers.findIndex((l) => l.id === id);
@@ -522,8 +680,11 @@ function readLayer(v: unknown): Layer | null {
     edge: readEdge(v.edge),
   });
   switch (v.kind) {
-    case "fill":
-      return { ...base, kind: "fill", paint: readPaint(v.paint, solid("#3a86ff")) };
+    case "fill": {
+      const fill: FillLayer = { ...base, kind: "fill", paint: readPaint(v.paint, solid("#3a86ff")) };
+      if (v.part === "front") fill.part = "front";
+      return fill;
+    }
     case "pattern":
       return {
         ...base,
@@ -590,10 +751,43 @@ function readLayer(v: unknown): Layer | null {
         fx: readFx(v.fx),
       };
     }
+    case "icon": {
+      const paths = Array.isArray(v.paths) ? v.paths.filter((p): p is string => typeof p === "string" && PATH_DATA.test(p) && p.length <= MAX_PATH) : [];
+      if (paths.length === 0 || paths.length > MAX_PATHS || paths.join("").length > MAX_ICON) return null;
+      const viewBox = num(v.viewBox, 24, 1, 1024);
+      const filled = Array.isArray(v.filled) ? v.filled.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < paths.length) : [];
+      const brand = typeof v.brand === "string" ? normalizeColor(v.brand, "") : "";
+      return {
+        ...base,
+        ...where(),
+        kind: "icon",
+        pack: text(v.pack, "icons", 40),
+        icon: text(v.icon, "icon", 80),
+        paths,
+        filled: [...new Set(filled)],
+        style: v.style === "fill" ? "fill" : "stroke",
+        viewBox,
+        strokeWidth: num(v.strokeWidth, 2, 0, viewBox / 4),
+        evenOdd: bool(v.evenOdd),
+        size: num(v.size, 340, 4, 3000),
+        look: oneOf(v.look, ICON_LOOK_IDS, "emboss"),
+        paint: readPaint(v.paint, solid("#ffffff")),
+        auto: v.auto !== false,
+        depth: num(v.depth, 60, 0, 100),
+        ...(brand ? { brand } : {}),
+      };
+    }
     default:
       return null;
   }
 }
+
+/** Path data and nothing else: commands, numbers, separators. */
+const PATH_DATA = /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]+$/;
+const MAX_PATH = 40_000;
+const MAX_PATHS = 64;
+const MAX_ICON = 120_000;
+const ICON_LOOK_IDS = ICON_LOOKS.map((l) => l.id);
 
 /**
  * A design read from disk or storage, made safe to draw: unknown layers are dropped, numbers
@@ -612,5 +806,5 @@ export function parseDoc(value: unknown): Doc | null {
     seen.add(layer.id);
     layers.push(layer);
   }
-  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", layers };
+  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", style: value.style === "windows" ? "windows" : "mac", layers };
 }

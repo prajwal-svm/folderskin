@@ -1,0 +1,226 @@
+name: Release the command line
+
+#     git tag cli-v0.1.0 && git push origin cli-v0.1.0
+#
+# or run it from the Actions tab with the tag to build.
+#
+# The `folderskin` command line is released on tags of its own, apart from the app, with its own
+# version (crates/folderskin-cli/Cargo.toml). Its releases are never marked "latest": the app's
+# updater and the website read releases/latest, and must keep finding the app there. People get
+# the command line with scripts/install-cli.sh or scripts/install-cli.ps1, which look for the
+# newest cli-v release themselves.
+#
+# The release is made as a draft first, on the existing tag with no target commit (see release.yml
+# for why), each platform attaches its archive and a .sha256 beside it, and it is published with
+# SHA256SUMS once all four are there.
+on:
+  push:
+    tags:
+      - "cli-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (e.g. cli-v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write # the draft release, its archives, and publishing it
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # The archives are named after the version in the CLI's Cargo.toml, so a tag that doesn't
+      # match it would publish a build that reports another version.
+      - name: Check that the tag matches the version
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          want="${TAG#cli-v}"
+          have="$(awk -F'"' '/^version[ \t]*=/ { print $2; exit }' crates/folderskin-cli/Cargo.toml)"
+          if [ "$have" != "$want" ]; then
+            echo "::error file=crates/folderskin-cli/Cargo.toml::the command line's version is $have, but the tag is $TAG"
+            exit 1
+          fi
+          echo "version=$want" >> "$GITHUB_OUTPUT"
+
+      - name: Create the draft, or keep the one there
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.tag_name == env.TAG) | .id' | grep -q .; then
+            echo "$TAG already has a release; the builds add to it"
+            exit 0
+          fi
+          cat > notes.md <<EOF
+          The \`folderskin\` command line, version $VERSION: paint folder art with open-weight models on your own computer (or with your own API key), clean pictures up, check them and put them on folders.
+
+          **Install:** \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/install-cli.sh | sh\` on macOS and Linux, or in PowerShell on Windows \`irm https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/install-cli.ps1 | iex\`. Or download the archive for your system below, check it against SHA256SUMS, and put \`folderskin\` on your PATH.
+
+          This is not the FolderSkin app; the app's own releases are the ones marked latest.
+          EOF
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --latest=false --verify-tag \
+            --title "folderskin command line $VERSION" --notes-file notes.md
+
+  build:
+    name: ${{ matrix.name }}
+    needs: draft
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows (x86_64)
+            os: windows-latest
+            targets: ""
+            asset: windows-x86_64.zip
+          - name: macOS (Apple silicon and Intel)
+            os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            asset: macos-universal.tar.gz
+          # Ubuntu 22.04, so the binary runs on any system with glibc 2.35 or newer.
+          - name: Linux (x86_64)
+            os: ubuntu-22.04
+            targets: ""
+            asset: linux-x86_64.tar.gz
+          - name: Linux (ARM64)
+            os: ubuntu-22.04-arm
+            targets: ""
+            asset: linux-aarch64.tar.gz
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Rust
+        uses: ./.github/actions/rust-toolchain
+        with:
+          targets: ${{ matrix.targets }}
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        if: runner.os != 'macOS'
+        shell: bash
+        run: cargo build --release --locked -p folderskin-cli
+
+      # One binary for both kinds of Mac, runnable from macOS 12 on.
+      - name: Build (universal)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p folderskin-cli --target aarch64-apple-darwin
+          cargo build --release --locked -p folderskin-cli --target x86_64-apple-darwin
+          mkdir -p target/release
+          lipo -create -output target/release/folderskin-cli \
+            target/aarch64-apple-darwin/release/folderskin-cli \
+            target/x86_64-apple-darwin/release/folderskin-cli
+          lipo -info target/release/folderskin-cli
+
+      # The cargo binary is folderskin-cli, because the app's own binary is already called
+      # folderskin; in the archive it is simply `folderskin`.
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "$RUNNER_OS" = "Windows" ]; then exe=".exe"; fi
+          mkdir -p stage
+          cp "target/release/folderskin-cli$exe" "stage/folderskin$exe"
+          cp LICENSE stage/
+          echo "ARCHIVE=folderskin-cli-$VERSION-${{ matrix.asset }}" >> "$GITHUB_ENV"
+          echo "EXE=$exe" >> "$GITHUB_ENV"
+
+      # Before anything is attached: the archived binary starts, and draws the blank folder
+      # through the compositor, which exercises the image code and writing a file.
+      - name: Smoke test
+        shell: bash
+        working-directory: stage
+        run: |
+          set -euo pipefail
+          ./folderskin$EXE --version
+          ./folderskin$EXE --version | grep -qx "folderskin $VERSION"
+          ./folderskin$EXE template --out t.png
+          test -s t.png
+          rm t.png
+
+      - name: Archive (zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path stage/* -DestinationPath "$env:ARCHIVE"
+
+      - name: Archive (tar.gz)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: tar -czf "$ARCHIVE" -C stage .
+
+      - name: Attach the archive and its checksum
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+          else
+            shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+          fi
+          cat "$ARCHIVE.sha256"
+          gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish:
+    name: Publish (every platform present, never latest)
+    needs: [draft, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require every archive, write SHA256SUMS, then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ needs.draft.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "$assets"
+          missing=()
+          for suffix in windows-x86_64.zip macos-universal.tar.gz linux-x86_64.tar.gz linux-aarch64.tar.gz; do
+            name="folderskin-cli-$VERSION-$suffix"
+            grep -qx "$name" <<<"$assets" || missing+=("$name")
+            grep -qx "$name.sha256" <<<"$assets" || missing+=("$name.sha256")
+          done
+          if ((${#missing[@]})); then
+            printf 'refusing to publish %s; missing: %s\n' "$TAG" "${missing[*]}" >&2
+            exit 1
+          fi
+          mkdir sums
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.sha256' --dir sums
+          cat sums/*.sha256 | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+          # --latest=false: the app's updater and the website read releases/latest.
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          echo "published $TAG"

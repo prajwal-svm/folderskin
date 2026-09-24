@@ -1,7 +1,7 @@
 //! A picture the way the app takes it, so `render`, `apply` and the pack previews show exactly
 //! what adding that picture to FolderSkin would.
 
-use folderskin_core::compositor::{self, Artwork, IconSet};
+use folderskin_core::compositor::{self, Artwork, IconSet, Style};
 use folderskin_core::matte;
 use image::RgbaImage;
 
@@ -30,17 +30,28 @@ impl Skin {
 
     /// The icon as a PNG, `size` px square, through the render the app uses.
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
+        self.preview_png_in(size, Style::Mac)
+    }
+
+    /// [`Skin::preview_png`] with artwork on the folder of `style`, as the app draws it when
+    /// that folder is chosen. A finished folder is its own shape on either.
+    pub fn preview_png_in(&self, size: u32, style: Style) -> Vec<u8> {
         match self {
             Skin::Folder(cut) => compositor::preview_png_from_image(cut, size),
-            Skin::Artwork(art) => compositor::render_preview_png(art, size),
+            Skin::Artwork(art) => compositor::render_preview_png_in(art, size, style),
         }
     }
 
     /// The icon at every size in `sizes`, as the app applies it.
     pub fn icon_set(&self, sizes: &[u32]) -> IconSet {
+        self.icon_set_in(sizes, Style::Mac)
+    }
+
+    /// [`Skin::icon_set`] with artwork on the folder of `style`.
+    pub fn icon_set_in(&self, sizes: &[u32], style: Style) -> IconSet {
         match self {
             Skin::Folder(cut) => compositor::icon_set_from_image(cut, sizes),
-            Skin::Artwork(art) => compositor::render_icon_set(art, sizes),
+            Skin::Artwork(art) => compositor::render_icon_set_in(art, sizes, style),
         }
     }
 

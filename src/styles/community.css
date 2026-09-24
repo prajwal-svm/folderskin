@@ -1,4 +1,5 @@
-/* The Community view: packs shared on GitHub, filtered by tag the way the library is. */
+/* The Community view: packs people share, searched as you type, drawn only where they're on
+   screen. The heading, the filters and the count stay put; the packs scroll beneath them. */
 
 .community {
   flex: 1;
@@ -8,32 +9,14 @@
   animation: fade-up var(--t-base) var(--ease-out) both;
 }
 
-/* The heading scrolls away with the packs; the filters below it stay at the top. */
 .community-head {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 14px 20px;
-  padding: 22px 6px 6px;
-}
-
-.community .toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  margin: 0 -16px 8px;
-  background: var(--island);
-}
-
-/* a soft edge for the packs passing under the filters */
-.community .toolbar::after {
-  content: "";
-  position: absolute;
-  inset: 100% 0 auto;
-  height: 14px;
-  background: linear-gradient(var(--island), transparent);
-  pointer-events: none;
+  padding: 22px 22px 2px;
 }
 
 .community-intro {
@@ -47,47 +30,147 @@
   gap: 8px;
 }
 
-.community-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0 16px 28px;
-  container-type: inline-size;
-}
-
 .community-note {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 24px 6px;
+  margin: 24px 22px;
   font-weight: 650;
   font-size: 13px;
   color: var(--muted);
 }
 
-.community-foot {
+/* how many packs are listed, and how they're checked */
+.community-status {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  margin: 18px 6px 0;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--hint);
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 0 22px 2px;
+  font-weight: 650;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
-.packs {
+.community-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+}
+
+.community-status .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+/* ---------- skins whose names match ---------- */
+
+.skin-hits {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 16px 8px 22px;
+  animation: fade-in var(--t-base) ease both;
+}
+
+.skin-hits-title {
+  flex: none;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.skin-hits-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 2px;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-/* one pack: a strip of its folders, who made it and its tags, and Add */
+.skin-hits-list::-webkit-scrollbar {
+  display: none;
+}
+
+.skin-hit {
+  width: 208px;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 12px;
+  background: var(--well);
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.skin-hit:hover,
+.skin-hit:focus-visible {
+  background: var(--well-2);
+}
+
+.skin-hit img,
+.skin-hit-blank {
+  grid-row: 1 / span 2;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+/* A skin's name can be long and the chip is small: it trails off here, and the chip's title and
+   the viewer it opens say it in full. A pack's name is never cut short: it wraps, two lines for
+   the longest a pack may have. */
+.skin-hit-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skin-hit-pack {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.skin-hit-name {
+  font-weight: 700;
+  font-size: 12.5px;
+  align-self: end;
+}
+
+.skin-hit-pack {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
+  align-self: start;
+}
+
+/* ---------- the packs ---------- */
+
+.packs-grid {
+  flex: 1;
+  container-type: inline-size;
+  /* packs slide under the filters instead of being cut off by them */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
+
+/* one pack: a strip of its folders, who made it and its tags, and Add. Each fills its place in
+   the grid exactly, which the grid works out from the width alone. */
 .pack {
+  height: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -95,7 +178,6 @@
   padding: 12px 14px;
   border-radius: var(--r-card);
   background: var(--well);
-  animation: rise var(--t-slow) var(--ease-out) both;
 }
 
 .pack-preview {
@@ -141,36 +223,33 @@
    after the name in a row. */
 .pack-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
-}
-
-.packs.is-gallery .pack-title {
-  justify-content: space-between;
 }
 
 .pack-title .ok-badge {
   flex: none;
 }
 
-.pack-name,
-.pack-by {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* A pack's name is never cut short: it wraps, and every card's height leaves room for two lines. */
 .pack-name {
+  min-width: 0;
   font-weight: 800;
   font-size: 15px;
+  line-height: 20px;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 .pack-by {
   font-weight: 600;
   font-size: 12.5px;
+  line-height: 18px;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pack-author {
@@ -184,14 +263,18 @@
   text-decoration: underline;
 }
 
+/* one row of tags; any that don't fit are on the pack itself */
 .pack-tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
   margin-top: 2px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pack-tags .tag-chip {
+  flex: none;
   background: var(--island);
 }
 
@@ -211,16 +294,144 @@
   background: var(--well-2);
 }
 
-/* a narrow library: the strip, the words and the buttons each get a row */
-@container (max-width: 560px) {
-  .packs:not(.is-gallery) .pack {
+/* A narrow list: the strip, the words and the buttons each get a row. The grid's rows grow to
+   match below 560 px of card, which is this less the grid's padding. */
+@container (max-width: 588px) {
+  .packs-grid.is-list .pack {
     grid-template-columns: minmax(0, 1fr);
+    align-content: start;
     row-gap: 10px;
   }
 
-  .packs:not(.is-gallery) .pack-preview {
+  .packs-grid.is-list .pack-preview {
     width: 100%;
   }
+}
+
+/* the gallery: one card per pack, its first folders two by two above its details */
+.packs-grid.is-gallery .pack {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px;
+}
+
+.packs-grid.is-gallery .pack-preview {
+  width: 100%;
+  height: auto;
+}
+
+.packs-grid.is-gallery .pack-preview-blank {
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 300px;
+  margin-inline: auto;
+  border-radius: 12px;
+}
+
+.packs-grid.is-gallery .pack-title {
+  justify-content: space-between;
+}
+
+/* on a card the byline may take two lines rather than lose the licence */
+.packs-grid.is-gallery .pack-by {
+  white-space: normal;
+  max-height: 36px;
+}
+
+.packs-grid.is-gallery .pack-action {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.packs-grid.is-gallery .pack-action > * {
+  flex: 1;
+  justify-content: center;
+}
+
+/* They stretch to fill the card anyway; this only lets a narrow card fit three. */
+.packs-grid.is-gallery .pack-action .btn {
+  gap: 6px;
+  padding: 0 12px;
+}
+
+/* the gallery's Remove: the can alone, round and as tall as the buttons beside it */
+.packs-grid.is-gallery .pack-action > .pack-remove {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  background: var(--island);
+}
+
+.pack .pack-remove:hover:not(:disabled),
+.pack .pack-remove:focus-visible:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* another pack is being worked on: one at a time */
+.pack .pack-remove:disabled {
+  opacity: 0.55;
+}
+
+/* a place whose page is on its way */
+.pack.is-placeholder {
+  pointer-events: none;
+}
+
+.pack-line {
+  display: block;
+  width: 70%;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--well-2);
+}
+
+.pack-line.is-short {
+  width: 45%;
+}
+
+/* how far adding a pack has got, in place of its buttons */
+.pack-progress {
+  --done: 0;
+  position: relative;
+  flex: 1;
+  height: 38px;
+  min-width: 150px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--island);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pack-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--done) * 100%);
+  background: var(--accent-soft);
+  transition: width var(--t-base) var(--ease-out);
+}
+
+.pack-progress-text {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the orders in the options: each as wide as its words, so "Best match" keeps to one line */
+.filter-sort.community-sort .seg-btn {
+  flex: 1 1 auto;
+  padding: 0 8px;
+  white-space: nowrap;
 }
 
 /* list or gallery, beside the search */
@@ -253,68 +464,6 @@
   color: var(--ink);
 }
 
-/* the gallery: one card per pack, its first folders two by two above its details */
-.packs.is-gallery {
-  display: grid;
-  /* auto-fit: a row with room to spare stretches its cards instead of leaving empty columns.
-     250 px keeps View, Update and Remove on one line, and still two cards a row at the
-     window's default size. */
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 10px;
-}
-
-.packs.is-gallery .pack {
-  grid-template-columns: minmax(0, 1fr);
-  align-items: stretch;
-  gap: 12px;
-  padding: 12px;
-}
-
-.packs.is-gallery .pack-preview {
-  width: 100%;
-  height: auto;
-}
-
-.packs.is-gallery .pack-preview-blank {
-  height: auto;
-  aspect-ratio: 1;
-  border-radius: 12px;
-}
-
-.packs.is-gallery .pack-by {
-  white-space: normal;
-}
-
-.packs.is-gallery .pack-action {
-  flex-wrap: wrap;
-  justify-content: space-between;
-}
-
-.packs.is-gallery .pack-action > * {
-  flex: 1;
-  justify-content: center;
-}
-
-/* They stretch to fill the card anyway; this only lets a narrow card fit three. */
-.packs.is-gallery .pack-action .btn {
-  gap: 6px;
-  padding: 0 12px;
-}
-
-/* the gallery's Remove: the can alone, round and as tall as the buttons beside it */
-.packs.is-gallery .pack-action > .pack-remove {
-  flex: none;
-  width: 38px;
-  height: 38px;
-  background: var(--island);
-}
-
-.pack .pack-remove:hover:not(:disabled),
-.pack .pack-remove:focus-visible:not(:disabled) {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
 /* a pack's preview opens it */
 .pack-preview-btn {
   display: block;
@@ -328,7 +477,7 @@
   opacity: 0.88;
 }
 
-.packs.is-gallery .pack-preview-btn {
+.packs-grid.is-gallery .pack-preview-btn {
   width: 100%;
 }
 
@@ -348,7 +497,15 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding: 4px;
+  border-radius: 12px;
   animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+/* the skin a search found, which the viewer opened at */
+.pack-skin.is-focus {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .pack-skin img {
@@ -376,6 +533,18 @@
   align-items: center;
   gap: 5px;
   margin-right: auto;
+}
+
+/* Add in the viewer, filling as the pack arrives */
+.btn.pack-adding,
+.btn.pack-adding:disabled {
+  opacity: 1;
+  background-image: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.3) calc(var(--done) * 100%),
+    transparent calc(var(--done) * 100%)
+  );
+  font-variant-numeric: tabular-nums;
 }
 
 .pack-quad {

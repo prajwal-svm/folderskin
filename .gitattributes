@@ -1,0 +1,3 @@
+# Everything under community/ is checked out byte for byte as committed: pack hashes are taken
+# over the exact bytes of pack.json and its pictures, so a CRLF checkout would change them.
+community/** -text

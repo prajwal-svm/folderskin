@@ -1,0 +1,280 @@
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import type { Skin } from "../../lib/tauri";
+import { clip } from "../../lib/names";
+import { worthRetrying } from "../../lib/aiError";
+import { progressOf, type Turn } from "../../state/chats";
+import { FolderGhost } from "../FolderGhost";
+import { OkBadge } from "../OkBadge";
+import { ChevronDownIcon, StopIcon, TerminalIcon } from "../icons/composer";
+import { CopyIcon } from "../icons/copy";
+
+/** What the chat can do for a turn, from the card's buttons. */
+export type TurnActions = {
+  /** Asks the same again, with the same provider, model and pictures. */
+  again: (turn: Turn) => void;
+  /** Puts the turn's words back in the box, to change them. */
+  reword: (turn: Turn) => void;
+  stop: (turn: Turn) => void;
+  /** Opens the provider settings, at `provider`. */
+  settings: (provider: string) => void;
+  /** Shows the picture on the folder, on the right. */
+  preview: (skin: Skin) => void;
+  apply: (skin: Skin) => void;
+  chooseFolder: () => void;
+  menu: (skin: Skin, anchor: HTMLElement) => void;
+  copy: (text: string, what: string) => void;
+};
+
+const secondsSince = (from: number, to = Date.now()) => Math.max(0, Math.floor((to - from) / 1000));
+const duration = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`);
+
+/** The log a request wrote, behind a disclosure: there to look at, never in the way. */
+function Log({ lines, open, onToggle }: { lines: string[]; open: boolean; onToggle: () => void }) {
+  const box = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    if (open && box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [open, lines.length]);
+  return (
+    <div className="turn-log">
+      <button type="button" className="turn-log-toggle" aria-expanded={open} onClick={onToggle}>
+        <TerminalIcon size={13} />
+        {open ? "Hide the details" : "Details"}
+        <span className="turn-log-chevron" aria-hidden="true">
+          <ChevronDownIcon size={13} />
+        </span>
+      </button>
+      {open && (
+        <pre className="turn-log-lines" ref={box} tabIndex={0} aria-label="what it did">
+          {lines.join("\n")}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/** A picture on its way: the folder developing, what's happening now, how far it is, and Stop. */
+function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(t);
+  }, []);
+  const [logOpen, setLogOpen] = useState(false);
+  const progress = progressOf(turn);
+  const stopping = turn.stage === "Stopping";
+  const detail = turn.download
+    ? `${turn.download.file}`
+    : turn.step
+      ? `Step ${turn.step.done} of ${turn.step.total}`
+      : null;
+  return (
+    <div className="turn-result is-developing" aria-live="polite">
+      <div className="develop">
+        <FolderGhost className="develop-ghost" />
+        <span className="develop-light" aria-hidden="true" />
+      </div>
+      <div className="turn-meta">
+        <p className="turn-name develop-step" key={turn.stage ?? "start"}>
+          {turn.stage ?? `Sending your idea to ${turn.where.split(" · ")[0]}`}
+        </p>
+        <div className={progress === null ? "turn-progress is-waiting" : "turn-progress"} style={{ "--done": `${Math.round((progress ?? 0) * 100)}%` } as CSSProperties} aria-hidden="true">
+          <span />
+        </div>
+        <p className="turn-where">
+          {[detail, turn.where, duration(secondsSince(turn.started, now))].filter(Boolean).join(" · ")}
+        </p>
+        <div className="turn-actions">
+          <button type="button" className="btn btn-secondary btn-sm" disabled={stopping} onClick={onStop}>
+            <StopIcon size={12} />
+            {stopping ? "Stopping" : "Stop"}
+          </button>
+        </div>
+        {turn.log && turn.log.length > 0 && <Log lines={turn.log} open={logOpen} onToggle={() => setLogOpen((o) => !o)} />}
+      </div>
+    </div>
+  );
+}
+
+/** What the chat offers when a request fails, by what went wrong. */
+function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
+  const [logOpen, setLogOpen] = useState(false);
+  const error = turn.error ?? { code: "failed", message: "It didn't finish." };
+  const provider = turn.where.split(" · ")[0];
+  const primary =
+    error.code === "missing_key"
+      ? { label: `Add your ${provider} key`, run: () => act.settings(turn.provider) }
+      : error.code === "unauthorized"
+        ? { label: "Check the key", run: () => act.settings(turn.provider) }
+        : error.code === "local_not_ready" || error.code === "runtime_failed_to_start"
+          ? { label: "Set up the local model", run: () => act.settings("local") }
+          : error.code === "refused"
+            ? { label: "Reword it", run: () => act.reword(turn) }
+            : null;
+  return (
+    <div className="turn-error" role="alert">
+      <p className="turn-error-text">{error.message}</p>
+      {error.fix && error.fix.length > 0 && (
+        <ul className="turn-fix">
+          {error.fix.map((f) => (
+            <li key={f}>{f}</li>
+          ))}
+        </ul>
+      )}
+      <div className="turn-actions">
+        {primary && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={primary.run}>
+            {primary.label}
+          </button>
+        )}
+        {worthRetrying(error.code) && (
+          <button type="button" className={primary ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"} onClick={() => act.again(turn)}>
+            Try again
+          </button>
+        )}
+        {error.ask && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            data-tip="Copies a ready-to-paste question about this error, for Claude or any assistant"
+            onClick={() => act.copy(error.ask!, "The question for Claude")}
+          >
+            <CopyIcon size={13} />
+            Ask Claude to fix it
+          </button>
+        )}
+      </div>
+      {turn.log && turn.log.length > 0 && <Log lines={turn.log} open={logOpen} onToggle={() => setLogOpen((o) => !o)} />}
+    </div>
+  );
+}
+
+/**
+ * One request in the chat: what was asked (with its reference pictures), and then the folder
+ * developing, the result with what to do with it, what went wrong, or that it was stopped.
+ */
+export function TurnCard({
+  turn,
+  live,
+  folderName,
+  onFolder,
+  applied,
+  act,
+}: {
+  turn: Turn;
+  /** The picture as the library has it now; undefined once it has been deleted there. */
+  live: Skin | undefined;
+  /** The folder the chat's pictures are for. */
+  folderName: string | null;
+  /** This picture is the one on show on the folder, on the right. */
+  onFolder: boolean;
+  /** This picture was applied to the folder. */
+  applied: boolean;
+  act: TurnActions;
+}) {
+  const [logOpen, setLogOpen] = useState(false);
+  return (
+    <article className="turn" data-status={turn.status}>
+      <div className="turn-ask">
+        <p>{turn.idea}</p>
+        {turn.refs.length > 0 && (
+          <div className="turn-refs">
+            {turn.refs.map((r) => (
+              <img key={r.id} src={r.thumb} alt="" data-tip={r.name} draggable={false} />
+            ))}
+          </div>
+        )}
+      </div>
+      {turn.status === "working" && <Working turn={turn} onStop={() => act.stop(turn)} />}
+      {turn.status === "error" && <Failed turn={turn} act={act} />}
+      {turn.status === "stopped" && (
+        <div className="turn-stopped">
+          <p>Stopped before it finished{turn.finished ? `, after ${duration(secondsSince(turn.started, turn.finished))}` : ""}.</p>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => act.again(turn)}>
+            Try again
+          </button>
+        </div>
+      )}
+      {turn.status === "done" &&
+        (live ? (
+          <div className="turn-result">
+            <img className="turn-img" src={live.thumbnail} alt="" draggable={false} />
+            <div className="turn-meta">
+              <div className="turn-title">
+                <p className="turn-name" data-tip={live.name} data-tip-overflow>
+                  {live.name}
+                </p>
+                <button
+                  type="button"
+                  className="icon-btn turn-more"
+                  aria-label={`options for ${live.name}`}
+                  aria-haspopup="dialog"
+                  data-tip="Name, tags and details"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => act.menu(live, e.currentTarget)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg>
+                </button>
+              </div>
+              {live.tags.length > 0 && (
+                <div className="turn-tags">
+                  {live.tags.map((tag) => (
+                    <span className="tag-chip" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="turn-where">
+                {turn.where}
+                {turn.finished ? ` · ${duration(secondsSince(turn.started, turn.finished))}` : ""} · in Yours
+              </p>
+              <div className="turn-actions">
+                {folderName ? (
+                  applied ? (
+                    <span className="turn-applied">
+                      <OkBadge size={16} /> On {clip(folderName, 24)}
+                    </span>
+                  ) : (
+                    <button type="button" className="btn btn-primary btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={() => act.apply(live)}>
+                      Apply to {clip(folderName, 24)}
+                    </button>
+                  )
+                ) : (
+                  <button type="button" className="btn btn-primary btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={act.chooseFolder}>
+                    Choose a folder
+                  </button>
+                )}
+                {folderName && !applied && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={onFolder}
+                    data-tip={onFolder ? undefined : `See it on ${clip(folderName, 24)} before applying it`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => act.preview(live)}
+                  >
+                    {onFolder ? "On show" : "Preview"}
+                  </button>
+                )}
+                <button type="button" className="btn btn-ghost btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={() => act.again(turn)}>
+                  Make another
+                </button>
+              </div>
+              {turn.log && turn.log.length > 0 && <Log lines={turn.log} open={logOpen} onToggle={() => setLogOpen((o) => !o)} />}
+            </div>
+          </div>
+        ) : (
+          <div className="turn-stopped">
+            <p>This picture has been deleted from your library.</p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => act.again(turn)}>
+              Make it again
+            </button>
+          </div>
+        ))}
+    </article>
+  );
+}

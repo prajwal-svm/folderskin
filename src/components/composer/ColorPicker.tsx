@@ -85,7 +85,7 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
       className="cmp-swatch"
       style={{ "--c": cssColor(color) } as CSSProperties}
       aria-label={`${label} ${color}`}
-      title={color}
+      data-tip={color}
       onClick={() => {
         const p = parseColor(color);
         if (!p) return;
@@ -167,7 +167,7 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
             type="button"
             className="cmp-swatch is-clear"
             aria-label="no colour"
-            title="See-through"
+            data-tip="See-through"
             onClick={() => {
               const out = toHex({ ...c, a: 0 });
               last.current = out;
@@ -220,7 +220,7 @@ export function ColorField({
         aria-label={`${label}: ${shown}`}
         aria-haspopup="dialog"
         aria-expanded={anchor !== null}
-        title={compact ? `${label}: ${shown}` : undefined}
+        data-tip={compact ? `${label}: ${shown}` : undefined}
         onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
       >
         <span className={c && c.a === 0 ? "cmp-well-chip is-clear" : "cmp-well-chip"} style={{ "--c": cssColor(value) } as CSSProperties} />

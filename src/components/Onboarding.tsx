@@ -17,6 +17,7 @@ import {
 } from "../lib/onboarding";
 import { licenseLabel } from "../lib/packs";
 import { api, errorMessage, type CommunityPack } from "../lib/tauri";
+import { reducesMotion } from "../state/prefs";
 import { applyTheme, loadThemePref } from "../state/theme";
 import { OkBadge } from "./OkBadge";
 import { PackPreview, prefetchPreview } from "./PackPreview";
@@ -45,10 +46,6 @@ const DECODE_WAIT = 700;
 const DONE_PAUSE = 900;
 
 type Phase = "row" | "landing" | "logo" | "welcome";
-
-function prefersReducedMotion(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 /** Resolves once every picture is decoded, or after `wait` ms, whichever comes first. */
 function decodeAll(sources: string[], wait: number): Promise<void> {
@@ -125,7 +122,7 @@ export function Onboarding({ leaving, onDone, onGone }: { leaving: boolean; onDo
  * A click or a key skips to the end. Without `replay`, or with reduced motion, only the end shows.
  */
 function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
-  const [animate] = useState(() => replay && !prefersReducedMotion());
+  const [animate] = useState(() => replay && !reducesMotion());
   const [phase, setPhase] = useState<Phase>(animate ? "row" : "welcome");
   const [ready, setReady] = useState(!animate);
   const [step, setStep] = useState(0);
@@ -283,7 +280,7 @@ function usePackSetup() {
         if (!live.current) return;
         setPacks(list);
         setPicked(new Set(defaultPicks(list)));
-        list.slice(0, 8).forEach((p) => prefetchPreview(p.id));
+        list.slice(0, 8).forEach((p) => prefetchPreview(p.preview));
       })
       .catch((e) => {
         if (live.current) setLoadError(errorMessage(e));
@@ -545,11 +542,11 @@ function PackCard({
         disabled={locked || done}
         onClick={onToggle}
       >
-        <PackPreview id={pack.id} count={pack.count} grid />
+        <PackPreview src={pack.preview} count={pack.count} grid />
         <span className="onboard-pack-tick" aria-hidden="true">
           {checked && <CheckIcon size={13} playOnMount />}
         </span>
-        <span className="onboard-pack-name" title={pack.name}>
+        <span className="onboard-pack-name" data-tip={pack.name} data-tip-overflow>
           {pack.name}
         </span>
         <span className="onboard-pack-by">
@@ -566,7 +563,7 @@ function PackCard({
           </>
         ) : state?.kind === "failed" ? (
           <span className="onboard-pack-failed">
-            <span title={state.error}>Couldn't add it</span>
+            <span data-tip={state.error}>Couldn't add it</span>
             <button type="button" className="link-btn onboard-retry" disabled={running} onClick={onRetry}>
               <RefreshCwIcon size={13} />
               Try again

@@ -72,10 +72,10 @@ pub fn current_icon_png(_folder: &Path, _size: u32) -> Option<Vec<u8>> {
 /// folder for it — the same picture Explorer draws, near enough, and far better than failing.
 #[cfg(target_os = "windows")]
 pub fn current_icon_png(folder: &Path, size: u32) -> Option<Vec<u8>> {
-    use folderskin_core::apply::windows::{icon_resource_of, INI_NAME};
+    use folderskin_core::apply::windows::{decode_ini, icon_resource_of, INI_NAME};
 
-    // Not UTF-8 (a UTF-16 ini some other tool wrote) reads as no icon rather than a wrong one.
-    let ini = std::fs::read_to_string(folder.join(INI_NAME)).ok()?;
+    // UTF-8, or UTF-16 as Windows writes it; anything else reads as no icon, not a wrong one.
+    let (ini, _) = decode_ini(&std::fs::read(folder.join(INI_NAME)).ok()?)?;
     let (named, index) = icon_resource_of(&ini)?;
     let path = win::resolve_icon_path(folder, &named)?;
     let rgba = win::extract_icon(&path, index, size)?;

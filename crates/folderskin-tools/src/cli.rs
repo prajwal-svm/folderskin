@@ -1,6 +1,6 @@
 //! Command-line surface of folderskin-tools (clap derive).
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -38,8 +38,24 @@ pub enum Command {
         #[arg(long, default_value = "guide.png")]
         out: PathBuf,
     },
+    /// Write the blank folder an image model repaints (FolderSkin's folder in flat grey, centred
+    /// on a flat backdrop), and optionally its silhouette as a mask: white inside the folder
+    Template {
+        #[arg(long, default_value = "template.png")]
+        out: PathBuf,
+        #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(64..=4096))]
+        width: u32,
+        #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(64..=4096))]
+        height: u32,
+        /// The colour around the folder
+        #[arg(long, default_value = "FF00FF", value_name = "RRGGBB")]
+        backdrop: String,
+        /// Also write the folder's silhouette here, white on black, lined up with the template
+        #[arg(long, value_name = "PNG")]
+        mask: Option<PathBuf>,
+    },
     /// Write the layers the composer draws a design between: back.png, front.png, middle.png,
-    /// top.png and outline.png
+    /// top.png and outline.png, and the same for Windows' folder in windows/
     ComposerLayers {
         /// Folder to write them into; made if it isn't there
         #[arg(long)]
@@ -71,6 +87,96 @@ pub enum Command {
     Packs {
         #[command(subcommand)]
         command: PacksCommand,
+    },
+    /// Look after the community service: packs shared without GitHub, their review, and pulling
+    /// approved ones into community/packs
+    Community {
+        #[command(subcommand)]
+        command: CommunityCommand,
+    },
+}
+
+/// The community service and the maintainer's key, for every command that talks to it.
+#[derive(Args, Debug)]
+pub struct Service {
+    /// The service's address, e.g. https://community.example.org
+    #[arg(long, env = "FOLDERSKIN_COMMUNITY_API")]
+    pub api: String,
+    /// The maintainer's key, from `community keygen`
+    #[arg(long, env = "FOLDERSKIN_ADMIN_KEY", value_name = "FILE")]
+    pub key: PathBuf,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CommunityCommand {
+    /// Make a maintainer's signing key; its public half goes in ADMIN_KEYS in wrangler.toml
+    Keygen {
+        /// Where to save it. Whoever has this file can approve packs, so keep it private
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// List packs waiting for review, flagged ones first
+    Queue {
+        /// waiting, flagged, pending, approved or open
+        #[arg(long, default_value = "waiting")]
+        status: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Approve a pack, or turn it down with reasons from docs/PACK-TERMS.md
+    Decide {
+        /// The submission, sub_…
+        id: String,
+        #[arg(value_parser = ["approve", "reject"])]
+        decision: String,
+        /// A reason code such as quality, brand or sexual; repeat for more. Needed to reject
+        #[arg(long = "reason")]
+        reasons: Vec<String>,
+        /// A note the author reads
+        #[arg(long, default_value = "")]
+        note: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Take a pack down at once, published or still waiting
+    Takedown {
+        id: String,
+        /// A reason code from docs/PACK-TERMS.md; repeat for more
+        #[arg(long = "reason", required = true)]
+        reasons: Vec<String>,
+        #[arg(long, default_value = "")]
+        note: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// List the reports people sent, newest first, with how to reach whoever sent each one
+    Reports {
+        /// How many days back to look, up to 180
+        #[arg(long, default_value_t = 7, value_parser = clap::value_parser!(u32).range(1..=180))]
+        days: u32,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Stop taking new packs and verifications: the kill switch
+    Pause {
+        /// Said to anyone who tries to share while it's paused
+        #[arg(long, default_value = "")]
+        message: String,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Take new packs and verifications again
+    Resume {
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Write approved packs into community/packs as ordinary pack folders, checked like any other
+    Pull {
+        /// The packs folder
+        #[arg(long, default_value = "community/packs")]
+        out: PathBuf,
+        #[command(flatten)]
+        service: Service,
     },
 }
 
@@ -127,6 +233,26 @@ pub enum PacksCommand {
         #[arg(long, default_value = "community")]
         dir: PathBuf,
     },
+    /// Check every pack, then write the tree the app searches: a SQLite catalog, thumbnails,
+    /// preview strips, pictures and manifests named after their contents, and head.json last
+    /// (deterministic; only what changed is written)
+    Catalog {
+        /// The community folder, holding packs/ and, if there is one, featured.json
+        #[arg(long, default_value = "community")]
+        dir: PathBuf,
+        /// Where the tree goes (default: v2 in the community folder, beside packs/)
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Another https:// folder serving the same tree, which the app tries first; repeatable
+        #[arg(long = "mirror", value_name = "URL")]
+        mirrors: Vec<String>,
+    },
+}
+
+/// Where `packs catalog` writes its tree: `--out`, or `v2` in the community folder it reads, as
+/// `packs index` writes into that folder too.
+pub fn catalog_out(dir: &std::path::Path, out: Option<PathBuf>) -> PathBuf {
+    out.unwrap_or_else(|| dir.join("v2"))
 }
 
 pub fn parse_focus(s: &str) -> Result<(f32, f32), String> {
@@ -204,6 +330,48 @@ mod tests {
     }
 
     #[test]
+    fn parses_template_on_magenta_at_1024_unless_told_otherwise() {
+        match Cli::parse_from(["folderskin-tools", "template"]).command {
+            Command::Template {
+                out,
+                width,
+                height,
+                backdrop,
+                mask,
+            } => {
+                assert_eq!(out, PathBuf::from("template.png"));
+                assert_eq!((width, height), (1024, 1024));
+                assert_eq!(backdrop, "FF00FF");
+                assert_eq!(mask, None);
+            }
+            other => panic!("{other:?}"),
+        }
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "template",
+            "--width",
+            "1024",
+            "--height",
+            "960",
+            "--mask",
+            "m.png",
+        ]);
+        match cli.command {
+            Command::Template {
+                width,
+                height,
+                mask,
+                ..
+            } => {
+                assert_eq!((width, height), (1024, 960));
+                assert_eq!(mask, Some(PathBuf::from("m.png")));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(Cli::try_parse_from(["folderskin-tools", "template", "--width", "8"]).is_err());
+    }
+
+    #[test]
     fn parses_composer_layers_at_1024_unless_told_otherwise() {
         let parse = |args: &[&str]| {
             Cli::try_parse_from([&["folderskin-tools", "composer-layers"], args].concat())
@@ -243,6 +411,122 @@ mod tests {
             } => assert_eq!(dir, PathBuf::from("/tmp/c")),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_packs_catalog_into_community_v2_by_default() {
+        match Cli::parse_from(["folderskin-tools", "packs", "catalog"]).command {
+            Command::Packs {
+                command: PacksCommand::Catalog { dir, out, mirrors },
+            } => {
+                assert_eq!(dir, PathBuf::from("community"));
+                assert_eq!(
+                    catalog_out(&dir, out),
+                    PathBuf::from("community").join("v2")
+                );
+                assert!(mirrors.is_empty());
+            }
+            other => panic!("{other:?}"),
+        }
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "packs",
+            "catalog",
+            "--out",
+            "/tmp/v2",
+            "--mirror",
+            "https://a.example/v2",
+            "--mirror",
+            "https://b.example/v2",
+        ]);
+        match cli.command {
+            Command::Packs {
+                command: PacksCommand::Catalog { out, mirrors, .. },
+            } => {
+                assert_eq!(out, Some(PathBuf::from("/tmp/v2")));
+                assert_eq!(mirrors, ["https://a.example/v2", "https://b.example/v2"]);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_catalog_goes_into_the_community_folder_it_was_given() {
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "packs",
+            "catalog",
+            "--dir",
+            "elsewhere/mine",
+        ]);
+        match cli.command {
+            Command::Packs {
+                command: PacksCommand::Catalog { dir, out, .. },
+            } => assert_eq!(
+                catalog_out(&dir, out),
+                PathBuf::from("elsewhere/mine").join("v2")
+            ),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_community_commands_with_the_service_and_key() {
+        let service = [
+            "--api",
+            "https://community.example.org",
+            "--key",
+            "admin.key",
+        ];
+        let parse = |args: &[&str]| {
+            Cli::try_parse_from([&["folderskin-tools", "community"], args, &service].concat())
+                .map(|cli| cli.command)
+        };
+        match parse(&["pull"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Pull { out, service },
+            } => {
+                assert_eq!(out, PathBuf::from("community/packs"));
+                assert_eq!(service.api, "https://community.example.org");
+                assert_eq!(service.key, PathBuf::from("admin.key"));
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse(&[
+            "decide",
+            "sub_aaaaaaaaaaaaaaaaaaaa",
+            "reject",
+            "--reason",
+            "quality",
+            "--reason",
+            "brand",
+        ])
+        .unwrap()
+        {
+            Command::Community {
+                command:
+                    CommunityCommand::Decide {
+                        decision, reasons, ..
+                    },
+            } => {
+                assert_eq!(decision, "reject");
+                assert_eq!(reasons, ["quality", "brand"]);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&["decide", "sub_x", "maybe"]).is_err());
+        assert!(
+            parse(&["takedown", "sub_x"]).is_err(),
+            "a takedown says why"
+        );
+        match parse(&["reports"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Reports { days, .. },
+            } => assert_eq!(days, 7),
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&["reports", "--days", "0"]).is_err());
+        assert!(Cli::try_parse_from(["folderskin-tools", "community", "keygen"]).is_err());
     }
 
     #[test]

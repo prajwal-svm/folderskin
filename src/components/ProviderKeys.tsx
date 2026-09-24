@@ -5,8 +5,13 @@ import { isTauri } from "../lib/devMock";
 import type { ToastTone } from "../hooks/useToasts";
 import { OkBadge } from "./OkBadge";
 import { ProviderLogo } from "./ProviderLogo";
+import { LocalSetup } from "./studio/LocalSetup";
+import { useLocalSetupRunning } from "../state/localSetupRun";
+import { CpuIcon } from "./icons/composer";
+import { Select } from "./Select";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
+import { branded } from "./Brand";
 
 /**
  * The AI providers, the key for the chosen one, and optionally its model. Shared by the
@@ -36,6 +41,7 @@ export function ProviderKeys({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
+  const settingUp = useLocalSetupRunning();
 
   const save = useCallback(async () => {
     if (!provider || !draft.trim()) return;
@@ -43,16 +49,33 @@ export function ProviderKeys({
     setNote(null);
     try {
       await api.aiSetKey(provider.id, draft.trim());
-      await api.aiTestKey(provider.id);
-      setDraft("");
-      toast(`${provider.label} accepted the key`, { tone: "ok" });
-      onChanged();
     } catch (e) {
       setNote({ text: errorMessage(e), bad: true });
+      setBusy(false);
+      return;
+    }
+    // It's saved whatever the check says next, so everything that shows keys hears of it now.
+    setDraft("");
+    onChanged();
+    try {
+      await api.aiTestKey(provider.id);
+      toast(`${provider.label} accepted the key`, { tone: "ok" });
+    } catch (e) {
+      setNote({ text: `Saved, but ${provider.label} didn't accept it: ${errorMessage(e)}`, bad: true });
     } finally {
       setBusy(false);
     }
   }, [provider, draft, onChanged, toast]);
+
+  const copy = useCallback(
+    (text: string, what: string) => {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => toast(`${what} is copied`, { tone: "ok" }))
+        .catch(() => toast("Couldn't copy it", { tone: "danger" }));
+    },
+    [toast],
+  );
 
   const forget = useCallback(async () => {
     if (!provider) return;
@@ -88,36 +111,46 @@ export function ProviderKeys({
             }}
           >
             <span className="provider-name">
-              <ProviderLogo id={p.id} size={18} />
+              {p.kind === "local" ? <CpuIcon size={18} /> : <ProviderLogo id={p.id} size={18} />}
               {p.label}
             </span>
-            {p.has_key ? (
-              <OkBadge size={17} playOnMount label="Key saved" />
+            {p.kind === "local" && settingUp ? (
+              // Downloading, whichever provider is shown below.
+              <span className="provider-state provider-busy" role="img" aria-label="downloading" data-tip="Downloading the model">
+                <LoaderIcon size={16} />
+              </span>
+            ) : p.has_key ? (
+              <OkBadge size={17} playOnMount label={p.kind === "local" ? "Set up" : "Key saved"} />
             ) : (
-              <span className="provider-state">No key</span>
+              <span className="provider-state">{p.kind === "local" ? "Not set up" : "No key"}</span>
             )}
           </button>
         ))}
       </div>
 
-      {onModel && (
-      <label className="field">
-        <span className="field-label">Model</span>
-        <select className="input" value={model?.id ?? ""} onChange={(e) => onModel(e.target.value)}>
-          {provider.models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label} ({m.price_hint})
-            </option>
-          ))}
-        </select>
-        <span className="field-note">
-          {model?.native_alpha
-            ? "Returns a transparent background by itself."
-            : "No transparency, so FolderSkin paints on magenta and cuts it out."}
-        </span>
-      </label>
+      {/* The Local Model has one model, which its own panel below names. */}
+      {onModel && provider.kind !== "local" && (
+        <div className="field">
+          <span className="field-label">Model</span>
+          <Select
+            label="model"
+            className="is-field"
+            value={model?.id ?? ""}
+            onChange={onModel}
+            options={provider.models.map((m) => ({ value: m.id, label: `${m.label} (${m.price_hint})` }))}
+          />
+          <span className="field-note">
+            {branded(model?.native_alpha ? "Returns a transparent background by itself." : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out.")}
+          </span>
+        </div>
       )}
 
+      {provider.kind === "local" ? (
+        <div className="field">
+          <span className="field-label">On your machine</span>
+          <LocalSetup onChanged={onChanged} copy={copy} />
+        </div>
+      ) : (
       <div className="field">
         <span className="field-label">{provider.label} API key</span>
         {provider.has_key ? (
@@ -147,7 +180,7 @@ export function ProviderKeys({
             </button>
           </div>
         )}
-        {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{note.text}</span>}
+        {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{branded(note.text)}</span>}
         <div className="key-links">
           <button type="button" className="link-btn" onClick={() => void openUrl(provider.keys_url).catch(() => {})}>
             Get a key <ExternalLinkIcon size={12} />
@@ -157,9 +190,14 @@ export function ProviderKeys({
           </button>
         </div>
       </div>
+      )}
 
       <p className="field-note">
-        {isTauri() ? "Your API keys are securely stored on this device." : "In this browser preview, keys last until you reload."}
+        {provider.kind === "local"
+          ? "Skins generated on this machine stay on it until you decide to share them with the community."
+          : isTauri()
+            ? "Your API keys are securely stored on this device."
+            : "In this browser preview, keys last until you reload."}
       </p>
     </>
   );

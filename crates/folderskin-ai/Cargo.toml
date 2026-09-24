@@ -6,8 +6,14 @@ license.workspace = true
 description = "Bring-your-own-key image generation for FolderSkin"
 
 [dependencies]
+# What an answer becomes: a keyed-out folder or artwork cropped for the template.
+folderskin-core.workspace = true
+image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 base64 = "0.22"
+# Its timer, for polling Black Forest Labs without holding a runtime thread; reqwest already runs
+# on tokio wherever this crate is used.
+tokio.workspace = true
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "multipart", "charset", "http2"] }

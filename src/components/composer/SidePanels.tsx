@@ -74,9 +74,7 @@ export function Panel({
           <span className="cmp-panel-chevron" aria-hidden="true">
             <ChevronDownIcon size={14} />
           </span>
-          <span className="cmp-panel-title" title={title}>
-            {title}
-          </span>
+          <span className="cmp-panel-title">{title}</span>
           {badge}
         </button>
         {actions && <div className="cmp-panel-actions">{actions}</div>}
@@ -155,7 +153,7 @@ export function Resizer({
       aria-valuemax={now?.max}
       tabIndex={0}
       className={dragging ? "cmp-resizer is-dragging" : "cmp-resizer"}
-      title="Drag to give the layers more room. Double-click to reset."
+      data-tip="Drag to give the layers more room. Double-click to reset."
       onPointerDown={drag}
       onKeyDown={keys}
       onFocus={() => setNow(measure())}

@@ -5,6 +5,7 @@
  * finished loading so the stage can draw again.
  */
 import type { Doc, ImageFx, TextLayer } from "./doc";
+import type { FolderStyle } from "./parts";
 import { applyMatrix, blurPixels, blurRadius, fxMatrix, hasColorFx, hasFx } from "./imagefx";
 import { grainPixels } from "./patterns";
 import { layoutText, type TextLayout } from "./text";
@@ -34,8 +35,11 @@ export class Assets {
   private grains = new Map<string, HTMLCanvasElement>();
   private layouts = new Map<string, TextLayout>();
   private scratchPool: HTMLCanvasElement[] = [];
+  private paths = new Map<string, Path2D>();
   private listeners = new Set<() => void>();
   private measurer: CanvasRenderingContext2D | null = null;
+  /** Each folder's front panel mask, from its Rust template, for fills that cover only the front. */
+  private fronts = new Map<FolderStyle, CanvasImageSource>();
 
   onChange(fn: () => void): () => void {
     this.listeners.add(fn);
@@ -128,6 +132,30 @@ export class Assets {
     return hit;
   }
 
+  /** An icon path, parsed once: the stage draws every icon every frame. */
+  path(d: string): Path2D {
+    let p = this.paths.get(d);
+    if (!p) {
+      p = new Path2D(d);
+      // Enough for a few designs' icons; a pack browsed by the thousand doesn't come through here.
+      if (this.paths.size > 2000) this.paths.clear();
+      this.paths.set(d, p);
+    }
+    return p;
+  }
+
+  /** Keeps the front panel mask of the folder of `style`, once its template has loaded. */
+  setFront(style: FolderStyle, mask: CanvasImageSource) {
+    if (this.fronts.get(style) === mask) return;
+    this.fronts.set(style, mask);
+    this.changed();
+  }
+
+  /** The front panel mask of the folder of `style`, or null while its template hasn't loaded. */
+  front(style: FolderStyle): CanvasImageSource | null {
+    return this.fronts.get(style) ?? null;
+  }
+
   /** Forgets text layouts, for when a font has finished loading and measures differently. */
   fontsChanged() {
     this.layouts.clear();
@@ -162,6 +190,16 @@ export class Assets {
         return new Promise<void>((resolve) => p.waiters.push(resolve));
       });
     return Promise.all(waits).then(() => undefined);
+  }
+
+  /** Whether a picture `doc` shows is still loading, so it can't be drawn whole yet. One that failed has gone as far as it will. */
+  loading(doc: Doc): boolean {
+    return doc.layers.some((l) => {
+      if (l.kind !== "image" || l.hidden) return false;
+      this.image(l.src);
+      const p = this.pictures.get(l.src);
+      return p !== undefined && !p.ready && !p.failed;
+    });
   }
 
   /** Drops pictures the document no longer uses. */

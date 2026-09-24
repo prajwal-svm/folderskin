@@ -90,6 +90,20 @@
   font-size: 14.5px;
 }
 
+.btn-sm {
+  height: 32px;
+  gap: 6px;
+  padding: 0 13px;
+  font-size: 12.5px;
+}
+
+.btn-xs {
+  height: 28px;
+  gap: 5px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+
 .btn-block {
   width: 100%;
 }
@@ -117,35 +131,56 @@
 
 /* A label under an icon-only button while it's hovered or focused, from its data-tip. It waits a
    moment before showing, so passing over the button doesn't flash it. */
-.has-tip {
-  position: relative;
-}
-
-.has-tip::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 5;
-  padding: 5px 9px;
+/* Every tooltip in the app (Tooltip.tsx): one layer over everything, in the ink colour, never
+   the system's grey box. */
+.tip {
+  position: fixed;
+  z-index: 90;
+  max-width: 260px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 9px;
   border-radius: 8px;
   background: var(--ink);
   color: var(--island);
+  box-shadow: var(--shadow-pop);
   font-weight: 700;
   font-size: 11.5px;
-  line-height: 1.2;
-  white-space: nowrap;
+  line-height: 1.35;
   pointer-events: none;
-  opacity: 0;
-  transform: translateY(-3px);
-  transition: opacity var(--t-fast) ease, transform var(--t-fast) ease;
+  animation: tip-in var(--t-fast) var(--ease-out) both;
 }
 
-.has-tip:hover::after,
-.has-tip:focus-visible::after {
-  opacity: 1;
-  transform: none;
-  transition-delay: 350ms;
+.tip-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tip-kbd {
+  flex: none;
+  font: inherit;
+  font-weight: 650;
+  opacity: 0.62;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--tip-from, 3px));
+  }
+}
+
+.tip.is-bottom {
+  --tip-from: -3px;
+}
+
+.tip.is-left {
+  --tip-from: 0;
+}
+
+.tip.is-right {
+  --tip-from: 0;
 }
 
 .link-btn {
@@ -385,6 +420,20 @@
   display: none;
 }
 
+/* Tags that run on past the strip's end (or start, once scrolled) fade out there rather than
+   stopping mid-word against whatever is beside them. */
+.seg[data-cut="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+
+.seg[data-cut="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+
+.seg[data-cut="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
 .seg-pill {
   position: absolute;
   top: 3px;
@@ -478,6 +527,11 @@
 .input:focus-visible {
   border-color: var(--accent);
   background: var(--island);
+}
+
+/* A field whose problem is shown under it. */
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 .input::placeholder {
@@ -581,6 +635,11 @@ select.input {
   background: var(--accent);
 }
 
+/* White on the accent, or dark when the accent is white itself. */
+.switch.is-on .knob {
+  background: var(--on-accent);
+}
+
 .switch.is-on .knob {
   transform: translateX(14px);
 }
@@ -642,11 +701,11 @@ select.input {
   background: var(--island);
   box-shadow: var(--shadow-pop);
   animation: pop-in var(--t-base) var(--ease-spring) both;
-  transform-origin: left top;
+  transform-origin: center top;
 }
 
 .skin-menu.is-above {
-  transform-origin: left bottom;
+  transform-origin: center bottom;
 }
 
 /* the name reads as the menu's title and turns into a field when pointed at */
@@ -656,10 +715,9 @@ select.input {
   padding: 0 2px;
   font-weight: 800;
   font-size: 15px;
+  line-height: 1.3;
   letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -670,9 +728,15 @@ select.input {
 
 /* A field at rest too, like the tag field below it, so the name reads as one to change. */
 .skin-menu-name {
+  display: block;
   width: 100%;
-  height: 36px;
-  padding: 0 32px 0 10px;
+  min-height: 36px;
+  padding: 8px 32px 8px 10px;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  font-family: inherit;
   border-radius: var(--r-control);
   border: 1px solid transparent;
   background: var(--well);
@@ -680,7 +744,6 @@ select.input {
   font-weight: 750;
   font-size: 14px;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
   cursor: text;
   user-select: text;
   -webkit-user-select: text;
@@ -698,7 +761,7 @@ select.input {
 
 .skin-menu-pencil {
   position: absolute;
-  top: 50%;
+  top: 18px;
   right: 11px;
   display: flex;
   color: var(--hint);
@@ -721,7 +784,8 @@ select.input {
 .skin-facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 12px;
+  align-items: center;
+  gap: 7px 14px;
   padding: 10px 12px;
   border-radius: 10px;
   background: var(--well);
@@ -740,11 +804,8 @@ select.input {
 
 .skin-fact dd {
   min-width: 0;
+  margin: 0;
   color: var(--ink-2);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
 }
 
@@ -788,168 +849,6 @@ select.input {
 .menu-item.is-danger:hover,
 .menu-item.is-danger:focus-visible {
   background: var(--danger-soft);
-}
-
-/* ---------- settings ---------- */
-
-.settings-tabs {
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--r-pill);
-  background: var(--well);
-  align-self: center;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-.settings-tab {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: var(--r-pill);
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 13px;
-  white-space: nowrap;
-  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
-}
-
-.settings-tab:hover,
-.settings-tab:focus-visible {
-  color: var(--ink);
-}
-
-.settings-tab.is-active {
-  background: var(--island);
-  color: var(--ink);
-}
-
-.settings-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 300px;
-  padding-top: 6px;
-  animation: fade-up var(--t-base) var(--ease-out) both;
-}
-
-.choice {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.choice-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 14px 0 12px;
-  border-radius: var(--r-control);
-  background: var(--well);
-  border: 1px solid transparent;
-  color: var(--ink-2);
-  font-weight: 700;
-  font-size: 13px;
-  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease;
-}
-
-.choice-btn:hover,
-.choice-btn:focus-visible {
-  background: var(--well-2);
-}
-
-.choice-btn.is-active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--ink);
-}
-
-/* Your skins: how many, where they are, and the way there */
-.storage {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 10px 10px 12px;
-  border-radius: var(--r-card);
-  background: var(--well);
-}
-
-.storage-icon {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.storage-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.storage-count {
-  font-weight: 800;
-  font-size: 14.5px;
-  letter-spacing: -0.01em;
-}
-
-.storage-path {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* on the well, the button takes the island colour to show */
-.storage .btn-secondary {
-  flex: none;
-  background: var(--island);
-}
-
-.storage .btn-secondary:hover:not(:disabled),
-.storage .btn-secondary:focus-visible:not(:disabled) {
-  background: var(--well-2);
-}
-
-.settings-link {
-  align-self: flex-start;
-}
-
-/* The About page's name, note and links sit in the middle; the credits below stay left. */
-.settings-about-top {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  text-align: center;
-}
-
-.settings-about {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-top: 10px;
-  text-align: left;
-}
-
-.settings-mark {
-  height: 44px;
-  width: auto;
-}
-
-.settings-page .about-links {
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 0;
 }
 
 /* sharing one skin: the skin itself instead of the picker */
@@ -1160,7 +1059,7 @@ select.input {
   height: 16px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* Connecting from the author row, when they have not already. It stands where the account row
@@ -1441,6 +1340,10 @@ select.input {
 .modal-body {
   padding: 14px 22px 22px;
   overflow-y: auto;
+  /* What scrolls up under the title fades out rather than being cut off by an edge. The fade is
+     no taller than the body's top padding, so nothing is faded until it's scrolled. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
   /* `overflow-y: auto` alone turns the x axis into `auto` too, so one over-wide child gives the
      dialog a sideways scrollbar. Nothing in here should ever scroll that way. */
   overflow-x: hidden;
@@ -1471,11 +1374,13 @@ select.input {
 
 /* ---------- toasts ---------- */
 
+/* Over the popovers and menus (60) a toast is often about, whose failed download it reports;
+   under the tooltips. */
 .toasts {
   position: fixed;
   left: 50%;
   bottom: 22px;
-  z-index: 60;
+  z-index: 70;
   display: flex;
   flex-direction: column-reverse;
   align-items: center;
@@ -1552,4 +1457,22 @@ select.input {
     opacity: 0;
     transform: translateY(8px) scale(0.96);
   }
+}
+
+/* VirtualGrid: a scroll box, a spacer as tall as the whole grid, and only the cells on screen. */
+.vgrid {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.vgrid-space {
+  position: relative;
+}
+
+.vgrid-cell {
+  position: absolute;
+  top: 0;
+  left: 0;
 }

@@ -3,6 +3,7 @@
 //! thumbnail.
 
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinSource, Store, THUMB_SIZE};
+use folderskin_core::compositor::Style;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -66,7 +67,8 @@ pub struct Inner {
     /// Skins that could not be saved: no data folder, or a failed write of an AI result.
     unsaved: Mutex<HashMap<String, Unsaved>>,
     /// The plain default folder's thumbnail, as a PNG data URL, once it has been drawn.
-    default_thumb: OnceLock<String>,
+    /// The plain folder's thumbnail, once for each folder skins can go on: the Mac's, Windows'.
+    default_thumb: [OnceLock<String>; 2],
 }
 
 /// Cheap to clone; every command clones it before moving work to a blocking thread.
@@ -388,10 +390,11 @@ impl AppState {
         }
     }
 
-    /// The plain default folder's thumbnail: `draw()`'s data URL the first time, and the same
-    /// one after that. Callers that ask while it is being drawn wait for it.
-    pub fn default_thumbnail(&self, draw: impl FnOnce() -> String) -> String {
-        self.0.default_thumb.get_or_init(draw).clone()
+    /// The plain default folder's thumbnail on the folder of `style`: `draw()`'s data URL the
+    /// first time, and the same one after that. Callers that ask while it is being drawn wait.
+    pub fn default_thumbnail(&self, style: Style, draw: impl FnOnce() -> String) -> String {
+        let slot = usize::from(style == Style::Windows);
+        self.0.default_thumb[slot].get_or_init(draw).clone()
     }
 }
 

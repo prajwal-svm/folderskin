@@ -121,6 +121,26 @@ export function mix(a: string, b: string, t: number): string {
   return toHex({ r: x.r + (y.r - x.r) * k, g: x.g + (y.g - x.g) * k, b: x.b + (y.b - x.b) * k, a: x.a + (y.a - x.a) * k });
 }
 
+/**
+ * The colour of an icon pressed into a folder of colour `folder`, as macOS draws the symbol on
+ * its folders: a deeper shade of the folder's own colour, or on a dark folder a lighter one, so
+ * the symbol always reads while still belonging to the folder. With no folder colour (a
+ * see-through design) it's the shade macOS uses on its own blue folder.
+ */
+export function embossTint(folder: string | null): string {
+  const base = folder && (parseColor(folder)?.a ?? 0) > 0.35 ? toHex({ ...(parseColor(folder) as RGBA), a: 1 }) : FOLDER_BLUE_BOTTOM;
+  const l = luminance(base);
+  if (l < 0.06) return mix(base, "#ffffff", 0.26);
+  // Lighter folders need a deeper shade to show; mid ones a little less.
+  return mix(base, "#0c1a2c", l > 0.6 ? 0.3 : l > 0.25 ? 0.24 : 0.2);
+}
+
+/** The pressed-in look's lit lip and shaded edge for a folder whose colour is `folder`. */
+export function embossLight(folder: string | null): { lip: string; shade: string } {
+  const l = luminance(folder && parseColor(folder) ? folder : FOLDER_BLUE_BOTTOM);
+  return { lip: l < 0.06 ? "#ffffff24" : l < 0.25 ? "#ffffff4d" : "#ffffff99", shade: l < 0.06 ? "#00000059" : "#0000003d" };
+}
+
 /** The picker's swatches: a spread of hues in a light, a clear and a deep version, then greys. */
 export const SWATCHES = [
   "#ff5a5f", "#ff8a3d", "#ffc233", "#34c77b", "#1fb5a8", "#3a86ff", "#6f5cff", "#c150e8", "#ff5fa2",

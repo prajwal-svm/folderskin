@@ -7,14 +7,28 @@
  * (composite.ts), never from here.
  */
 import type { Assets } from "./assets";
-import { cssColor } from "./color";
-import { CANVAS, isPlaced, type Doc, type Layer, type Paint, type PlacedLayer } from "./doc";
+import { cssColor, embossLight, embossTint } from "./color";
+import { backgroundColor, CANVAS, isPlaced, mainColor, type Doc, type FillLayer, type IconLayer, type Layer, type Paint, type PlacedLayer } from "./doc";
 import { EMOJI_STACK } from "./fonts";
 import { bounds, type Box, type Rect } from "./geometry";
 import { drawPattern } from "./patterns";
 import { evenOdd, roundRect, traceShape } from "./shapes";
 
 type Ctx = CanvasRenderingContext2D;
+
+/** What a layer needs to know about the design around it: the folder's colour, for icons pressed into it. */
+export type Surround = { folder: string | null };
+const NO_SURROUND: Surround = { folder: null };
+
+/** How far a pressed-in icon's lip and shade reach, in canvas units. */
+const embossReach = (layer: IconLayer) => (layer.look === "emboss" ? (layer.size * 0.011 * layer.depth) / 60 : 0);
+
+/** The colour an icon is drawn in, before any pressing in. */
+export function iconColor(layer: IconLayer, around: Surround): string {
+  if (layer.look === "original" && layer.brand) return layer.brand;
+  if (layer.look === "emboss" && layer.auto) return embossTint(around.folder);
+  return mainColor(layer.paint);
+}
 
 /** A canvas style for a paint laid over the rectangle `x, y, w, h`. */
 export function paintStyle(ctx: Ctx, paint: Paint, x: number, y: number, w: number, h: number): string | CanvasGradient {
@@ -47,6 +61,7 @@ export function boxOf(layer: PlacedLayer, assets: Assets): Box {
       return { x: layer.x, y: layer.y, w: l.w, h: l.h, rotation: layer.rotation };
     }
     case "emoji":
+    case "icon":
       return { x: layer.x, y: layer.y, w: layer.size, h: layer.size, rotation: layer.rotation };
     case "shape":
     case "image":
@@ -60,6 +75,7 @@ function reach(layer: PlacedLayer): number {
   if (layer.kind === "text") r += layer.size * 0.25 + (layer.stroke?.width ?? 0);
   if (layer.kind === "emoji") r += layer.size * 0.12;
   if (layer.kind === "shape") r += layer.stroke?.width ?? 0;
+  if (layer.kind === "icon") r += (layer.strokeWidth * layer.size) / layer.viewBox / 2 + embossReach(layer);
   if (layer.edge) r += layer.edge.width;
   return r;
 }
@@ -79,8 +95,26 @@ function place(ctx: Ctx, layer: PlacedLayer) {
   if (layer.flipX || layer.flipY) ctx.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
 }
 
+/** Draws an icon's paths, centred on the origin, `size` canvas units square. */
+function drawIcon(ctx: Ctx, layer: IconLayer, assets: Assets, color: string) {
+  const s = layer.size / layer.viewBox;
+  ctx.translate(-layer.size / 2, -layer.size / 2);
+  ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = layer.strokeWidth;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const rule = layer.evenOdd ? "evenodd" : "nonzero";
+  layer.paths.forEach((d, i) => {
+    const p = assets.path(d);
+    if (layer.style === "fill" || layer.filled.includes(i)) ctx.fill(p, rule);
+    else ctx.stroke(p);
+  });
+}
+
 /** Draws one layer's own pixels, without its opacity, blend, edge or shadow. */
-export function drawContent(ctx: Ctx, layer: Layer, assets: Assets) {
+export function drawContent(ctx: Ctx, layer: Layer, assets: Assets, around: Surround = NO_SURROUND) {
   ctx.save();
   switch (layer.kind) {
     case "fill":
@@ -171,8 +205,46 @@ export function drawContent(ctx: Ctx, layer: Layer, assets: Assets) {
       ctx.drawImage(pic, (iw - sw) / 2, (ih - sh) / 2, sw, sh, -w / 2, -h / 2, w, h);
       break;
     }
+    case "icon":
+      place(ctx, layer);
+      drawIcon(ctx, layer, assets, iconColor(layer, around));
+      break;
   }
   ctx.restore();
+}
+
+/**
+ * Presses a layer drawn alone on `src` into the folder: a lighter copy a little lower shows as
+ * the groove's lit lower lip, and the layer less itself moved down leaves its top edges, shaded.
+ * Drawn with compositing, not `ctx.filter`, which the macOS 12 web view doesn't have.
+ */
+function pressIn(src: HTMLCanvasElement, dst: HTMLCanvasElement, band: HTMLCanvasElement, d: number, light: { lip: string; shade: string }): HTMLCanvasElement {
+  const w = src.width;
+  const h = src.height;
+  const g = dst.getContext("2d")!;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = "source-over";
+  g.clearRect(0, 0, w, h);
+  g.drawImage(src, 0, d);
+  g.globalCompositeOperation = "source-in";
+  g.fillStyle = light.lip;
+  g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "source-over";
+  g.drawImage(src, 0, 0);
+
+  const b = band.getContext("2d")!;
+  b.setTransform(1, 0, 0, 1, 0, 0);
+  b.globalCompositeOperation = "source-over";
+  b.clearRect(0, 0, w, h);
+  b.drawImage(src, 0, 0);
+  b.globalCompositeOperation = "destination-out";
+  b.drawImage(src, 0, d * 0.75);
+  b.globalCompositeOperation = "source-in";
+  b.fillStyle = light.shade;
+  b.fillRect(0, 0, w, h);
+  b.globalCompositeOperation = "source-over";
+  g.drawImage(band, 0, 0);
+  return dst;
 }
 
 /** Grows a layer drawn alone on `src` by `r` pixels in `color` behind it: a sticker's edge. */
@@ -199,12 +271,17 @@ function withEdge(src: HTMLCanvasElement, dst: HTMLCanvasElement, r: number, col
 
 /** Whether a layer has to be drawn on its own first: anything that applies to it as a whole. */
 function isolated(layer: Layer): boolean {
-  return layer.opacity < 1 || layer.blend !== "normal" || (isPlaced(layer) && (layer.shadow !== null || (layer.edge !== null && layer.edge.width > 0)));
+  return (
+    layer.opacity < 1 ||
+    layer.blend !== "normal" ||
+    (layer.kind === "icon" && embossReach(layer) > 0) ||
+    (isPlaced(layer) && (layer.shadow !== null || (layer.edge !== null && layer.edge.width > 0)))
+  );
 }
 
-export function drawLayer(ctx: Ctx, layer: Layer, k: number, px: number, assets: Assets) {
+export function drawLayer(ctx: Ctx, layer: Layer, k: number, px: number, assets: Assets, around: Surround = NO_SURROUND) {
   if (!isolated(layer)) {
-    drawContent(ctx, layer, assets);
+    drawContent(ctx, layer, assets, around);
     return;
   }
   const r = inkRect(layer, assets);
@@ -224,9 +301,12 @@ export function drawLayer(ctx: Ctx, layer: Layer, k: number, px: number, assets:
   o.globalCompositeOperation = "source-over";
   o.clearRect(0, 0, off.width, off.height);
   o.setTransform(k, 0, 0, k, -ox0, -oy0);
-  drawContent(o, layer, assets);
+  drawContent(o, layer, assets, around);
   let img: HTMLCanvasElement = off;
-  if (isPlaced(layer) && layer.edge && layer.edge.width > 0) img = withEdge(off, assets.scratch(1, ow, oh), layer.edge.width * k, layer.edge.color);
+  if (layer.kind === "icon" && embossReach(layer) > 0) {
+    img = pressIn(img, assets.scratch(2, ow, oh), assets.scratch(3, ow, oh), Math.max(1, embossReach(layer) * k), embossLight(around.folder));
+  }
+  if (isPlaced(layer) && layer.edge && layer.edge.width > 0) img = withEdge(img, assets.scratch(img === off ? 1 : 0, ow, oh), layer.edge.width * k, layer.edge.color);
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -242,6 +322,32 @@ export function drawLayer(ctx: Ctx, layer: Layer, k: number, px: number, assets:
   ctx.restore();
 }
 
+/**
+ * A fill that covers only the folder's front panel: drawn on a spare canvas, cut to the front's
+ * mask (the one Rust cuts the design's front with, so the two meet exactly), then laid on with
+ * the layer's opacity and blend.
+ */
+function drawOnFront(ctx: Ctx, layer: FillLayer, k: number, px: number, assets: Assets, mask: CanvasImageSource) {
+  const off = assets.scratch(0, px, px);
+  const o = off.getContext("2d")!;
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalAlpha = 1;
+  o.globalCompositeOperation = "source-over";
+  o.clearRect(0, 0, px, px);
+  o.setTransform(k, 0, 0, k, 0, 0);
+  drawContent(o, layer, assets);
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalCompositeOperation = "destination-in";
+  o.drawImage(mask, 0, 0, px, px);
+  o.globalCompositeOperation = "source-over";
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = layer.opacity;
+  ctx.globalCompositeOperation = layer.blend === "normal" ? "source-over" : layer.blend;
+  ctx.drawImage(off, 0, 0, px, px, 0, 0, px, px);
+  ctx.restore();
+}
+
 /** Draws `doc` onto `ctx`, a canvas `px` pixels square, from scratch; `only` draws one layer alone. */
 export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: { only?: string } = {}) {
   const k = px / CANVAS;
@@ -251,10 +357,14 @@ export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: 
   ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0, 0, px, px);
   ctx.setTransform(k, 0, 0, k, 0, 0);
+  const around: Surround = { folder: backgroundColor(doc) };
   for (const layer of doc.layers) {
     if (layer.hidden) continue;
     if (opts.only && layer.id !== opts.only) continue;
-    drawLayer(ctx, layer, k, px, assets);
+    // Until the folder's template has loaded there's no front to cut to: it covers everything.
+    const front = layer.kind === "fill" && layer.part === "front" && doc.shape === "folder" ? assets.front(doc.style) : null;
+    if (front && layer.kind === "fill") drawOnFront(ctx, layer, k, px, assets, front);
+    else drawLayer(ctx, layer, k, px, assets, around);
     ctx.setTransform(k, 0, 0, k, 0, 0);
   }
   ctx.restore();

@@ -20,7 +20,21 @@ use tauri::{AppHandle, Manager, State};
 
 /// Bump when the compositor's output changes so cached thumbnails, the default folder's and the
 /// saved skins' alike, are re-rendered.
-pub const THUMB_CACHE_VERSION: u32 = 2;
+pub const THUMB_CACHE_VERSION: u32 = 3;
+
+/// What a cached thumbnail's name carries: [`THUMB_CACHE_VERSION`], and the folder skins go on
+/// now ([`crate::look`]) when that isn't FolderSkin's own, so each folder keeps its own thumbnails.
+pub fn thumb_tag() -> String {
+    thumb_tag_in(crate::look::current())
+}
+
+/// [`thumb_tag`] for the folder of `style`.
+pub fn thumb_tag_in(style: compositor::Style) -> String {
+    match style {
+        compositor::Style::Mac => format!("v{THUMB_CACHE_VERSION}"),
+        style => format!("v{THUMB_CACHE_VERSION}-{}", style.id()),
+    }
+}
 const THUMB_SIZE: u32 = 512;
 /// The id the webview can give the plain default folder, which is not a skin.
 const DEFAULT_ID: &str = "__default__";
@@ -82,11 +96,15 @@ impl SkinDto {
     }
 }
 
-/// "OpenAI · GPT Image 2.5 Flare" for an AI result: the names the studio shows, or the ids when
-/// the catalogue no longer lists them.
+/// "OpenAI · GPT Image 2.5 Flare" for an AI result, or "Local Model · FLUX.2 klein 4B": the
+/// names the studio shows, or the ids when the catalogue no longer lists them.
 fn made_with(entry: &SavedSkin) -> Option<String> {
     let provider = entry.provider.as_deref()?;
     let model = entry.model.as_deref()?;
+    if provider == crate::ai::local::PROVIDER_ID {
+        let label = crate::ai::local::model_label(model).unwrap_or(model);
+        return Some(format!("Local Model · {label}"));
+    }
     let provider_label = folderskin_ai::catalogue::provider(provider).map_or(provider, |p| p.label);
     let model_label = folderskin_ai::model(provider, model).map_or(model, |m| m.label);
     Some(format!("{provider_label} · {model_label}"))
@@ -180,15 +198,20 @@ pub fn data_url(png: &[u8]) -> String {
 fn default_thumb_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_cache_dir().ok()?.join("thumbs");
     std::fs::create_dir_all(&dir).ok()?;
-    Some(dir.join(format!("default.thumb-v{THUMB_CACHE_VERSION}.png")))
+    Some(dir.join(format!("default.thumb-{}.png", thumb_tag())))
 }
 
 /// The plain default folder's thumbnail as a data URL: kept in memory once drawn, and on disk
 /// between launches.
 fn default_thumbnail(app: &AppHandle, state: &AppState) -> String {
-    state.default_thumbnail(|| {
+    let style = crate::look::current();
+    state.default_thumbnail(style, || {
         let png = cached_png(default_thumb_path(app).as_deref(), || {
-            compositor::render_preview_png(&compositor::default_folder_artwork(), THUMB_SIZE)
+            compositor::render_preview_png_in(
+                &compositor::default_folder_artwork_in(style),
+                THUMB_SIZE,
+                style,
+            )
         });
         data_url(&png)
     })
@@ -609,6 +632,16 @@ mod tests {
             let read: SkinSource = serde_json::from_value(name.into()).unwrap();
             assert_eq!(read, source);
         }
+    }
+
+    #[test]
+    fn each_folder_keeps_its_own_thumbnails_and_the_macs_keep_their_names() {
+        use compositor::Style;
+        assert_eq!(thumb_tag_in(Style::Mac), format!("v{THUMB_CACHE_VERSION}"));
+        assert_eq!(
+            thumb_tag_in(Style::Windows),
+            format!("v{THUMB_CACHE_VERSION}-windows")
+        );
     }
 
     #[test]

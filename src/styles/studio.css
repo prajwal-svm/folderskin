@@ -5,10 +5,119 @@
  */
 
 .studio {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.studio[hidden] {
+  display: none;
+}
+
+/* ---------- the chat's header: its chats, its title, the folder it's for, a new one ---------- */
+
+.studio-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 56px;
+  padding: 0 12px 0 10px;
+}
+
+.studio-chats-btn.is-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.studio-chat-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 0 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.studio-head-space {
+  flex: 1;
+  align-self: stretch;
+}
+
+/* On Windows the window's own buttons sit over the chat's top right while the folder panel is
+   away, so the header keeps clear of them. */
+html[data-os="windows"] .app.is-right-off .studio-head {
+  padding-right: 144px;
+}
+
+.folder-target {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 12.5px;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.folder-target svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.folder-target:hover,
+.folder-target:focus-visible,
+.folder-target[aria-expanded="true"] {
+  background: var(--well-2);
+  color: var(--ink);
+}
+
+.folder-target.is-empty,
+.folder-target.is-empty svg {
+  color: var(--accent-ink);
+}
+
+.folder-target-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-target-label {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.studio-problem {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 6px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-control);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 650;
+  font-size: 12.5px;
+}
+
+.studio-problem .link-btn {
+  margin-left: auto;
 }
 
 .studio-thread {
@@ -24,7 +133,7 @@
 
 .studio.has-thread .studio-thread {
   flex-grow: 1;
-  padding-top: 24px;
+  padding-top: 8px;
   padding-bottom: 8px;
 }
 
@@ -119,14 +228,28 @@
   color: var(--hint);
 }
 
+.composer.is-drop-target {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-wash);
+}
+
+.composer-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A picture to paint from: its thumbnail, its name and a remove button. One the model can't take
+   is faded and says why in its tooltip. */
 .composer-ref {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 3px 4px 3px 10px;
-  border-radius: var(--r-pill);
+  gap: 7px;
+  max-width: 220px;
+  height: 32px;
+  padding: 3px 3px 3px 3px;
+  border-radius: 10px;
   background: var(--well);
   font-weight: 650;
   font-size: 12px;
@@ -134,10 +257,53 @@
   animation: pop var(--t-base) var(--ease-spring) both;
 }
 
-.composer-ref span {
+.composer-ref img {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.composer-ref-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.composer-ref-x {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.composer-ref-x:hover,
+.composer-ref-x:focus-visible {
+  background: var(--well-2);
+  color: var(--ink);
+}
+
+.composer-ref.is-unused {
+  opacity: 0.55;
+}
+
+.composer-ref.is-unused .composer-ref-name {
+  text-decoration: line-through;
+}
+
+.composer-ref.is-adding {
+  padding: 0 10px;
+  color: var(--muted);
+}
+
+.composer-attach:disabled {
+  opacity: 0.4;
 }
 
 .composer-bar {
@@ -165,12 +331,12 @@
   background: var(--island);
 }
 
+/* As wide as the model's name where the row has room, and cut short only where it hasn't. */
 .model-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  max-width: 240px;
   height: 30px;
   padding: 0 10px;
   border-radius: var(--r-pill);
@@ -312,6 +478,14 @@
 .turn-ask {
   align-self: flex-end;
   max-width: 78%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.turn-ask p {
+  margin: 0;
   padding: 9px 14px;
   border-radius: 16px 16px 4px 16px;
   background: var(--well);
@@ -319,11 +493,29 @@
   font-size: 13.5px;
   line-height: 1.45;
   color: var(--ink);
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
+.turn-refs {
+  display: flex;
+  gap: 6px;
+}
+
+.turn-refs img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+/* The picture holds its place at the top while the details open and close under the words
+   beside it, whether it's done or still being made. */
 .turn-result {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 18px;
 }
 
@@ -405,8 +597,133 @@
 .turn-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 10px;
+}
+
+.turn-applied {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+/* How far a picture is: a thin bar that fills, or a light running along it while no count is known. */
+.turn-progress {
+  position: relative;
+  width: min(260px, 100%);
+  height: 4px;
+  margin: 6px 0 2px;
+  border-radius: 4px;
+  background: var(--well-2);
+  overflow: hidden;
+}
+
+.turn-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--done, 0%);
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--t-base) var(--ease-out);
+}
+
+.turn-progress.is-waiting span {
+  width: 36%;
+  animation: progress-wait 1.4s var(--ease-in-out, ease-in-out) infinite;
+  animation-play-state: var(--loop-state);
+}
+
+@keyframes progress-wait {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(280%);
+  }
+}
+
+/* The log a request wrote, behind a disclosure. */
+.turn-log {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.turn-log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  margin-left: -8px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.turn-log-toggle:hover,
+.turn-log-toggle:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.turn-log-chevron {
+  display: inline-flex;
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.turn-log-toggle[aria-expanded="true"] .turn-log-chevron {
+  transform: rotate(180deg);
+}
+
+.turn-log-lines {
+  width: 100%;
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--well);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.turn-stopped {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--well);
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.turn-stopped p {
+  margin: 0;
+  flex: 1;
+  min-width: 180px;
 }
 
 .turn-error {
@@ -417,6 +734,22 @@
   font-weight: 650;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.turn-error-text {
+  margin: 0;
+}
+
+.turn-fix {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.turn-fix li + li {
+  margin-top: 3px;
 }
 
 .turn-error .turn-actions {
@@ -461,6 +794,418 @@
 
 .develop-step {
   animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+/* ---------- the chats, in a drawer over the chat's left edge ---------- */
+
+.chat-drawer {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(300px, 88%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 10px 12px;
+  background: var(--island);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+  transform: translateX(-105%);
+  visibility: hidden;
+  transition: transform var(--t-slow) var(--ease-out), visibility 0s linear var(--t-slow);
+}
+
+.chat-drawer.is-open {
+  transform: none;
+  visibility: visible;
+  transition: transform var(--t-slow) var(--ease-out), visibility 0s;
+}
+
+.chat-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding-left: 6px;
+}
+
+.chat-drawer-title {
+  flex: 1;
+  margin: 0;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.chat-search.search {
+  flex: none;
+  width: 100%;
+  height: 34px;
+}
+
+.chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.chat-empty {
+  margin: 10px 6px;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.chat-group + .chat-group {
+  margin-top: 10px;
+}
+
+.chat-group-title {
+  margin: 4px 8px 4px;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--hint);
+}
+
+.chat-row {
+  position: relative;
+  border-radius: 10px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.chat-row:hover,
+.chat-row:focus-within {
+  background: var(--nav-hover);
+}
+
+.chat-row.is-on {
+  background: var(--accent-soft);
+}
+
+.chat-open {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 64px 6px 6px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.chat-cover {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--well);
+  color: var(--muted);
+  overflow: hidden;
+}
+
+.chat-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.chat-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 750;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.chat-meta {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Rename and delete show while the row is pointed at. */
+.chat-row-actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease;
+}
+
+.chat-row:hover .chat-row-actions,
+.chat-row:focus-within .chat-row-actions {
+  opacity: 1;
+}
+
+.chat-row-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.chat-row-btn:hover,
+.chat-row-btn:focus-visible {
+  background: var(--well-2);
+  color: var(--ink);
+}
+
+.chat-row-btn.is-danger:hover,
+.chat-row-btn.is-danger:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.chat-rename {
+  width: 100%;
+  height: 46px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: var(--island);
+  border: 1px solid var(--accent);
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ---------- making pictures on this computer ---------- */
+
+.local-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.local-facts {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.local-facts > .local-note {
+  margin-top: 10px;
+}
+
+/* The model, named in the fold's title, with how fine it is and its size beside it. */
+.local-model {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.local-model svg {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+}
+
+.local-model-name {
+  font-weight: 750;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.local-model .local-muted {
+  font-size: 12px;
+}
+
+/* The machine, and the info mark that folds its details open beneath it: the whole row is the
+   button. Focus shows as a tint, never an outline. */
+.local-machine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  box-sizing: content-box;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) ease;
+}
+
+.local-machine:focus-visible {
+  outline: none;
+  background: var(--accent-wash);
+}
+
+.local-info {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted);
+  transition: color var(--t-fast) ease;
+}
+
+.local-machine:hover .local-info,
+.local-facts.is-open .local-info {
+  color: var(--accent);
+}
+
+/* The details fold open by growing their row from nothing to their height. */
+.local-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--t-base) var(--ease-out);
+}
+
+.local-facts.is-open .local-more {
+  grid-template-rows: 1fr;
+}
+
+.local-more-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.local-more .local-list {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.local-muted {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Where the model is kept names the user, so it stays veiled until it's pointed at or reached
+   with the keyboard. */
+.local-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+  filter: blur(4.5px);
+  transition: filter var(--t-fast) ease;
+}
+
+.local-path:hover,
+.local-path:focus-visible {
+  filter: none;
+}
+
+.local-path:focus-visible {
+  outline: none;
+  background: var(--accent-wash);
+}
+
+/* The model's removal, at the bottom right of its fold. */
+.local-more-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.local-note.is-warn {
+  color: var(--danger);
+}
+
+.local-remove-btn {
+  gap: 6px;
+  color: var(--danger, var(--ink-2));
+}
+
+.local-list {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 0;
+}
+
+.local-list > div {
+  display: contents;
+}
+
+.local-list dt {
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.local-list dd {
+  margin: 0;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.local-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* What setting up takes, and its button on the right. */
+.local-go {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.local-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.local-progress .turn-progress {
+  width: 100%;
+}
+
+.local-stage {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-weight: 750;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.local-stage .local-stop {
+  margin-left: auto;
 }
 
 /* ---------- settings dialog ---------- */
@@ -509,7 +1254,7 @@
 .provider-state {
   font-weight: 700;
   font-size: 11px;
-  color: var(--hint);
+  color: var(--muted);
 }
 
 
@@ -605,4 +1350,10 @@
 
 .helper-copy {
   align-self: flex-start;
+}
+
+/* The Local Model's tile while its model downloads. */
+.provider-busy {
+  display: inline-flex;
+  color: var(--accent);
 }

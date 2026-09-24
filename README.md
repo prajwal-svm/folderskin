@@ -12,12 +12,12 @@
 
 **Give any folder a skin.**
 
-Your wedding folder looks exactly like your tax folder. FolderSkin gives every folder a skin that
-feels like what's inside it: a golden-hour film still for the wedding, a vintage travel poster for
-the trip, pop art for the vlog, soft pastels for the baby's first year. Drop a folder on the
-window, try skins on it, and apply the one you love. Pick from free community packs, use a photo
-of your own, design one yourself from a colour, a word or an emoji, or describe any style and let
-AI paint it.
+Your best memories wear the same plain folder as your old paperwork. FolderSkin gives every folder a
+skin that feels like what's inside it: a golden-hour film still for summer photos, a vintage travel
+poster for a trip, pop art for a video project, soft pastels for a birthday. Drop a folder on the
+window, try skins on it, and apply the one you love. Pick from free community packs, use a photo of
+your own, design one yourself from a colour, a word or an emoji, or describe any style and let AI
+paint it.
 
 <p>
   <a href="https://github.com/prajwal-svm/folderskin/releases/latest"><strong>Download free</strong></a>

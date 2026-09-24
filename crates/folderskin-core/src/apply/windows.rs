@@ -34,6 +34,9 @@ pub const INI_NAME: &str = "desktop.ini";
 pub const MARKER: &str = "; managed by FolderSkin";
 /// Start of the comment line recording what the folder was before FolderSkin marked it.
 pub const WAS_PREFIX: &str = "; folder was: ";
+/// Start of a line of the folder's own icon, put aside while FolderSkin's is on: the whole line
+/// follows it, as it was, so a revert can put it back exactly.
+pub const PUT_ASIDE_PREFIX: &str = "; put aside by FolderSkin: ";
 
 /// Which of the two attributes FolderSkin marks a folder with the folder already had of its own.
 ///
@@ -166,6 +169,11 @@ pub fn prepare(icons: &IconSet) -> Result<Vec<u8>, ApplyError> {
 /// and our marker plus `IconResource` are (re)written at the end of `[.ShellClassInfo]`.
 /// Re-applying is idempotent: our old lines are dropped before the new ones go in. Line
 /// endings are CRLF, which is what every other writer of this file uses.
+///
+/// An icon the folder already had of its own is put aside rather than dropped: its lines stay
+/// where they were, commented out behind [`PUT_ASIDE_PREFIX`], and [`desktop_ini_without_ours`]
+/// takes the comment off again. Only an `IconResource` naming our own icon file, in an ini that
+/// carries our marker, counts as ours.
 pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str, before: Before) -> String {
     let icon_line = our_icon_line(ico_name);
     let was_line = before.line();
@@ -178,6 +186,7 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str, before: Befo
     };
 
     let (bom, body) = split_bom(existing);
+    let marked = is_ours(existing);
     let mut out: Vec<String> = Vec::new();
     let mut in_section = false;
     let mut seen_section = false;
@@ -201,7 +210,7 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str, before: Befo
             continue;
         }
 
-        // Drop our own marker wherever it sits, and any IconResource inside the section we
+        // Drop our own marker wherever it sits, and our own IconResource inside the section we
         // own — that key is exactly what we are replacing.
         if trimmed == MARKER || is_was_line(trimmed) {
             continue;
@@ -214,7 +223,11 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str, before: Befo
             })
         {
             // Explorer prefers the legacy IconFile/IconIndex pair over IconResource, so an old
-            // pair would silently win over ours.
+            // pair would silently win over ours. Someone else's is put aside where it stands,
+            // for the revert to put back.
+            if !(marked && is_our_icon_resource(trimmed)) {
+                out.push(format!("{PUT_ASIDE_PREFIX}{line}"));
+            }
             continue;
         }
         out.push(line.to_string());
@@ -240,11 +253,13 @@ pub fn desktop_ini_contents(existing: Option<&str>, ico_name: &str, before: Befo
 
 /// `existing` with FolderSkin's lines removed, or `None` when the file should be deleted.
 ///
-/// Only our marker and an `IconResource` that names our own `folderskin.ico` are removed, so a
-/// user who later pointed the key at their own icon keeps it. `None` is returned when nothing
-/// but section headers would be left — there is no reason to keep an ini with no keys in it.
+/// Only our marker and an `IconResource` that names our own icon file in a marked ini are
+/// removed, so a user who later pointed the key at their own icon keeps it, and an icon the
+/// folder had before is put back where it was. `None` is returned when nothing but section
+/// headers would be left — there is no reason to keep an ini with no keys in it.
 pub fn desktop_ini_without_ours(existing: &str) -> Option<String> {
     let (bom, body) = split_bom(existing);
+    let marked = is_ours(existing);
     let mut out: Vec<String> = Vec::new();
     let mut in_section = false;
 
@@ -259,7 +274,11 @@ pub fn desktop_ini_without_ours(existing: &str) -> Option<String> {
         if trimmed == MARKER || is_was_line(trimmed) {
             continue;
         }
-        if in_section && is_our_icon_resource(trimmed) {
+        if let Some(theirs) = line.strip_prefix(PUT_ASIDE_PREFIX) {
+            out.push(theirs.to_string());
+            continue;
+        }
+        if in_section && marked && is_our_icon_resource(trimmed) {
             continue;
         }
         out.push(line.to_string());
@@ -280,11 +299,41 @@ pub fn is_ours(contents: &str) -> bool {
 }
 
 /// True when a revert would take something off: FolderSkin's lines in `desktop.ini` (its text,
-/// if the folder has one) or its icon file. Someone else's `IconResource` doesn't count, since a
-/// revert leaves it alone.
-pub fn would_revert(desktop_ini: Option<&str>, ico_exists: bool) -> bool {
-    ico_exists
-        || desktop_ini.is_some_and(|ini| desktop_ini_without_ours(ini).as_deref() != Some(ini))
+/// if the folder has one). Someone else's `IconResource` doesn't count, since a revert leaves it
+/// alone; nor does an icon file of ours the ini doesn't name, which a revert leaves alone too.
+pub fn would_revert(desktop_ini: Option<&str>) -> bool {
+    desktop_ini.is_some_and(|ini| desktop_ini_without_ours(ini).as_deref() != Some(ini))
+}
+
+/// The icon files a marked `desktop.ini` names as FolderSkin's: what a revert deletes, and what
+/// a new apply replaces.
+///
+/// Deleting goes by this and not by the names in the folder, so a file the user called
+/// `folderskin.ico` in a folder FolderSkin never touched is not ours to take. Each name matched
+/// [`is_our_ico_name`], so it is a bare file name in the folder itself, never a path.
+pub fn our_icon_files(desktop_ini: &str) -> Vec<String> {
+    if !is_ours(desktop_ini) {
+        return Vec::new();
+    }
+    let (_, body) = split_bom(desktop_ini);
+    let mut in_section = false;
+    let mut names = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if is_header(trimmed) {
+            in_section = is_our_section(trimmed);
+            continue;
+        }
+        if in_section && is_our_icon_resource(trimmed) {
+            if let Some((_, value)) = trimmed.split_once('=') {
+                let name = value.split(',').next().unwrap_or("").trim().to_string();
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+    }
+    names
 }
 
 /// The icon file a folder's `desktop.ini` points Explorer at, and which icon in it, as the
@@ -292,7 +341,7 @@ pub fn would_revert(desktop_ini: Option<&str>, ico_exists: bool) -> bool {
 /// 3)`, `("..\\shared\\theirs.ico", 0)`.
 ///
 /// Explorer takes the older `IconFile`/`IconIndex` pair over `IconResource` when a folder carries
-/// both, which is why [`desktop_ini_contents`] drops the pair when it writes ours — so this reads
+/// both, which is why [`desktop_ini_contents`] puts the pair aside when it writes ours — so this reads
 /// it the same way round, and answers with the icon actually on screen. Only
 /// `[.ShellClassInfo]` is looked at; a key of the same name in another section means something
 /// else. Pure, so the parsing is unit-tested on every OS; resolving and drawing what it names is
@@ -384,24 +433,69 @@ fn join_lines(bom: &str, lines: &[String]) -> String {
     out
 }
 
+/// How a `desktop.ini` was written, so it is written back the same way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IniEncoding {
+    /// UTF-8, or plain ASCII, with or without its byte-order mark.
+    Utf8,
+    /// UTF-16, little-endian, after its byte-order mark: what Windows writes once a folder has a
+    /// name of its own (`LocalizedResourceName`), as Music and Videos have.
+    Utf16,
+}
+
+/// A `desktop.ini`'s text and how it was written. The byte-order mark stays at the front of the
+/// text (as U+FEFF), so an edit keeps it and [`encode_ini`] puts it back. `None` for anything
+/// that isn't UTF-8 or UTF-16 with its mark, which a lossy read and write would corrupt.
+pub fn decode_ini(bytes: &[u8]) -> Option<(String, IniEncoding)> {
+    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        let (pairs, odd) = rest.as_chunks::<2>();
+        if !odd.is_empty() {
+            return None;
+        }
+        let units: Vec<u16> = pairs.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
+        let text = String::from_utf16(&units).ok()?;
+        return Some((format!("\u{feff}{text}"), IniEncoding::Utf16));
+    }
+    String::from_utf8(bytes.to_vec())
+        .ok()
+        .map(|text| (text, IniEncoding::Utf8))
+}
+
+/// `text` as the bytes of a `desktop.ini` written the way `encoding` says: UTF-16 always starts
+/// with its byte-order mark.
+pub fn encode_ini(text: &str, encoding: IniEncoding) -> Vec<u8> {
+    match encoding {
+        IniEncoding::Utf8 => text.as_bytes().to_vec(),
+        IniEncoding::Utf16 => {
+            let marked = if text.starts_with('\u{feff}') {
+                std::borrow::Cow::Borrowed(text)
+            } else {
+                std::borrow::Cow::Owned(format!("\u{feff}{text}"))
+            };
+            marked.encode_utf16().flat_map(u16::to_le_bytes).collect()
+        }
+    }
+}
+
 #[cfg(windows)]
 pub use imp::{apply, has_custom_icon, refresh_shell_icons, revert};
 
 #[cfg(windows)]
 mod imp {
     use super::{
-        desktop_ini_contents, desktop_ini_without_ours, ico_file_name, is_our_ico_name, was_before,
-        would_revert, Before, INI_NAME,
+        decode_ini, desktop_ini_contents, desktop_ini_without_ours, encode_ini, ico_file_name,
+        our_icon_files, was_before, would_revert, Before, IniEncoding, INI_NAME,
     };
-    use crate::apply::paths::{read_text_if_present, write_atomic};
+    use crate::apply::paths::write_atomic;
     use crate::apply::ApplyError;
     use std::ffi::{c_void, OsStr};
     use std::os::windows::ffi::OsStrExt;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::sync::atomic::{AtomicU64, Ordering};
     use windows_sys::Win32::Storage::FileSystem::{
-        GetFileAttributesW, SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
-        FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_SYSTEM, INVALID_FILE_ATTRIBUTES,
+        GetFileAttributesW, SetFileAttributesW, FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_HIDDEN,
+        FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, FILE_ATTRIBUTE_READONLY,
+        FILE_ATTRIBUTE_SYSTEM, INVALID_FILE_ATTRIBUTES,
     };
     use windows_sys::Win32::UI::Shell::{
         ILCreateFromPathW, ILFree, SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNE_ATTRIBUTES,
@@ -419,11 +513,20 @@ mod imp {
     ///
     /// Any icon file an earlier apply left behind goes once the new one is in place and the ini
     /// names it, so a folder never keeps more than the one it wears and the ini never points at
-    /// a file that isn't there.
+    /// a file that isn't there. Only the file the old ini named goes: one the user happened to
+    /// call `folderskin.ico` stays.
+    ///
+    /// A `desktop.ini` that was there before keeps its own read-only, archive and indexing
+    /// attributes, so a revert can hand them back, and is written back as it was written: UTF-16
+    /// stays UTF-16. One that can't be read as either is refused before anything in the folder
+    /// changes, and a write that fails part-way takes back what it did.
     pub fn apply(folder: &Path, ico_bytes: &[u8]) -> Result<(), ApplyError> {
         let name = ico_file_name(ico_bytes);
         let ico = folder.join(&name);
         let ini = folder.join(INI_NAME);
+        let existing = read_ini(&ini)?;
+        let ini_attributes = attributes(&ini);
+        let had_ico = ico.exists();
 
         // The hidden+system bits on our own files from an earlier apply stop them being
         // replaced, so those are cleared first and set again at the end.
@@ -438,28 +541,43 @@ mod imp {
         clear_attributes(&ico);
         clear_attributes(&ini);
 
-        write_atomic(&ico, ico_bytes)?;
-        let existing = read_text_if_present(&ini)?;
+        let text = existing.as_ref().map(|(text, _)| text.as_str());
+        let encoding = existing.as_ref().map_or(IniEncoding::Utf8, |(_, e)| *e);
         // What the folder was before FolderSkin marked it. On a re-apply the marks are already
         // on, so what an earlier apply wrote down beats what the folder looks like now.
-        let before = existing
-            .as_deref()
+        let before = text
             .and_then(was_before)
             .unwrap_or_else(|| marks_now(folder));
-        write_atomic(
-            &ini,
-            desktop_ini_contents(existing.as_deref(), &name, before).as_bytes(),
-        )?;
+        let written = write_atomic(&ico, ico_bytes).and_then(|()| {
+            write_atomic(
+                &ini,
+                &encode_ini(&desktop_ini_contents(text, &name, before), encoding),
+            )
+        });
+        if let Err(e) = written {
+            // Nothing half-done is left: the icon file goes unless it was there already, and the
+            // ini gets its attributes back.
+            if had_ico {
+                let _ = hide(&ico);
+            } else {
+                let _ = std::fs::remove_file(&ico);
+            }
+            if let Some(was) = ini_attributes {
+                let _ = set_attributes(&ini, was);
+            }
+            return Err(e.into());
+        }
 
-        for stale in our_ico_files(folder) {
-            if stale != ico {
+        for stale in text.map(our_icon_files).unwrap_or_default() {
+            if stale != name {
+                let stale = folder.join(stale);
                 clear_attributes(&stale);
                 let _ = std::fs::remove_file(&stale);
             }
         }
 
         hide(&ico)?;
-        hide(&ini)?;
+        hide_keeping(&ini, ini_attributes)?;
         set_customized(folder, true, before)?;
         notify(folder);
         Ok(())
@@ -467,21 +585,41 @@ mod imp {
 
     /// True when the folder wears FolderSkin's icon, which `revert` would take off.
     pub fn has_custom_icon(folder: &Path) -> bool {
-        let ini = read_text_if_present(&folder.join(INI_NAME)).ok().flatten();
-        would_revert(ini.as_deref(), !our_ico_files(folder).is_empty())
+        let ini = read_ini(&folder.join(INI_NAME)).ok().flatten();
+        would_revert(ini.as_ref().map(|(text, _)| text.as_str()))
     }
 
-    /// Removes our ini lines and icon files, leaving anything else in the folder alone.
+    /// `desktop.ini`'s text and how it was written, or `None` when the folder has none. One that
+    /// is neither UTF-8 nor UTF-16 is refused rather than guessed at: it is read back, edited and
+    /// written again, and a lossy round trip would corrupt the keys already in it.
+    fn read_ini(path: &Path) -> Result<Option<(String, IniEncoding)>, ApplyError> {
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        decode_ini(&bytes).map(Some).ok_or_else(|| {
+            ApplyError::Refused(format!(
+                "{} is neither UTF-8 nor UTF-16 text, so FolderSkin will not rewrite it",
+                path.display()
+            ))
+        })
+    }
+
+    /// Removes our ini lines and the icon files they name, leaving anything else in the folder
+    /// alone, and puts back an icon the folder had of its own.
     pub fn revert(folder: &Path) -> Result<(), ApplyError> {
         let mut touched = false;
         // Read while our lines are still in the file: they are what says whether the folder had
         // either mark of its own. No record means a version that never wrote one, so both come
         // off, which is what that version did.
         let mut before = Before::default();
+        let mut icons = Vec::new();
 
         let ini = folder.join(INI_NAME);
-        if let Some(existing) = read_text_if_present(&ini)? {
+        if let Some((existing, encoding)) = read_ini(&ini)? {
             before = was_before(&existing).unwrap_or_default();
+            icons = our_icon_files(&existing);
             match desktop_ini_without_ours(&existing) {
                 None => {
                     clear_attributes(&ini);
@@ -489,9 +627,10 @@ mod imp {
                     touched = true;
                 }
                 Some(left) if left != existing => {
+                    let kept = attributes(&ini);
                     clear_attributes(&ini);
-                    write_atomic(&ini, left.as_bytes())?;
-                    hide(&ini)?;
+                    write_atomic(&ini, &encode_ini(&left, encoding))?;
+                    hide_keeping(&ini, kept)?;
                     touched = true;
                 }
                 // Nothing of ours in it; leave the file and its attributes untouched.
@@ -499,10 +638,13 @@ mod imp {
             }
         }
 
-        for ico in our_ico_files(folder) {
-            clear_attributes(&ico);
-            std::fs::remove_file(&ico)?;
-            touched = true;
+        for name in icons {
+            let ico = folder.join(name);
+            if ico.is_file() {
+                clear_attributes(&ico);
+                std::fs::remove_file(&ico)?;
+                touched = true;
+            }
         }
 
         if !touched {
@@ -514,20 +656,6 @@ mod imp {
         Ok(())
     }
 
-    /// Every icon file in `folder` that FolderSkin wrote — the hashed name it writes now and the
-    /// fixed one older versions wrote. Empty when the folder can't be read, which is the same
-    /// answer as "none of ours", and the caller is about to fail on the folder anyway.
-    fn our_ico_files(folder: &Path) -> Vec<PathBuf> {
-        let Ok(entries) = std::fs::read_dir(folder) else {
-            return Vec::new();
-        };
-        entries
-            .flatten()
-            .filter(|e| is_our_ico_name(&e.file_name().to_string_lossy()))
-            .map(|e| e.path())
-            .collect()
-    }
-
     /// A NUL-terminated UTF-16 copy of `s`, as every `*W` entry point wants.
     fn wide(s: &OsStr) -> Vec<u16> {
         s.encode_wide().chain(std::iter::once(0)).collect()
@@ -536,6 +664,16 @@ mod imp {
     /// Marks `path` hidden and system, the way Windows marks its own `desktop.ini`.
     fn hide(path: &Path) -> Result<(), ApplyError> {
         set_attributes(path, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)
+    }
+
+    /// Marks `path` hidden and system as [`hide`] does, keeping the read-only, archive and
+    /// indexing attributes it had in `before` (read before it was cleared to be written). A file
+    /// that wasn't there before gets hidden and system alone.
+    fn hide_keeping(path: &Path, before: Option<u32>) -> Result<(), ApplyError> {
+        const KEPT: u32 =
+            FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_NOT_CONTENT_INDEXED;
+        let kept = before.unwrap_or(0) & KEPT;
+        set_attributes(path, kept | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)
     }
 
     /// Best-effort reset of `path`'s attributes so it can be replaced or deleted.
@@ -755,6 +893,129 @@ mod imp {
                 std::ptr::null(),
             );
             ILFree(pidl);
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::apply::tempfile_dir;
+
+        /// A picture's worth of icon bytes; `apply` only names and writes them.
+        const ICO: &[u8] = b"not really an icon, but apply only writes it";
+
+        #[test]
+        fn revert_leaves_icon_files_it_did_not_write() {
+            let folder = tempfile_dir();
+            for name in ["folderskin.ico", "folderskin-0123456789abcdef.ico"] {
+                std::fs::write(folder.join(name), b"mine").unwrap();
+            }
+            assert!(!has_custom_icon(&folder));
+            revert(&folder).unwrap();
+            for name in ["folderskin.ico", "folderskin-0123456789abcdef.ico"] {
+                assert_eq!(std::fs::read(folder.join(name)).unwrap(), b"mine", "{name}");
+            }
+
+            // Nor does an apply take them as leftovers of its own.
+            apply(&folder, ICO).unwrap();
+            revert(&folder).unwrap();
+            assert!(!folder.join(ico_file_name(ICO)).exists());
+            for name in ["folderskin.ico", "folderskin-0123456789abcdef.ico"] {
+                assert_eq!(std::fs::read(folder.join(name)).unwrap(), b"mine", "{name}");
+            }
+        }
+
+        #[test]
+        fn a_folders_own_icon_and_its_ini_come_back_as_they_were() {
+            let folder = tempfile_dir();
+            let ini = folder.join(INI_NAME);
+            let theirs = "[.ShellClassInfo]\r\nIconResource=mine.ico,0\r\nInfoTip=hi\r\n";
+            std::fs::write(folder.join("mine.ico"), b"mine").unwrap();
+            std::fs::write(&ini, theirs).unwrap();
+            let was = FILE_ATTRIBUTE_READONLY
+                | FILE_ATTRIBUTE_HIDDEN
+                | FILE_ATTRIBUTE_SYSTEM
+                | FILE_ATTRIBUTE_ARCHIVE;
+            set_attributes(&ini, was).unwrap();
+            set_attributes(&folder, FILE_ATTRIBUTE_SYSTEM).unwrap();
+
+            apply(&folder, ICO).unwrap();
+            assert!(has_custom_icon(&folder));
+            revert(&folder).unwrap();
+
+            assert_eq!(std::fs::read_to_string(&ini).unwrap(), theirs);
+            assert_eq!(attributes(&ini), Some(was));
+            assert_eq!(std::fs::read(folder.join("mine.ico")).unwrap(), b"mine");
+            assert!(!folder.join(ico_file_name(ICO)).exists());
+            let marks = attributes(&folder).unwrap() & MARKS;
+            assert_eq!(marks, FILE_ATTRIBUTE_SYSTEM, "the folder's own mark stays");
+
+            // The scratch folder's cleanup can't take a read-only file away.
+            set_attributes(&ini, FILE_ATTRIBUTE_NORMAL).unwrap();
+        }
+
+        #[test]
+        fn a_utf16_ini_as_windows_writes_it_is_skinned_and_comes_back_byte_for_byte() {
+            let folder = tempfile_dir();
+            let ini = folder.join(INI_NAME);
+            let theirs = encode_ini(
+                "[.ShellClassInfo]\r\nLocalizedResourceName=Мои фото\r\nIconResource=mine.ico,0\r\n",
+                IniEncoding::Utf16,
+            );
+            assert_eq!(theirs[..2], [0xFF, 0xFE]);
+            std::fs::write(folder.join("mine.ico"), b"mine").unwrap();
+            std::fs::write(&ini, &theirs).unwrap();
+            let was = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+            set_attributes(&ini, was).unwrap();
+            set_attributes(&folder, FILE_ATTRIBUTE_SYSTEM).unwrap();
+
+            apply(&folder, ICO).unwrap();
+            assert!(has_custom_icon(&folder));
+            let (skinned, encoding) = decode_ini(&std::fs::read(&ini).unwrap()).unwrap();
+            assert_eq!(encoding, IniEncoding::Utf16, "still UTF-16");
+            assert!(
+                skinned.contains("LocalizedResourceName=Мои фото"),
+                "{skinned}"
+            );
+            assert!(skinned.contains(&ico_file_name(ICO)), "{skinned}");
+            assert_eq!(
+                attributes(&ini).unwrap() & was,
+                was,
+                "hidden and system still"
+            );
+
+            revert(&folder).unwrap();
+            assert_eq!(std::fs::read(&ini).unwrap(), theirs);
+            assert_eq!(attributes(&ini), Some(was));
+            assert!(!folder.join(ico_file_name(ICO)).exists());
+            set_attributes(&ini, FILE_ATTRIBUTE_NORMAL).unwrap();
+        }
+
+        #[test]
+        fn an_ini_it_wont_rewrite_is_refused_before_anything_changes() {
+            let folder = tempfile_dir();
+            let ini = folder.join(INI_NAME);
+            // Neither UTF-8 nor UTF-16 with its mark: Latin-1, say.
+            let theirs = b"[.ShellClassInfo]\r\nInfoTip=caf\xe9\r\n".to_vec();
+            std::fs::write(&ini, &theirs).unwrap();
+            let was = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+            set_attributes(&ini, was).unwrap();
+
+            let e = apply(&folder, ICO).unwrap_err();
+            assert!(matches!(e, ApplyError::Refused(_)), "{e:?}");
+            assert_eq!(std::fs::read(&ini).unwrap(), theirs);
+            assert_eq!(
+                attributes(&ini),
+                Some(was),
+                "its attributes are as they were"
+            );
+            assert!(
+                !folder.join(ico_file_name(ICO)).exists(),
+                "no icon left behind"
+            );
+            // And revert leaves it be too, having nothing of its own to take off.
+            assert!(!has_custom_icon(&folder));
+            set_attributes(&ini, FILE_ATTRIBUTE_NORMAL).unwrap();
         }
     }
 }

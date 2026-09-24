@@ -139,7 +139,7 @@ export function Segmented<T extends string | number>({
           type="button"
           role="radio"
           aria-checked={o.value === value}
-          title={o.title}
+          data-tip={o.title}
           className={o.value === value ? "cmp-seg-btn is-on" : "cmp-seg-btn"}
           onClick={() => onChange(o.value)}
         >
@@ -153,7 +153,7 @@ export function Segmented<T extends string | number>({
 /** An on/off switch with its label. */
 export function Toggle({ label, on, onChange, hint }: { label: string; on: boolean; onChange: (on: boolean) => void; hint?: string }) {
   return (
-    <button type="button" role="switch" aria-checked={on} className="cmp-toggle" onClick={() => onChange(!on)} title={hint}>
+    <button type="button" role="switch" aria-checked={on} className="cmp-toggle" onClick={() => onChange(!on)} data-tip={hint}>
       <span className="cmp-toggle-label">{label}</span>
       <span className={on ? "switch is-on" : "switch"} aria-hidden="true">
         <span className="knob" />
@@ -184,7 +184,7 @@ export function IconButton({
       className={`cmp-icon-btn${active ? " is-on" : ""}${className ? ` ${className}` : ""}`}
       aria-label={label}
       aria-pressed={active}
-      title={label}
+      data-tip={label}
       disabled={disabled}
       onClick={onClick}
     >

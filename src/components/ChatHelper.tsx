@@ -44,14 +44,9 @@ export function ChatHelper({
       sub="Their chat apps can paint a folder for you. FolderSkin cuts it out afterwards."
       onClose={onClose}
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Close
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onImport}>
-            Add the finished picture
-          </button>
-        </>
+        <button type="button" className="btn btn-primary" onClick={onImport}>
+          Add the finished picture
+        </button>
       }
     >
       <ol className="helper-steps">

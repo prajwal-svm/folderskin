@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { isYours } from "../lib/tags";
+import { reducesMotion } from "../state/prefs";
 import { StarIcon } from "./icons/star";
 
 /** Degrees the folder turns when the pointer is at the tile's edge. */
@@ -11,8 +12,6 @@ const DRIFT = 5;
 const LIFT = 1.04;
 /** Share of the remaining distance covered each frame: the folder eases after the pointer. */
 const FOLLOW = 0.16;
-
-const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * One folder in the library. While hovered it lifts slightly and turns toward the pointer: the
@@ -91,7 +90,7 @@ export function FolderThumb({
 
   const track = useCallback(
     (e: PointerEvent<HTMLButtonElement>) => {
-      if (reducedMotion()) return;
+      if (reducesMotion()) return;
       const r = e.currentTarget.getBoundingClientRect();
       const x = Math.min(1, Math.max(-1, ((e.clientX - r.left) / r.width) * 2 - 1));
       const y = Math.min(1, Math.max(-1, ((e.clientY - r.top) / r.height) * 2 - 1));
@@ -137,7 +136,7 @@ export function FolderThumb({
         </span>
         <span
           className="tile-name"
-          title={skin.name}
+          data-tip={skin.name} data-tip-overflow
           // A double click on the name renames it, as in Finder: the menu opens with the name ready to
           // type over. Not for a pack's skin, whose name isn't the user's to change.
           onDoubleClick={onMenu && isYours(skin) ? () => more.current && onMenu(more.current, true) : undefined}
@@ -150,7 +149,7 @@ export function FolderThumb({
         className="tile-star"
         aria-label={favorite ? `remove ${skin.name} from favourites` : `add ${skin.name} to favourites`}
         aria-pressed={favorite}
-        title={favorite ? "Remove from favourites" : "Add to favourites"}
+        data-tip={favorite ? "Remove from favourites" : "Add to favourites"}
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           e.stopPropagation();
@@ -167,7 +166,7 @@ export function FolderThumb({
           aria-label={`options for ${skin.name}`}
           aria-haspopup="dialog"
           aria-expanded={menuOpen}
-          title={isYours(skin) ? "Rename, tags and details" : "Tags and details"}
+          data-tip={isYours(skin) ? "Rename, tags and details" : "Tags and details"}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();

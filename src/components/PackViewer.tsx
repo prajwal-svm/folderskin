@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type CommunityPack, type PackSkinPreview } from "../lib/tauri";
+import { api, errorMessage, type CommunityPack, type PackProgress, type PackSkinPreview } from "../lib/tauri";
 import { licenseLabel, REPO_URL } from "../lib/packs";
+import { progressLabel, progressShare } from "../lib/communityStore";
 import { Modal } from "./Modal";
 import { OkBadge } from "./OkBadge";
 import { DownloadIcon } from "./icons/download";
@@ -11,11 +12,15 @@ import { RefreshCwIcon } from "./icons/refresh-cw";
 
 /**
  * A community pack opened to look through: every skin drawn as the folder it makes, with its
- * name, and the pack's details. Looking downloads the pack but saves nothing; Add does that.
+ * name, and the pack's details. Opened from a skin that matched a search, it starts at that skin.
+ * Looking saves nothing; Add does that.
  */
 export function PackViewer({
   pack,
+  focus = null,
   busy,
+  removing = false,
+  progress = null,
   blocked,
   onAdd,
   onUpdate,
@@ -23,8 +28,14 @@ export function PackViewer({
   onClose,
 }: {
   pack: CommunityPack;
+  /** The skin to show first, by its place in the pack. */
+  focus?: number | null;
   /** This pack is being added, updated or removed. */
   busy: boolean;
+  /** It is being removed, rather than added or updated. */
+  removing?: boolean;
+  /** How far adding or updating it has got. */
+  progress?: PackProgress | null;
   /** Another pack is. */
   blocked: boolean;
   onAdd: () => void;
@@ -34,6 +45,7 @@ export function PackViewer({
 }) {
   const [skins, setSkins] = useState<PackSkinPreview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const focused = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -46,15 +58,36 @@ export function PackViewer({
     };
   }, [pack.id, pack.hash]);
 
+  useEffect(() => {
+    if (skins && focus !== null) focused.current?.scrollIntoView({ block: "center" });
+  }, [skins, focus]);
+
+  // While it's added or updated, the button fills as the pictures arrive.
+  const working = busy && !removing;
+  const filling = (working ? { "--done": progressShare(progress) } : undefined) as CSSProperties | undefined;
   const primary = !pack.added ? (
-    <button type="button" className="btn btn-primary" disabled={busy || blocked} aria-busy={busy} onClick={onAdd}>
-      {busy ? <LoaderIcon /> : <DownloadIcon size={15} />}
-      {busy ? "Adding" : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
+    <button
+      type="button"
+      className={working ? "btn btn-primary pack-adding" : "btn btn-primary"}
+      disabled={busy || blocked}
+      aria-busy={working}
+      style={filling}
+      onClick={onAdd}
+    >
+      {working ? <LoaderIcon /> : <DownloadIcon size={15} />}
+      {working ? progressLabel(progress) : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
     </button>
   ) : pack.update ? (
-    <button type="button" className="btn btn-primary" disabled={busy || blocked} aria-busy={busy} onClick={onUpdate}>
-      {busy ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
-      {busy ? "Updating" : "Update"}
+    <button
+      type="button"
+      className={working ? "btn btn-primary pack-adding" : "btn btn-primary"}
+      disabled={busy || blocked}
+      aria-busy={working}
+      style={filling}
+      onClick={onUpdate}
+    >
+      {working ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
+      {working ? progressLabel(progress, "Updating") : "Update"}
     </button>
   ) : (
     <span className="chip chip-ok">
@@ -73,6 +106,7 @@ export function PackViewer({
             @{pack.author}
           </button>{" "}
           · {pack.count} {pack.count === 1 ? "skin" : "skins"} · {licenseLabel(pack.license)}
+          {pack.bytes > 0 && <> · {megabytes(pack.bytes)}</>}
         </>
       }
       onClose={onClose}
@@ -107,14 +141,19 @@ export function PackViewer({
         <p className="field-note is-error">Couldn't open this pack: {error}.</p>
       ) : skins === null ? (
         <p className="community-note">
-          <LoaderIcon /> Downloading {pack.count} {pack.count === 1 ? "skin" : "skins"} to show them
+          <LoaderIcon /> Getting {pack.count} {pack.count === 1 ? "skin" : "skins"} to show them
         </p>
       ) : (
         <ul className="pack-skins">
           {skins.map((s, i) => (
-            <li key={`${i}:${s.name}`} className="pack-skin" style={{ animationDelay: `${Math.min(i, 16) * 25}ms` }}>
-              <img src={s.thumbnail} alt="" draggable={false} />
-              <span className="pack-skin-name" title={s.name}>
+            <li
+              key={`${i}:${s.name}`}
+              ref={i === focus ? focused : undefined}
+              className={i === focus ? "pack-skin is-focus" : "pack-skin"}
+              style={{ animationDelay: `${Math.min(i, 16) * 25}ms` }}
+            >
+              <img src={s.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+              <span className="pack-skin-name" data-tip={s.name} data-tip-overflow>
                 {s.name}
               </span>
             </li>
@@ -123,4 +162,9 @@ export function PackViewer({
       )}
     </Modal>
   );
+}
+
+/** "3.2 MB", "640 KB". */
+function megabytes(bytes: number): string {
+  return bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1000))} KB`;
 }

@@ -25,7 +25,7 @@ export function PictureMenu({ skins, onFile, onSkin }: { skins: Skin[]; onFile: 
           )}
           <div className="cmp-skin-grid">
             {shown.map((s) => (
-              <button key={s.id} type="button" className="cmp-skin" title={s.name} aria-label={`use ${s.name}`} onClick={() => onSkin(s)}>
+              <button key={s.id} type="button" className="cmp-skin" data-tip={s.name} aria-label={`use ${s.name}`} onClick={() => onSkin(s)}>
                 <img src={s.thumbnail} alt="" draggable={false} />
               </button>
             ))}

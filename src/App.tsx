@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
@@ -11,7 +12,13 @@ import { applyLabel, CONFIRM_ABOVE, folders, formatBytes, mergeRuns, runToast, t
 import { throttle } from "./lib/throttle";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
+import { flushChats } from "./state/chatStore";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
+import { chooseLook } from "./state/look";
+import type { FolderStyle } from "./composer/parts";
+import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RAIL, RIGHT, saveLayout, stepSidebar, type Layout } from "./state/layout";
+import { IslandResizer } from "./components/IslandResizer";
+import { LoaderIcon } from "./components/icons/loader";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useToasts } from "./hooks/useToasts";
 import { useUpdates } from "./hooks/useUpdates";
@@ -25,6 +32,7 @@ import { AboutMenu } from "./components/AboutMenu";
 import { WindowControls } from "./components/WindowControls";
 import { CommunityView } from "./components/CommunityView";
 import type { ApplyOutcome, ComposerHandle, ComposerRequest } from "./components/composer/Composer";
+import type { StudioHandle } from "./components/studio/Studio";
 import { Confirm } from "./components/Confirm";
 import { SkinMenu } from "./components/SkinMenu";
 import { SharePack } from "./components/SharePack";
@@ -74,7 +82,7 @@ function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref)
 /** The composer is loaded the first time it's opened, so the rest of the app starts without it. */
 const Composer = lazy(() => import("./components/composer/Composer").then((m) => ({ default: m.Composer })));
 /** The AI view likewise. */
-const Studio = lazy(() => import("./components/Studio").then((m) => ({ default: m.Studio })));
+const Studio = lazy(() => import("./components/studio/Studio").then((m) => ({ default: m.Studio })));
 
 /** A question before a big run over a folder and its subfolders, answered through `resolve`. */
 type TreeAsk = {
@@ -90,6 +98,49 @@ type TreeAsk = {
 
 /** How long a folder that replaced another shows its own icon before the selected skin goes on. */
 const ARRIVAL_MS = 900;
+
+/** How long the sidebar takes to fold or open (the grid's transition in shell.css). */
+const FOLD_MS = 320;
+
+/**
+ * The window's columns as the user left them, and the window's width, which they're fitted to.
+ * Saved a moment after each change; folding or opening the sidebar animates, dragging doesn't.
+ */
+function useLayout() {
+  const [layout, setLayout] = useState<Layout>(loadLayout);
+  const [width, setWidth] = useState(() => window.innerWidth);
+  const [folding, setFolding] = useState(false);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  useEffect(() => {
+    const t = window.setTimeout(() => saveLayout(layout), 250);
+    return () => window.clearTimeout(t);
+  }, [layout]);
+  useEffect(() => {
+    if (!folding) return;
+    const t = window.setTimeout(() => setFolding(false), FOLD_MS + 40);
+    return () => window.clearTimeout(t);
+  }, [folding]);
+  const toggleRail = useCallback(() => {
+    setFolding(true);
+    setLayout((l) => ({ ...l, rail: !l.rail }));
+  }, []);
+  // A drag or an arrow key that folds or opens the sidebar animates too, rather than jumping.
+  const latest = useRef(layout);
+  latest.current = layout;
+  const moveSidebar = useCallback((next: Layout) => {
+    if (next === latest.current) return;
+    if (next.rail !== latest.current.rail) setFolding(true);
+    latest.current = next;
+    setLayout(next);
+  }, []);
+  const resizeSidebar = useCallback((to: number) => moveSidebar(dragSidebar(latest.current, to)), [moveSidebar]);
+  const stepSidebarEdge = useCallback((from: number, by: number) => moveSidebar(stepSidebar(latest.current, from, by)), [moveSidebar]);
+  return { layout, setLayout, width, folding, toggleRail, resizeSidebar, stepSidebarEdge };
+}
 
 /** Newest first. A pack keeps its own order: the app gives its first skin the newest time. */
 function newestFirst(list: Skin[]): Skin[] {
@@ -127,6 +178,10 @@ export default function App() {
   const [keysVersion, setKeysVersion] = useState(0);
   /** The composer, once it has been opened: it stays mounted so a design survives a visit elsewhere. */
   const [composerOpened, setComposerOpened] = useState(false);
+  /** The AI chat likewise, so its scroll, words and pictures wait for the user to come back. */
+  const [studioOpened, setStudioOpened] = useState(false);
+  /** The folder panel hidden from the AI chat by choice, though a folder is chosen. */
+  const [aiPanelHidden, setAiPanelHidden] = useState(false);
   const composer = useRef<ComposerHandle>(null);
   /** Stop was pressed on a run over a folder and its subfolders. */
   const [stopping, setStopping] = useState(false);
@@ -135,6 +190,18 @@ export default function App() {
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null);
   const requestSeq = useRef(0);
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleThemePref } = useTheme();
+  const { layout, setLayout, width: windowWidth, folding, toggleRail, resizeSidebar, stepSidebarEdge } = useLayout();
+
+  // ⌘\ (Ctrl+\ elsewhere) folds the sidebar and opens it again, as its button's tooltip says.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "\\" || document.querySelector(".modal-backdrop")) return;
+      e.preventDefault();
+      toggleRail();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleRail]);
   const { items: toastItems, push: toast, dismiss: dismissToast } = useToasts();
   const updates = useUpdates();
 
@@ -149,12 +216,71 @@ export default function App() {
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
 
+  // Skins go on the Mac's folder or Windows' (state/look.ts). After a switch the library's
+  // thumbnails and the plain folder are drawn again on the new one.
+  /** The folder the library's thumbnails are being drawn on again, until they arrive. */
+  const [redrawing, setRedrawing] = useState<FolderStyle | null>(null);
+  const lookRun = useRef(0);
+  const chooseFolderLook = useCallback(
+    (look: FolderStyle) => {
+      // Every thumbnail is drawn again, which takes a moment; until then the old ones are dimmed
+      // and a note says so. Only the last switch's thumbnails are kept, if two cross.
+      const run = ++lookRun.current;
+      setRedrawing(look);
+      chooseLook(look)
+        .then(() => api.listSkins())
+        .then((list) => {
+          if (run !== lookRun.current) return;
+          setSkins(newestFirst(list.skins));
+          setDefaultThumb(list.default_thumbnail);
+        })
+        .catch((e) => toast(`Couldn't switch the folder: ${errorMessage(e)}`, { tone: "danger" }))
+        .finally(() => {
+          if (run === lookRun.current) setRedrawing(null);
+        });
+    },
+    [toast],
+  );
+
   // The stylesheet reserves room for the window's own controls on Windows (shell.css). window.rs
   // sets the same flag before the first paint so there is no reflow; this is what makes it right
   // whatever the webview did with that script.
   useEffect(() => {
     document.documentElement.dataset.os = platform.os;
   }, [platform.os]);
+
+  // In full screen the Mac's traffic lights are gone, and so is the room the folded sidebar keeps
+  // for them at its top (shell.css).
+  useEffect(() => {
+    if (!isTauri() || platform.os !== "macos") return;
+    const win = getCurrentWindow();
+    let live = true;
+    const check = () =>
+      void win
+        .isFullscreen()
+        .then((full) => live && document.documentElement.toggleAttribute("data-fullscreen", full))
+        .catch(() => {});
+    check();
+    const off = win.onResized(check);
+    return () => {
+      live = false;
+      void off.then((stop) => stop());
+    };
+  }, [platform.os]);
+
+  // The assistant's chats are saved a moment after they change (chatStore.ts). Closing the window
+  // saves what is still waiting first, so a picture that has just been made stays in its chat;
+  // a save that hangs keeps the window open for a second at most. The browser preview only has
+  // pagehide, which can't wait for it.
+  useEffect(() => {
+    const flush = () => void flushChats();
+    window.addEventListener("pagehide", flush);
+    const off = isTauri() ? getCurrentWindow().onCloseRequested(() => Promise.race([flushChats(), new Promise<void>((r) => setTimeout(r, 1000))])) : null;
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      void off?.then((stop) => stop());
+    };
+  }, []);
 
   /** Puts skins in the library, or updates the ones already there. */
   const addSkins = useCallback((added: Skin[]) => {
@@ -256,10 +382,26 @@ export default function App() {
     [takePath, toast],
   );
 
+  /** A drop on the AI view: a picture is one to paint from, a folder the one the pictures are for. */
+  const studio = useRef<StudioHandle>(null);
+  const dropOnStudio = useCallback(
+    async (path: string) => {
+      try {
+        const info = await api.inspectPath(path);
+        if (info.kind === "image") studio.current?.addReference(info.path);
+        else await takePath(path);
+      } catch (e) {
+        toast(errorMessage(e), { tone: "danger" });
+      }
+    },
+    [takePath, toast],
+  );
+
   useDragDrop(
     useCallback(
-      (paths: string[]) => void (paths[0] && (view === "compose" ? dropOnComposer(paths[0]) : takePath(paths[0]))),
-      [takePath, dropOnComposer, view],
+      (paths: string[]) =>
+        void (paths[0] && (view === "compose" ? dropOnComposer(paths[0]) : view === "generate" ? dropOnStudio(paths[0]) : takePath(paths[0]))),
+      [takePath, dropOnComposer, dropOnStudio, view],
     ),
     useCallback((info) => dispatch({ type: "drag", info }), []),
   );
@@ -513,6 +655,7 @@ export default function App() {
 
   useEffect(() => {
     if (view === "compose") setComposerOpened(true);
+    if (view === "generate") setStudioOpened(true);
   }, [view]);
 
   const revert = useCallback(async () => {
@@ -690,13 +833,72 @@ export default function App() {
               : null;
 
   const library = view === "skins" || view === "yours" || view === "faves";
+  // The skin being tried is put down with Escape in the library, or a click on the grid's empty
+  // space, as a selection is: the folder shows as it is again, or the empty folder with the Mac |
+  // Windows switch under it. Not while typing, or while a menu or dialog has the key.
+  const skinId = state.skinId;
+  const putDown = useCallback(() => dispatch({ type: "skinCleared" }), []);
+  useEffect(() => {
+    if (!library || !skinId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || menu || aboutOpen || document.querySelector(".modal-backdrop, .cmp-pop, .filter-pop")) return;
+      if (e.target instanceof Element && e.target.closest("input, textarea, [contenteditable='true']")) return;
+      putDown();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [library, skinId, menu, aboutOpen, putDown]);
   const composing = view === "compose";
   // Windows has no system caption bar (window.rs builds the window undecorated), so the folder
   // island carries the window's controls and a strip to drag it by.
   const windowsChrome = platform.os === "windows";
+  // The AI chat has the window to itself until there's a folder to show: one chosen (and not hidden
+  // on purpose), or one being dragged in, which needs somewhere to land.
+  const aiView = view === "generate";
+  const rightShown = !aiView || state.drag?.kind === "folder" || (state.folder !== null && !aiPanelHidden);
+  const cols = columns(layout, windowWidth, rightShown);
+  // The panel slides in and out rather than jumping; dragging an edge or resizing the window doesn't wait.
+  const [sliding, setSliding] = useState(false);
+  const lastShown = useRef(rightShown);
+  useEffect(() => {
+    if (lastShown.current === rightShown) return;
+    lastShown.current = rightShown;
+    setSliding(true);
+    const t = window.setTimeout(() => setSliding(false), 460);
+    return () => window.clearTimeout(t);
+  }, [rightShown]);
+  // A newly chosen folder is shown, even in the AI chat after its panel was hidden.
+  useEffect(() => setAiPanelHidden(false), [state.folder?.path]);
+  const full = columns(layout, windowWidth, true);
 
   return (
-    <main className={`app os-${platform.os}`}>
+    <main
+      className={`app os-${platform.os}${layout.rail ? " is-rail" : ""}${folding || sliding ? " is-folding" : ""}${rightShown ? "" : " is-right-off"}`}
+      style={{ "--left-w": `${cols.left}px`, "--right-w": `${cols.right}px`, "--right-full": `${full.right}px` } as CSSProperties}
+    >
+      <IslandResizer
+        label="sidebar width"
+        className="is-left"
+        width={cols.left}
+        min={layout.rail ? RAIL : LEFT.min}
+        max={LEFT.max}
+        grows="right"
+        onWidth={resizeSidebar}
+        onStep={(by) => stepSidebarEdge(cols.left, by)}
+        onReset={() => setLayout((l) => ({ ...l, rail: false, left: DEFAULT_LAYOUT.left }))}
+      />
+      {rightShown && (
+      <IslandResizer
+        label={composing ? "layers and settings width" : "folder panel width"}
+        className="is-right"
+        width={cols.right}
+        min={RIGHT.min}
+        max={RIGHT.max}
+        grows="left"
+        onWidth={(to) => setLayout((l) => dragRight(l, to, windowWidth))}
+        onReset={() => setLayout((l) => ({ ...l, right: null }))}
+      />
+      )}
       <Sidebar
         view={view}
         onView={(v) => {
@@ -715,9 +917,10 @@ export default function App() {
         updateReady={updates.status.state === "available"}
         onSettings={() => setSettingsTab("general")}
         settingsOpen={settingsTab !== null}
+        rail={layout.rail}
+        onToggleRail={toggleRail}
       />
       <AboutMenu
-        note={platform.note}
         open={aboutOpen}
         onHover={hoverAbout}
         onClose={() => setAboutOpen(false)}
@@ -761,7 +964,13 @@ export default function App() {
                 />
               }
             />
-            <div className="gallery-scroll">
+            <div
+              className="gallery-scroll"
+              aria-busy={redrawing ? true : undefined}
+              onClick={(e) => {
+                if (skinId && e.target instanceof Element && !e.target.closest(".tile, button, a, input")) putDown();
+              }}
+            >
               <Gallery
                 skins={visible}
                 selectedId={state.skinId}
@@ -776,22 +985,41 @@ export default function App() {
                 menuFor={menu?.skin.id ?? null}
               />
             </div>
+            {redrawing && (
+              <div className="gallery-redraw" role="status">
+                <LoaderIcon size={15} />
+                <span>Drawing your skins on {redrawing === "windows" ? "Windows'" : "the Mac's"} folder</span>
+              </div>
+            )}
           </>
         )}
         {view === "community" && (
           <CommunityView onShare={() => setSharing({})} onAdded={addSkins} onRemoved={dropSkins} onShowTag={showTag} toast={toast} />
         )}
-        {view === "generate" && (
+        {(studioOpened || aiView) && (
           <Suspense fallback={null}>
             <Studio
-              folderName={state.folder?.name ?? null}
-              selectedId={state.skinId}
+              ref={studio}
+              active={aiView}
+              os={platform.os}
+              folder={state.folder}
+              shownId={state.skinId}
+              appliedId={state.appliedSkinId}
+              panelShown={rightShown}
+              onTogglePanel={() => setAiPanelHidden(rightShown)}
+              onChooseFolder={browseFolder}
+              onUseFolder={(path) => {
+                if (path) void takePath(path);
+                else dispatch({ type: "folderCleared" });
+              }}
+              onPreview={(id) => dispatch({ type: "skinSelected", skinId: id })}
+              onApply={applyFromComposer}
               onGenerated={addSkin}
-              onTryOn={(id) => dispatch({ type: "skinSelected", skinId: id })}
               onImport={pickPhoto}
               skinOf={skinOf}
               onMenu={openMenu}
               keysVersion={keysVersion}
+              dragImage={aiView && state.drag?.kind === "image"}
               toast={toast}
             />
           </Suspense>
@@ -834,6 +1062,9 @@ export default function App() {
       )}
 
       {!composing && (
+      // The folder island keeps its width while its column opens and closes, so it slides in
+      // from the window's edge rather than squeezing.
+      <div className="right-slot" inert={!rightShown} aria-hidden={!rightShown}>
       <FolderStage
         state={state}
         skin={selected}
@@ -853,7 +1084,11 @@ export default function App() {
         onCarryOn={carryOn}
         onTryAgain={tryAgain}
         onDismissRun={() => dispatch({ type: "runDismissed" })}
+        pickHint={aiView ? "Preview a picture from the chat" : undefined}
+        onLook={chooseFolderLook}
+        onPutDown={putDown}
       />
+      </div>
       )}
 
       {confirmingDelete && (
@@ -918,11 +1153,13 @@ export default function App() {
       {settingsTab && (
         <Settings
           tab={settingsTab}
+          folderPicture={defaultThumb}
           themePref={themePref}
           onThemePref={setThemePref}
+          rail={layout.rail}
+          onRail={(on) => on !== layout.rail && toggleRail()}
           fileBrowser={fileBrowser(platform.os)}
           savedCount={skins.filter((s) => s.custom).length}
-          note={platform.note}
           onKeysChanged={() => setKeysVersion((v) => v + 1)}
           onClose={closeSettings}
           toast={toast}

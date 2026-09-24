@@ -1,0 +1,38 @@
+[package]
+name = "folderskin-cli"
+# The command line is released on its own (tags `cli-v*`), not with the app.
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FolderSkin from a terminal: paint folder art with local models or your own key, clean pictures up, and apply them"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+# The app's own binary is already called `folderskin`; release archives rename this one to it.
+[[bin]]
+name = "folderskin-cli"
+path = "src/main.rs"
+
+[dependencies]
+folderskin-core.workspace = true
+folderskin-ai = { path = "../folderskin-ai" }
+folderskin-keys = { path = "../folderskin-keys" }
+folderskin-local = { path = "../folderskin-local" }
+folderskin-tools = { path = "../folderskin-tools" }
+image.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+clap = { version = "4", features = ["derive"] }
+# The app's config folder, found the way Tauri finds it. Already in the tree through Tauri.
+dirs = "6"
+
+[target.'cfg(unix)'.dependencies]
+# Ctrl+C, and reading an API key without echoing it. Already in the tree.
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }

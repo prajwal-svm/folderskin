@@ -1,0 +1,21 @@
+[package]
+name = "folderskin-catalog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "FolderSkin's community catalog: every pack and skin in one searchable SQLite file, and the published tree around it"
+
+[dependencies]
+folderskin-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+# SQLite compiled in, with FTS5 (libsqlite3-sys turns it on for the bundled build), so every
+# platform searches the same way and nothing depends on the system's copy. `serialize` hands a
+# finished catalog over as bytes without a temporary file. MIT; SQLite itself is public domain.
+rusqlite = { version = "0.40", default-features = false, features = ["bundled", "serialize"] }
+# The catalog travels gzipped. Already in the tree through png and reqwest (miniz_oxide, pure Rust).
+flate2 = "1"
+# Unicode general categories, to split a search into words exactly as SQLite's tokenizer does.
+# Already in the app through Tauri, with the same features. MIT or Apache-2.0.
+regex = "1"

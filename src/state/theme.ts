@@ -1,5 +1,7 @@
 /** Light / dark theme, following the system unless the user picks one. */
 
+import { useSyncExternalStore } from "react";
+
 export type Theme = "light" | "dark";
 export type ThemePref = Theme | "system";
 
@@ -38,4 +40,20 @@ export function toggleTheme(current: Theme): Theme {
 
 export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
+}
+
+/** The theme on screen now: the one applyTheme put on <html>. */
+function shownTheme(): Theme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function watchTheme(changed: () => void): () => void {
+  const observer = new MutationObserver(changed);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
+}
+
+/** The theme on screen, for a part of the app that draws itself to match: it follows every change. */
+export function useShownTheme(): Theme {
+  return useSyncExternalStore(watchTheme, shownTheme, () => "light");
 }

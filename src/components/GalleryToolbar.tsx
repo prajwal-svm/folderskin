@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SearchIcon } from "./icons/search";
 
 export type TabCount = { id: string; label: string; count: number };
@@ -31,18 +31,29 @@ export function GalleryToolbar({
   const search = useRef<HTMLInputElement>(null);
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
   const [animate, setAnimate] = useState(false);
+  /** Which ends of the tags run on past what shows (the search beside them opened, say): those fade out. */
+  const [cut, setCut] = useState<"start" | "end" | "both" | null>(null);
+
+  const measureCut = useCallback(() => {
+    const el = seg.current;
+    if (!el) return;
+    const start = el.scrollLeft > 1;
+    const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setCut(start && end ? "both" : start ? "start" : end ? "end" : null);
+  }, []);
 
   useLayoutEffect(() => {
     const measure = () => {
       const el = seg.current?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(active)}"]`);
       setPill(el ? { x: el.offsetLeft, w: el.offsetWidth } : null);
       el?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+      measureCut();
     };
     measure();
     const ro = new ResizeObserver(measure);
     if (seg.current) ro.observe(seg.current);
     return () => ro.disconnect();
-  }, [active, tabs]);
+  }, [active, tabs, measureCut]);
 
   // Slide only after the first placement, so the pill doesn't fly in from the left on load.
   useEffect(() => {
@@ -65,7 +76,7 @@ export function GalleryToolbar({
 
   return (
     <div className={extra ? "toolbar has-extra" : "toolbar"} data-tauri-drag-region>
-      <div className="seg" role="tablist" aria-label={label} ref={seg}>
+      <div className="seg" role="tablist" aria-label={label} ref={seg} data-cut={cut ?? undefined} onScroll={measureCut}>
         {pill && (
           <span
             className="seg-pill"
@@ -93,7 +104,7 @@ export function GalleryToolbar({
           </button>
         ))}
       </div>
-      <label className={query ? "search has-query" : "search"} title={placeholder}>
+      <label className={query ? "search has-query" : "search"}>
         <SearchIcon size={15} />
         <input
           ref={search}

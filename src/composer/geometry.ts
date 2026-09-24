@@ -179,3 +179,84 @@ export function boxTargets(boxes: Box[]): Targets {
   }
   return { xs, ys };
 }
+
+/** Room kept between what's already on the folder and something new beside it. */
+const SPOT_GAP = 28;
+/** And between something new and the front panel's edges. */
+const SPOT_MARGIN = 24;
+/** How small something new (an icon, an emoji, a shape) may be drawn to find it a free spot, rather than on top of another. */
+const SMALLEST = 160;
+/** The middle first, then beside it, above and below, then the corners. */
+const AROUND = [
+  [0, 0],
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
+];
+
+/**
+ * Where something `w` × `h` can go on the front panel (`front`, x0 y0 x1 y1) without covering
+ * any of `taken`: the middle when it's free, otherwise a whole step beside, above or below it,
+ * the step clearing the biggest thing already there with a gap. Where those are all taken (a
+ * wide label in the middle rules out both sides), right beside something already there, the
+ * spot nearest the middle first. `null` when nowhere is free.
+ */
+export function freeSpot(front: [number, number, number, number], centre: Point, w: number, h: number, taken: Box[]): Point | null {
+  const [fx0, fy0, fx1, fy1] = front;
+  const widest = taken.reduce((m, b) => Math.max(m, b.w), w);
+  const tallest = taken.reduce((m, b) => Math.max(m, b.h), h);
+  const fits = (x: number, y: number) => x - w / 2 >= fx0 + SPOT_MARGIN && x + w / 2 <= fx1 - SPOT_MARGIN && y - h / 2 >= fy0 + SPOT_MARGIN && y + h / 2 <= fy1 - SPOT_MARGIN;
+  const free = (x: number, y: number) => taken.every((b) => Math.abs(b.x - x) * 2 >= b.w + w || Math.abs(b.y - y) * 2 >= b.h + h);
+  for (const [dx, dy] of AROUND) {
+    const x = centre.x + dx * (widest / 2 + w / 2 + SPOT_GAP);
+    const y = centre.y + dy * (tallest / 2 + h / 2 + SPOT_GAP);
+    if (fits(x, y) && free(x, y)) return { x, y };
+  }
+  const beside = taken
+    .flatMap((b) => [
+      { x: b.x - (b.w / 2 + w / 2 + SPOT_GAP), y: b.y },
+      { x: b.x + (b.w / 2 + w / 2 + SPOT_GAP), y: b.y },
+      { x: b.x, y: b.y - (b.h / 2 + h / 2 + SPOT_GAP) },
+      { x: b.x, y: b.y + (b.h / 2 + h / 2 + SPOT_GAP) },
+    ])
+    .filter((p) => fits(p.x, p.y) && free(p.x, p.y));
+  const far = (p: Point) => Math.hypot(p.x - centre.x, p.y - centre.y);
+  return beside.reduce<Point | null>((best, p) => (!best || far(p) < far(best) ? p : best), null);
+}
+
+/**
+ * [`freeSpot`] for something `w` × `h` at its own size, or else a little smaller, down to
+ * `smallest` across its shorter side, and the share of its size it goes at. `null` when it fits
+ * nowhere even then.
+ */
+export function fitSpot(front: [number, number, number, number], centre: Point, w: number, h: number, taken: Box[], smallest = SMALLEST): (Point & { scale: number }) | null {
+  const short = Math.min(w, h);
+  for (let side = short; side >= Math.min(short, smallest); side -= 20) {
+    const scale = side / short;
+    const at = freeSpot(front, centre, w * scale, h * scale, taken);
+    if (at) return { ...at, scale };
+  }
+  return null;
+}
+
+/** An icon's size: the first one big, the ones after it smaller. */
+export const FIRST_ICON = 340;
+export const NEXT_ICON = 240;
+
+/**
+ * Where the next icon goes, and how big: in a free spot on the front panel at its usual size, or
+ * a little smaller where the panel is too narrow for that (Windows' front is narrower than the
+ * Mac's), and only when nothing is free anywhere, stepped down and across from the middle, one
+ * step per icon already there (`count`).
+ */
+export function placeIcon(front: [number, number, number, number], centre: Point, taken: Box[], count: number): Point & { size: number } {
+  const usual = count === 0 ? FIRST_ICON : NEXT_ICON;
+  const at = fitSpot(front, centre, usual, usual, taken);
+  if (at) return { x: at.x, y: at.y, size: usual * at.scale };
+  return { x: centre.x + (count % 5) * 36, y: centre.y + (count % 5) * 36, size: usual };
+}

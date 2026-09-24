@@ -20,16 +20,44 @@
   padding: 0 10px 0 12px;
 }
 
+/* The tools that fit, then ⋯ with the rest (Tools in Composer.tsx); never one cut in half. */
 .cmp-tools {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 1px;
+  overflow: hidden;
+}
+
+/* An unseen copy of every tool, measured to know how many fit. */
+.cmp-tools-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 1px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cmp-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmp-pop-title {
+  margin: 0 0 8px;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ink);
 }
 
 /* Tools read like a Mac toolbar: the icon, and its name small beneath it. */
 .cmp-tool {
+  flex: none;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -154,7 +182,7 @@
 }
 
 .cmp-stage[data-backdrop="light"] {
-  background: #e7e9ec;
+  background: #ffffff;
 }
 
 .cmp-stage[data-backdrop="dark"] {
@@ -190,9 +218,40 @@
   animation: fade-up var(--t-slow) var(--ease-out) both;
 }
 
+/* While the folder or a picture is still loading, what's drawn so far stays out of sight, and the
+   handles with it; after a moment the loader stands in the design's place. */
+.cmp-stage[data-waiting] .cmp-canvas,
+.cmp-stage[data-waiting] .cmp-overlay,
+.cmp-stage[data-waiting] .cmp-stage-hint {
+  visibility: hidden;
+}
+
+.cmp-stage-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+  pointer-events: none;
+  animation: fade-in var(--t-base) var(--ease-out) both;
+}
+
 .cmp-stage[data-backdrop="dark"] .cmp-stage-hint,
-.cmp-stage[data-backdrop="colour"] .cmp-stage-hint {
+.cmp-stage[data-backdrop="colour"] .cmp-stage-hint,
+.cmp-stage[data-backdrop="dark"] .cmp-stage-loader,
+.cmp-stage[data-backdrop="colour"] .cmp-stage-loader {
   color: rgba(255, 255, 255, 0.85);
+}
+
+/* The light desktop is light in either theme. */
+.cmp-stage[data-backdrop="light"] .cmp-stage-hint,
+.cmp-stage[data-backdrop="light"] .cmp-stage-loader {
+  color: rgba(16, 24, 40, 0.6);
 }
 
 /* The selected layer is tinted, not framed; knobs sit on its corners and sides. */
@@ -204,7 +263,7 @@
 }
 
 .cmp-sel {
-  background: rgba(58, 134, 255, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   animation: fade-in var(--t-fast) ease both;
 }
 
@@ -213,7 +272,7 @@
 }
 
 .cmp-hover {
-  background: rgba(58, 134, 255, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .cmp-knob {
@@ -278,9 +337,11 @@
 }
 
 .cmp-skeleton {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 9px;
+  white-space: nowrap;
   height: 34px;
   padding: 0 12px 0 6px;
   border-radius: var(--r-pill);
@@ -318,7 +379,7 @@
 }
 
 .cmp-backdrop.is-light {
-  background: #e7e9ec;
+  background: #ffffff;
 }
 
 .cmp-backdrop.is-dark {
@@ -342,51 +403,18 @@
   min-height: 36px;
 }
 
+/* Given way when the canvas is too narrow for them (useBarRoom), rather than drawn cut off. */
+.cmp-backdrops[hidden],
+.cmp-sizes[hidden] {
+  display: none;
+}
+
 .cmp-size {
   display: block;
   animation: fade-in var(--t-base) ease both;
 }
 
 /* ---------- templates ---------- */
-
-.cmp-sheet {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 20px 20px 22px;
-  background: var(--island);
-  overflow-y: auto;
-  animation: fade-in var(--t-base) ease both;
-}
-
-.cmp-sheet-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.cmp-sheet-head > div {
-  flex: 1;
-}
-
-.cmp-sheet-title {
-  margin: 0;
-  font-weight: 800;
-  font-size: 21px;
-  letter-spacing: -0.03em;
-}
-
-.cmp-sheet-sub {
-  margin: 5px 0 0;
-  max-width: 440px;
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-}
 
 .cmp-sheet-grid {
   display: grid;
@@ -441,6 +469,89 @@
   color: var(--ink-2);
 }
 
+.cmp-card-note {
+  margin-top: -4px;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ---------- starting a new design ---------- */
+
+.modal-new {
+  width: min(820px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+}
+
+.new-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.new-heading {
+  margin: 0;
+  font-weight: 750;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.new-empty-art {
+  width: 104px;
+  height: 104px;
+  color: var(--dash);
+}
+
+.new-empty-art .ghost {
+  width: 100%;
+  height: 100%;
+}
+
+.new-free-art {
+  width: 100%;
+  height: 100%;
+}
+
+.new-free-art rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-dasharray: 6 5;
+}
+
+.cmp-card.is-empty:hover .new-empty-art,
+.cmp-card.is-empty:focus-visible .new-empty-art {
+  color: var(--accent);
+}
+
+.cmp-card.is-empty:hover .ghost-line path,
+.cmp-card.is-empty:focus-visible .ghost-line path {
+  stroke: var(--accent);
+}
+
+.new-unsaved {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--r-card);
+  background: var(--well);
+}
+
+.new-unsaved-text {
+  flex: 1;
+  margin: 0;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.new-unsaved-text strong {
+  font-weight: 750;
+  color: var(--ink);
+}
+
 .cmp-design-thumb {
   display: block;
 }
@@ -492,12 +603,24 @@
   color: var(--muted);
 }
 
+/* Both side scrollers keep their scrollbar's room whether or not they overflow (base.css draws
+   the track 10 px wide and shows its thumb only on hover): given room only once they overflowed,
+   every row narrowed the moment a setting appeared, such as a colour's Covers row when the design
+   goes onto the folder. The room comes off the right padding, so both sides stay even. */
 .cmp-side-scroll {
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: scroll;
   overscroll-behavior: contain;
+}
+
+.cmp-side-scroll .cmp-section {
+  padding-right: 4px;
+}
+
+.cmp-side-scroll .cmp-inspector-empty {
+  padding-right: 8px;
 }
 
 /* ---------- the side's two panels: the layers, and the selected layer's settings ---------- */
@@ -628,13 +751,13 @@
 .cmp-layers-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   overscroll-behavior: contain;
-  padding: 2px 10px 10px;
+  padding: 2px 0 10px 10px;
 }
 
-/* The bar between the panels: a hairline with a wide grip that turns the accent colour when it's
-   pointed at, held or focused. */
+/* The bar between the panels: the hairline that divides them, with a wide grip that shows a small
+   grey thumb when it's pointed at, held or focused. */
 .cmp-resizer {
   flex: none;
   position: relative;
@@ -660,25 +783,23 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 32px;
-  height: 5px;
-  border-radius: 5px;
-  background: var(--accent);
+  width: 36px;
+  height: 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 20%, transparent);
   opacity: 0;
   transform: translate(-50%, -50%);
-  transition: opacity var(--t-fast) ease;
-}
-
-.cmp-resizer:hover::before,
-.cmp-resizer:focus-visible::before,
-.cmp-resizer.is-dragging::before {
-  background: var(--accent);
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease;
 }
 
 .cmp-resizer:hover .cmp-resizer-grip,
 .cmp-resizer:focus-visible .cmp-resizer-grip,
 .cmp-resizer.is-dragging .cmp-resizer-grip {
   opacity: 1;
+}
+
+.cmp-resizer.is-dragging .cmp-resizer-grip {
+  background: color-mix(in srgb, var(--ink) 36%, transparent);
 }
 
 /* While the bar is held the whole window shows the resize cursor, wherever the pointer strays. */
@@ -771,6 +892,12 @@
   border-color: var(--accent-soft);
 }
 
+.cmp-thumb.is-icon {
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+}
+
 .cmp-thumb.is-emoji {
   font-size: 17px;
   line-height: 1;
@@ -785,11 +912,30 @@
 .cmp-layer-name {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 700;
   font-size: 12.5px;
+}
+
+.cmp-layer-label {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A renamed text layer's words, so the name and what's on the folder are never mixed up. */
+.cmp-layer-content {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 .cmp-layer-name-input {
@@ -819,8 +965,10 @@
   transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
+/* A row's lock, eye and delete show while it's pointed at or reached by the keyboard; a lock or
+   eye that's switched on stays, since it says something about the layer. */
 .cmp-layer:hover .cmp-layer-btn,
-.cmp-layer.is-on .cmp-layer-btn,
+.cmp-layer:focus-visible .cmp-layer-btn,
 .cmp-layer-btn.is-set,
 .cmp-layer-btn:focus-visible {
   opacity: 1;
@@ -913,6 +1061,16 @@
   margin: 0;
   font-weight: 600;
   font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* With nothing selected, the attributes panel says how to get something in it. */
+.cmp-inspector-empty {
+  margin: 0;
+  padding: 12px 18px 16px;
+  font-weight: 600;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -1878,4 +2036,494 @@
   opacity: 1;
   background: linear-gradient(90deg, var(--accent-hover) var(--done), var(--accent) var(--done));
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- a layer's own name, the icon section, aligning ---------- */
+
+.cmp-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: var(--well);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink);
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.cmp-input::placeholder {
+  color: var(--hint);
+  font-weight: 600;
+}
+
+.cmp-input:focus {
+  background: var(--island);
+  border-color: var(--accent);
+}
+
+/* A field with an (i) at its end that says what the field is for, in a tooltip. */
+.cmp-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.cmp-input-wrap .cmp-input {
+  padding-right: 32px;
+}
+
+.cmp-input-info {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--hint);
+  transform: translateY(-50%);
+  cursor: help;
+  transition: color var(--t-fast) ease;
+}
+
+.cmp-input-info:hover,
+.cmp-input-info:focus-visible {
+  color: var(--accent-ink);
+}
+
+/* ---------- the app's own dropdown (Select.tsx) ---------- */
+
+.cmp-select-btn {
+  cursor: pointer;
+}
+
+/* In a form (Settings, the AI provider dialog), the size of the fields around it. */
+.cmp-select-btn.is-field {
+  flex: none;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-control);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+/* Nothing chosen yet: the question, in the colour a field's placeholder takes. */
+.cmp-select-placeholder {
+  color: var(--hint);
+}
+
+.cmp-select-pop {
+  padding: 6px;
+}
+
+.cmp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cmp-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-weight: 650;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-option.is-active {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.cmp-option[aria-selected="true"] {
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.cmp-option svg {
+  flex: none;
+  color: var(--accent-ink);
+}
+
+.cmp-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cmp-icon-now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cmp-icon-now-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 750;
+  font-size: 13px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.cmp-align {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cmp-align-label {
+  flex: 1;
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cmp-align-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ---------- the side island's two views, and the icon library ---------- */
+
+.cmp-side-tabs {
+  margin-top: 10px;
+}
+
+.cmp-side-tabs .cmp-seg {
+  display: flex;
+  width: 100%;
+}
+
+.cmp-icons-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cmp-icons-view[hidden] {
+  display: none;
+}
+
+.icon-library {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 14px 12px;
+}
+
+/* Under the grid: the icon being tried and Add to canvas, or the selected one and Done. */
+.icon-status {
+  flex: none;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 10px;
+  border-radius: var(--r-control);
+  background: var(--well);
+}
+
+.icon-status-glyph {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--island);
+  color: var(--ink);
+}
+
+.icon-status-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.icon-status-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.icon-status .btn {
+  flex: none;
+}
+
+/* The icon being tried from the library: outlined as not added yet. */
+.cmp-pending {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.icon-cell[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.icon-controls {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-controls .cmp-seg {
+  flex: none;
+}
+
+/* The pack's logo, its name (cut short with an ellipsis when the side is narrow) and a chevron. */
+.icon-pack-btn.cmp-pick-btn {
+  flex: 1 1 120px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 8px 0 5px;
+  cursor: pointer;
+}
+
+.icon-pack-btn > span:not(.pack-logo) {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-pack-btn .pack-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--island);
+}
+
+/* A pack's mark on a small tile, in the pack list and its button. */
+.pack-logo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--well);
+  color: var(--ink);
+  overflow: visible;
+}
+
+.pack-logo-initial {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.icon-search {
+  flex: none;
+  height: 34px;
+}
+
+.icon-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.icon-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.icon-grid {
+  flex: 1;
+}
+
+.icon-cell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--ink-2);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.icon-cell:hover {
+  background: var(--tile-selected);
+  color: var(--ink);
+}
+
+.icon-cell:focus-visible,
+.icon-cell.is-active:focus {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.icon-cell:active {
+  transform: scale(0.94);
+}
+
+.icon-empty {
+  margin: 18px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.icon-packs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -6px;
+}
+
+.icon-pack {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+  border-radius: 12px;
+  transition: background-color var(--t-fast) ease;
+}
+
+.icon-pack:hover,
+.icon-pack:focus-within {
+  background: var(--nav-hover);
+}
+
+.icon-pack.is-current {
+  background: var(--tile-selected);
+}
+
+.icon-pack-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.icon-pack-main:disabled {
+  cursor: default;
+}
+
+.icon-pack-main > svg {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent-ink);
+}
+
+.icon-pack-main:disabled .pack-logo {
+  opacity: 0.55;
+}
+
+.icon-pack-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.icon-pack-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 750;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.icon-pack-meta {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Download: a small pill with the size it costs, or how far it has got. */
+.icon-pack-get {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.icon-pack-get:hover:not(:disabled),
+.icon-pack-get:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.icon-pack-get:disabled {
+  cursor: default;
+}
+
+/* Remove shows while its row is pointed at, like a layer's delete. */
+.icon-pack-remove {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--hint);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.icon-pack:hover .icon-pack-remove,
+.icon-pack-remove:focus-visible {
+  opacity: 1;
+}
+
+.icon-pack-remove:hover,
+.icon-pack-remove:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
 }

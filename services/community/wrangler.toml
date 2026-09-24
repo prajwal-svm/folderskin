@@ -1,0 +1,101 @@
+# FolderSkin's community service: sharing a pack without a GitHub account (src/index.ts).
+#
+# Everything here fits the Workers free plan, and the paid pieces are optional:
+#   Workers      100,000 requests and 10 ms of CPU each a day. No picture is decoded here.
+#   D1           5 million rows read, 100,000 written a day. Quotas keep writes far below that.
+#   R2           10 GB stored, 1 million writes a month, and nothing for traffic out.
+#   Workers AI   10,000 neurons a day; AI_DAILY_NEURONS keeps the triage inside them.
+#   Turnstile, Email Routing and one cron trigger cost nothing.
+# If the day ever comes that 10 ms isn't enough, Workers Paid is $5 a month and changes nothing
+# else here.
+#
+# Setting it up once (see migrations/ and the secrets below):
+#   pnpm install
+#   wrangler d1 create folderskin-community        # paste the id into database_id below
+#   wrangler r2 bucket create folderskin-community-hold
+#   wrangler r2 bucket create folderskin-community-public
+#   pnpm migrate:remote
+#   wrangler secret put TURNSTILE_SECRET           # from the Turnstile widget for this hostname
+#   wrangler secret put IP_SALT                    # 32+ random bytes, e.g. `openssl rand -base64 32`
+#   wrangler secret put LINK_SECRET                # 32+ random bytes, a different value
+#   wrangler secret put NOTIFY_WEBHOOK_URL         # optional: Discord, Slack, Telegram or ntfy
+#   folderskin-tools community keygen --out ~/folderskin-admin.key   # its public key goes in ADMIN_KEYS
+#   pnpm run deploy
+# Then put the service's address in the app (FOLDERSKIN_COMMUNITY_API, or COMMUNITY_API in
+# src-tauri/src/share.rs) so the share dialog offers sharing without GitHub.
+#
+# Before anyone relies on it, add a WAF rate-limiting rule on the route in the dashboard (the free
+# plan has one): the BURST binding below limits each network inside the Worker, and the rule
+# stops a flood before it is billed as requests at all.
+
+name = "folderskin-community"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+# Reached on its own custom domain only: no *.workers.dev address and no preview URLs, which would
+# be ways in that the WAF rule and Turnstile's hostname check don't cover.
+workers_dev = false
+preview_urls = false
+# routes = [{ pattern = "community.example.org", custom_domain = true }]
+
+# Workers Logs stay off: they keep each request's URL, and a phone link's URL is the link itself.
+# The Worker logs only its own short error lines, never a request, a header or a secret.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "folderskin-community"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+# Private: pictures waiting for review and the contact sheets. Never given a public address.
+[[r2_buckets]]
+binding = "HOLD"
+bucket_name = "folderskin-community-hold"
+
+# Approved packs, laid out as community/packs is. It can be given a public address, or left
+# private: `folderskin-tools community pull` reads it through the Worker either way.
+[[r2_buckets]]
+binding = "PUBLIC"
+bucket_name = "folderskin-community-public"
+
+# Optional. Without it every pack simply waits for a person.
+[ai]
+binding = "AI"
+remote = true
+
+# A burst limit per network, checked before anything touches D1.
+[[ratelimits]]
+name = "BURST"
+namespace_id = "1001"
+simple = { limit = 120, period = 60 }
+
+# Optional: email to the maintainer's own address, which has to be a verified destination in
+# Email Routing. MAIL_TO below is the same address; MAIL_FROM is one on the zone.
+[[send_email]]
+name = "MAILER"
+destination_address = "maintainer@example.org"
+
+# The daily clean-up and digest.
+[triggers]
+crons = ["17 7 * * *"]
+
+[vars]
+# The maintainer's signing keys (base64url Ed25519 public keys, comma separated), from
+# `folderskin-tools community keygen`. Empty means nobody can use the admin endpoints; the phone
+# links in notifications still work.
+ADMIN_KEYS = ""
+PUBLIC_BASE_URL = "https://community.example.org"
+# Cloudflare's always-passes test key until the real widget exists.
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+MAIL_TO = "maintainer@example.org"
+MAIL_FROM = "community@example.org"
+# "1" pauses sharing from the dashboard without touching the database.
+PAUSED = ""
+GLOBAL_DAILY_PICTURES = "1500"
+MAX_WAITING = "150"
+TRIAGE_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
+AI_NEURONS_PER_SHEET = "60"
+AI_DAILY_NEURONS = "9000"
+# More words to flag, comma separated.
+EXTRA_BLOCKLIST = ""
+# discord, slack, telegram or ntfy; worked out from NOTIFY_WEBHOOK_URL when empty.
+NOTIFY_WEBHOOK_KIND = ""

@@ -1,3 +1,6 @@
+import { isGithubUser } from "./licences";
+import { defaultProfile, loadProfiles, saveProfiles, upsertProfile } from "./profiles";
+
 /** Community packs live in the FolderSkin repository on GitHub, under community/. */
 export const REPO_URL = "https://github.com/prajwal-svm/folderskin";
 /** The pack folders, to look through on GitHub. */
@@ -16,44 +19,17 @@ export const PACK_TERMS_VERSION = 1;
 /** Most skins in one pack; `folderskin_core::pack::MAX_SKINS` is the same. */
 export const MAX_PACK_SKINS = 50;
 
+export { isGithubUser, LICENSES, licenseLabel } from "./licences";
+
 /**
- * The licences shared skins can use: Creative Commons, or MIT like FolderSkin's own code.
- * `folderskin_core::pack::LICENSES` is the same list. CC0 comes first: most skins are made with
- * AI, and CC0 claims the least over them.
+ * Gives the default licence profile (profiles.ts) the GitHub name a pack was just shared as, when
+ * it credits no one yet. That is all sharing ever changes in a profile: which one a pack uses,
+ * and a licence changed for one pack, stay with that pack. Profiles are changed in Settings.
  */
-export const LICENSES = [
-  { id: "CC0-1.0", label: "CC0", note: "Anyone can use them for anything." },
-  { id: "CC-BY-4.0", label: "CC BY 4.0", note: "Anyone can use them, and credits you." },
-  { id: "MIT", label: "MIT", note: "The same licence as FolderSkin; your name stays with them." },
-] as const;
-
-export const licenseLabel = (id: string) => LICENSES.find((l) => l.id === id)?.label ?? id;
-
-/** What sharing remembers between packs: the GitHub user name and the usual licence. */
-export type SharingPrefs = { author: string; license: string };
-const SHARING_KEY = "folderskin.sharing";
-
-export function loadSharingPrefs(): SharingPrefs {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SHARING_KEY) ?? "{}") as Partial<SharingPrefs>;
-    const license = LICENSES.some((l) => l.id === saved.license) ? (saved.license as string) : LICENSES[0].id;
-    return { author: typeof saved.author === "string" ? saved.author : "", license };
-  } catch {
-    return { author: "", license: LICENSES[0].id };
-  }
-}
-
-export function saveSharingPrefs(prefs: SharingPrefs): void {
-  try {
-    localStorage.setItem(SHARING_KEY, JSON.stringify(prefs));
-  } catch {
-    /* nowhere to keep it: it lasts until the app closes */
-  }
-}
-
-/** A GitHub user name: letters, digits and single dashes, not at either end, at most 39. */
-export function isGithubUser(name: string): boolean {
-  return name.length <= 39 && /^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/.test(name);
+export function creditDefaultProfile(login: string): void {
+  const profiles = loadProfiles();
+  const p = defaultProfile(profiles);
+  if (!p.author && isGithubUser(login)) saveProfiles(upsertProfile(profiles, { ...p, author: login }));
 }
 
 /** The folder name a pack gets from its name, the way `pack::slug` makes it in Rust. */

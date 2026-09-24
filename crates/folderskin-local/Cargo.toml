@@ -1,0 +1,42 @@
+[package]
+name = "folderskin-local"
+# Versioned with the command line, not the app: it ships in the CLI's releases first.
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Local image generation for FolderSkin: open-weight models run on this computer"
+publish = false
+
+[dependencies]
+folderskin-core.workspace = true
+image.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+reqwest.workspace = true
+# `rt` for spawn_blocking: the runtime's output is read and the pictures cleaned up off the async
+# threads. The app's runtime and the command line's are both tokio.
+tokio = { workspace = true, features = ["rt"] }
+# Where the user's home is, the same way Tauri finds it. Already in the tree through Tauri.
+dirs = "6"
+# The runtime comes zipped. Both are already in the tree through the png crate.
+flate2 = "1"
+crc32fast = "1"
+
+[target.'cfg(windows)'.dependencies]
+# How much memory the computer has, and a job object that takes the runtime down with us: a
+# window-less child would otherwise keep the GPU busy after FolderSkin quits or is stopped. And
+# short (8.3) names, for paths sd-cli can't open as they are.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_JobObjects",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+# kill(2), to end the runtimes still running when FolderSkin quits (run::end_all): Windows has
+# its job object for that, macOS and Linux nothing that does it for us.
+libc = "0.2"

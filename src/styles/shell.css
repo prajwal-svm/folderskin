@@ -1,12 +1,119 @@
 /* The window: a sidebar straight on the glass, then two islands (library, folder). */
 
+/* The sidebar's and the right island's widths come from App.tsx (state/layout.ts), which fits
+   them to the window; these are the same values before it has. */
 .app {
+  --left-w: 228px;
+  --right-w: clamp(320px, 29vw, 372px);
   position: relative;
   height: 100%;
   display: grid;
-  grid-template-columns: 228px minmax(0, 1fr) clamp(320px, 29vw, 372px);
+  grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
   gap: var(--gap);
   padding: var(--gap) var(--gap) var(--gap) 0;
+}
+
+/* Folded, the sidebar is an island like the others, with the window's edge around it. */
+.app.is-rail {
+  padding-left: var(--gap);
+}
+
+/* No folder panel (the AI chat before a folder is chosen): the centre runs to the window's edge. */
+.app.is-right-off {
+  padding-right: 0;
+}
+
+/* The folder panel's column. The island inside keeps its full width while the column opens and
+   closes, so it slides in from the window's edge instead of squeezing. */
+.right-slot {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--r-island);
+}
+
+.right-slot > .island {
+  flex: none;
+  width: var(--right-full, 100%);
+  min-width: 100%;
+}
+
+.app.is-right-off .winbar {
+  width: 132px;
+}
+
+/* Folding or opening the sidebar slides the columns; dragging an edge or resizing the window
+   doesn't wait for a transition. */
+.app.is-folding {
+  transition:
+    grid-template-columns var(--t-slow) var(--ease-out),
+    padding var(--t-slow) var(--ease-out);
+}
+
+/* ---------- the edges between islands ---------- */
+
+/* A strip over the gap between two islands, a little wider than it for an easy grab. It draws
+   nothing until it's pointed at: then a small grey thumb in the middle of the gap, darker while
+   it's held. The gap itself stays the window's own grey. */
+.island-resizer {
+  position: absolute;
+  z-index: 4;
+  top: var(--gap);
+  bottom: var(--gap);
+  width: calc(var(--gap) + 4px);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.island-resizer.is-left {
+  left: calc(var(--left-w) - 2px);
+}
+
+.app.is-rail .island-resizer.is-left {
+  left: calc(var(--gap) + var(--left-w) - 2px);
+}
+
+.island-resizer.is-right {
+  right: calc(var(--gap) + var(--right-w) - 2px);
+}
+
+.island-resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 36px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 20%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.island-resizer:hover::after,
+.island-resizer:focus-visible::after {
+  opacity: 1;
+}
+
+.is-resizing-islands .island-resizer:active::after {
+  opacity: 1;
+  background: color-mix(in srgb, var(--ink) 36%, transparent);
+}
+
+/* Hidden while the sidebar folds or opens, but not taken out of reach: an edge folded with the
+   arrow keys keeps the focus, so the next key can open it again. */
+.app.is-folding .island-resizer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.is-resizing-islands,
+.is-resizing-islands * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .island {
@@ -30,6 +137,7 @@
 .sidebar {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   padding: 0 2px 0 12px;
 }
@@ -40,6 +148,89 @@
   align-items: center;
   padding: 0 10px; /* the mark lines up with the nav icons, the name with the nav labels */
   flex: none;
+}
+
+/* ---------- the sidebar folded: an island of icons ---------- */
+
+.sidebar.is-rail {
+  align-items: center;
+  padding: 10px 0 8px;
+  border-radius: var(--r-island);
+  background: var(--island);
+  border: 1px solid var(--island-line);
+  transition: background-color var(--t-base) ease;
+}
+
+/* It runs the window's full height. In the Mac app the traffic lights sit over the window's top
+   left corner, so they sit inside the island's top, above the logo; in full screen they're gone
+   and so is the room (App.tsx sets data-fullscreen). */
+html[data-glass]:not([data-fullscreen]) .sidebar.is-rail {
+  padding-top: 38px;
+}
+
+.sidebar.is-rail .sidebar-top,
+.os-macos .sidebar.is-rail .sidebar-top {
+  height: auto;
+  padding: 2px 0 12px;
+}
+
+.sidebar.is-rail .brand-lockup {
+  flex: none;
+  justify-content: center;
+}
+
+/* Folded, the photo button is one icon among the others, not a big blue one. */
+.sidebar.is-rail .cta {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0 0 8px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.sidebar.is-rail .cta:hover,
+.sidebar.is-rail .cta:focus-visible {
+  background: var(--nav-hover);
+  color: var(--accent-ink);
+}
+
+.sidebar.is-rail .sidebar-scroll {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sidebar.is-rail .nav-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Where the group names were, a short rule between the groups. */
+.sidebar.is-rail .nav-group + .nav-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  background: linear-gradient(var(--line), var(--line)) top center / 24px 1px no-repeat;
+}
+
+.sidebar.is-rail .nav-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidebar.is-rail .sidebar-bottom {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* below the traffic lights, with the same room above the logo as below it */
@@ -63,7 +254,7 @@
   z-index: 3;
   top: var(--gap);
   right: var(--gap);
-  width: clamp(320px, 29vw, 372px);
+  width: var(--right-w);
   height: 32px;
   display: flex;
   align-items: stretch;
@@ -143,9 +334,14 @@ html[data-os="windows"] .cmp-side-head {
   letter-spacing: -0.035em;
 }
 
-/* "Skin", wherever the name is written as the logo */
+/* "Skin", wherever the name is written: the logo, and every mention of it in the app's words */
 .brand-accent {
-  color: var(--accent);
+  color: var(--brand);
+}
+
+/* The name in running text (components/Brand.tsx): bold, whatever the text around it is. */
+.brand-word {
+  font-weight: 700;
 }
 
 /* The version badge opens About while it is hovered or focused. It is the one part of the
@@ -446,4 +642,9 @@ html[data-os="windows"] .cmp-side-head {
   line-height: 1.5;
   color: var(--muted);
   max-width: 540px;
+}
+
+/* On the rail's white island the open page is tinted, as a selected thing is everywhere else. */
+.sidebar.is-rail .nav-btn.is-active {
+  background: var(--accent-soft);
 }

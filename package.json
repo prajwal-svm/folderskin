@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "site:dev": "vite --config website/vite.config.mjs",
     "site:build": "vite build --config website/vite.config.mjs",
@@ -29,6 +30,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^22.20.3",
     "@types/react": "^19.2.0",

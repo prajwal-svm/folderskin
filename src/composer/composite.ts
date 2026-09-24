@@ -89,6 +89,72 @@ function drawOutline(ctx: Ctx, t: TemplateImages, px: number, scratch: HTMLCanva
   ctx.restore();
 }
 
+/** How the editor shows what's see-through: a fine checkerboard, in greys that sit on any backdrop. */
+const CHECK_CELLS = 40;
+const CHECK_LIGHT = "rgba(120, 128, 140, 0.10)";
+const CHECK_DARK = "rgba(120, 128, 140, 0.22)";
+/** The folder's edges where the design leaves it see-through. */
+const SKELETON_LINE = "rgba(110, 118, 130, 0.6)";
+
+let checker: HTMLCanvasElement | null = null;
+function checkerboard(px: number): HTMLCanvasElement {
+  if (!checker) checker = document.createElement("canvas");
+  if (checker.width !== px) {
+    checker.width = px;
+    checker.height = px;
+    const g = checker.getContext("2d")!;
+    const cell = px / CHECK_CELLS;
+    g.fillStyle = CHECK_LIGHT;
+    g.fillRect(0, 0, px, px);
+    g.fillStyle = CHECK_DARK;
+    for (let y = 0; y < CHECK_CELLS; y++) {
+      for (let x = y % 2; x < CHECK_CELLS; x += 2) g.fillRect(Math.round(x * cell), Math.round(y * cell), Math.ceil(cell), Math.ceil(cell));
+    }
+  }
+  return checker;
+}
+
+/**
+ * The folder as it is with nothing on it, for the editor only: a checkerboard over its whole
+ * shape (back panel with its tab, and front) and its edges as a fine grey line. A design drawn
+ * over it hides both where it's solid, so an empty or see-through design still shows exactly the
+ * folder it will be, never a bare sheet of paper with a rim floating under it.
+ */
+function drawSkeleton(ctx: Ctx, t: TemplateImages, px: number, scratch: HTMLCanvasElement) {
+  if (scratch.width !== px || scratch.height !== px) {
+    scratch.width = px;
+    scratch.height = px;
+  }
+  const s = scratch.getContext("2d")!;
+  reset(s);
+  s.clearRect(0, 0, px, px);
+  s.drawImage(t.back, 0, 0, px, px);
+  s.drawImage(t.front, 0, 0, px, px);
+  s.globalCompositeOperation = "source-in";
+  s.drawImage(checkerboard(px), 0, 0);
+  s.globalCompositeOperation = "source-over";
+  ctx.save();
+  reset(ctx);
+  ctx.drawImage(scratch, 0, 0, px, px);
+  ctx.restore();
+  drawOutline(ctx, t, px, scratch, SKELETON_LINE, 1);
+}
+
+/** The design on the folder as the editor shows it: the folder's skeleton under whatever of it is see-through. */
+export function drawFolderView(ctx: Ctx, design: CanvasImageSource, t: TemplateImages, px: number, scratch: HTMLCanvasElement) {
+  drawSkeleton(ctx, t, px, scratch);
+  drawOnFolder(ctx, design, t, px, scratch);
+}
+
+/** A free icon as the editor shows it: the checkerboard under whatever of the square is see-through. */
+export function drawFreeView(ctx: Ctx, design: CanvasImageSource, px: number) {
+  ctx.save();
+  reset(ctx);
+  ctx.drawImage(checkerboard(px), 0, 0, px, px);
+  ctx.drawImage(design, 0, 0, px, px);
+  ctx.restore();
+}
+
 let grey: HTMLCanvasElement | null = null;
 /** A flat grey the size of a design, for the folder shown behind a free icon. */
 function greyDesign(px: number): HTMLCanvasElement {
@@ -129,7 +195,7 @@ export function drawView(ctx: Ctx, design: HTMLCanvasElement, t: TemplateImages 
     return;
   }
   if (view.shape === "folder") {
-    if (view.skeleton) drawOnFolder(ctx, design, t, px, scratch);
+    if (view.skeleton) drawFolderView(ctx, design, t, px, scratch);
     else {
       ctx.save();
       reset(ctx);
@@ -139,9 +205,13 @@ export function drawView(ctx: Ctx, design: HTMLCanvasElement, t: TemplateImages 
     }
     return;
   }
-  if (view.skeleton) drawOnFolder(ctx, greyDesign(px), t, px, scratch, 0.32);
-  ctx.save();
-  reset(ctx);
-  ctx.drawImage(design, 0, 0, px, px);
-  ctx.restore();
+  if (view.skeleton) {
+    drawOnFolder(ctx, greyDesign(px), t, px, scratch, 0.32);
+    ctx.save();
+    reset(ctx);
+    ctx.drawImage(design, 0, 0, px, px);
+    ctx.restore();
+    return;
+  }
+  drawFreeView(ctx, design, px);
 }

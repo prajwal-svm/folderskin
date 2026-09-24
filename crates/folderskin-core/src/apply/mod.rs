@@ -396,6 +396,34 @@ mod tests {
 
     // ------------------------------------------------------------------ desktop.ini
 
+    #[test]
+    fn a_utf16_desktop_ini_is_read_and_written_back_the_same_way() {
+        use windows::{decode_ini, encode_ini, IniEncoding};
+        let text =
+            "[.ShellClassInfo]\r\nLocalizedResourceName=Мои фото\r\nIconResource=mine.ico,0\r\n";
+        let bytes = encode_ini(text, IniEncoding::Utf16);
+        assert_eq!(bytes[..4], [0xFF, 0xFE, b'[', 0]);
+        let (read, encoding) = decode_ini(&bytes).unwrap();
+        assert_eq!(encoding, IniEncoding::Utf16);
+        assert_eq!(read.strip_prefix('\u{feff}'), Some(text));
+        // Skinned and reverted, it comes back byte for byte, name and all.
+        let skinned = windows::desktop_ini_contents(Some(&read), &ico_name(), Before::default());
+        assert!(skinned.starts_with('\u{feff}'), "{skinned:?}");
+        assert!(skinned.contains("LocalizedResourceName=Мои фото"));
+        let back = windows::desktop_ini_without_ours(&skinned).unwrap();
+        assert_eq!(encode_ini(&back, encoding), bytes);
+        // UTF-8, with or without its mark, stays UTF-8.
+        assert_eq!(
+            decode_ini(b"[a]\r\n"),
+            Some(("[a]\r\n".to_string(), IniEncoding::Utf8))
+        );
+        let marked = "\u{feff}[a]\r\n";
+        assert_eq!(encode_ini(marked, IniEncoding::Utf8), marked.as_bytes());
+        // Neither: refused, not guessed at.
+        assert_eq!(decode_ini(b"caf\xe9"), None);
+        assert_eq!(decode_ini(&[0xFF, 0xFE, b'a']), None, "half a character");
+    }
+
     /// The icon file name for a skin, as `apply` derives it from the packed `.ico`.
     fn ico_name() -> String {
         windows::ico_file_name(b"the packed icon")
@@ -455,8 +483,55 @@ mod tests {
         let existing = "[.ShellClassInfo]\r\nInfoTip=hello\r\nIconResource=other.ico,0\r\n";
         let s = windows::desktop_ini_contents(Some(existing), &ico_name(), Before::default());
         assert!(s.contains("InfoTip=hello"));
-        assert!(!s.contains("other.ico"));
-        assert_eq!(s.matches("IconResource=").count(), 1);
+        // The folder's own icon is put aside, not live: Explorer reads ours.
+        assert_eq!(windows::icon_resource_of(&s), Some((ico_name(), 0)), "{s}");
+        assert!(s.contains("; put aside by FolderSkin: IconResource=other.ico,0\r\n"));
+        assert_eq!(
+            s.lines().filter(|l| l.starts_with("IconResource=")).count(),
+            1
+        );
+    }
+
+    /// A folder that already wore an icon of its own gets it back, exactly as it was, when
+    /// FolderSkin's comes off, however many times a skin went on in between.
+    #[test]
+    fn a_folders_own_icon_is_put_back_by_revert() {
+        for existing in [
+            "[.ShellClassInfo]\r\nIconResource=mine.ico,0\r\n",
+            "\u{feff}[.ShellClassInfo]\r\nIconFile=old.dll\r\nInfoTip=hi\r\nIconIndex=4\r\n[ViewState]\r\nMode=\r\n",
+            // Named like ours, but no marker: the user's own, not FolderSkin's.
+            "[.ShellClassInfo]\r\nIconResource=folderskin.ico,0\r\n",
+        ] {
+            let once = windows::desktop_ini_contents(Some(existing), &ico_name(), Before::default());
+            assert_eq!(windows::icon_resource_of(&once), Some((ico_name(), 0)), "{once}");
+            let twice =
+                windows::desktop_ini_contents(Some(&once), &windows::ico_file_name(b"two"), Before::default());
+            assert_eq!(
+                windows::desktop_ini_without_ours(&twice).as_deref(),
+                Some(existing),
+                "{twice}"
+            );
+            assert!(windows::would_revert(Some(&twice)));
+            // The only icon file a revert may delete is the one the marked ini names.
+            assert_eq!(
+                windows::our_icon_files(&twice),
+                [windows::ico_file_name(b"two")]
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_icon_file_a_marked_ini_names_is_ours_to_delete() {
+        let ours = windows::desktop_ini_contents(None, &ico_name(), Before::default());
+        assert_eq!(windows::our_icon_files(&ours), [ico_name()]);
+        for theirs in [
+            "[.ShellClassInfo]\r\nIconResource=folderskin.ico,0\r\n",
+            "[.ShellClassInfo]\r\nIconResource=folderskin-0123456789abcdef.ico,0\r\n",
+            "[.ShellClassInfo]\r\nInfoTip=hello\r\n",
+        ] {
+            assert!(windows::our_icon_files(theirs).is_empty(), "{theirs:?}");
+            assert!(!windows::would_revert(Some(theirs)), "{theirs:?}");
+        }
     }
 
     /// A folder skinned by an older version, re-skinned: the fixed name it used to point at is
@@ -653,11 +728,10 @@ mod tests {
     #[test]
     fn a_folder_counts_as_skinned_only_when_revert_would_change_it() {
         let ours = windows::desktop_ini_contents(None, &ico_name(), Before::default());
-        assert!(windows::would_revert(Some(&ours), false));
-        assert!(windows::would_revert(None, true));
+        assert!(windows::would_revert(Some(&ours)));
         let theirs = "[.ShellClassInfo]\r\nIconResource=theirs.ico,0\r\n";
-        assert!(!windows::would_revert(Some(theirs), false));
-        assert!(!windows::would_revert(None, false));
+        assert!(!windows::would_revert(Some(theirs)));
+        assert!(!windows::would_revert(None));
 
         let png = std::path::Path::new("/home/me/Pics/.folderskin.png");
         assert!(linux::would_revert(

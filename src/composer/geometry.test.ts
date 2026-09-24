@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bounds, boxTargets, contains, cursorFor, handlePoint, hitHandle, MIN_SIZE, normAngle, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
+import { bounds, boxTargets, contains, cursorFor, fitSpot, freeSpot, handlePoint, hitHandle, MIN_SIZE, normAngle, placeIcon, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
+import { FALLBACK_PARTS, WINDOWS_PARTS, centreOf } from "./parts";
 
 const box: Box = { x: 500, y: 400, w: 200, h: 100, rotation: 0 };
 const turned: Box = { ...box, rotation: 90 };
@@ -97,5 +98,83 @@ describe("canvas geometry", () => {
     const t = snap({ ...moving, x: 309 }, boxTargets([{ x: 250, y: 900, w: 10, h: 10, rotation: 0 }]), 6);
     expect(t.dx).toBe(-4);
     expect(snap(moving, { xs: [600], ys: [] }, 6).guides).toEqual([]);
+  });
+});
+
+describe("where something new goes on the folder", () => {
+  /** Adds `count` icons one after another, as the library does, and says where each went. */
+  const addIcons = (front: [number, number, number, number], count: number) => {
+    const taken: Box[] = [];
+    for (let n = 0; n < count; n++) {
+      const at = placeIcon(front, centreOf(front), taken, n);
+      taken.push({ x: at.x, y: at.y, w: at.size, h: at.size, rotation: 0 });
+    }
+    return taken;
+  };
+  const apart = (boxes: Box[]) => boxes.every((a, i) => boxes.every((b, j) => i === j || Math.abs(a.x - b.x) * 2 >= a.w + b.w || Math.abs(a.y - b.y) * 2 >= a.h + b.h));
+
+  it("puts icons side by side on the Mac's folder, as it always has", () => {
+    const icons = addIcons(FALLBACK_PARTS.front, 3);
+    expect(icons.map((b) => [b.x, b.w])).toEqual([
+      [512, 340],
+      [194, 240],
+      [830, 240],
+    ]);
+  });
+
+  it("puts icons side by side on Windows' narrower folder too, a little smaller", () => {
+    const icons = addIcons(WINDOWS_PARTS.front, 3);
+    expect(apart(icons)).toBe(true);
+    expect(new Set(icons.map((b) => b.x)).size).toBe(3);
+    const [x0, , x1] = WINDOWS_PARTS.front;
+    for (const b of icons) {
+      expect(b.x - b.w / 2).toBeGreaterThanOrEqual(x0);
+      expect(b.x + b.w / 2).toBeLessThanOrEqual(x1);
+      expect(b.w).toBeGreaterThanOrEqual(160);
+    }
+  });
+
+  it("puts new words beside a label's own rather than over them", () => {
+    const front = FALLBACK_PARTS.front;
+    const label: Box = { ...centreOf(front), w: 640, h: 180, rotation: 0 };
+    const at = freeSpot(front, centreOf(front), 620, 180, [label])!;
+    expect(at).not.toBeNull();
+    expect(apart([label, { ...at, w: 620, h: 180, rotation: 0 }])).toBe(true);
+    // With nothing there, the middle.
+    expect(freeSpot(front, centreOf(front), 620, 180, [])).toEqual(centreOf(front));
+  });
+
+  it("puts a shape and an emoji beside a label and its new words, a little smaller if it must", () => {
+    for (const front of [FALLBACK_PARTS.front, WINDOWS_PARTS.front]) {
+      const c = centreOf(front);
+      const label: Box = { ...c, w: 640, h: 165, rotation: 0 };
+      const words: Box = { x: c.x, y: c.y - 190, w: 760, h: 165, rotation: 0 };
+      const placed = [label, words];
+      for (const size of [380, 420]) {
+        const at = fitSpot(front, c, size, size, placed);
+        expect(at, `${size} on ${front}`).not.toBeNull();
+        placed.push({ x: at!.x, y: at!.y, w: size * at!.scale, h: size * at!.scale, rotation: 0 });
+      }
+      expect(apart(placed), JSON.stringify(placed)).toBe(true);
+      const [x0, y0, x1, y1] = front;
+      for (const b of placed.slice(2)) {
+        expect(b.w).toBeGreaterThanOrEqual(160);
+        expect([b.x - b.w / 2 >= x0, b.x + b.w / 2 <= x1, b.y - b.h / 2 >= y0, b.y + b.h / 2 <= y1]).toEqual([true, true, true, true]);
+      }
+    }
+  });
+
+  it("looks right beside what's there once every step from the middle is taken", () => {
+    const front = FALLBACK_PARTS.front;
+    const c = centreOf(front);
+    // A wide label in the middle and a heart under it: the steps across clear the label's width,
+    // off the front, but the heart has room at its sides.
+    const label: Box = { ...c, w: 900, h: 165, rotation: 0 };
+    const heart: Box = { x: c.x, y: c.y + 250, w: 260, h: 260, rotation: 0 };
+    const at = freeSpot(front, c, 260, 260, [label, heart])!;
+    expect(at).not.toBeNull();
+    expect(apart([label, heart, { ...at, w: 260, h: 260, rotation: 0 }])).toBe(true);
+    // Nowhere at all, and it says so.
+    expect(fitSpot(front, c, 900, 900, [label], 900)).toBeNull();
   });
 });

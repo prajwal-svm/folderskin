@@ -258,3 +258,77 @@ export const CaseUpperIcon = icon(
 
 export const ChevronUpIcon = icon(<path d="m18 15-6-6-6 6" />, "ChevronUpIcon");
 export const ChevronDownIcon = icon(<path d="m6 9 6 6 6-6" />, "ChevronDownIcon");
+
+export const StickerIcon = icon(
+  <>
+    <path d="M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
+    <path d="M15 3v5a1 1 0 0 0 1 1h5" />
+    <path d="M8 13h.01" />
+    <path d="M16 13h.01" />
+    <path d="M10 16s.8 1 2 1c1.3 0 2-1 2-1" />
+  </>,
+  "StickerIcon",
+);
+
+export const TickIcon = icon(<path d="M20 6 9 17l-5-5" />, "TickIcon");
+
+export const EllipsisIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="19" cy="12" r="1" />
+    <circle cx="5" cy="12" r="1" />
+  </>,
+  "EllipsisIcon",
+);
+
+export const InfoCircleIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 16v-4" />
+    <path d="M12 8h.01" />
+  </>,
+  "InfoCircleIcon",
+);
+
+export const HistoryIcon = icon(
+  <>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M12 7v5l4 2" />
+  </>,
+  "HistoryIcon",
+);
+
+export const SquarePenIcon = icon(
+  <>
+    <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+  </>,
+  "SquarePenIcon",
+);
+
+export const StopIcon = icon(<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" />, "StopIcon");
+
+export const CpuIcon = icon(
+  <>
+    <rect width="16" height="16" x="4" y="4" rx="2" />
+    <rect width="6" height="6" x="9" y="9" rx="1" />
+    <path d="M15 2v2" />
+    <path d="M15 20v2" />
+    <path d="M2 15h2" />
+    <path d="M2 9h2" />
+    <path d="M20 15h2" />
+    <path d="M20 9h2" />
+    <path d="M9 2v2" />
+    <path d="M9 20v2" />
+  </>,
+  "CpuIcon",
+);
+
+export const TerminalIcon = icon(
+  <>
+    <path d="m4 17 6-6-6-6" />
+    <path d="M12 19h8" />
+  </>,
+  "TerminalIcon",
+);

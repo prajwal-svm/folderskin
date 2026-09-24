@@ -43,7 +43,7 @@ export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
               type="button"
               role="tab"
               aria-selected={g.id === group}
-              title={g.label}
+              data-tip={g.label}
               aria-label={g.label}
               className={g.id === group ? "cmp-emoji-tab is-on" : "cmp-emoji-tab"}
               onClick={() => setGroup(g.id)}
@@ -128,7 +128,7 @@ export function ShapeGrid({ value, onPick, color = "currentColor" }: { value?: S
   return (
     <div className="cmp-grid">
       {SHAPES.map((s) => (
-        <button key={s.id} type="button" className={s.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} title={s.label} onClick={() => onPick(s.id)}>
+        <button key={s.id} type="button" className={s.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} data-tip={s.label} onClick={() => onPick(s.id)}>
           <Mini
             label={s.label}
             size={36}
@@ -155,7 +155,7 @@ export function PatternGrid({ value, onPick }: { value?: PatternKind; onPick: (p
   return (
     <div className="cmp-grid">
       {PATTERNS.map((p) => (
-        <button key={p.id} type="button" className={p.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} title={p.label} onClick={() => onPick(p.id)}>
+        <button key={p.id} type="button" className={p.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} data-tip={p.label} onClick={() => onPick(p.id)}>
           <Mini
             label={p.label}
             size={44}

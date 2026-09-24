@@ -1,18 +1,26 @@
 //! FolderSkin desktop app (Tauri v2).
 
 pub mod ai;
+pub mod catalog;
+pub mod chats;
 pub mod commands;
 pub mod community;
 pub mod composer;
 pub mod folder_icon;
 pub mod github;
-pub mod keys;
+pub mod icons;
+pub mod look;
 pub mod onboarding;
 pub mod pack_views;
+pub mod previews;
+pub mod share;
 pub mod state;
 pub mod store;
 pub mod tree;
 pub mod window;
+
+/// The saved API keys, sealed on disk; a crate of their own so the command line opens them too.
+pub use folderskin_keys as keys;
 
 use tauri::Manager;
 
@@ -64,7 +72,15 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(state::AppState::default())
         .manage(keys::Keys::default())
+        // The AI runs that can be stopped, and this computer as the local models see it.
+        .manage(ai::jobs::Jobs::default())
+        .manage(ai::local::Local::default())
         .manage(github::Pending::default())
+        .manage(chats::Chats::default())
+        .manage(catalog::Community::default())
+        // Community strips and thumbnails, fetched as the cards that show them scroll in.
+        .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
+        .manage(share::Waiting::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -75,7 +91,6 @@ pub fn run() {
             commands::edit_skin,
             commands::skins_folder,
             community::community_packs,
-            community::community_preview,
             community::community_add,
             community::community_update,
             community::community_pack_skins,
@@ -108,6 +123,34 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_test_key,
             ai::ai_generate,
+            ai::ai_cancel,
+            ai::ai_local_status,
+            ai::ai_local_setup,
+            ai::ai_local_remove,
+            ai::ai_local_remove_unused,
+            icons::icon_pack_download,
+            icons::icon_packs_installed,
+            icons::icon_pack_read,
+            icons::icon_pack_remove,
+            look::folder_look,
+            look::set_folder_look,
+            chats::chats_list,
+            chats::chat_read,
+            chats::chat_save,
+            chats::chat_delete,
+            chats::chat_keep_reference,
+            community::community_search,
+            community::community_refresh,
+            community::community_installed,
+            share::share_status,
+            share::share_verify,
+            share::share_wait,
+            share::share_cancel,
+            share::share_save_key,
+            share::share_load_key,
+            share::share_submit,
+            share::share_submissions,
+            share::share_withdraw,
         ])
         .setup(|app| {
             // Before anything that could panic, so a crash report has somewhere to land.
@@ -117,7 +160,12 @@ pub fn run() {
             // Open the saved skins before the window exists, so the first list_skins sees them.
             // The onboarding's marker sits beside them (onboarding.rs).
             match app.path().app_data_dir() {
-                Ok(dir) => app.state::<state::AppState>().open_store(dir.join("skins")),
+                Ok(dir) => {
+                    // Before the skins: their thumbnails are drawn on the folder chosen.
+                    look::load(&dir);
+                    app.state::<chats::Chats>().open(dir.join("chats"));
+                    app.state::<state::AppState>().open_store(dir.join("skins"))
+                }
                 Err(e) => eprintln!(
                     "folderskin: no app data folder ({e}); skins added now last until you quit"
                 ),
@@ -132,6 +180,14 @@ pub fn run() {
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));
             window::create_main(app)
         })
-        .run(tauri::generate_context!())
-        .expect("error while running FolderSkin");
+        .build(tauri::generate_context!())
+        .expect("error while building FolderSkin")
+        .run(|_app, event| {
+            // A painting, or mflux's install, doesn't end with the app on macOS and Linux: it
+            // would go on for minutes after FolderSkin quit, holding gigabytes of memory and the
+            // graphics card. (On Windows the job object ends it anyway.)
+            if let tauri::RunEvent::Exit = event {
+                folderskin_local::run::end_all();
+            }
+        });
 }

@@ -5,6 +5,9 @@ import { fileBrowser } from "../lib/platform";
 import { applyLabel, folders, runSummary, tooMany } from "../lib/tree";
 import type { State } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
+import { LookSwitch } from "./LookSwitch";
+import { useLook } from "../state/look";
+import type { FolderStyle } from "../composer/parts";
 import { ArrowDownIcon } from "./icons/arrow-down";
 import { ArrowLeftIcon } from "./icons/arrow-left";
 import { FolderOpenIcon } from "./icons/folder-open";
@@ -13,7 +16,7 @@ import { RotateCcwIcon } from "./icons/rotate-ccw";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
-import { clip, trailOff } from "../lib/names";
+import { clip } from "../lib/names";
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 
@@ -50,6 +53,9 @@ export function FolderStage({
   onCarryOn,
   onTryAgain,
   onDismissRun,
+  pickHint = "Pick a skin to try it on",
+  onLook,
+  onPutDown,
 }: {
   state: State;
   /** The skin selected in the library, if any. */
@@ -76,6 +82,12 @@ export function FolderStage({
   /** Tries the folders a run couldn't change again. */
   onTryAgain: () => void;
   onDismissRun: () => void;
+  /** What to do to see a skin on the folder, where there's none on it yet. */
+  pickHint?: string;
+  /** Chooses which folder skins go on, from the switch shown while there's no folder. */
+  onLook?: (look: FolderStyle) => void;
+  /** Puts down the skin shown before any folder, so the empty folder (and its switch) is back. */
+  onPutDown?: () => void;
 }) {
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
@@ -125,7 +137,7 @@ export function FolderStage({
           onClick={busy ? undefined : onBrowse}
           onMouseDown={(e) => e.preventDefault()}
           aria-label={folder ? `choose a different folder than ${folder.name}` : `choose a folder from ${browseLabel}`}
-          title={folder ? "Choose a different folder" : undefined}
+          data-tip={folder ? "Choose a different folder" : undefined}
         >
           <span className="stage-halo" aria-hidden="true" />
           {src && state.includeSubfolders && !drag && (
@@ -159,6 +171,15 @@ export function FolderStage({
 
         <StageCopy state={state} skin={skin} browseLabel={browseLabel} />
 
+        {/* Under the empty folder only: while a skin is previewed, the preview is what's shown,
+            with the way back to the empty folder (Escape does the same). */}
+        {!folder && !skin && !drag && onLook && <StageLook onLook={onLook} />}
+        {!folder && skin && !drag && onPutDown && (
+          <button type="button" className="link-btn stage-put-down" data-tip="Or press Escape" onMouseDown={(e) => e.preventDefault()} onClick={onPutDown}>
+            Back to the empty folder
+          </button>
+        )}
+
         {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} />}
 
         {state.run && !busy && !drag && (
@@ -178,6 +199,7 @@ export function FolderStage({
             onRevert={onRevert}
             onReveal={onReveal}
             onBrowse={onBrowse}
+            pickHint={pickHint}
           />
         )}
 
@@ -187,6 +209,11 @@ export function FolderStage({
       </div>
     </aside>
   );
+}
+
+/** Which folder skins go on, chosen while there's no folder and no skin yet: the empty one above shows it. */
+function StageLook({ onLook }: { onLook: (look: FolderStyle) => void }) {
+  return <LookSwitch className="stage-look" label="which folder skins go on" value={useLook()} onChange={onLook} />;
 }
 
 /**
@@ -246,7 +273,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
         <OkBadge size={16} playOnMount /> Applied
       </span>
     ) : (phase === "ready" && !state.arriving) || phase === "applying" ? (
-      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`} title={skin?.name}>
+      <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`} data-tip={skin?.name} data-tip-overflow>
         <span className="chip-text">Trying on {skin?.name}</span>
       </span>
     ) : (
@@ -258,10 +285,10 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
   return (
     <div className="stage-copy" key={`folder:${folder.path}`}>
       {eyebrow}
-      <h2 className="stage-title" title={folder.name}>
+      <h2 className="stage-title" data-tip={folder.name} data-tip-overflow>
         {folder.name}
       </h2>
-      <p className="stage-path" title={folder.path}>
+      <p className="stage-path" data-tip={folder.path} data-tip-overflow>
         {prettyPath(folder.path)}
       </p>
     </div>
@@ -278,6 +305,7 @@ function StageActions({
   onRevert,
   onReveal,
   onBrowse,
+  pickHint,
 }: {
   state: State;
   skin: Skin | null;
@@ -288,6 +316,7 @@ function StageActions({
   onRevert: () => void;
   onReveal: () => void;
   onBrowse: () => void;
+  pickHint: string;
 }) {
   const { phase, drag } = state;
   if (drag || phase === "idle") return null;
@@ -302,7 +331,7 @@ function StageActions({
       <span className="nudge-arrow">
         <ArrowLeftIcon />
       </span>
-      Pick a skin to try it on
+      {pickHint}
     </p>
   );
 
@@ -461,7 +490,7 @@ function RunProgress({ state, stopping, onStop }: { state: State; stopping: bool
       <span className="stage-progress-bar" aria-hidden="true">
         <span style={{ width: `${share}%` }} />
       </span>
-      <p className="stage-progress-name" title={p.name}>
+      <p className="stage-progress-name" data-tip={p.name} data-tip-overflow>
         {p.done === 0 ? `Starting with ${clip(p.name)}` : p.name}
       </p>
       <button type="button" className="btn btn-ghost" disabled={stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
@@ -502,7 +531,7 @@ function RunResult({
           {tone === "ok" ? <OkBadge size={18} playOnMount /> : <BadgeAlertIcon size={17} />}
         </span>
         <p className="stage-result-title">{title}</p>
-        <button type="button" className="stage-result-x" aria-label="hide this summary" title="Hide" onClick={onDismiss}>
+        <button type="button" className="stage-result-x" aria-label="hide this summary" data-tip="Hide" onClick={onDismiss}>
           <XIcon size={13} />
         </button>
       </div>
@@ -514,7 +543,7 @@ function RunResult({
           </summary>
           <ul>
             {failed.map((f) => (
-              <li key={f.path} title={f.path}>
+              <li key={f.path} data-tip={f.path} data-tip-overflow>
                 <span className="stage-result-name">{f.name}</span>
                 <span className="stage-result-reason">{f.reason}</span>
               </li>
@@ -559,7 +588,7 @@ function statusLine(state: State, skin: Skin | null, fileBrowser: string, custom
     case "ready":
       return state.arriving && customIcon ? "It has an icon of its own." : "Nothing changes on disk until you apply.";
     case "applying":
-      return trailOff(`Writing ${skin ? clip(skin.name) : "the skin"} into ${clip(state.folder?.name ?? "the folder")}`);
+      return `Writing ${skin ? clip(skin.name) : "the skin"} into ${clip(state.folder?.name ?? "the folder")}`;
     case "applied":
       return `${fileBrowser} can take a second to catch up.`;
     case "reverting":

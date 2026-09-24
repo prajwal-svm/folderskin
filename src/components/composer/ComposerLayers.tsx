@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { cssColor } from "../../composer/color";
-import { layerLabel, mainColor, type Doc, type Layer } from "../../composer/doc";
+import { layerContent, layerLabel, mainColor, type Doc, type Layer } from "../../composer/doc";
 import { EyeOffIcon, EyeOpenIcon, LockIcon, LockOpenIcon, ShapesIcon, TrashIcon, TypeIcon, WavesIcon } from "../icons/composer";
 import { paintCss } from "../../composer/paints";
 
@@ -33,12 +33,33 @@ function Thumb({ layer }: { layer: Layer }) {
       );
     case "image":
       return <img className="cmp-thumb is-image" src={layer.src} alt="" draggable={false} />;
+    case "icon":
+      return (
+        <span className="cmp-thumb is-icon" aria-hidden="true">
+          <svg viewBox={`0 0 ${layer.viewBox} ${layer.viewBox}`} width={16} height={16}>
+            {layer.paths.map((d, i) =>
+              layer.style === "fill" || layer.filled.includes(i) ? (
+                <path key={i} d={d} fill="currentColor" fillRule={layer.evenOdd ? "evenodd" : "nonzero"} />
+              ) : (
+                <path key={i} d={d} fill="none" stroke="currentColor" strokeWidth={layer.strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+              ),
+            )}
+          </svg>
+        </span>
+      );
   }
 }
+
+/** The hint under the rename field: renaming a layer never changes what's on the folder. */
+const RENAME_HINT = "Names the layer in this list. What it shows on the folder stays as it is.";
 
 /**
  * The layers, top first, as the eye sees them stacked. Click to select, double-click a name to
  * rename it, drag a row to restack it; each row can be hidden, locked or deleted.
+ *
+ * A text layer is named after its words until it's given a name of its own; then its row shows
+ * that name and, beside it, the words it shows on the folder, so renaming the layer is never
+ * mistaken for changing the words.
  */
 export function ComposerLayers({
   doc,
@@ -109,6 +130,8 @@ export function ComposerLayers({
         }
         const y = row * ROW + (lifted ? dragging.offset : shift);
         const label = layerLabel(layer, index);
+        const auto = layerLabel({ ...layer, name: undefined } as Layer, index);
+        const content = layer.name ? layerContent(layer) : null;
         return (
           <div
             key={layer.id}
@@ -147,33 +170,41 @@ export function ComposerLayers({
             {renaming === layer.id ? (
               <input
                 className="cmp-layer-name-input"
-                defaultValue={layer.name ?? label}
+                defaultValue={layer.name ?? ""}
+                placeholder={auto}
                 autoFocus
                 maxLength={40}
                 aria-label="layer name"
+                aria-description={RENAME_HINT}
                 onFocus={(e) => e.currentTarget.select()}
                 onBlur={(e) => {
-                  onRename(layer.id, e.currentTarget.value.trim());
+                  // Only a real change is one: leaving the field as it was adds no undo step, and
+                  // the automatic name (a text layer's words) is never frozen into a fixed one.
+                  const value = e.currentTarget.value.trim();
+                  const next = value && value !== auto ? value : "";
+                  if (next !== (layer.name ?? "")) onRename(layer.id, next);
                   setRenaming(null);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") e.currentTarget.blur();
                   if (e.key === "Escape") {
                     e.stopPropagation();
+                    e.currentTarget.value = layer.name ?? "";
                     setRenaming(null);
                   }
                 }}
               />
             ) : (
-              <span className="cmp-layer-name" title={label}>
-                {label}
+              <span className="cmp-layer-name">
+                <span className="cmp-layer-label">{label}</span>
+                {content && <span className="cmp-layer-content">“{content}”</span>}
               </span>
             )}
             <button
               type="button"
               className={layer.locked ? "cmp-layer-btn is-set" : "cmp-layer-btn"}
               aria-label={layer.locked ? `unlock ${label}` : `lock ${label}`}
-              title={layer.locked ? "Unlock" : "Lock, so it can't be moved on the canvas"}
+              data-tip={layer.locked ? "Unlock" : "Lock, so it can't be moved on the canvas"}
               onClick={() => onToggle(layer.id, "locked")}
             >
               {layer.locked ? <LockIcon size={13} /> : <LockOpenIcon size={13} />}
@@ -182,12 +213,12 @@ export function ComposerLayers({
               type="button"
               className={layer.hidden ? "cmp-layer-btn is-set" : "cmp-layer-btn"}
               aria-label={layer.hidden ? `show ${label}` : `hide ${label}`}
-              title={layer.hidden ? "Show" : "Hide"}
+              data-tip={layer.hidden ? "Show" : "Hide"}
               onClick={() => onToggle(layer.id, "hidden")}
             >
               {layer.hidden ? <EyeOffIcon size={14} /> : <EyeOpenIcon size={14} />}
             </button>
-            <button type="button" className="cmp-layer-btn is-danger" aria-label={`delete ${label}`} title="Delete" onClick={() => onDelete(layer.id)}>
+            <button type="button" className="cmp-layer-btn is-danger" aria-label={`delete ${label}`} data-tip="Delete layer" onClick={() => onDelete(layer.id)}>
               <TrashIcon size={13} />
             </button>
           </div>
