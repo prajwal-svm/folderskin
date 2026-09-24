@@ -1360,11 +1360,13 @@ select.input {
 
 /* ---------- toasts ---------- */
 
+/* Over the popovers and menus (60) a toast is often about, whose failed download it reports;
+   under the tooltips. */
 .toasts {
   position: fixed;
   left: 50%;
   bottom: 22px;
-  z-index: 60;
+  z-index: 70;
   display: flex;
   flex-direction: column-reverse;
   align-items: center;

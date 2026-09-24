@@ -381,6 +381,24 @@ test.describe("the icon library", () => {
     await expect(side(page).locator(".icon-cell").first()).toBeVisible();
   });
 
+  test("a pack that can't be downloaded says so over the pack list, not under it", async ({ page }) => {
+    // The app's own window size, where the list reaches down to where toasts show.
+    await page.setViewportSize({ width: 1125, height: 687 });
+    await openApp(page, { query: "offline" });
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByRole("button", { name: /icon pack: Lucide/ }).click();
+    await page.getByRole("button", { name: "download Heroicons", exact: true }).click();
+    const toast = page.locator(".toasts").getByText(/Couldn't download Heroicons/);
+    await expect(toast).toBeVisible();
+    // Every part of it is on top, the popover included where they cross.
+    const box = (await toast.boundingBox())!;
+    for (const x of [box.x + 4, box.x + box.width / 2, box.x + box.width - 4]) {
+      const top = await page.evaluate(([px, py]) => document.elementFromPoint(px, py)?.closest(".toasts") !== null, [x, box.y + box.height / 2]);
+      expect(top, `at x ${Math.round(x)}`).toBe(true);
+    }
+  });
+
   test("draws only the icons on screen", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
