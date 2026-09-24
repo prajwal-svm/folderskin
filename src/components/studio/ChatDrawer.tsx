@@ -18,7 +18,7 @@ function when(ms: number, now: number): string {
 /**
  * Every chat, newest first and grouped by day, in a panel that slides over the chat from its left
  * edge: search them, open one, start a new one, rename one or delete one. Escape or a click outside
- * closes it.
+ * closes it; Escape in a search with words in it empties the search first.
  */
 export function ChatDrawer({
   open,
@@ -56,10 +56,15 @@ export function ChatDrawer({
   useEffect(() => {
     if (!open) return;
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !renaming && !document.querySelector(".modal-backdrop")) {
-        e.stopPropagation();
-        onClose();
+      if (e.key !== "Escape" || renaming || document.querySelector(".modal-backdrop")) return;
+      e.stopPropagation();
+      // The search with words in it empties itself first, as it does in a dialog.
+      if (e.target === search.current && search.current?.value) {
+        e.preventDefault();
+        setQuery("");
+        return;
       }
+      onClose();
     };
     const down = (e: MouseEvent) => {
       const t = e.target as Element;

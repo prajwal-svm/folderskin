@@ -113,6 +113,14 @@ test.describe("the AI chat", () => {
     if (!(await drawer.isVisible())) await chat(page).getByRole("button", { name: "chats", exact: true }).click();
     await drawer.getByLabel("search chats").fill("lighthouse");
     await expect(drawer.getByText(/No chat is called anything like/)).toBeVisible();
+    // Escape empties the search first, and closes the drawer only after that.
+    await drawer.getByLabel("search chats").press("Escape");
+    await expect(drawer.getByLabel("search chats")).toHaveValue("");
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator(".chat-open", { hasText: "Pop art cats" })).toBeVisible();
+    await drawer.getByLabel("search chats").press("Escape");
+    await expect(drawer).toBeHidden();
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
     await drawer.getByLabel("search chats").fill("cats");
     await drawer.getByRole("button", { name: "rename Pop art cats" }).click();
     await drawer.getByLabel("chat name").fill("Cats for the desktop");
