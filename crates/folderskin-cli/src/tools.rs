@@ -5,7 +5,7 @@ use crate::cli::{ApplyArgs, RenderArgs, TemplateArgs};
 use crate::error::CliError;
 use crate::out::Out;
 use crate::{images, preview};
-use folderskin_core::apply::{refresh_shell_icons, revert_icon};
+use folderskin_core::apply::{has_custom_icon, refresh_shell_icons, revert_icon};
 use folderskin_core::compositor::{self, render_preview_png, Artwork, SKIN_HEIGHT, SKIN_WIDTH};
 use folderskin_core::matte;
 use folderskin_tools::cli::PacksCommand;
@@ -28,13 +28,25 @@ pub fn apply(args: &ApplyArgs, out: &Arc<Out>) -> Result<(), CliError> {
 }
 
 pub fn revert(folder: &Path, out: &Arc<Out>) -> Result<(), CliError> {
+    // Asked first: a folder with nothing to take off is left exactly as it is, and says so.
+    let had = has_custom_icon(folder);
     revert_icon(folder).map_err(|e| preview::apply_error(folder, e))?;
-    refresh_shell_icons();
+    if had {
+        refresh_shell_icons();
+    }
+    let human = if had {
+        format!("reverted {}", folder.display())
+    } else {
+        format!(
+            "nothing to revert: {} doesn't wear an icon FolderSkin can take off",
+            folder.display()
+        )
+    };
     out.result(
         Some(folder),
         "reverted",
-        json!({"folder": folder}),
-        &format!("reverted {}", folder.display()),
+        json!({"folder": folder, "changed": had}),
+        &human,
         false,
     );
     Ok(())
