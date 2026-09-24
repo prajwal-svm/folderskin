@@ -84,12 +84,17 @@
   opacity: 0.45;
 }
 
+/* Centred by its margins, not a transform: the fade-up it comes in with animates the transform,
+   which would otherwise leave its left edge at the middle. */
 .gallery-redraw {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 22px;
-  transform: translateX(-50%);
-  display: inline-flex;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin-inline: auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 14px;

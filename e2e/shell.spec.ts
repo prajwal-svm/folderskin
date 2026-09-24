@@ -191,6 +191,11 @@ test.describe("the folder skins go on", () => {
     await look.getByRole("radio", { name: "Windows" }).click();
     await expect(note).toBeVisible();
     await expect(gallery).toHaveAttribute("aria-busy", "true");
+    // In the middle of the library, and all of it inside.
+    const [at, library] = await Promise.all([note.boundingBox(), page.locator(".island-main").boundingBox()]);
+    expect(Math.abs(at!.x + at!.width / 2 - (library!.x + library!.width / 2))).toBeLessThan(2);
+    expect(at!.x).toBeGreaterThan(library!.x);
+    expect(at!.x + at!.width).toBeLessThan(library!.x + library!.width);
     await expect(note).toBeHidden();
     await expect(gallery).not.toHaveAttribute("aria-busy", "true");
     // And back, which says so too.
