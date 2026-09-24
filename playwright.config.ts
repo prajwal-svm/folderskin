@@ -11,6 +11,8 @@ export default defineConfig({
   // over; the tests' own waits are short.
   timeout: 45_000,
   expect: { timeout: 7_000 },
+  // The parts of the app that load their code on first use are compiled before the tests start.
+  globalSetup: "./e2e/warm.ts",
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
