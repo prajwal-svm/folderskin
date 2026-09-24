@@ -420,6 +420,20 @@
   display: none;
 }
 
+/* Tags that run on past the strip's end (or start, once scrolled) fade out there rather than
+   stopping mid-word against whatever is beside them. */
+.seg[data-cut="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+
+.seg[data-cut="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+
+.seg[data-cut="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
 .seg-pill {
   position: absolute;
   top: 3px;

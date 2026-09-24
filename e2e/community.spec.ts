@@ -198,3 +198,17 @@ test("without a connection it says so, and can try again", async ({ page }) => {
   await expect(page.getByText(/couldn't reach GitHub/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
+
+test("tags that don't fit beside the search fade out rather than stopping mid-word", async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await openCommunity(page, 0);
+  const strip = page.getByRole("tablist", { name: "filter packs by tag" });
+  const overflows = () => strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+  await search(page).fill("a");
+  await expect.poll(overflows).toBe(true);
+  await expect(strip).toHaveAttribute("data-cut", "end");
+  // With room for them all, nothing fades.
+  await page.setViewportSize({ width: 1900, height: 800 });
+  await expect.poll(overflows).toBe(false);
+  await expect(strip).not.toHaveAttribute("data-cut", /.*/);
+});
