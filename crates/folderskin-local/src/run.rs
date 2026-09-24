@@ -6,9 +6,9 @@ use crate::progress::{Line, OutputParser, Splitter};
 use crate::CancelToken;
 use std::collections::VecDeque;
 use std::io::Read;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Mutex, MutexGuard};
+use std::sync::{mpsc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 /// How many of the runtime's last log lines are kept for an error report.
@@ -35,6 +35,52 @@ static ENDED: AtomicBool = AtomicBool::new(false);
 
 fn running() -> MutexGuard<'static, Vec<u32>> {
     RUNNING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Runtimes that were stopped and are still ending. Ending can take seconds after the stop: on
+/// Windows sd-cli is gone only once the system has let go of the gigabytes it was streaming from
+/// the disk and of the graphics card, measured at 6 to 12 s. A stopped run doesn't wait for that
+/// (the stop is answered at once); the next run does, before it starts, so it never finds the
+/// graphics card still full.
+struct Ending {
+    count: Mutex<usize>,
+    gone: Condvar,
+}
+
+static ENDING: Ending = Ending {
+    count: Mutex::new(0),
+    gone: Condvar::new(),
+};
+
+fn ending() -> MutexGuard<'static, usize> {
+    ENDING.count.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Waits until every runtime stopped earlier has ended, or `cancel` is set. Says whether it was.
+pub(crate) fn wait_for_the_stopped(cancel: &CancelToken) -> bool {
+    let mut count = ending();
+    while *count > 0 {
+        if cancel.is_cancelled() {
+            return true;
+        }
+        count = match ENDING.gone.wait_timeout(count, Duration::from_millis(100)) {
+            Ok((count, _)) => count,
+            Err(e) => e.into_inner().0,
+        };
+    }
+    cancel.is_cancelled()
+}
+
+/// Lets `child`, which has been told to end, finish ending on a thread of its own, and reaps it.
+fn reap_later(mut child: Child, listed: Listed) {
+    *ending() += 1;
+    std::thread::spawn(move || {
+        // Off the list before it is reaped: after that its id can be another process's.
+        drop(listed);
+        let _ = child.wait();
+        *ending() -= 1;
+        ENDING.gone.notify_all();
+    });
 }
 
 /// A runtime on the list, for as long as this is kept.
@@ -93,14 +139,23 @@ pub(crate) fn hide_window(cmd: &mut Command) {
     let _ = cmd;
 }
 
-/// Runs `cmd` to the end, reporting its progress, and ends it early if `cancel` is set.
-/// `steps` is how many painting steps the run takes.
+/// Runs `cmd` to the end, reporting its progress, and ends it early if `cancel` is set: then it
+/// returns as soon as the runtime has been told to end, and the runtime finishes ending on its own
+/// (see [`ENDING`]). `steps` is how many painting steps the run takes. A run waits for runtimes
+/// stopped earlier to have ended before it starts its own.
 pub fn run(
     mut cmd: Command,
     steps: u32,
     reporter: &Reporter,
     cancel: &CancelToken,
 ) -> std::io::Result<Finished> {
+    if wait_for_the_stopped(cancel) {
+        return Ok(Finished {
+            status: None,
+            tail: Vec::new(),
+            painted: false,
+        });
+    }
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -155,37 +210,42 @@ pub fn run(
         Line::Nothing => {}
     };
 
-    let mut stopped: Option<std::time::Instant> = None;
+    let mut stopped = false;
     loop {
+        // Stopped: the runtime is told to end, and the run is over. Its output isn't waited
+        // for, nor is it: ending can take seconds, and a launcher (uv's, for mflux) can leave a
+        // process of its own holding the output open after it is ended.
+        if cancel.is_cancelled() {
+            let _ = child.kill();
+            stopped = true;
+            break;
+        }
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(bytes) => splitter.push(&bytes).iter().for_each(|p| handle(p)),
             // Both streams closed: the runtime is finishing.
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        if cancel.is_cancelled() && stopped.is_none() {
-            let _ = child.kill();
-            stopped = Some(std::time::Instant::now());
-        }
-        // A launcher (uv's, for mflux) can leave a process of its own holding the output open
-        // after it is ended; don't wait on that for long.
-        if stopped.is_some_and(|at| at.elapsed() > Duration::from_secs(5)) {
-            break;
-        }
     }
     if let Some(rest) = splitter.finish() {
         handle(&rest);
     }
-    if stopped.is_none() {
-        for reader in readers {
-            let _ = reader.join();
-        }
+    if stopped {
+        reap_later(child, listed);
+        return Ok(Finished {
+            status: None,
+            tail: tail.into(),
+            painted: parser.painted(),
+        });
+    }
+    for reader in readers {
+        let _ = reader.join();
     }
     // Off the list before it is reaped: after that its id can be another process's.
     drop(listed);
     let status = child.wait()?;
     Ok(Finished {
-        status: stopped.is_none().then_some(status),
+        status: Some(status),
         tail: tail.into(),
         painted: parser.painted(),
     })
@@ -291,6 +351,42 @@ mod tests {
             seen.contains(&Event::Progress { step: 2, steps: 2 }),
             "{seen:?}"
         );
+    }
+
+    #[test]
+    fn a_stopped_run_ends_at_once_though_its_output_stays_open() {
+        // What it starts keeps the output open long after the runtime itself is ended, as a
+        // runtime that takes its time to let go does.
+        let slow_to_go = shell(
+            "sleep 30 & sleep 30",
+            "Start-Process -NoNewWindow -FilePath ping -ArgumentList '-n','30','127.0.0.1'; Start-Sleep -Seconds 30",
+        );
+        let (reporter, _) = collect();
+        let cancel = CancelToken::new();
+        let later = cancel.clone();
+        let asked = Arc::new(Mutex::new(None));
+        let at = asked.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(1500));
+            *at.lock().unwrap() = Some(std::time::Instant::now());
+            later.cancel();
+        });
+        let done = run(slow_to_go, 4, &reporter, &cancel).unwrap();
+        let took = asked.lock().unwrap().expect("stopped").elapsed();
+        assert!(done.status.is_none());
+        assert!(took < Duration::from_secs(2), "{took:?} after the stop");
+
+        // The next run starts once the stopped one has ended, and runs to the end.
+        let (reporter, _) = collect();
+        let next = run(
+            shell("echo next", "Write-Output next"),
+            4,
+            &reporter,
+            &CancelToken::new(),
+        )
+        .unwrap();
+        assert_eq!(next.status.and_then(|s| s.code()), Some(0));
+        assert_eq!(*ending(), 0);
     }
 
     #[test]

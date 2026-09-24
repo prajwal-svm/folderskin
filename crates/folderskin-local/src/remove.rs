@@ -48,6 +48,9 @@ fn dir_size(dir: &Path) -> u64 {
 pub fn remove(reporter: &Reporter) -> Result<u64, Error> {
     let home = paths::home();
     let _only_one = crate::setup::lock(&home)?;
+    // A painting just stopped may still be letting go of the model's files, which Windows won't
+    // delete while they're open.
+    crate::run::wait_for_the_stopped(&crate::CancelToken::new());
     let mut freed = 0;
     for dir in setup_dirs(&home) {
         let size = dir_size(&dir);
