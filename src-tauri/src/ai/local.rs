@@ -961,12 +961,16 @@ mod tests {
         assert!(s.can_set_up);
         assert_eq!(s.backend, "MLX");
         if !s.ready {
-            // The weights are counted now, not left to download the first time it paints.
+            // The weights are counted now, not left to download the first time it paints; and
+            // uv, when mflux has still to be installed with it.
             assert!(s.download_bytes > 0 || s.installs.is_some(), "{s:?}");
-            assert!(s.download_bytes <= 4_619_699_678, "{s:?}");
+            assert!(
+                s.download_bytes <= 4_619_699_678 + folderskin_local::manifest::UV_SIZE,
+                "{s:?}"
+            );
             let note = s.note.as_deref().unwrap_or_default();
             assert!(
-                note.contains("8 GB of memory") && note.contains("12 GB"),
+                note.contains("With 8 GB of memory") && note.contains("needs about 8 GB"),
                 "{note}"
             );
         }
@@ -974,7 +978,10 @@ mod tests {
         let roomy = mac(36.0);
         let s = status(&roomy, &Settings::for_machine(&roomy));
         assert!(
-            !s.note.as_deref().unwrap_or_default().contains("12 GB"),
+            !s.note
+                .as_deref()
+                .unwrap_or_default()
+                .contains("needs about"),
             "{s:?}"
         );
     }
