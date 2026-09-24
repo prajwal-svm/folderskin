@@ -14,7 +14,9 @@ pub const HEIGHT: u32 = 960;
 /// Below this much VRAM, a reference picture is encoded at half size (see [`sdcpp`]).
 const SMALL_VRAM_GB: f64 = 6.0;
 
-/// The arguments for stable-diffusion.cpp's `sd-cli`, after the program itself.
+/// The arguments for stable-diffusion.cpp's `sd-cli`, after the program itself. The model files
+/// are named in a form sd-cli can open ([`crate::paths::for_sdcpp`]); `pictures` and `out` are
+/// passed as they are given.
 #[allow(clippy::too_many_arguments)]
 pub fn sdcpp(
     files: &ModelFiles,
@@ -26,12 +28,16 @@ pub fn sdcpp(
     backend: Backend,
     vram_gb: f64,
 ) -> Vec<OsString> {
+    let local = |f: &crate::manifest::HfFile| {
+        let path = f.local();
+        crate::paths::for_sdcpp(&path).unwrap_or(path)
+    };
     let mut args: Vec<OsString> = vec!["--diffusion-model".into()];
-    args.push(files.diffusion.local().into());
+    args.push(local(&files.diffusion).into());
     args.push("--llm".into());
-    args.push(files.llm.local().into());
+    args.push(local(&files.llm).into());
     args.push("--vae".into());
-    args.push(files.vae.local().into());
+    args.push(local(&files.vae).into());
     for a in [
         "-p",
         prompt,

@@ -242,7 +242,45 @@ pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
         )
         .fix(setup));
     }
+    // Paths sd-cli can't open fail here, in words, rather than as "file not found" in its log.
+    if model
+        .files(settings.tier)
+        .all()
+        .iter()
+        .any(|f| paths::for_sdcpp(&f.local()).is_none())
+    {
+        return Err(Error::environment(
+            "path_not_ascii",
+            "stable-diffusion.cpp can't open the models where they are.",
+            format!(
+                "On Windows it can only open paths written in plain ASCII, and {} has other \
+                 letters in it, with no short name to use instead.",
+                paths::models_dir().display()
+            ),
+        )
+        .fix(format!(
+            "Move {} to a folder with a plain name, such as C:\\folderskin-localgen, and set \
+             FOLDERSKIN_LOCALGEN_HOME to that folder.",
+            paths::home().display()
+        )));
+    }
+    for r in &job.refs {
+        if paths::for_sdcpp(r).is_none() {
+            return Err(not_ascii(r, "open"));
+        }
+    }
     Ok(())
+}
+
+/// A picture or folder whose path stable-diffusion.cpp can't use ([`paths::for_sdcpp`]).
+fn not_ascii(path: &Path, doing: &str) -> Error {
+    Error::fixable(
+        "path_not_ascii",
+        format!("stable-diffusion.cpp can't {doing} {}.", path.display()),
+        "On Windows it can only use paths written in plain ASCII, and this one has other \
+         letters in it, with no short name to use instead.",
+    )
+    .fix("Use a folder and a file name with plain letters, e.g. C:\\folderskin\\photo.png.")
 }
 
 /// The mflux program whose presence means mflux is installed.
@@ -308,13 +346,28 @@ fn generate_blocking(
         model.steps
     };
 
-    let (cmd, runtime) = if settings.backend == Backend::Mlx {
+    let (cmd, runtime, painted) = if settings.backend == Backend::Mlx {
         let (program, args) =
             command::mflux(model, settings.tier, &prompt, job.seed, &pictures, &out);
         let mut cmd = Command::new(program);
         cmd.args(args);
-        (cmd, "mflux".to_string())
+        let painted = Painting {
+            at: out.clone(),
+            stand_in: false,
+        };
+        (cmd, "mflux".to_string(), painted)
     } else {
+        // sd-cli can't write to a name that isn't plain ASCII ("фото.png" comes out garbled), so
+        // it paints to a plain name in the same folder and the picture is renamed afterwards.
+        let dir = paths::for_sdcpp(out_dir).ok_or_else(|| not_ascii(out_dir, "write to"))?;
+        let painted = Painting {
+            at: dir.join(format!(".painting-{}.png", std::process::id())),
+            stand_in: true,
+        };
+        let pictures = pictures
+            .iter()
+            .map(|p| paths::for_sdcpp(p).ok_or_else(|| not_ascii(p, "open")))
+            .collect::<Result<Vec<_>, _>>()?;
         let exe = paths::sd_cli(settings.backend);
         let mut cmd = Command::new(&exe);
         cmd.args(command::sdcpp(
@@ -323,17 +376,18 @@ fn generate_blocking(
             &prompt,
             job.seed,
             &pictures,
-            &out,
+            &painted.at,
             settings.backend,
             settings.vram_gb,
         ));
         let release = std::fs::read_to_string(exe.with_file_name(".release"))
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|_| SDCPP_TAG.to_string());
-        (cmd, format!("stable-diffusion.cpp {release}"))
+        (cmd, format!("stable-diffusion.cpp {release}"), painted)
     };
     // A picture left from an earlier run with the same name must not pass for this one's.
     let _ = std::fs::remove_file(&out);
+    let _ = std::fs::remove_file(&painted.at);
 
     reporter.stage(
         Stage::Load,
@@ -371,18 +425,21 @@ fn generate_blocking(
     if let Some(e) = runtime_error(status.code(), &finished.tail, &runtime, settings.backend) {
         return Err(e);
     }
-    if !out.is_file() {
+    if !painted.at.is_file() {
         return Err(Error::environment(
             "generation_failed",
             "The runtime finished without a picture.",
             format!(
                 "{runtime} ended normally but wrote nothing to {}.{}",
-                out.display(),
+                painted.at.display(),
                 tail_text(&finished.tail)
             ),
         )
         .fix("Run the same command again with --verbose to see everything it printed.")
         .fix("Check the runtime and the models: folderskin ai doctor"));
+    }
+    if painted.stand_in {
+        std::fs::rename(&painted.at, &out).map_err(|e| Error::io("save the picture", &out, &e))?;
     }
 
     reporter.stage(Stage::Finish, format!("{name}: done in {seconds:.0} s"));
@@ -511,6 +568,21 @@ fn generate_blocking(
         shape: job.shape,
         provenance,
     })
+}
+
+/// Where the runtime writes its picture: its own name, or a plain stand-in that is renamed to it.
+/// A stand-in left behind when painting stops early (a cancel, a failure) is removed.
+struct Painting {
+    at: PathBuf,
+    stand_in: bool,
+}
+
+impl Drop for Painting {
+    fn drop(&mut self) {
+        if self.stand_in {
+            let _ = std::fs::remove_file(&self.at);
+        }
+    }
 }
 
 /// FolderSkin's silhouette in a `width` x `height` frame: white inside the folder, as the blank
