@@ -1008,6 +1008,8 @@ export const mockApi = {
       ];
       tell({ type: "stage", stage: "download", message: "Downloading what this computer needs" });
       for (const [file, total] of files) {
+        // Where it starts from first, as download.rs says before the first chunk.
+        tell({ type: "download", file, done: 0, total });
         for (let i = 1; i <= 5; i++) {
           await sleep(90);
           if (mockStopped.delete(SETUP)) {
