@@ -120,25 +120,20 @@ async function load(id: string): Promise<Chat> {
   return settled;
 }
 
-/** Reads the history and opens the latest chat, or a new one; once per session. */
+/**
+ * Reads the history, once per session, and opens a new chat unless one is open already (the AI
+ * view starts one each time it's shown): every launch starts fresh, and earlier chats wait in the
+ * history. A chat is only saved once something has been asked in it, so this never fills the
+ * history with empty ones.
+ */
 export function startChats() {
   if (started) return;
   started = true;
+  const fresh = () => state.active ?? newChat(chatId(Date.now()), Date.now());
   api
     .chatsList()
-    .then(async (list) => {
-      set({ list });
-      if (list[0]) {
-        try {
-          set({ active: await load(list[0].id), ready: true });
-          return;
-        } catch {
-          // Open a new one instead; the history still lists it.
-        }
-      }
-      set({ active: newChat(chatId(Date.now()), Date.now()), ready: true });
-    })
-    .catch((e) => set({ ready: true, active: newChat(chatId(Date.now()), Date.now()), problem: `Earlier chats couldn't be read: ${errorMessage(e)}` }));
+    .then((list) => set({ list, active: fresh(), ready: true }))
+    .catch((e) => set({ ready: true, active: fresh(), problem: `Earlier chats couldn't be read: ${errorMessage(e)}` }));
 }
 
 export async function openChat(id: string) {

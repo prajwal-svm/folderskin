@@ -108,6 +108,48 @@ fn find_in(program: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// The bytes free for this user on the disk `path` is on (the nearest folder of it that exists,
+/// since the engine's home may not be made yet), when the system says.
+pub fn free_space(path: &Path) -> Option<u64> {
+    let mut at = path;
+    while !at.exists() {
+        at = at.parent()?;
+    }
+    free_space_at(at)
+}
+
+#[cfg(unix)]
+fn free_space_at(path: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    // SAFETY: statvfs fills the zeroed struct for a NUL-terminated path, and only then is it read.
+    let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statvfs(c_path.as_ptr(), &mut stats) } != 0 {
+        return None;
+    }
+    // Blocks available to an unprivileged user, in fragments: what `df` calls Available.
+    #[allow(clippy::unnecessary_cast)] // the field types differ between systems
+    Some(stats.f_bavail as u64 * stats.f_frsize as u64)
+}
+
+#[cfg(windows)]
+fn free_space_at(path: &Path) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut free = 0u64;
+    // SAFETY: `wide` is NUL-terminated; the two totals it doesn't need are asked for as null.
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut free,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    (ok != 0).then_some(free)
+}
+
 /// `path` in a form stable-diffusion.cpp can open, or `None` when there is none.
 ///
 /// On Windows sd-cli opens files through the ANSI file API, so a path with any letter outside
@@ -166,6 +208,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn free_space_is_read_from_the_nearest_folder_there_is() {
+        let here = free_space(&std::env::temp_dir()).expect("the temp folder's disk says");
+        assert!(here > 0);
+        // A home not made yet is on the same disk as the folder it will be made in.
+        let later = std::env::temp_dir()
+            .join("fs-free-space-not-made")
+            .join("models");
+        assert!(!later.exists());
+        let there = free_space(&later).unwrap();
+        // The disk is in use meanwhile: the same within a few hundred MB.
+        assert!(here.abs_diff(there) < 500_000_000, "{here} {there}");
+    }
+
+    #[test]
     fn the_runtime_sits_under_its_backend() {
         let exe = sd_cli(Backend::Vulkan);
         assert!(
@@ -187,12 +243,9 @@ mod tests {
         let (empty, bin) = (dir.join("empty"), dir.join("bin"));
         std::fs::create_dir_all(&empty).unwrap();
         std::fs::create_dir_all(&bin).unwrap();
-        let tool = bin.join("mflux-generate-z-image-turbo");
+        let tool = bin.join("mflux-generate-flux2");
         std::fs::write(&tool, b"#!/bin/sh\n").unwrap();
-        let found = find_in(
-            "mflux-generate-z-image-turbo",
-            &[empty.clone(), bin.clone()],
-        );
+        let found = find_in("mflux-generate-flux2", &[empty.clone(), bin.clone()]);
         assert_eq!(found.as_deref(), Some(tool.as_path()));
         assert_eq!(find_in("uv", &[empty, bin]), None);
         std::fs::remove_dir_all(&dir).unwrap();

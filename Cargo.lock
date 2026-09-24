@@ -1353,6 +1353,7 @@ dependencies = [
  "flate2",
  "folderskin-core",
  "image",
+ "libc",
  "reqwest",
  "serde",
  "serde_json",

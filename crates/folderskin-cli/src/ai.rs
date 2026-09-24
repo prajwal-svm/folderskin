@@ -9,7 +9,7 @@ use crate::error::CliError;
 use crate::out::Out;
 use crate::paint::{self, Order, Painted, Painter};
 use crate::{preview, runtime, terminal};
-use folderskin_local::{detect, random_seed, CancelToken, ModelId, Runtime, Shape, MODELS, STYLES};
+use folderskin_local::{detect, random_seed, CancelToken, Runtime, Shape, MODELS, STYLES};
 use serde::Deserialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -695,11 +695,9 @@ fn theme(args: &ThemeArgs, out: &Arc<Out>) -> Result<(), CliError> {
     }
     let config = Config::load()?;
     let painter = Painter::choose(args.provider.as_deref(), None, &args.machine, &config)?;
-    let painter = match (&args.model, &painter) {
-        (Some(m), _) => painter.with_model(m)?,
-        // A drive has many folders: klein is twice as fast as Z-Image and as good for this.
-        (None, Painter::Local { .. }) => painter.with_model(ModelId::Klein.id())?,
-        (None, Painter::Byok { .. }) => painter,
+    let painter = match &args.model {
+        Some(m) => painter.with_model(m)?,
+        None => painter,
     };
     let out_dir = absolute(&args.out.clone().unwrap_or_else(|| {
         PathBuf::from("folderskin-out").join(format!(
@@ -875,8 +873,8 @@ fn models(out: &Arc<Out>) -> Result<(), CliError> {
     )];
     let mut local = Vec::new();
     for model in &MODELS {
-        let files = model.files(settings.tier).all();
-        let ready = files.iter().all(|f| f.local().is_file());
+        let files = model.files_for(settings.backend, settings.tier);
+        let ready = files.iter().all(|f| f.local.is_file());
         let what = if model.takes_pictures {
             "text or pictures to picture"
         } else {

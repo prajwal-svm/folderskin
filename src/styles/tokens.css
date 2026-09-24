@@ -31,6 +31,9 @@
 
   /* accent: #3A86FF. --accent-hover is a background under white text; --accent-ink is the
      accent as text, icon or stroke on an island (dark enough on white, lighter on dark). */
+  /* FolderSkin's own blue: the "Skin" of its name wherever it's written, in both themes and
+     whatever accent is chosen. */
+  --brand: #3a86ff;
   --accent: #3a86ff;
   --accent-hover: #2470eb;
   --accent-ink: #2470eb;

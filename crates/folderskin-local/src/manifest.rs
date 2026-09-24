@@ -201,27 +201,6 @@ pub const QWEN3_4B_Q4: HfFile = hf(
     2497281312,
     "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
 );
-pub const ZIMAGE_Q8: HfFile = hf(
-    "leejet/Z-Image-Turbo-GGUF",
-    "c61c0e422dc8b541b7548cf33a4ef8302b0f8085",
-    "z_image_turbo-Q8_0.gguf",
-    6577440704,
-    "df1c5baa86d1398c979495a6072dbcee79444fdb884a2445582ba0769c44e9a1",
-);
-pub const ZIMAGE_Q4: HfFile = hf(
-    "leejet/Z-Image-Turbo-GGUF",
-    "c61c0e422dc8b541b7548cf33a4ef8302b0f8085",
-    "z_image_turbo-Q4_K.gguf",
-    3864250304,
-    "14b375ab4f226bc5378f68f37e899ef3c2242b8541e61e2bc1aff40976086fbd",
-);
-pub const ZIMAGE_VAE: HfFile = hf(
-    "Comfy-Org/z_image_turbo",
-    "6fc90a3b1b653e935a0d175e260736de25b84df5",
-    "split_files/vae/ae.safetensors",
-    335304388,
-    "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
-);
 pub const KLEIN_Q8: HfFile = hf(
     "leejet/FLUX.2-klein-4B-GGUF",
     "3b1f5a9dc3abb32238b053aeb3d823c30afdacbd",
@@ -245,37 +224,32 @@ pub const KLEIN_VAE: HfFile = hf(
     "ea4273f02d1fafbf8e1d1c2cf6018ed8748652eb0bf34f2dd91171f16f15ab62",
 );
 
-/// Which of the two models.
+/// The model that paints.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelId {
-    Zimage,
     Klein,
 }
 
 impl ModelId {
     pub fn id(self) -> &'static str {
         match self {
-            ModelId::Zimage => "zimage",
             ModelId::Klein => "klein",
         }
     }
 
     pub fn parse(s: &str) -> Option<ModelId> {
-        [ModelId::Zimage, ModelId::Klein]
-            .into_iter()
-            .find(|m| m.id() == s)
+        [ModelId::Klein].into_iter().find(|m| m.id() == s)
     }
 
     pub fn info(self) -> &'static Model {
         match self {
-            ModelId::Zimage => &MODELS[0],
-            ModelId::Klein => &MODELS[1],
+            ModelId::Klein => &MODELS[0],
         }
     }
 }
 
-/// One of the two models, the same on every platform, both Apache-2.0.
+/// A model, the same on every platform.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Model {
     pub id: ModelId,
@@ -285,10 +259,9 @@ pub struct Model {
     /// repaints.
     pub takes_pictures: bool,
     pub steps: u32,
-    pub mlx_steps: u32,
 }
 
-/// The diffusion model, the text encoder and the VAE one model runs with.
+/// The diffusion model, the text encoder and the VAE stable-diffusion.cpp runs a model with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct ModelFiles {
     pub diffusion: HfFile,
@@ -302,23 +275,27 @@ impl ModelFiles {
     }
 }
 
+/// A file a model needs on this computer: where it is downloaded from, its size and hash, and
+/// where it is kept.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ModelFile {
+    /// How it is named to people: the file's name, or for MLX weights its path in their folder,
+    /// since their parts share file names (`transformer/0.safetensors`, `vae/0.safetensors`).
+    pub name: String,
+    pub url: String,
+    pub size: u64,
+    pub sha256: &'static str,
+    pub local: PathBuf,
+}
+
 impl Model {
+    /// The GGUF files stable-diffusion.cpp runs this model from at `tier`.
     pub fn files(&self, tier: Tier) -> ModelFiles {
         let llm = match tier {
             Tier::Q8 => QWEN3_4B_Q8,
             Tier::Q4 => QWEN3_4B_Q4,
         };
         match (self.id, tier) {
-            (ModelId::Zimage, Tier::Q8) => ModelFiles {
-                diffusion: ZIMAGE_Q8,
-                llm,
-                vae: ZIMAGE_VAE,
-            },
-            (ModelId::Zimage, Tier::Q4) => ModelFiles {
-                diffusion: ZIMAGE_Q4,
-                llm,
-                vae: ZIMAGE_VAE,
-            },
             (ModelId::Klein, Tier::Q8) => ModelFiles {
                 diffusion: KLEIN_Q8,
                 llm,
@@ -331,43 +308,241 @@ impl Model {
             },
         }
     }
-}
 
-/// Z-Image-Turbo (6B, 8 steps), text to picture, the workhorse for artwork; and FLUX.2 [klein]
-/// 4B (4 steps), which works from pictures.
-pub const MODELS: [Model; 2] = [
-    Model {
-        id: ModelId::Zimage,
-        label: "Z-Image-Turbo",
-        licence: "Apache-2.0",
-        takes_pictures: false,
-        steps: 8,
-        mlx_steps: 9,
-    },
-    Model {
-        id: ModelId::Klein,
-        label: "FLUX.2 [klein] 4B",
-        licence: "Apache-2.0",
-        takes_pictures: true,
-        steps: 4,
-        mlx_steps: 4,
-    },
-];
+    /// The MLX weights mflux runs this model from at `tier`.
+    pub fn mlx(&self, tier: Tier) -> &'static MlxWeights {
+        match (self.id, tier) {
+            (ModelId::Klein, Tier::Q8) => &KLEIN_MLX_Q8,
+            (ModelId::Klein, Tier::Q4) => &KLEIN_MLX_Q4,
+        }
+    }
 
-/// mflux, pinned like everything else: it shipped five releases in six weeks of 2026. It
-/// downloads each model's weights itself the first time it runs it.
-pub const MFLUX_VERSION: &str = "0.20.0";
-
-/// mflux's name for a model, and the pre-quantised 4-bit copy it takes at `q4`. At `q8` mflux
-/// quantises the upstream Apache weights as it loads them; at `q4` it takes these copies of the
-/// same weights (the older filipstrand/ copy of Z-Image is tagged with another licence than its
-/// upstream's, so not that one).
-pub fn mlx_weights(model: ModelId) -> (&'static str, &'static str) {
-    match model {
-        ModelId::Zimage => ("mflux-community/z-image-turbo-mflux-q4", "z-image-turbo"),
-        ModelId::Klein => ("mflux-community/flux2-klein-4b-mflux-q4", "flux2-klein-4b"),
+    /// Every file this model runs from with `backend` at `tier`: its MLX weights for mflux,
+    /// otherwise the GGUF files for stable-diffusion.cpp.
+    pub fn files_for(&self, backend: Backend, tier: Tier) -> Vec<ModelFile> {
+        if backend == Backend::Mlx {
+            let weights = self.mlx(tier);
+            weights
+                .files
+                .iter()
+                .map(|f| ModelFile {
+                    name: f.path.to_string(),
+                    url: weights.url(f),
+                    size: f.size,
+                    sha256: f.sha256,
+                    local: weights.local(f),
+                })
+                .collect()
+        } else {
+            self.files(tier)
+                .all()
+                .iter()
+                .map(|f| ModelFile {
+                    name: f.name().to_string(),
+                    url: f.url(),
+                    size: f.size,
+                    sha256: f.sha256,
+                    local: f.local(),
+                })
+                .collect()
+        }
     }
 }
+
+/// FLUX.2 [klein] 4B, Apache-2.0: four steps, and it paints from words alone or from pictures, so
+/// one model does everything and there is one download: 4.6 GB on a Mac and 5.2 GB elsewhere at
+/// q4. (Z-Image-Turbo was dropped: text to picture only, so a second download, and on a Mac 2.5
+/// times slower for artwork klein paints as well.)
+pub const MODELS: [Model; 1] = [Model {
+    id: ModelId::Klein,
+    label: "FLUX.2 [klein] 4B",
+    licence: "Apache-2.0",
+    takes_pictures: true,
+    steps: 4,
+}];
+
+/// mflux, pinned like everything else: it shipped five releases in six weeks of 2026.
+pub const MFLUX_VERSION: &str = "0.20.0";
+
+/// One file of an MLX model, at `path` in its repository.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct MlxFile {
+    pub path: &'static str,
+    pub size: u64,
+    pub sha256: &'static str,
+}
+
+/// A model's weights for mflux: mflux-community's pre-quantised copy of the Apache-2.0 weights,
+/// pinned to a revision and kept in the repository's own layout, which is how mflux loads a model
+/// from a folder. Setup downloads them like every other model file, so they show their size and
+/// their progress, carry on after a stop and are checked against their hashes, and painting never
+/// touches the network. (Left to itself, mflux fetches weights the first time it paints, with
+/// nothing to show for it, into Hugging Face's shared cache where FolderSkin can neither find nor
+/// clear them; and asked for q8 it fetches the full-precision originals, 23.7 GB for klein, and
+/// quantises them in memory on every run.)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct MlxWeights {
+    pub repo: &'static str,
+    pub rev: &'static str,
+    /// The model mflux takes these weights to be (`--base-model`).
+    pub base: &'static str,
+    pub files: &'static [MlxFile],
+}
+
+impl MlxWeights {
+    /// The folder they are kept in, named after their repository, so each tier has its own.
+    pub fn dir(&self) -> PathBuf {
+        crate::paths::models_dir()
+            .join("mlx")
+            .join(self.repo.rsplit('/').next().unwrap_or(self.repo))
+    }
+
+    pub fn local(&self, file: &MlxFile) -> PathBuf {
+        file.path
+            .split('/')
+            .fold(self.dir(), |dir, part| dir.join(part))
+    }
+
+    pub fn url(&self, file: &MlxFile) -> String {
+        format!(
+            "https://huggingface.co/{}/resolve/{}/{}",
+            self.repo, self.rev, file.path
+        )
+    }
+}
+
+const fn mlx(path: &'static str, size: u64, sha256: &'static str) -> MlxFile {
+    MlxFile { path, size, sha256 }
+}
+
+/// klein at 4-bit for mflux: 4.62 GB.
+pub const KLEIN_MLX_Q4: MlxWeights = MlxWeights {
+    repo: "mflux-community/flux2-klein-4b-mflux-q4",
+    rev: "77090341902cb5f9217f05c664ff604236ca18cc",
+    base: "flux2-klein-4b",
+    files: &[
+        mlx(
+            "text_encoder/0.safetensors",
+            2135435237,
+            "e59ed2b6825cb8ae3d0ba1e8a43575a565d465ce4518b7d79d28020b19b639cd",
+        ),
+        mlx(
+            "text_encoder/1.safetensors",
+            127582075,
+            "edbdea3187bc4a0ad0e1ecb7152da8e6b344669413d9e45be5e7a2244f398ee3",
+        ),
+        mlx(
+            "text_encoder/model.safetensors.index.json",
+            51332,
+            "7dc8598806b8bbdb0b87b9dc445ac7cf49d7acc42ae333bd0bc0252e46081ed9",
+        ),
+        mlx(
+            "tokenizer/chat_template.jinja",
+            4168,
+            "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8",
+        ),
+        mlx(
+            "tokenizer/tokenizer.json",
+            11422650,
+            "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+        ),
+        mlx(
+            "tokenizer/tokenizer_config.json",
+            376,
+            "779410a34a98fb2c6c925a1be6f24d632f1723473161b037f6676eb6c04886c6",
+        ),
+        mlx(
+            "transformer/0.safetensors",
+            2145323769,
+            "36796395e3946496f3e118f26fe22594b1d7d871342a59dd7824349d91c08266",
+        ),
+        mlx(
+            "transformer/1.safetensors",
+            34727728,
+            "9730ae148ca4f5ffc62860748b849a70987f0b7301588248bd98a2af9bc15070",
+        ),
+        mlx(
+            "transformer/model.safetensors.index.json",
+            26908,
+            "dbdecbf3a957b37d15bd943b956dbb25aa648a01df363e7dd5ebbe5ce941358d",
+        ),
+        mlx(
+            "vae/0.safetensors",
+            165107888,
+            "688ae0c3d2e93573ce8a6d3561d793cf6de5a4207b2e128cad6cd0d71e43b10f",
+        ),
+        mlx(
+            "vae/model.safetensors.index.json",
+            17547,
+            "e13e551dabf8c088c8b3c6f52fca3f9e64ead5c42dd592586c7a1f868607afa4",
+        ),
+    ],
+};
+
+/// klein at 8-bit for mflux: 8.57 GB. The repository also keeps a second copy of every file under
+/// a folder named " ", which isn't downloaded.
+pub const KLEIN_MLX_Q8: MlxWeights = MlxWeights {
+    repo: "mflux-community/flux2-klein-4b-mflux-q8",
+    rev: "261787352bed056874d2b0ca01e57455a667b453",
+    base: "flux2-klein-4b",
+    files: &[
+        mlx(
+            "text_encoder/0.safetensors",
+            2145931485,
+            "c59037293e62b9142e06e602a03b734fdf7f0f6b80141759f875200bab5ff523",
+        ),
+        mlx(
+            "text_encoder/1.safetensors",
+            2128222096,
+            "ccb1fd9fa0e19db71c44b3fdd9ed16e15dc14de3dcd240a0b162c4a10faba2cc",
+        ),
+        mlx(
+            "text_encoder/model.safetensors.index.json",
+            51332,
+            "3273ab420ba8b5bfd991cc233b8d90afa794ffe856925299c892ee4c9d1614f2",
+        ),
+        mlx(
+            "tokenizer/chat_template.jinja",
+            4168,
+            "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8",
+        ),
+        mlx(
+            "tokenizer/tokenizer.json",
+            11422650,
+            "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+        ),
+        mlx(
+            "tokenizer/tokenizer_config.json",
+            376,
+            "779410a34a98fb2c6c925a1be6f24d632f1723473161b037f6676eb6c04886c6",
+        ),
+        mlx(
+            "transformer/0.safetensors",
+            2142058138,
+            "442cb6770b834cb47043ef96f929b05b21e84bb1cca6daa806bf416aaa0b04f9",
+        ),
+        mlx(
+            "transformer/1.safetensors",
+            1975761716,
+            "5cbf48740f8655185b3578a25188d2db72148ea2476385979961d89ee56d0dcc",
+        ),
+        mlx(
+            "transformer/model.safetensors.index.json",
+            26908,
+            "fce32043337212c1fb02f5da46b0dde35cfecdb577d618e46bab6ce70392468f",
+        ),
+        mlx(
+            "vae/0.safetensors",
+            166156486,
+            "fc2ff418c22e76c8ad93c43b4ffdee19d10a90898d3d10ef3c53dda9ad9cb4f2",
+        ),
+        mlx(
+            "vae/model.safetensors.index.json",
+            17547,
+            "ae30aec3a3da440b700726376c89d1574cb4182e4ca534809243606df4d3be38",
+        ),
+    ],
+};
 
 /// `packs make` saves a finished folder as WebP through cwebp, or as a PNG several times the
 /// size, too big for a pack. Homebrew and Linux have a `webp` package; on Windows this is
@@ -409,21 +584,130 @@ mod tests {
                     assert!(f.url().starts_with("https://huggingface.co/"));
                     assert!(f.url().contains(f.rev));
                 }
+                let weights = model.mlx(tier);
+                assert_eq!(weights.rev.len(), 40, "{}", weights.repo);
+                let mut paths: Vec<&str> = weights.files.iter().map(|f| f.path).collect();
+                paths.sort_unstable();
+                paths.dedup();
+                assert_eq!(paths.len(), weights.files.len(), "{}", weights.repo);
+                for f in weights.files {
+                    assert_eq!(f.sha256.len(), 64, "{}", f.path);
+                    assert!(
+                        f.sha256.bytes().all(|b| b.is_ascii_hexdigit()),
+                        "{}",
+                        f.path
+                    );
+                    assert!(f.size > 0, "{}", f.path);
+                    // A relative path of plain parts: none empty, none with a space (the q8
+                    // repository's " " copy), none that climbs out of the weights' folder.
+                    assert!(
+                        f.path
+                            .split('/')
+                            .all(|p| !p.is_empty() && p != ".." && !p.contains(' ')),
+                        "{}",
+                        f.path
+                    );
+                    assert!(weights.url(f).ends_with(f.path));
+                    assert!(weights.url(f).contains(weights.rev));
+                    assert!(weights.local(f).starts_with(weights.dir()));
+                }
+                // What mflux needs to load a model from a folder: each part's weights and index,
+                // and the tokenizer.
+                for part in ["text_encoder", "transformer", "vae"] {
+                    let index = format!("{part}/model.safetensors.index.json");
+                    assert!(paths.contains(&index.as_str()), "{} {index}", weights.repo);
+                    assert!(
+                        paths
+                            .iter()
+                            .any(|p| p.starts_with(part) && p.ends_with(".safetensors")),
+                        "{} {part}",
+                        weights.repo
+                    );
+                }
+                assert!(paths.contains(&"tokenizer/tokenizer.json"));
             }
         }
+        assert_ne!(
+            KLEIN_MLX_Q4.dir(),
+            KLEIN_MLX_Q8.dir(),
+            "each tier has its own folder"
+        );
     }
 
     #[test]
     fn the_download_sizes_match_what_setup_promises() {
-        // SKILL.md tells people about 15.7 GB at q8 and 9.4 GB at q4.
-        let total = |tier| {
-            let mut files: Vec<HfFile> = MODELS.iter().flat_map(|m| m.files(tier).all()).collect();
-            files.sort_by_key(|f| f.path);
-            files.dedup();
-            files.iter().map(|f| f.size).sum::<u64>() as f64 / 1e9
+        // The app, `ai setup --help` and SKILL.md tell people about these.
+        let gb = |backend, tier| {
+            MODELS
+                .iter()
+                .flat_map(|m| m.files_for(backend, tier))
+                .map(|f| f.size)
+                .sum::<u64>() as f64
+                / 1e9
         };
-        assert!((total(Tier::Q8) - 15.7).abs() < 0.1, "{}", total(Tier::Q8));
-        assert!((total(Tier::Q4) - 9.4).abs() < 0.1, "{}", total(Tier::Q4));
+        assert!(
+            (gb(Backend::Mlx, Tier::Q4) - 4.6).abs() < 0.05,
+            "{}",
+            gb(Backend::Mlx, Tier::Q4)
+        );
+        assert!(
+            (gb(Backend::Mlx, Tier::Q8) - 8.6).abs() < 0.05,
+            "{}",
+            gb(Backend::Mlx, Tier::Q8)
+        );
+        for backend in [Backend::Cuda, Backend::Vulkan, Backend::Metal, Backend::Cpu] {
+            assert!(
+                (gb(backend, Tier::Q4) - 5.2).abs() < 0.05,
+                "{}",
+                gb(backend, Tier::Q4)
+            );
+            assert!(
+                (gb(backend, Tier::Q8) - 8.8).abs() < 0.05,
+                "{}",
+                gb(backend, Tier::Q8)
+            );
+        }
+    }
+
+    #[test]
+    fn mflux_gets_its_weights_as_files_in_their_folders_and_sdcpp_by_name() {
+        let klein = ModelId::Klein.info();
+        let mlx = klein.files_for(Backend::Mlx, Tier::Q4);
+        assert_eq!(mlx.len(), KLEIN_MLX_Q4.files.len());
+        let transformer = mlx
+            .iter()
+            .find(|f| f.name == "transformer/0.safetensors")
+            .unwrap();
+        assert_eq!(
+            transformer.local,
+            crate::paths::models_dir()
+                .join("mlx")
+                .join("flux2-klein-4b-mflux-q4")
+                .join("transformer")
+                .join("0.safetensors")
+        );
+        assert_eq!(
+            transformer.url,
+            "https://huggingface.co/mflux-community/flux2-klein-4b-mflux-q4/resolve/\
+             77090341902cb5f9217f05c664ff604236ca18cc/transformer/0.safetensors"
+        );
+        // Three parts share the name "0.safetensors": each is named by its path.
+        let names: std::collections::HashSet<&str> = mlx.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names.len(), mlx.len());
+
+        let gguf = klein.files_for(Backend::Vulkan, Tier::Q4);
+        let names: Vec<&str> = gguf.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "flux-2-klein-4b-Q4_0.gguf",
+                "Qwen3-4B-Q4_K_M.gguf",
+                "full_encoder_small_decoder.safetensors"
+            ]
+        );
+        assert!(gguf
+            .iter()
+            .all(|f| f.local.parent() == Some(&crate::paths::models_dir())));
     }
 
     #[test]
@@ -437,7 +721,7 @@ mod tests {
         assert_eq!(ModelId::parse("klein"), Some(ModelId::Klein));
         assert_eq!(ModelId::Klein.info().steps, 4);
         assert_eq!(KLEIN_VAE.name(), "full_encoder_small_decoder.safetensors");
-        assert_eq!(ZIMAGE_VAE.name(), "ae.safetensors");
+        assert_eq!(ModelId::parse("zimage"), None);
     }
 
     #[test]

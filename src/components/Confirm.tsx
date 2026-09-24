@@ -1,5 +1,6 @@
 import { Modal } from "./Modal";
 import { DeleteIcon } from "./icons/delete";
+import { branded } from "./Brand";
 
 /**
  * "Are you sure?" before something can't be undone, like deleting a skin or removing a pack, or
@@ -45,7 +46,7 @@ export function Confirm({
     >
       <div className="confirm">
         {image && <img className="confirm-thumb" src={image} alt="" draggable={false} />}
-        <p className="confirm-text">{text}</p>
+        <p className="confirm-text">{branded(text)}</p>
       </div>
     </Modal>
   );

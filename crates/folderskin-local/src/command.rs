@@ -1,7 +1,7 @@
 //! The command lines that run the models, exactly as the local-generation skill ran them.
 
-use crate::machine::{Backend, Tier};
-use crate::manifest::{mlx_weights, Model, ModelFiles, ModelId};
+use crate::machine::Backend;
+use crate::manifest::{MlxWeights, Model, ModelFiles, ModelId};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -82,33 +82,43 @@ pub fn sdcpp(
     args
 }
 
-/// mflux's program for `model` and its arguments.
+/// The size FolderSkin's blank folder is handed to the model at when a whole folder is
+/// repainted; what comes out is the full [`WIDTH`] x [`HEIGHT`] frame either way. mflux works from
+/// a reference at the reference's own size, so a half-size folder is a quarter of the reference's
+/// tokens: on an M3 Pro a whole folder took 67 s instead of 139 s, and fitted FolderSkin's
+/// silhouette as closely (0.989 against 0.987). stable-diffusion.cpp keeps the full frame, since
+/// how it scales a reference is its own (see `--ref-image-args` in [`sdcpp`]).
+pub fn template_size(backend: Backend) -> (u32, u32) {
+    if backend == Backend::Mlx {
+        (WIDTH / 2, HEIGHT / 2)
+    } else {
+        (WIDTH, HEIGHT)
+    }
+}
+
+/// mflux's program for `model` and its arguments: the weights from their folder, never from the
+/// network, and the pictures to work from, if there are any.
 pub fn mflux(
     model: &Model,
-    tier: Tier,
+    weights: &MlxWeights,
     prompt: &str,
     seed: u64,
     pictures: &[PathBuf],
     out: &Path,
 ) -> (&'static str, Vec<OsString>) {
-    let (repo, base) = mlx_weights(model.id);
-    let mut args: Vec<OsString> = match tier {
-        Tier::Q8 => vec!["--model".into(), base.into(), "-q".into(), "8".into()],
-        Tier::Q4 => vec![
-            "--model".into(),
-            repo.into(),
-            "--base-model".into(),
-            base.into(),
-        ],
-    };
+    let mut args: Vec<OsString> = vec![
+        "--model".into(),
+        weights.dir().into(),
+        "--base-model".into(),
+        weights.base.into(),
+    ];
     let program = match model.id {
-        ModelId::Zimage => "mflux-generate-z-image-turbo",
-        ModelId::Klein if !pictures.is_empty() => {
+        ModelId::Klein if pictures.is_empty() => "mflux-generate-flux2",
+        ModelId::Klein => {
             args.push("--image-paths".into());
             args.extend(pictures.iter().map(OsString::from));
             "mflux-generate-flux2-edit"
         }
-        ModelId::Klein => "mflux-generate-flux2",
     };
     for a in [
         "--prompt",
@@ -120,7 +130,10 @@ pub fn mflux(
         "--seed",
         &seed.to_string(),
         "--steps",
-        &model.mlx_steps.to_string(),
+        &model.steps.to_string(),
+        // As with sd-cli's --disable-image-metadata: mflux otherwise writes the prompt into the
+        // PNG (EXIF, IPTC and XMP), and a picture shared on its own shouldn't carry it.
+        "--no-metadata",
         "--output",
     ] {
         args.push(a.into());
@@ -132,6 +145,7 @@ pub fn mflux(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::machine::Tier;
     use crate::manifest::ModelId;
 
     fn strings(args: &[OsString]) -> Vec<String> {
@@ -217,38 +231,60 @@ mod tests {
     }
 
     #[test]
-    fn mflux_takes_upstream_weights_at_q8_and_the_community_copy_at_q4() {
-        let zimage = ModelId::Zimage.info();
-        let (program, args) = mflux(zimage, Tier::Q8, "p", 7, &[], Path::new("o.png"));
-        assert_eq!(program, "mflux-generate-z-image-turbo");
-        let args = strings(&args);
-        assert_eq!(&args[..4], ["--model", "z-image-turbo", "-q", "8"]);
-        assert!(args.windows(2).any(|w| w == ["--steps", "9"]));
-
+    fn mflux_paints_from_the_weights_folder_setup_filled() {
         let klein = ModelId::Klein.info();
-        let (program, args) = mflux(klein, Tier::Q4, "p", 7, &[], Path::new("o.png"));
+        let weights = klein.mlx(Tier::Q4);
+        let (program, args) = mflux(klein, weights, "p", 7, &[], Path::new("o.png"));
         assert_eq!(program, "mflux-generate-flux2");
+        let args = strings(&args);
         assert_eq!(
-            &strings(&args)[..4],
+            &args[..4],
             [
                 "--model",
-                "mflux-community/flux2-klein-4b-mflux-q4",
+                &weights.dir().to_string_lossy(),
                 "--base-model",
                 "flux2-klein-4b"
             ]
         );
+        assert!(
+            !args.iter().any(|a| a == "-q" || a == "--quantize"),
+            "{args:?}"
+        );
+        assert!(args.windows(2).any(|w| w == ["--steps", "4"]));
+        assert!(args.windows(2).any(|w| w == ["--width", "1024"]));
+        assert!(args.windows(2).any(|w| w == ["--height", "960"]));
+        assert!(args.contains(&"--no-metadata".to_string()));
+        assert!(!args.contains(&"--image-paths".to_string()));
+        assert!(args.ends_with(&["--output".into(), "o.png".into()]));
+
+        let q8 = klein.mlx(Tier::Q8);
         let (program, args) = mflux(
             klein,
-            Tier::Q8,
+            q8,
             "p",
             7,
-            &[PathBuf::from("a.png")],
+            &[PathBuf::from("t.png"), PathBuf::from("dog.jpg")],
             Path::new("o.png"),
         );
         assert_eq!(program, "mflux-generate-flux2-edit");
-        assert!(strings(&args)
-            .windows(2)
-            .any(|w| w == ["--image-paths", "a.png"]));
-        assert!(strings(&args).ends_with(&["--output".into(), "o.png".into()]));
+        let args = strings(&args);
+        assert_eq!(args[1], q8.dir().to_string_lossy());
+        let at = args.iter().position(|a| a == "--image-paths").unwrap();
+        assert_eq!(
+            &args[at + 1..at + 3],
+            ["t.png", "dog.jpg"],
+            "the template first"
+        );
+    }
+
+    #[test]
+    fn mlx_repaints_a_half_size_folder_and_sdcpp_the_full_frame() {
+        assert_eq!(template_size(Backend::Mlx), (512, 480));
+        for b in [Backend::Cuda, Backend::Vulkan, Backend::Metal, Backend::Cpu] {
+            assert_eq!(template_size(b), (WIDTH, HEIGHT));
+        }
+        // Sides the model takes: multiples of 16.
+        let (w, h) = template_size(Backend::Mlx);
+        assert_eq!((w % 16, h % 16), (0, 0));
     }
 }

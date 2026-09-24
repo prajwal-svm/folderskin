@@ -193,7 +193,7 @@ export const LOCAL_SETUP_JOB = "local-setup";
 
 /** Whether pictures can be made on this computer, and what it takes (the local engine). */
 export type LocalStatus = {
-  /** The runtime and both models are here, and the runtime starts. */
+  /** The runtime and the model are here, and the runtime starts. */
   ready: boolean;
   /** Setting up has something to install here; false on a computer the runtime has no build for (an Intel Mac, ARM64 Linux), where `note` says what to do instead. */
   can_set_up: boolean;
@@ -203,14 +203,21 @@ export type LocalStatus = {
   backend: string;
   /** What it runs on, as people know it ("NVIDIA GeForce RTX 3050 Ti, 4 GB"). */
   device: string;
-  /** What's still to download before it's ready; 0 once it is. */
+  /** What's still to download before it's ready (the runtime's build and the model), less what's here; 0 once it is. */
   download_bytes: number;
-  /** The models download the first time each one paints (mflux on Apple Silicon), so `download_bytes` leaves them out. */
-  downloads_on_first_use: boolean;
-  /** How long a picture from words took the last time (Z-Image's), once one has been painted. */
+  /** The runtime setting up installs besides that, while it isn't installed: "mflux" on Apple Silicon, whose packages uv fetches and `download_bytes` can't count. */
+  installs: string | null;
+  /** What setup's files take on disk now, partial downloads included: what removing the model gives back. */
+  kept_bytes: number;
+  /** The model it paints with ("FLUX.2 [klein] 4B"), how finely ("4-bit") and what its files come to here. */
+  model: string;
+  quality: string;
+  model_bytes: number;
+  /** Free space on the disk the model goes on (null when the system doesn't say), and what setting up wants free: with less, it won't start. */
+  free_bytes: number | null;
+  wanted_bytes: number;
+  /** How long the last picture painted here took, once one has been. */
   seconds_per_image: number | null;
-  /** How long each model took the last time it painted here: klein runs at quite another speed. */
-  timings: { label: string; seconds: number }[];
   /** Where the runtime and models are kept. */
   home: string;
   /** Anything worth knowing before setting up, such as too little memory for the best model. */
@@ -401,8 +408,10 @@ const tauriApi = {
     invoke<Skin>("ai_generate", { req, onEvent: new Channel<AiEvent>(onEvent) }),
   /** Stops the run named `job`: its request is dropped, or its local model stopped; {@link LOCAL_SETUP_JOB} stops setting up. */
   aiCancel: (job: string) => invoke<void>("ai_cancel", { job }),
-  /** Whether pictures can be made on this computer, and what setting that up takes. */
+  /** Whether the local model can paint on this machine, and what setting it up takes. */
   aiLocalStatus: () => invoke<LocalStatus>("ai_local_status"),
+  /** Removes the local model: what setup downloaded, and mflux when setup installed it. Refused ("busy") while it is being set up or is painting. */
+  aiLocalRemove: () => invoke<LocalStatus>("ai_local_remove"),
   /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes.
    *  Stopped with `aiCancel(LOCAL_SETUP_JOB)` (it fails with the code "stopped"); what was downloaded is kept.
    *  Asked while a setup is under way, it joins that one: `onEvent` hears where it has got to, and it settles as that one does. */

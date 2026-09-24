@@ -9,7 +9,7 @@ any other skin, and **Save & apply** puts it straight on the folder you picked.
 | You want | Start from | Then |
 | --- | --- | --- |
 | A folder in one colour, any colour | **Colour** or **Plain** | Click the folder, pick the colour. The picker takes any colour, with transparency |
-| A labelled folder: *Taxes 2026*, *Clients* | **Label** | Type the words; pick a font, weight and colour. Short words read best at small sizes |
+| A labelled folder: *Recipes*, *Notes 2026* | **Label** | Type the words; pick a font, weight and colour. Short words read best at small sizes |
 | A folder that says what's inside with one picture | **Emoji** | Double-click the emoji to swap it, or search the picker (*dog*, *plane*, *receipt*) |
 | A label on the tab itself | **Tab label** | The **Tab** button in *Place* puts any layer on the tab |
 | A back and a front in different colours | **Two-tone** | The split is hidden behind the paper sheet |

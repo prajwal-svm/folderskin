@@ -1,69 +1,39 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { api, LOCAL_SETUP_JOB, type LocalStatus } from "../../lib/tauri";
 import { aiFailure, worthRetrying } from "../../lib/aiError";
 import { formatBytes } from "../../lib/tree";
+import { duration, spaceShort, whatItTakes } from "../../lib/localSetup";
 import type { AiEvent, TurnError } from "../../state/chats";
-import { OkBadge } from "../OkBadge";
-import { CpuIcon, TerminalIcon } from "../icons/composer";
+import { setupBegan } from "../../state/localSetupRun";
+import { Confirm } from "../Confirm";
+import { CpuIcon } from "../icons/composer";
 import { CopyIcon } from "../icons/copy";
+import { DeleteIcon } from "../icons/delete";
+import { InfoIcon } from "../icons/info";
 import { LoaderIcon } from "../icons/loader";
 
-/**
- * A setup as it goes: the file downloading now and how far it has got, and how far the whole
- * download has got, `whole` being what was left to download when it started. Each file counts
- * what came this time, from where it was when first heard of, as `whole` does.
- */
-type Setup = { stage: string; file: string | null; done: number; total: number; whole: number; from: Record<string, number>; got: Record<string, number>; log: string[] };
-
-/** How much of the whole download has come so far. */
-export function wholeDone(setup: Pick<Setup, "got">): number {
-  return Object.values(setup.got).reduce((sum, n) => sum + n, 0);
-}
-
-/** "18 seconds", "14 minutes". */
-function duration(seconds: number): string {
-  return seconds < 60 ? `${Math.round(seconds)} seconds` : `${Math.round(seconds / 60)} minutes`;
-}
-
-/** How long a picture takes here, as far as is known: each model's time once both have painted. */
-function pictureTakes(status: LocalStatus): string {
-  const timings = status.timings ?? [];
-  if (timings.length > 1) return timings.map((t) => `about ${duration(t.seconds)} with ${t.label}`).join(", ");
-  if (status.seconds_per_image !== null) return `about ${duration(status.seconds_per_image)}`;
-  return "Known after the first picture";
-}
-
-/** What pressing "Set up this computer" will take, in a line under it. */
-function whatItTakes(status: LocalStatus): string {
-  if (status.downloads_on_first_use) return "Installs mflux; each model downloads the first time it paints, then works offline.";
-  if (status.download_bytes > 0) return `Downloads ${formatBytes(status.download_bytes)} once, then works offline.`;
-  return "Nothing left to download; setting up checks what's here.";
-}
+type Setup = { stage: string; file: string | null; done: number; total: number };
 
 /**
- * Pictures made on this computer, with no key and no account: what it runs on here and how long a
- * picture takes, and one button that downloads and checks everything it needs, showing each file
- * as it comes and a log for anyone who wants to see what it's doing. It can be stopped part-way;
- * what was downloaded is kept, and setting up again carries on from there. A setup that was
- * already under way when the panel opened (it was closed, or another provider picked) is joined,
- * so its progress and its Stop are back.
+ * The Local Model, with no key and no account: the model, and folded away beneath it the machine
+ * it runs on, what it runs with, how long the last picture took there and where it is stored (the
+ * path veiled until it's pointed at, since it names the user), with the model's removal at the
+ * bottom. One button downloads and checks everything it needs, showing each file as it comes,
+ * once the disk has room for it. It can be stopped part-way; what was downloaded is kept, and
+ * setting up again carries on from there. A setup that was already under way when the panel
+ * opened (it was closed, or another provider picked) is joined, so its progress and its Stop are
+ * back. Whether it's ready shows on its tile in the provider list, not here.
  */
-export function LocalSetup({
-  onChanged,
-  copy,
-  onBusy,
-}: {
-  onChanged: () => void;
-  copy: (text: string, what: string) => void;
-  /** Hears when a setup starts and ends, for the provider list to say so. */
-  onBusy?: (busy: boolean) => void;
-}) {
+export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
   const [status, setStatus] = useState<LocalStatus | null>(null);
   const [problem, setProblem] = useState<TurnError | null>(null);
   const [setup, setSetup] = useState<Setup | null>(null);
-  const [logOpen, setLogOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [factsOpen, setFactsOpen] = useState(false);
+  /** Asking whether to remove the model, or removing it. */
+  const [removal, setRemoval] = useState<"ask" | "removing" | null>(null);
   const looked = useRef<(status: LocalStatus) => void>(() => {});
+  const factsId = useId();
 
   useEffect(() => {
     let live = true;
@@ -80,27 +50,23 @@ export function LocalSetup({
     };
   }, []);
 
-  const whole = status?.download_bytes ?? 0;
   const start = useCallback(async () => {
     setProblem(null);
     setStopping(false);
-    onBusy?.(true);
-    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0, whole, from: {}, got: {}, log: [] });
+    setSetup({ stage: "Getting ready", file: null, done: 0, total: 0 });
+    const ended = setupBegan();
     const onEvent = (e: AiEvent) =>
       setSetup((s) => {
         if (!s) return s;
         switch (e.type) {
           case "stage":
             return { ...s, stage: e.message };
-          case "download": {
-            const from = e.file in s.from ? s.from : { ...s.from, [e.file]: e.done };
-            const got = { ...s.got, [e.file]: Math.max(0, e.done - from[e.file]) };
-            return { ...s, file: e.file, done: e.done, total: e.total, from, got };
-          }
+          case "download":
+            return { ...s, file: e.file, done: e.done, total: e.total };
           case "progress":
             return { ...s, done: e.step, total: e.steps };
           case "log":
-            return { ...s, log: [...s.log.slice(-300), e.level === "info" ? e.message : `${e.level}: ${e.message}`] };
+            return s;
         }
       });
     try {
@@ -108,12 +74,18 @@ export function LocalSetup({
       onChanged();
     } catch (e) {
       setProblem(aiFailure(e));
+      // What a stopped or failed setup downloaded is kept: the line beside the button should say
+      // what is left, not what there was before it started.
+      api
+        .aiLocalStatus()
+        .then(setStatus)
+        .catch(() => {});
     } finally {
+      ended();
       setSetup(null);
       setStopping(false);
-      onBusy?.(false);
     }
-  }, [onChanged, onBusy, whole]);
+  }, [onChanged]);
   useEffect(() => {
     looked.current = (s) => {
       // Asking to set up while a setup runs joins it (ai_local_setup), with its progress from here on.
@@ -128,57 +100,98 @@ export function LocalSetup({
     api.aiCancel(LOCAL_SETUP_JOB).catch(() => setStopping(false));
   }, []);
 
+  const remove = useCallback(async () => {
+    setProblem(null);
+    setRemoval("removing");
+    try {
+      // Done is shown by what follows: the panel offers to set it up again.
+      setStatus(await api.aiLocalRemove());
+      onChanged();
+    } catch (e) {
+      setProblem(aiFailure(e));
+    } finally {
+      setRemoval(null);
+    }
+  }, [onChanged]);
+
   if (!status && !problem) {
     return (
       <p className="local-note">
-        <LoaderIcon size={14} /> Looking at this computer…
+        <LoaderIcon size={14} /> Looking at your machine
       </p>
     );
   }
 
-  // The bar is the whole download's when it's known how much that is, the file's otherwise.
-  const share = !setup ? 0 : setup.whole > 0 ? Math.min(100, (wholeDone(setup) / setup.whole) * 100) : setup.total > 0 ? Math.min(100, (setup.done / setup.total) * 100) : 0;
-  const stopped = problem?.code === "stopped";
+  const share = setup && setup.total > 0 ? Math.min(100, (setup.done / setup.total) * 100) : 0;
+  const short = status ? spaceShort(status) : null;
   return (
     <div className="local-setup">
       {status && (
-        <div className="local-facts">
-          <span className="local-chip">
-            <CpuIcon size={15} />
-            {status.device}
-          </span>
-          <dl className="local-list">
-            <div>
-              <dt>Runs with</dt>
-              <dd>{status.backend}</dd>
+        <div className={factsOpen ? "local-facts is-open" : "local-facts"}>
+          <button type="button" className="local-machine" aria-expanded={factsOpen} aria-controls={factsId} onClick={() => setFactsOpen((open) => !open)}>
+            <span className="local-model">
+              <CpuIcon size={15} />
+              <span className="local-model-name">{status.model}</span>
+              <span className="local-muted">
+                {status.quality} · {formatBytes(status.model_bytes)}
+              </span>
+            </span>
+            <span className="local-info" aria-hidden="true">
+              <InfoIcon size={15} />
+            </span>
+          </button>
+          <div className="local-more" id={factsId} role="region" aria-label="about the local model" inert={!factsOpen}>
+            <div className="local-more-inner">
+              <dl className="local-list">
+                <div>
+                  <dt>Machine</dt>
+                  <dd>{status.device}</dd>
+                </div>
+                <div>
+                  <dt>Runs with</dt>
+                  <dd>{status.backend}</dd>
+                </div>
+                <div>
+                  <dt>Last picture</dt>
+                  <dd>
+                    {status.seconds_per_image === null ? (
+                      <span className="local-muted">Shows after your first one</span>
+                    ) : (
+                      <>
+                        {duration(status.seconds_per_image)} <span className="local-muted">on this machine</span>
+                      </>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Stored at</dt>
+                  <dd>
+                    {/* It names the user: veiled until it's pointed at or reached with the keyboard. */}
+                    <span className="local-path" tabIndex={factsOpen ? 0 : -1}>
+                      {status.home}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+              {status.kept_bytes > 0 && !setup && (
+                <div className="local-more-foot">
+                  <button type="button" className="btn btn-ghost btn-sm local-remove-btn" disabled={removal === "removing"} onClick={() => setRemoval("ask")}>
+                    {removal === "removing" ? <LoaderIcon size={13} /> : <DeleteIcon size={13} />}
+                    {removal === "removing" ? "Removing the model" : "Remove the model"}
+                  </button>
+                </div>
+              )}
             </div>
-            {(status.ready || status.can_set_up) && (
-              <div>
-                <dt>A picture takes</dt>
-                <dd>{pictureTakes(status)}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Kept in</dt>
-              <dd className="local-path" data-tip={status.home} data-tip-overflow>
-                {status.home}
-              </dd>
-            </div>
-          </dl>
+          </div>
           {status.note && <p className="local-note">{status.note}</p>}
         </div>
       )}
-      {status?.ready && !setup && (
-        <p className="local-ready">
-          <OkBadge size={17} playOnMount /> Set up and ready. Nothing you make here leaves this computer.
-        </p>
-      )}
-      {status && !status.ready && status.can_set_up && !setup && !stopped && (
+      {status && !status.ready && status.can_set_up && !setup && (
         <div className="local-go">
-          <button type="button" className="btn btn-primary" onClick={() => void start()}>
-            Set up this computer
+          <span className={short ? "local-note is-warn" : "local-note"}>{short ?? whatItTakes(status)}</span>
+          <button type="button" className="btn btn-primary" disabled={short !== null} onClick={() => void start()}>
+            Set up the local model
           </button>
-          <span className="local-note">{whatItTakes(status)}</span>
         </div>
       )}
       {setup && (
@@ -194,30 +207,10 @@ export function LocalSetup({
           </div>
           <p className="local-note">
             {setup.file ? `${setup.file}: ${formatBytes(setup.done)} of ${formatBytes(setup.total)}` : "Starting"}
-            {setup.whole > 0 && ` · ${formatBytes(Math.min(wholeDone(setup), setup.whole))} of ${formatBytes(setup.whole)} in all`}
           </p>
-          {setup.log.length > 0 && (
-            <div className="turn-log">
-              <button type="button" className="turn-log-toggle" aria-expanded={logOpen} onClick={() => setLogOpen((o) => !o)}>
-                <TerminalIcon size={13} />
-                {logOpen ? "Hide the details" : "Details"}
-              </button>
-              {logOpen && <pre className="turn-log-lines">{setup.log.join("\n")}</pre>}
-            </div>
-          )}
         </div>
       )}
-      {stopped && (
-        <div className="local-go" role="status">
-          {status?.can_set_up && (
-            <button type="button" className="btn btn-primary" onClick={() => void start()}>
-              Carry on setting up
-            </button>
-          )}
-          <span className="local-note">{problem.message}</span>
-        </div>
-      )}
-      {problem && !stopped && (
+      {problem && (
         <div className="turn-error" role="alert">
           <p className="turn-error-text">{problem.message}</p>
           {problem.fix && (
@@ -228,9 +221,9 @@ export function LocalSetup({
             </ul>
           )}
           <div className="turn-actions">
-            {status?.can_set_up && worthRetrying(problem.code) && (
+            {status?.can_set_up && (problem.code === "stopped" || worthRetrying(problem.code)) && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void start()}>
-                Try again
+                {problem.code === "stopped" ? "Carry on setting up" : "Try again"}
               </button>
             )}
             {problem.ask && (
@@ -241,6 +234,15 @@ export function LocalSetup({
             )}
           </div>
         </div>
+      )}
+      {removal === "ask" && status && (
+        <Confirm
+          title="Remove the local model?"
+          text={`This deletes the model and everything its setup downloaded (${formatBytes(status.kept_bytes)}). Your skins stay, and you can set it up again whenever you like.`}
+          action="Remove"
+          onCancel={() => setRemoval(null)}
+          onConfirm={() => void remove()}
+        />
       )}
     </div>
   );

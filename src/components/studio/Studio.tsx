@@ -4,7 +4,7 @@ import { api, errorMessage, type AiCatalogue, type Skin } from "../../lib/tauri"
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
-import { clip, trailOff } from "../../lib/names";
+import { clip } from "../../lib/names";
 import type { ToastTone } from "../../hooks/useToasts";
 import { ask, deleteChat, dismissProblem, keepReference, openChat, renameChatTo, setChatFolder, startChats, startNewChat, stop, useChats } from "../../state/chatStore";
 import type { ChatFolder, ChatRef, ChatSummary, Shape, Turn } from "../../state/chats";
@@ -18,6 +18,7 @@ import { ChatDrawer } from "./ChatDrawer";
 import { FolderTarget } from "./FolderTarget";
 import { PromptBox, refLimit } from "./PromptBox";
 import { TurnCard, type TurnActions } from "./TurnCard";
+import { Brand } from "../Brand";
 
 const CHOICE_KEY = "folderskin.ai.choice";
 
@@ -93,8 +94,16 @@ export const Studio = forwardRef<
   const box = useRef<HTMLFormElement>(null);
   const thread = useRef<HTMLDivElement>(null);
 
+  // Every visit to the view starts a new chat, as every launch does, with the folder chosen in the
+  // library; earlier chats wait in the history. (A chat nothing was asked in yet is kept as it is.)
+  const shown = useRef(false);
   useEffect(() => {
-    if (active) startChats();
+    if (active && !shown.current) {
+      startChats();
+      startNewChat(folder);
+    }
+    shown.current = active;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   const load = useCallback(() => {
@@ -183,7 +192,7 @@ export const Studio = forwardRef<
   }, []);
 
   // This computer paints one picture at a time, whichever chat asked for the one it's on.
-  const busy = "This computer is still painting the last one";
+  const busy = "The local model is still painting the last one";
   const blocked = provider?.kind === "local" && chats.localRunning ? busy : null;
 
   const send = () => {
@@ -294,7 +303,9 @@ export const Studio = forwardRef<
             <SparklesIcon size={22} />
           </span>
           <p className="empty-title">The assistant isn't in this build</p>
-          <p className="empty-text">FolderSkin couldn't load its provider list: {loadError}. Rebuild the app, then open this again.</p>
+          <p className="empty-text">
+            <Brand /> couldn&apos;t load its provider list: {loadError}. Rebuild the app, then open this again.
+          </p>
           <button type="button" className="btn btn-secondary" onClick={load}>
             Try again
           </button>
@@ -306,16 +317,19 @@ export const Studio = forwardRef<
   const turns = chat?.turns ?? [];
   const hasThread = turns.length > 0;
   const local = provider?.kind === "local";
-  const placeholder = folder ? trailOff(`Describe a folder for ${clip(folder.name)}`) : "Describe the folder you want";
+  const placeholder = folder ? `Describe a folder for ${clip(folder.name)}` : "Describe the folder you want";
   const foot = !provider
     ? null
     : local
       ? provider.has_key
-        ? "Free, and painted right here: nothing leaves this computer."
-        : "Free once this computer is set up. Nothing you make leaves it."
+        ? "Free, and generated right here on your machine."
+        : "Free once the local model is set up."
       : provider.has_key
         ? `${model?.price_hint ?? "Priced by the picture"}, billed to your ${provider.label} account.`
         : `Add your ${provider.label} key to start. It stays on this computer.`;
+  // Once a chat has started the box sits at the bottom with nothing under it, unless the
+  // provider can't paint yet: then the line says why, and offers the way without a key.
+  const showFoot = !hasThread || !provider?.has_key;
 
   return (
     <section className={hasThread ? "studio has-thread" : "studio"} hidden={!active} aria-label="generate with AI">
@@ -382,7 +396,7 @@ export const Studio = forwardRef<
             <h2 className="studio-title">What should your folder look like?</h2>
             <p className="studio-sub">
               {local
-                ? "Describe a scene, or tap a style below for an idea to start from. It's painted right here, on this computer."
+                ? "Describe a scene, or tap a style below for an idea to start from. It's generated right here, on your machine."
                 : `Describe a scene, or tap a style below for an idea to start from. It goes straight from this computer to ${provider?.label ?? "the provider"} with your own key.`}
             </p>
           </div>
@@ -429,14 +443,16 @@ export const Studio = forwardRef<
             </button>
           </div>
         )}
-        <p className="studio-foot">
-          {foot && <span>{foot}</span>}
-          {!local && (
-            <button type="button" className="link-btn" onClick={() => setHelperOpen(true)}>
-              No API key? Use Grok or ChatGPT's chat
-            </button>
-          )}
-        </p>
+        {showFoot && (
+          <p className="studio-foot">
+            {foot && <span>{foot}</span>}
+            {!local && (
+              <button type="button" className="link-btn" onClick={() => setHelperOpen(true)}>
+                No API key? Use Grok or ChatGPT's chat
+              </button>
+            )}
+          </p>
+        )}
       </div>
 
       <ChatDrawer

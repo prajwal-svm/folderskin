@@ -1,7 +1,7 @@
 ---
 name: folderskin-localgen
-description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. Z-Image-Turbo for text to picture and FLUX.2 [klein] 4B for reference pictures and whole-folder skins, both Apache-2.0, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon), all driven by the `folderskin` command line. Sets the machine up with `folderskin ai setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, checks and cleans pictures up (trim, clip, cut out, adjust), and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
-version: 2.0.0
+description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. One model, FLUX.2 [klein] 4B (Apache-2.0), for words, reference pictures and whole-folder skins alike, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon), all driven by the `folderskin` command line. Sets the machine up with `folderskin ai setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, checks and cleans pictures up (trim, clip, cut out, adjust), and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
+version: 3.0.0
 ---
 
 # Painting folder art locally
@@ -33,33 +33,37 @@ folderskin ai setup
 ```
 
 `doctor` says what it found and what it will use: the backend (`cuda` for NVIDIA on Windows,
-`vulkan` for other GPUs and Linux, `mlx` on Apple Silicon, `cpu` otherwise) and the tier (`q8`
-with 24 GB of RAM or more, `q4` below), what is installed, and the next command to run. `setup`
-downloads the pinned stable-diffusion.cpp build and the models, about 15.7 GB at `q8` and 9.4 GB
-at `q4`, resuming where a download stopped and checking every file against its published SHA-256.
-On a Mac it installs mflux with `uv tool install`, which downloads each model the first time it
-runs it. Ctrl+C stops it cleanly; running it again carries on. stable-diffusion.cpp publishes
-Linux builds for x86_64 only, so on ARM64 Linux (and on an Intel Mac) `doctor` says there is
-nothing to install; the image tools and `--provider` still work there.
+`vulkan` for other GPUs and Linux, `mlx` on Apple Silicon, `cpu` otherwise) and the tier (`q4`
+on every computer), what is installed, and the next command to run. `setup` downloads the runtime
+and the model: on Windows and Linux the pinned stable-diffusion.cpp build and klein's GGUF files,
+5.2 GB; on a Mac it installs mflux with `uv tool install`, then downloads klein's pre-quantised MLX
+weights, 4.6 GB, into the same folder as everything else. Every file resumes where its download
+stopped and is checked against its published SHA-256, and painting never downloads anything.
+Ctrl+C stops it cleanly; running it again carries on. stable-diffusion.cpp publishes Linux builds
+for x86_64 only, so on ARM64 Linux (and on an Intel Mac) `doctor` says there is nothing to
+install; the image tools and `--provider` still work there.
 
 `--backend` and `--tier` override the choice for one command; `folderskin ai config set tier q4`
 (or `backend`, `model`, `provider`) makes it the default.
 
-RAM decides the tier, not VRAM: stable-diffusion.cpp streams weights from RAM when they do not fit
-on the card, so a 4 GB laptop GPU runs the 8-bit models.
+Every computer starts at `q4`. `--tier q8` (or `ai config set tier q8`) is a little sharper and
+twice the download: 8.6 GB on a Mac, 8.8 GB elsewhere. stable-diffusion.cpp streams weights from
+RAM when they do not fit on the card, so even a 4 GB laptop GPU runs either.
 
 Measured on an RTX 3050 Ti laptop GPU (4 GB) with 32 GB of RAM, `q8`, 1024 × 960:
 
 | picture | `cuda` | `vulkan` |
 |---|---|---|
-| artwork, Z-Image-Turbo (8 steps) | 60 s | |
-| artwork, `--model klein` (4 steps) | 28 s | 65 s |
-| one or two references, klein | 30–35 s | |
-| whole folder, klein | 31 s | |
+| artwork (4 steps) | 28 s | 65 s |
+| one or two references | 30–35 s | |
+| whole folder | 31 s | |
 
 On a laptop with a second, integrated GPU, Vulkan lists both; on the test laptop (AMD integrated
 plus NVIDIA) stable-diffusion.cpp chose the NVIDIA card by itself, and `doctor` lists what it sees.
-A Mac has no numbers here yet.
+
+On an M3 Pro with 36 GB, `mlx`, `q4`: artwork about 50 s and a whole folder about 55 s, each
+including mflux's own start (about 10 s of Python loading). mflux peaks at 11.7 GB while klein
+paints, so a Mac with 8 GB swaps and is slow; 16 GB or more is comfortable.
 
 ## Step 2: paint
 
@@ -81,17 +85,15 @@ folderskin ai gen "a retro film camera with a chrome lens" --style pop-art -n 4
 
 The three ways to paint:
 
-| you want | use | model |
-|---|---|---|
-| a picture wrapped onto FolderSkin's folder (the normal case) | `ai gen "idea" --style …` | Z-Image-Turbo |
-| the same, from photos or pictures you have | `ai gen "idea" --ref a.jpg [--ref b.png]` | FLUX.2 [klein] 4B |
-| the whole folder painted as one object | `ai gen "idea" --shape folder` (refs allowed) | FLUX.2 [klein] 4B |
+| you want | use |
+|---|---|
+| a picture wrapped onto FolderSkin's folder (the normal case) | `ai gen "idea" --style …` |
+| the same, from photos or pictures you have | `ai gen "idea" --ref a.jpg [--ref b.png]` |
+| the whole folder painted as one object | `ai gen "idea" --shape folder` (refs allowed) |
 
-`--model klein` paints plain artwork with klein instead: twice as fast, and in a side-by-side of
-pop art, anime, oil and sketch it was as good, bolder in pop art and richer in sketch hatching,
-where Z-Image was more painterly in oil. For a big batch, klein; for photographic subjects and
-lettering, Z-Image. Whole-folder pictures are cut out along FolderSkin's own silhouette, not by
-colour: the model repaints the app's blank folder, the command line finds the painted folder, fits
+klein paints all three. It follows the idea closely and letters short words ("POW") correctly,
+but counts loosely: "three koi" can come back as two, so another seed or a different phrasing
+helps. Whole-folder pictures are cut out along FolderSkin's own silhouette, not by colour: the model repaints the app's blank folder, the command line finds the painted folder, fits
 the silhouette to it and uses that as the edge. The report line gives the fit; below 0.95 the
 model changed the folder's shape, and the picture is left on its backdrop for you to look at.
 
@@ -116,7 +118,7 @@ folderskin ai batch briefs.json --out renders/night-prints
 ```
 
 Reference paths are relative to the JSON file. `name` names the file (numbered when `n` is more
-than one); `model` picks the artwork model per brief. Every brief is checked before the first
+than one). Every brief is checked before the first
 picture is painted, and the run ends with `previews/_sheet.png`.
 
 ### Or theme a whole drive
@@ -148,7 +150,7 @@ Open `previews/_sheet.png`, then any picture that looks doubtful at full size in
 | the subject cut by the paper strip, or high on the folder | another seed; or say where it is: "…, standing low in the frame" |
 | a blank band or a frame along the folder's edges | paper margins are cut already (the `.json` says `border_trimmed`); `folderskin image trim <picture>` does it for any picture; a frame drawn inside the art is the model's, so try another seed |
 | a whole folder whose fit was below 0.95 | another seed; the model moved or reshaped the folder (`folderskin image clip` cuts one that fits) |
-| the style is weak | `--model klein`, or put more of the style into words |
+| the style is weak | put more of the style into words, or try another preset |
 | the colours are a little off | `folderskin image saturate <picture> 20`, `brightness`, `contrast`, or `image adjust --hue …`: the composer's own adjustments |
 | text or a signature in the art | another seed; small models write when a style suggests posters |
 
@@ -170,8 +172,8 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 
 ## Rules
 
-- Both models are Apache-2.0, which puts no condition on what they paint, so a result can go in a
-  pack under CC0-1.0, CC-BY-4.0 or MIT. Do not add models whose licence is non-commercial or
+- klein is Apache-2.0, which puts no condition on what it paints, so a result can go in a pack
+  under CC0-1.0, CC-BY-4.0 or MIT. Do not add models whose licence is non-commercial or
   restricted (Qwen-Image 2.1, FLUX.2 [dev], klein 9B, Kontext dev, Krea 2, Ideogram 4) to the
   command line: their pictures cannot go in a pack. An ungated mirror of such a model is still
   under its licence.
@@ -190,8 +192,8 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 | command | use |
 |---|---|
 | `folderskin ai doctor [--backend …] [--tier …]` | what the machine is, and what is installed |
-| `folderskin ai setup [--backend …] [--tier …] [--runtime latest]` | download the runtime and the models |
-| `folderskin ai gen "idea" [--style S] [--shape artwork\|folder] [--ref P]… [-n N] [--seed S] [--model auto\|zimage\|klein] [--out DIR] [--apply FOLDER]` | paint pictures from one idea |
+| `folderskin ai setup [--backend …] [--tier …] [--runtime latest]` | download the runtime and the model |
+| `folderskin ai gen "idea" [--style S] [--shape artwork\|folder] [--ref P]… [-n N] [--seed S] [--model auto\|klein] [--out DIR] [--apply FOLDER]` | paint pictures from one idea |
 | `folderskin ai batch briefs.json [--out DIR]` | paint every brief in a file |
 | `folderskin ai theme <root> [--style S] [--depth N] [--apply]` | paint every folder under a root from its name |
 | `folderskin ai styles` / `folderskin ai models` | the style presets / the models and providers |

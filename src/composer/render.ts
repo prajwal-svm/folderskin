@@ -8,7 +8,7 @@
  */
 import type { Assets } from "./assets";
 import { cssColor, embossLight, embossTint } from "./color";
-import { backgroundColor, CANVAS, isPlaced, mainColor, type Doc, type IconLayer, type Layer, type Paint, type PlacedLayer } from "./doc";
+import { backgroundColor, CANVAS, isPlaced, mainColor, type Doc, type FillLayer, type IconLayer, type Layer, type Paint, type PlacedLayer } from "./doc";
 import { EMOJI_STACK } from "./fonts";
 import { bounds, type Box, type Rect } from "./geometry";
 import { drawPattern } from "./patterns";
@@ -322,6 +322,32 @@ export function drawLayer(ctx: Ctx, layer: Layer, k: number, px: number, assets:
   ctx.restore();
 }
 
+/**
+ * A fill that covers only the folder's front panel: drawn on a spare canvas, cut to the front's
+ * mask (the one Rust cuts the design's front with, so the two meet exactly), then laid on with
+ * the layer's opacity and blend.
+ */
+function drawOnFront(ctx: Ctx, layer: FillLayer, k: number, px: number, assets: Assets, mask: CanvasImageSource) {
+  const off = assets.scratch(0, px, px);
+  const o = off.getContext("2d")!;
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalAlpha = 1;
+  o.globalCompositeOperation = "source-over";
+  o.clearRect(0, 0, px, px);
+  o.setTransform(k, 0, 0, k, 0, 0);
+  drawContent(o, layer, assets);
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalCompositeOperation = "destination-in";
+  o.drawImage(mask, 0, 0, px, px);
+  o.globalCompositeOperation = "source-over";
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = layer.opacity;
+  ctx.globalCompositeOperation = layer.blend === "normal" ? "source-over" : layer.blend;
+  ctx.drawImage(off, 0, 0, px, px, 0, 0, px, px);
+  ctx.restore();
+}
+
 /** Draws `doc` onto `ctx`, a canvas `px` pixels square, from scratch; `only` draws one layer alone. */
 export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: { only?: string } = {}) {
   const k = px / CANVAS;
@@ -335,7 +361,10 @@ export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: 
   for (const layer of doc.layers) {
     if (layer.hidden) continue;
     if (opts.only && layer.id !== opts.only) continue;
-    drawLayer(ctx, layer, k, px, assets, around);
+    // Until the folder's template has loaded there's no front to cut to: it covers everything.
+    const front = layer.kind === "fill" && layer.part === "front" && doc.shape === "folder" ? assets.front(doc.style) : null;
+    if (front && layer.kind === "fill") drawOnFront(ctx, layer, k, px, assets, front);
+    else drawLayer(ctx, layer, k, px, assets, around);
     ctx.setTransform(k, 0, 0, k, 0, 0);
   }
   ctx.restore();

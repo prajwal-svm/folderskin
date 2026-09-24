@@ -6,10 +6,12 @@ import type { ToastTone } from "../hooks/useToasts";
 import { OkBadge } from "./OkBadge";
 import { ProviderLogo } from "./ProviderLogo";
 import { LocalSetup } from "./studio/LocalSetup";
+import { useLocalSetupRunning } from "../state/localSetupRun";
 import { CpuIcon } from "./icons/composer";
 import { Select } from "./Select";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
+import { branded } from "./Brand";
 
 /**
  * The AI providers, the key for the chosen one, and optionally its model. Shared by the
@@ -39,8 +41,7 @@ export function ProviderKeys({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
-  /** This computer is being set up, as its panel last heard. */
-  const [settingUp, setSettingUp] = useState(false);
+  const settingUp = useLocalSetupRunning();
 
   const save = useCallback(async () => {
     if (!provider || !draft.trim()) return;
@@ -113,16 +114,22 @@ export function ProviderKeys({
               {p.kind === "local" ? <CpuIcon size={18} /> : <ProviderLogo id={p.id} size={18} />}
               {p.label}
             </span>
-            {p.has_key ? (
+            {p.kind === "local" && settingUp ? (
+              // Downloading, whichever provider is shown below.
+              <span className="provider-state provider-busy" role="img" aria-label="downloading" data-tip="Downloading the model">
+                <LoaderIcon size={16} />
+              </span>
+            ) : p.has_key ? (
               <OkBadge size={17} playOnMount label={p.kind === "local" ? "Set up" : "Key saved"} />
             ) : (
-              <span className="provider-state">{p.kind === "local" ? (settingUp ? "Setting up" : "Not set up") : "No key"}</span>
+              <span className="provider-state">{p.kind === "local" ? "Free" : "No key"}</span>
             )}
           </button>
         ))}
       </div>
 
-      {onModel && (
+      {/* The Local Model has one model, which its own panel below names. */}
+      {onModel && provider.kind !== "local" && (
         <div className="field">
           <span className="field-label">Model</span>
           <Select
@@ -133,23 +140,15 @@ export function ProviderKeys({
             options={provider.models.map((m) => ({ value: m.id, label: `${m.label} (${m.price_hint})` }))}
           />
           <span className="field-note">
-            {provider.kind === "local"
-              ? model?.id === "auto"
-                ? "The best model this computer can run well."
-                : model?.accepts_reference
-                  ? "Can paint from reference pictures."
-                  : "Fastest; paints from words only."
-              : model?.native_alpha
-                ? "Returns a transparent background by itself."
-                : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out."}
+            {branded(model?.native_alpha ? "Returns a transparent background by itself." : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out.")}
           </span>
         </div>
       )}
 
       {provider.kind === "local" ? (
         <div className="field">
-          <span className="field-label">On this computer</span>
-          <LocalSetup onChanged={onChanged} copy={copy} onBusy={setSettingUp} />
+          <span className="field-label">On your machine</span>
+          <LocalSetup onChanged={onChanged} copy={copy} />
         </div>
       ) : (
       <div className="field">
@@ -181,7 +180,7 @@ export function ProviderKeys({
             </button>
           </div>
         )}
-        {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{note.text}</span>}
+        {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{branded(note.text)}</span>}
         <div className="key-links">
           <button type="button" className="link-btn" onClick={() => void openUrl(provider.keys_url).catch(() => {})}>
             Get a key <ExternalLinkIcon size={12} />
@@ -195,7 +194,7 @@ export function ProviderKeys({
 
       <p className="field-note">
         {provider.kind === "local"
-          ? "Pictures made on this computer never leave it, and cost nothing."
+          ? "Skins generated on this machine stay on it until you decide to share them with the community."
           : isTauri()
             ? "Your API keys are securely stored on this device."
             : "In this browser preview, keys last until you reload."}

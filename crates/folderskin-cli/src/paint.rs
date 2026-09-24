@@ -358,17 +358,18 @@ impl Painter {
     }
 }
 
-/// A local model by name; `auto` leaves the choice to the job.
+/// A local model by name; `auto` leaves the choice to the job. `zimage`, Z-Image-Turbo's name
+/// before it was dropped, paints with klein, so a setting saved then goes on working.
 fn local_model(name: &str) -> Result<Option<ModelId>, CliError> {
     match name.to_lowercase().as_str() {
-        "auto" => Ok(None),
+        "auto" | "zimage" => Ok(None),
         m => ModelId::parse(m).map(Some).ok_or_else(|| {
             CliError::fixable(
                 "unknown_model",
                 format!("There is no local model called {m:?}."),
-                "The local models are zimage (Z-Image-Turbo) and klein (FLUX.2 [klein] 4B).",
+                "The local model is klein (FLUX.2 [klein] 4B).",
             )
-            .fix("Use --model zimage, --model klein, or leave it out.")
+            .fix("Use --model klein, or leave it out.")
         }),
     }
 }
@@ -647,23 +648,24 @@ mod tests {
         let (s, b, t) = settings(&machine(), &none, &config).unwrap();
         assert_eq!(
             (s.backend, s.tier, b, t),
-            (Backend::Cuda, Tier::Q8, Source::Detected, Source::Detected)
+            (Backend::Cuda, Tier::Q4, Source::Detected, Source::Detected)
         );
+        // Each layer asks for something the one below it doesn't, so which one won shows.
         config.backend = Some("vulkan".into());
-        config.tier = Some("q4".into());
+        config.tier = Some("q8".into());
         let (s, b, t) = settings(&machine(), &none, &config).unwrap();
         assert_eq!(
             (s.backend, s.tier, b, t),
-            (Backend::Vulkan, Tier::Q4, Source::Config, Source::Config)
+            (Backend::Vulkan, Tier::Q8, Source::Config, Source::Config)
         );
         let flags = MachineArgs {
             backend: Some(BackendArg::Cpu),
-            tier: Some(TierArg::Q8),
+            tier: Some(TierArg::Q4),
         };
-        let (s, b, _) = settings(&machine(), &flags, &config).unwrap();
+        let (s, b, t) = settings(&machine(), &flags, &config).unwrap();
         assert_eq!(
-            (s.backend, s.tier, b),
-            (Backend::Cpu, Tier::Q8, Source::Flag)
+            (s.backend, s.tier, b, t),
+            (Backend::Cpu, Tier::Q4, Source::Flag, Source::Flag)
         );
         let auto = MachineArgs {
             backend: Some(BackendArg::Auto),

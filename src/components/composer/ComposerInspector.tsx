@@ -557,6 +557,7 @@ export function ComposerInspector({
   onReplaceIcon,
   index,
   size,
+  onFolder,
 }: {
   layer: Layer | null;
   onPatch: (patch: Patch, key?: string) => void;
@@ -569,6 +570,8 @@ export function ComposerInspector({
   index: number;
   /** The layer's box on the canvas, for aligning it. */
   size: { w: number; h: number } | null;
+  /** The design is on a folder, whose front a colour can cover alone. */
+  onFolder: boolean;
 }) {
   if (!layer) {
     return <p className="cmp-inspector-empty">Select a layer, on the folder or in the list above, to change it here.</p>;
@@ -579,6 +582,20 @@ export function ComposerInspector({
       {layer.kind === "fill" && (
         <Section title="Colour">
           <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `paint:${layer.id}`)} used={used} />
+          {onFolder && (
+            <Field label="Covers">
+              <Segmented<"folder" | "front">
+                label="what the colour covers"
+                small
+                value={layer.part === "front" ? "front" : "folder"}
+                onChange={(covers) => onPatch({ part: covers === "front" ? "front" : undefined })}
+                options={[
+                  { value: "folder", label: "Whole folder" },
+                  { value: "front", label: "Front", title: "Only the front panel, so the back and tab can be another colour" },
+                ]}
+              />
+            </Field>
+          )}
         </Section>
       )}
       {layer.kind === "pattern" && <PatternSection layer={layer} onPatch={onPatch} used={used} />}

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { frame, unframe } from "./body";
-import { FALLBACK_PARTS, parseDoc } from "./doc";
+import { FALLBACK_PARTS, fallbackParts, parseDoc, WINDOWS_PARTS } from "./doc";
 import { EMOJI, searchEmoji } from "./emoji";
 import { confettiColors, grainPixels, seeded } from "./patterns";
-import { TEMPLATES } from "./templates";
+import { templateById, TEMPLATES } from "./templates";
 
 describe("templates", () => {
   it("each makes a design that reads back the same", () => {
@@ -11,7 +11,7 @@ describe("templates", () => {
     for (const t of TEMPLATES) {
       expect(ids.has(t.id), t.id).toBe(false);
       ids.add(t.id);
-      const doc = t.make(FALLBACK_PARTS, { src: "data:image/png;base64,AAAA", width: 800, height: 600, alpha: false });
+      const doc = t.make(fallbackParts(t.style ?? "mac"), { src: "data:image/png;base64,AAAA", width: 800, height: 600, alpha: false });
       expect(doc.layers.length, t.id).toBeGreaterThan(0);
       expect(parseDoc(JSON.parse(JSON.stringify(doc))), t.id).toEqual(doc);
     }
@@ -19,13 +19,33 @@ describe("templates", () => {
 
   it("start new layers on the folder", () => {
     for (const t of TEMPLATES) {
-      for (const l of t.make(FALLBACK_PARTS).layers) {
+      for (const l of t.make(fallbackParts(t.style ?? "mac")).layers) {
         if (!("x" in l)) continue;
         expect(l.x, `${t.id} ${l.kind}`).toBeGreaterThan(0);
         expect(l.x, `${t.id} ${l.kind}`).toBeLessThan(1024);
         expect(l.y, `${t.id} ${l.kind}`).toBeGreaterThan(0);
         expect(l.y, `${t.id} ${l.kind}`).toBeLessThan(1024);
       }
+    }
+  });
+});
+
+describe("the Mac's and Windows' own folders", () => {
+  it("start on their own folder, back and front in their own colours", () => {
+    for (const [id, parts, style] of [
+      ["mac", FALLBACK_PARTS, "mac"],
+      ["windows", WINDOWS_PARTS, "windows"],
+    ] as const) {
+      const t = templateById(id)!;
+      expect(t.style).toBe(style);
+      const doc = t.make(parts);
+      expect(doc.style, id).toBe(style);
+      const [back, front] = doc.layers;
+      expect(back, id).toMatchObject({ kind: "fill", name: "Back" });
+      expect(back, id).not.toHaveProperty("part");
+      expect(front, id).toMatchObject({ kind: "fill", name: "Front", part: "front" });
+      // Every gradient fits what a design keeps when it's read back.
+      for (const l of doc.layers) if ("paint" in l && l.paint.type !== "solid") expect(l.paint.stops.length, id).toBeLessThanOrEqual(8);
     }
   });
 });

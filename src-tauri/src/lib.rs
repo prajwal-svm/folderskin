@@ -126,6 +126,7 @@ pub fn run() {
             ai::ai_cancel,
             ai::ai_local_status,
             ai::ai_local_setup,
+            ai::ai_local_remove,
             icons::icon_pack_download,
             icons::icon_packs_installed,
             icons::icon_pack_read,
@@ -178,6 +179,14 @@ pub fn run() {
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));
             window::create_main(app)
         })
-        .run(tauri::generate_context!())
-        .expect("error while running FolderSkin");
+        .build(tauri::generate_context!())
+        .expect("error while building FolderSkin")
+        .run(|_app, event| {
+            // A painting, or mflux's install, doesn't end with the app on macOS and Linux: it
+            // would go on for minutes after FolderSkin quit, holding gigabytes of memory and the
+            // graphics card. (On Windows the job object ends it anyway.)
+            if let tauri::RunEvent::Exit = event {
+                folderskin_local::run::end_all();
+            }
+        });
 }

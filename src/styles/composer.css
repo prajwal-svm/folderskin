@@ -182,7 +182,7 @@
 }
 
 .cmp-stage[data-backdrop="light"] {
-  background: #e7e9ec;
+  background: #ffffff;
 }
 
 .cmp-stage[data-backdrop="dark"] {
@@ -379,7 +379,7 @@
 }
 
 .cmp-backdrop.is-light {
-  background: #e7e9ec;
+  background: #ffffff;
 }
 
 .cmp-backdrop.is-dark {
@@ -603,12 +603,24 @@
   color: var(--muted);
 }
 
+/* Both side scrollers keep their scrollbar's room whether or not they overflow (base.css draws
+   the track 10 px wide and shows its thumb only on hover): given room only once they overflowed,
+   every row narrowed the moment a setting appeared, such as a colour's Covers row when the design
+   goes onto the folder. The room comes off the right padding, so both sides stay even. */
 .cmp-side-scroll {
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: scroll;
   overscroll-behavior: contain;
+}
+
+.cmp-side-scroll .cmp-section {
+  padding-right: 4px;
+}
+
+.cmp-side-scroll .cmp-inspector-empty {
+  padding-right: 8px;
 }
 
 /* ---------- the side's two panels: the layers, and the selected layer's settings ---------- */
@@ -739,9 +751,9 @@
 .cmp-layers-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   overscroll-behavior: contain;
-  padding: 2px 10px 10px;
+  padding: 2px 0 10px 10px;
 }
 
 /* The bar between the panels: the hairline that divides them, with a wide grip that shows a small

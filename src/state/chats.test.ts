@@ -52,9 +52,9 @@ describe("titleFrom", () => {
 
   it("cuts a long idea at a word", () => {
     const t = titleFrom("an enormous victorian greenhouse full of ferns and orchids, lit by lanterns at night");
-    expect(t.length).toBeLessThanOrEqual(49);
-    expect(t.endsWith("…")).toBe(true);
-    expect(t).not.toMatch(/,…$/);
+    expect(t.length).toBeLessThanOrEqual(48);
+    expect(t).toBe("An enormous victorian greenhouse full of ferns");
+    expect(t).not.toMatch(/…|[\s,.;:!?-]$/);
   });
 });
 

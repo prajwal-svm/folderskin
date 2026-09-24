@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { placeTip, type TipSide } from "../lib/tip";
+import { branded } from "./Brand";
 
 /** How long the pointer rests on something before its tip shows, and how long the next one waits after a tip has just closed (none: moving along a row of buttons reads each at once). */
 const DELAY_MS = 420;
@@ -168,7 +169,7 @@ export function TipLayer() {
       role="tooltip"
       style={pos ? { left: pos.x, top: pos.y } : { left: 0, top: 0, visibility: "hidden" }}
     >
-      <span className="tip-text">{shown.text}</span>
+      <span className="tip-text">{branded(shown.text)}</span>
       {shown.kbd && <kbd className="tip-kbd">{shown.kbd}</kbd>}
     </div>,
     document.body,

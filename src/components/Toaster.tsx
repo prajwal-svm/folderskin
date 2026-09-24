@@ -1,6 +1,7 @@
 import type { Toast } from "../hooks/useToasts";
 import { OkBadge } from "./OkBadge";
 import { SparklesIcon } from "./icons/sparkles";
+import { branded } from "./Brand";
 
 export function Toaster({ items, onDismiss }: { items: Toast[]; onDismiss: (id: number) => void }) {
   return (
@@ -10,7 +11,7 @@ export function Toaster({ items, onDismiss }: { items: Toast[]; onDismiss: (id: 
           <span className={t.tone === "ok" ? "toast-icon is-ok" : t.tone === "danger" ? "toast-icon is-danger" : "toast-icon"}>
             {t.tone === "danger" ? <span aria-hidden="true">!</span> : t.tone === "ok" ? <OkBadge size={18} playOnMount /> : <SparklesIcon size={15} playOnMount />}
           </span>
-          <span className="toast-text">{t.text}</span>
+          <span className="toast-text">{branded(t.text)}</span>
           {t.action && (
             <button
               type="button"

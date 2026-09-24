@@ -1,4 +1,4 @@
-//! "This computer": pictures painted here by folderskin-local's open-weight models, with no key
+//! The Local Model: pictures painted here by folderskin-local's open-weight models, with no key
 //! and no account. What the provider list shows for it, what setting it up takes, and one
 //! painting turned into what the library keeps.
 
@@ -19,18 +19,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tokio::sync::watch;
 
-/// The provider id the chat sends for "This computer".
+/// The provider id the chat sends for the Local Model.
 pub const PROVIDER_ID: &str = "local";
 
-/// The models on offer, as the provider list shows them: `auto` lets each picture go to the model
-/// that suits it (klein when there are pictures to work from or a whole folder to repaint,
-/// otherwise Z-Image), and the other two ask for one.
-const MODELS: [(&str, &str, bool); 3] = [
-    ("auto", "Best for this computer", true),
-    ("klein", "FLUX.2 klein 4B", true),
-    // Text to picture only: a picture to work from goes to klein whatever is asked.
-    ("zimage", "Z-Image Turbo", false),
-];
+/// The model on offer, as the provider list shows it: klein, which paints from words and from
+/// pictures alike.
+const MODELS: [(&str, &str, bool); 1] = [("klein", "FLUX.2 klein 4B", true)];
+
+/// Z-Image Turbo, which an earlier build also offered: skins it painted keep its name.
+const RETIRED_LABELS: [(&str, &str); 1] = [("zimage", "Z-Image Turbo")];
 
 /// The machine, looked at once (it runs `nvidia-smi` or asks the system for its display
 /// adapters, a second or two), a turn for the one painting the graphics card has room for, and
@@ -88,6 +85,11 @@ impl Local {
     /// Whether a setup is under way.
     pub fn is_setting_up(&self) -> bool {
         lock(&self.0.setup).is_some()
+    }
+
+    /// The turn to paint, when no picture is being painted; while it is held none can start.
+    pub fn try_turn(&self) -> Option<tokio::sync::MutexGuard<'_, ()>> {
+        self.0.turn.try_lock().ok()
     }
 
     /// Joins the setup under way, which `listener` then hears from where it has got to; or, when
@@ -237,7 +239,7 @@ impl SetupLead {
 impl Drop for SetupLead {
     fn drop(&mut self) {
         self.end(Err(AiFailure::bug(
-            "Setting this computer up stopped unexpectedly.",
+            "Setting the local model up stopped unexpectedly.",
         )));
     }
 }
@@ -251,21 +253,21 @@ impl SetupJoin {
         match self.0.wait_for(Option::is_some).await {
             Ok(ended) => ended.clone().unwrap_or_else(|| {
                 Err(AiFailure::bug(
-                    "Setting this computer up stopped unexpectedly.",
+                    "Setting the local model up stopped unexpectedly.",
                 ))
             }),
             Err(_) => Err(AiFailure::bug(
-                "Setting this computer up stopped unexpectedly.",
+                "Setting the local model up stopped unexpectedly.",
             )),
         }
     }
 }
 
-/// "This computer" as the provider list shows it; `ready` is shown as its key being saved.
+/// The Local Model as the provider list shows it; `ready` is shown as its key being saved.
 pub fn provider(ready: bool) -> AiProviderDto {
     AiProviderDto {
         id: PROVIDER_ID.into(),
-        label: "This computer".into(),
+        label: "Local Model".into(),
         kind: "local",
         models: MODELS
             .iter()
@@ -285,23 +287,27 @@ pub fn provider(ready: bool) -> AiProviderDto {
     }
 }
 
-/// A local model by the name the provider list gave it; `auto` leaves it to each picture.
+/// A local model by the name the provider list gave it. The names an earlier build offered,
+/// `auto` and `zimage`, paint with klein too, so a chat saved then goes on working.
 pub fn model_choice(id: &str) -> Result<Option<ModelId>, AiFailure> {
     match id {
-        "auto" | "" => Ok(None),
+        "auto" | "" | "zimage" => Ok(None),
         other => ModelId::parse(other).map(Some).ok_or_else(|| {
-            AiFailure::failed(format!("This computer has no model called {other:?}."))
+            AiFailure::failed(format!("There is no local model called {other:?}."))
                 .fix("Choose another model in the provider settings.")
         }),
     }
 }
 
-/// The name a local model goes by in the library ("On this computer · FLUX.2 klein 4B").
+/// The name a local model goes by in the library ("Local Model · FLUX.2 klein 4B"), a
+/// retired one's too.
 pub fn model_label(id: &str) -> Option<&'static str> {
     MODELS
         .iter()
-        .find(|(m, ..)| *m == id)
-        .map(|(_, label, _)| *label)
+        .map(|(m, label, _)| (*m, *label))
+        .chain(RETIRED_LABELS)
+        .find(|(m, _)| *m == id)
+        .map(|(_, label)| label)
 }
 
 /// How the models run here, as people know it: CUDA, Vulkan, Metal, MLX or CPU.
@@ -338,29 +344,31 @@ pub struct LocalStatusDto {
     pub setting_up: bool,
     pub backend: String,
     pub device: String,
+    /// What setting up downloads: the runtime's build (stable-diffusion.cpp) and the model's
+    /// files, less what is already here.
     pub download_bytes: u64,
-    /// The models' weights come down the first time each one paints (mflux on Apple Silicon), so
-    /// `download_bytes` doesn't count them.
-    pub downloads_on_first_use: bool,
-    /// How long a picture from words alone took the last time, which goes to Z-Image; klein's
-    /// when only it has painted here yet.
+    /// The runtime setting up installs besides that, when it isn't installed yet: "mflux" on
+    /// Apple Silicon, whose packages uv fetches and `download_bytes` can't count.
+    pub installs: Option<String>,
+    /// What setup's files take on disk now, partial downloads included: what removing the model
+    /// gives back (besides mflux, when setup installed it).
+    pub kept_bytes: u64,
+    /// The model it paints with ("FLUX.2 [klein] 4B"), how finely ("4-bit") and what its files
+    /// come to here.
+    pub model: String,
+    pub quality: String,
+    pub model_bytes: u64,
+    /// Free space on the disk the model goes on, when the system says, and what setting up wants
+    /// free ([`folderskin_local::space_wanted`]): with less, it refuses and says to clear some.
+    pub free_bytes: Option<u64>,
+    pub wanted_bytes: u64,
     pub seconds_per_image: Option<f64>,
-    /// How long each model took the last time it painted here, by the name the list gives it:
-    /// klein, painting whole folders and from pictures, runs at quite another speed.
-    pub timings: Vec<ModelTiming>,
     pub home: String,
     pub note: Option<String>,
     /// Why the runtime won't start, when it is installed but doesn't; for `ai_local_setup`'s
     /// failure, since setting up again doesn't change it.
     #[serde(skip)]
     pub problem: Option<RuntimeProblem>,
-}
-
-/// How long one model took to paint a picture here.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct ModelTiming {
-    pub label: String,
-    pub seconds: f64,
 }
 
 /// An installed runtime that won't start.
@@ -372,10 +380,15 @@ pub struct RuntimeProblem {
     pub message: String,
 }
 
+/// Below this much memory a Mac swaps while klein paints: at 1024 x 960 it peaks at 11.7 GB
+/// (measured on an M3 Pro with mflux 0.20.0, 4-bit), whatever mflux's low-RAM options.
+const LOW_MEMORY_GB: f64 = 16.0;
+
 /// Looks at what is installed. Asks the runtime whether it starts, which takes a second: call it
 /// off the async threads. Says nobody is setting it up; [`Local::status`] knows better.
 pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
     let status = folderskin_local::status(machine, settings);
+    let model = ModelId::Klein.info();
     let runtime = &status.runtime;
     let models_here = status.models.iter().all(|m| m.ready());
     let ready = runtime.installed && runtime.problem.is_none() && models_here;
@@ -385,7 +398,6 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         code: runtime.problem_code.unwrap_or("runtime_failed_to_start"),
         message: format!("{} is installed but won't start: {p}.", runtime.name),
     });
-    let timing = Timing::read();
     let mut notes = Vec::new();
     if let Some(problem) = &problem {
         notes.push(problem.message.clone());
@@ -415,10 +427,10 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
                     .into(),
             );
         }
-        if settings.tier == Tier::Q4 && settings.backend != Backend::Mlx {
+        if settings.backend == Backend::Mlx && machine.ram_gb < LOW_MEMORY_GB {
             notes.push(format!(
-                "With {:.0} GB of memory it uses the smaller 4-bit models, which are a little \
-                 softer.",
+                "With {:.0} GB of memory this Mac paints slowly, and other apps slow down while it \
+                 does: the model needs about 12 GB. A provider with your own key is quicker.",
                 machine.ram_gb
             ));
         }
@@ -434,28 +446,40 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         } else {
             folderskin_local::download_size(machine, settings)
         },
-        downloads_on_first_use: settings.backend == Backend::Mlx,
-        seconds_per_image: timing.seconds_for(settings),
-        timings: timing.by_model(settings),
+        installs: (settings.backend == Backend::Mlx && !runtime.installed && can_set_up)
+            .then(|| runtime.name.clone()),
+        kept_bytes: folderskin_local::kept_bytes(),
+        model: model.label.into(),
+        quality: match settings.tier {
+            Tier::Q4 => "4-bit",
+            Tier::Q8 => "8-bit",
+        }
+        .into(),
+        model_bytes: model
+            .files_for(settings.backend, settings.tier)
+            .iter()
+            .map(|f| f.size)
+            .sum(),
+        free_bytes: folderskin_local::paths::free_space(&folderskin_local::home()),
+        wanted_bytes: if ready || !can_set_up {
+            0
+        } else {
+            folderskin_local::space_wanted(folderskin_local::space_needed(machine, settings))
+        },
+        seconds_per_image: Timing::read().seconds_for(settings),
         home: status.home.display().to_string(),
         note: (!notes.is_empty()).then(|| notes.join(" ")),
         problem,
     }
 }
 
-/// How long the last picture took here with each model, so the next status can say roughly how
-/// long one takes. Kept beside the models, since it belongs to this computer and how it runs
-/// them. Z-Image and klein paint at quite different speeds, so each keeps its own: one time for
-/// both said fourteen minutes after a Z-Image picture and five after a klein one.
+/// How long the last picture took here, so the next status can say roughly how long one takes.
+/// Kept beside the models, since it belongs to this computer and how it runs them.
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Timing {
     pub backend: String,
     pub tier: String,
-    /// The last picture's, whichever model painted it; all a file written before `models` has.
     pub seconds: f64,
-    /// The last picture's with each model, by id.
-    #[serde(default)]
-    pub models: std::collections::BTreeMap<String, f64>,
 }
 
 impl Timing {
@@ -470,59 +494,20 @@ impl Timing {
             .unwrap_or_default()
     }
 
-    fn measured_with(&self, settings: &Settings) -> bool {
-        self.backend == settings.backend.id() && self.tier == settings.tier.id()
-    }
-
-    /// How long a picture from words alone takes, when it was measured with these settings:
-    /// Z-Image's time, which is where such a picture goes; klein's, or the last picture's from a
-    /// file that kept no more, until Z-Image has painted.
+    /// The time, when it was measured with these settings.
     pub fn seconds_for(&self, settings: &Settings) -> Option<f64> {
-        if !self.measured_with(settings) {
-            return None;
-        }
-        [ModelId::Zimage, ModelId::Klein]
-            .iter()
-            .find_map(|m| self.models.get(m.id()).copied())
-            .or(Some(self.seconds))
-            .filter(|s| *s > 0.0)
+        (self.backend == settings.backend.id()
+            && self.tier == settings.tier.id()
+            && self.seconds > 0.0)
+            .then_some(self.seconds)
     }
 
-    /// Each model's time, when they were measured with these settings, in the list's order.
-    pub fn by_model(&self, settings: &Settings) -> Vec<ModelTiming> {
-        if !self.measured_with(settings) {
-            return Vec::new();
-        }
-        MODELS
-            .iter()
-            .filter_map(|(id, label, _)| {
-                let seconds = *self.models.get(*id)?;
-                (seconds > 0.0).then(|| ModelTiming {
-                    label: label.to_string(),
-                    seconds,
-                })
-            })
-            .collect()
-    }
-
-    /// This timing with `model`'s latest picture taking `seconds`. Times measured with other
-    /// settings are no guide to these, so they go.
-    pub fn with(mut self, settings: &Settings, model: ModelId, seconds: f64) -> Timing {
-        if !self.measured_with(settings) {
-            self = Timing {
-                backend: settings.backend.id().into(),
-                tier: settings.tier.id().into(),
-                ..Timing::default()
-            };
-        }
-        let seconds = (seconds * 10.0).round() / 10.0;
-        self.seconds = seconds;
-        self.models.insert(model.id().into(), seconds);
-        self
-    }
-
-    fn record(settings: &Settings, model: ModelId, seconds: f64) {
-        let timing = Timing::read().with(settings, model, seconds);
+    fn record(settings: &Settings, seconds: f64) {
+        let timing = Timing {
+            backend: settings.backend.id().into(),
+            tier: settings.tier.id().into(),
+            seconds: (seconds * 10.0).round() / 10.0,
+        };
         if let Ok(text) = serde_json::to_vec(&timing) {
             // Only a hint for next time: a computer that can't keep it just doesn't say.
             let _ = std::fs::write(Timing::file(), text);
@@ -577,7 +562,7 @@ pub async fn paint(
     let model = job.model().id;
     let doing = Doing {
         what: format!(
-            "painting {} on this computer ({}, {})",
+            "painting {} with the local model ({}, {})",
             match order.shape {
                 Shape::Folder => "a whole folder",
                 Shape::Artwork => "folder artwork",
@@ -586,7 +571,6 @@ pub async fn paint(
             device(machine, settings.backend)
         ),
         setup: false,
-        model: Some(model),
     };
     send(AiEvent::info(format!(
         "backend: {} ({})",
@@ -609,7 +593,7 @@ pub async fn paint(
     let picture = folderskin_local::generate(&job, settings, &work.0, &reporter, cancel)
         .await
         .map_err(|e| failure::from_engine(e, &doing))?;
-    Timing::record(settings, model, picture.provenance.seconds);
+    Timing::record(settings, picture.provenance.seconds);
     let shape = picture.shape;
     if order.shape == Shape::Folder {
         send(AiEvent::stage("cut", "Cutting it out of the background"));
@@ -733,24 +717,16 @@ mod tests {
         let p = provider(true);
         assert_eq!(
             (p.id.as_str(), p.label.as_str(), p.kind),
-            ("local", "This computer", "local")
+            ("local", "Local Model", "local")
         );
         assert!(p.has_key, "set up and ready shows as ready");
         assert!(!provider(false).has_key);
         let ids: Vec<&str> = p.models.iter().map(|m| m.id.as_str()).collect();
-        assert_eq!(ids, ["auto", "klein", "zimage"]);
+        assert_eq!(ids, ["klein"], "one model, which paints everything");
         assert!(p
             .models
             .iter()
-            .all(|m| m.price_hint == "Free" && !m.native_alpha));
-        let takes = |id: &str| {
-            p.models
-                .iter()
-                .find(|m| m.id == id)
-                .unwrap()
-                .accepts_reference
-        };
-        assert!(takes("auto") && takes("klein") && !takes("zimage"));
+            .all(|m| m.price_hint == "Free" && !m.native_alpha && m.accepts_reference));
         assert!(p.keys_url.is_empty() && p.key_hint.is_empty());
         let json = serde_json::to_value(&p).unwrap();
         assert_eq!(json["kind"], "local");
@@ -758,11 +734,15 @@ mod tests {
 
     #[test]
     fn models_are_chosen_by_the_names_the_list_gives_them() {
-        assert_eq!(model_choice("auto").unwrap(), None);
         assert_eq!(model_choice("klein").unwrap(), Some(ModelId::Klein));
-        assert_eq!(model_choice("zimage").unwrap(), Some(ModelId::Zimage));
+        // What chats saved by an earlier build ask for still paints, with klein.
+        assert_eq!(model_choice("auto").unwrap(), None);
+        assert_eq!(model_choice("").unwrap(), None);
+        assert_eq!(model_choice("zimage").unwrap(), None);
         assert_eq!(model_choice("sdxl").unwrap_err().code, "failed");
         assert_eq!(model_label("klein"), Some("FLUX.2 klein 4B"));
+        // A skin Z-Image painted keeps its name in the library.
+        assert_eq!(model_label("zimage"), Some("Z-Image Turbo"));
         assert_eq!(model_label("nope"), None);
     }
 
@@ -809,7 +789,11 @@ mod tests {
         }
         let json = serde_json::to_value(&s).unwrap();
         assert!(json.get("problem").is_none(), "{json}");
-        assert_eq!(json["downloads_on_first_use"], false);
+        assert_eq!(
+            json["installs"],
+            serde_json::Value::Null,
+            "nothing to install here"
+        );
     }
 
     /// A listener that keeps what it hears.
@@ -906,6 +890,39 @@ mod tests {
     }
 
     #[test]
+    fn a_mac_says_what_setting_up_takes_and_when_it_is_short_of_memory() {
+        let mac = |ram_gb| Machine {
+            os: Os::Macos,
+            arch: Arch::Arm64,
+            ram_gb,
+            gpu: Gpu::Apple,
+            gpu_name: "Apple M2".into(),
+            vram_gb: 0.0,
+        };
+        let small = mac(8.0);
+        let s = status(&small, &Settings::for_machine(&small));
+        assert!(s.can_set_up);
+        assert_eq!(s.backend, "MLX");
+        if !s.ready {
+            // The weights are counted now, not left to download the first time it paints.
+            assert!(s.download_bytes > 0 || s.installs.is_some(), "{s:?}");
+            assert!(s.download_bytes <= 4_619_699_678, "{s:?}");
+            let note = s.note.as_deref().unwrap_or_default();
+            assert!(
+                note.contains("8 GB of memory") && note.contains("12 GB"),
+                "{note}"
+            );
+        }
+        assert!(s.installs.is_none() || s.installs.as_deref() == Some("mflux"));
+        let roomy = mac(36.0);
+        let s = status(&roomy, &Settings::for_machine(&roomy));
+        assert!(
+            !s.note.as_deref().unwrap_or_default().contains("12 GB"),
+            "{s:?}"
+        );
+    }
+
+    #[test]
     fn a_timing_counts_only_for_the_settings_it_was_measured_with() {
         let settings = Settings {
             backend: Backend::Cuda,
@@ -916,63 +933,14 @@ mod tests {
             backend: "cuda".into(),
             tier: "q8".into(),
             seconds: 28.4,
-            ..Timing::default()
         };
-        assert_eq!(
-            t.seconds_for(&settings),
-            Some(28.4),
-            "a file from before models"
-        );
+        assert_eq!(t.seconds_for(&settings), Some(28.4));
         let vulkan = Settings {
             backend: Backend::Vulkan,
             ..settings
         };
         assert_eq!(t.seconds_for(&vulkan), None);
         assert_eq!(Timing::default().seconds_for(&settings), None);
-    }
-
-    #[test]
-    fn each_model_keeps_its_own_time() {
-        let settings = Settings {
-            backend: Backend::Cuda,
-            tier: Tier::Q8,
-            vram_gb: 4.0,
-        };
-        let t = Timing::default()
-            .with(&settings, ModelId::Klein, 301.0)
-            .with(&settings, ModelId::Zimage, 839.0)
-            .with(&settings, ModelId::Klein, 298.04);
-        // A picture from words goes to Z-Image, whatever painted last.
-        assert_eq!(t.seconds_for(&settings), Some(839.0));
-        assert_eq!(
-            t.by_model(&settings),
-            [
-                ModelTiming {
-                    label: "FLUX.2 klein 4B".into(),
-                    seconds: 298.0
-                },
-                ModelTiming {
-                    label: "Z-Image Turbo".into(),
-                    seconds: 839.0
-                },
-            ]
-        );
-        // Until Z-Image has painted, klein's is the guide.
-        let only_klein = Timing::default().with(&settings, ModelId::Klein, 42.0);
-        assert_eq!(only_klein.seconds_for(&settings), Some(42.0));
-        // Times from other settings go when these are measured.
-        let vulkan = Settings {
-            backend: Backend::Vulkan,
-            ..settings
-        };
-        let moved = t.with(&vulkan, ModelId::Klein, 90.0);
-        assert_eq!(moved.by_model(&vulkan).len(), 1);
-        assert_eq!(moved.seconds_for(&settings), None);
-        // A file written before models were kept still reads.
-        let old: Timing =
-            serde_json::from_str(r#"{"backend":"cuda","tier":"q8","seconds":60.0}"#).unwrap();
-        assert_eq!(old.seconds_for(&settings), Some(60.0));
-        assert!(old.by_model(&settings).is_empty());
     }
 
     #[test]

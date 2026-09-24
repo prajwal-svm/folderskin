@@ -5,6 +5,7 @@
  * finished loading so the stage can draw again.
  */
 import type { Doc, ImageFx, TextLayer } from "./doc";
+import type { FolderStyle } from "./parts";
 import { applyMatrix, blurPixels, blurRadius, fxMatrix, hasColorFx, hasFx } from "./imagefx";
 import { grainPixels } from "./patterns";
 import { layoutText, type TextLayout } from "./text";
@@ -37,6 +38,8 @@ export class Assets {
   private paths = new Map<string, Path2D>();
   private listeners = new Set<() => void>();
   private measurer: CanvasRenderingContext2D | null = null;
+  /** Each folder's front panel mask, from its Rust template, for fills that cover only the front. */
+  private fronts = new Map<FolderStyle, CanvasImageSource>();
 
   onChange(fn: () => void): () => void {
     this.listeners.add(fn);
@@ -139,6 +142,18 @@ export class Assets {
       this.paths.set(d, p);
     }
     return p;
+  }
+
+  /** Keeps the front panel mask of the folder of `style`, once its template has loaded. */
+  setFront(style: FolderStyle, mask: CanvasImageSource) {
+    if (this.fronts.get(style) === mask) return;
+    this.fronts.set(style, mask);
+    this.changed();
+  }
+
+  /** The front panel mask of the folder of `style`, or null while its template hasn't loaded. */
+  front(style: FolderStyle): CanvasImageSource | null {
+    return this.fronts.get(style) ?? null;
   }
 
   /** Forgets text layouts, for when a font has finished loading and measures differently. */

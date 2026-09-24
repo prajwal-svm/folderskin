@@ -334,9 +334,14 @@ html[data-os="windows"] .cmp-side-head {
   letter-spacing: -0.035em;
 }
 
-/* "Skin", wherever the name is written as the logo */
+/* "Skin", wherever the name is written: the logo, and every mention of it in the app's words */
 .brand-accent {
-  color: var(--accent);
+  color: var(--brand);
+}
+
+/* The name in running text (components/Brand.tsx): bold, whatever the text around it is. */
+.brand-word {
+  font-weight: 700;
 }
 
 /* The version badge opens About while it is hovered or focused. It is the one part of the

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { branded } from "./Brand";
 
 /**
  * The dialogs open now, oldest first. Only the newest answers Escape and keeps the focus, so a
@@ -125,8 +126,8 @@ export function Modal({
           <>
             <header className="modal-head">
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 className="modal-title">{title}</h2>
-                {sub && <p className="modal-sub">{sub}</p>}
+                <h2 className="modal-title">{branded(title)}</h2>
+                {sub && <p className="modal-sub">{branded(sub)}</p>}
               </div>
               {closable && closeButton(onClose, "modal-close")}
             </header>

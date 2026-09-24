@@ -72,6 +72,7 @@ import { Popover } from "./Popover";
 import { NewDesign, type Start } from "./NewDesign";
 import { LookSwitch } from "../LookSwitch";
 import { getLook } from "../../state/look";
+import { useShownTheme } from "../../state/theme";
 import { IconLibrary, PREVIEW_ID } from "./IconLibrary";
 import { Segmented } from "./controls";
 import { ImageIcon } from "../icons/image";
@@ -123,9 +124,20 @@ function loadLook(): IconLook {
 const SAVE_PX = 2048;
 const PREVIEW_SIZES = [128, 64, 32];
 
+/**
+ * The design being made, kept for this run of the app only (sessionStorage): leaving the canvas
+ * and coming back finds it as it was, and every launch starts afresh from the new-design dialog.
+ * Saved designs are in the library; this is only the one on the canvas.
+ */
 function loadDraft(): Draft | null {
   try {
-    const raw = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as Partial<Draft> | null;
+    // Earlier builds kept it for good; one of those mustn't come back now.
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null") as Partial<Draft> | null;
     const doc = raw ? parseDoc(raw.doc) : null;
     if (!raw || !doc) return null;
     const editing = raw.editing && typeof raw.editing.skinId === "string" ? { skinId: raw.editing.skinId, tags: Array.isArray(raw.editing.tags) ? raw.editing.tags : [] } : null;
@@ -135,13 +147,24 @@ function loadDraft(): Draft | null {
   }
 }
 
-function loadView(): { backdrop: Backdrop } {
+/**
+ * What's behind the folder on the canvas, when someone has picked it in this run of the app
+ * (sessionStorage); `null` until then, which follows the theme: white in light, dark in dark.
+ * Every launch starts from the theme again.
+ */
+function loadView(): { backdrop: Backdrop | null } {
   try {
-    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") as { backdrop?: unknown };
-    const backdrops: Backdrop[] = ["window", "light", "dark", "colour"];
-    return { backdrop: backdrops.includes(v.backdrop as Backdrop) ? (v.backdrop as Backdrop) : "window" };
+    // Earlier builds kept it for good.
+    localStorage.removeItem(VIEW_KEY);
   } catch {
-    return { backdrop: "window" };
+    // Nothing kept, nothing to forget.
+  }
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? "{}") as { backdrop?: unknown };
+    const backdrops: Backdrop[] = ["window", "light", "dark", "colour"];
+    return { backdrop: backdrops.includes(v.backdrop as Backdrop) ? (v.backdrop as Backdrop) : null };
+  } catch {
+    return { backdrop: null };
   }
 }
 
@@ -498,22 +521,32 @@ export function Composer({
   // didn't load, and the design is shown by itself.
   const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts } | null>>>({});
   const asked = useRef(new Set<FolderStyle>());
+  const loadFolder = useCallback(
+    (style: FolderStyle) => {
+      if (asked.current.has(style)) return;
+      asked.current.add(style);
+      api
+        .composerTemplate(style)
+        .then(async (t) => {
+          const images = await loadTemplate(t);
+          setTemplates((all) => ({ ...all, [style]: { images, parts: t.parts } }));
+        })
+        .catch((e) => {
+          asked.current.delete(style);
+          setTemplates((all) => ({ ...all, [style]: null }));
+          toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
+        });
+    },
+    [toast],
+  );
+  useEffect(() => loadFolder(doc.style), [doc.style, loadFolder]);
+  // Fills that cover only the front are cut to each folder's front, once it has loaded.
   useEffect(() => {
-    const style = doc.style;
-    if (asked.current.has(style)) return;
-    asked.current.add(style);
-    api
-      .composerTemplate(style)
-      .then(async (t) => {
-        const images = await loadTemplate(t);
-        setTemplates((all) => ({ ...all, [style]: { images, parts: t.parts } }));
-      })
-      .catch((e) => {
-        asked.current.delete(style);
-        setTemplates((all) => ({ ...all, [style]: null }));
-        toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
-      });
-  }, [doc.style, toast]);
+    for (const style of ["mac", "windows"] as const) {
+      const folder = templates[style];
+      if (folder) assets.setFront(style, folder.images.front);
+    }
+  }, [assets, templates]);
   const template = templates[doc.style] ?? null;
   /** The folder the design is on hasn't loaded yet: the stage waits for it rather than show the design without it. */
   const folderLoading = templates[doc.style] === undefined;
@@ -524,12 +557,19 @@ export function Composer({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** The "Start a new design" dialog: on the first visit, and whenever New is pressed. */
   const [starting, setStarting] = useState(!draft);
+  // The dialog shows a folder's own look on that folder, whichever one this design is on.
+  useEffect(() => {
+    if (!starting) return;
+    for (const t of TEMPLATES) if (t.style) loadFolder(t.style);
+  }, [starting, loadFolder]);
   const [name, setName] = useState(draft?.name ?? "");
   const [nameTouched, setNameTouched] = useState(draft?.nameTouched ?? false);
   const [editing, setEditing] = useState<Editing | null>(draft?.editing ?? null);
   const [saving, setSaving] = useState<"save" | "copy" | "apply" | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: string; run: () => void } | null>(null);
   const [view, setView] = useState(loadView);
+  const theme = useShownTheme();
+  const backdrop: Backdrop = view.backdrop ?? (theme === "dark" ? "dark" : "light");
   const [previews, setPreviews] = useState<string[]>([]);
   /** What the side island shows: the layers and their settings, or the icon library. */
   const [side, setSide] = useState<"layers" | "icons">("layers");
@@ -569,12 +609,12 @@ export function Composer({
     const t = window.setTimeout(() => {
       try {
         const d: Draft = { doc, name, nameTouched, editing, dirty };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
       } catch {
-        // A design with big pictures can be too much for storage. It still lasts until the app
-        // quits; an older copy mustn't come back in its place after a restart.
+        // A design with big pictures can be too much for storage. It still lasts while the canvas
+        // is open; an older copy mustn't come back in its place.
         try {
-          localStorage.removeItem(DRAFT_KEY);
+          sessionStorage.removeItem(DRAFT_KEY);
         } catch {
           // Nothing kept, nothing to forget.
         }
@@ -585,7 +625,7 @@ export function Composer({
 
   useEffect(() => {
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify(view));
+      sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
     } catch {
       // Only a preference.
     }
@@ -605,10 +645,10 @@ export function Composer({
     assets.prune([next]);
   }, [assets]);
 
-  /** Forgets the stored draft, for a fresh start that shouldn't come back after a restart. */
+  /** Forgets the stored draft, for a fresh start that shouldn't come back. */
   const forgetDraft = useCallback(() => {
     try {
-      localStorage.removeItem(DRAFT_KEY);
+      sessionStorage.removeItem(DRAFT_KEY);
     } catch {
       // The next autosave writes over it anyway.
     }
@@ -660,10 +700,13 @@ export function Composer({
         if (!img) return;
         picture = asPicture(img);
       }
-      reset({ ...choice.template.make(parts, picture), style }, { editing: null, name: "", named: false });
+      // A folder's own look starts on that folder; any other template on the last design's.
+      const on = choice.template.style ?? style;
+      const onParts = templates[on]?.parts ?? fallbackParts(on);
+      reset({ ...choice.template.make(onParts, picture), style: on }, { editing: null, name: "", named: false });
       forgetDraft();
     },
-    [choosePicture, forgetDraft, parts, reset],
+    [choosePicture, forgetDraft, templates, reset],
   );
 
   // Edit a saved design, or remix any skin, when the app asks.
@@ -1159,7 +1202,7 @@ export function Composer({
             folderLoading={folderLoading}
             parts={parts}
             view={viewOf}
-            backdrop={view.backdrop}
+            backdrop={backdrop}
             version={version}
             hint={doc.layers.length === 0 ? "An empty design is a see-through folder. Add a colour, words or a picture from the bar above." : null}
             onOpen={(layer) => {
@@ -1203,10 +1246,10 @@ export function Composer({
                 key={b.id}
                 type="button"
                 role="radio"
-                aria-checked={view.backdrop === b.id}
+                aria-checked={backdrop === b.id}
                 aria-label={b.label}
                 data-tip={b.label}
-                className={view.backdrop === b.id ? `cmp-backdrop is-${b.id} is-on` : `cmp-backdrop is-${b.id}`}
+                className={backdrop === b.id ? `cmp-backdrop is-${b.id} is-on` : `cmp-backdrop is-${b.id}`}
                 onClick={() => setView((v) => ({ ...v, backdrop: b.id }))}
               />
             ))}
@@ -1235,7 +1278,7 @@ export function Composer({
               setNameTouched(true);
             }}
           />
-          <p className="cmp-side-sub">{editing ? (dirty ? "Changed since it was saved" : "Saved in Yours") : "Not saved yet"}</p>
+          {editing && <p className="cmp-side-sub">{dirty ? "Changed since it was saved" : "Saved in Yours"}</p>}
           <div className="cmp-side-tabs">
             <Segmented<"layers" | "icons">
               label="side panel"
@@ -1330,6 +1373,7 @@ export function Composer({
                   onReplaceIcon={() => openIcons(selected?.id ?? null)}
                   index={index}
                   size={selected && isPlaced(selected) ? boxOf(selected, assets) : null}
+                  onFolder={doc.shape === "folder"}
                 />
               </div>
             </Panel>
@@ -1340,7 +1384,7 @@ export function Composer({
             {folder && folderIcon ? <img src={folderIcon} alt="" draggable={false} /> : <FolderIcon size={18} />}
             <span className="cmp-target-text">
               <span className="cmp-target-label">{folder ? "Apply to" : "No folder chosen"}</span>
-              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder…"}</span>
+              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder"}</span>
             </span>
           </button>
           {folder && subfolders && subfolders.count > 0 && (
@@ -1405,8 +1449,8 @@ export function Composer({
       )}
       {active && starting && (
         <NewDesign
-          parts={parts}
-          template={template?.images ?? null}
+          folders={templates}
+          style={doc.style}
           assets={assets}
           version={version}
           dirty={dirty && doc.layers.length > 0}

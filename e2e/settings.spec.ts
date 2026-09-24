@@ -15,12 +15,12 @@ test.describe("settings", () => {
     await openApp(page);
     await openSettings(page);
     const tabs = dialog(page).getByRole("tab");
-    await expect(tabs).toHaveText(["General", "AI", "Sharing", "About"]);
+    await expect(tabs).toHaveText(["General", "AI Provider", "Sharing", "About"]);
     await expect(dialog(page).getByRole("tab", { name: "General" })).toHaveAttribute("aria-selected", "true");
     await expect(dialog(page).getByRole("tab", { name: "General" })).toBeFocused();
     await expect(dialog(page).getByRole("heading", { name: "Appearance" })).toBeVisible();
     await page.keyboard.press("ArrowDown");
-    await expect(dialog(page).getByRole("tab", { name: "AI" })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog(page).getByRole("tab", { name: "AI Provider" })).toHaveAttribute("aria-selected", "true");
     await expect(dialog(page).getByRole("heading", { name: "Where pictures are made" })).toBeVisible();
     await page.keyboard.press("End");
     await expect(dialog(page).getByRole("heading", { name: "Updates" })).toBeVisible();
@@ -65,6 +65,22 @@ test.describe("settings", () => {
     await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "System" }).click();
     await expect.poll(() => html(page, "data-accent")).toBeNull();
     await expect.poll(() => html(page, "data-motion")).toBeNull();
+  });
+
+  test("writes the app's name bold, with Skin in FolderSkin's blue whatever the accent", async ({ page }) => {
+    await openApp(page);
+    await openSettings(page);
+    await dialog(page).getByRole("radio", { name: "Purple" }).click();
+    await expect.poll(() => html(page, "data-accent")).toBe("purple");
+    await dialog(page).getByRole("tab", { name: "About" }).click();
+    for (const name of [dialog(page).locator(".about-intro .brand-word"), dialog(page).locator(".set-row-note .brand-word")]) {
+      await expect(name).toHaveText("FolderSkin");
+      await expect(name).toHaveCSS("font-weight", "700");
+      await expect(name.locator(".brand-accent")).toHaveCSS("color", "rgb(58, 134, 255)");
+    }
+    await dialog(page).getByRole("tab", { name: "General" }).click();
+    await dialog(page).getByRole("radio", { name: "Blue" }).click();
+    await expect.poll(() => html(page, "data-accent")).toBeNull();
   });
 
   test("Motion: Reduced keeps the icons and the library's folders still", async ({ page }) => {
@@ -199,8 +215,8 @@ test.describe("settings", () => {
       ["accent color", "General", "Accent colour"],
       ["your skins", "General", "Your skins"],
       ["reduce motion", "General", "Motion"],
-      ["where pictures are made", "AI", "Where pictures are made"],
-      ["openai", "AI", "Where pictures are made"],
+      ["where pictures are made", "AI Provider", "Where pictures are made"],
+      ["openai", "AI Provider", "Where pictures are made"],
     ]) {
       await search.fill(words);
       await expect(dialog(page).getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");

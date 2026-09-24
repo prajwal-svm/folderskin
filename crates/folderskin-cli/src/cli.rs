@@ -62,8 +62,8 @@ pub enum Command {
 pub enum AiCommand {
     /// What this computer is, what is installed, and what `ai gen` would use
     Doctor(MachineArgs),
-    /// Download the runtime and the models (about 15.7 GB at q8, 9.4 GB at q4), resuming and
-    /// checking every file
+    /// Download the runtime and the model (4.6 GB on a Mac, 5.2 GB elsewhere, at the default q4),
+    /// resuming and checking every file
     Setup(SetupArgs),
     /// Paint pictures from one idea
     Gen(GenArgs),
@@ -91,7 +91,7 @@ pub struct MachineArgs {
     /// What runs the models
     #[arg(long, value_enum)]
     pub backend: Option<BackendArg>,
-    /// q8: best, wants ~24 GB of RAM; q4: smaller and a little softer
+    /// q4, the default: 4.6 GB on a Mac, 5.2 GB elsewhere; q8: a little sharper, twice the download
     #[arg(long, value_enum)]
     pub tier: Option<TierArg>,
 }
@@ -157,7 +157,7 @@ pub struct GenArgs {
     /// Where the seeds start, so a good picture can be painted again exactly (local models)
     #[arg(long, value_parser = parse_seed)]
     pub seed: Option<u64>,
-    /// Local: auto, zimage or klein (pictures always go to klein). With --provider: its model id
+    /// Local: auto or klein, the one local model. With --provider: its model id
     #[arg(long)]
     pub model: Option<String>,
     /// local (the default), or a provider for your own key: openai, xai, google, bfl, recraft,
@@ -258,7 +258,7 @@ pub enum ConfigCommand {
 pub enum ConfigKey {
     /// local, or a provider for your own key
     Provider,
-    /// The provider's model; for local, auto, zimage or klein
+    /// The provider's model; for local, auto or klein
     Model,
     /// auto, q8 or q4
     Tier,

@@ -150,9 +150,10 @@ impl fmt::Display for Backend {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Tier {
-    /// 8-bit: the best, about 15.7 GB of downloads, wants ~24 GB of RAM.
+    /// 8-bit: a little sharper, twice the download: 8.6 GB on a Mac, 8.8 GB elsewhere. Only when
+    /// asked for (`--tier q8`).
     Q8,
-    /// 4-bit: smaller and a little softer, about 9.4 GB.
+    /// 4-bit, the default everywhere: 4.6 GB on a Mac, 5.2 GB elsewhere.
     Q4,
 }
 
@@ -187,14 +188,11 @@ pub fn pick_backend(m: &Machine) -> Backend {
     }
 }
 
-/// 8-bit weights where memory allows. They stream from RAM when they don't fit on the card, so
-/// RAM decides, not VRAM: a 4 GB laptop GPU runs the 8-bit models.
-pub fn pick_tier(m: &Machine) -> Tier {
-    if m.ram_gb >= 24.0 {
-        Tier::Q8
-    } else {
-        Tier::Q4
-    }
+/// 4-bit on every computer: the one download that suits them all, and klein at 4-bit paints
+/// folder art as well as people can tell at icon size. 8-bit doubles the download for a little
+/// more sharpness, so it is only used when someone asks for it.
+pub fn pick_tier(_m: &Machine) -> Tier {
+    Tier::Q4
 }
 
 /// Looks at this computer. Runs `nvidia-smi` and, failing that, asks the system for its display
@@ -368,11 +366,20 @@ mod tests {
     }
 
     #[test]
-    fn ram_decides_the_tier() {
-        let tier = |ram| pick_tier(&machine(Os::Windows, Arch::X86_64, ram, Gpu::Nvidia));
-        assert_eq!(tier(32.0), Tier::Q8);
-        assert_eq!(tier(24.0), Tier::Q8);
-        assert_eq!(tier(16.0), Tier::Q4);
+    fn every_computer_starts_at_4_bit() {
+        for (os, arch, gpu) in [
+            (Os::Windows, Arch::X86_64, Gpu::Nvidia),
+            (Os::Linux, Arch::X86_64, Gpu::Other),
+            (Os::Macos, Arch::Arm64, Gpu::Other),
+        ] {
+            for ram in [8.0, 16.0, 24.0, 36.0, 128.0] {
+                assert_eq!(
+                    pick_tier(&machine(os, arch, ram, gpu)),
+                    Tier::Q4,
+                    "{os:?} {ram}"
+                );
+            }
+        }
     }
 
     #[test]

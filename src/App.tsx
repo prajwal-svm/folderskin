@@ -906,7 +906,6 @@ export default function App() {
         onToggleRail={toggleRail}
       />
       <AboutMenu
-        note={platform.note}
         open={aboutOpen}
         onHover={hoverAbout}
         onClose={() => setAboutOpen(false)}
@@ -1139,7 +1138,6 @@ export default function App() {
           onRail={(on) => on !== layout.rail && toggleRail()}
           fileBrowser={fileBrowser(platform.os)}
           savedCount={skins.filter((s) => s.custom).length}
-          note={platform.note}
           onKeysChanged={() => setKeysVersion((v) => v + 1)}
           onClose={closeSettings}
           toast={toast}

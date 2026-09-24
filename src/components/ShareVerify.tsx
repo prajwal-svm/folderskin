@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type ShareStatus } from "../lib/tauri";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
+import { Brand } from "./Brand";
 
 /**
  * Verifying this computer for sharing without GitHub. The check that keeps automated uploads out
@@ -53,10 +54,10 @@ export function ShareVerify({ handle, onVerified, onCancel }: { handle: string; 
   return (
     <div className="gh-connect">
       <p className="share-verify-lead">
-        A page from FolderSkin's sharing service has opened in your browser. Once you're through its quick check, FolderSkin carries on by itself.
+        A page from <Brand />&apos;s sharing service has opened in your browser. Once you&apos;re through its quick check, <Brand /> carries on by itself.
       </p>
       <p className="field-note">
-        Your packs will be credited to <strong>{handle}</strong>. FolderSkin asks this once per computer.
+        Your packs will be credited to <strong>{handle}</strong>. <Brand /> asks this once per computer.
       </p>
       <button type="button" className="btn btn-primary gh-open" disabled={!url} onClick={() => url && void openUrl(url).catch(() => {})}>
         <ExternalLinkIcon />

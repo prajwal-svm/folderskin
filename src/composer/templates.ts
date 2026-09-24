@@ -4,6 +4,7 @@
  */
 import { FOLDER_BLUE_BOTTOM, FOLDER_BLUE_TOP } from "./color";
 import {
+  CANVAS,
   centreOf,
   emptyDoc,
   imageBox,
@@ -16,7 +17,9 @@ import {
   makeText,
   solid,
   type Doc,
+  type FolderStyle,
   type Layer,
+  type Paint,
   type Parts,
 } from "./doc";
 
@@ -25,18 +28,100 @@ export type Picture = { src: string; width: number; height: number; alpha: boole
 export type Template = {
   id: string;
   label: string;
+  /** Starts on this folder whichever folder the last design was on: it's that folder's own look. */
+  style?: FolderStyle;
+  /** A folder as its system draws it, with nothing on it: offered with the empty starts, not the templates. */
+  plain?: { note: string };
   /** Needs a picture before it can start. */
   photo?: boolean;
+  /** The design, laid out on `parts`: those of `style`'s folder when the template has one. */
   make: (parts: Parts, picture?: Picture) => Doc;
 };
 
-const doc = (layers: Layer[], shape: Doc["shape"] = "folder"): Doc => ({ ...emptyDoc(shape), layers });
+const doc = (layers: Layer[], shape: Doc["shape"] = "folder", style: FolderStyle = "mac"): Doc => ({ ...emptyDoc(shape, style), layers });
+
+/** A top-to-bottom gradient across the whole canvas, each colour at a height on it. */
+const down = (...stops: [y: number, color: string][]): Paint => ({
+  type: "linear",
+  angle: 180,
+  stops: stops.map(([y, color]) => ({ at: Math.min(1, Math.max(0, y / CANVAS)), color })),
+});
 
 export const TEMPLATES: Template[] = [
   {
     id: "plain",
     label: "Plain",
     make: () => doc([makeFill(linear(180, FOLDER_BLUE_TOP, FOLDER_BLUE_BOTTOM))]),
+  },
+  {
+    // The folder Finder draws: a deeper blue back and tab, a lighter front that darkens along
+    // the bottom, with the pocket's seam across it. Colours from macOS's own folder.
+    id: "mac",
+    label: "Mac folder",
+    style: "mac",
+    plain: { note: "The Mac's blue" },
+    make: (p) => {
+      const back = (share: number) => p.back[1] + share * (p.front[1] - p.back[1]);
+      const front = (share: number) => p.front[1] + share * (p.front[3] - p.front[1]);
+      return doc(
+        [
+          { ...makeFill(down([back(0.08), "#3aaee4"], [back(0.38), "#35ace1"], [back(0.62), "#1aa2dd"], [back(0.87), "#008bce"])), name: "Back" },
+          {
+            ...makeFill(
+              down(
+                [front(0.02), "#56c9f9"],
+                [front(0.1), "#60d0ff"],
+                [front(0.79), "#5fcffe"],
+                [front(0.84), "#56cafa"],
+                [front(0.865), "#5fcdf8"],
+                [front(0.89), "#46bff1"],
+                [front(0.94), "#34ade6"],
+                [front(1), "#1ca1dd"],
+              ),
+            ),
+            part: "front",
+            name: "Front",
+          },
+        ],
+        "folder",
+        "mac",
+      );
+    },
+  },
+  {
+    // The folder Explorer draws: a golden back and tab (the folder darkens its back a little
+    // more itself), a pale yellow front deepening towards its bottom right, and a deeper lip
+    // along its bottom. Colours from Windows 11's own folder.
+    id: "windows",
+    label: "Windows folder",
+    style: "windows",
+    plain: { note: "Windows' yellow" },
+    make: (p) => {
+      // Under the tab the front's top edge is 48 units lower than elsewhere: the back shows to there.
+      const lowest = p.front[1] + 48;
+      const lip = 17;
+      const bottom = p.front[3] + 10;
+      return doc(
+        [
+          { ...makeFill(down([p.back[1], "#ffca1e"], [lowest, "#f6b919"])), name: "Back" },
+          {
+            ...makeFill({ type: "linear", angle: 125, stops: [{ at: 0.19, color: "#ffe59a" }, { at: 0.85, color: "#ffcb3d" }] }),
+            part: "front",
+            name: "Front",
+          },
+          {
+            ...makeShape("rect", (p.front[0] + p.front[2]) / 2, (p.front[3] - lip + bottom) / 2, "#ffc227"),
+            w: p.front[2] - p.front[0] + 48,
+            h: bottom - (p.front[3] - lip),
+            radius: 0,
+            paint: linear(90, "#ffd152", "#ffc227", "#ffb403"),
+            name: "Bottom edge",
+          },
+        ],
+        "folder",
+        "windows",
+      );
+    },
   },
   {
     id: "colour",
