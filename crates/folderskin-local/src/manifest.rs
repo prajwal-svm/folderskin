@@ -364,6 +364,23 @@ pub const MODELS: [Model; 1] = [Model {
 /// mflux, pinned like everything else: it shipped five releases in six weeks of 2026.
 pub const MFLUX_VERSION: &str = "0.20.0";
 
+/// The Python mflux runs on: uv's own build of it, which setup installs beside mflux. A Mac out of
+/// the box has no Python mflux can use (/usr/bin/python3 only offers Apple's developer tools),
+/// and one that has a Python may have any version of it.
+pub const MFLUX_PYTHON: &str = "3.13";
+
+/// mflux's packages are chosen from those published before this, so every Mac installs the set
+/// that was tested, however many releases PyTorch or Transformers have shipped since.
+pub const MFLUX_PACKAGES_AS_OF: &str = "2026-09-24T00:00:00Z";
+
+/// uv, which installs mflux and its Python. Setup downloads this build rather than asking for
+/// one: it is Astral's release for Apple Silicon, the only Mac mflux runs on.
+pub const UV_VERSION: &str = "0.12.18";
+pub const UV_URL: &str =
+    "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-aarch64-apple-darwin.tar.gz";
+pub const UV_SIZE: u64 = 16963768;
+pub const UV_SHA256: &str = "cf40e0c6a202190ccd9e0406dcfdd5b2d6668a9a5c779b17948963df32aafe5b";
+
 /// One file of an MLX model, at `path` in its repository.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct MlxFile {
@@ -632,6 +649,27 @@ mod tests {
             KLEIN_MLX_Q8.dir(),
             "each tier has its own folder"
         );
+    }
+
+    #[test]
+    fn mflux_is_installed_from_pins_too() {
+        // The build for Apple Silicon, of the version it says.
+        assert!(
+            UV_URL.contains(&format!("/download/{UV_VERSION}/")),
+            "{UV_URL}"
+        );
+        assert!(
+            UV_URL.ends_with("/uv-aarch64-apple-darwin.tar.gz"),
+            "{UV_URL}"
+        );
+        assert_eq!(UV_SHA256.len(), 64);
+        assert!(UV_SHA256.bytes().all(|b| b.is_ascii_hexdigit()));
+        const { assert!(UV_SIZE > 1_000_000) };
+        // What uv takes: a minor version of Python, and an RFC 3339 time in UTC.
+        let (major, minor) = MFLUX_PYTHON.split_once('.').unwrap();
+        assert_eq!((major, minor.parse::<u32>().is_ok()), ("3", true));
+        assert!(MFLUX_PACKAGES_AS_OF.ends_with("T00:00:00Z"));
+        assert_eq!(MFLUX_PACKAGES_AS_OF.len(), "2026-09-24T00:00:00Z".len());
     }
 
     #[test]

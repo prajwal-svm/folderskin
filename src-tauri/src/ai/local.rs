@@ -353,10 +353,11 @@ pub struct LocalStatusDto {
     /// files, less what is already here.
     pub download_bytes: u64,
     /// The runtime setting up installs besides that, when it isn't installed yet: "mflux" on
-    /// Apple Silicon, whose packages uv fetches and `download_bytes` can't count.
+    /// Apple Silicon, which setup installs with a uv and a Python of its own, whose packages
+    /// `download_bytes` can't count.
     pub installs: Option<String>,
     /// What setup's files take on disk now, partial downloads included: what removing the model
-    /// gives back (besides mflux, when setup installed it).
+    /// gives back.
     pub kept_bytes: u64,
     /// Of those, the model files an earlier setup left that the model doesn't use now: the other
     /// tier's, or Z-Image Turbo's ([`folderskin_local::unused`]).
@@ -412,22 +413,11 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
     }
     if !ready && !can_set_up {
         // Nothing to set up and nothing to paint with: only what to do instead.
-        let why = folderskin_local::setup::no_build(machine.os, machine.arch, settings.backend);
-        notes.push(format!(
-            "{} {} You can still make pictures with a provider and your own key.",
-            why.what, why.why
-        ));
+        let why = folderskin_local::setup::cannot_set_up(machine, settings.backend).unwrap_or_else(
+            || folderskin_local::setup::no_build(machine.os, machine.arch, settings.backend),
+        );
+        notes.push(cannot_note(&why));
     } else {
-        if settings.backend == Backend::Mlx
-            && !runtime.installed
-            && folderskin_local::paths::find_tool("uv").is_none()
-        {
-            notes.push(
-                "Setting up installs mflux with uv, which isn't on this Mac yet: install it from \
-                 https://docs.astral.sh/uv/ first."
-                    .into(),
-            );
-        }
         if settings.backend == Backend::Cpu {
             notes.push(
                 "No graphics card it can use was found, so pictures are painted on the \
@@ -480,6 +470,18 @@ pub fn status(machine: &Machine, settings: &Settings) -> LocalStatusDto {
         note: (!notes.is_empty()).then(|| notes.join(" ")),
         problem,
     }
+}
+
+/// What the settings say when the local model can't be set up on this computer: why, what can be
+/// done about it from the window (updating macOS), and that providers still work.
+fn cannot_note(why: &folderskin_local::Error) -> String {
+    let mut parts = vec![format!("{} {}", why.what, why.why)];
+    if why.code == "macos_too_old" {
+        // The command line's other ways, such as another backend, aren't the window's.
+        parts.extend(failure::app_fixes(&why.fix));
+    }
+    parts.push("You can still make pictures with a provider and your own key.".into());
+    parts.join(" ")
 }
 
 /// How long the last picture took here, so the next status can say roughly how long one takes.
@@ -803,6 +805,24 @@ mod tests {
             serde_json::Value::Null,
             "nothing to install here"
         );
+    }
+
+    #[test]
+    fn a_mac_too_old_for_the_local_model_is_told_to_update_macos() {
+        let note = cannot_note(&folderskin_local::setup::macos_too_old((13, 6)));
+        assert!(
+            note.starts_with("The local model needs macOS 14 or later"),
+            "{note}"
+        );
+        assert!(
+            note.contains("Software Update), then set the local model up again."),
+            "{note}"
+        );
+        assert!(
+            !note.contains("folderskin ai"),
+            "no commands in the window: {note}"
+        );
+        assert!(note.ends_with("a provider and your own key."), "{note}");
     }
 
     /// A listener that keeps what it hears.

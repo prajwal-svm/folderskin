@@ -190,12 +190,11 @@ pub fn check_ready(job: &Job, settings: &Settings) -> Result<(), Error> {
         settings.backend, settings.tier
     );
     if settings.backend == Backend::Mlx {
-        if paths::find_tool(MFLUX_PROBE).is_none() {
+        if paths::mflux(MFLUX_PROBE).is_none() {
             return Err(Error::environment(
                 "mflux_missing",
                 "mflux isn't installed.",
-                "On Apple Silicon the models run in mflux, and it isn't on the PATH or where uv \
-                 installs its tools.",
+                "On Apple Silicon the models run in mflux, which setup installs.",
             )
             .fix(setup));
         }
@@ -346,8 +345,9 @@ fn generate_blocking(
     let (cmd, runtime, painted) = if settings.backend == Backend::Mlx {
         let weights = model.mlx(settings.tier);
         let (program, args) = command::mflux(model, weights, &prompt, job.seed, &pictures, &out);
-        // By its full path: an app opened from the Finder has no ~/.local/bin on its PATH.
-        let mut cmd = Command::new(paths::find_tool(program).unwrap_or_else(|| program.into()));
+        // By its full path: setup's folder is on no PATH, and an app opened from the Finder has
+        // no ~/.local/bin on its PATH either.
+        let mut cmd = Command::new(paths::mflux(program).unwrap_or_else(|| program.into()));
         cmd.args(args);
         // The weights are all in their folder, checked: painting never reaches for the network,
         // and a missing file fails at once in words rather than as a download in the background.
@@ -402,7 +402,8 @@ fn generate_blocking(
                 "mflux_missing",
                 "mflux isn't installed.",
                 format!(
-                    "mflux's program for {} isn't on the PATH or where uv installs its tools.",
+                    "mflux's program for {} isn't where setup installs it, on the PATH or where \
+                     uv installs its tools.",
                     model.label
                 ),
             )

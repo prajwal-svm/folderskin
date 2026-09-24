@@ -182,7 +182,7 @@ pub fn from_engine(e: EngineError, doing: &Doing) -> AiFailure {
                 failure = failure.fix(step);
             }
             match code {
-                "no_build_for_platform" => {
+                "no_build_for_platform" | "macos_too_old" => {
                     failure.fix("Or make pictures with a provider and your own key instead.")
                 }
                 "runtime_failed_to_start" | "runtime_missing" | "mflux_missing" => {

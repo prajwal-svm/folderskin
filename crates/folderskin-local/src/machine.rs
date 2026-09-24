@@ -252,6 +252,25 @@ pub fn detect() -> Machine {
     }
 }
 
+/// This Mac's macOS version, major and minor ("14.6.1" is (14, 6)), when the system says; `None`
+/// on Windows and Linux. Asked once: it doesn't change while a program runs.
+pub fn macos_version() -> Option<(u32, u32)> {
+    static VERSION: std::sync::OnceLock<Option<(u32, u32)>> = std::sync::OnceLock::new();
+    *VERSION.get_or_init(|| {
+        (Os::this() == Os::Macos)
+            .then(|| parse_version(&run_quiet("sysctl", &["-n", "kern.osproductversion"])))
+            .flatten()
+    })
+}
+
+/// "14.6.1" as (14, 6), and "15" as (15, 0).
+fn parse_version(text: &str) -> Option<(u32, u32)> {
+    let mut parts = text.trim().split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().map_or(Some(0), |m| m.parse().ok())?;
+    Some((major, minor))
+}
+
 /// Display adapters that can run a model: not Windows' basic display driver, not a virtual one.
 fn real_adapters(listing: &str) -> Vec<String> {
     listing
@@ -415,5 +434,19 @@ mod tests {
     fn this_computer_has_memory() {
         assert!(ram_gb() > 0.5, "{}", ram_gb());
         assert_eq!(run_quiet("folderskin-no-such-program", &[]), "");
+    }
+
+    #[test]
+    fn a_mac_says_which_macos_it_runs() {
+        assert_eq!(parse_version("14.6.1\n"), Some((14, 6)));
+        assert_eq!(parse_version("26.0"), Some((26, 0)));
+        assert_eq!(parse_version("15"), Some((15, 0)));
+        assert_eq!(parse_version(""), None);
+        assert_eq!(parse_version("sysctl: unknown oid"), None);
+        match Os::this() {
+            // Every Mac FolderSkin runs on is macOS 12 or later.
+            Os::Macos => assert!(macos_version().is_some_and(|v| v >= (12, 0))),
+            _ => assert_eq!(macos_version(), None),
+        }
     }
 }

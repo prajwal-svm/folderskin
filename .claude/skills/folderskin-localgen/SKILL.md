@@ -1,7 +1,7 @@
 ---
 name: folderskin-localgen
 description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. One model, FLUX.2 [klein] 4B (Apache-2.0), for words, reference pictures and whole-folder skins alike, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon), all driven by the `folderskin` command line. Sets the machine up with `folderskin ai setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, checks and cleans pictures up (trim, clip, cut out, adjust), and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
-version: 3.0.0
+version: 3.1.0
 ---
 
 # Painting folder art locally
@@ -36,12 +36,14 @@ folderskin ai setup
 `vulkan` for other GPUs and Linux, `mlx` on Apple Silicon, `cpu` otherwise) and the tier (`q4`
 on every computer), what is installed, and the next command to run. `setup` downloads the runtime
 and the model: on Windows and Linux the pinned stable-diffusion.cpp build and klein's GGUF files,
-5.2 GB; on a Mac it installs mflux with `uv tool install`, then downloads klein's pre-quantised MLX
-weights, 4.6 GB, into the same folder as everything else. Every file resumes where its download
-stopped and is checked against its published SHA-256, and painting never downloads anything.
-Ctrl+C stops it cleanly; running it again carries on. stable-diffusion.cpp publishes Linux builds
-for x86_64 only, so on ARM64 Linux (and on an Intel Mac) `doctor` says there is nothing to
-install; the image tools and `--provider` still work there.
+5.2 GB; on a Mac it installs mflux 0.20.0 (with a pinned uv of its own and uv's Python 3.13, all in
+`bin/mlx` under the same folder, so nothing needs installing first and the user's own uv and Python
+are left alone), then downloads klein's pre-quantised MLX weights, 4.6 GB. An mflux the user
+installed themselves is used as it is. Every file resumes where its download stopped and is
+checked against its published SHA-256, and painting never downloads anything. Ctrl+C stops it
+cleanly; running it again carries on. stable-diffusion.cpp publishes Linux builds for x86_64 only,
+so on ARM64 Linux (and on an Intel Mac) `doctor` says there is nothing to install; mflux needs
+macOS 14 or later. The image tools and `--provider` still work everywhere.
 
 `--backend` and `--tier` override the choice for one command; `folderskin ai config set tier q4`
 (or `backend`, `model`, `provider`) makes it the default.

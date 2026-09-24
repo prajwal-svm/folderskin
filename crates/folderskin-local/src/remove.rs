@@ -10,12 +10,15 @@ use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
-/// Left in the engine's home when setup installed mflux itself, so removing takes away only an
-/// mflux FolderSkin put there, never one someone installed for their own use.
+/// Left in the engine's home by an earlier FolderSkin, which installed mflux with the person's
+/// own uv, among their uv tools, so removing takes away only an mflux FolderSkin put there, never
+/// one someone installed for their own use. Setup now installs mflux in the runtimes' folder
+/// ([`paths::mflux_dir`]), which goes with the rest.
 pub(crate) const MFLUX_MARKER: &str = "mflux.installed";
 
 /// The folders under the engine's home that are setup's alone: the models (every tier, partial
-/// downloads included), the runtimes' zips, the runtimes, and the app's work folders. Only these
+/// downloads included), the runtimes' zips, the runtimes (mflux with its uv and Python among
+/// them), and the app's work folders. Only these
 /// are removed, never the home itself, which `FOLDERSKIN_LOCALGEN_HOME` can point anywhere.
 fn setup_dirs(home: &Path) -> [PathBuf; 4] {
     [
@@ -26,8 +29,8 @@ fn setup_dirs(home: &Path) -> [PathBuf; 4] {
     ]
 }
 
-/// How much disk what setup downloaded takes now, partial downloads included; mflux, which lives
-/// with uv's tools, isn't counted.
+/// How much disk what setup downloaded and installed takes now, partial downloads included; an
+/// mflux an earlier FolderSkin installed among the person's uv tools isn't counted.
 pub fn kept_bytes() -> u64 {
     setup_dirs(&paths::home()).iter().map(|d| dir_size(d)).sum()
 }
@@ -47,9 +50,9 @@ fn dir_size(dir: &Path) -> u64 {
         .sum()
 }
 
-/// Removes everything setup put here ([`setup_dirs`]), and mflux when setup installed it. It
-/// waits for no one: a setup under way, here or in a terminal, holds the lock and it is refused
-/// ("busy"). Returns the bytes given back.
+/// Removes everything setup put here ([`setup_dirs`]), and the mflux an earlier FolderSkin
+/// installed among the person's uv tools. It waits for no one: a setup under way, here or in a
+/// terminal, holds the lock and it is refused ("busy"). Returns the bytes given back.
 pub fn remove(reporter: &Reporter) -> Result<u64, Error> {
     let home = paths::home();
     let _only_one = crate::setup::lock(&home)?;
@@ -192,8 +195,9 @@ pub fn remove_unused(settings: &Settings, reporter: &Reporter) -> Result<u64, Er
     Ok(freed)
 }
 
-/// `uv tool uninstall mflux`, and the bytes its tool folder held; 0 when uv isn't there or says no,
-/// which is reported and otherwise left alone (the model's files are what took the space).
+/// `uv tool uninstall mflux` with the person's uv, for the mflux an earlier FolderSkin installed
+/// among their tools, and the bytes its tool folder held; 0 when uv isn't there or says no, which
+/// is reported and otherwise left alone (the model's files are what took the space).
 fn uninstall_mflux(reporter: &Reporter) -> u64 {
     let Some(uv) = paths::find_tool("uv") else {
         reporter.log(

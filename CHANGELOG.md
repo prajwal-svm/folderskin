@@ -6,6 +6,14 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **The local model sets itself up on any Mac.** Setting it up on Apple Silicon used to stop and
+  ask for uv to be installed first. Now it installs everything it needs, uv and Python included,
+  in its own folder. A Mac fresh out of the box needs nothing else, and your own Python stays
+  as it is. Removing the model removes all of it. On a Mac too old for the model (it needs
+  macOS 14 or later), the settings say so before anything is downloaded.
+
 ## 0.1.4 — 2026-09-24
 
 ### Added
