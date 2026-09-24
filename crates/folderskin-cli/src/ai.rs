@@ -1,15 +1,17 @@
 //! `folderskin ai …`: set the computer up, paint, and choose the defaults.
 
 use crate::cli::{
-    AiCommand, BatchArgs, ConfigCommand, ConfigKey, GenArgs, KeyCommand, MachineArgs, RuntimeArg,
-    SetupArgs, ThemeArgs,
+    AiCommand, BatchArgs, ConfigCommand, ConfigKey, GenArgs, KeyCommand, MachineArgs, RemoveArgs,
+    RuntimeArg, SetupArgs, ThemeArgs,
 };
 use crate::config::{self, Config};
 use crate::error::CliError;
 use crate::out::Out;
 use crate::paint::{self, Order, Painted, Painter};
 use crate::{preview, runtime, terminal};
-use folderskin_local::{detect, random_seed, CancelToken, Runtime, Shape, MODELS, STYLES};
+use folderskin_local::{
+    detect, random_seed, CancelToken, Runtime, Settings, Shape, Tier, MODELS, STYLES,
+};
 use serde::Deserialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -19,6 +21,7 @@ pub fn run(command: AiCommand, out: &Arc<Out>) -> Result<(), CliError> {
     match command {
         AiCommand::Doctor(args) => doctor(&args, out),
         AiCommand::Setup(args) => setup(&args, out),
+        AiCommand::Remove(args) => remove(&args, out),
         AiCommand::Gen(args) => gen(args, out),
         AiCommand::Batch(args) => batch(&args, out),
         AiCommand::Theme(args) => theme(&args, out),
@@ -112,6 +115,28 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 settings.backend, settings.tier
             ));
         }
+        // An earlier setup at the other tier left everything that one paints with: setting up at
+        // that tier only adds what else it needs.
+        if !model.ready() && !setting_up {
+            if let Some(other) = other_tier_here(&settings) {
+                next.push(format!(
+                    "or use the {other} files already here: add --tier {other} (folderskin ai \
+                     config set tier {other} keeps it)"
+                ));
+            }
+        }
+    }
+    let unused = folderskin_local::unused(&settings);
+    if !unused.is_empty() {
+        let bytes: u64 = unused.iter().map(|u| u.bytes).sum();
+        let names: Vec<&str> = unused.iter().map(|u| u.name.as_str()).collect();
+        lines.push(format!(
+            "unused:   {} of model files the model doesn't use at {}: {}",
+            gb(bytes),
+            settings.tier,
+            names.join(", ")
+        ));
+        lines.push("          remove them: folderskin ai remove --unused".into());
     }
     lines.push(format!(
         "cwebp:    {}",
@@ -149,8 +174,132 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
         }
         None => lines.push("ready:    folderskin ai gen \"a lighthouse at dusk\"".into()),
     }
-    let meta = serde_json::to_value(&status).unwrap_or_default();
+    // What the words say, for a script too: whether a setup is under way, where the backend and
+    // tier came from, what to do next (none when it is ready) and the files it doesn't use.
+    let mut meta = serde_json::to_value(&status).unwrap_or_default();
+    meta["setting_up"] = json!(setting_up);
+    meta["backend_from"] = json!(backend_from.id());
+    meta["tier_from"] = json!(tier_from.id());
+    meta["ready"] = json!(next.is_empty());
+    meta["next"] = json!(next);
+    meta["unused"] = json!(unused);
     out.result(None, "doctor", meta, &lines.join("\n"), false);
+    Ok(())
+}
+
+/// The other tier, when every file it paints with is here though the one asked for isn't.
+fn other_tier_here(settings: &Settings) -> Option<Tier> {
+    let other = match settings.tier {
+        Tier::Q4 => Tier::Q8,
+        Tier::Q8 => Tier::Q4,
+    };
+    MODELS
+        .iter()
+        .all(|m| {
+            m.files_for(settings.backend, other)
+                .iter()
+                .all(|f| f.local.is_file())
+        })
+        .then_some(other)
+}
+
+/// Bytes as people read a download's size: "5.2 GB", "340 MB".
+fn gb(bytes: u64) -> String {
+    if bytes >= 1_000_000_000 {
+        format!("{:.1} GB", bytes as f64 / 1e9)
+    } else {
+        format!("{} MB", bytes.div_ceil(1_000_000))
+    }
+}
+
+fn remove(args: &RemoveArgs, out: &Arc<Out>) -> Result<(), CliError> {
+    if !args.unused && (args.machine.backend.is_some() || args.machine.tier.is_some()) {
+        return Err(CliError::usage(
+            "That command isn't quite right.",
+            "--backend and --tier say which model files to keep, which only --unused asks.",
+        )
+        .fix("Leave them out to remove everything, or add --unused."));
+    }
+    let home = folderskin_local::home();
+    if args.unused {
+        let machine = detect();
+        let config = Config::load()?;
+        let (settings, _, _) = paint::settings(&machine, &args.machine, &config)?;
+        let files = folderskin_local::unused(&settings);
+        let bytes: u64 = files.iter().map(|f| f.bytes).sum();
+        let at = format!("{} at {}", settings.backend, settings.tier);
+        if files.is_empty() {
+            out.result(
+                Some(&home),
+                "removed",
+                json!({"bytes": 0, "files": files}),
+                &format!("Nothing to remove: every model file here is one {at} uses."),
+                false,
+            );
+            return Ok(());
+        }
+        if args.dry_run {
+            out.note(&format!(
+                "dry run: {} of model files {at} doesn't use; nothing is deleted",
+                gb(bytes)
+            ));
+            for file in &files {
+                out.result(
+                    Some(&folderskin_local::paths::models_dir().join(&file.name)),
+                    "plan",
+                    json!({"name": file.name, "bytes": file.bytes}),
+                    &format!("would delete {} ({})", file.name, gb(file.bytes)),
+                    false,
+                );
+            }
+            return Ok(());
+        }
+        let freed = folderskin_local::remove_unused(&settings, &out.reporter())?;
+        out.finish_line();
+        out.result(
+            Some(&home),
+            "removed",
+            json!({"bytes": freed, "files": files}),
+            &format!(
+                "Deleted {} that {at} doesn't use: {} back. What it paints with stays.",
+                count(files.len(), "model file"),
+                gb(freed)
+            ),
+            false,
+        );
+        return Ok(());
+    }
+    let kept = folderskin_local::kept_bytes();
+    if args.dry_run {
+        out.result(
+            Some(&home),
+            "plan",
+            json!({"bytes": kept}),
+            &format!(
+                "would delete the models, the runtime and their downloads in {}: {} (dry run: nothing is deleted)",
+                home.display(),
+                gb(kept)
+            ),
+            false,
+        );
+        return Ok(());
+    }
+    let freed = folderskin_local::remove(&out.reporter())?;
+    out.finish_line();
+    out.result(
+        Some(&home),
+        "removed",
+        json!({"bytes": freed}),
+        &if freed == 0 {
+            "Nothing to remove: setup hasn't downloaded anything here.".to_string()
+        } else {
+            format!(
+                "Deleted the models, the runtime and their downloads: {} back. Set it up again with folderskin ai setup",
+                gb(freed)
+            )
+        },
+        false,
+    );
     Ok(())
 }
 
@@ -1391,5 +1540,27 @@ mod tests {
         );
         assert_eq!(words("!!!", 40), "folder");
         assert_eq!(words("Summer '25 — Crète", 40), "summer-25-crète");
+    }
+
+    #[test]
+    fn sizes_read_as_a_download_does() {
+        assert_eq!(gb(15_158_000_000), "15.2 GB");
+        assert_eq!(gb(340_000_000), "340 MB");
+        assert_eq!(gb(3000), "1 MB");
+    }
+
+    #[test]
+    fn remove_refuses_a_backend_or_tier_it_would_ignore() {
+        let args = RemoveArgs {
+            unused: false,
+            dry_run: true,
+            machine: MachineArgs {
+                backend: None,
+                tier: Some(crate::cli::TierArg::Q8),
+            },
+        };
+        let e = remove(&args, &Out::new(true, false)).unwrap_err();
+        assert_eq!(e.code, "usage", "{e:?}");
+        assert!(e.why.contains("only --unused"), "{e:?}");
     }
 }

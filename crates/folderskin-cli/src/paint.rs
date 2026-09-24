@@ -25,6 +25,15 @@ pub enum Source {
 }
 
 impl Source {
+    /// How `--json` says it: "flag", "config" or "detected".
+    pub fn id(self) -> &'static str {
+        match self {
+            Source::Flag => "flag",
+            Source::Config => "config",
+            Source::Detected => "detected",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Source::Flag => "from the command line",

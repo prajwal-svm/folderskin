@@ -65,6 +65,9 @@ pub enum AiCommand {
     /// Download the runtime and the model (4.6 GB on a Mac, 5.2 GB elsewhere, at the default q4),
     /// resuming and checking every file
     Setup(SetupArgs),
+    /// Delete what setup downloaded, to get the room back; --unused, only the model files the
+    /// model doesn't use now
+    Remove(RemoveArgs),
     /// Paint pictures from one idea
     Gen(GenArgs),
     /// Paint every brief in a JSON file
@@ -120,6 +123,20 @@ pub struct SetupArgs {
     /// pinned: the stable-diffusion.cpp build this was tested with; latest: the newest release
     #[arg(long, value_enum, default_value_t = RuntimeArg::Pinned)]
     pub runtime: RuntimeArg,
+}
+
+#[derive(Args, Debug)]
+pub struct RemoveArgs {
+    /// Only the model files the model doesn't use now: the other tier's, or those of a model an
+    /// earlier version set up
+    #[arg(long)]
+    pub unused: bool,
+    /// Say what would be deleted, and how much room it would give back, without deleting it
+    #[arg(long)]
+    pub dry_run: bool,
+    /// With --unused, the files of these are kept
+    #[command(flatten)]
+    pub machine: MachineArgs,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -622,6 +639,15 @@ mod tests {
         assert_eq!(s.machine.backend, Some(BackendArg::Vulkan));
         assert_eq!(s.machine.tier, Some(TierArg::Q4));
         assert_eq!(s.runtime, RuntimeArg::Latest);
+        let Command::Ai(AiCommand::Remove(r)) =
+            parse(&["ai", "remove", "--unused", "--dry-run", "--tier", "q8"])
+                .unwrap()
+                .command
+        else {
+            panic!("not remove");
+        };
+        assert!(r.unused && r.dry_run);
+        assert_eq!(r.machine.tier, Some(TierArg::Q8));
         assert!(parse(&["ai", "doctor", "--backend", "rocm"]).is_err());
         assert!(parse(&["ai", "doctor", "--tier", "q5"]).is_err());
     }
