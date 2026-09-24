@@ -362,6 +362,26 @@ fn clip(args: &OneImage, out: &Arc<Out>) -> Result<(), CliError> {
     let (img, _) = load(&args.input)?;
     let (w, h) = img.dimensions();
     let dest = target(&args.input, args.out.as_deref(), "clipped");
+    // Already cut out along FolderSkin's outline, as `image check` finds it: there is nothing to
+    // cut. The cut below expects the template's own frame around the folder, so it would take a
+    // trimmed cut-out for a folder of another shape.
+    if matte::surround(&img, MAGENTA) == Surround::Transparent {
+        if let Some(cut) = matte::finished_cutout(&img, MAGENTA) {
+            let fit = check::silhouette_fit(&cut);
+            if fit >= painted::MIN_SILHOUETTE_FIT {
+                return done(
+                    &cut,
+                    &dest,
+                    &format!(
+                        "already cut out along FolderSkin's silhouette (fit {fit:.2}), so only \
+                         trimmed to it"
+                    ),
+                    out,
+                    json!({"fit": fit, "already_cut_out": true}),
+                );
+            }
+        }
+    }
     let silhouette = folderskin_local::generate::folder_silhouette(w, h);
     let cut = painted::cut_along_silhouette(&img, &silhouette);
     match cut.image {
@@ -818,6 +838,21 @@ mod tests {
         save(&clipped, &dir.join("f.jpg")).unwrap();
         let back = image::open(dir.join("f.jpg")).unwrap().to_rgba8();
         assert_eq!(matte::surround(&back, MAGENTA), Surround::Keyed);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_folder_already_cut_out_is_clipped_to_itself() {
+        let dir = temp_dir("clip");
+        let cut = matte::finished_cutout(&template(), MAGENTA).unwrap();
+        let (input, output) = (dir.join("cut.png"), dir.join("cut-clipped.png"));
+        std::fs::write(&input, encode_png(&cut)).unwrap();
+        let args = OneImage {
+            input,
+            out: Some(output.clone()),
+        };
+        clip(&args, &Out::new(true, false)).unwrap();
+        assert_eq!(image::open(&output).unwrap().to_rgba8(), cut);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
