@@ -6,7 +6,9 @@ use crate::error::CliError;
 use crate::out::Out;
 use crate::{images, preview};
 use folderskin_core::apply::{has_custom_icon, refresh_shell_icons, revert_icon};
-use folderskin_core::compositor::{self, render_preview_png, Artwork, SKIN_HEIGHT, SKIN_WIDTH};
+use folderskin_core::compositor::{
+    self, render_preview_png_in, Artwork, Style, SKIN_HEIGHT, SKIN_WIDTH,
+};
 use folderskin_core::matte;
 use folderskin_tools::cli::PacksCommand;
 use folderskin_tools::{catalog, make, packs};
@@ -68,32 +70,7 @@ pub fn rgb(hex: &str) -> Result<[u8; 3], CliError> {
 }
 
 pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
-    let focus = args.focus.unwrap_or((0.5, 0.5));
-    let (png, what) = match (&args.image, &args.solid) {
-        (Some(path), _) => {
-            let (img, _) = images::load(path)?;
-            let skin = preview::skin(img, focus, path)?;
-            (skin.preview_png(args.size), skin.describe())
-        }
-        (None, Some(hex)) => {
-            let [r, g, b] = rgb(hex)?;
-            let art = Artwork {
-                rgba: RgbaImage::from_pixel(SKIN_WIDTH, SKIN_HEIGHT, image::Rgba([r, g, b, 255])),
-                focus,
-            };
-            (
-                render_preview_png(&art, args.size),
-                "artwork on FolderSkin's folder",
-            )
-        }
-        (None, None) => {
-            return Err(CliError::usage(
-                "There is nothing to render.",
-                "Give a picture, or a colour with --solid.",
-            )
-            .fix("folderskin render picture.png --out preview.png"))
-        }
-    };
+    let (png, what) = rendered(args, preview::look())?;
     images::write_as_named(&png, &args.out, "save the preview")?;
     let (place, stdout) = place(&args.out);
     out.result(
@@ -104,6 +81,36 @@ pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
         stdout,
     );
     Ok(())
+}
+
+/// The PNG `render` writes, with artwork on the folder of `style`, and what it became.
+fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), CliError> {
+    let focus = args.focus.unwrap_or((0.5, 0.5));
+    Ok(match (&args.image, &args.solid) {
+        (Some(path), _) => {
+            let (img, _) = images::load(path)?;
+            let skin = preview::skin(img, focus, path)?;
+            (skin.preview_png_in(args.size, style), skin.describe())
+        }
+        (None, Some(hex)) => {
+            let [r, g, b] = rgb(hex)?;
+            let art = Artwork {
+                rgba: RgbaImage::from_pixel(SKIN_WIDTH, SKIN_HEIGHT, image::Rgba([r, g, b, 255])),
+                focus,
+            };
+            (
+                render_preview_png_in(&art, args.size, style),
+                "artwork on FolderSkin's folder",
+            )
+        }
+        (None, None) => {
+            return Err(CliError::usage(
+                "There is nothing to render.",
+                "Give a picture, or a colour with --solid.",
+            )
+            .fix("folderskin render picture.png --out preview.png"))
+        }
+    })
 }
 
 /// How a result's destination reads, and whether it is standard output (`-`).
@@ -474,6 +481,29 @@ mod tests {
         };
         assert_eq!(template(&both, &out).unwrap_err().code, "usage");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn render_draws_artwork_on_the_folder_chosen() {
+        let args = RenderArgs {
+            image: None,
+            solid: Some("2A9D8F".into()),
+            out: "-".into(),
+            size: 64,
+            focus: None,
+        };
+        let (mac, _) = rendered(&args, Style::Mac).unwrap();
+        let (windows, _) = rendered(&args, Style::Windows).unwrap();
+        let art = Artwork {
+            rgba: RgbaImage::from_pixel(
+                SKIN_WIDTH,
+                SKIN_HEIGHT,
+                image::Rgba([0x2A, 0x9D, 0x8F, 255]),
+            ),
+            focus: (0.5, 0.5),
+        };
+        assert_eq!(windows, render_preview_png_in(&art, 64, Style::Windows));
+        assert_ne!(mac, windows, "Windows' folder is another shape");
     }
 
     #[test]

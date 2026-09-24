@@ -20,8 +20,18 @@ pub struct Cli {
     /// Also show everything the runtime prints
     #[arg(long, short, global = true)]
     pub verbose: bool,
+    /// The folder artwork goes on, as in the app: mac or windows (default: the one chosen in the
+    /// app)
+    #[arg(long, global = true, value_enum)]
+    pub look: Option<LookArg>,
     #[command(subcommand)]
     pub command: Command,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LookArg {
+    Mac,
+    Windows,
 }
 
 #[derive(Subcommand, Debug)]
@@ -761,6 +771,23 @@ mod tests {
                 .command,
             Command::Image(ImageCommand::Render(_))
         ));
+    }
+
+    #[test]
+    fn the_folder_look_can_be_given_anywhere() {
+        assert_eq!(parse(&["render", "a.png"]).unwrap().look, None);
+        for args in [
+            &["render", "a.png", "--look", "windows"][..],
+            &["--look", "windows", "apply", "D:/x", "--image", "a.png"],
+            &["ai", "gen", "x", "--look", "windows"],
+        ] {
+            assert_eq!(
+                parse(args).unwrap().look,
+                Some(LookArg::Windows),
+                "{args:?}"
+            );
+        }
+        assert!(parse(&["render", "a.png", "--look", "linux"]).is_err());
     }
 
     #[test]

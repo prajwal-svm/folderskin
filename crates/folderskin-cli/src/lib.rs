@@ -37,6 +37,11 @@ pub fn main() -> ExitCode {
         Err(e) => return usage(e, json, &command),
     };
     let out = Out::new(cli.json, cli.verbose);
+    preview::set_look(match cli.look {
+        Some(cli::LookArg::Mac) => folderskin_core::compositor::Style::Mac,
+        Some(cli::LookArg::Windows) => folderskin_core::compositor::Style::Windows,
+        None => config::saved_look(),
+    });
     catch_panics();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(cli.command, &out)))
         .unwrap_or_else(|_| Err(panicked()));

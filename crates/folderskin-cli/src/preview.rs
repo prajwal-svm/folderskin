@@ -3,14 +3,34 @@
 
 use crate::error::CliError;
 use folderskin_core::apply::{apply_icon, refresh_shell_icons, ApplyError};
-use folderskin_core::compositor::ICON_SIZES;
+use folderskin_core::compositor::{Style, ICON_SIZES};
 use folderskin_core::matte;
 use folderskin_tools::skin::Skin;
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The side of a preview, in pixels.
 pub const PREVIEW_SIZE: u32 = 512;
+
+/// Whether artwork goes on Windows' folder rather than the Mac's, for this run: `--look`, or
+/// the folder chosen in the app. Set once, before the command runs.
+static WINDOWS_LOOK: AtomicBool = AtomicBool::new(false);
+
+/// Puts artwork on the folder of `style` for the rest of the run.
+pub fn set_look(style: Style) {
+    WINDOWS_LOOK.store(style == Style::Windows, Ordering::Relaxed);
+}
+
+/// The folder artwork goes on in this run, as the app would put it.
+pub fn look() -> Style {
+    if WINDOWS_LOOK.load(Ordering::Relaxed) {
+        Style::Windows
+    } else {
+        Style::Mac
+    }
+}
+
 /// A contact sheet's cells and columns.
 const CELL: u32 = 256;
 const COLUMNS: u32 = 4;
@@ -73,7 +93,7 @@ pub fn preview(picture: &Path, dir: &Path) -> Result<(PathBuf, &'static str), Cl
     let dest = dir
         .join(picture.file_name().unwrap_or_default())
         .with_extension("png");
-    std::fs::write(&dest, skin.preview_png(PREVIEW_SIZE))
+    std::fs::write(&dest, skin.preview_png_in(PREVIEW_SIZE, look()))
         .map_err(|e| CliError::io("save the preview", &dest, &e))?;
     Ok((dest, skin.describe()))
 }
@@ -108,7 +128,8 @@ pub fn contact_sheet(previews: &[PathBuf], dest: &Path) -> Result<(), CliError> 
 /// Puts `picture` on `folder`, as the app does, and says what it became.
 pub fn apply(folder: &Path, picture: &Path, focus: (f32, f32)) -> Result<&'static str, CliError> {
     let skin = skin(read_picture(picture)?, focus, picture)?;
-    apply_icon(folder, &skin.icon_set(&ICON_SIZES)).map_err(|e| apply_error(folder, e))?;
+    apply_icon(folder, &skin.icon_set_in(&ICON_SIZES, look()))
+        .map_err(|e| apply_error(folder, e))?;
     refresh_shell_icons();
     Ok(skin.describe())
 }

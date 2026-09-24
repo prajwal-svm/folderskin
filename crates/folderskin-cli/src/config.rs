@@ -4,6 +4,7 @@
 use crate::cli::ConfigKey;
 use crate::error::CliError;
 use crate::paint::cannot_run;
+use folderskin_core::compositor::Style;
 use folderskin_local::machine::{Arch, Os};
 use folderskin_local::Backend;
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,33 @@ pub fn config_dir() -> Option<PathBuf> {
 pub fn config_file() -> Option<PathBuf> {
     config_dir().map(|d| d.join(FILE))
 }
+
+/// The app's data folder, where it keeps the skins and the folder it puts them on: the same as
+/// [`config_dir`] on Windows and macOS, `~/.local/share/app.folderskin.desktop` on Linux.
+/// `FOLDERSKIN_CONFIG_DIR` moves it with the settings.
+pub fn app_data_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("FOLDERSKIN_CONFIG_DIR").filter(|d| !d.is_empty()) {
+        return Some(PathBuf::from(dir));
+    }
+    dirs::data_dir().map(|d| d.join(APP_ID))
+}
+
+/// The folder the app puts artwork on, as chosen in it (`folder-look.txt`, which the app's
+/// `look.rs` keeps): the Mac's when nothing was chosen or the choice can't be read, as in the app.
+pub fn saved_look() -> Style {
+    app_data_dir().map_or(Style::Mac, |dir| look_saved_in(&dir))
+}
+
+/// The folder look kept in `dir`, the app's data folder.
+fn look_saved_in(dir: &std::path::Path) -> Style {
+    std::fs::read_to_string(dir.join(LOOK_FILE))
+        .ok()
+        .and_then(|s| Style::from_id(s.trim()))
+        .unwrap_or(Style::Mac)
+}
+
+/// Where the app keeps the folder look, in its data folder.
+const LOOK_FILE: &str = "folder-look.txt";
 
 /// The defaults someone chose. Anything not set is decided from the computer each time.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -365,6 +393,26 @@ mod tests {
             serde_json::from_str::<Config>("{}").unwrap(),
             Config::default()
         );
+    }
+
+    #[test]
+    fn the_folder_look_is_the_one_the_app_kept() {
+        let dir = std::env::temp_dir().join(format!("fs-cli-look-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(look_saved_in(&dir), Style::Mac, "nothing chosen yet");
+        for (kept, look) in [
+            ("windows", Style::Windows),
+            (
+                "mac
+",
+                Style::Mac,
+            ),
+            ("?", Style::Mac),
+        ] {
+            std::fs::write(dir.join(LOOK_FILE), kept).unwrap();
+            assert_eq!(look_saved_in(&dir), look, "{kept:?}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
