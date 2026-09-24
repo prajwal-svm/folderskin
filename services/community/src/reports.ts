@@ -15,7 +15,7 @@ import { makeLink } from "./links";
 import { alert, record } from "./notify";
 import { takeAll } from "./quota";
 import { SUBMISSION_ID } from "./store";
-import { hasText, isPackId } from "./text";
+import { hasText, isPackId, trimTrailingSlashes } from "./text";
 
 export const REPORT_REASONS = ["csam", "ncii", "copyright", "terms", "other"] as const;
 type ReportReason = (typeof REPORT_REASONS)[number];
@@ -40,7 +40,7 @@ async function resolve(env: Env, target: string): Promise<string | null> {
     const row = await env.DB.prepare("SELECT id FROM submissions WHERE id = ?1").bind(id).first<{ id: string }>();
     if (row) return row.id;
   }
-  const folder = target.trim().toLowerCase().replace(/\/+$/, "").replace(/^.*\//, "");
+  const folder = trimTrailingSlashes(target.trim().toLowerCase()).replace(/^.*\//, "");
   if (isPackId(folder)) {
     const row = await env.DB.prepare(
       `SELECT id FROM submissions WHERE status = 'approved' AND (folder = ?1 OR (folder IS NULL AND pack_id = ?1))

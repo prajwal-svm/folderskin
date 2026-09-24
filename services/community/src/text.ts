@@ -118,6 +118,16 @@ export function slug(name: string): string {
   return isWindowsDeviceName(cut) ? `${cut}-1` : cut;
 }
 
+/**
+ * `text` without the slashes it ends with. Walked back from the end rather than `/\/+$/`, which
+ * tries every run of slashes in the text and takes quadratic time on a long one that isn't last.
+ */
+export function trimTrailingSlashes(text: string): string {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "/") end--;
+  return text.slice(0, end);
+}
+
 function tagProblems(tags: unknown, max: number, whose: string, problems: string[]): string[] {
   if (!Array.isArray(tags)) {
     problems.push(`${whose} needs a list of tags`);

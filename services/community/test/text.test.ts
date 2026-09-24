@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanTag, handleProblem, isPictureFileName, readManifest, slug, textFlags } from "../src/text";
+import { cleanTag, handleProblem, isPictureFileName, readManifest, slug, textFlags, trimTrailingSlashes } from "../src/text";
 
 const skin = (file: string, name = "Koi", tags: string[] = []) => ({ file, name, tags });
 
@@ -81,5 +81,20 @@ describe("the word checks", () => {
 
   it("leave ordinary words alone", () => {
     expect(textFlags([{ label: "the pack name", text: "Classic art: Scunthorpe harbour, cumulus clouds" }])).toEqual([]);
+  });
+});
+
+describe("trailing slashes", () => {
+  it("come off the end and nowhere else", () => {
+    expect(trimTrailingSlashes("https://community.test///")).toBe("https://community.test");
+    expect(trimTrailingSlashes("https://community.test/packs/koi")).toBe("https://community.test/packs/koi");
+    expect(trimTrailingSlashes("///")).toBe("");
+    expect(trimTrailingSlashes("")).toBe("");
+  });
+
+  it("take a moment even when a long run of them isn't at the end", () => {
+    const text = `${"/".repeat(200_000)}x`;
+    expect(trimTrailingSlashes(text)).toBe(text);
+    expect(trimTrailingSlashes(`${text}${"/".repeat(200_000)}`)).toBe(text);
   });
 });

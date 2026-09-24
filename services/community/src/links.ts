@@ -10,6 +10,7 @@
  */
 import { b64url, fromB64url, hmac, hmacVerify, now } from "./bytes";
 import type { Env } from "./env";
+import { trimTrailingSlashes } from "./text";
 
 export type LinkAction = "review" | "takedown" | "pause";
 
@@ -24,7 +25,7 @@ const signed = (payload: string) => `link|${payload}`;
 
 /** A link for `action` on `subject`, or null when the service has no LINK_SECRET or address to make one with. */
 export async function makeLink(env: Env, action: LinkAction, subject: string, at = now()): Promise<string | null> {
-  const base = env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, "");
+  const base = trimTrailingSlashes(env.PUBLIC_BASE_URL?.trim() ?? "");
   if (!env.LINK_SECRET || !base) return null;
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(16)));
   const payload = `${action}.${subject || "-"}.${at + LIFETIME[action]}.${nonce}`;
