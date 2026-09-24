@@ -1108,7 +1108,8 @@ export function Composer({
 
         <div className="cmp-stage-wrap">
           <ComposerStage
-            doc={side === "icons" && iconPreview ? iconPreview : doc}
+            doc={doc}
+            shown={side === "icons" ? iconPreview : null}
             pendingId={side === "icons" && iconPreview ? PREVIEW_ID : null}
             selectedId={selectedId}
             onSelect={setSelectedId}

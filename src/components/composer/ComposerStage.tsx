@@ -54,6 +54,7 @@ function resized(layer: PlacedLayer, box0: Box, box: Box): Record<string, number
  */
 export function ComposerStage({
   doc,
+  shown = null,
   selectedId,
   onSelect,
   onPreview,
@@ -69,8 +70,10 @@ export function ComposerStage({
   pendingId = null,
 }: {
   doc: Doc;
+  /** The design as it's drawn when that isn't `doc` (with the icon library's tried icon in it). Only drawn: every change starts from `doc`. */
+  shown?: Doc | null;
   selectedId: string | null;
-  /** A layer shown only to be tried (the icon library's), outlined as not added yet and not pickable. */
+  /** A layer of `shown` there only to be tried, outlined as not added yet and not pickable. */
   pendingId?: string | null;
   onSelect: (id: string | null) => void;
   /** A change while the pointer is still down. */
@@ -118,9 +121,10 @@ export function ComposerStage({
   const px = Math.min(2048, Math.round(size * dpr));
 
   // Draws on the next frame, once, however many changes came in before it.
+  const drawn = shown ?? doc;
   const frame = useRef(0);
-  const latest = useRef({ doc, view, template, px });
-  latest.current = { doc, view, template, px };
+  const latest = useRef({ doc: drawn, view, template, px });
+  latest.current = { doc: drawn, view, template, px };
   useEffect(() => {
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
@@ -141,7 +145,7 @@ export function ComposerStage({
       drawView(ctx2d(c), design.current, t, n, v, scratch.current);
     });
     return () => cancelAnimationFrame(frame.current);
-  }, [doc, view, template, px, version, assets]);
+  }, [drawn, view, template, px, version, assets]);
 
   const toUnits = useCallback(
     (e: { clientX: number; clientY: number }): Point => {
@@ -151,11 +155,11 @@ export function ComposerStage({
     [left, top, size],
   );
 
-  const placed = useMemo(() => doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden && l.id !== pendingId), [doc, pendingId]);
+  const placed = useMemo(() => doc.layers.filter((l): l is PlacedLayer => isPlaced(l) && !l.hidden), [doc]);
   const pending = useMemo(() => {
-    const l = pendingId ? doc.layers.find((x) => x.id === pendingId) : undefined;
+    const l = pendingId ? drawn.layers.find((x) => x.id === pendingId) : undefined;
     return l && isPlaced(l) ? l : null;
-  }, [doc, pendingId]);
+  }, [drawn, pendingId]);
 
   /** The topmost layer under a point that can be picked on the canvas. */
   const layerAt = useCallback(

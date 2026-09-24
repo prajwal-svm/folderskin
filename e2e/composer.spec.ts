@@ -14,6 +14,23 @@ async function startFrom(page: Page, template: string) {
   await expect(newDialog(page)).toBeHidden();
 }
 
+/** Where the selected layer is, from its X and Y in the settings. */
+async function layerAt(page: Page) {
+  return { x: Number(await side(page).getByLabel("X", { exact: true }).inputValue()), y: Number(await side(page).getByLabel("Y", { exact: true }).inputValue()) };
+}
+
+/** Drags on the canvas from a point in the design's units (0 to 1024 across) by `dx`, `dy` screen pixels. */
+async function dragOnCanvas(page: Page, from: { x: number; y: number }, dx: number, dy: number) {
+  const box = (await composer(page).locator("canvas.cmp-canvas").boundingBox())!;
+  const sx = box.x + (from.x / 1024) * box.width;
+  const sy = box.y + (from.y / 1024) * box.height;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + dx / 2, sy + dy / 2, { steps: 4 });
+  await page.mouse.move(sx + dx, sy + dy, { steps: 4 });
+  await page.mouse.up();
+}
+
 test.describe("starting a new design", () => {
   test("opens as a dialog over the whole window on the first visit", async ({ page }) => {
     await openApp(page);
@@ -211,6 +228,45 @@ test.describe("the icon library", () => {
     // Undo takes the look back, as it would any change to the design.
     await page.keyboard.press("Control+z");
     await expect(side(page).getByRole("radio", { name: "Pressed in" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("a layer dragged while an icon is tried moves, and the icon tried stays only tried", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    const before = await layerAt(page);
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    await expect(composer(page).locator(".cmp-pending")).toBeVisible();
+    await dragOnCanvas(page, before, 30, 20);
+    // Still only tried: Add to canvas keeps it once.
+    await side(page).getByRole("button", { name: "Add to canvas" }).click();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Camera", "Projects", "Background"]);
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    expect(await layerAt(page)).not.toEqual(before);
+  });
+
+  test("with an icon selected, dragging it keeps it the icon it is", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).dblclick();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Camera" }).click();
+    const at = await layerAt(page);
+    await side(page).getByRole("button", { name: "Replace", exact: true }).click();
+    // The arrow keys put another icon on the canvas in its place, to look at.
+    const search = side(page).getByLabel("search icons");
+    await search.fill("");
+    await search.press("ArrowDown");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await dragOnCanvas(page, at, 30, 20);
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Camera", "Background"]);
   });
 
   test("shows each pack with its logo and no licence small print", async ({ page }) => {
