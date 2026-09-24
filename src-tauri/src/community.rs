@@ -1116,7 +1116,32 @@ pub(crate) mod tests {
         bytes
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    /// A scratch folder for one test, removed when it drops: when the test ends, and when an
+    /// assertion fails part-way through. Plain folders were left behind by every run of the
+    /// tests that didn't remove theirs, several hundred of them in the temp folder.
+    pub(crate) struct TempDir(PathBuf);
+
+    impl std::ops::Deref for TempDir {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+
+    impl AsRef<Path> for TempDir {
+        fn as_ref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Made before the state that opens a store in it, so it drops after the store has closed.
+    fn temp_dir(name: &str) -> TempDir {
         let d = std::env::temp_dir().join(format!(
             "folderskin-community-{}-{}",
             name,
@@ -1124,7 +1149,7 @@ pub(crate) mod tests {
         ));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
-        d
+        TempDir(d)
     }
 
     const PACK: &str = r#"{
@@ -1141,14 +1166,15 @@ pub(crate) mod tests {
 
     #[test]
     fn a_pack_folder_is_saved_as_community_skins_and_removed_as_one() {
-        let dir = temp_dir("import").join("test-colours");
+        let (import, store) = (temp_dir("import"), temp_dir("import-store"));
+        let dir = import.join("test-colours");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("pack.json"), PACK).unwrap();
         std::fs::write(dir.join("teal.png"), png(512, 480, [20, 140, 150, 255])).unwrap();
         std::fs::write(dir.join("rust.png"), png(512, 480, [180, 70, 30, 255])).unwrap();
 
         let state = AppState::default();
-        state.open_store(temp_dir("import-store"));
+        state.open_store(store.to_path_buf());
         let manifest = std::fs::read(dir.join("pack.json")).unwrap();
         let pack = Pack::parse(&manifest).unwrap();
         let pictures: Vec<Vec<u8>> = pack
@@ -1187,8 +1213,9 @@ pub(crate) mod tests {
 
     #[test]
     fn an_update_swaps_the_skins_and_keeps_the_ones_both_versions_share() {
+        let store = temp_dir("update-store");
         let state = AppState::default();
-        state.open_store(temp_dir("update-store"));
+        state.open_store(store.to_path_buf());
         let pack = Pack::parse(PACK.as_bytes()).unwrap();
         let teal = png(512, 480, [20, 140, 150, 255]);
         let old = vec![teal.clone(), png(512, 480, [180, 70, 30, 255])];
@@ -1261,8 +1288,9 @@ pub(crate) mod tests {
     #[test]
     fn a_bad_picture_stops_the_whole_pack_before_anything_is_saved() {
         let pack = Pack::parse(PACK.as_bytes()).unwrap();
+        let store = temp_dir("bad-store");
         let state = AppState::default();
-        state.open_store(temp_dir("bad-store"));
+        state.open_store(store.to_path_buf());
         let pictures = vec![png(512, 480, [1, 2, 3, 255]), png(100, 100, [1, 2, 3, 255])];
         let err =
             save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
@@ -1328,8 +1356,9 @@ pub(crate) mod tests {
 
     #[test]
     fn a_pack_is_saved_in_its_own_order_and_says_how_far_it_has_got() {
+        let store = temp_dir("order-store");
         let state = AppState::default();
-        state.open_store(temp_dir("order-store"));
+        state.open_store(store.to_path_buf());
         let pack = Pack::parse(
             listing(&[("a.png", "First"), ("b.png", "Second"), ("c.png", "Third")]).as_bytes(),
         )
@@ -1374,8 +1403,9 @@ pub(crate) mod tests {
 
     #[test]
     fn a_picture_listed_twice_is_one_skin() {
+        let store = temp_dir("twice-store");
         let state = AppState::default();
-        state.open_store(temp_dir("twice-store"));
+        state.open_store(store.to_path_buf());
         let pack =
             Pack::parse(listing(&[("a.png", "Teal"), ("b.png", "Teal again")]).as_bytes()).unwrap();
         let teal = png(512, 480, [20, 140, 150, 255]);
@@ -1397,7 +1427,7 @@ pub(crate) mod tests {
     fn a_pack_that_cannot_be_saved_adds_nothing() {
         let dir = temp_dir("full-store");
         let state = AppState::default();
-        state.open_store(dir.clone());
+        state.open_store(dir.to_path_buf());
         let pack = Pack::parse(PACK.as_bytes()).unwrap();
         let pictures = vec![png(512, 480, [1, 2, 3, 255]), png(512, 480, [4, 5, 6, 255])];
         // Something in the way of the second picture, as a full disk would be.
