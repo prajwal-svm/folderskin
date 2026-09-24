@@ -2,6 +2,7 @@
  * Moving, sizing and turning layers on the composer's canvas, and finding what the pointer is
  * over. Pure maths in canvas units; the stage converts to and from screen pixels.
  */
+import type { Parts } from "./parts";
 
 export type Point = { x: number; y: number };
 /** A layer's box: its centre, size and turn (degrees, clockwise). */
@@ -199,23 +200,28 @@ const AROUND = [
   [1, 1],
 ];
 
+/** The front panel, as the folder's parts give it: its box, and the corner of that box it leaves out. */
+export type Front = Pick<Parts, "front" | "front_step">;
+
 /**
- * Where something `w` × `h` can go on the front panel (`front`, x0 y0 x1 y1) without covering
- * any of `taken`: the middle when it's free, otherwise a whole step beside, above or below it,
- * the step clearing the biggest thing already there with a gap. Where those are all taken (a
- * wide label in the middle rules out both sides), right beside something already there, the
- * spot nearest the middle first. `null` when nowhere is free.
+ * Where something `w` × `h` can go on the front panel (`panel`) without covering any of `taken`:
+ * the middle when it's free, otherwise a whole step beside, above or below it, the step clearing
+ * the biggest thing already there with a gap. Where those are all taken (a wide label in the
+ * middle rules out both sides), right beside something already there, the spot nearest the
+ * middle first. `null` when nowhere is free.
  */
-export function freeSpot(front: [number, number, number, number], centre: Point, w: number, h: number, taken: Box[]): Point | null {
-  const [fx0, fy0, fx1, fy1] = front;
+export function freeSpot(panel: Front, centre: Point, w: number, h: number, taken: Box[]): Point | null {
+  const [fx0, fy0, fx1, fy1] = panel.front;
+  const step = panel.front_step;
   const widest = taken.reduce((m, b) => Math.max(m, b.w), w);
   const tallest = taken.reduce((m, b) => Math.max(m, b.h), h);
+  // Under Windows' tab the front starts lower: a spot reaching up there moves right, out from under it.
+  const out = (p: Point): Point => (step && p.x - w / 2 < step[2] && p.x + w / 2 > step[0] && p.y - h / 2 < step[3] + SPOT_MARGIN ? { x: step[2] + w / 2, y: p.y } : p);
   const fits = (x: number, y: number) => x - w / 2 >= fx0 + SPOT_MARGIN && x + w / 2 <= fx1 - SPOT_MARGIN && y - h / 2 >= fy0 + SPOT_MARGIN && y + h / 2 <= fy1 - SPOT_MARGIN;
   const free = (x: number, y: number) => taken.every((b) => Math.abs(b.x - x) * 2 >= b.w + w || Math.abs(b.y - y) * 2 >= b.h + h);
   for (const [dx, dy] of AROUND) {
-    const x = centre.x + dx * (widest / 2 + w / 2 + SPOT_GAP);
-    const y = centre.y + dy * (tallest / 2 + h / 2 + SPOT_GAP);
-    if (fits(x, y) && free(x, y)) return { x, y };
+    const at = out({ x: centre.x + dx * (widest / 2 + w / 2 + SPOT_GAP), y: centre.y + dy * (tallest / 2 + h / 2 + SPOT_GAP) });
+    if (fits(at.x, at.y) && free(at.x, at.y)) return at;
   }
   const beside = taken
     .flatMap((b) => [
@@ -224,6 +230,7 @@ export function freeSpot(front: [number, number, number, number], centre: Point,
       { x: b.x, y: b.y - (b.h / 2 + h / 2 + SPOT_GAP) },
       { x: b.x, y: b.y + (b.h / 2 + h / 2 + SPOT_GAP) },
     ])
+    .map(out)
     .filter((p) => fits(p.x, p.y) && free(p.x, p.y));
   const far = (p: Point) => Math.hypot(p.x - centre.x, p.y - centre.y);
   return beside.reduce<Point | null>((best, p) => (!best || far(p) < far(best) ? p : best), null);
@@ -234,11 +241,11 @@ export function freeSpot(front: [number, number, number, number], centre: Point,
  * `smallest` across its shorter side, and the share of its size it goes at. `null` when it fits
  * nowhere even then.
  */
-export function fitSpot(front: [number, number, number, number], centre: Point, w: number, h: number, taken: Box[], smallest = SMALLEST): (Point & { scale: number }) | null {
+export function fitSpot(panel: Front, centre: Point, w: number, h: number, taken: Box[], smallest = SMALLEST): (Point & { scale: number }) | null {
   const short = Math.min(w, h);
   for (let side = short; side >= Math.min(short, smallest); side -= 20) {
     const scale = side / short;
-    const at = freeSpot(front, centre, w * scale, h * scale, taken);
+    const at = freeSpot(panel, centre, w * scale, h * scale, taken);
     if (at) return { ...at, scale };
   }
   return null;
@@ -254,9 +261,9 @@ export const NEXT_ICON = 240;
  * Mac's), and only when nothing is free anywhere, stepped down and across from the middle, one
  * step per icon already there (`count`).
  */
-export function placeIcon(front: [number, number, number, number], centre: Point, taken: Box[], count: number): Point & { size: number } {
+export function placeIcon(panel: Front, centre: Point, taken: Box[], count: number): Point & { size: number } {
   const usual = count === 0 ? FIRST_ICON : NEXT_ICON;
-  const at = fitSpot(front, centre, usual, usual, taken);
+  const at = fitSpot(panel, centre, usual, usual, taken);
   if (at) return { x: at.x, y: at.y, size: usual * at.scale };
   return { x: centre.x + (count % 5) * 36, y: centre.y + (count % 5) * 36, size: usual };
 }
