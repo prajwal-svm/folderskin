@@ -53,4 +53,4 @@ pub use machine::{detect, pick_backend, pick_tier, Backend, Machine, Tier};
 pub use manifest::{Model, ModelId, MODELS};
 pub use paths::home;
 pub use prompts::{compose, Shape, Style, STYLES};
-pub use setup::{setup, status, Runtime, Status};
+pub use setup::{download_size, is_set_up, setup, status, Runtime, Status};

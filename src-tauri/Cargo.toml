@@ -24,15 +24,18 @@ tauri-plugin-process = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["system-proxy"] }
 folderskin-core.workspace = true
 folderskin-ai = { path = "../crates/folderskin-ai" }
+# "This computer": open-weight models set up and run here, shared with the command line.
+folderskin-local = { path = "../crates/folderskin-local" }
 # Sharing without GitHub: the computer's key and signed requests to the community service.
 folderskin-share = { path = "../crates/folderskin-share" }
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true
-# `sync` for the community catalog's load lock and download turns; Tauri's own tokio already has
-# it, so it adds nothing to the build.
-tokio = { workspace = true, features = ["sync"] }
+# `sync` for the community catalog's load lock and download turns and the local painting's turn,
+# `rt` for a provider's request on a task Stop can drop; Tauri's own tokio already has both, so
+# they add nothing to the build.
+tokio = { workspace = true, features = ["sync", "rt"] }
 base64 = "0.22"
 sha2.workspace = true
 # A pack's pictures download a few at a time (`StreamExt::buffered`). Already in the tree through

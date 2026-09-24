@@ -922,23 +922,17 @@ fn key(command: KeyCommand, out: &Arc<Out>) -> Result<(), CliError> {
             runtime()?
                 .block_on(folderskin_ai::test_key(p.id, &key))
                 .map_err(|e| paint::ai_error(p, e))?;
-            let checked = !matches!(p.id, "bfl" | "ideogram");
             let from = match source {
                 config::KeySource::Environment => config::key_variable(p.id),
                 config::KeySource::Saved => "the saved keys".into(),
             };
+            // Every provider's key is checked with a real request now, so `checked` stays for
+            // scripts that read it but is always true.
             out.result(
                 None,
                 "key_ok",
-                json!({"provider": p.id, "checked": checked}),
-                &if checked {
-                    format!("{} accepted the key from {from}.", p.label)
-                } else {
-                    format!(
-                        "{} has no free way to check a key; it is checked the first time you paint with it.",
-                        p.label
-                    )
-                },
+                json!({"provider": p.id, "checked": true}),
+                &format!("{} accepted the key from {from}.", p.label),
                 false,
             );
         }

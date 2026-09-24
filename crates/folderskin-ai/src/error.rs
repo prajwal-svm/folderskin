@@ -58,6 +58,10 @@ impl AiError {
         let message = trim_message(&message);
         match status {
             401 | 403 => AiError::Unauthorized(provider.to_string()),
+            // Black Forest Labs' "Invalid API key format": the key, not the request.
+            422 if message.to_lowercase().contains("api key") => {
+                AiError::Unauthorized(provider.to_string())
+            }
             429 => AiError::RateLimited(provider.to_string()),
             400 if looks_like_refusal(&message) => {
                 AiError::Refused(format!("{provider} declined that prompt: {message}"))
@@ -112,6 +116,14 @@ mod tests {
             !text.contains("sk-abc123"),
             "the key must not survive into the message: {text}"
         );
+    }
+
+    #[test]
+    fn a_key_in_the_wrong_shape_is_a_rejected_key() {
+        let e = AiError::from_status("Black Forest Labs", 422, "Invalid API key format".into());
+        assert!(matches!(e, AiError::Unauthorized(_)), "{e:?}");
+        let other = AiError::from_status("Black Forest Labs", 422, "width must be even".into());
+        assert!(matches!(other, AiError::Provider { status: 422, .. }));
     }
 
     #[test]

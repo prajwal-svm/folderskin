@@ -1099,6 +1099,10 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   color: var(--ink);
 }
 
+.local-stage .local-stop {
+  margin-left: auto;
+}
+
 /* ---------- settings dialog ---------- */
 
 .provider-list {

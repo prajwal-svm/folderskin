@@ -72,6 +72,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(state::AppState::default())
         .manage(keys::Keys::default())
+        // The AI runs that can be stopped, and this computer as the local models see it.
+        .manage(ai::jobs::Jobs::default())
+        .manage(ai::local::Local::default())
         .manage(github::Pending::default())
         .manage(chats::Chats::default())
         .manage(catalog::Community::default())
@@ -120,6 +123,9 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_test_key,
             ai::ai_generate,
+            ai::ai_cancel,
+            ai::ai_local_status,
+            ai::ai_local_setup,
             icons::icon_pack_download,
             icons::icon_packs_installed,
             icons::icon_pack_read,
