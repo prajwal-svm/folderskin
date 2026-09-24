@@ -103,7 +103,8 @@
 }
 
 .skin-hit {
-  width: 184px;
+  width: 208px;
+  height: 100%;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   grid-template-rows: auto auto;
@@ -130,12 +131,17 @@
 }
 
 /* A skin's name can be long and the chip is small: it trails off here, and the chip's title and
-   the pack it opens say it in full. */
-.skin-hit-name,
-.skin-hit-pack {
+   the viewer it opens say it in full. A pack's name is never cut short: it wraps, two lines for
+   the longest a pack may have. */
+.skin-hit-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skin-hit-pack {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .skin-hit-name {

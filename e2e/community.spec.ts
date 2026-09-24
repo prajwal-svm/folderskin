@@ -105,6 +105,11 @@ test("a pack opens to look through, and a skin that matched opens it at that ski
   await expect(hit).toBeVisible();
   const skin = (await hit.locator(".skin-hit-name").textContent())!;
   const pack = (await hit.locator(".skin-hit-pack").textContent())!;
+  // A pack's name is never cut short in the strip: it wraps instead.
+  const clipped = await page
+    .locator(".skin-hit-pack")
+    .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1).map((el) => el.textContent));
+  expect(clipped).toEqual([]);
   await hit.click();
   await expect(viewer.getByRole("heading", { name: pack })).toBeVisible();
   await expect(viewer.locator(".pack-skin.is-focus")).toContainText(skin);
