@@ -578,6 +578,22 @@ function mockShareStatus(): ShareStatus {
 /** Set when the folder look changes, so the next list of skins takes as long as a redraw would. */
 let mockRedraw = false;
 
+/** How long a redraw takes: a moment, or with `?holdredraw` until the page calls `mockRedrawn()`,
+ *  so a test can look at the library while it's drawn again, however busy the machine. */
+async function redrawTime(): Promise<void> {
+  if (!new URLSearchParams(location.search).has("holdredraw")) {
+    await sleep(700);
+    return;
+  }
+  const w = window as { mockRedrawn?: () => void };
+  await new Promise<void>((resolve) => {
+    w.mockRedrawn = () => {
+      delete w.mockRedrawn;
+      resolve();
+    };
+  });
+}
+
 export const mockApi = {
   folderLook: async (): Promise<FolderStyle> => (localStorage.getItem(MOCK_LOOK_KEY) === "windows" ? "windows" : "mac"),
   setFolderLook: async (look: FolderStyle): Promise<void> => {
@@ -588,7 +604,7 @@ export const mockApi = {
     // The app draws every thumbnail again on the other folder, which takes a moment.
     if (mockRedraw) {
       mockRedraw = false;
-      await sleep(700);
+      await redrawTime();
     }
     return {
       skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
