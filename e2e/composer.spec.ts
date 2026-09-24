@@ -303,6 +303,16 @@ test.describe("the icon library", () => {
     for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(Math.abs(a.x - b.x) * 2).toBeGreaterThanOrEqual(a.w + b.w);
   });
 
+  test("new words and shapes on Two-tone stand out from its dark front, not the yellow under it", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Two-tone");
+    await composer(page).getByRole("button", { name: "Text" }).click();
+    await expect(side(page).getByRole("button", { name: "Text colour: #FFFFFF" })).toBeVisible();
+    await composer(page).getByRole("button", { name: "Shape" }).click();
+    await page.locator(".cmp-grid-btn[data-tip='Heart']").click();
+    await expect(side(page).getByRole("button", { name: "Shape colour: #FFFFFF" })).toBeVisible();
+  });
+
   test("new words go beside the label's own, not over them", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Label");

@@ -745,8 +745,10 @@ export function Composer({
   // ---- adding ----
   const front = centreOf(parts.front);
   const bg = backgroundColor(doc);
-  const ink = bg ? inkOn(bg) : "#ffffff";
-  const accent = bg && luminance(bg) > 0.5 ? "#3a86ff" : "#ffffff";
+  // New words, shapes and icons land on the front, whatever covers it.
+  const under = backgroundColor(doc, parts.front);
+  const ink = under ? inkOn(under) : "#ffffff";
+  const accent = under && luminance(under) > 0.5 ? "#3a86ff" : "#ffffff";
 
   const add = useCallback(
     (layer: Layer, index?: number) => {
