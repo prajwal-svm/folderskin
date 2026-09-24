@@ -174,53 +174,66 @@ pub async fn test_key(provider_id: &str, api_key: &str) -> Result<(), AiError> {
         return Err(AiError::MissingKey(provider.label.to_string()));
     }
     let label = provider.label;
-    let (url, req) = match provider.id {
-        "openai" => (
-            "https://api.openai.com/v1/models",
+    let req = match provider.id {
+        "openai" => client()
+            .get("https://api.openai.com/v1/models")
+            .bearer_auth(api_key),
+        "xai" => client()
+            .get("https://api.x.ai/v1/models")
+            .bearer_auth(api_key),
+        "recraft" => client()
+            .get("https://external.api.recraft.ai/v1/users/me")
+            .bearer_auth(api_key),
+        "google" => client()
+            .get("https://generativelanguage.googleapis.com/v1beta/models")
+            .header("x-goog-api-key", api_key),
+        "stability" => client()
+            .get("https://api.stability.ai/v1/user/account")
+            .bearer_auth(api_key),
+        // The account's credit balance: free, and only answered for a key it knows.
+        "bfl" => client()
+            .get("https://api.bfl.ai/v1/credits")
+            .header("x-key", api_key),
+        // Ideogram has no "who am I". Describing a picture checks the key before it looks at the
+        // picture, so a few bytes that aren't one are turned away once the key is accepted, and
+        // nothing is described or charged.
+        "ideogram" => {
+            let part = reqwest::multipart::Part::bytes(b"not a picture".to_vec())
+                .file_name("key-check.png")
+                .mime_str("image/png")
+                .map_err(|e| AiError::Decode(e.to_string()))?;
             client()
-                .get("https://api.openai.com/v1/models")
-                .bearer_auth(api_key),
-        ),
-        "xai" => (
-            "https://api.x.ai/v1/models",
-            client()
-                .get("https://api.x.ai/v1/models")
-                .bearer_auth(api_key),
-        ),
-        "recraft" => (
-            "https://external.api.recraft.ai/v1/users/me",
-            client()
-                .get("https://external.api.recraft.ai/v1/users/me")
-                .bearer_auth(api_key),
-        ),
-        "google" => (
-            "https://generativelanguage.googleapis.com/v1beta/models",
-            client()
-                .get("https://generativelanguage.googleapis.com/v1beta/models")
-                .header("x-goog-api-key", api_key),
-        ),
-        "stability" => (
-            "https://api.stability.ai/v1/user/account",
-            client()
-                .get("https://api.stability.ai/v1/user/account")
-                .bearer_auth(api_key),
-        ),
-        // These two have no free "who am I" endpoint, so the key is checked on first use.
-        "bfl" | "ideogram" => return Ok(()),
+                .post("https://api.ideogram.ai/describe")
+                .header("Api-Key", api_key)
+                .multipart(reqwest::multipart::Form::new().part("image_file", part))
+        }
         other => return Err(AiError::UnknownProvider(other.to_string())),
     };
-    let _ = url;
     let res = req.send().await.map_err(|e| net(label, e))?;
     let status = res.status();
-    if status.is_success() {
-        return Ok(());
-    }
-    let text = res.text().await.unwrap_or_default();
-    Err(AiError::from_status(
+    let text = if status.is_success() {
+        String::new()
+    } else {
+        res.text().await.unwrap_or_default()
+    };
+    key_check(
+        provider.id,
         label,
         status.as_u16(),
         request::error_message(&text),
-    ))
+    )
+}
+
+/// What the answer to [`test_key`]'s request says about the key.
+fn key_check(provider_id: &str, label: &str, status: u16, message: String) -> Result<(), AiError> {
+    match (provider_id, status) {
+        (_, 200..=299) => Ok(()),
+        // Black Forest Labs answers a key that isn't even shaped like one with 422.
+        ("bfl", 401 | 403 | 422) => Err(AiError::Unauthorized(label.to_string())),
+        // Past the key and turned away for the picture that isn't one: the key is good.
+        ("ideogram", 400..=499) if !matches!(status, 401 | 403 | 429) => Ok(()),
+        _ => Err(AiError::from_status(label, status, message)),
+    }
 }
 
 // ---------------------------------------------------------------- per provider
@@ -381,7 +394,8 @@ async fn bfl(
     let polling_url = request::read_bfl_submit(&body)?;
 
     for _ in 0..POLL_LIMIT {
-        tokio_sleep(POLL_INTERVAL).await;
+        // The runtime's timer: the thread serves other requests while this one waits.
+        tokio::time::sleep(POLL_INTERVAL).await;
         let res = client()
             .get(&polling_url)
             .header("x-key", key)
@@ -464,26 +478,6 @@ async fn ideogram(
     Ok((bytes, media, None))
 }
 
-/// Sleeps without pulling in a tokio dependency of our own: reqwest already runs on tokio, so a
-/// timer is available wherever this crate is used.
-async fn tokio_sleep(duration: Duration) {
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        std::thread::sleep(duration);
-        let _ = tx.send(());
-    });
-    let _ = tokio_recv(rx).await;
-}
-
-async fn tokio_recv(rx: std::sync::mpsc::Receiver<()>) -> Option<()> {
-    // The wait happens on a blocking helper thread, so this never parks the async executor for
-    // longer than the poll interval.
-    std::thread::spawn(move || rx.recv().ok())
-        .join()
-        .ok()
-        .flatten()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,6 +518,42 @@ mod tests {
         r.reference_png = Some(vec![1, 2, 3]);
         let err = futures_lite_block(generate(&r, "key"));
         assert!(matches!(err, Err(AiError::Unsupported(m)) if m.contains("reference picture")));
+    }
+
+    #[test]
+    fn a_key_check_reads_each_providers_answer() {
+        assert!(key_check("openai", "OpenAI", 200, String::new()).is_ok());
+        assert!(matches!(
+            key_check("openai", "OpenAI", 401, "no".into()),
+            Err(AiError::Unauthorized(_))
+        ));
+        // Black Forest Labs: 403 for a key it doesn't know, 422 for one that isn't shaped right.
+        for status in [403, 422] {
+            assert!(matches!(
+                key_check(
+                    "bfl",
+                    "Black Forest Labs",
+                    status,
+                    "Not authenticated".into()
+                ),
+                Err(AiError::Unauthorized(_))
+            ));
+        }
+        // Ideogram: the key is checked first, then the picture that isn't one is turned away.
+        assert!(key_check("ideogram", "Ideogram", 400, "bad image".into()).is_ok());
+        assert!(key_check("ideogram", "Ideogram", 422, "bad image".into()).is_ok());
+        assert!(matches!(
+            key_check("ideogram", "Ideogram", 401, "Access denied".into()),
+            Err(AiError::Unauthorized(_))
+        ));
+        assert!(matches!(
+            key_check("ideogram", "Ideogram", 429, String::new()),
+            Err(AiError::RateLimited(_))
+        ));
+        assert!(matches!(
+            key_check("ideogram", "Ideogram", 503, "down".into()),
+            Err(AiError::Provider { status: 503, .. })
+        ));
     }
 
     #[test]
