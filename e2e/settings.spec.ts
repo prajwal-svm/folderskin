@@ -422,7 +422,8 @@ test.describe("settings", () => {
   });
 
   test("GitHub connects in its own section, keeps the focus, and credits the default profile", async ({ page }) => {
-    await openApp(page);
+    // The code is approved once the test has looked at it waiting.
+    await openApp(page, { query: "holdgithub" });
     await openSettings(page);
     await dialog(page).getByRole("tab", { name: "Sharing" }).click();
     await dialog(page).getByRole("button", { name: "Connect", exact: true }).focus();
@@ -430,8 +431,10 @@ test.describe("settings", () => {
     await expect(dialog(page).getByRole("button", { name: "Open GitHub" })).toBeFocused();
     // The profiles stay below while it waits.
     await expect(dialog(page).getByRole("heading", { name: "Licence profiles" })).toBeVisible();
+    await page.waitForFunction(() => typeof (window as { mockApprove?: () => void }).mockApprove === "function");
+    await page.evaluate(() => (window as { mockApprove?: () => void }).mockApprove?.());
     const disconnect = dialog(page).getByRole("button", { name: "Disconnect" });
-    await expect(disconnect).toBeFocused({ timeout: 10_000 });
+    await expect(disconnect).toBeFocused();
     const rows = dialog(page).locator(".set-profile");
     await expect(rows.first()).toContainText("Credited to octocat");
 
