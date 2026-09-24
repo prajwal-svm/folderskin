@@ -169,7 +169,7 @@ export function CommunityView({
             <button
               type="button"
               className="icon-btn"
-              title="Look for new and updated packs"
+              data-tip="Look for new and updated packs"
               aria-label="refresh packs"
               aria-busy={s.refreshing}
               disabled={s.refreshing}
@@ -191,7 +191,7 @@ export function CommunityView({
                   role="radio"
                   aria-checked={s.view === id}
                   aria-label={label}
-                  title={label}
+                  data-tip={label}
                   className={s.view === id ? "view-switch-btn is-active" : "view-switch-btn"}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => community.setView(id)}
@@ -210,7 +210,7 @@ export function CommunityView({
           <ul className="skin-hits-list">
             {shown.skins.map((hit) => (
               <li key={`${hit.pack}:${hit.index}`}>
-                <button type="button" className="skin-hit" title={`${hit.name}, in ${hit.pack_name}`} onClick={() => openHit(hit)}>
+                <button type="button" className="skin-hit" data-tip={`${hit.name}, in ${hit.pack_name}`} data-tip-overflow onClick={() => openHit(hit)}>
                   {hit.thumbnail ? <img src={hit.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="skin-hit-blank" />}
                   <span className="skin-hit-name">{hit.name}</span>
                   <span className="skin-hit-pack">{hit.pack_name}</span>
@@ -348,7 +348,7 @@ const PackCard = memo(function PackCard({
         type="button"
         className="pack-preview-btn"
         aria-label={`view ${pack.name}`}
-        title={`View ${pack.name}`}
+        data-tip={`View ${pack.name}`}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => community.open(pack)}
       >
@@ -395,7 +395,7 @@ const PackCard = memo(function PackCard({
                   <button
                     type="button"
                     className="btn btn-primary"
-                    title="A newer version of this pack is out"
+                    data-tip="A newer version of this pack is out"
                     disabled={busy || blocked}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void community.update(pack)}
@@ -424,7 +424,7 @@ const PackCard = memo(function PackCard({
                   <button
                     type="button"
                     className="icon-btn pack-remove"
-                    title="Remove this pack"
+                    data-tip="Remove this pack"
                     aria-label={`remove ${pack.name}`}
                     disabled={blocked}
                     onMouseDown={(e) => e.preventDefault()}
@@ -514,7 +514,7 @@ function CommunityOptions({ sort, typed, facets, tag }: { sort: CommunitySort; t
         aria-haspopup="dialog"
         aria-expanded={openNow}
         aria-label="Sort and more tags"
-        title="Sort and more tags"
+        data-tip="Sort and more tags"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
       >

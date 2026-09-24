@@ -16,6 +16,7 @@ export function Select<T extends string | number>({
   onChange,
   label,
   className,
+  placeholder,
 }: {
   value: T;
   options: SelectOption<T>[];
@@ -23,13 +24,17 @@ export function Select<T extends string | number>({
   /** What's being chosen, for screen readers and the list's name. */
   label: string;
   className?: string;
+  /** Shown, with nothing ticked, while `value` is none of the options: for a choice the app
+   *  leaves to them rather than making it. */
+  placeholder?: string;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const chosen = Math.max(0, options.findIndex((o) => o.value === value));
+  const found = options.findIndex((o) => o.value === value);
+  const chosen = Math.max(0, found);
   const [active, setActive] = useState(chosen);
   const list = useRef<HTMLDivElement>(null);
   const id = useId();
-  const current = options[chosen];
+  const current = found === -1 && placeholder !== undefined ? null : options[chosen];
 
   // The option with the keyboard has the focus. A frame later: the popover is placed (and can take
   // focus) only once it has been measured, and it focuses its own panel as it opens.
@@ -79,7 +84,7 @@ export function Select<T extends string | number>({
         className={`cmp-pick-btn cmp-select-btn${className ? ` ${className}` : ""}`}
         aria-haspopup="listbox"
         aria-expanded={anchor !== null}
-        aria-label={`${label}: ${current?.label ?? ""}`}
+        aria-label={`${label}: ${current?.label ?? placeholder ?? ""}`}
         onClick={(e) => (anchor ? close() : open(e.currentTarget))}
         onKeyDown={(e) => {
           if (!anchor && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -88,7 +93,7 @@ export function Select<T extends string | number>({
           }
         }}
       >
-        <span>{current?.render ?? current?.label}</span>
+        {current ? <span>{current.render ?? current.label}</span> : <span className="cmp-select-placeholder">{placeholder}</span>}
         <ChevronDownIcon size={14} />
       </button>
       {anchor && (
@@ -99,14 +104,14 @@ export function Select<T extends string | number>({
                 key={String(o.value)}
                 role="option"
                 data-index={i}
-                aria-selected={i === chosen}
+                aria-selected={i === chosen && current !== null}
                 tabIndex={i === active ? 0 : -1}
                 className={i === active ? "cmp-option is-active" : "cmp-option"}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(i)}
               >
                 <span className="cmp-option-label">{o.render ?? o.label}</span>
-                {i === chosen && <TickIcon size={14} />}
+                {i === chosen && current !== null && <TickIcon size={14} />}
               </div>
             ))}
           </div>

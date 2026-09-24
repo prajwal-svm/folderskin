@@ -2065,6 +2065,11 @@
   font-size: 13.5px;
 }
 
+/* Nothing chosen yet: the question, in the colour a field's placeholder takes. */
+.cmp-select-placeholder {
+  color: var(--hint);
+}
+
 .cmp-select-pop {
   padding: 6px;
 }

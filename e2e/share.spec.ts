@@ -14,11 +14,17 @@ async function shareWithoutGithub(page: Page, query = "") {
   return dialog;
 }
 
+/** Says where the pictures came from, in the app's own dropdown. */
+async function pictures(dialog: ReturnType<Page["getByRole"]>, answer: string) {
+  await dialog.getByRole("button", { name: /^the pictures:/ }).click();
+  await dialog.page().getByRole("listbox", { name: "the pictures" }).getByRole("option", { name: answer }).click();
+}
+
 /** The pack itself: a name, a tag, where the pictures came from, and the terms. */
 async function fillPack(dialog: ReturnType<Page["getByRole"]>) {
   await dialog.getByPlaceholder("Neon nights").fill("Night prints");
   await dialog.getByRole("button", { name: "+ photo" }).click();
-  await dialog.getByRole("combobox", { name: "The pictures" }).selectOption("own");
+  await pictures(dialog, "I made them myself");
   await dialog.getByText("I've read the pack terms and this pack follows them.").click();
 }
 
@@ -84,7 +90,7 @@ test("a build without the service says so instead of failing", async ({ page }) 
   const dialog = await shareWithoutGithub(page, "noshare");
   await expect(dialog.getByText(/Sharing without GitHub isn't available yet/)).toBeVisible();
   // Nothing asks for what couldn't be sent anyway.
-  await expect(dialog.getByRole("combobox", { name: "The pictures" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: /^the pictures:/ })).toHaveCount(0);
   await expect(dialog.getByText("Reviewed first.")).toHaveCount(0);
   await dialog.getByPlaceholder("Neon nights").fill("Night prints");
   await dialog.getByRole("button", { name: "+ photo" }).click();
@@ -107,12 +113,28 @@ test("the send button says what is still missing", async ({ page }) => {
   await dialog.getByPlaceholder("Neon nights").fill("Night prints");
   await dialog.getByRole("button", { name: "+ photo" }).click();
   await expect(dialog.getByText("Say where the pictures came from")).toBeVisible();
-  await dialog.getByRole("combobox", { name: "The pictures" }).selectOption("ai");
+  // Nothing is chosen for them: the field asks.
+  await expect(dialog.getByRole("button", { name: /^the pictures:/ })).toHaveAccessibleName("the pictures: Where did they come from?");
+  await pictures(dialog, "I made them with an AI model");
   await expect(dialog.getByText("Choose the name your packs show")).toBeVisible();
   await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("ab");
   await expect(dialog.getByText("Choose the name your packs show")).toBeVisible();
   await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("abc");
   await expect(dialog.getByText("Agree to the terms")).toBeVisible();
+});
+
+test("the skins shown narrow to one tag, and name the pack after it", async ({ page }) => {
+  await openApp(page);
+  await openView(page, /community/i);
+  await page.getByRole("button", { name: "Share your skins" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share a pack" });
+  const shown = dialog.getByRole("button", { name: /^which skins to show:/ });
+  await expect(shown).toHaveAccessibleName("which skins to show: All of yours (8)");
+  await expect(dialog.locator(".share-pick-one")).toHaveCount(8);
+  await shown.click();
+  await page.getByRole("listbox", { name: "which skins to show" }).getByRole("option", { name: "Tagged painting (3)" }).click();
+  await expect(dialog.locator(".share-pick-one")).toHaveCount(3);
+  await expect(dialog.getByPlaceholder("Neon nights")).toHaveValue("Painting");
 });
 
 test.describe("licence profiles", () => {

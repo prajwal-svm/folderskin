@@ -513,7 +513,7 @@ export function SharePack({
       footer={
         <>
           {stop && !busy && (
-            <span className="modal-reason" title={stop}>
+            <span className="modal-reason" data-tip={stop} data-tip-overflow>
               {stop}
             </span>
           )}
@@ -563,14 +563,13 @@ export function SharePack({
               )}
             </div>
             {tags.length > 0 && yours.length > 1 && (
-              <select className="input" value={filter} onChange={(e) => narrow(e.target.value)} aria-label="which skins to show">
-                <option value="">All of yours ({yours.length})</option>
-                {tags.map((t) => (
-                  <option key={t.tag} value={t.tag}>
-                    Tagged {t.tag} ({t.count})
-                  </option>
-                ))}
-              </select>
+              <Select
+                label="which skins to show"
+                className="is-field"
+                value={filter}
+                onChange={narrow}
+                options={[{ value: "", label: `All of yours (${yours.length})` }, ...tags.map((t) => ({ value: t.tag, label: `Tagged ${t.tag} (${t.count})` }))]}
+              />
             )}
             <div className="share-pick-box">
               <div className="share-pick">
@@ -582,7 +581,8 @@ export function SharePack({
                     type="button"
                     className={on ? "share-pick-one is-on" : "share-pick-one"}
                     aria-pressed={on}
-                    title={s.name}
+                    data-tip={s.name}
+                    data-tip-overflow
                     onClick={() => toggle(s.id)}
                   >
                     <img src={s.thumbnail} alt="" draggable={false} />
@@ -662,7 +662,9 @@ export function SharePack({
                 <div className="gh-account">
                   <GithubAvatar account={account} />
                   <span className="gh-account-who">
-                    <strong title={account.login}>{account.login}</strong>
+                    <strong data-tip={account.login} data-tip-overflow>
+                      {account.login}
+                    </strong>
                   </span>
                   <button type="button" className="link-btn" onClick={useAnother}>
                     Use another
@@ -690,7 +692,9 @@ export function SharePack({
                     {direct.handle.charAt(0).toUpperCase()}
                   </span>
                   <span className="gh-account-who">
-                    <strong title={direct.handle}>{direct.handle}</strong>
+                    <strong data-tip={direct.handle} data-tip-overflow>
+                      {direct.handle}
+                    </strong>
                     <span>Verified on this computer</span>
                   </span>
                   <button type="button" className="link-btn" onClick={() => setShowMine(true)}>
@@ -738,19 +742,17 @@ export function SharePack({
             {keyNote && <span className={keyNote.error ? "field-note is-error" : "field-note"}>{keyNote.text}</span>}
           </div>
           {route === "direct" && direct?.available && (
-            <label className="field">
+            <div className="field">
               <span className="field-label">The pictures</span>
-              <select className="input" value={source} onChange={(e) => setSource(e.target.value as PictureSource)}>
-                <option value="" disabled>
-                  Where did they come from?
-                </option>
-                {PICTURE_SOURCES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <Select<PictureSource | "">
+                label="the pictures"
+                className="is-field"
+                value={source}
+                onChange={setSource}
+                placeholder="Where did they come from?"
+                options={PICTURE_SOURCES.map((s) => ({ value: s.id, label: s.label }))}
+              />
+            </div>
           )}
           <label className="field">
             <span className="field-label">Credits</span>

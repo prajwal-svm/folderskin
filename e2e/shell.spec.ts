@@ -100,6 +100,42 @@ test.describe("tooltips", () => {
     }
   });
 
+  test("are the app's own in Community and the share dialog too", async ({ page }) => {
+    const titled = () => page.evaluate(() => [...document.querySelectorAll("[title], svg title")].map((e) => e.outerHTML.slice(0, 120)));
+    await openApp(page, { query: "shared" });
+    await openView(page, /community/i);
+    // A pack added, with a newer version out, so its card has every button it can have.
+    const colours = page.locator(".pack").filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) });
+    await colours.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(colours.getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "refresh packs" }).click();
+    await expect(colours.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+    // A search that finds skins by name, and the sort and tags beside it.
+    await page.getByRole("searchbox", { name: /search packs/i }).fill("toledo");
+    await expect(page.locator(".skin-hit").first()).toBeVisible();
+    await page.getByRole("button", { name: /sort and more tags/i }).click();
+    await expect(page.getByRole("dialog", { name: /sort and tags/i })).toBeVisible();
+    expect(await titled(), "native tooltips in Community").toEqual([]);
+    await page.keyboard.press("Escape");
+
+    await page.locator(".skin-hit").first().click();
+    await expect(page.locator(".pack-skin").first()).toBeVisible();
+    expect(await titled(), "native tooltips in a pack").toEqual([]);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Share your skins" }).click();
+    const share = page.getByRole("dialog", { name: "Share a pack" });
+    await share.getByRole("button", { name: "Connect to GitHub" }).click();
+    await expect(share.getByText("octocat")).toBeVisible({ timeout: 10_000 });
+    expect(await titled(), "native tooltips in the share dialog").toEqual([]);
+    await share.getByRole("radio", { name: "Without GitHub" }).click();
+    await expect(share.getByText("Verified on this computer")).toBeVisible();
+    expect(await titled(), "native tooltips sharing without GitHub").toEqual([]);
+    await share.getByRole("button", { name: "Your submissions" }).click();
+    await expect(page.getByRole("dialog", { name: "Your submissions" }).getByRole("listitem").first()).toBeVisible();
+    expect(await titled(), "native tooltips in Your submissions").toEqual([]);
+  });
+
   test("show after a moment on hover, with the shortcut beside them", async ({ page }) => {
     await openApp(page);
     await openView(page, /design your own/i);

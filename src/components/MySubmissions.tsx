@@ -74,7 +74,7 @@ export function MySubmissions() {
           return (
             <li key={s.id} className="share-sub">
               <div className="share-sub-head">
-                <strong className="share-sub-name" title={s.name}>
+                <strong className="share-sub-name" data-tip={s.name} data-tip-overflow>
                   {s.name}
                 </strong>
                 <span className={status.tone === "plain" ? "chip" : `chip chip-${status.tone}`}>{status.label}</span>
