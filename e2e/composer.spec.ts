@@ -91,6 +91,42 @@ test.describe("starting a new design", () => {
   });
 });
 
+test.describe("the Mac's and Windows' own folders", () => {
+  test("start on their own folder, with a front of its own colour that covers only the front", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Windows folder");
+    const which = composer(page).getByRole("radiogroup", { name: "which folder" });
+    await expect(which.getByRole("radio", { name: "Windows" })).toHaveAttribute("aria-checked", "true");
+    await expect(layerNames(page)).toHaveText(["Bottom edge", "Front", "Back"]);
+    // Nothing new is saved until it is, so a new design doesn't say so.
+    await expect(side(page).locator(".cmp-side-sub")).toHaveCount(0);
+
+    // The tab keeps the back's colour; the front's covering the whole folder paints it too.
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    const tab = () =>
+      canvas.evaluate((c: HTMLCanvasElement) => {
+        const px = c.getContext("2d")!.getImageData(Math.round((200 / 1024) * c.width), Math.round((160 / 1024) * c.height), 1, 1).data;
+        return `${px[0]},${px[1]},${px[2]}`;
+      });
+    await side(page).locator(".cmp-layer", { hasText: "Front" }).click();
+    const covers = side(page).getByRole("radiogroup", { name: "what the colour covers" });
+    await expect(covers.getByRole("radio", { name: "Front" })).toHaveAttribute("aria-checked", "true");
+    await page.waitForTimeout(300);
+    const golden = await tab();
+    await covers.getByRole("radio", { name: "Whole folder" }).click();
+    await expect.poll(tab).not.toBe(golden);
+    await covers.getByRole("radio", { name: "Front" }).click();
+    await expect.poll(tab).toBe(golden);
+
+    // From Windows' folder, the Mac's own look still starts on the Mac's.
+    await composer(page).getByRole("button", { name: "New" }).click();
+    await newDialog(page).getByRole("button", { name: /^Mac folder$/ }).click();
+    await expect(newDialog(page)).toBeHidden();
+    await expect(which.getByRole("radio", { name: "Mac" })).toHaveAttribute("aria-checked", "true");
+    await expect(layerNames(page)).toHaveText(["Front", "Back"]);
+  });
+});
+
 test.describe("a new session", () => {
   test("keeps the design while the app runs, and starts afresh the next time it opens", async ({ page, context }) => {
     await openApp(page);

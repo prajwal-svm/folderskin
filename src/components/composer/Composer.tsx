@@ -483,22 +483,32 @@ export function Composer({
   // didn't load, and the design is shown by itself.
   const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts } | null>>>({});
   const asked = useRef(new Set<FolderStyle>());
+  const loadFolder = useCallback(
+    (style: FolderStyle) => {
+      if (asked.current.has(style)) return;
+      asked.current.add(style);
+      api
+        .composerTemplate(style)
+        .then(async (t) => {
+          const images = await loadTemplate(t);
+          setTemplates((all) => ({ ...all, [style]: { images, parts: t.parts } }));
+        })
+        .catch((e) => {
+          asked.current.delete(style);
+          setTemplates((all) => ({ ...all, [style]: null }));
+          toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
+        });
+    },
+    [toast],
+  );
+  useEffect(() => loadFolder(doc.style), [doc.style, loadFolder]);
+  // Fills that cover only the front are cut to each folder's front, once it has loaded.
   useEffect(() => {
-    const style = doc.style;
-    if (asked.current.has(style)) return;
-    asked.current.add(style);
-    api
-      .composerTemplate(style)
-      .then(async (t) => {
-        const images = await loadTemplate(t);
-        setTemplates((all) => ({ ...all, [style]: { images, parts: t.parts } }));
-      })
-      .catch((e) => {
-        asked.current.delete(style);
-        setTemplates((all) => ({ ...all, [style]: null }));
-        toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
-      });
-  }, [doc.style, toast]);
+    for (const style of ["mac", "windows"] as const) {
+      const folder = templates[style];
+      if (folder) assets.setFront(style, folder.images.front);
+    }
+  }, [assets, templates]);
   const template = templates[doc.style] ?? null;
   /** The folder the design is on hasn't loaded yet: the stage waits for it rather than show the design without it. */
   const folderLoading = templates[doc.style] === undefined;
@@ -509,6 +519,11 @@ export function Composer({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** The "Start a new design" dialog: on the first visit, and whenever New is pressed. */
   const [starting, setStarting] = useState(!draft);
+  // The dialog shows a folder's own look on that folder, whichever one this design is on.
+  useEffect(() => {
+    if (!starting) return;
+    for (const t of TEMPLATES) if (t.style) loadFolder(t.style);
+  }, [starting, loadFolder]);
   const [name, setName] = useState(draft?.name ?? "");
   const [nameTouched, setNameTouched] = useState(draft?.nameTouched ?? false);
   const [editing, setEditing] = useState<Editing | null>(draft?.editing ?? null);
@@ -642,10 +657,13 @@ export function Composer({
         if (!img) return;
         picture = asPicture(img);
       }
-      reset({ ...choice.template.make(parts, picture), style }, { editing: null, name: "", named: false });
+      // A folder's own look starts on that folder; any other template on the last design's.
+      const on = choice.template.style ?? style;
+      const onParts = templates[on]?.parts ?? fallbackParts(on);
+      reset({ ...choice.template.make(onParts, picture), style: on }, { editing: null, name: "", named: false });
       forgetDraft();
     },
-    [choosePicture, forgetDraft, parts, reset],
+    [choosePicture, forgetDraft, templates, reset],
   );
 
   // Edit a saved design, or remix any skin, when the app asks.
@@ -1234,7 +1252,7 @@ export function Composer({
               setNameTouched(true);
             }}
           />
-          <p className="cmp-side-sub">{editing ? (dirty ? "Changed since it was saved" : "Saved in Yours") : "Not saved yet"}</p>
+          {editing && <p className="cmp-side-sub">{dirty ? "Changed since it was saved" : "Saved in Yours"}</p>}
           <div className="cmp-side-tabs">
             <Segmented<"layers" | "icons">
               label="side panel"
@@ -1329,6 +1347,7 @@ export function Composer({
                   onReplaceIcon={() => openIcons(selected?.id ?? null)}
                   index={index}
                   size={selected && isPlaced(selected) ? boxOf(selected, assets) : null}
+                  onFolder={doc.shape === "folder"}
                 />
               </div>
             </Panel>
@@ -1404,8 +1423,8 @@ export function Composer({
       )}
       {active && starting && (
         <NewDesign
-          parts={parts}
-          template={template?.images ?? null}
+          folders={templates}
+          style={doc.style}
           assets={assets}
           version={version}
           dirty={dirty && doc.layers.length > 0}

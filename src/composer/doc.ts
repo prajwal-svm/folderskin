@@ -133,8 +133,12 @@ type Placed = {
   edge: Edge | null;
 };
 
-/** Covers the whole canvas: a colour or a gradient. */
-export type FillLayer = Common & { kind: "fill"; paint: Paint };
+/**
+ * Covers the whole canvas with a colour or a gradient, or with `part: "front"` only the folder's
+ * front panel, cut to it exactly: a folder whose back and front are different colours, the way
+ * the Mac's and Windows' own folders are. On a free icon it covers the whole canvas.
+ */
+export type FillLayer = Common & { kind: "fill"; paint: Paint; part?: "front" };
 /** Covers the whole canvas: a repeating pattern. `background` may be transparent. */
 export type PatternLayer = Common & {
   kind: "pattern";
@@ -407,6 +411,7 @@ export function layerLabel(layer: Layer, index = 1): string {
   if (layer.name) return layer.name;
   switch (layer.kind) {
     case "fill":
+      if (layer.part === "front") return "Front";
       return index === 0 ? "Background" : layer.paint.type === "solid" ? "Colour" : "Gradient";
     case "pattern":
       return patternLabel(layer.pattern);
@@ -443,8 +448,13 @@ export function mainColor(paint: Paint): string {
   return paint.stops[Math.floor(paint.stops.length / 2)]?.color ?? "#000000";
 }
 
-/** The colour at the bottom of the design, which new text and shapes are made to stand out from. */
+/**
+ * The colour at the bottom of the design, which new text and shapes are made to stand out from:
+ * the front panel's own colour when it has one, since that's where they land.
+ */
 export function backgroundColor(doc: Doc): string | null {
+  const front = doc.layers.find((l) => !l.hidden && l.kind === "fill" && l.part === "front");
+  if (front?.kind === "fill") return mainColor(front.paint);
   const base = doc.layers.find((l) => !l.hidden && (l.kind === "fill" || l.kind === "image"));
   if (!base) return null;
   if (base.kind === "fill") return mainColor(base.paint);
@@ -670,8 +680,11 @@ function readLayer(v: unknown): Layer | null {
     edge: readEdge(v.edge),
   });
   switch (v.kind) {
-    case "fill":
-      return { ...base, kind: "fill", paint: readPaint(v.paint, solid("#3a86ff")) };
+    case "fill": {
+      const fill: FillLayer = { ...base, kind: "fill", paint: readPaint(v.paint, solid("#3a86ff")) };
+      if (v.part === "front") fill.part = "front";
+      return fill;
+    }
     case "pattern":
       return {
         ...base,

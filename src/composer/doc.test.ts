@@ -136,6 +136,17 @@ describe("reading a design back", () => {
     expect(parseDoc({ layers: [] })).toEqual({ version: 1, shape: "folder", style: "mac", layers: [] });
   });
 
+  it("keeps a colour that covers only the front, and nothing else it doesn't know", () => {
+    const front = { ...makeFill(solid("#60d0ff")), part: "front" as const };
+    const d = addLayer(addLayer(emptyDoc(), makeFill(solid("#0a94d3"))), front);
+    expect(parseDoc(JSON.parse(JSON.stringify(d)))).toEqual(d);
+    const odd = parseDoc({ layers: [{ kind: "fill", paint: { type: "solid", color: "#ffffff" }, part: "back" }] })!;
+    expect(odd.layers[0]).not.toHaveProperty("part");
+    expect(layerLabel(front, 1)).toBe("Front");
+    // What's added lands on the front, so it's the front's colour it should stand out from.
+    expect(backgroundColor(d)).toBe("#60d0ff");
+  });
+
   it("keeps which folder a design is on, a Mac's unless it says Windows'", () => {
     expect(parseDoc({ style: "windows", layers: [] })?.style).toBe("windows");
     expect(parseDoc({ style: "linux", layers: [] })?.style).toBe("mac");
