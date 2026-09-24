@@ -49,6 +49,7 @@ test.describe("settings", () => {
     expect(await html(page, "data-motion")).toBe("reduced");
 
     // Black and white is black on the light window and white on the dark one, with dark words on it.
+    await openSettings(page);
     await dialog(page).getByRole("radio", { name: "Black and white" }).click();
     const mono = () =>
       page.evaluate(() => {
@@ -60,7 +61,6 @@ test.describe("settings", () => {
     await expect.poll(mono).toEqual(["#1d1d1f", "#ffffff"]);
 
     // Back to the defaults: no attributes left behind.
-    await openSettings(page);
     await dialog(page).getByRole("radio", { name: "Blue" }).click();
     await dialog(page).getByRole("radiogroup", { name: "motion" }).getByRole("radio", { name: "System" }).click();
     await expect.poll(() => html(page, "data-accent")).toBeNull();
