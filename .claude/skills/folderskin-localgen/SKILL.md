@@ -1,34 +1,49 @@
 ---
 name: folderskin-localgen
-description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. Z-Image-Turbo for text to picture and FLUX.2 [klein] 4B for reference pictures and whole-folder skins, both Apache-2.0, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon). Sets the machine up with `fsgen.py setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
-version: 1.0.0
+description: Paints FolderSkin folder art on this computer with open-weight models, no API key and no filters. Z-Image-Turbo for text to picture and FLUX.2 [klein] 4B for reference pictures and whole-folder skins, both Apache-2.0, run by stable-diffusion.cpp (CUDA or Vulkan on Windows and Linux) or mflux (MLX on Apple Silicon), all driven by the `folderskin` command line. Sets the machine up with `folderskin ai setup`, paints single ideas or whole batches in a style (pop art, anime, oil, sketch, woodblock and more), themes every folder under a root from its name and applies the results, works from one or several reference photos, repaints FolderSkin's own blank folder and cuts it out along the app's exact silhouette, checks and cleans pictures up (trim, clip, cut out, adjust), and previews every result as the folder the app makes of it. Use when the user says "generate locally", "make folder art offline", "paint a folder of X in Y style", "use this photo as a folder", "batch generate skins", "theme my whole drive", "paint all these folders", "set up local generation", "make a pack of N skins about X", or asks which local model or GPU settings to use.
+version: 2.0.0
 ---
 
 # Painting folder art locally
 
-`scripts/fsgen.py` paints pictures for FolderSkin with models that run on this computer. What it
-paints goes through FolderSkin's own code afterwards, so a result always lands on the folder the
-way the app would put it there. Making a community pack from the results is the other skill,
-`folderskin-skins`; this one ends with a folder of good pictures.
+The `folderskin` command line paints pictures for FolderSkin with models that run on this
+computer. What it paints goes through FolderSkin's own code afterwards, so a result always lands
+on the folder the way the app would put it there. Making a community pack from the results is the
+other skill, `folderskin-skins`; this one ends with a folder of good pictures.
 
-Run everything from the repository root with `uv run`; the script installs its own Python
-packages. The runtime and the models live outside the repository, in
+From a checkout, run it as `cargo run -p folderskin-cli --release -- …` from the repository root
+(the first build takes a few minutes; release mode, because cleaning up and previewing 1024 px
+pictures is slow otherwise). Where it is installed (`scripts/install-cli.sh`, or
+`scripts/install-cli.ps1` on Windows), it is just `folderskin …`; the examples below use that
+form. The runtime and the models live outside the repository, in
 `%LOCALAPPDATA%\folderskin-localgen` (Windows), `~/Library/Caches/folderskin-localgen` (macOS) or
 `~/.cache/folderskin-localgen` (Linux); `FOLDERSKIN_LOCALGEN_HOME` moves them.
+
+Every command explains its own failures (what happened, why, what to try, and a ready-to-paste
+`claude "…"` line) and exits 1 for something to put right, 2 for a wrong command line, 3 when the
+computer is missing something (runtime, models, driver, network) and 70 for a bug. `--json` makes
+any command write one JSON event per line instead, for a script to read; `--verbose` shows
+everything the runtime prints.
 
 ## Step 1: check the machine, then set it up
 
 ```sh
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py doctor
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py setup
+folderskin ai doctor
+folderskin ai setup
 ```
 
 `doctor` says what it found and what it will use: the backend (`cuda` for NVIDIA on Windows,
 `vulkan` for other GPUs and Linux, `mlx` on Apple Silicon, `cpu` otherwise) and the tier (`q8`
-with 24 GB of RAM or more, `q4` below). `setup` downloads the pinned stable-diffusion.cpp build and
-the models, about 15.7 GB at `q8` and 9.4 GB at `q4`, resuming where a download stopped and checking
-every file against its published SHA-256. On a Mac it installs mflux with `uv tool install`, which
-downloads each model the first time it runs it.
+with 24 GB of RAM or more, `q4` below), what is installed, and the next command to run. `setup`
+downloads the pinned stable-diffusion.cpp build and the models, about 15.7 GB at `q8` and 9.4 GB
+at `q4`, resuming where a download stopped and checking every file against its published SHA-256.
+On a Mac it installs mflux with `uv tool install`, which downloads each model the first time it
+runs it. Ctrl+C stops it cleanly; running it again carries on. stable-diffusion.cpp publishes
+Linux builds for x86_64 only, so on ARM64 Linux (and on an Intel Mac) `doctor` says there is
+nothing to install; the image tools and `--provider` still work there.
+
+`--backend` and `--tier` override the choice for one command; `folderskin ai config set tier q4`
+(or `backend`, `model`, `provider`) makes it the default.
 
 RAM decides the tier, not VRAM: stable-diffusion.cpp streams weights from RAM when they do not fit
 on the card, so a 4 GB laptop GPU runs the 8-bit models.
@@ -49,33 +64,40 @@ A Mac has no numbers here yet.
 ## Step 2: paint
 
 ```sh
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py gen "a retro film camera with a chrome lens" --style pop-art -n 4
+folderskin ai gen "a retro film camera with a chrome lens" --style pop-art -n 4
 ```
 
-- The idea is the subject and the scene in plain words. `--style` is a preset (`fsgen.py styles`
-  lists them: pop-art, anime, oil, sketch, woodblock, travel-poster, watercolour, clay, risograph,
-  art-nouveau, pixel, synthwave, photo) or your own words.
+- The idea is the subject and the scene in plain words (`-` reads it from standard input).
+  `--style` is a preset (`folderskin ai styles` lists them: pop-art, anime, oil, sketch,
+  woodblock, travel-poster, watercolour, clay, risograph, art-nouveau, pixel, synthwave, photo) or
+  your own words. `--raw` sends the idea to the model word for word, without FolderSkin's prompt.
 - `-n 4` paints four seeds in a row, and `--seed` fixes where they start, so a good one can be
-  painted again exactly.
-- Results go to `fsgen-out/` (`--out` changes it): the picture, a `.json` beside it with the idea,
-  prompt, model, licence, seed and settings, and `previews/` with each picture drawn as the folder
-  the app makes of it plus `_sheet.png` with all of them.
+  painted again exactly. `--name` names the file (with `-n 1`).
+- Results go to `folderskin-out/` (`--out` changes it): the picture, a `.json` beside it with the
+  idea, prompt, model, licence, seed and settings, and `previews/` with each picture drawn as the
+  folder the app makes of it plus `_sheet.png` with all of them. Each finished picture's path is
+  printed on its own line.
+- `--apply "<folder>"` puts the (first) picture on a folder straight away.
 
 The three ways to paint:
 
 | you want | use | model |
 |---|---|---|
-| a picture wrapped onto FolderSkin's folder (the normal case) | `gen "idea" --style …` | Z-Image-Turbo |
-| the same, from photos or pictures you have | `gen "idea" --ref a.jpg [--ref b.png]` | FLUX.2 [klein] 4B |
-| the whole folder painted as one object | `gen "idea" --shape folder` (refs allowed) | FLUX.2 [klein] 4B |
+| a picture wrapped onto FolderSkin's folder (the normal case) | `ai gen "idea" --style …` | Z-Image-Turbo |
+| the same, from photos or pictures you have | `ai gen "idea" --ref a.jpg [--ref b.png]` | FLUX.2 [klein] 4B |
+| the whole folder painted as one object | `ai gen "idea" --shape folder` (refs allowed) | FLUX.2 [klein] 4B |
 
 `--model klein` paints plain artwork with klein instead: twice as fast, and in a side-by-side of
 pop art, anime, oil and sketch it was as good, bolder in pop art and richer in sketch hatching,
 where Z-Image was more painterly in oil. For a big batch, klein; for photographic subjects and
 lettering, Z-Image. Whole-folder pictures are cut out along FolderSkin's own silhouette, not by
-colour: the model repaints the app's blank folder, the script finds the painted folder, fits the
-silhouette to it and uses that as the edge. The report line gives the fit; below 0.95 the model
-changed the folder's shape, and the picture is left on its backdrop for you to look at.
+colour: the model repaints the app's blank folder, the command line finds the painted folder, fits
+the silhouette to it and uses that as the edge. The report line gives the fit; below 0.95 the
+model changed the folder's shape, and the picture is left on its backdrop for you to look at.
+
+`--provider openai` (or xai, google, bfl, recraft, stability, ideogram) paints the same idea with
+your own key instead (`folderskin ai key set openai`, or `FOLDERSKIN_OPENAI_KEY`), processed the
+way the app does. That is not local and not free; this skill is about the local models.
 
 ## Step 3: paint a batch
 
@@ -90,11 +112,12 @@ For a pack, write the briefs down once and let it run:
 ```
 
 ```sh
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py batch briefs.json --out renders/night-prints
+folderskin ai batch briefs.json --out renders/night-prints
 ```
 
 Reference paths are relative to the JSON file. `name` names the file (numbered when `n` is more
-than one); `model` picks the artwork model per brief. The run ends with `previews/_sheet.png`.
+than one); `model` picks the artwork model per brief. Every brief is checked before the first
+picture is painted, and the run ends with `previews/_sheet.png`.
 
 ### Or theme a whole drive
 
@@ -102,27 +125,31 @@ than one); `model` picks the artwork model per brief. The run ends with `preview
 `--apply` puts each picture on its folder through the app's own code:
 
 ```sh
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py theme "D:/Projects" --style risograph
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py theme "D:/Projects" --style risograph --apply
+folderskin ai theme "D:/Projects" --style risograph
+folderskin ai theme "D:/Projects" --style risograph --apply
 ```
 
 Run it without `--apply` first and look at `previews/_sheet.png`; a second run skips folders that
-already have a picture, so it only applies. It uses klein (about 28 s a folder on a 4 GB laptop
+already have a picture, so it only applies. Each picture is named after its folder's path plus a
+fingerprint of it (`photos-holidays-1a2b3c4d.png`), so adding or renaming folders between runs
+never hands one folder's picture to another. It uses klein (about 28 s a folder on a 4 GB laptop
 GPU: a hundred folders is under an hour) and leaves out hidden folders, `$` folders and tool
-folders such as `node_modules`. `--depth 2` goes a level deeper. `folderskin-tools revert
-"<folder>"` takes an icon off again. A name that is an idea rather than a thing ("Taxes 2025")
-tends to come back as lettering; paint that one with `gen` and a subject of your own.
+folders such as `node_modules`. `--depth 2` goes a level deeper. `folderskin revert "<folder>"`
+takes an icon off again. A name that is an idea rather than a thing ("Taxes 2025") tends to come
+back as lettering; paint that one with `ai gen` and a subject of your own.
 
 ## Step 4: look at every result
 
 Open `previews/_sheet.png`, then any picture that looks doubtful at full size in `previews/`.
+`folderskin image check <picture>` says what the app will make of a picture and what to fix.
 
 | what you see | what to do |
 |---|---|
 | the subject cut by the paper strip, or high on the folder | another seed; or say where it is: "…, standing low in the frame" |
-| a blank band or a frame along the folder's edges | the script cuts paper margins (the `.json` says `border_trimmed`); a frame drawn inside the art is the model's, so try another seed |
-| a whole folder whose fit was below 0.95 | another seed; the model moved or reshaped the folder |
+| a blank band or a frame along the folder's edges | paper margins are cut already (the `.json` says `border_trimmed`); `folderskin image trim <picture>` does it for any picture; a frame drawn inside the art is the model's, so try another seed |
+| a whole folder whose fit was below 0.95 | another seed; the model moved or reshaped the folder (`folderskin image clip` cuts one that fits) |
 | the style is weak | `--model klein`, or put more of the style into words |
+| the colours are a little off | `folderskin image saturate <picture> 20`, `brightness`, `contrast`, or `image adjust --hue …`: the composer's own adjustments |
 | text or a signature in the art | another seed; small models write when a style suggests posters |
 
 Say which check failed before painting again.
@@ -130,11 +157,11 @@ Say which check failed before painting again.
 ## Step 5: make it a pack
 
 The pictures in the output folder (not `previews/`, not `raw/`) are ready for the other skill.
-`fsgen.py pack` is `folderskin-tools packs make` with everything after `pack` passed through, and
-`cwebp` on hand (setup installs it on Windows), which whole-folder pictures need to fit in a pack:
+`folderskin packs make` makes the pack, and uses the `cwebp` setup installed (on Windows) when
+there is none on the PATH, which whole-folder pictures need to fit in a pack:
 
 ```sh
-uv run .claude/skills/folderskin-localgen/scripts/fsgen.py pack renders/night-prints --id night-prints \
+folderskin packs make renders/night-prints --id night-prints \
   --name "Night prints" --tags woodblock,night --author <github-name> --preview /tmp/night-prints.png
 ```
 
@@ -145,9 +172,9 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 
 - Both models are Apache-2.0, which puts no condition on what they paint, so a result can go in a
   pack under CC0-1.0, CC-BY-4.0 or MIT. Do not add models whose licence is non-commercial or
-  restricted (Qwen-Image 2.1, FLUX.2 [dev], klein 9B, Kontext dev, Krea 2, Ideogram 4) to this
-  script: their pictures cannot go in a pack. An ungated mirror of such a model is still under its
-  licence.
+  restricted (Qwen-Image 2.1, FLUX.2 [dev], klein 9B, Kontext dev, Krea 2, Ideogram 4) to the
+  command line: their pictures cannot go in a pack. An ungated mirror of such a model is still
+  under its licence.
 - Nothing filters a prompt or a picture, and a brand or a named product paints as asked; that
   makes the person running it responsible for what it paints. (klein's weights were fine-tuned by
   their makers against sexual imagery of minors and non-consensual imagery; nothing else is held
@@ -162,11 +189,16 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 
 | command | use |
 |---|---|
-| `fsgen.py doctor [--backend …] [--tier …]` | what the machine is, and what is installed |
-| `fsgen.py setup [--backend …] [--tier …] [--runtime latest]` | download the runtime and the models |
-| `fsgen.py gen "idea" [--style S] [--shape artwork\|folder] [--ref P]… [-n N] [--seed S] [--model auto\|zimage\|klein] [--out DIR]` | paint pictures from one idea |
-| `fsgen.py batch briefs.json [--out DIR]` | paint every brief in a file |
-| `fsgen.py theme <root> [--style S] [--depth N] [--apply]` | paint every folder under a root from its name |
-| `fsgen.py pack <pictures…> --id … --name … --tags … --author …` | `packs make`, with cwebp |
-| `fsgen.py styles` | list the style presets |
-| `cargo run -p folderskin-tools -- template --out t.png --mask m.png` | the blank folder a model repaints, and its silhouette |
+| `folderskin ai doctor [--backend …] [--tier …]` | what the machine is, and what is installed |
+| `folderskin ai setup [--backend …] [--tier …] [--runtime latest]` | download the runtime and the models |
+| `folderskin ai gen "idea" [--style S] [--shape artwork\|folder] [--ref P]… [-n N] [--seed S] [--model auto\|zimage\|klein] [--out DIR] [--apply FOLDER]` | paint pictures from one idea |
+| `folderskin ai batch briefs.json [--out DIR]` | paint every brief in a file |
+| `folderskin ai theme <root> [--style S] [--depth N] [--apply]` | paint every folder under a root from its name |
+| `folderskin ai styles` / `folderskin ai models` | the style presets / the models and providers |
+| `folderskin ai config [set\|unset\|get] …` | default provider, model, tier and backend |
+| `folderskin packs make <pictures…> --id … --name … --tags … --author …` | make a pack, with cwebp |
+| `folderskin image check\|info\|trim\|clip\|cutout\|crop <picture>` | look at a picture and clean it up |
+| `folderskin image saturate\|brightness\|contrast\|invert\|adjust <picture> …` | the composer's colour adjustments |
+| `folderskin render <picture> --out preview.png` | a picture as the folder the app makes of it |
+| `folderskin apply <folder> --image <picture>` / `folderskin revert <folder>` | put an icon on a folder, or take it off |
+| `folderskin template --width 1024 --height 960 --out t.png --mask m.png` | the blank folder a model repaints, and its silhouette |

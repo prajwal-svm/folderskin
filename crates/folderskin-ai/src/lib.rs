@@ -5,16 +5,18 @@
 //! straight from the user's machine to the provider they chose.
 //!
 //! [`catalogue`] lists what is on offer, [`request`] builds each provider's body and reads its
-//! reply (pure, so it is all unit-tested), [`prompts`] composes the prompt, and [`generate`]
-//! performs the one HTTP call.
+//! reply (pure, so it is all unit-tested), [`prompts`] composes the prompt, [`generate`]
+//! performs the one HTTP call, and [`finish`] plans the request and makes the answer a skin.
 
 pub mod catalogue;
 pub mod error;
+pub mod finish;
 pub mod prompts;
 pub mod request;
 
 pub use catalogue::{model, provider, providers, ModelInfo, ProviderInfo};
 pub use error::AiError;
+pub use finish::{finish, plan, Finished};
 
 use request::{BflPoll, Payload};
 use std::sync::OnceLock;
