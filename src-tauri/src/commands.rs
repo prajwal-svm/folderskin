@@ -91,11 +91,15 @@ impl SkinDto {
     }
 }
 
-/// "OpenAI · GPT Image 2.5 Flare" for an AI result: the names the studio shows, or the ids when
-/// the catalogue no longer lists them.
+/// "OpenAI · GPT Image 2.5 Flare" for an AI result, or "On this computer · FLUX.2 klein 4B": the
+/// names the studio shows, or the ids when the catalogue no longer lists them.
 fn made_with(entry: &SavedSkin) -> Option<String> {
     let provider = entry.provider.as_deref()?;
     let model = entry.model.as_deref()?;
+    if provider == crate::ai::local::PROVIDER_ID {
+        let label = crate::ai::local::model_label(model).unwrap_or(model);
+        return Some(format!("On this computer · {label}"));
+    }
     let provider_label = folderskin_ai::catalogue::provider(provider).map_or(provider, |p| p.label);
     let model_label = folderskin_ai::model(provider, model).map_or(model, |m| m.label);
     Some(format!("{provider_label} · {model_label}"))
