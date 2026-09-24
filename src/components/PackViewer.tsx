@@ -153,7 +153,7 @@ export function PackViewer({
               style={{ animationDelay: `${Math.min(i, 16) * 25}ms` }}
             >
               <img src={s.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
-              <span className="pack-skin-name" title={s.name}>
+              <span className="pack-skin-name" data-tip={s.name} data-tip-overflow>
                 {s.name}
               </span>
             </li>
