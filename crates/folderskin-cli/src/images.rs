@@ -164,13 +164,28 @@ pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliErro
         return stdout
             .write_all(bytes)
             .and_then(|()| stdout.flush())
-            .map_err(|e| CliError::io(doing, Path::new("standard output"), &e));
+            .map_err(|e| {
+                // Whatever was reading stopped (`| head`, a viewer that had seen enough): there
+                // is nobody left to tell, so the command ends here, quietly, as one ended by a
+                // closed pipe does.
+                if reader_gone(&e) {
+                    std::process::exit(0);
+                }
+                CliError::io(doing, Path::new("standard output"), &e)
+            });
     }
     if target.is_dir() {
         return Err(CliError::folder_not_file(doing, target));
     }
     make_parent(target)?;
     std::fs::write(target, bytes).map_err(|e| CliError::io(doing, target, &e))
+}
+
+/// Whether writing failed because the other end of the pipe was closed: a broken pipe, or on
+/// Windows "the pipe has been ended" (109) or "the pipe is being closed" (232).
+fn reader_gone(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::BrokenPipe
+        || (cfg!(windows) && matches!(e.raw_os_error(), Some(109 | 232)))
 }
 
 /// Standard output is the terminal: a picture there is a screenful of binary, not a picture.
@@ -754,6 +769,18 @@ fn info(input: &Path, out: &Arc<Out>) -> Result<(), CliError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_closed_pipe_is_the_reader_gone_and_nothing_else_is() {
+        use std::io::{Error, ErrorKind};
+        assert!(reader_gone(&Error::from(ErrorKind::BrokenPipe)));
+        assert!(!reader_gone(&Error::from(ErrorKind::PermissionDenied)));
+        if cfg!(windows) {
+            assert!(reader_gone(&Error::from_raw_os_error(109)));
+            assert!(reader_gone(&Error::from_raw_os_error(232)));
+            assert!(!reader_gone(&Error::from_raw_os_error(5)), "access denied");
+        }
+    }
     use image::Rgba;
 
     #[test]
