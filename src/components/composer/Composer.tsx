@@ -761,7 +761,7 @@ export function Composer({
     // Beside what's there already, as an icon goes, not over a label's own words: a size smaller
     // where the front is too narrow for them at their own (Windows' is).
     const { w, h } = boxOf(text, assets);
-    const at = fitSpot(parts.front, front, w, h, taken, SMALLEST_WORDS);
+    const at = fitSpot(parts, front, w, h, taken, SMALLEST_WORDS);
     add(at ? { ...text, x: at.x, y: at.y, size: Math.round(text.size * at.scale) } : text);
     window.setTimeout(() => {
       textRef.current?.focus();
@@ -771,12 +771,12 @@ export function Composer({
   // Emoji and shapes find a free spot too, a little smaller if that's what it takes.
   const addEmoji = (char: string) => {
     const emoji = makeEmoji(char, front.x, front.y + 6);
-    const at = fitSpot(parts.front, { x: front.x, y: front.y + 6 }, emoji.size, emoji.size, taken);
+    const at = fitSpot(parts, { x: front.x, y: front.y + 6 }, emoji.size, emoji.size, taken);
     add(at ? { ...emoji, x: at.x, y: at.y, size: Math.round(emoji.size * at.scale) } : emoji);
   };
   const addShape = (kind: ShapeKind) => {
     const shape = makeShape(kind, front.x, front.y, accent);
-    const at = fitSpot(parts.front, front, shape.w, shape.h, taken);
+    const at = fitSpot(parts, front, shape.w, shape.h, taken);
     add(at ? { ...shape, x: at.x, y: at.y, w: Math.round(shape.w * at.scale), h: Math.round(shape.h * at.scale) } : shape);
   };
   const addPattern = (pattern: PatternKind) => add(makePattern(pattern, bg && luminance(bg) > 0.6 ? "#1b1f2733" : "#ffffff59"), coveringTop(latestDoc.current));
@@ -838,8 +838,8 @@ export function Composer({
   }, [doc.layers, assets, parts.front]);
   const iconSpot = useMemo(() => {
     const n = doc.layers.filter((l) => l.kind === "icon").length;
-    return { ...placeIcon(parts.front, { x: front.x, y: front.y }, taken, n), color: ink };
-  }, [doc.layers, taken, parts.front, front.x, front.y, ink]);
+    return { ...placeIcon(parts, { x: front.x, y: front.y }, taken, n), color: ink };
+  }, [doc.layers, taken, parts, front.x, front.y, ink]);
 
   /** An icon added from the library, in its free spot. Nothing is selected, so the next click tries another. */
   const addIcon = (drawing: IconDrawing) => {

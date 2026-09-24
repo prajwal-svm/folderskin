@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bounds, boxTargets, contains, cursorFor, fitSpot, freeSpot, handlePoint, hitHandle, MIN_SIZE, normAngle, placeIcon, resizeBox, rotateBy, snap, toLocal, toWorld, type Box } from "./geometry";
-import { FALLBACK_PARTS, WINDOWS_PARTS, centreOf } from "./parts";
+import { FALLBACK_PARTS, WINDOWS_PARTS, centreOf, type Parts } from "./parts";
 
 const box: Box = { x: 500, y: 400, w: 200, h: 100, rotation: 0 };
 const turned: Box = { ...box, rotation: 90 };
@@ -103,10 +103,10 @@ describe("canvas geometry", () => {
 
 describe("where something new goes on the folder", () => {
   /** Adds `count` icons one after another, as the library does, and says where each went. */
-  const addIcons = (front: [number, number, number, number], count: number) => {
+  const addIcons = (parts: Parts, count: number) => {
     const taken: Box[] = [];
     for (let n = 0; n < count; n++) {
-      const at = placeIcon(front, centreOf(front), taken, n);
+      const at = placeIcon(parts, centreOf(parts.front), taken, n);
       taken.push({ x: at.x, y: at.y, w: at.size, h: at.size, rotation: 0 });
     }
     return taken;
@@ -114,7 +114,7 @@ describe("where something new goes on the folder", () => {
   const apart = (boxes: Box[]) => boxes.every((a, i) => boxes.every((b, j) => i === j || Math.abs(a.x - b.x) * 2 >= a.w + b.w || Math.abs(a.y - b.y) * 2 >= a.h + b.h));
 
   it("puts icons side by side on the Mac's folder, as it always has", () => {
-    const icons = addIcons(FALLBACK_PARTS.front, 3);
+    const icons = addIcons(FALLBACK_PARTS, 3);
     expect(icons.map((b) => [b.x, b.w])).toEqual([
       [512, 340],
       [194, 240],
@@ -123,7 +123,7 @@ describe("where something new goes on the folder", () => {
   });
 
   it("puts icons side by side on Windows' narrower folder too, a little smaller", () => {
-    const icons = addIcons(WINDOWS_PARTS.front, 3);
+    const icons = addIcons(WINDOWS_PARTS, 3);
     expect(apart(icons)).toBe(true);
     expect(new Set(icons.map((b) => b.x)).size).toBe(3);
     const [x0, , x1] = WINDOWS_PARTS.front;
@@ -137,21 +137,22 @@ describe("where something new goes on the folder", () => {
   it("puts new words beside a label's own rather than over them", () => {
     const front = FALLBACK_PARTS.front;
     const label: Box = { ...centreOf(front), w: 640, h: 180, rotation: 0 };
-    const at = freeSpot(front, centreOf(front), 620, 180, [label])!;
+    const at = freeSpot(FALLBACK_PARTS, centreOf(front), 620, 180, [label])!;
     expect(at).not.toBeNull();
     expect(apart([label, { ...at, w: 620, h: 180, rotation: 0 }])).toBe(true);
     // With nothing there, the middle.
-    expect(freeSpot(front, centreOf(front), 620, 180, [])).toEqual(centreOf(front));
+    expect(freeSpot(FALLBACK_PARTS, centreOf(front), 620, 180, [])).toEqual(centreOf(front));
   });
 
   it("puts a shape and an emoji beside a label and its new words, a little smaller if it must", () => {
-    for (const front of [FALLBACK_PARTS.front, WINDOWS_PARTS.front]) {
+    for (const parts of [FALLBACK_PARTS, WINDOWS_PARTS]) {
+      const front = parts.front;
       const c = centreOf(front);
       const label: Box = { ...c, w: 640, h: 165, rotation: 0 };
       const words: Box = { x: c.x, y: c.y - 190, w: 760, h: 165, rotation: 0 };
       const placed = [label, words];
       for (const size of [380, 420]) {
-        const at = fitSpot(front, c, size, size, placed);
+        const at = fitSpot(parts, c, size, size, placed);
         expect(at, `${size} on ${front}`).not.toBeNull();
         placed.push({ x: at!.x, y: at!.y, w: size * at!.scale, h: size * at!.scale, rotation: 0 });
       }
@@ -171,10 +172,40 @@ describe("where something new goes on the folder", () => {
     // off the front, but the heart has room at its sides.
     const label: Box = { ...c, w: 900, h: 165, rotation: 0 };
     const heart: Box = { x: c.x, y: c.y + 250, w: 260, h: 260, rotation: 0 };
-    const at = freeSpot(front, c, 260, 260, [label, heart])!;
+    const at = freeSpot(FALLBACK_PARTS, c, 260, 260, [label, heart])!;
     expect(at).not.toBeNull();
     expect(apart([label, heart, { ...at, w: 260, h: 260, rotation: 0 }])).toBe(true);
     // Nowhere at all, and it says so.
-    expect(fitSpot(front, c, 900, 900, [label], 900)).toBeNull();
+    expect(fitSpot(FALLBACK_PARTS, c, 900, 900, [label], 900)).toBeNull();
+  });
+
+  it("keeps below where Windows' front starts under the tab, not only inside its box", () => {
+    // The front's box reaches up to its top right of the tab; under the tab the front starts lower.
+    const [, , stepX, lowerTop] = WINDOWS_PARTS.front_step!;
+    const onFront = (b: Box) => b.x - b.w / 2 >= stepX || b.y - b.h / 2 >= lowerTop;
+    const c = centreOf(WINDOWS_PARTS.front);
+    // Two-tone's new words in the middle, then an emoji and a star, each where it finds room.
+    const placed: Box[] = [{ ...c, w: 600, h: 150, rotation: 0 }];
+    for (const [size, centre] of [
+      [380, { x: c.x, y: c.y + 6 }],
+      [380, c],
+    ] as const) {
+      const at = fitSpot(WINDOWS_PARTS, centre, size, size, placed)!;
+      expect(at).not.toBeNull();
+      placed.push({ x: at.x, y: at.y, w: size * at.scale, h: size * at.scale, rotation: 0 });
+    }
+    // A shape on Label, with new words under its own: above them, moved right, out from under the tab.
+    const label: Box[] = [
+      { ...c, w: 500, h: 134, rotation: 0 },
+      { x: c.x, y: 717, w: 700, h: 145, rotation: 0 },
+    ];
+    const heart = fitSpot(WINDOWS_PARTS, c, 380, 380, label)!;
+    expect(heart).not.toBeNull();
+    placed.push({ x: heart.x, y: heart.y, w: 380 * heart.scale, h: 380 * heart.scale, rotation: 0 });
+    expect(apart([...label, placed[placed.length - 1]])).toBe(true);
+    // And as many icons as there's room for.
+    const icons = addIcons(WINDOWS_PARTS, 6);
+    for (const b of [...placed, ...icons]) expect(onFront(b), JSON.stringify(b)).toBe(true);
+    expect(apart(placed.slice(0, 3))).toBe(true);
   });
 });

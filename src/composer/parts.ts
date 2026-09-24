@@ -13,6 +13,8 @@ export type Parts = {
   folder: [number, number, number, number];
   front: [number, number, number, number];
   front_radius: number;
+  /** The corner of `front` that isn't front: under Windows' tab, where its front starts lower. Null on the Mac's folder. */
+  front_step: [number, number, number, number] | null;
   back: [number, number, number, number];
   paper: [number, number, number, number];
   tab: [number, number, number, number];
@@ -27,6 +29,7 @@ export const FALLBACK_PARTS: Parts = {
   folder: [15, 36.5, 1009, 973.5],
   front: [15, 160.5, 1009, 973.5],
   front_radius: 55,
+  front_step: null,
   back: [29, 36.5, 995, 973.5],
   paper: [74.5, 131.3, 949.5, 973.5],
   tab: [61, 36.5, 441.7, 97],
@@ -38,6 +41,7 @@ export const WINDOWS_PARTS: Parts = {
   folder: [64, 136, 960, 840],
   front: [64, 248, 960, 840],
   front_radius: 36,
+  front_step: [64, 248, 464, 296],
   back: [64, 136, 960, 840],
   paper: [64, 232, 960, 840],
   tab: [64, 136, 464, 232],
