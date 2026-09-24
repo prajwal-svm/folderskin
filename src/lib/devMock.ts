@@ -751,6 +751,7 @@ export const mockApi = {
       {
         id: "openai",
         label: "OpenAI",
+        kind: "key",
         models: [
           { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.04 / image" },
           { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.19 / image" },
@@ -763,6 +764,7 @@ export const mockApi = {
       {
         id: "xai",
         label: "xAI Grok",
+        kind: "key",
         models: [{ id: "grok-imagine-image", label: "Grok Imagine", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.02 / image" }],
         keys_url: "https://console.x.ai",
         docs_url: "https://docs.x.ai",
@@ -780,6 +782,7 @@ export const mockApi = {
       ).map(([id, label, model, modelLabel, alpha, keys_url, docs_url, key_hint]) => ({
         id,
         label,
+        kind: "key" as const,
         models: [{ id: model, label: modelLabel, native_alpha: alpha, accepts_reference: false, sizes: ["1024x1024"], price_hint: "~$0.04 / image" }],
         keys_url,
         docs_url,
@@ -850,26 +853,44 @@ export const mockApi = {
       }
     };
     const fail = new URLSearchParams(location.search).get("aifail");
+    // As folderskin-local picks it: klein whenever there's a picture to work from (a reference,
+    // or the blank folder a whole folder repaints), otherwise the one asked for, Z-Image for auto.
+    const klein = req.shape === "folder" || (req.reference_paths?.length ?? 0) > 0 || req.model === "klein";
+    // The errors are the objects ai/failure.rs returns, with its codes and words.
     if (local) {
-      if (!mockLocal.ready) throw { code: "local_not_ready", message: "Pictures can't be made on this computer until it's set up.", fix: ["Open the provider settings and choose Set up."] };
-      onEvent({ type: "stage", stage: "load", message: "Loading the model" });
+      if (!mockLocal.ready) {
+        throw { code: "local_not_ready", message: "Pictures can't be made on this computer until it's set up.", fix: ["The models aren't downloaded yet. Set it up in the provider settings."] };
+      }
       onEvent({ type: "log", level: "info", message: "backend: CUDA (NVIDIA GeForce RTX 3050 Ti, 4 GB)" });
-      onEvent({ type: "log", level: "info", message: "model: FLUX.2 [klein] 4B, q4" });
+      onEvent({ type: "log", level: "info", message: `model: ${klein ? "FLUX.2 [klein] 4B" : "Z-Image-Turbo"}, q8 weights` });
+      onEvent({ type: "stage", stage: "load", message: "Loading the model" });
       await wait(500);
       onEvent({ type: "stage", stage: "paint", message: "Painting" });
       for (let step = 1; step <= 8; step++) {
         await wait(260);
         onEvent({ type: "progress", step, steps: 8 });
-        onEvent({ type: "log", level: "info", message: `step ${step}/8, 0.9 s/it` });
+        onEvent({ type: "log", level: "info", message: `[INFO ] sampling step ${step}/8, 0.9 s/it` });
       }
-      if (fail === "memory") throw { code: "out_of_memory", message: "The graphics card ran out of memory while painting.", fix: ["Close apps that use the graphics card, such as games or video editors.", "Choose the smaller model in the provider settings."], ask: 'claude "FolderSkin ran out of GPU memory generating a folder icon locally on an RTX 3050 Ti (4 GB). How do I fix it?"' };
+      if (fail === "memory") {
+        throw {
+          code: "out_of_memory",
+          message: "The graphics card ran out of memory while painting.",
+          fix: [
+            "Close apps that use the graphics card, such as games or video editors, then try again.",
+            klein ? "If it keeps happening, restart the computer: something may still be holding the graphics card's memory." : "Or choose FLUX.2 klein 4B, the smaller model, in the provider settings.",
+          ],
+          ask: `claude "On windows x86_64 with FolderSkin 0.1.3, painting ${req.shape === "folder" ? "a whole folder" : "folder artwork"} on this computer (CUDA, NVIDIA GeForce RTX 3050 Ti, 4 GB) failed with out_of_memory: The graphics card ran out of memory while painting. stable-diffusion.cpp stopped with exit code 1. Help me fix it."`,
+        };
+      }
     } else {
       onEvent({ type: "stage", stage: "send", message: `Sending your idea to ${who}` });
       await wait(700);
-      if (fail === "key") throw `add your ${req.provider} API key first`;
-      if (fail === "refused") throw `${who} declined that prompt: it asks for something its safety system won't draw.`;
-      if (fail === "rate") throw `${who} is rate limiting you right now. Wait a moment and try again.`;
-      if (fail === "network") throw `couldn't reach ${who}: the connection was refused`;
+      if (fail === "key") throw { code: "missing_key", message: `Add your ${who} API key first.` };
+      if (fail === "refused") throw { code: "refused", message: `${who} declined that prompt: it asks for something its safety system won't draw.` };
+      if (fail === "rate") throw { code: "rate_limited", message: `${who} is rate limiting you right now. Wait a moment and try again.` };
+      if (fail === "network") {
+        throw { code: "network", message: `Couldn't reach ${who}: the connection was refused.`, fix: ["Check the internet connection (and any proxy or firewall), then try again."] };
+      }
       onEvent({ type: "stage", stage: "paint", message: `${who} is painting it` });
       await wait(1800);
     }
@@ -893,7 +914,7 @@ export const mockApi = {
       source: "ai",
       created_at: Date.now(),
       tags: cleanTags(req.tags),
-      made_with: local ? "On this computer · FLUX.2 klein" : `${who} · ${req.model}`,
+      made_with: local ? `On this computer · ${klein ? "FLUX.2 klein 4B" : "Z-Image Turbo"}` : `${who} · ${req.model}`,
       idea: req.idea,
     };
     keep([skin]);
@@ -904,6 +925,9 @@ export const mockApi = {
   },
   aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
   aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {
+    // aiCancel(LOCAL_SETUP_JOB) stops it, as ai_local_setup does; a Stop from an earlier setup doesn't count.
+    const SETUP = "local-setup";
+    mockStopped.delete(SETUP);
     const files: [string, number][] = [
       ["stable-diffusion.cpp (CUDA)", 150_000_000],
       ["FLUX.2 klein 4B, q4", 2_400_000_000],
@@ -914,6 +938,9 @@ export const mockApi = {
     for (const [file, total] of files) {
       for (let i = 1; i <= 5; i++) {
         await sleep(90);
+        if (mockStopped.delete(SETUP)) {
+          throw { code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." };
+        }
         onEvent({ type: "download", file, done: Math.round((total * i) / 5), total });
       }
       onEvent({ type: "log", level: "info", message: `checked ${file}` });

@@ -29,5 +29,7 @@ describe("aiFailure", () => {
     expect(worthRetrying("network")).toBe(true);
     expect(worthRetrying("refused")).toBe(false);
     expect(worthRetrying("missing_key")).toBe(false);
+    expect(worthRetrying("no_build_for_platform")).toBe(false);
+    expect(worthRetrying("out_of_memory")).toBe(true);
   });
 });

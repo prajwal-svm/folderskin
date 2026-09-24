@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { api, type LocalStatus } from "../../lib/tauri";
+import { api, LOCAL_SETUP_JOB, type LocalStatus } from "../../lib/tauri";
 import { aiFailure } from "../../lib/aiError";
 import { formatBytes } from "../../lib/tree";
 import type { AiEvent, TurnError } from "../../state/chats";
@@ -13,13 +13,15 @@ type Setup = { stage: string; file: string | null; done: number; total: number; 
 /**
  * Pictures made on this computer, with no key and no account: what it runs on here and how long a
  * picture takes, and one button that downloads and checks everything it needs, showing each file
- * as it comes and a log for anyone who wants to see what it's doing.
+ * as it comes and a log for anyone who wants to see what it's doing. It can be stopped part-way;
+ * what was downloaded is kept, and setting up again carries on from there.
  */
 export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
   const [status, setStatus] = useState<LocalStatus | null>(null);
   const [problem, setProblem] = useState<TurnError | null>(null);
   const [setup, setSetup] = useState<Setup | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -34,6 +36,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
 
   const start = useCallback(async () => {
     setProblem(null);
+    setStopping(false);
     setSetup({ stage: "Getting ready", file: null, done: 0, total: 0, log: [] });
     const onEvent = (e: AiEvent) =>
       setSetup((s) => {
@@ -56,8 +59,14 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       setProblem(aiFailure(e));
     } finally {
       setSetup(null);
+      setStopping(false);
     }
   }, [onChanged]);
+
+  const stop = useCallback(() => {
+    setStopping(true);
+    api.aiCancel(LOCAL_SETUP_JOB).catch(() => setStopping(false));
+  }, []);
 
   if (!status && !problem) {
     return (
@@ -113,7 +122,10 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       {setup && (
         <div className="local-progress" role="status" aria-live="polite">
           <p className="local-stage">
-            <LoaderIcon size={14} /> {setup.stage}
+            <LoaderIcon size={14} /> {stopping ? "Stopping" : setup.stage}
+            <button type="button" className="btn btn-ghost btn-sm local-stop" disabled={stopping} onClick={stop}>
+              Stop
+            </button>
           </p>
           <div className="turn-progress" style={{ "--done": `${share}%` } as CSSProperties} aria-hidden="true">
             <span />
@@ -145,7 +157,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           <div className="turn-actions">
             {status && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void start()}>
-                Try again
+                {problem.code === "stopped" ? "Carry on setting up" : "Try again"}
               </button>
             )}
             {problem.ask && (

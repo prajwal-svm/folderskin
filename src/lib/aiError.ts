@@ -44,7 +44,8 @@ function sentence(text: string): string {
   return /[.!?…)]$/.test(s) ? s : `${s}.`;
 }
 
-/** Whether trying again, as it was, can help: not when the key, the words or the setup are what's wrong. */
+/** Whether trying again, as it was, can help: not when the key, the words or the setup are what's
+ *  wrong, nor on a computer the local runtime has no build for (ai/failure.rs passes that code on). */
 export function worthRetrying(code: string): boolean {
-  return !["missing_key", "unauthorized", "refused", "local_not_ready"].includes(code);
+  return !["missing_key", "unauthorized", "refused", "local_not_ready", "no_build_for_platform"].includes(code);
 }

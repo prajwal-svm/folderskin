@@ -188,6 +188,9 @@ export type AiGenerateRequest = {
   job?: string;
 };
 
+/** The job name setting this computer up runs under, for `aiCancel` (ai/jobs.rs `LOCAL_SETUP`). */
+export const LOCAL_SETUP_JOB = "local-setup";
+
 /** Whether pictures can be made on this computer, and what it takes (the local engine). */
 export type LocalStatus = {
   /** The runtime and a model are here and checked. */
@@ -385,11 +388,12 @@ const tauriApi = {
   /** Makes a picture and saves it as a skin, telling `onEvent` how it's going as it goes. */
   aiGenerate: (req: AiGenerateRequest, onEvent: (event: AiEvent) => void = () => {}) =>
     invoke<Skin>("ai_generate", { req, onEvent: new Channel<AiEvent>(onEvent) }),
-  /** Stops the run named `job`: its request is dropped, or its local model stopped. */
+  /** Stops the run named `job`: its request is dropped, or its local model stopped; {@link LOCAL_SETUP_JOB} stops setting up. */
   aiCancel: (job: string) => invoke<void>("ai_cancel", { job }),
   /** Whether pictures can be made on this computer, and what setting that up takes. */
   aiLocalStatus: () => invoke<LocalStatus>("ai_local_status"),
-  /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes. */
+  /** Downloads and checks the runtime and model for this computer, telling `onEvent` as it goes.
+   *  Stopped with `aiCancel(LOCAL_SETUP_JOB)` (it fails with the code "stopped"); what was downloaded is kept. */
   aiLocalSetup: (onEvent: (event: AiEvent) => void) => invoke<LocalStatus>("ai_local_setup", { onEvent: new Channel<AiEvent>(onEvent) }),
 
   // ---- the assistant's saved chats (chats.rs) ----
