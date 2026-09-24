@@ -161,6 +161,9 @@ function saveMockChats(store: MockChats) {
 type MockPack = Omit<CommunityPack, "added" | "update" | "hash" | "bytes" | "preview"> & { skins?: string[] };
 
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
+/** The packs repository's files, where the preview's real pictures come from. Declared before anything that runs
+ *  at load: `library` is seeded from picture(), which reads it. */
+const COMMUNITY_RAW = "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
 const MOCK_PACKS: MockPack[] = [
   { id: "classic-art", name: "Classic Art", author: "prajwal-svm", license: "CC0-1.0", tags: ["classic art"], count: 16 },
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
@@ -218,8 +221,6 @@ const mockFailedOnce = new Set<string>();
 const mockViewed = new Set<string>();
 
 const ONBOARDED_KEY = "folderskin.mock.onboarded";
-/** The packs repository's files, where the preview's real pictures come from. */
-const COMMUNITY_RAW = "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
 const OFFLINE = "couldn't reach GitHub. Check your connection and try again";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const offline = () => new URLSearchParams(location.search).has("offline");
