@@ -375,6 +375,24 @@ test.describe("the AI chat", () => {
     await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
   });
 
+  test("carried on at once after a stop, setting up counts what was left, not the whole download again", async ({ page }) => {
+    await openApp(page, { query: "slowsetup" });
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /Local Model/ }).click();
+    await settings(page).getByRole("button", { name: "Set up the local model" }).click();
+    const progress = settings(page).locator(".local-progress");
+    await expect(progress).toContainText("of 5.4 GB in all");
+    // Stopped with the runtime and some of the model kept.
+    await expect(progress).toContainText(/FLUX\.2 klein 4B, q4: [1-9]/);
+    await settings(page).getByRole("button", { name: "Stop" }).click();
+    await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
+    const whole = async () => parseFloat((await progress.textContent())?.match(/of ([\d.]+) GB in all/)?.[1] ?? "0");
+    await expect.poll(whole).toBeGreaterThan(0);
+    expect(await whole()).toBeLessThan(5.2);
+    await expect(localReady(page)).toBeVisible({ timeout: 20_000 });
+  });
+
   test("before it is set up, the Local Model says so, and setting up counts the whole download", async ({ page }) => {
     await openApp(page);
     await openView(page, /generate with ai/i);

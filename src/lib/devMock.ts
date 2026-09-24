@@ -83,7 +83,19 @@ const mockLocal = {
   ready: new URLSearchParams(location.search).has("localready"),
   seconds: null as number | null,
   unused: new URLSearchParams(location.search).has("leftovers") ? 15_158_000_000 : 0,
+  /** How much of each of setup's files is on the disk: a stopped setup keeps what came, and the next carries on from there. */
+  got: {} as Record<string, number>,
 };
+
+/** What setting up downloads in the preview, file by file. */
+const MOCK_SETUP_FILES: [string, number][] = [
+  ["stable-diffusion.cpp (CUDA)", 150_000_000],
+  ["FLUX.2 klein 4B, q4", 2_400_000_000],
+  ["Qwen3 4B text encoder, q4", 2_500_000_000],
+  ["FLUX.2 autoencoder", 330_000_000],
+];
+const MOCK_SETUP_BYTES = MOCK_SETUP_FILES.reduce((sum, [, bytes]) => sum + bytes, 0);
+const mockGot = () => Object.values(mockLocal.got).reduce((sum, n) => sum + n, 0);
 
 /** The preview's setup under way, which a second aiLocalSetup joins as ai_local_setup does: it
  *  hears where the setup has got to, then what comes next, and settles as the setup does. */
@@ -96,9 +108,9 @@ function mockLocalStatus(): LocalStatus {
     setting_up: mockSetup !== null,
     backend: "CUDA",
     device: "NVIDIA GeForce RTX 3050 Ti, 4 GB",
-    download_bytes: mockLocal.ready ? 0 : 5_380_000_000,
+    download_bytes: mockLocal.ready ? 0 : MOCK_SETUP_BYTES - mockGot(),
     installs: null,
-    kept_bytes: (mockLocal.ready ? 5_380_000_000 : 0) + mockLocal.unused,
+    kept_bytes: (mockLocal.ready ? MOCK_SETUP_BYTES : mockGot()) + mockLocal.unused,
     unused_bytes: mockLocal.unused,
     model: "FLUX.2 [klein] 4B",
     quality: "4-bit",
@@ -928,7 +940,12 @@ export const mockApi = {
   aiCancel: async (job: string): Promise<void> => {
     mockStopped.add(job);
   },
-  aiLocalStatus: async (): Promise<LocalStatus> => mockLocalStatus(),
+  aiLocalStatus: async (): Promise<LocalStatus> => {
+    // Once the runtime is installed, ai_local_status asks it whether it starts, which takes a moment.
+    const [runtime, size] = MOCK_SETUP_FILES[0];
+    if (mockLocal.ready || mockLocal.got[runtime] === size) await sleep(500);
+    return mockLocalStatus();
+  },
   aiLocalRemoveUnused: async (): Promise<LocalStatus> => {
     if (mockSetup) throw { code: "busy", message: "The local model is being set up.", fix: ["Stop the setup, then remove the files."] };
     await sleep(300);
@@ -942,6 +959,7 @@ export const mockApi = {
     // How long a picture took here stays: it belongs to the machine, not to the files.
     mockLocal.ready = false;
     mockLocal.unused = 0;
+    mockLocal.got = {};
     return mockLocalStatus();
   },
   aiLocalSetup: async (onEvent: (event: AiEvent) => void): Promise<LocalStatus> => {
@@ -966,25 +984,22 @@ export const mockApi = {
       for (const listener of listeners) listener(event);
     };
     const run = async (): Promise<LocalStatus> => {
-      const files: [string, number][] = [
-        ["stable-diffusion.cpp (CUDA)", 150_000_000],
-        ["FLUX.2 klein 4B, q4", 2_400_000_000],
-        ["Qwen3 4B text encoder, q4", 2_500_000_000],
-        ["FLUX.2 autoencoder", 330_000_000],
-      ];
       // `?slowsetup`: a setup of a few seconds, for a test that has to find it still under way on
       // a busy machine.
       const pace = new URLSearchParams(location.search).has("slowsetup") ? 250 : 90;
       tell({ type: "stage", stage: "download", message: "Downloading what the local model needs" });
-      for (const [file, total] of files) {
-        // Where it starts from first, as download.rs says before the first chunk.
-        tell({ type: "download", file, done: 0, total });
-        for (let i = 1; i <= 5; i++) {
+      for (const [file, total] of MOCK_SETUP_FILES) {
+        // Where it starts from first, as download.rs says before the first chunk: where the last
+        // setup left it.
+        const from = mockLocal.got[file] ?? 0;
+        tell({ type: "download", file, done: from, total });
+        for (let i = 1; i <= 5 && from < total; i++) {
           await sleep(pace);
           if (mockStopped.delete(SETUP)) {
             throw { code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." };
           }
-          tell({ type: "download", file, done: Math.round((total * i) / 5), total });
+          mockLocal.got[file] = from + Math.round(((total - from) * i) / 5);
+          tell({ type: "download", file, done: mockLocal.got[file], total });
         }
         tell({ type: "log", level: "info", message: `checked ${file}` });
       }
