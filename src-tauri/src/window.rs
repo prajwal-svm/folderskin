@@ -19,6 +19,25 @@
 
 use tauri::{App, WebviewWindowBuilder};
 
+/// Makes one open panel and lets it go, once the window has settled, so the first "Choose…"
+/// clicked opens as quickly as every later one. AppKit sets up the first `NSOpenPanel` an app makes
+/// the slow way and reuses that for the rest: on macOS 26 a first panel took 1.06 s to come up and
+/// one after a panel made in advance 0.59 s (0.5 s is as quick as they come), and in FolderSkin
+/// itself making one took 474 ms cold and 211 ms after. The cold one holds the main thread, so it
+/// waits until the window's first work is done.
+#[cfg(target_os = "macos")]
+fn warm_up_open_panel(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        let _ = app.run_on_main_thread(|| {
+            if let Some(mtm) = objc2::MainThreadMarker::new() {
+                drop(objc2_app_kit::NSOpenPanel::openPanel(mtm));
+            }
+        });
+    });
+}
+
 pub fn create_main(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     let config = app
         .config()
@@ -60,5 +79,7 @@ pub fn create_main(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     builder.build()?;
+    #[cfg(target_os = "macos")]
+    warm_up_open_panel(app.handle());
     Ok(())
 }

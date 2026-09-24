@@ -218,7 +218,7 @@ pub async fn icon_pack_download(
 }
 
 /// The icon packs downloaded on this computer.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn icon_packs_installed(app: AppHandle) -> Result<Vec<InstalledIconPack>, String> {
     Ok(installed(&packs_dir(&app)?))
 }
@@ -238,7 +238,7 @@ pub async fn icon_pack_read(app: AppHandle, id: String) -> Result<String, String
 }
 
 /// Forgets a downloaded pack. Designs that use its icons keep them: a layer carries its drawing.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn icon_pack_remove(app: AppHandle, id: String) -> Result<(), String> {
     if !is_pack_id(&id) {
         return Err("that isn't an icon pack FolderSkin knows".into());

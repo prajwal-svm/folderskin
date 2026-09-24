@@ -8,6 +8,14 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Fixed
 
+- **Painting with the local model no longer freezes the Mac.** As the picture was decoded, the
+  model briefly used 23 GB of memory, enough to make even a 36 GB Mac stall for seconds while it
+  made room. It now decodes the picture in tiles and peaks at 8 GB, with no difference to see,
+  and finishes a few seconds sooner.
+- **The model downloads faster.** Big files come down in pieces over eight connections at once
+  instead of one, and a stopped download carries on with the pieces it still needs.
+- **File pickers open sooner on a Mac.** The first one used to take a second to appear. Saving a
+  chat or a key no longer holds up the window or a picker while the disk is busy.
 - **The local model sets itself up on any Mac.** Setting it up on Apple Silicon used to stop and
   ask for uv to be installed first. Now it installs everything it needs, uv and Python included,
   in its own folder. A Mac fresh out of the box needs nothing else, and your own Python stays

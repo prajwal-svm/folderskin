@@ -252,29 +252,40 @@ pub fn keep_reference(dir: &Path, id: &str, source: &Path) -> Result<ChatRefDto,
 }
 
 // ---------- commands ----------
+//
+// Off the main thread (`async`): a save waits for the disk (write_atomic syncs it), and the window
+// and the file dialogs wait for the main thread.
 
-#[tauri::command]
+/// Held while a chat and the index are written: saves and deletes run on threads of their own,
+/// and two at once would each write an index without the other's change.
+static WRITING: Mutex<()> = Mutex::new(());
+
+fn writing() -> std::sync::MutexGuard<'static, ()> {
+    WRITING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[tauri::command(async)]
 pub fn chats_list(chats: State<'_, Chats>) -> Result<Vec<ChatSummary>, String> {
     Ok(index(&chats.dir()?))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn chat_read(chats: State<'_, Chats>, id: String) -> Result<Value, String> {
     read(&chats.dir()?, &id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn chat_save(chats: State<'_, Chats>, chat: Value) -> Result<ChatSummary, String> {
     let dir = chats.dir()?;
-    // Chats are saved as they change; one at a time, so two saves never race over the index.
-    static WRITING: Mutex<()> = Mutex::new(());
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+    let _one = writing();
     save(&dir, &chat)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn chat_delete(chats: State<'_, Chats>, id: String) -> Result<(), String> {
-    delete(&chats.dir()?, &id)
+    let dir = chats.dir()?;
+    let _one = writing();
+    delete(&dir, &id)
 }
 
 #[tauri::command]
