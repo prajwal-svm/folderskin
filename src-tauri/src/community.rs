@@ -104,8 +104,12 @@ pub struct SearchDto {
     pub hit_packs: Vec<PackDto>,
     /// Tags of the packs the words match, most used first.
     pub facets: Vec<Facet>,
-    /// True when nothing could be reached and these are the packs from the last visit.
-    pub offline: bool,
+    /// Why these are the packs from the last visit rather than the ones published now, as the
+    /// start of a sentence ("you're offline"); `None` when they are the ones published now.
+    pub last_visit: Option<String>,
+    /// Which catalog answered, so a page that comes from a newer one than the rest of the list
+    /// can be told apart.
+    pub generation: String,
 }
 
 /// What Refresh found.
@@ -297,7 +301,8 @@ fn search(
             })
             .collect(),
         facets: results.facets,
-        offline: source.offline,
+        last_visit: source.last_visit.as_ref().map(|why| why.to_string()),
+        generation: source.generation.clone(),
     })
 }
 
@@ -326,6 +331,20 @@ pub async fn community_refresh(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The packs in the library now, each with the version it was added at (`None` when it was
+/// added before FolderSkin kept one). The Community view keeps its list while it is away, and
+/// the library may have changed meanwhile: this marks the packs it shows again, from this
+/// computer alone.
+#[tauri::command]
+pub async fn community_installed(
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, Option<String>>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.installed_packs())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Whether a pack added with hash `have` (itself `None` when it was added before FolderSkin kept
@@ -521,13 +540,17 @@ async fn download_published(
             let arrived = &arrived;
             async move {
                 let path = tree::picture_path(&skin.sha256, &skin.ext());
+                // Checked as it arrives, so a mirror with the wrong bytes is passed over for
+                // the next folder rather than failing the pack.
                 let bytes = source
-                    .get(&path, skin.bytes as usize)
+                    .get(&path, skin.bytes as usize, |b| {
+                        tree::sha256_hex(b) == skin.sha256
+                    })
                     .await
-                    .map_err(|e| format!("{}: {e}", skin.file))?;
-                if tree::sha256_hex(&bytes) != skin.sha256 {
-                    return Err(format!("{} arrived damaged; try again", skin.file));
-                }
+                    .map_err(|e| match e {
+                        Fetch::Damaged => format!("{} arrived damaged; try again", skin.file),
+                        e => format!("{}: {e}", skin.file),
+                    })?;
                 let done = arrived.fetch_add(1, Ordering::Relaxed) + 1;
                 progress(PackProgress::download(done, total));
                 Ok::<_, String>(bytes)
@@ -764,8 +787,51 @@ pub async fn export_pack(
 
 // ---------- helpers ----------
 
-/// What [`fetch`] says when the file isn't there.
-pub(crate) const NOT_FOUND: &str = "not found";
+/// Why a download didn't arrive. Callers that know what the file was say it better; the rest
+/// pass it on as the sentence it reads as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fetch {
+    /// Nothing answered at all, from this host: offline, most likely.
+    Unreachable(String),
+    /// The host answered that it hasn't got the file.
+    NotFound(String),
+    /// The host answered with another error, such as 503 or 429: the host and the status.
+    Refused(String, String),
+    /// Bigger than it may be, in bytes.
+    TooBig(usize),
+    /// It arrived, but its size or SHA-256 isn't the file's.
+    Damaged,
+}
+
+impl Fetch {
+    /// True when nothing answered, as opposed to an answer that wasn't the file.
+    pub fn is_offline(&self) -> bool {
+        matches!(self, Fetch::Unreachable(_))
+    }
+}
+
+impl std::fmt::Display for Fetch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Fetch::Unreachable(host) => write!(
+                f,
+                "couldn't reach {host}. Check your connection and try again"
+            ),
+            Fetch::NotFound(host) => write!(f, "it isn't on {host} any more; try Refresh"),
+            Fetch::Refused(host, status) => {
+                write!(f, "{host} answered {status}; try again in a minute")
+            }
+            Fetch::TooBig(max) => write!(f, "it's over {} KB", max / 1024),
+            Fetch::Damaged => write!(f, "it arrived damaged; try again"),
+        }
+    }
+}
+
+impl From<Fetch> for String {
+    fn from(e: Fetch) -> String {
+        e.to_string()
+    }
+}
 
 /// `url` with a query no cache has seen when `fresh`, so the answer comes from the host itself
 /// rather than a copy up to a few minutes old. Only head.json, or index.json standing in for
@@ -802,7 +868,7 @@ fn client() -> Result<&'static reqwest::Client, String> {
 }
 
 /// Who serves `url`, for a sentence: "GitHub" for GitHub's hosts, otherwise the host's own name.
-fn host(url: &str) -> String {
+pub(crate) fn host(url: &str) -> String {
     let host = reqwest::Url::parse(url)
         .ok()
         .and_then(|u| u.host_str().map(str::to_ascii_lowercase))
@@ -819,36 +885,30 @@ fn host(url: &str) -> String {
     }
 }
 
-/// Said when `url`'s host can't be reached at all.
-fn unreachable(url: &str) -> String {
-    format!(
-        "couldn't reach {}. Check your connection and try again",
-        host(url)
-    )
-}
-
 /// Downloads `url`, refusing a body over `max` bytes, including one that never says its length.
-pub(crate) async fn fetch(url: &str, max: usize) -> Result<Vec<u8>, String> {
-    let mut response = client()?
+pub(crate) async fn fetch(url: &str, max: usize) -> Result<Vec<u8>, Fetch> {
+    let unreachable = || Fetch::Unreachable(host(url));
+    // A client that can't be made is as good as no connection.
+    let mut response = client()
+        .map_err(|_| unreachable())?
         .get(url)
         .send()
         .await
-        .map_err(|_| unreachable(url))?;
+        .map_err(|_| unreachable())?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(NOT_FOUND.into());
+        return Err(Fetch::NotFound(host(url)));
     }
     if !response.status().is_success() {
-        return Err(format!("{} answered {}", host(url), response.status()));
+        return Err(Fetch::Refused(host(url), response.status().to_string()));
     }
-    let too_big = || format!("is over {} KB", max / 1024);
     if response.content_length().is_some_and(|n| n > max as u64) {
-        return Err(too_big());
+        return Err(Fetch::TooBig(max));
     }
     let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|_| unreachable(url))? {
+    while let Some(chunk) = response.chunk().await.map_err(|_| unreachable())? {
         body.extend_from_slice(&chunk);
         if body.len() > max {
-            return Err(too_big());
+            return Err(Fetch::TooBig(max));
         }
     }
     Ok(body)
@@ -1039,13 +1099,13 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::store::SkinKind;
     use std::io::Cursor;
     use std::sync::Arc;
 
-    fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
+    pub(crate) fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
         let mut bytes = Vec::new();
         image::RgbaImage::from_pixel(w, h, image::Rgba(rgba))
             .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
@@ -1356,14 +1416,16 @@ mod tests {
     }
 
     /// Serves `files` (path, body, delay before answering) over HTTP on a free local port, and
-    /// counts the most requests it had at once. Returns the base URL and that count.
-    fn serve(files: Vec<(String, Vec<u8>, Duration)>) -> (String, Arc<AtomicUsize>) {
+    /// counts the most requests it had at once. Returns the base URL and that count. A request
+    /// with a query is answered from `<path>?` when that is one of the files, so a test can
+    /// answer Refresh's cache-busting request differently.
+    pub(crate) fn serve(files: Vec<(String, Vec<u8>, Duration)>) -> (String, Arc<AtomicUsize>) {
         let (base, most, _) = serve_logged(files);
         (base, most)
     }
 
     /// [`serve`], also keeping every path asked for, query and all, in the order they came.
-    fn serve_logged(
+    pub(crate) fn serve_logged(
         files: Vec<(String, Vec<u8>, Duration)>,
     ) -> (String, Arc<AtomicUsize>, Arc<Mutex<Vec<String>>>) {
         use std::io::{BufRead, BufReader, Write};
@@ -1392,10 +1454,13 @@ mod tests {
                     while reader.read_line(&mut header).is_ok_and(|n| n > 2) {
                         header.clear();
                     }
-                    let path = request.split(' ').nth(1).unwrap_or("");
-                    lock(&log).push(path.to_string());
-                    let path = path.split('?').next().unwrap_or("");
-                    let (status, body) = match files.get(path) {
+                    let asked = request.split(' ').nth(1).unwrap_or("");
+                    lock(&log).push(asked.to_string());
+                    let path = asked.split('?').next().unwrap_or("");
+                    let with_query = files
+                        .get(&format!("{path}?"))
+                        .filter(|_| asked.contains('?'));
+                    let (status, body) = match with_query.or_else(|| files.get(path)) {
                         Some((body, delay)) => {
                             std::thread::sleep(*delay);
                             ("200 OK", body.clone())
@@ -1482,7 +1547,7 @@ mod tests {
             lock(&heard).push(p)
         }))
         .unwrap_err();
-        assert_eq!(err, "b.png: not found");
+        assert_eq!(err, "b.png: it isn't on 127.0.0.1 any more; try Refresh");
         assert_eq!(
             heard.into_inner().unwrap().first(),
             Some(&PackProgress::download(0, 2))
@@ -1552,7 +1617,7 @@ mod tests {
 
     // ---------- the catalog, the published tree and index.json ----------
 
-    use crate::catalog::{self, Community};
+    use crate::catalog::{self, Community, LastVisit};
     use crate::previews::Asked;
     use folderskin_catalog::build;
     use folderskin_catalog::tree::{CatalogRef, Head, PublishedSkin};
@@ -1560,19 +1625,19 @@ mod tests {
     use tauri::http::StatusCode;
 
     /// A skin of a published pack: its file, its name and its picture.
-    type Picture = (&'static str, &'static str, Vec<u8>);
+    pub(crate) type Picture = (&'static str, &'static str, Vec<u8>);
     /// A published pack: id, name, tags and skins.
-    type Published<'a> = (&'a str, &'a str, &'a [&'a str], Vec<Picture>);
-    type Served = Vec<(String, Vec<u8>, Duration)>;
+    pub(crate) type Published<'a> = (&'a str, &'a str, &'a [&'a str], Vec<Picture>);
+    pub(crate) type Served = Vec<(String, Vec<u8>, Duration)>;
 
     /// A WebP as far as the preview scheme can tell, which says whose it is.
-    fn webp(of: &str) -> Vec<u8> {
+    pub(crate) fn webp(of: &str) -> Vec<u8> {
         [b"RIFF\0\0\0\0WEBPVP8 ".as_slice(), of.as_bytes()].concat()
     }
 
     /// `packs` published as `packs catalog` writes them, as files served under `/v2`, with the
     /// head.json among them and each pack's hash.
-    fn tree_files(packs: &[Published]) -> (Served, Head, HashMap<String, String>) {
+    pub(crate) fn tree_files(packs: &[Published]) -> (Served, Head, HashMap<String, String>) {
         let mut files: Served = Vec::new();
         let mut serve = |path: String, body: Vec<u8>| files.push((path, body, Duration::ZERO));
         let mut records = Vec::new();
@@ -1655,7 +1720,7 @@ mod tests {
         (files, head, hashes)
     }
 
-    fn colour_packs() -> Vec<Published<'static>> {
+    pub(crate) fn colour_packs() -> Vec<Published<'static>> {
         vec![
             (
                 "reds",
@@ -1739,8 +1804,12 @@ mod tests {
         let (base, _, asked) = serve_logged(files);
         let dir = temp_dir("tree-cache");
         let source = block_on(catalog::load(&base, Some(&dir), false)).unwrap();
-        assert!(source.is_tree() && !source.offline);
+        assert!(source.is_tree() && source.last_visit.is_none());
         let found = search(&source, &HashMap::new(), &query("nav")).unwrap();
+        assert_eq!(
+            (found.last_visit, found.generation),
+            (None, head.generation.clone())
+        );
         assert_eq!(found.packs[0].id, "blues");
         assert_eq!(
             found.skins,
@@ -1767,19 +1836,50 @@ mod tests {
         // Nothing listens here: the copy kept from the visit before, marked as such.
         let nowhere = "http://127.0.0.1:9";
         let offline = block_on(catalog::load(nowhere, Some(&dir), false)).unwrap();
-        assert!(offline.offline && offline.is_tree());
+        assert!(offline.is_tree());
+        assert_eq!(offline.last_visit, Some(LastVisit::Offline));
+        let found = search(&offline, &HashMap::new(), &query("sky")).unwrap();
+        assert_eq!(found.total, 1);
+        assert_eq!(found.last_visit.as_deref(), Some("you're offline"));
+        drop(offline);
+
+        // A host answering with something that isn't head.json, such as a network's sign-in
+        // page, isn't called offline.
+        let (portal, _) = serve(vec![(
+            "/v2/head.json".into(),
+            b"<html>Sign in to the network</html>".to_vec(),
+            Duration::ZERO,
+        )]);
+        let signed_out = block_on(catalog::load(&portal, Some(&dir), false)).unwrap();
         assert_eq!(
-            search(&offline, &HashMap::new(), &query("sky"))
+            signed_out.last_visit,
+            Some(LastVisit::Unanswered("127.0.0.1".into()))
+        );
+        assert_eq!(
+            search(&signed_out, &HashMap::new(), &query("sky"))
+                .unwrap()
+                .last_visit
+                .as_deref(),
+            Some("127.0.0.1 isn't answering")
+        );
+        // Windows can't change a file SQLite still has open.
+        drop(signed_out);
+
+        // The kept catalog is used only while it is still the file its generation names.
+        let kept = dir.join(format!("catalog-{}.sqlite", head.generation));
+        let mut bytes = std::fs::read(&kept).unwrap();
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0xff;
+        std::fs::write(&kept, bytes).unwrap();
+        assert!(block_on(catalog::load(nowhere, Some(&dir), false)).is_err());
+        let again = block_on(catalog::load(&base, Some(&dir), false)).unwrap();
+        assert_eq!(
+            search(&again, &HashMap::new(), &query("sky"))
                 .unwrap()
                 .total,
             1
         );
-        assert!(
-            search(&offline, &HashMap::new(), &query("sky"))
-                .unwrap()
-                .offline
-        );
-        drop(offline);
+        drop(again);
         // Refresh says it couldn't get through, rather than pass old packs off as new.
         let err = block_on(catalog::load(nowhere, Some(&dir), true))
             .err()
@@ -1917,11 +2017,18 @@ mod tests {
             hash: hash.clone(),
             position: 1,
         };
-        let (bytes, mime) = block_on(previews::serve(&community, &base, strip())).unwrap();
-        assert_eq!((bytes, mime), (webp(&hash), "image/webp"));
+        let picture = block_on(previews::serve(&community, &base, strip())).unwrap();
+        assert_eq!(
+            (picture.bytes, picture.mime, picture.lasting),
+            (webp(&hash), "image/webp", true)
+        );
         let sky_sha = tree::sha256_hex(&colour_packs()[1].3[1].2);
-        let (bytes, _) = block_on(previews::serve(&community, &base, sky())).unwrap();
-        assert_eq!(bytes, webp(&sky_sha), "the thumbnail the manifest names");
+        let picture = block_on(previews::serve(&community, &base, sky())).unwrap();
+        assert_eq!(
+            picture.bytes,
+            webp(&sky_sha),
+            "the thumbnail the manifest names"
+        );
 
         let before = lock(&asked).len();
         block_on(previews::serve(&community, &base, strip())).unwrap();
@@ -1949,6 +2056,161 @@ mod tests {
     }
 
     #[test]
+    fn searches_carry_on_while_refresh_downloads() {
+        let (mut files, _, _) = tree_files(&colour_packs());
+        let head = files
+            .iter()
+            .find(|(p, ..)| p == "/v2/head.json")
+            .unwrap()
+            .1
+            .clone();
+        // Refresh's head.json, asked for past the caches, takes its time.
+        files.push(("/v2/head.json?".into(), head, Duration::from_millis(1500)));
+        let (base, _) = serve(files);
+        let community = Arc::new(Community::with_cache(None));
+        block_on(community.current(&base)).unwrap();
+
+        let refreshing = {
+            let (community, base) = (community.clone(), base.clone());
+            std::thread::spawn(move || block_on(community.refresh(&base)).map(|_| ()))
+        };
+        std::thread::sleep(Duration::from_millis(200));
+        let started = std::time::Instant::now();
+        let source = block_on(community.current(&base)).unwrap();
+        assert_eq!(
+            search(&source, &HashMap::new(), &query("sky"))
+                .unwrap()
+                .total,
+            1
+        );
+        assert!(
+            started.elapsed() < Duration::from_millis(700),
+            "a search waited {:?} for Refresh",
+            started.elapsed()
+        );
+        assert!(!refreshing.is_finished(), "Refresh was still downloading");
+        refreshing.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn a_catalog_that_doesnt_arrive_leaves_the_last_visits_packs() {
+        let (files, _, _) = tree_files(&colour_packs());
+        let (base, _) = serve(files);
+        let dir = temp_dir("behind");
+        drop(block_on(catalog::load(&base, Some(&dir), false)).unwrap());
+
+        // A newer head.json whose catalog isn't there (a mirror or CDN a moment behind).
+        let (newer, _, _) = tree_files(&colour_packs()[..1]);
+        let newer: Served = newer
+            .into_iter()
+            .filter(|(path, ..)| !path.ends_with(".sqlite.gz"))
+            .collect();
+        let (behind, _) = serve(newer);
+        let source = block_on(catalog::load(&behind, Some(&dir), false)).unwrap();
+        assert_eq!(source.last_visit, Some(LastVisit::Behind));
+        let found = search(&source, &HashMap::new(), &query("sky")).unwrap();
+        assert_eq!(found.total, 1, "Blues, from the last visit");
+        assert_eq!(
+            found.last_visit.as_deref(),
+            Some("the newest list of packs didn't arrive")
+        );
+        drop(source);
+
+        // Refresh, or a first visit with nothing kept, says what happened in a sentence.
+        let err = block_on(catalog::load(&behind, Some(&dir), true))
+            .err()
+            .unwrap();
+        assert_eq!(
+            err,
+            "the newest list of packs isn't there yet; try again in a minute"
+        );
+        let err = block_on(catalog::load(&behind, None, false)).err().unwrap();
+        assert_eq!(
+            err,
+            "the newest list of packs isn't there yet; try again in a minute"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_last_visits_packs_are_asked_about_again_after_a_while() {
+        let (files, _, _) = tree_files(&colour_packs());
+        let (base, _) = serve(files);
+        let dir = temp_dir("retry");
+        drop(block_on(catalog::load(&base, Some(&dir), false)).unwrap());
+        let nowhere = "http://127.0.0.1:9";
+
+        // Within the minute, the last visit's packs stay.
+        let patient = Community::with_cache(Some(dir.clone()));
+        let first = block_on(patient.current(nowhere)).unwrap();
+        assert_eq!(first.last_visit, Some(LastVisit::Offline));
+        let still = block_on(patient.current(&base)).unwrap();
+        assert!(Arc::ptr_eq(&first, &still));
+        drop((first, still, patient));
+
+        // After it, the next request asks again, and the packs published now take over.
+        let eager = Community::with_cache(Some(dir.clone())).retrying_after(Duration::ZERO);
+        let first = block_on(eager.current(nowhere)).unwrap();
+        assert_eq!(first.last_visit, Some(LastVisit::Offline));
+        let failed_again = block_on(eager.current(nowhere)).unwrap();
+        assert!(Arc::ptr_eq(&first, &failed_again), "still offline");
+        let back = block_on(eager.current(&base)).unwrap();
+        assert_eq!(back.last_visit, None);
+        assert!(Arc::ptr_eq(&back, &block_on(eager.current(&base)).unwrap()));
+        drop((first, failed_again, back, eager));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn index_json_strips_are_kept_for_that_list_alone() {
+        let index = r#"{ "version": 1, "packs": [
+  { "id": "x", "name": "X", "author": "a", "license": "CC0-1.0", "tags": [], "count": 1,
+    "hash": "00000000000000b2" } ] }"#;
+        let (base, _, asked) = serve_logged(vec![
+            (
+                "/index.json".into(),
+                index.as_bytes().to_vec(),
+                Duration::ZERO,
+            ),
+            (
+                "/previews/x.png".into(),
+                png(8, 8, [1, 2, 3, 255]),
+                Duration::ZERO,
+            ),
+        ]);
+        let dir = temp_dir("index-strips");
+        let community = Community::with_cache(Some(dir.clone()));
+        let strip = || Asked::Strip {
+            id: "x".into(),
+            hash: Some("00000000000000b2".into()),
+        };
+        let strips_asked = || {
+            lock(&asked)
+                .iter()
+                .filter(|p| p.starts_with("/previews/"))
+                .count()
+        };
+        let picture = block_on(previews::serve(&community, &base, strip())).unwrap();
+        assert_eq!(picture.mime, "image/png");
+        assert!(!picture.lasting, "nothing ties previews/x.png to a version");
+        block_on(previews::serve(&community, &base, strip())).unwrap();
+        assert_eq!(strips_asked(), 1, "kept while this list is in use");
+        let on_disk: Vec<_> = std::fs::read_dir(dir.join("files"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect();
+        assert!(on_disk.is_empty(), "never kept on disk: {on_disk:?}");
+
+        // Refresh makes a new list, which asks for its strips again.
+        block_on(community.refresh(&base)).unwrap();
+        block_on(previews::serve(&community, &base, strip())).unwrap();
+        assert_eq!(strips_asked(), 2);
+        drop(community);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn errors_name_whoever_serves_the_packs() {
         for github in [
             "https://raw.githubusercontent.com/prajwal-svm/folderskin/main/community/index.json",
@@ -1963,8 +2225,17 @@ mod tests {
         );
         assert_eq!(host("https://notgithub.com/x"), "notgithub.com");
         assert_eq!(
-            unreachable("https://cdn.example.org/v2/head.json"),
+            Fetch::Unreachable(host("https://cdn.example.org/v2/head.json")).to_string(),
             "couldn't reach cdn.example.org. Check your connection and try again"
+        );
+        // No bare "not found": every reason is a sentence.
+        assert_eq!(
+            Fetch::NotFound("GitHub".into()).to_string(),
+            "it isn't on GitHub any more; try Refresh"
+        );
+        assert_eq!(
+            Fetch::Refused("GitHub".into(), "503 Service Unavailable".into()).to_string(),
+            "GitHub answered 503 Service Unavailable; try again in a minute"
         );
     }
 }

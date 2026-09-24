@@ -5,13 +5,15 @@
 //! screen, as `<img>` loads, and gets bytes straight from here. Each picture is downloaded once,
 //! at most [`crate::catalog::PREVIEW_DOWNLOADS`] at a time so a fast scroll can't queue a hundred
 //! requests, and kept in a folder of the app cache that is held under [`CACHE_BYTES`]. The files
-//! are named after their contents, so the webview is told it may keep them forever too.
+//! are named after their contents, so the webview is told it may keep them forever too. The
+//! strips of a list made from index.json are not, so they are kept for that list alone.
 //!
 //! The webview reaches the scheme as `fscommunity://localhost/<path>` on macOS and Linux and as
 //! `http://fscommunity.localhost/<path>` on Windows, which is why [`url`] builds both and the
 //! Content-Security-Policy in tauri.conf.json allows both.
 
 use crate::catalog::{Community, Source};
+use crate::community::Fetch;
 use folderskin_catalog::tree::{self, PublishedPack};
 use folderskin_catalog::PackRow;
 use folderskin_core::apply::paths::write_atomic;
@@ -131,29 +133,48 @@ pub fn handle<R: Runtime>(
             None => Err(StatusCode::BAD_REQUEST),
         };
         let response = match answer {
-            Ok((bytes, mime)) => Response::builder()
+            Ok(picture) => Response::builder()
                 .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, mime)
-                // Named after their contents: nothing under this name ever changes.
-                .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
+                .header(header::CONTENT_TYPE, picture.mime)
+                .header(
+                    header::CACHE_CONTROL,
+                    if picture.lasting {
+                        // Named after its contents: nothing under this name ever changes.
+                        "public, max-age=31536000, immutable"
+                    } else {
+                        "no-cache"
+                    },
+                )
                 .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-                .body(bytes),
+                .body(picture.bytes),
             Err(status) => Response::builder().status(status).body(Vec::new()),
         };
         responder.respond(response.unwrap_or_else(|_| Response::new(Vec::new())));
     });
 }
 
+/// A picture to hand the webview.
+#[derive(Debug, PartialEq)]
+pub struct Picture {
+    pub bytes: Vec<u8>,
+    pub mime: &'static str,
+    /// True when its address names its contents, so the webview may keep it for good.
+    pub lasting: bool,
+}
+
 /// The picture `asked` names, from the disk cache or downloaded into it.
-pub async fn serve(
-    community: &Community,
-    base: &str,
-    asked: Asked,
-) -> Result<(Vec<u8>, &'static str), StatusCode> {
+pub async fn serve(community: &Community, base: &str, asked: Asked) -> Result<Picture, StatusCode> {
     let files = community.files();
     let key = asked.key();
     if let Some(bytes) = cached(files, key.as_deref()).await {
-        return picture(bytes);
+        return picture(bytes, true);
+    }
+    let source = community
+        .current(base)
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !source.is_tree() {
+        return from_index(community, &source, &asked).await;
     }
     // Waiting here, rather than in the webview, keeps a fast scroll from opening a hundred
     // connections: the pictures that scrolled away still arrive, but a few at a time.
@@ -164,14 +185,10 @@ pub async fn serve(
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     // Another request for the same picture may have fetched it while this one waited.
     if let Some(bytes) = cached(files, key.as_deref()).await {
-        return picture(bytes);
+        return picture(bytes, true);
     }
-    let source = community
-        .current(base)
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
     let bytes = download(&source, files, &asked).await?;
-    let answer = picture(bytes.clone())?;
+    let answer = picture(bytes.clone(), true)?;
     if let (Some(files), Some(key)) = (files, key) {
         let files = files.clone();
         let _ = tauri::async_runtime::spawn_blocking(move || files.put(&key, &bytes)).await;
@@ -179,19 +196,55 @@ pub async fn serve(
     Ok(answer)
 }
 
+/// A strip from a list made from index.json. It is `previews/<id>.png`, replaced in place when
+/// the pack changes, and a cache may hand out the old one for a few minutes after: nothing ties
+/// it to the version asked for. So it is kept only as long as this list, never on disk, and the
+/// webview is told to ask again rather than keep it. The list has no thumbnails.
+async fn from_index(
+    community: &Community,
+    source: &Source,
+    asked: &Asked,
+) -> Result<Picture, StatusCode> {
+    let Asked::Strip { id, .. } = asked else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    if let Some(bytes) = source.session_strip(id) {
+        return picture(bytes, false);
+    }
+    let _turn = community
+        .downloads()
+        .acquire()
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    if let Some(bytes) = source.session_strip(id) {
+        return picture(bytes, false);
+    }
+    let bytes = source
+        .get(
+            &format!("previews/{id}.png"),
+            tree::MAX_PREVIEW_BYTES,
+            is_picture,
+        )
+        .await
+        .map_err(status)?;
+    let answer = picture(bytes.clone(), false)?;
+    source.keep_session_strip(id, bytes);
+    Ok(answer)
+}
+
+/// A download from the published tree.
 async fn download(
     source: &Source,
     files: Option<&DiskCache>,
     asked: &Asked,
 ) -> Result<Vec<u8>, StatusCode> {
     let path = match asked {
-        Asked::Strip { id, hash } => match (source.is_tree(), hash) {
-            (true, Some(hash)) => tree::strip_path(hash),
-            (true, None) => return Err(StatusCode::NOT_FOUND),
-            (false, _) => format!("previews/{id}.png"),
-        },
-        Asked::Thumb { sha256 } if source.is_tree() => tree::thumb_path(sha256),
-        Asked::Skin { id, hash, position } if source.is_tree() => {
+        Asked::Strip {
+            hash: Some(hash), ..
+        } => tree::strip_path(hash),
+        Asked::Strip { hash: None, .. } => return Err(StatusCode::NOT_FOUND),
+        Asked::Thumb { sha256 } => tree::thumb_path(sha256),
+        Asked::Skin { id, hash, position } => {
             // Only the version the catalog lists now can be checked, and it's the only one asked for.
             let row = source
                 .packs(std::slice::from_ref(id))
@@ -208,19 +261,19 @@ async fn download(
                 .ok_or(StatusCode::NOT_FOUND)?;
             tree::thumb_path(&skin.sha256)
         }
-        // A list made from index.json has no thumbnails.
-        _ => return Err(StatusCode::NOT_FOUND),
     };
     source
-        .get(&path, tree::MAX_PREVIEW_BYTES)
+        .get(&path, tree::MAX_PREVIEW_BYTES, is_picture)
         .await
-        .map_err(|e| {
-            if e == crate::community::NOT_FOUND {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::BAD_GATEWAY
-            }
-        })
+        .map_err(status)
+}
+
+/// How the webview hears that a picture didn't arrive.
+fn status(e: Fetch) -> StatusCode {
+    match e {
+        Fetch::NotFound(_) => StatusCode::NOT_FOUND,
+        _ => StatusCode::BAD_GATEWAY,
+    }
 }
 
 /// The manifest of the pack the catalog lists as `row`, kept in the disk cache: it is named after
@@ -238,11 +291,16 @@ pub async fn manifest(
         Some(bytes) => bytes,
         None => {
             let bytes = source
-                .get(&tree::manifest_path(id, hash), tree::MAX_MANIFEST_BYTES)
-                .await?;
-            if !whole(&bytes) {
-                return Err("that pack's list arrived damaged; try again".into());
-            }
+                .get(
+                    &tree::manifest_path(id, hash),
+                    tree::MAX_MANIFEST_BYTES,
+                    whole,
+                )
+                .await
+                .map_err(|e| match e {
+                    Fetch::Damaged => "that pack's list arrived damaged; try again".to_string(),
+                    e => e.to_string(),
+                })?;
             if let Some(files) = files {
                 let (files, bytes) = (files.clone(), bytes.clone());
                 let _ = tauri::async_runtime::spawn_blocking(move || files.put(&key, &bytes)).await;
@@ -265,16 +323,30 @@ async fn cached(files: Option<&DiskCache>, key: Option<&str>) -> Option<Vec<u8>>
         .flatten()
 }
 
-/// `bytes` with its type, when it is a PNG or a WebP; anything else is refused.
-fn picture(bytes: Vec<u8>) -> Result<(Vec<u8>, &'static str), StatusCode> {
-    let mime = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        "image/png"
+/// The type of a PNG or a WebP; `None` for anything else.
+fn mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
     } else if bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
-        "image/webp"
+        Some("image/webp")
     } else {
-        return Err(StatusCode::BAD_GATEWAY);
-    };
-    Ok((bytes, mime))
+        None
+    }
+}
+
+/// True for a PNG or a WebP: a folder answering with an error page instead is passed over.
+fn is_picture(bytes: &[u8]) -> bool {
+    mime(bytes).is_some()
+}
+
+/// `bytes` as a picture for the webview, when it is a PNG or a WebP; anything else is refused.
+fn picture(bytes: Vec<u8>, lasting: bool) -> Result<Picture, StatusCode> {
+    let mime = mime(&bytes).ok_or(StatusCode::BAD_GATEWAY)?;
+    Ok(Picture {
+        bytes,
+        mime,
+        lasting,
+    })
 }
 
 /// A folder of downloaded files kept under a size limit. When a new file takes it over the
@@ -438,14 +510,19 @@ mod tests {
     #[test]
     fn only_pictures_are_handed_on() {
         assert_eq!(
-            picture(b"\x89PNG\r\n\x1a\nrest".to_vec()).unwrap().1,
+            picture(b"\x89PNG\r\n\x1a\nrest".to_vec(), true)
+                .unwrap()
+                .mime,
             "image/png"
         );
         assert_eq!(
-            picture(b"RIFF\x10\0\0\0WEBPVP8 ".to_vec()).unwrap().1,
+            picture(b"RIFF\x10\0\0\0WEBPVP8 ".to_vec(), false)
+                .unwrap()
+                .mime,
             "image/webp"
         );
-        assert!(picture(b"<html>".to_vec()).is_err());
+        assert!(picture(b"<html>".to_vec(), true).is_err());
+        assert!(!is_picture(b"<html>"), "an error page is passed over");
     }
 
     #[test]

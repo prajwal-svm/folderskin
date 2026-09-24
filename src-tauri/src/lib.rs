@@ -114,6 +114,7 @@ pub fn run() {
             ai::ai_generate,
             community::community_search,
             community::community_refresh,
+            community::community_installed,
         ])
         .setup(|app| {
             // Before anything that could panic, so a crash report has somewhere to land.
