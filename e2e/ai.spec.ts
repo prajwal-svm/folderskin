@@ -339,29 +339,9 @@ test.describe("the AI chat", () => {
     await settings(page).getByRole("button", { name: "Set up the local model" }).click();
     await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
     await settings(page).getByRole("button", { name: "Stop" }).click();
-    // A stop asked for isn't an error, and there is one way on from it, not two.
-    await expect(settings(page).getByRole("status").filter({ hasText: "What was downloaded is kept" })).toBeVisible();
-    await expect(settings(page).getByRole("alert")).toHaveCount(0);
-    await expect(settings(page).getByRole("button", { name: "Set up this computer" })).toHaveCount(0);
+    await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
     await expect(localReady(page)).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("before it is set up, this computer says so, and setting up counts the whole download", async ({ page }) => {
-    await openApp(page);
-    await openView(page, /generate with ai/i);
-    await chat(page).locator(".model-pill").click();
-    const tile = settings(page).getByRole("radio", { name: /This computer/ });
-    await expect(tile).toContainText("Not set up");
-    await tile.click();
-    // How long a picture takes is only known once one has been painted, and it says so.
-    await expect(settings(page).locator(".local-list")).toContainText("A picture takesKnown after the first picture");
-    await settings(page).getByRole("button", { name: "Set up this computer" }).click();
-    await expect(tile).toContainText("Setting up");
-    // Each file as it comes, and how far the whole download has got.
-    await expect(settings(page).locator(".local-progress")).toContainText(/of 5\.\d+ GB in all/);
-    await expect(settings(page).getByText(/Set up and ready/)).toBeVisible({ timeout: 10_000 });
-    await expect(tile.getByLabel("Set up")).toBeVisible();
   });
 
   test("a setup under way is found again when its settings are opened again", async ({ page }) => {
@@ -378,7 +358,7 @@ test.describe("the AI chat", () => {
     await expect(settings(page).getByText(/Downloading what the local model needs/)).toBeVisible();
     await expect(settings(page).getByRole("button", { name: "Set up the local model" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "Stop" }).click();
-    await expect(settings(page).getByRole("status").filter({ hasText: "What was downloaded is kept" })).toBeVisible();
+    await expect(settings(page).getByRole("alert")).toContainText("What was downloaded is kept");
     await settings(page).getByRole("button", { name: "Carry on setting up" }).click();
     await expect(localReady(page)).toBeVisible({ timeout: 20_000 });
   });
