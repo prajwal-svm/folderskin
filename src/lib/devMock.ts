@@ -1012,26 +1012,45 @@ export const mockApi = {
       else if (event.type === "log") log.push(event);
       for (const listener of listeners) listener(event);
     };
+    const stopped = () => ({ code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." });
+    // `?holdsetup`: the setup waits once it has downloaded everything, and with `?holdsetup=n`
+    // after its first n pieces too, until the page calls `mockSetupGo()`, so a test finds it
+    // under way, and where it expects, however busy the machine. Stop still stops it there.
+    const holding = new URLSearchParams(location.search).get("holdsetup");
+    const holdAfter = holding === null ? null : Number(holding);
+    const hold = async () => {
+      const w = window as { mockSetupGo?: () => void };
+      let go = false;
+      w.mockSetupGo = () => {
+        delete w.mockSetupGo;
+        go = true;
+      };
+      while (!go) {
+        await sleep(50);
+        if (mockStopped.delete(SETUP)) {
+          delete w.mockSetupGo;
+          throw stopped();
+        }
+      }
+    };
     const run = async (): Promise<LocalStatus> => {
-      // `?slowsetup`: a setup of a few seconds, for a test that has to find it still under way on
-      // a busy machine.
-      const pace = new URLSearchParams(location.search).has("slowsetup") ? 250 : 90;
       tell({ type: "stage", stage: "download", message: "Downloading what the local model needs" });
+      let pieces = 0;
       for (const [file, total] of MOCK_SETUP_FILES) {
         // Where it starts from first, as download.rs says before the first chunk: where the last
         // setup left it.
         const from = mockLocal.got[file] ?? 0;
         tell({ type: "download", file, done: from, total });
         for (let i = 1; i <= 5 && from < total; i++) {
-          await sleep(pace);
-          if (mockStopped.delete(SETUP)) {
-            throw { code: "stopped", message: "Stopped. What was downloaded is kept, and setting up again carries on from there." };
-          }
+          await sleep(90);
+          if (mockStopped.delete(SETUP)) throw stopped();
           mockLocal.got[file] = from + Math.round(((total - from) * i) / 5);
           tell({ type: "download", file, done: mockLocal.got[file], total });
+          if (++pieces === holdAfter) await hold();
         }
         tell({ type: "log", level: "info", message: `checked ${file}` });
       }
+      if (holdAfter !== null) await hold();
       tell({ type: "stage", stage: "check", message: "Checking it runs" });
       await sleep(400);
       mockLocal.ready = true;
