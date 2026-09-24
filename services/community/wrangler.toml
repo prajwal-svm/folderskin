@@ -85,8 +85,8 @@ crons = ["17 7 * * *"]
 # links in notifications still work.
 ADMIN_KEYS = "3EuyfNm69LvmEeAFaMb6aBCF1jA8bWilIEk-FxjIOi0"
 PUBLIC_BASE_URL = "https://community.folderskin.app"
-# Cloudflare's always-passes test key until the real widget exists.
-TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+# The "FolderSkin community" Turnstile widget, on folderskin.app and its subdomains.
+TURNSTILE_SITE_KEY = "0x4AAAAAAFCt8h3vCygPWuKI"
 MAIL_TO = "maintainer@example.org"
 MAIL_FROM = "community@example.org"
 # "1" pauses sharing from the dashboard without touching the database.
