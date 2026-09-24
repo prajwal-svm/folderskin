@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { summaryOf, type Chat } from "./chats";
+import { summaryOf, type Chat, type Turn } from "./chats";
 import type { Ask } from "./chatStore";
 
 // The app's commands, stood in for: each test says what they give back.
@@ -22,6 +22,11 @@ let store: typeof import("./chatStore");
 
 /** Lets every promise that can settle now settle (the save timer is faked, so it waits). */
 const settled = () => new Promise((r) => setImmediate(r));
+
+const saved = (id: string, title: string, updated: number): Chat => {
+  const turn: Turn = { id: "t1", idea: title, shape: "folder", provider: "openai", model: "gpt-image", where: "OpenAI · GPT Image", refs: [], status: "done", started: updated, finished: updated };
+  return { version: 1, id, title, named: false, created: updated, updated, folder: null, turns: [turn] };
+};
 
 const request = (extra: Partial<Ask> = {}): Ask => ({
   idea: "a paper boat",
@@ -82,6 +87,15 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("renaming a chat", () => {
+  it("renames one from the history that hasn't been opened", async () => {
+    await start([saved("cnewer", "A lighthouse", 2), saved("colder", "Older chat", 1)]);
+    await store.renameChatTo("colder", "Renamed");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(lastSaved("colder")).toMatchObject({ title: "Renamed", named: true, turns: [{ id: "t1", status: "done" }] });
+  });
 });
 
 describe("how a request ends", () => {

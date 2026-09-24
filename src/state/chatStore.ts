@@ -145,13 +145,23 @@ export function startNewChat(folder: ChatFolder | null) {
   set({ active: chat });
 }
 
-export function renameChatTo(id: string, title: string) {
-  const chat = chats.get(id);
-  if (!chat) return;
+/** Renames a chat, the open one or any in the history (read first if it hasn't been opened). */
+export async function renameChatTo(id: string, title: string) {
+  let chat = chats.get(id);
+  if (!chat) {
+    try {
+      chat = await load(id);
+    } catch (e) {
+      set({ problem: `Couldn't rename that chat: ${errorMessage(e)}` });
+      return;
+    }
+    // Deleted while it was being read.
+    if (!state.list.some((s) => s.id === id)) return;
+  }
   const next = renameChat(chat, title, Date.now());
   put(next);
+  set({ list: state.list.map((s) => (s.id === id ? { ...s, title: next.title } : s)) });
   if (next.turns.length > 0) saveSoon(id);
-  else set({ list: state.list.map((s) => (s.id === id ? { ...s, title: next.title } : s)) });
 }
 
 export async function deleteChat(id: string) {

@@ -23,6 +23,29 @@ async function sendIdea(page: Page, idea: string) {
   await box(page).press("Enter");
 }
 
+/** Chats saved before the app opens, newest first, as the preview keeps them (devMock's chats). */
+async function seedChats(page: Page, titles: string[]) {
+  await page.addInitScript((titles) => {
+    const key = "folderskin.mock.chats";
+    if (localStorage.getItem(key)) return;
+    const chats = titles.map((title, i) => {
+      const at = Date.now() - (i + 1) * 60_000;
+      return {
+        version: 1,
+        id: `cseed${i}`,
+        title,
+        named: false,
+        created: at,
+        updated: at,
+        folder: null,
+        turns: [{ id: "t1", idea: title.toLowerCase(), shape: "folder", provider: "openai", model: "gpt-image-2.5-flare", where: "OpenAI · GPT Image 2.5 Flare", refs: [], status: "stopped", started: at, finished: at }],
+      };
+    });
+    const index = chats.map((c) => ({ id: c.id, title: c.title, created: c.created, updated: c.updated, turns: 1, cover: null }));
+    localStorage.setItem(key, JSON.stringify({ index, chats: Object.fromEntries(chats.map((c) => [c.id, c])) }));
+  }, titles);
+}
+
 test.describe("the AI chat", () => {
   test("has the window to itself until a folder is chosen, then the folder slides in", async ({ page }) => {
     await openApp(page);
@@ -143,6 +166,28 @@ test.describe("the AI chat", () => {
     await expect(card.getByRole("alert")).toContainText("ran out of memory", { timeout: 10_000 });
     await expect(card.locator(".turn-fix li")).toHaveCount(2);
     await expect(card.getByRole("button", { name: "Ask Claude to fix it" })).toBeVisible();
+  });
+
+  test("renames a chat from the history that hasn't been opened", async ({ page }) => {
+    await seedChats(page, ["A lighthouse", "Older chat"]);
+    await openApp(page);
+    await openView(page, /generate with ai/i);
+    await expect(chat(page).locator(".studio-chat-title")).toHaveText("A lighthouse");
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
+    const drawer = page.getByRole("complementary", { name: "chats" });
+    await drawer.getByRole("button", { name: "rename Older chat" }).click();
+    await drawer.getByLabel("chat name").fill("Boats for the desktop");
+    await drawer.getByLabel("chat name").press("Enter");
+    await expect(drawer.getByRole("button", { name: "rename Boats for the desktop" })).toBeVisible();
+    // It stays renamed, and is saved so.
+    await page.waitForTimeout(500);
+    await expect(drawer.getByRole("button", { name: "rename Older chat" })).toHaveCount(0);
+    await drawer.locator(".chat-open", { hasText: "Boats for the desktop" }).click();
+    await expect(chat(page).locator(".studio-chat-title")).toHaveText("Boats for the desktop");
+    await page.reload();
+    await openView(page, /generate with ai/i);
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
+    await expect(drawer.getByRole("button", { name: "rename Boats for the desktop" })).toBeVisible();
   });
 
   test("a key that doesn't pass its check is still saved, and says so", async ({ page }) => {
