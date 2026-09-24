@@ -129,8 +129,8 @@ export const PromptBox = forwardRef<
         <span className="composer-spacer" />
         <button type="button" className="model-pill" onClick={onSettings} data-tip={provider ? `${where}: ${status.toLowerCase()}. Choose the provider and model` : "Choose the provider and model"}>
           <span className={ready ? "model-dot is-ready" : "model-dot"} aria-hidden="true" />
-          {provider?.kind === "local" ? <CpuIcon size={14} /> : provider && <ProviderLogo id={provider.id} size={14} />}
-          <span className="model-pill-text">{provider ? where : "Choose a provider"}</span>
+          {provider?.kind === "local" ? <CpuIcon size={14} /> : provider ? <ProviderLogo id={provider.id} size={14} /> : loading && <LoaderIcon size={14} />}
+          <span className="model-pill-text">{provider ? where : loading ? "Loading the providers" : "Choose a provider"}</span>
           <SlidersHorizontalIcon size={14} />
         </button>
         <button

@@ -815,6 +815,7 @@ export const mockApi = {
     // `?slowcatalogue`: as the app's first catalogue of a session, which asks the local runtime
     // whether it starts and takes a couple of seconds.
     if (new URLSearchParams(location.search).has("slowcatalogue")) await sleep(1500);
+    await catalogueHeld;
     return mockProviders();
   },
   aiSetKey: async (provider: string) => {
@@ -1153,6 +1154,12 @@ export const mockApi = {
     mockShare.submissions = mockShare.submissions.map((s) => (s.id === id ? { ...s, status: "withdrawn", pack_id: null } : s));
   },
 };
+
+/** `?holdcatalogue`: the providers don't come until the page calls `mockCatalogueIn()`, so a test
+ *  can look at the AI view while they load, however busy the machine. */
+const catalogueHeld = new URLSearchParams(location.search).has("holdcatalogue")
+  ? new Promise<void>((resolve) => ((window as { mockCatalogueIn?: () => void }).mockCatalogueIn = resolve))
+  : Promise.resolve();
 
 /** The providers and models, as ai_catalogue lists them, with the keys saved in this preview. */
 function mockProviders(): AiCatalogue {

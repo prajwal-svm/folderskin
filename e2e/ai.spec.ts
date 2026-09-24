@@ -141,6 +141,21 @@ test.describe("the AI chat", () => {
     await expect(box(page)).toHaveValue("");
   });
 
+  test("while the providers load, it doesn't speak as if a provider with a key were chosen", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("folderskin.ai.choice", JSON.stringify({ provider: "local", model: "klein", shape: "folder" })));
+    await openApp(page, { query: "holdcatalogue&localready" });
+    await openView(page, /generate with ai/i);
+    const pill = chat(page).locator(".model-pill");
+    const sub = chat(page).locator(".studio-sub");
+    await expect(pill).toContainText("Loading the providers");
+    await expect(sub).toHaveText("Describe a scene, or tap a style below for an idea to start from.");
+    await expect(chat(page).getByRole("button", { name: /No API key/ })).toHaveCount(0);
+    await page.evaluate(() => (window as { mockCatalogueIn?: () => void }).mockCatalogueIn?.());
+    await expect(pill).toContainText("Local Model · FLUX.2 klein 4B");
+    await expect(sub).toContainText("It's generated right here, on your machine.");
+    await expect(chat(page).getByRole("button", { name: /No API key/ })).toHaveCount(0);
+  });
+
   test("names the whole model in its pill where there's room, and in the pill's tip", async ({ page }) => {
     await openApp(page);
     await openView(page, /generate with ai/i);
