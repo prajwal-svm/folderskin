@@ -327,7 +327,12 @@ export function IconLibrary({
   };
 
   const info = packInfo(usable);
-  const looks = ICON_LOOKS.filter((l) => l.id !== "original" || target?.brand || pack?.brands);
+  // Original keeps the colours a pack gives its icons (a brand's), so it's offered for a selected
+  // logo, or while adding from a pack whose icons have colours. Where it isn't offered, a new icon
+  // comes out flat, and the switch says so.
+  const coloured = useMemo(() => pack?.icons.some((i) => i.c !== undefined) ?? false, [pack]);
+  const looks = ICON_LOOKS.filter((l) => l.id !== "original" || (target ? target.brand : coloured));
+  const shownLook = looks.some((l) => l.id === look) ? look : "flat";
   // The bar under the grid: while swapping, which icon and Done; while adding, the icon being tried
   // and Add to canvas, or the icon pointed at (the cells have no tooltips of their own).
   const named = candidate ?? hover;
@@ -350,7 +355,7 @@ export function IconLibrary({
         <Segmented<IconLook>
           label={target ? "how the selected icon looks" : "how new icons look"}
           small
-          value={look}
+          value={shownLook}
           onChange={onLook}
           options={looks.map((l) => ({ value: l.id, label: l.label, title: target ? `${l.label}: changes ${iconName(target.icon)} on the folder` : `${l.label}: how the next icon looks` }))}
         />

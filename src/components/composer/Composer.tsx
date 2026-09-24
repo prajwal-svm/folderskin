@@ -112,7 +112,8 @@ const LOOK_KEY = "folderskin.composer.iconLook";
 
 function loadLook(): IconLook {
   try {
-    return localStorage.getItem(LOOK_KEY) === "flat" ? "flat" : "emboss";
+    const v = localStorage.getItem(LOOK_KEY);
+    return v === "flat" || v === "original" ? v : "emboss";
   } catch {
     return "emboss";
   }
@@ -455,8 +456,9 @@ export function Composer({
   });
   const doc = history.present;
 
-  // Each folder's layers, from Rust, the first time a design is on that folder.
-  const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts }>>>({});
+  // Each folder's layers, from Rust, the first time a design is on that folder; null when they
+  // didn't load, and the design is shown by itself.
+  const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts } | null>>>({});
   const asked = useRef(new Set<FolderStyle>());
   useEffect(() => {
     const style = doc.style;
@@ -470,10 +472,13 @@ export function Composer({
       })
       .catch((e) => {
         asked.current.delete(style);
+        setTemplates((all) => ({ ...all, [style]: null }));
         toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
       });
   }, [doc.style, toast]);
   const template = templates[doc.style] ?? null;
+  /** The folder the design is on hasn't loaded yet: the stage waits for it rather than show the design without it. */
+  const folderLoading = templates[doc.style] === undefined;
   const parts = template?.parts ?? fallbackParts(doc.style);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
@@ -768,10 +773,14 @@ export function Composer({
     );
   };
 
-  /** A look chosen in the library: the selected icon's, at once, and the next new one's. */
+  /**
+   * A look chosen in the library: the selected icon's, at once, and the next new one's. Original
+   * for a selected logo is that logo's only; chosen while adding, the logos added next keep their
+   * colours (icons without colours of their own come out flat).
+   */
   const chooseLook = (look: IconLook) => {
     if (iconTarget && iconTarget.look !== look) commit(patchLayer(latestDoc.current, iconTarget.id, { look }));
-    if (look === "original") return;
+    if (look === "original" && iconTarget) return;
     setIconLook(look);
     try {
       localStorage.setItem(LOOK_KEY, look);
@@ -862,6 +871,8 @@ export function Composer({
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       if (typingIn(e.target)) return;
+      // A control used the key itself: the icon grid's arrows, Enter and Space move through it and pick.
+      if (e.defaultPrevented) return;
       // A dialog is open over the design: nothing here may change what's behind it.
       if (document.querySelector(".modal-backdrop")) return;
       if (mod && k === "z") {
@@ -1110,7 +1121,8 @@ export function Composer({
 
         <div className="cmp-stage-wrap">
           <ComposerStage
-            doc={side === "icons" && iconPreview ? iconPreview : doc}
+            doc={doc}
+            shown={side === "icons" ? iconPreview : null}
             pendingId={side === "icons" && iconPreview ? PREVIEW_ID : null}
             selectedId={selectedId}
             onSelect={setSelectedId}
@@ -1118,6 +1130,7 @@ export function Composer({
             onSettle={() => dispatch({ type: "settle" })}
             assets={assets}
             template={template?.images ?? null}
+            folderLoading={folderLoading}
             parts={parts}
             view={viewOf}
             backdrop={view.backdrop}

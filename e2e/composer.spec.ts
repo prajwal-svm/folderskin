@@ -14,6 +14,44 @@ async function startFrom(page: Page, template: string) {
   await expect(newDialog(page)).toBeHidden();
 }
 
+/** Where the selected layer is, from its X and Y in the settings. */
+async function layerAt(page: Page) {
+  return { x: Number(await side(page).getByLabel("X", { exact: true }).inputValue()), y: Number(await side(page).getByLabel("Y", { exact: true }).inputValue()) };
+}
+
+/** Drags on the canvas from a point in the design's units (0 to 1024 across) by `dx`, `dy` screen pixels. */
+async function dragOnCanvas(page: Page, from: { x: number; y: number }, dx: number, dy: number) {
+  const box = (await composer(page).locator("canvas.cmp-canvas").boundingBox())!;
+  const sx = box.x + (from.x / 1024) * box.width;
+  const sy = box.y + (from.y / 1024) * box.height;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + dx / 2, sy + dy / 2, { steps: 4 });
+  await page.mouse.move(sx + dx, sy + dy, { steps: 4 });
+  await page.mouse.up();
+}
+
+/** A pack of one logo with its brand's colour, served where the preview downloads Simple Icons from. */
+const LOGO_PACK = {
+  format: 1,
+  id: "simple-icons",
+  name: "Simple Icons",
+  version: "1",
+  license: "CC0-1.0",
+  source: "https://simpleicons.org",
+  style: "fill",
+  viewBox: 24,
+  brands: true,
+  icons: [{ n: "red-square", d: ["M2 2h20v20H2z"], c: "#ff0000" }],
+};
+
+/** Holds requests until `open` is called. */
+function gate() {
+  let open = () => {};
+  const wait = new Promise<void>((resolve) => (open = resolve));
+  return { wait, open: () => open() };
+}
+
 test.describe("starting a new design", () => {
   test("opens as a dialog over the whole window on the first visit", async ({ page }) => {
     await openApp(page);
@@ -213,6 +251,81 @@ test.describe("the icon library", () => {
     await expect(side(page).getByRole("radio", { name: "Pressed in" })).toHaveAttribute("aria-checked", "true");
   });
 
+  test("a layer dragged while an icon is tried moves, and the icon tried stays only tried", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    const before = await layerAt(page);
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).click();
+    await expect(composer(page).locator(".cmp-pending")).toBeVisible();
+    await dragOnCanvas(page, before, 30, 20);
+    // Still only tried: Add to canvas keeps it once.
+    await side(page).getByRole("button", { name: "Add to canvas" }).click();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Camera", "Projects", "Background"]);
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    expect(await layerAt(page)).not.toEqual(before);
+  });
+
+  test("with an icon selected, dragging it keeps it the icon it is", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").fill("camera");
+    await side(page).getByRole("button", { name: "Camera", exact: true }).dblclick();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Camera" }).click();
+    const at = await layerAt(page);
+    await side(page).getByRole("button", { name: "Replace", exact: true }).click();
+    // The arrow keys put another icon on the canvas in its place, to look at.
+    const search = side(page).getByLabel("search icons");
+    await search.fill("");
+    await search.press("ArrowDown");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await dragOnCanvas(page, at, 30, 20);
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await expect(layerNames(page)).toHaveText(["Camera", "Background"]);
+  });
+
+  test("the arrow keys move through the grid and leave the selected layer where it is", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Label");
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    const before = await layerAt(page);
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByLabel("search icons").press("ArrowDown");
+    for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowDown"]) await page.keyboard.press(key);
+    await expect(side(page).locator(".icon-cell.is-active")).toBeFocused();
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Projects" }).click();
+    expect(await layerAt(page)).toEqual(before);
+  });
+
+  test("adds logos in their own colours when Original is chosen", async ({ page }) => {
+    await page.route("**/dist-icons/simple-icons.json", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(LOGO_PACK) }));
+    await openApp(page);
+    await startFrom(page, "Plain");
+    await composer(page).getByRole("button", { name: "Icon" }).click();
+    await side(page).getByRole("button", { name: /icon pack: Lucide/ }).click();
+    await page.getByRole("button", { name: "download Simple Icons" }).click();
+    await expect(side(page).getByRole("button", { name: /icon pack: Simple Icons/ })).toBeVisible({ timeout: 10_000 });
+    const original = side(page).getByRole("radio", { name: "Original" });
+    await original.click();
+    await expect(original).toHaveAttribute("aria-checked", "true");
+    await side(page).getByRole("button", { name: "Red square", exact: true }).dblclick();
+    // Lucide's icons have no colours of their own: they're added flat, and the switch says so.
+    await side(page).getByRole("button", { name: /icon pack: Simple Icons/ }).click();
+    await page.getByRole("button", { name: /^Lucide/ }).click();
+    await expect(side(page).getByRole("radio", { name: "Original" })).toHaveCount(0);
+    await expect(side(page).getByRole("radio", { name: "Flat" })).toHaveAttribute("aria-checked", "true");
+    await side(page).getByRole("radio", { name: /^Layers/ }).click();
+    await side(page).locator(".cmp-layer", { hasText: "Red square" }).click();
+    await expect(side(page).getByRole("radio", { name: "Original" })).toHaveAttribute("aria-checked", "true");
+  });
+
   test("shows each pack with its logo and no licence small print", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Plain");
@@ -285,6 +398,62 @@ test.describe("the canvas and its panels", () => {
     // A free icon has no folder to choose.
     await composer(page).getByRole("switch", { name: "folder skeleton" }).click();
     await expect(which).toHaveCount(0);
+  });
+
+  test("shows a loader, not a half-drawn stage, while the folder is on its way", async ({ page }) => {
+    // The folders' pictures are held back until each is let through.
+    const held = { mac: gate(), windows: gate() };
+    await page.route(/\/docs\/images\/composer\/(windows\/)?[a-z]+\.png/, async (route) => {
+      await held[route.request().url().includes("/windows/") ? "windows" : "mac"].wait;
+      await route.continue();
+    });
+    await openApp(page);
+    await startFrom(page, "Label");
+    const loader = composer(page).getByRole("status").filter({ hasText: "Getting the folder ready" });
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    await expect(loader).toBeVisible();
+    await expect(canvas).toBeHidden();
+
+    const which = composer(page).getByRole("radiogroup", { name: "which folder" });
+    const onMac = (await which.getByRole("radio", { name: "Mac" }).getAttribute("aria-checked")) === "true";
+    held[onMac ? "mac" : "windows"].open();
+    await expect(loader).toBeHidden();
+    await expect(canvas).toBeVisible();
+
+    // The other folder, the first time it's chosen.
+    await which.getByRole("radio", { name: onMac ? "Windows" : "Mac" }).click();
+    await expect(loader).toBeVisible();
+    await expect(canvas).toBeHidden();
+    held[onMac ? "windows" : "mac"].open();
+    await expect(loader).toBeHidden();
+    await expect(canvas).toBeVisible();
+  });
+
+  test("shows a loader, not the design without its photo, while the photo is still being read", async ({ page }) => {
+    // The photo (a big JPEG) isn't read until it's let through, as a big one takes a while.
+    await page.addInitScript(() => {
+      const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
+      const held: [HTMLImageElement, string][] = [];
+      (window as unknown as { letThrough: () => void }).letThrough = () => held.splice(0).forEach(([img, v]) => src.set!.call(img, v));
+      Object.defineProperty(HTMLImageElement.prototype, "src", {
+        get() {
+          return src.get!.call(this);
+        },
+        set(v: string) {
+          if (v.startsWith("data:image/jpeg") && v.length > 20_000) held.push([this, v]);
+          else src.set!.call(this, v);
+        },
+      });
+    });
+    await openApp(page);
+    await startFrom(page, "Photo");
+    const loader = composer(page).getByRole("status").filter({ hasText: "Getting the picture ready" });
+    const canvas = composer(page).locator("canvas.cmp-canvas");
+    await expect(loader).toBeVisible();
+    await expect(canvas).toBeHidden();
+    await page.evaluate(() => (window as unknown as { letThrough: () => void }).letThrough());
+    await expect(loader).toBeHidden();
+    await expect(canvas).toBeVisible();
   });
 
   test("the second panel is Attributes, with tips behind the info button", async ({ page }) => {
