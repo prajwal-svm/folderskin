@@ -293,6 +293,29 @@ test.describe("the AI chat", () => {
     await expect(generate).toBeEnabled({ timeout: 10_000 });
   });
 
+  test("opening a picture's details leaves the picture where it is", async ({ page }) => {
+    await openApp(page, { query: "localready" });
+    await openView(page, /generate with ai/i);
+    await sendIdea(page, "a paper boat");
+    const card = chat(page).locator("article.turn").last();
+    await expect(card.getByRole("button", { name: "Choose a folder" })).toBeVisible({ timeout: 10_000 });
+    // Where the picture sits in its card: the chat may scroll as the card grows, the picture mustn't move in it.
+    const offset = () =>
+      card.evaluate((c) => {
+        const img = c.querySelector(".turn-img")!.getBoundingClientRect();
+        const box = c.getBoundingClientRect();
+        return `${Math.round(img.top - box.top)},${Math.round(img.left - box.left)}`;
+      });
+    await page.waitForTimeout(1000); // the picture's entrance
+    const closed = await offset();
+    await card.getByRole("button", { name: "Details" }).click();
+    await expect(card.locator(".turn-log-lines")).toBeVisible();
+    expect(await offset()).toBe(closed);
+    await card.getByRole("button", { name: "Hide the details" }).click();
+    await expect(card.locator(".turn-log-lines")).toHaveCount(0);
+    expect(await offset()).toBe(closed);
+  });
+
   test("coming back keeps the folder chosen in the library meanwhile", async ({ page }) => {
     await openApp(page);
     await openView(page, /generate with ai/i);

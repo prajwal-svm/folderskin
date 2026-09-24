@@ -511,9 +511,11 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   border: 1px solid var(--line);
 }
 
+/* The picture holds its place at the top while the details open and close under the words
+   beside it, whether it's done or still being made. */
 .turn-result {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 18px;
 }
 
