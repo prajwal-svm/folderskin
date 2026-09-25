@@ -12,7 +12,7 @@
  *
  * Every picture is checked by its bytes before it is stored: the hash the pack declared, the format
  * its name promises, its dimensions from its header, no animation, and no loss: a pack shared here
- * is PNG or lossless WebP, at most 1.5 MB a picture and 40 MB in all. Nothing is decoded here.
+ * is PNG or lossless WebP, at most 1.5 MB a picture and 64 MB in all. Nothing is decoded here.
  *
  * The four requests that send a pack are sharing requests: while the key or its network is banned
  * or cooling down they are turned away, and a quota spent or the waiting cap is a strike on both

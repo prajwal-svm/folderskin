@@ -161,7 +161,7 @@ describe("sending a pack", () => {
     expect(await errorOf(await put(list[3]))).toEqual(lossy);
   });
 
-  it("takes pictures of up to 1.5 MB, and packs of up to 40 MB", async () => {
+  it("takes pictures of up to 1.5 MB, and packs of up to 64 MB", async () => {
     const who = await author("heavy-lifter");
     const sized = async (count: number, bytes: number, salt: number) => {
       const body = await describePack(pictures(count, salt));
@@ -169,13 +169,13 @@ describe("sending a pack", () => {
     };
     const tooBig = await call(await signed(who, "POST", "/v1/submissions", await sized(1, 1_572_865, 71)));
     expect(await errorOf(tooBig)).toEqual({ code: "too_large", message: "skin-1.png is over the 1.5 MB a picture can be." });
-    // 27 pictures of 1.5 MB are 40.5 MB, over; 26 are 39 MB, and go through.
-    const heavy = await call(await signed(who, "POST", "/v1/submissions", await sized(27, 1_572_864, 72)));
+    // 43 pictures of 1.5 MB are 64.5 MB, over; 42 are 63 MB, and go through.
+    const heavy = await call(await signed(who, "POST", "/v1/submissions", await sized(43, 1_572_864, 72)));
     expect(await errorOf(heavy)).toEqual({
       code: "pack_too_large",
-      message: "The pack's pictures come to 40.5 MB, and a pack can be 40 MB at most. Take some out and try again.",
+      message: "The pack's pictures come to 64.5 MB, and a pack can be 64 MB at most. Take some out and try again.",
     });
-    const fits = await call(await signed(who, "POST", "/v1/submissions", await sized(26, 1_572_864, 73)));
+    const fits = await call(await signed(who, "POST", "/v1/submissions", await sized(42, 1_572_864, 73)));
     expect(fits.status).toBe(201);
   });
 
@@ -186,7 +186,7 @@ describe("sending a pack", () => {
     const { submission_id: id, need } = (await created.json()) as { submission_id: string; need: string[] };
     expect((await call(await signed(who, "PUT", `/v1/submissions/${id}/items/${need[0]}`, list[0].bytes))).status).toBe(200);
     // As a pack opened before the limit came down would stand.
-    await env.DB.prepare("UPDATE items SET bytes = ?2 WHERE submission = ?1").bind(id, 40 * 1024 * 1024 + 1).run();
+    await env.DB.prepare("UPDATE items SET bytes = ?2 WHERE submission = ?1").bind(id, 64 * 1024 * 1024 + 1).run();
     const done = await call(await signed(who, "POST", `/v1/submissions/${id}/finalize`, {}));
     expect((await errorOf(done)).code).toBe("pack_too_large");
   });

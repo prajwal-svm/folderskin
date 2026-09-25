@@ -94,7 +94,7 @@ already published keep whatever pictures they have.
 
 | | |
 |---|---|
-| A pack's pictures | PNG or lossless WebP, 256 to 1024 px a side, 1.5 MB each; at most 50 pictures and 40 MB in all |
+| A pack's pictures | PNG or lossless WebP, 256 to 1024 px a side, 1.5 MB each; at most 50 pictures and 64 MB in all |
 | A computer on probation (new) | 2 packs and 100 pictures a day, 1 pack waiting at a time |
 | An active computer (a pack of theirs approved) | 3 packs and 150 pictures a day, 3 waiting |
 | A trusted computer (set by the maintainer) | 10 packs and 500 pictures a day, 10 waiting |
@@ -132,7 +132,7 @@ them (lifting a key's ban for good puts it back on probation).
 |---|---|---|
 | 400 | `lossy_picture` | a picture is a JPEG or a lossy WebP; FolderSkin 0.1.7 sends every one as lossless WebP |
 | 400 | `too_large` | a picture is over 1.5 MB |
-| 400 | `pack_too_large` | the pack's pictures come to over 40 MB, checked when it opens and again when it is sent for review |
+| 400 | `pack_too_large` | the pack's pictures come to over 64 MB, checked when it opens and again when it is sent for review |
 | 429 | `quota` | a daily quota of the computer's or its network's is spent |
 | 429 | `waiting` | the computer has as many packs waiting as its tier allows |
 | 429 | `slow_down` | the network's burst limit is spent (`Retry-After: 60`) |
