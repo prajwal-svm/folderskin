@@ -366,7 +366,7 @@ jobs:
       contents: write
     steps:
       - name: Collect each platform's part
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: update-feed-*
           path: update-feed
