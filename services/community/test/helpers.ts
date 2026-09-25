@@ -9,6 +9,7 @@ import { vi } from "vitest";
 import { b64url, sha256Hex } from "../src/bytes";
 import type { Env } from "../src/env";
 import worker from "../src/index";
+import { TERMS_VERSION } from "../src/limits";
 
 export const BASE = "https://community.test";
 
@@ -191,7 +192,7 @@ export async function describe(list: Picture[], manifest: Partial<{ name: string
     license: "CC0-1.0",
     source: "own",
     notes: "Drawn by me.",
-    terms_version: 1,
+    terms_version: TERMS_VERSION,
     items: await Promise.all(list.map(async (p) => ({ file: p.file, sha256: await sha256Hex(p.bytes), bytes: p.bytes.length, width: 512, height: 512 }))),
   };
 }

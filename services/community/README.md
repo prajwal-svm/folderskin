@@ -57,8 +57,10 @@ for prajwal-svm/folderskin-community alone, with Contents read and write. Withou
 GitHub turns the request down or can't be reached, nothing is lost: the workflow asks
 `GET /v1/exports/pending` every 15 minutes, which answers `{"pending": 2}` (how many approved packs
 haven't been pulled yet, and nothing about them) with `Cache-Control: public, max-age=60`, and does
-the work when it isn't 0. Every attempt is written to `events`, and one GitHub turned down shows in
-the daily digest, since a token that has run out would cause it.
+the work when it isn't 0. The count comes from an index of its own, and each Worker isolate reads
+it at most once a minute, so asking often costs next to nothing. Every attempt is written to
+`events`, and one GitHub turned down shows in the daily digest, since a token that has run out
+would cause it.
 
 The workflow uploads the catalog it builds with `PUT /v1/admin/tree/<path>`, one file at a time,
 signed with its own key in `ADMIN_KEYS`, into the `PACKS` bucket (`folderskin-packs`), which
@@ -106,6 +108,9 @@ and is a strike itself. Listing and withdrawing one's own packs, and everything 
 A full review queue and a pause are the service's own doing, so they are no strike. The burst
 limit is checked before a request's signature, so it strikes the network alone, and only when the
 network isn't cooling down already: a flood mustn't turn into a database write for each request.
+Its answer is `slow_down` with `Retry-After: 60`, unless the network now has longer to wait: then
+it is `cooling_down`, with the real wait, so the app doesn't come back in a minute only to be
+turned away again.
 
 **Bans.** Each pack the maintainer turns down or takes down is a mark on its key. Turning one down
 as abuse (the maintainer's `"ban": true`, or the phone page's box, or a reason of `sexual`, `minor`
@@ -217,8 +222,15 @@ pnpm migrate:remote
 pnpm run deploy
 ```
 
-`migrations/0002_installs.sql` adds the two install tables, and `migrations/0003_penalties.sql`
-the `penalties` and `marks` tables and each submission's `network`; until they are applied,
-counting, sharing and decisions fail. The `PACKS` binding needs the `folderskin-packs` bucket,
-with `packs.folderskin.app` as its custom domain. Secrets are set with `wrangler secret put` and
-never go in the repository; `wrangler.toml` lists them, `GITHUB_DISPATCH_TOKEN` among them.
+`migrations/0002_installs.sql` adds the two install tables, `migrations/0003_penalties.sql` the
+`penalties` and `marks` tables and each submission's `network`, and `migrations/0004_pending_index.sql`
+the index the pending count reads; until they are applied, counting, sharing and decisions fail,
+and the pending count reads every approved pack. The `PACKS` binding needs the
+`folderskin-packs` bucket, with `packs.folderskin.app` as its custom domain. Secrets are set with
+`wrangler secret put` and never go in the repository; `wrangler.toml` lists them,
+`GITHUB_DISPATCH_TOKEN` among them.
+
+The service asks for version 2 of the pack terms (`TERMS_VERSION`, the terms for sharing through
+this service alone), and turns away a pack sent under any other. The app agrees to whichever
+version `/v1/status` names, so deploy it together with the version 2 text of
+`docs/PACK-TERMS.md`, or people agree to a version they weren't shown.
