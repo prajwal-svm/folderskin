@@ -24,10 +24,14 @@ export function networkOf(ip: string): string {
   return `${first.join(":")}::/48`;
 }
 
-/** The hashed network of `request`, as today's key sees it. */
-export async function networkHash(env: Env, request: Request, at = now()): Promise<string> {
+/**
+ * The hashed network of `request`, as today's key for `purpose` sees it. Quotas, reports and the
+ * burst limit use "network"; anything else gets keys of its own, so the rows it keeps can't be
+ * matched with theirs even on the same day.
+ */
+export async function networkHash(env: Env, request: Request, at = now(), purpose = "network"): Promise<string> {
   if (!env.IP_SALT) throw fail(503, "not_configured", "FolderSkin's sharing service isn't set up yet. Please try again later.");
   const network = networkOf(request.headers.get("CF-Connecting-IP") ?? "");
-  const daily = await hmac(env.IP_SALT, `network|${dayOf(at)}`);
+  const daily = await hmac(env.IP_SALT, `${purpose}|${dayOf(at)}`);
   return hex(await hmac(daily, network)).slice(0, 32);
 }

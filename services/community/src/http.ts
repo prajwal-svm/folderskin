@@ -71,9 +71,10 @@ export function escapeHtml(text: string): string {
 
 /**
  * The request's body, refusing anything over `max` bytes: by its Content-Length first, so a large
- * upload is turned away before it is read, and again as it arrives, for one that sends none.
+ * upload is turned away before it is read, and again as it arrives, for one that sends none. A
+ * response the service fetched is read the same way.
  */
-export async function readBody(request: Request, max: number): Promise<Uint8Array> {
+export async function readBody(request: Request | Response, max: number): Promise<Uint8Array> {
   const declared = request.headers.get("Content-Length");
   if (declared !== null && Number(declared) > max) throw tooLarge(max);
   if (!request.body) return new Uint8Array(0);

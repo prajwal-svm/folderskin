@@ -1,5 +1,6 @@
 /**
- * FolderSkin's community service: sharing a pack without a GitHub account.
+ * FolderSkin's community service: sharing a pack without a GitHub account, and counting how often
+ * each community pack is added (installs.ts), for folderskin.app's gallery.
  *
  * The app verifies the computer once (a Turnstile check in the browser, bound to the computer's
  * Ed25519 key), then sends packs here, signed with that key. Every pack waits in a private bucket
@@ -15,6 +16,7 @@ import * as admin from "./admin";
 import { daily } from "./daily";
 import type { Env } from "./env";
 import { errorResponse, fail, html, HttpError } from "./http";
+import * as installs from "./installs";
 import { networkHash } from "./ip";
 import { verifyPage, VERIFY_SCRIPT } from "./pages";
 import { actOnLink, linkSheet, showLink } from "./phone";
@@ -40,6 +42,9 @@ const ROUTES: Route[] = [
   ["POST", new RegExp(`^/v1/submissions/${ID}/finalize$`), (req, env, ctx, [id]) => submissions.finalize(req, env, ctx, id)],
   ["DELETE", new RegExp(`^/v1/packs/${ID}$`), (req, env, ctx, [id]) => submissions.remove(req, env, ctx, id)],
   ["POST", /^\/v1\/reports$/, (req, env, ctx) => report(req, env, ctx)],
+  ["GET", /^\/v1\/packs\/installs$/, (req, env) => installs.counts(req, env)],
+  ["OPTIONS", /^\/v1\/packs\/installs$/, (req) => installs.preflight(req)],
+  ["POST", /^\/v1\/packs\/([^/]{1,100})\/installs$/, (req, env, _, [id]) => installs.count(req, env, id)],
 
   ["GET", /^\/v1\/admin\/queue$/, (req, env) => admin.queue(req, env)],
   ["GET", new RegExp(`^/v1/admin/submissions/${ID}$`), (req, env, _, [id]) => admin.detail(req, env, id)],
@@ -72,8 +77,11 @@ function script(source: string): Response {
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const { pathname } = new URL(request.url);
-  // A burst limit per network before anything else, the database included.
-  if (env.BURST && pathname !== "/") {
+  // A burst limit per network before anything else, the database included. Its key needs IP_SALT;
+  // the install counts need nothing but D1, so they go without the limit until IP_SALT is set,
+  // rather than answer "not set up" to the website.
+  const open = pathname === installs.COUNTS_PATH && !env.IP_SALT;
+  if (env.BURST && pathname !== "/" && !open) {
     const { success } = await env.BURST.limit({ key: await networkHash(env, request) });
     if (!success) throw fail(429, "slow_down", "Too many requests from your network. Wait a minute and try again.", { "Retry-After": "60" });
   }
