@@ -6,6 +6,8 @@
  * Everything in this file is pure: the document is plain data (it is saved beside the skin as
  * JSON and read back to edit it again), and every change makes a new document.
  */
+import "../i18n/composer";
+import { t } from "../i18n";
 import { clip } from "../lib/names";
 import { normalizeColor } from "./color";
 import { centreOf, type FolderStyle, type Parts } from "./parts";
@@ -25,22 +27,22 @@ const MAX_SRC = 24_000_000;
 export type Shape = "folder" | "free";
 
 export const BLENDS = [
-  { id: "normal", label: "Normal" },
-  { id: "multiply", label: "Multiply" },
-  { id: "screen", label: "Screen" },
-  { id: "overlay", label: "Overlay" },
-  { id: "soft-light", label: "Soft light" },
-  { id: "hard-light", label: "Hard light" },
-  { id: "color-dodge", label: "Dodge" },
-  { id: "color-burn", label: "Burn" },
-  { id: "darken", label: "Darken" },
-  { id: "lighten", label: "Lighten" },
-  { id: "difference", label: "Difference" },
-  { id: "exclusion", label: "Exclusion" },
-  { id: "hue", label: "Hue" },
-  { id: "saturation", label: "Saturation" },
-  { id: "color", label: "Colour" },
-  { id: "luminosity", label: "Luminosity" },
+  { id: "normal" },
+  { id: "multiply" },
+  { id: "screen" },
+  { id: "overlay" },
+  { id: "soft-light" },
+  { id: "hard-light" },
+  { id: "color-dodge" },
+  { id: "color-burn" },
+  { id: "darken" },
+  { id: "lighten" },
+  { id: "difference" },
+  { id: "exclusion" },
+  { id: "hue" },
+  { id: "saturation" },
+  { id: "color" },
+  { id: "luminosity" },
 ] as const;
 export type Blend = (typeof BLENDS)[number]["id"];
 
@@ -57,33 +59,33 @@ export type Shadow = { color: string; blur: number; x: number; y: number };
 export type Edge = { color: string; width: number };
 
 export const PATTERNS = [
-  { id: "stripes", label: "Stripes" },
-  { id: "dots", label: "Polka dots" },
-  { id: "checks", label: "Checks" },
-  { id: "gingham", label: "Gingham" },
-  { id: "grid", label: "Grid" },
-  { id: "waves", label: "Waves" },
-  { id: "zigzag", label: "Zigzag" },
-  { id: "halftone", label: "Halftone" },
-  { id: "confetti", label: "Confetti" },
-  { id: "grain", label: "Grain" },
+  { id: "stripes" },
+  { id: "dots" },
+  { id: "checks" },
+  { id: "gingham" },
+  { id: "grid" },
+  { id: "waves" },
+  { id: "zigzag" },
+  { id: "halftone" },
+  { id: "confetti" },
+  { id: "grain" },
 ] as const;
 export type PatternKind = (typeof PATTERNS)[number]["id"];
 
 export const SHAPES = [
-  { id: "rect", label: "Rectangle" },
-  { id: "ellipse", label: "Circle" },
-  { id: "ring", label: "Ring" },
-  { id: "triangle", label: "Triangle" },
-  { id: "diamond", label: "Diamond" },
-  { id: "star", label: "Star" },
-  { id: "burst", label: "Burst" },
-  { id: "polygon", label: "Polygon" },
-  { id: "heart", label: "Heart" },
-  { id: "arrow", label: "Arrow" },
-  { id: "bar", label: "Bar" },
-  { id: "banner", label: "Banner" },
-  { id: "bubble", label: "Bubble" },
+  { id: "rect" },
+  { id: "ellipse" },
+  { id: "ring" },
+  { id: "triangle" },
+  { id: "diamond" },
+  { id: "star" },
+  { id: "burst" },
+  { id: "polygon" },
+  { id: "heart" },
+  { id: "arrow" },
+  { id: "bar" },
+  { id: "banner" },
+  { id: "bubble" },
 ] as const;
 export type ShapeKind = (typeof SHAPES)[number]["id"];
 
@@ -209,10 +211,10 @@ export type ImageLayer = Common &
  * edge. "flat" paints it in one colour; "original" keeps the colour its pack gives it (a brand's).
  */
 export type IconLook = "emboss" | "flat" | "original";
-export const ICON_LOOKS: { id: IconLook; label: string }[] = [
-  { id: "emboss", label: "Pressed in" },
-  { id: "flat", label: "Flat" },
-  { id: "original", label: "Original" },
+export const ICON_LOOKS: { id: IconLook }[] = [
+  { id: "emboss" },
+  { id: "flat" },
+  { id: "original" },
 ];
 
 /**
@@ -375,7 +377,7 @@ export function makeIcon(drawing: IconDrawing, x: number, y: number, look: IconL
 /** The icon's name as people say it: "arrow-big-up" is "Arrow big up". */
 export function iconName(icon: string): string {
   const words = icon.replace(/[-_]+/g, " ").trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Icon";
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : t("composer.layerNames.icon");
 }
 
 /** Where a picture goes: covering the whole folder, or a picture with its own shape (a logo, a cut-out) sitting on the front. */
@@ -403,29 +405,29 @@ export const isPlaced = (layer: Layer): layer is PlacedLayer =>
 /** Whether a layer covers the whole canvas (it has no box of its own). */
 export const isCovering = (layer: Layer): layer is FillLayer | PatternLayer => layer.kind === "fill" || layer.kind === "pattern";
 
-export const patternLabel = (id: PatternKind) => PATTERNS.find((p) => p.id === id)?.label ?? "Pattern";
-export const shapeLabel = (id: ShapeKind) => SHAPES.find((s) => s.id === id)?.label ?? "Shape";
+export const patternLabel = (id: PatternKind) => (PATTERNS.some((p) => p.id === id) ? t(`composer.patterns.${id}`) : t("composer.layerNames.pattern"));
+export const shapeLabel = (id: ShapeKind) => (SHAPES.some((s) => s.id === id) ? t(`composer.shapes.${id}`) : t("composer.layerNames.shape"));
 
 /** What the layers list calls a layer. */
 export function layerLabel(layer: Layer, index = 1): string {
   if (layer.name) return layer.name;
   switch (layer.kind) {
     case "fill":
-      if (layer.part === "front") return "Front";
-      return index === 0 ? "Background" : layer.paint.type === "solid" ? "Colour" : "Gradient";
+      if (layer.part === "front") return t("composer.layerNames.front");
+      return index === 0 ? t("composer.layerNames.background") : layer.paint.type === "solid" ? t("composer.layerNames.colour") : t("composer.layerNames.gradient");
     case "pattern":
       return patternLabel(layer.pattern);
     case "text": {
       const line = layer.text.split("\n").find((l) => l.trim()) ?? "";
       const text = line.trim();
-      return text ? clip(text, 22) : "Text";
+      return text ? clip(text, 22) : t("composer.layerNames.text");
     }
     case "emoji":
-      return `${layer.char} Emoji`;
+      return t("composer.layerNames.emoji", { char: layer.char });
     case "shape":
       return shapeLabel(layer.shape);
     case "image":
-      return "Picture";
+      return t("composer.layerNames.picture");
     case "icon":
       return iconName(layer.icon);
   }

@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 
 /** A labelled row in the inspector. */
@@ -83,7 +84,7 @@ export function Slider({
           type="text"
           inputMode="decimal"
           value={draft}
-          aria-label={`${ariaLabel ?? label ?? "value"}, typed`}
+          aria-label={t("common.control.typed", { name: ariaLabel ?? label ?? t("common.control.value") })}
           onFocus={(e) => {
             setTyping(true);
             e.currentTarget.select();

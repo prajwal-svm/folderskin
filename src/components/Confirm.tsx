@@ -1,3 +1,4 @@
+import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { DeleteIcon } from "./icons/delete";
 import { branded } from "./Brand";
@@ -27,6 +28,7 @@ export function Confirm({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   return (
     <Modal
       narrow
@@ -35,7 +37,7 @@ export function Confirm({
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="button" className={tone === "danger" ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm}>
             {tone === "danger" && <DeleteIcon size={15} />}

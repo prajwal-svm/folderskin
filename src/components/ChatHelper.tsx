@@ -4,6 +4,7 @@ import type { ToastTone } from "../hooks/useToasts";
 import { Modal } from "./Modal";
 import { CheckIcon } from "./icons/check";
 import { CopyIcon } from "./icons/copy";
+import { t as tNow, useT } from "../i18n";
 
 /**
  * No API key needed: paint the folder in Grok's or ChatGPT's own chat. Three steps, with the
@@ -22,6 +23,7 @@ export function ChatHelper({
   onClose: () => void;
   toast: (text: string, opts?: { tone?: ToastTone }) => void;
 }) {
+  const t = useT();
   const [style, setStyle] = useState<string | null>(styleId);
   const [copied, setCopied] = useState(false);
   const prompt = useMemo(() => chatPrompt(scene, style), [scene, style]);
@@ -30,36 +32,36 @@ export function ChatHelper({
     try {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
-      toast("Prompt copied", { tone: "ok" });
+      toast(tNow("ai.helper.copiedToast"), { tone: "ok" });
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      toast("Couldn't reach the clipboard. Select the text and copy it instead.", { tone: "danger" });
+      toast(tNow("ai.helper.clipboardFailed"), { tone: "danger" });
     }
   };
 
   return (
     <Modal
       wide
-      title="Make it in Grok or ChatGPT"
-      sub="Their chat apps can paint a folder for you. FolderSkin cuts it out afterwards."
+      title={t("ai.helper.title")}
+      sub={t("ai.helper.sub")}
       onClose={onClose}
       footer={
         <button type="button" className="btn btn-primary" onClick={onImport}>
-          Add the finished picture
+          {t("ai.helper.add")}
         </button>
       }
     >
       <ol className="helper-steps">
         <li>
           <div className="helper-step-text">
-            <p className="helper-step-title">Attach this template to your message</p>
-            <p className="field-note">Drag it into the chat window. It keeps every folder the same shape.</p>
+            <p className="helper-step-title">{t("ai.helper.attach")}</p>
+            <p className="field-note">{t("ai.helper.attachNote")}</p>
           </div>
-          <img className="helper-template" src="/folder-template.png" alt="blank FolderSkin folder template" draggable />
+          <img className="helper-template" src="/folder-template.png" alt={t("ai.helper.templateAlt")} draggable />
         </li>
         <li>
           <div className="helper-step-text">
-            <p className="helper-step-title">Paste the prompt</p>
+            <p className="helper-step-title">{t("ai.helper.paste")}</p>
             <div className="helper-styles">
               {STYLES.map((s) => (
                 <button
@@ -69,24 +71,21 @@ export function ChatHelper({
                   aria-pressed={style === s.id}
                   onClick={() => setStyle((cur) => (cur === s.id ? null : s.id))}
                 >
-                  {s.label}
+                  {t(`ai.styles.${s.id}`)}
                 </button>
               ))}
             </div>
             <pre className="helper-prompt">{prompt}</pre>
             <button type="button" className="btn btn-secondary helper-copy" onClick={copy}>
               {copied ? <CheckIcon size={14} playOnMount /> : <CopyIcon size={14} />}
-              {copied ? "Copied" : "Copy prompt"}
+              {copied ? t("ai.helper.copied") : t("ai.helper.copy")}
             </button>
           </div>
         </li>
         <li>
           <div className="helper-step-text">
-            <p className="helper-step-title">Save the picture and add it here</p>
-            <p className="field-note">
-              The magenta goes, the folder lands in Yours. If the edges look pink, ask the chat to repaint the background
-              as exactly #FF00FF.
-            </p>
+            <p className="helper-step-title">{t("ai.helper.save")}</p>
+            <p className="field-note">{t("ai.helper.saveNote")}</p>
           </div>
         </li>
       </ol>

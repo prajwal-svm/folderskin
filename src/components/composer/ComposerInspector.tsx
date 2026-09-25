@@ -30,6 +30,8 @@ import { PaintField } from "./PaintField";
 import { EmojiPicker, FontPicker, PatternGrid, ShapeGrid } from "./pickers";
 import { Popover } from "./Popover";
 import { Select } from "../Select";
+import "../../i18n/composer";
+import { t, useLocale, type MessageKey } from "../../i18n";
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -86,16 +88,16 @@ function Arrange({ layer, onPatch, parts, size }: { layer: PlacedLayer; onPatch:
   const w = size?.w ?? 0;
   const h = size?.h ?? 0;
   const align: { to: AlignTo; title: string; at: Patch }[] = [
-    { to: "left", title: "Align to the front's left edge", at: { x: fx0 + ALIGN_INSET + w / 2 } },
-    { to: "centre", title: "Centre across the front", at: { x: front.x } },
-    { to: "right", title: "Align to the front's right edge", at: { x: fx1 - ALIGN_INSET - w / 2 } },
-    { to: "top", title: "Align to the front's top edge", at: { y: fy0 + ALIGN_INSET + h / 2 } },
-    { to: "middle", title: "Centre on the front, top to bottom", at: { y: front.y } },
-    { to: "bottom", title: "Align to the front's bottom edge", at: { y: fy1 - ALIGN_INSET - h / 2 } },
+    { to: "left", title: t("composer.inspector.align.left"), at: { x: fx0 + ALIGN_INSET + w / 2 } },
+    { to: "centre", title: t("composer.inspector.align.centre"), at: { x: front.x } },
+    { to: "right", title: t("composer.inspector.align.right"), at: { x: fx1 - ALIGN_INSET - w / 2 } },
+    { to: "top", title: t("composer.inspector.align.top"), at: { y: fy0 + ALIGN_INSET + h / 2 } },
+    { to: "middle", title: t("composer.inspector.align.middle"), at: { y: front.y } },
+    { to: "bottom", title: t("composer.inspector.align.bottom"), at: { y: fy1 - ALIGN_INSET - h / 2 } },
   ];
   const canStretch = layer.kind === "shape" || layer.kind === "image";
   return (
-    <Section title="Place">
+    <Section title={t("composer.inspector.place")}>
       <div className="cmp-pair">
         <label className="cmp-mini-field">
           <span>X</span>
@@ -118,28 +120,28 @@ function Arrange({ layer, onPatch, parts, size }: { layer: PlacedLayer; onPatch:
           </label>
         </div>
       )}
-      <Slider label="Turn" value={layer.rotation} min={-180} max={180} unit="°" onChange={(rotation) => onPatch({ rotation }, `rot:${layer.id}`)} />
+      <Slider label={t("composer.inspector.turn")} value={layer.rotation} min={-180} max={180} unit="°" onChange={(rotation) => onPatch({ rotation }, `rot:${layer.id}`)} />
       <div className="cmp-actions-row">
-        <IconButton label="Mirror left to right" active={layer.flipX} onClick={() => onPatch({ flipX: !layer.flipX })}>
+        <IconButton label={t("composer.inspector.mirrorX")} active={layer.flipX} onClick={() => onPatch({ flipX: !layer.flipX })}>
           <FlipHIcon size={15} />
         </IconButton>
-        <IconButton label="Mirror top to bottom" active={layer.flipY} onClick={() => onPatch({ flipY: !layer.flipY })}>
+        <IconButton label={t("composer.inspector.mirrorY")} active={layer.flipY} onClick={() => onPatch({ flipY: !layer.flipY })}>
           <FlipVIcon size={15} />
         </IconButton>
         <span className="cmp-actions-gap" />
-        <button type="button" className="cmp-chip" data-tip="Put it in the middle of the folder's front" onClick={() => onPatch({ x: front.x, y: front.y })}>
-          Front
+        <button type="button" className="cmp-chip" data-tip={t("composer.inspector.toFrontTip")} onClick={() => onPatch({ x: front.x, y: front.y })}>
+          {t("composer.inspector.toFront")}
         </button>
-        <button type="button" className="cmp-chip" data-tip="Put it on the folder's tab" onClick={() => onPatch({ x: tab.x, y: tab.y })}>
-          Tab
+        <button type="button" className="cmp-chip" data-tip={t("composer.inspector.toTabTip")} onClick={() => onPatch({ x: tab.x, y: tab.y })}>
+          {t("composer.inspector.toTab")}
         </button>
-        <button type="button" className="cmp-chip" data-tip="Centre it across" onClick={() => onPatch({ x: 512 })}>
-          Centre
+        <button type="button" className="cmp-chip" data-tip={t("composer.inspector.centreTip")} onClick={() => onPatch({ x: 512 })}>
+          {t("composer.inspector.centre")}
         </button>
       </div>
       {size && (
-        <div className="cmp-align" role="group" aria-label="align on the front">
-          <span className="cmp-align-label">Align on the front</span>
+        <div className="cmp-align" role="group" aria-label={t("composer.inspector.alignLabel")}>
+          <span className="cmp-align-label">{t("composer.inspector.alignOn")}</span>
           <div className="cmp-align-buttons">
             {align.map((a) => (
               <IconButton key={a.to} label={a.title} onClick={() => onPatch(a.at)}>
@@ -192,43 +194,43 @@ function NumberBox({ value, onChange, min = -4096, max = 4096 }: { value: number
 function Effects({ layer, onPatch, used }: { layer: Layer; onPatch: (p: Patch, key?: string) => void; used: string[] }) {
   const placed = isPlaced(layer) ? layer : null;
   return (
-    <Section title="Look">
-      <Slider label="Opacity" value={layer.opacity} min={0} max={100} scale={100} unit="%" onChange={(opacity) => onPatch({ opacity }, `opacity:${layer.id}`)} />
-      <Field label="Blend">
-        <Select<Blend> label="blend" value={layer.blend} onChange={(blend) => onPatch({ blend })} options={BLENDS.map((b) => ({ value: b.id, label: b.label }))} />
+    <Section title={t("composer.inspector.look")}>
+      <Slider label={t("composer.inspector.opacity")} value={layer.opacity} min={0} max={100} scale={100} unit="%" onChange={(opacity) => onPatch({ opacity }, `opacity:${layer.id}`)} />
+      <Field label={t("composer.inspector.blend")}>
+        <Select<Blend> label={t("composer.inspector.blendLabel")} value={layer.blend} onChange={(blend) => onPatch({ blend })} options={BLENDS.map((b) => ({ value: b.id, label: t(`composer.blends.${b.id}`) }))} />
       </Field>
       {placed && (
         <>
           <Toggle
-            label="Shadow"
+            label={t("composer.inspector.shadow")}
             on={placed.shadow !== null}
             onChange={(on) => onPatch({ shadow: on ? { color: "#00000059", blur: 26, x: 0, y: 14 } : null })}
           />
           {placed.shadow && (
             <div className="cmp-sub">
-              <Field label="Colour">
-                <ColorField value={placed.shadow.color} label="shadow colour" used={used} onChange={(color) => onPatch({ shadow: { ...placed.shadow!, color } }, `shadow:${layer.id}`)} />
+              <Field label={t("composer.inspector.colour")}>
+                <ColorField value={placed.shadow.color} label={t("composer.inspector.shadowColour")} used={used} onChange={(color) => onPatch({ shadow: { ...placed.shadow!, color } }, `shadow:${layer.id}`)} />
               </Field>
-              <Slider label="Softness" value={placed.shadow.blur} min={0} max={120} onChange={(blur) => onPatch({ shadow: { ...placed.shadow!, blur } }, `shadowb:${layer.id}`)} />
-              <Slider label="Across" value={placed.shadow.x} min={-80} max={80} onChange={(x) => onPatch({ shadow: { ...placed.shadow!, x } }, `shadowx:${layer.id}`)} />
-              <Slider label="Down" value={placed.shadow.y} min={-80} max={80} onChange={(y) => onPatch({ shadow: { ...placed.shadow!, y } }, `shadowy:${layer.id}`)} />
+              <Slider label={t("composer.inspector.softness")} value={placed.shadow.blur} min={0} max={120} onChange={(blur) => onPatch({ shadow: { ...placed.shadow!, blur } }, `shadowb:${layer.id}`)} />
+              <Slider label={t("composer.inspector.across")} value={placed.shadow.x} min={-80} max={80} onChange={(x) => onPatch({ shadow: { ...placed.shadow!, x } }, `shadowx:${layer.id}`)} />
+              <Slider label={t("composer.inspector.down")} value={placed.shadow.y} min={-80} max={80} onChange={(y) => onPatch({ shadow: { ...placed.shadow!, y } }, `shadowy:${layer.id}`)} />
               <button type="button" className="cmp-chip" onClick={() => onPatch({ shadow: { ...placed.shadow!, x: 0, y: 0, blur: Math.max(30, placed.shadow!.blur) } })}>
-                Make it a glow
+                {t("composer.inspector.glow")}
               </button>
             </div>
           )}
           <Toggle
-            label="Sticker edge"
-            hint="A border that follows its outline, like a die-cut sticker"
+            label={t("composer.inspector.stickerEdge")}
+            hint={t("composer.inspector.stickerEdgeHint")}
             on={placed.edge !== null}
             onChange={(on) => onPatch({ edge: on ? { color: "#ffffff", width: 18 } : null })}
           />
           {placed.edge && (
             <div className="cmp-sub">
-              <Field label="Colour">
-                <ColorField value={placed.edge.color} label="edge colour" used={used} onChange={(color) => onPatch({ edge: { ...placed.edge!, color } }, `edge:${layer.id}`)} />
+              <Field label={t("composer.inspector.colour")}>
+                <ColorField value={placed.edge.color} label={t("composer.inspector.edgeColour")} used={used} onChange={(color) => onPatch({ edge: { ...placed.edge!, color } }, `edge:${layer.id}`)} />
               </Field>
-              <Slider label="Width" value={placed.edge.width} min={1} max={80} onChange={(width) => onPatch({ edge: { ...placed.edge!, width } }, `edgew:${layer.id}`)} />
+              <Slider label={t("composer.inspector.width")} value={placed.edge.width} min={1} max={80} onChange={(width) => onPatch({ edge: { ...placed.edge!, width } }, `edgew:${layer.id}`)} />
             </div>
           )}
         </>
@@ -240,62 +242,62 @@ function Effects({ layer, onPatch, used }: { layer: Layer; onPatch: (p: Patch, k
 function TextSection({ layer, onPatch, used, textRef }: { layer: TextLayer; onPatch: (p: Patch, key?: string) => void; used: string[]; textRef: RefObject<HTMLTextAreaElement | null> }) {
   return (
     <>
-      <Section title="Text on the folder">
+      <Section title={t("composer.inspector.textOnFolder")}>
         <textarea
           ref={textRef}
           className="cmp-textarea"
           value={layer.text}
           rows={Math.min(5, Math.max(2, layer.text.split("\n").length))}
           maxLength={400}
-          placeholder="Type something"
-          aria-label="text on the folder"
+          placeholder={t("composer.inspector.typeSomething")}
+          aria-label={t("composer.inspector.textLabel")}
           onChange={(e) => onPatch({ text: e.target.value }, `text:${layer.id}`)}
         />
-        <Field label="Font">
-          <PopButton label="Font" width={260} panel={(close) => <FontPicker value={layer.font} onPick={(font) => (onPatch({ font }), close())} />}>
+        <Field label={t("composer.inspector.font")}>
+          <PopButton label={t("composer.inspector.font")} width={260} panel={(close) => <FontPicker value={layer.font} onPick={(font) => (onPatch({ font }), close())} />}>
             <span style={{ fontFamily: fontStack(layer.font) }}>{fontLabel(layer.font)}</span>
             <ChevronDownIcon size={14} />
           </PopButton>
         </Field>
-        <Field label="Weight">
-          <Select<number> label="weight" value={layer.weight} onChange={(weight) => onPatch({ weight })} options={WEIGHTS.map((w) => ({ value: w.value, label: w.label }))} />
+        <Field label={t("composer.inspector.weight")}>
+          <Select<number> label={t("composer.inspector.weightLabel")} value={layer.weight} onChange={(weight) => onPatch({ weight })} options={WEIGHTS.map((w) => ({ value: w.value, label: t(`composer.weights.${w.value}` as MessageKey) }))} />
         </Field>
         <div className="cmp-actions-row">
           <Segmented
-            label="alignment"
+            label={t("composer.inspector.alignment")}
             small
             value={layer.align}
             onChange={(align) => onPatch({ align })}
             options={[
-              { value: "left", label: <AlignLeftIcon size={14} />, title: "Left" },
-              { value: "center", label: <AlignCenterIcon size={14} />, title: "Centre" },
-              { value: "right", label: <AlignRightIcon size={14} />, title: "Right" },
+              { value: "left", label: <AlignLeftIcon size={14} />, title: t("composer.inspector.textAlign.left") },
+              { value: "center", label: <AlignCenterIcon size={14} />, title: t("composer.inspector.textAlign.centre") },
+              { value: "right", label: <AlignRightIcon size={14} />, title: t("composer.inspector.textAlign.right") },
             ]}
           />
           <span className="cmp-actions-gap" />
-          <IconButton label="Italic" active={layer.italic} onClick={() => onPatch({ italic: !layer.italic })}>
+          <IconButton label={t("composer.inspector.italic")} active={layer.italic} onClick={() => onPatch({ italic: !layer.italic })}>
             <ItalicIcon size={14} />
           </IconButton>
-          <IconButton label="Capitals" active={layer.upper} onClick={() => onPatch({ upper: !layer.upper })}>
+          <IconButton label={t("composer.inspector.capitals")} active={layer.upper} onClick={() => onPatch({ upper: !layer.upper })}>
             <CaseUpperIcon size={15} />
           </IconButton>
         </div>
-        <Slider label="Size" value={layer.size} min={8} max={600} onChange={(size) => onPatch({ size }, `size:${layer.id}`)} />
-        <Slider label="Spacing" value={layer.spacing} min={-20} max={100} scale={100} unit="%" onChange={(spacing) => onPatch({ spacing }, `spacing:${layer.id}`)} />
+        <Slider label={t("composer.inspector.size")} value={layer.size} min={8} max={600} onChange={(size) => onPatch({ size }, `size:${layer.id}`)} />
+        <Slider label={t("composer.inspector.spacing")} value={layer.spacing} min={-20} max={100} scale={100} unit="%" onChange={(spacing) => onPatch({ spacing }, `spacing:${layer.id}`)} />
         {layer.text.includes("\n") && (
-          <Slider label="Line height" value={layer.lineHeight} min={60} max={250} scale={100} unit="%" onChange={(lineHeight) => onPatch({ lineHeight }, `lh:${layer.id}`)} />
+          <Slider label={t("composer.inspector.lineHeight")} value={layer.lineHeight} min={60} max={250} scale={100} unit="%" onChange={(lineHeight) => onPatch({ lineHeight }, `lh:${layer.id}`)} />
         )}
-        <Slider label="Curve" value={layer.curve} min={-100} max={100} onChange={(curve) => onPatch({ curve }, `curve:${layer.id}`)} />
+        <Slider label={t("composer.inspector.curve")} value={layer.curve} min={-100} max={100} onChange={(curve) => onPatch({ curve }, `curve:${layer.id}`)} />
       </Section>
-      <Section title="Colour">
-        <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `paint:${layer.id}`)} used={used} label="Text colour" />
-        <Toggle label="Outline" on={layer.stroke !== null} onChange={(on) => onPatch({ stroke: on ? { color: "#1b1f27", width: Math.max(2, Math.round(layer.size / 18)) } : null })} />
+      <Section title={t("composer.inspector.colour")}>
+        <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `paint:${layer.id}`)} used={used} label={t("composer.inspector.textColour")} />
+        <Toggle label={t("composer.inspector.outline")} on={layer.stroke !== null} onChange={(on) => onPatch({ stroke: on ? { color: "#1b1f27", width: Math.max(2, Math.round(layer.size / 18)) } : null })} />
         {layer.stroke && (
           <div className="cmp-sub">
-            <Field label="Colour">
-              <ColorField value={layer.stroke.color} label="outline colour" used={used} onChange={(color) => onPatch({ stroke: { ...layer.stroke!, color } }, `stroke:${layer.id}`)} />
+            <Field label={t("composer.inspector.colour")}>
+              <ColorField value={layer.stroke.color} label={t("composer.inspector.outlineColour")} used={used} onChange={(color) => onPatch({ stroke: { ...layer.stroke!, color } }, `stroke:${layer.id}`)} />
             </Field>
-            <Slider label="Width" value={layer.stroke.width} min={1} max={60} onChange={(width) => onPatch({ stroke: { ...layer.stroke!, width } }, `strokew:${layer.id}`)} />
+            <Slider label={t("composer.inspector.width")} value={layer.stroke.width} min={1} max={60} onChange={(width) => onPatch({ stroke: { ...layer.stroke!, width } }, `strokew:${layer.id}`)} />
           </div>
         )}
       </Section>
@@ -308,17 +310,17 @@ function ShapeSection({ layer, onPatch, used }: { layer: ShapeLayer; onPatch: (p
   const pointy = layer.shape === "star" || layer.shape === "burst" || layer.shape === "polygon";
   return (
     <>
-      <Section title="Shape">
-        <Field label="Kind">
-          <PopButton label="Shape" width={300} panel={(close) => <ShapeGrid value={layer.shape} onPick={(shape) => (onPatch({ shape }), close())} />}>
+      <Section title={t("composer.inspector.shape")}>
+        <Field label={t("composer.inspector.kind")}>
+          <PopButton label={t("composer.inspector.shape")} width={300} panel={(close) => <ShapeGrid value={layer.shape} onPick={(shape) => (onPatch({ shape }), close())} />}>
             {shapeLabel(layer.shape)}
             <ChevronDownIcon size={14} />
           </PopButton>
         </Field>
-        {rounded && <Slider label="Rounding" value={layer.radius} min={0} max={100} scale={100} unit="%" onChange={(radius) => onPatch({ radius }, `radius:${layer.id}`)} />}
+        {rounded && <Slider label={t("composer.inspector.rounding")} value={layer.radius} min={0} max={100} scale={100} unit="%" onChange={(radius) => onPatch({ radius }, `radius:${layer.id}`)} />}
         {pointy && (
           <Slider
-            label={layer.shape === "polygon" ? "Sides" : "Points"}
+            label={layer.shape === "polygon" ? t("composer.inspector.sides") : t("composer.inspector.points")}
             value={layer.points}
             min={3}
             max={layer.shape === "burst" ? 40 : 16}
@@ -327,7 +329,7 @@ function ShapeSection({ layer, onPatch, used }: { layer: ShapeLayer; onPatch: (p
         )}
         {(layer.shape === "star" || layer.shape === "burst" || layer.shape === "ring") && (
           <Slider
-            label={layer.shape === "ring" ? "Hole" : "Depth"}
+            label={layer.shape === "ring" ? t("composer.inspector.hole") : t("composer.inspector.depth")}
             value={layer.inner}
             min={5}
             max={95}
@@ -337,15 +339,15 @@ function ShapeSection({ layer, onPatch, used }: { layer: ShapeLayer; onPatch: (p
           />
         )}
       </Section>
-      <Section title="Colour">
-        <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `paint:${layer.id}`)} used={used} label="Shape colour" />
-        <Toggle label="Outline" on={layer.stroke !== null} onChange={(on) => onPatch({ stroke: on ? { color: "#ffffff", width: 10 } : null })} />
+      <Section title={t("composer.inspector.colour")}>
+        <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `paint:${layer.id}`)} used={used} label={t("composer.inspector.shapeColour")} />
+        <Toggle label={t("composer.inspector.outline")} on={layer.stroke !== null} onChange={(on) => onPatch({ stroke: on ? { color: "#ffffff", width: 10 } : null })} />
         {layer.stroke && (
           <div className="cmp-sub">
-            <Field label="Colour">
-              <ColorField value={layer.stroke.color} label="outline colour" used={used} onChange={(color) => onPatch({ stroke: { ...layer.stroke!, color } }, `stroke:${layer.id}`)} />
+            <Field label={t("composer.inspector.colour")}>
+              <ColorField value={layer.stroke.color} label={t("composer.inspector.outlineColour")} used={used} onChange={(color) => onPatch({ stroke: { ...layer.stroke!, color } }, `stroke:${layer.id}`)} />
             </Field>
-            <Slider label="Width" value={layer.stroke.width} min={1} max={80} onChange={(width) => onPatch({ stroke: { ...layer.stroke!, width } }, `strokew:${layer.id}`)} />
+            <Slider label={t("composer.inspector.width")} value={layer.stroke.width} min={1} max={80} onChange={(width) => onPatch({ stroke: { ...layer.stroke!, width } }, `strokew:${layer.id}`)} />
           </div>
         )}
       </Section>
@@ -353,49 +355,49 @@ function ShapeSection({ layer, onPatch, used }: { layer: ShapeLayer; onPatch: (p
   );
 }
 
-const FX_FIELDS: { key: keyof ImageFx; label: string; min: number; max: number; unit?: string }[] = [
-  { key: "brightness", label: "Brightness", min: -100, max: 100 },
-  { key: "contrast", label: "Contrast", min: -100, max: 100 },
-  { key: "saturation", label: "Colour", min: -100, max: 100 },
-  { key: "hue", label: "Hue", min: -180, max: 180, unit: "°" },
-  { key: "blur", label: "Blur", min: 0, max: 40 },
-  { key: "grayscale", label: "Black & white", min: 0, max: 100, unit: "%" },
-  { key: "sepia", label: "Sepia", min: 0, max: 100, unit: "%" },
-  { key: "invert", label: "Invert", min: 0, max: 100, unit: "%" },
+const FX_FIELDS: { key: keyof ImageFx; min: number; max: number; unit?: string }[] = [
+  { key: "brightness", min: -100, max: 100 },
+  { key: "contrast", min: -100, max: 100 },
+  { key: "saturation", min: -100, max: 100 },
+  { key: "hue", min: -180, max: 180, unit: "°" },
+  { key: "blur", min: 0, max: 40 },
+  { key: "grayscale", min: 0, max: 100, unit: "%" },
+  { key: "sepia", min: 0, max: 100, unit: "%" },
+  { key: "invert", min: 0, max: 100, unit: "%" },
 ];
 
 function ImageSection({ layer, onPatch, parts, onReplace }: { layer: ImageLayer; onPatch: (p: Patch, key?: string) => void; parts: Parts; onReplace: (anchor: HTMLElement) => void }) {
   const fit = (cover: boolean) => onPatch(imageBox(layer.iw, layer.ih, parts, cover));
   return (
     <>
-      <Section title="Picture">
+      <Section title={t("composer.inspector.picture")}>
         <div className="cmp-actions-row is-wrap">
-          <button type="button" className="cmp-chip" onClick={() => fit(true)} data-tip="Cover the whole folder with it">
-            Cover folder
+          <button type="button" className="cmp-chip" onClick={() => fit(true)} data-tip={t("composer.inspector.coverTip")}>
+            {t("composer.inspector.cover")}
           </button>
-          <button type="button" className="cmp-chip" onClick={() => fit(false)} data-tip="Fit it on the front, whole">
-            Fit on front
+          <button type="button" className="cmp-chip" onClick={() => fit(false)} data-tip={t("composer.inspector.fitTip")}>
+            {t("composer.inspector.fit")}
           </button>
           <button
             type="button"
             className="cmp-chip"
             onClick={() => onPatch({ w: layer.iw * (layer.h / layer.ih), h: layer.h })}
-            data-tip="Undo any cropping from the sides"
+            data-tip={t("composer.inspector.uncropTip")}
           >
-            Uncrop
+            {t("composer.inspector.uncrop")}
           </button>
-          <button type="button" className="cmp-chip" onClick={(e) => onReplace(e.currentTarget)} data-tip="Use another picture in its place">
-            Replace
+          <button type="button" className="cmp-chip" onClick={(e) => onReplace(e.currentTarget)} data-tip={t("composer.inspector.replaceTip")}>
+            {t("composer.inspector.replace")}
           </button>
         </div>
-        <Slider label="Rounding" value={layer.radius} min={0} max={100} scale={100} unit="%" onChange={(radius) => onPatch({ radius }, `radius:${layer.id}`)} />
+        <Slider label={t("composer.inspector.rounding")} value={layer.radius} min={0} max={100} scale={100} unit="%" onChange={(radius) => onPatch({ radius }, `radius:${layer.id}`)} />
       </Section>
       <Section
-        title="Adjust"
+        title={t("composer.inspector.adjust")}
         extra={
           hasFx(layer.fx) ? (
             <button type="button" className="link-btn cmp-reset" onClick={() => onPatch({ fx: { ...NO_FX } })}>
-              Reset
+              {t("composer.inspector.reset")}
             </button>
           ) : undefined
         }
@@ -403,7 +405,7 @@ function ImageSection({ layer, onPatch, parts, onReplace }: { layer: ImageLayer;
         {FX_FIELDS.map((f) => (
           <Slider
             key={f.key}
-            label={f.label}
+            label={t(`composer.inspector.fx.${f.key}`)}
             value={layer.fx[f.key]}
             min={f.min}
             max={f.max}
@@ -420,34 +422,34 @@ function PatternSection({ layer, onPatch, used }: { layer: PatternLayer; onPatch
   const turns = layer.pattern !== "grain" && layer.pattern !== "confetti" && layer.pattern !== "dots";
   const random = layer.pattern === "grain" || layer.pattern === "confetti";
   return (
-    <Section title="Pattern">
-      <Field label="Kind">
-        <PopButton label="Pattern" width={300} panel={(close) => <PatternGrid value={layer.pattern} onPick={(pattern) => (onPatch({ pattern }), close())} />}>
+    <Section title={t("composer.inspector.pattern")}>
+      <Field label={t("composer.inspector.kind")}>
+        <PopButton label={t("composer.inspector.pattern")} width={300} panel={(close) => <PatternGrid value={layer.pattern} onPick={(pattern) => (onPatch({ pattern }), close())} />}>
           {patternLabel(layer.pattern)}
           <ChevronDownIcon size={14} />
         </PopButton>
       </Field>
-      <Field label="Colour">
-        <ColorField value={layer.color} label="pattern colour" used={used} onChange={(color) => onPatch({ color }, `pcolor:${layer.id}`)} />
+      <Field label={t("composer.inspector.colour")}>
+        <ColorField value={layer.color} label={t("composer.inspector.patternColour")} used={used} onChange={(color) => onPatch({ color }, `pcolor:${layer.id}`)} />
       </Field>
       {layer.pattern !== "grain" && (
-        <Field label="Behind it">
-          <ColorField value={layer.background} label="colour behind the pattern" used={used} onChange={(background) => onPatch({ background }, `pbg:${layer.id}`)} />
+        <Field label={t("composer.inspector.behindIt")}>
+          <ColorField value={layer.background} label={t("composer.inspector.behindColour")} used={used} onChange={(background) => onPatch({ background }, `pbg:${layer.id}`)} />
         </Field>
       )}
       <Slider
-        label={layer.pattern === "grain" ? "Grain size" : "Size"}
+        label={layer.pattern === "grain" ? t("composer.inspector.grainSize") : t("composer.inspector.size")}
         value={layer.scale}
         min={layer.pattern === "grain" ? 1 : 12}
         max={layer.pattern === "grain" ? 6 : 360}
         step={layer.pattern === "grain" ? 0.5 : 1}
         onChange={(scale) => onPatch({ scale }, `scale:${layer.id}`)}
       />
-      {turns && <Slider label="Angle" value={layer.angle} min={-90} max={90} unit="°" onChange={(angle) => onPatch({ angle }, `angle:${layer.id}`)} />}
+      {turns && <Slider label={t("composer.inspector.angle")} value={layer.angle} min={-90} max={90} unit="°" onChange={(angle) => onPatch({ angle }, `angle:${layer.id}`)} />}
       {random && (
         <button type="button" className="cmp-chip" onClick={() => onPatch({ seed: 1 + Math.floor(Math.random() * 99999) })}>
           <ShuffleIcon size={13} />
-          Shuffle
+          {t("composer.inspector.shuffle")}
         </button>
       )}
     </Section>
@@ -459,10 +461,6 @@ function PatternSection({ layer, onPatch, used }: { layer: PatternLayer; onPatch
  * text layer shows on the folder, so which one is being changed is never in doubt. Left empty, the
  * layer is named after what it is (a text layer after its words).
  */
-const NAME_NOTE = {
-  text: "Names the layer in the layers list only. The words on the folder are under Text on the folder.",
-  other: "Names the layer in the layers list only.",
-};
 
 function LayerName({ layer, index, onPatch }: { layer: Layer; index: number; onPatch: (p: Patch) => void }) {
   const auto = layerLabel({ ...layer, name: undefined } as Layer, index);
@@ -474,10 +472,10 @@ function LayerName({ layer, index, onPatch }: { layer: Layer; index: number; onP
     if (next !== (layer.name ?? "")) onPatch({ name: next || undefined });
     setDraft(next);
   };
-  const note = layer.kind === "text" ? NAME_NOTE.text : NAME_NOTE.other;
+  const note = layer.kind === "text" ? t("composer.inspector.nameNote.text") : t("composer.inspector.nameNote.other");
   return (
     <section className="cmp-section cmp-layer-naming">
-      <Field label="Layer name">
+      <Field label={t("composer.inspector.layerName")}>
         <span className="cmp-input-wrap">
           <input
             className="cmp-input"
@@ -485,7 +483,7 @@ function LayerName({ layer, index, onPatch }: { layer: Layer; index: number; onP
             placeholder={auto}
             maxLength={40}
             spellCheck={false}
-            aria-label="layer name"
+            aria-label={t("composer.inspector.layerNameLabel")}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
@@ -508,34 +506,34 @@ function LayerName({ layer, index, onPatch }: { layer: Layer; index: number; onP
 function IconSection({ layer, onPatch, used, onReplace }: { layer: IconLayer; onPatch: (p: Patch, key?: string) => void; used: string[]; onReplace: () => void }) {
   const looks = ICON_LOOKS.filter((l) => l.id !== "original" || layer.brand);
   return (
-    <Section title="Icon">
+    <Section title={t("composer.inspector.icon")}>
       <div className="cmp-icon-now">
         <span className="cmp-icon-now-name">{iconName(layer.icon)}</span>
-        <button type="button" className="cmp-chip" onClick={onReplace} data-tip="Pick another icon from the icon library">
-          Replace
+        <button type="button" className="cmp-chip" onClick={onReplace} data-tip={t("composer.inspector.replaceIconTip")}>
+          {t("composer.inspector.replace")}
         </button>
       </div>
-      <Segmented<IconLook> label="how the icon looks" value={layer.look} onChange={(look) => onPatch({ look })} options={looks.map((l) => ({ value: l.id, label: l.label }))} />
+      <Segmented<IconLook> label={t("composer.inspector.iconLook")} value={layer.look} onChange={(look) => onPatch({ look })} options={looks.map((l) => ({ value: l.id, label: t(`composer.iconLooks.${l.id}`) }))} />
       {layer.look === "emboss" && (
         <>
           <Toggle
-            label="Folder's own colour"
-            hint="A deeper shade of the folder's colour, the way macOS draws the symbol on a folder"
+            label={t("composer.inspector.foldersColour")}
+            hint={t("composer.inspector.foldersColourHint")}
             on={layer.auto}
             onChange={(auto) => onPatch({ auto })}
           />
           {!layer.auto && (
-            <Field label="Colour">
-              <ColorField value={layer.paint.type === "solid" ? layer.paint.color : "#ffffff"} label="icon colour" used={used} onChange={(color) => onPatch({ paint: { type: "solid", color } }, `icolor:${layer.id}`)} />
+            <Field label={t("composer.inspector.colour")}>
+              <ColorField value={layer.paint.type === "solid" ? layer.paint.color : "#ffffff"} label={t("composer.inspector.iconColour")} used={used} onChange={(color) => onPatch({ paint: { type: "solid", color } }, `icolor:${layer.id}`)} />
             </Field>
           )}
-          <Slider label="Depth" value={layer.depth} min={0} max={100} onChange={(depth) => onPatch({ depth }, `depth:${layer.id}`)} />
+          <Slider label={t("composer.inspector.depth")} value={layer.depth} min={0} max={100} onChange={(depth) => onPatch({ depth }, `depth:${layer.id}`)} />
         </>
       )}
       {layer.look === "flat" && <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `ipaint:${layer.id}`)} used={used} />}
-      <Slider label="Size" value={layer.size} min={24} max={1100} onChange={(size) => onPatch({ size }, `size:${layer.id}`)} />
+      <Slider label={t("composer.inspector.size")} value={layer.size} min={24} max={1100} onChange={(size) => onPatch({ size }, `size:${layer.id}`)} />
       {layer.style === "stroke" && (
-        <Slider label="Line weight" value={layer.strokeWidth} min={0.5} max={layer.viewBox / 6} step={0.25} onChange={(strokeWidth) => onPatch({ strokeWidth }, `sw:${layer.id}`)} />
+        <Slider label={t("composer.inspector.lineWeight")} value={layer.strokeWidth} min={0.5} max={layer.viewBox / 6} step={0.25} onChange={(strokeWidth) => onPatch({ strokeWidth }, `sw:${layer.id}`)} />
       )}
     </Section>
   );
@@ -573,25 +571,27 @@ export function ComposerInspector({
   /** The design is on a folder, whose front a colour can cover alone. */
   onFolder: boolean;
 }) {
+  // Draws again in a new language: the sections below read it as they draw.
+  useLocale();
   if (!layer) {
-    return <p className="cmp-inspector-empty">Select a layer, on the folder or in the list above, to change it here.</p>;
+    return <p className="cmp-inspector-empty">{t("composer.inspector.empty")}</p>;
   }
   return (
     <div className="cmp-inspector">
       <LayerName layer={layer} index={index} onPatch={onPatch} />
       {layer.kind === "fill" && (
-        <Section title="Colour">
+        <Section title={t("composer.inspector.colour")}>
           <PaintField value={layer.paint} onChange={(paint) => onPatch({ paint }, `paint:${layer.id}`)} used={used} />
           {onFolder && (
-            <Field label="Covers">
+            <Field label={t("composer.inspector.covers")}>
               <Segmented<"folder" | "front">
-                label="what the colour covers"
+                label={t("composer.inspector.coversLabel")}
                 small
                 value={layer.part === "front" ? "front" : "folder"}
                 onChange={(covers) => onPatch({ part: covers === "front" ? "front" : undefined })}
                 options={[
-                  { value: "folder", label: "Whole folder" },
-                  { value: "front", label: "Front", title: "Only the front panel, so the back and tab can be another colour" },
+                  { value: "folder", label: t("composer.inspector.coversFolder") },
+                  { value: "front", label: t("composer.inspector.coversFront"), title: t("composer.inspector.coversFrontTip") },
                 ]}
               />
             </Field>
@@ -601,14 +601,14 @@ export function ComposerInspector({
       {layer.kind === "pattern" && <PatternSection layer={layer} onPatch={onPatch} used={used} />}
       {layer.kind === "text" && <TextSection layer={layer} onPatch={onPatch} used={used} textRef={textRef} />}
       {layer.kind === "emoji" && (
-        <Section title="Emoji">
-          <Field label="Emoji">
-            <PopButton label="Emoji" width={320} className="cmp-pick-btn is-emoji" panel={(close) => <EmojiPicker onPick={(char) => (onPatch({ char }), close())} />}>
+        <Section title={t("composer.inspector.emoji")}>
+          <Field label={t("composer.inspector.emoji")}>
+            <PopButton label={t("composer.inspector.emoji")} width={320} className="cmp-pick-btn is-emoji" panel={(close) => <EmojiPicker onPick={(char) => (onPatch({ char }), close())} />}>
               <span className="cmp-emoji-now">{layer.char}</span>
               <ChevronDownIcon size={14} />
             </PopButton>
           </Field>
-          <Slider label="Size" value={layer.size} min={24} max={1100} onChange={(size) => onPatch({ size }, `size:${layer.id}`)} />
+          <Slider label={t("composer.inspector.size")} value={layer.size} min={24} max={1100} onChange={(size) => onPatch({ size }, `size:${layer.id}`)} />
         </Section>
       )}
       {layer.kind === "shape" && <ShapeSection layer={layer} onPatch={onPatch} used={used} />}

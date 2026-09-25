@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
-import { fileBrowser } from "../lib/platform";
-import { applyLabel, folders, runSummary, tooMany } from "../lib/tree";
+import { osOf, type Os } from "../lib/platform";
+import { t as tNow, useT } from "../i18n";
+import { applyLabel, runSummary, tooMany } from "../lib/tree";
 import type { State } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
 import { LookSwitch } from "./LookSwitch";
@@ -17,6 +18,7 @@ import { BadgeAlertIcon } from "./icons/badge-alert";
 import { XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
 import { clip } from "../lib/names";
+import { explain } from "../lib/sentences";
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 
@@ -53,7 +55,7 @@ export function FolderStage({
   onCarryOn,
   onTryAgain,
   onDismissRun,
-  pickHint = "Pick a skin to try it on",
+  pickHint,
   onLook,
   onPutDown,
 }: {
@@ -89,8 +91,10 @@ export function FolderStage({
   /** Puts down the skin shown before any folder, so the empty folder (and its switch) is back. */
   onPutDown?: () => void;
 }) {
+  const t = useT();
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
+  const system = osOf(os);
 
   // The folder's own icon. Nothing shows while it loads, so a stand-in never swaps for it in view,
   // unless it's slow.
@@ -128,7 +132,7 @@ export function FolderStage({
     .join(" ");
 
   return (
-    <aside className={cls} aria-label="folder" data-tauri-drag-region>
+    <aside className={cls} aria-label={t("folder.stage.label")} data-tauri-drag-region>
       <span className="drop-glow" aria-hidden="true" />
       <div className="stage" data-tauri-drag-region>
         <button
@@ -136,8 +140,8 @@ export function FolderStage({
           className={shaking ? "stage-art is-shaking" : "stage-art"}
           onClick={busy ? undefined : onBrowse}
           onMouseDown={(e) => e.preventDefault()}
-          aria-label={folder ? `choose a different folder than ${folder.name}` : `choose a folder from ${browseLabel}`}
-          data-tip={folder ? "Choose a different folder" : undefined}
+          aria-label={folder ? t("folder.stage.chooseOtherLabel", { name: folder.name }) : t("folder.stage.chooseFromLabel", { place: browseLabel })}
+          data-tip={folder ? t("folder.stage.chooseOther") : undefined}
         >
           <span className="stage-halo" aria-hidden="true" />
           {src && state.includeSubfolders && !drag && (
@@ -175,8 +179,8 @@ export function FolderStage({
             with the way back to the empty folder (Escape does the same). */}
         {!folder && !skin && !drag && onLook && <StageLook onLook={onLook} />}
         {!folder && skin && !drag && onPutDown && (
-          <button type="button" className="link-btn stage-put-down" data-tip="Or press Escape" onMouseDown={(e) => e.preventDefault()} onClick={onPutDown}>
-            Back to the empty folder
+          <button type="button" className="link-btn stage-put-down" data-tip={t("folder.stage.backTip")} onMouseDown={(e) => e.preventDefault()} onClick={onPutDown}>
+            {t("folder.stage.back")}
           </button>
         )}
 
@@ -193,18 +197,18 @@ export function FolderStage({
             state={state}
             skin={skin}
             customIcon={customIcon}
-            fileBrowser={fileBrowser(os)}
+            os={system}
             onApply={onApply}
             onTryOn={onTryOn}
             onRevert={onRevert}
             onReveal={onReveal}
             onBrowse={onBrowse}
-            pickHint={pickHint}
+            pickHint={pickHint ?? t("folder.stage.pickHint")}
           />
         )}
 
         <p className={error ? "stage-status is-error" : "stage-status"} role={error ? "alert" : undefined} aria-live="polite">
-          {error ?? statusLine(state, skin, fileBrowser(os), customIcon, stopping)}
+          {error ?? statusLine(state, skin, system, customIcon, stopping)}
         </p>
       </div>
     </aside>
@@ -213,7 +217,8 @@ export function FolderStage({
 
 /** Which folder skins go on, chosen while there's no folder and no skin yet: the empty one above shows it. */
 function StageLook({ onLook }: { onLook: (look: FolderStyle) => void }) {
-  return <LookSwitch className="stage-look" label="which folder skins go on" value={useLook()} onChange={onLook} />;
+  const t = useT();
+  return <LookSwitch className="stage-look" label={t("folder.look.appLabel")} value={useLook()} onChange={onLook} />;
 }
 
 /**
@@ -235,19 +240,22 @@ function StageImage({ src }: { src: string }) {
 }
 
 function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | null; browseLabel: string }) {
+  const t = useT();
   const { phase, folder, drag } = state;
 
   if (drag) {
     const image = drag.kind === "image";
     return (
       <div className="stage-copy" key={`drag:${drag.kind}`}>
-        <h2 className="stage-title">{image ? "Let go to add this picture" : "Let go to pick this folder"}</h2>
+        <h2 className="stage-title is-words">{image ? t("folder.stage.drag.imageTitle") : t("folder.stage.drag.folderTitle")}</h2>
         <p className="stage-sub">
           {image
-            ? `${drag.name ? clip(drag.name) : "It"} becomes a skin in Yours.`
+            ? drag.name
+              ? t("folder.stage.drag.imageNamed", { name: clip(drag.name) })
+              : t("folder.stage.drag.image")
             : drag.name
-              ? `${clip(drag.name)} will show up here, ready for a skin.`
-              : "It will show up here, ready for a skin."}
+              ? t("folder.stage.drag.folderNamed", { name: clip(drag.name) })
+              : t("folder.stage.drag.folder")}
         </p>
       </div>
     );
@@ -256,11 +264,11 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
   if (!folder) {
     return (
       <div className="stage-copy" key={skin ? `waiting:${skin.id}` : "empty"}>
-        <h2 className="stage-title">{skin ? "Now drop a folder" : "Drop a folder here"}</h2>
+        <h2 className="stage-title is-words">{skin ? t("folder.stage.empty.titleWithSkin") : t("folder.stage.empty.title")}</h2>
         <p className="stage-sub">
           {skin
-            ? `${clip(skin.name)} is ready. Drop any folder here, or click to pick one from ${browseLabel}.`
-            : `Or click to pick one from ${browseLabel}.`}
+            ? t("folder.stage.empty.subWithSkin", { name: clip(skin.name), place: browseLabel })
+            : t("folder.stage.empty.sub", { place: browseLabel })}
         </p>
       </div>
     );
@@ -270,15 +278,15 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
   const eyebrow =
     phase === "applied" || (phase === "reverting" && state.appliedSkinId !== null) ? (
       <span className="chip chip-ok stage-eyebrow" key="applied">
-        <OkBadge size={16} playOnMount /> Applied
+        <OkBadge size={16} playOnMount /> {t("folder.stage.applied")}
       </span>
     ) : (phase === "ready" && !state.arriving) || phase === "applying" ? (
       <span className="chip chip-accent stage-eyebrow" key={`try:${skin?.id}`} data-tip={skin?.name} data-tip-overflow>
-        <span className="chip-text">Trying on {skin?.name}</span>
+        <span className="chip-text">{t("folder.stage.tryingOn", { name: skin?.name ?? "" })}</span>
       </span>
     ) : (
       <span className="chip stage-eyebrow" key="current">
-        Current icon
+        {t("folder.stage.currentIcon")}
       </span>
     );
 
@@ -299,7 +307,7 @@ function StageActions({
   state,
   skin,
   customIcon,
-  fileBrowser,
+  os,
   onApply,
   onTryOn,
   onRevert,
@@ -310,7 +318,7 @@ function StageActions({
   state: State;
   skin: Skin | null;
   customIcon: boolean;
-  fileBrowser: string;
+  os: Os;
   onApply: () => void;
   onTryOn: () => void;
   onRevert: () => void;
@@ -318,6 +326,7 @@ function StageActions({
   onBrowse: () => void;
   pickHint: string;
 }) {
+  const t = useT();
   const { phase, drag } = state;
   if (drag || phase === "idle") return null;
 
@@ -345,14 +354,14 @@ function StageActions({
         {skin ? (
           <button type="button" className="btn btn-primary btn-lg" disabled={removing} onMouseDown={noFocusSteal} onClick={onTryOn}>
             <ArrowDownIcon />
-            <span className="stage-try">Try on {skin.name}</span>
+            <span className="stage-try">{t("folder.stage.tryOn", { name: skin.name })}</span>
           </button>
         ) : (
           nudge
         )}
         <button type="button" className="btn btn-ghost" disabled={removing} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
           {removing ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-          {removing ? "Removing" : inside ? "Remove custom icons" : "Remove custom icon"}
+          {removing ? t("folder.stage.removing") : inside ? t("folder.stage.removeIcons") : t("folder.stage.removeIcon")}
         </button>
       </div>
     );
@@ -364,12 +373,13 @@ function StageActions({
   const moreToDo = phase === "applied" && inside > 0 && !treeDone;
   if ((phase === "applied" || phase === "reverting") && !moreToDo) {
     const reach = inside > 0 && state.run?.kind === "apply" ? state.run.changed.length : 0;
-    const count = reach.toLocaleString("en-US");
     return (
       <DoneActions
         reverting={phase === "reverting"}
-        revertLabel={reach > 1 ? (state.run?.stopped ? `Revert these ${count}` : `Revert all ${count}`) : "Revert"}
-        fileBrowser={fileBrowser}
+        revertLabel={
+          reach > 1 ? (state.run?.stopped ? t("folder.stage.revertThese", { count: reach }) : t("folder.stage.revertAll", { count: reach })) : t("folder.stage.revert")
+        }
+        os={os}
         onReveal={onReveal}
         onRevert={onRevert}
       />
@@ -388,10 +398,10 @@ function StageActions({
         onClick={onApply}
       >
         {applying ? <LoaderIcon /> : <ArrowDownIcon />}
-        {applying ? "Applying" : inside ? applyLabel(inside) : "Apply skin"}
+        {applying ? t("folder.stage.applying") : inside ? applyLabel(inside) : t("folder.stage.applySkin")}
       </button>
       <button type="button" className="btn btn-ghost" disabled={applying} onMouseDown={noFocusSteal} onClick={onBrowse}>
-        Choose a different folder
+        {t("folder.stage.chooseOther")}
       </button>
     </div>
   );
@@ -404,16 +414,17 @@ function StageActions({
 function DoneActions({
   reverting,
   revertLabel,
-  fileBrowser,
+  os,
   onReveal,
   onRevert,
 }: {
   reverting: boolean;
   revertLabel: string;
-  fileBrowser: string;
+  os: Os;
   onReveal: () => void;
   onRevert: () => void;
 }) {
+  const t = useT();
   const shownAt = useRef(Number.POSITIVE_INFINITY);
   useEffect(() => {
     shownAt.current = performance.now();
@@ -430,11 +441,11 @@ function DoneActions({
         onClick={() => performance.now() - shownAt.current > SETTLE_MS && onReveal()}
       >
         <FolderOpenIcon size={16} />
-        Show in {fileBrowser}
+        {t(`common.showIn.${os}`)}
       </button>
       <button type="button" className="btn btn-ghost" disabled={reverting} aria-busy={reverting} onMouseDown={noFocusSteal} onClick={onRevert}>
         {reverting ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-        {reverting ? "Reverting" : revertLabel}
+        {reverting ? t("folder.stage.reverting") : revertLabel}
       </button>
     </div>
   );
@@ -446,6 +457,7 @@ function DoneActions({
  * more than a run can take.
  */
 function SubfolderSwitch({ state, onChange }: { state: State; onChange: (on: boolean) => void }) {
+  const t = useT();
   const s = state.subfolders;
   if (!s || s.count === 0 || !state.folder) return null;
   const on = state.includeSubfolders;
@@ -461,10 +473,8 @@ function SubfolderSwitch({ state, onChange }: { state: State; onChange: (on: boo
       onClick={() => onChange(!on)}
     >
       <span className="stage-scope-text">
-        <span className="stage-scope-title">Include subfolders</span>
-        <span className="stage-scope-sub">
-          {s.more ? tooMany("folders") : `${folders(s.count)} inside`}
-        </span>
+        <span className="stage-scope-title">{t("folder.stage.includeSubfolders")}</span>
+        <span className="stage-scope-sub">{s.more ? tooMany("folders") : t("folder.stage.inside", { count: s.count })}</span>
       </span>
       <span className={on ? "switch is-on" : "switch"} aria-hidden="true">
         <span className="knob" />
@@ -475,27 +485,26 @@ function SubfolderSwitch({ state, onChange }: { state: State; onChange: (on: boo
 
 /** A run over the folder and its subfolders, under way: how far, which folder, and Stop. */
 function RunProgress({ state, stopping, onStop }: { state: State; stopping: boolean; onStop: () => void }) {
+  const t = useT();
   const p = state.progress;
   if (!p) return null;
   const share = p.total > 0 ? Math.min(100, (p.done / p.total) * 100) : 0;
-  const verb = state.phase === "applying" ? "Applying" : "Reverting";
+  const verb = state.phase === "applying" ? t("folder.stage.applying") : t("folder.stage.reverting");
   return (
     <div className="stage-actions stage-progress" role="status" aria-live="polite">
       <p className="stage-progress-line">
-        <span className="stage-progress-title">{stopping ? "Stopping" : verb}</span>
-        <span className="stage-progress-count">
-          {p.done.toLocaleString("en-US")} of {p.total.toLocaleString("en-US")}
-        </span>
+        <span className="stage-progress-title">{stopping ? t("folder.stage.stopping") : verb}</span>
+        <span className="stage-progress-count">{t("folder.stage.doneOf", { done: p.done, total: p.total })}</span>
       </p>
       <span className="stage-progress-bar" aria-hidden="true">
         <span style={{ width: `${share}%` }} />
       </span>
       <p className="stage-progress-name" data-tip={p.name} data-tip-overflow>
-        {p.done === 0 ? `Starting with ${clip(p.name)}` : p.name}
+        {p.done === 0 ? t("folder.stage.startingWith", { name: clip(p.name) }) : p.name}
       </p>
       <button type="button" className="btn btn-ghost" disabled={stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
         {stopping ? <LoaderIcon size={15} /> : null}
-        {stopping ? "Finishing this folder" : "Stop"}
+        {stopping ? t("folder.stage.finishingThis") : t("folder.stage.stop")}
       </button>
     </div>
   );
@@ -518,6 +527,7 @@ function RunResult({
   onTryAgain: () => void;
   onDismiss: () => void;
 }) {
+  const t = useT();
   const run = state.run;
   if (!run) return null;
   const { title, detail, tone } = runSummary(run, skinName);
@@ -531,21 +541,19 @@ function RunResult({
           {tone === "ok" ? <OkBadge size={18} playOnMount /> : <BadgeAlertIcon size={17} />}
         </span>
         <p className="stage-result-title">{title}</p>
-        <button type="button" className="stage-result-x" aria-label="hide this summary" data-tip="Hide" onClick={onDismiss}>
+        <button type="button" className="stage-result-x" aria-label={t("folder.stage.hideSummaryLabel")} data-tip={t("folder.stage.hideSummary")} onClick={onDismiss}>
           <XIcon size={13} />
         </button>
       </div>
       {detail && <p className="stage-result-detail">{detail}</p>}
       {failed.length > 0 && (
         <details className="stage-result-failed">
-          <summary>
-            {failed.length === 1 ? "Which one" : `Which ${failed.length.toLocaleString("en-US")}`}
-          </summary>
+          <summary>{t("folder.stage.which", { count: failed.length })}</summary>
           <ul>
             {failed.map((f) => (
               <li key={f.path} data-tip={f.path} data-tip-overflow>
                 <span className="stage-result-name">{f.name}</span>
-                <span className="stage-result-reason">{f.reason}</span>
+                <span className="stage-result-reason">{explain(f.reason)}</span>
               </li>
             ))}
           </ul>
@@ -555,13 +563,13 @@ function RunResult({
         <div className="stage-result-actions">
           {carryOn && (
             <button type="button" className="chip-btn" onClick={onCarryOn}>
-              Carry on with the other {run.remaining.length.toLocaleString("en-US")}
+              {t("folder.stage.carryOnWith", { count: run.remaining.length })}
             </button>
           )}
           {!run.stopped && failed.length > 0 && (
             <button type="button" className="chip-btn" onClick={onTryAgain}>
               <RotateCcwIcon size={13} />
-              Try {failed.length === 1 ? "it" : "them"} again
+              {t("folder.stage.tryAgain", { count: failed.length })}
             </button>
           )}
         </div>
@@ -571,28 +579,32 @@ function RunResult({
 }
 
 /** One quiet line under the buttons: what just happened or what happens next. */
-function statusLine(state: State, skin: Skin | null, fileBrowser: string, customIcon: boolean, stopping: boolean): string {
+function statusLine(state: State, skin: Skin | null, os: Os, customIcon: boolean, stopping: boolean): string {
+  const t = tNow;
   const inside = state.includeSubfolders && state.subfolders ? state.subfolders.count : 0;
   if (state.progress && (state.phase === "applying" || state.phase === "reverting")) {
-    if (stopping) return "Folders already done stay that way.";
-    return state.phase === "applying" ? `${fileBrowser} catches up as it goes.` : "Putting the default icons back";
+    if (stopping) return t("folder.stage.status.doneStay");
+    return state.phase === "applying" ? t(`folder.stage.status.catchesUp.${os}`) : t("folder.stage.status.puttingIconsBack");
   }
   if (inside > 0 && (state.phase === "ready" || (state.phase === "applied" && state.run === null))) {
-    return "Hidden folders and app bundles are skipped.";
+    return t("folder.stage.status.skipped");
   }
   switch (state.phase) {
     case "idle":
-      return state.drag ? "" : "Pictures work too. Drop one to turn it into a skin.";
+      return state.drag ? "" : t("folder.stage.status.picturesToo");
     case "folder":
-      return customIcon ? "It has an icon of its own." : "";
+      return customIcon ? t("folder.stage.status.ownIcon") : "";
     case "ready":
-      return state.arriving && customIcon ? "It has an icon of its own." : "Nothing changes on disk until you apply.";
+      return state.arriving && customIcon ? t("folder.stage.status.ownIcon") : t("folder.stage.status.nothingChanges");
     case "applying":
-      return `Writing ${skin ? clip(skin.name) : "the skin"} into ${clip(state.folder?.name ?? "the folder")}`;
+      return t("folder.stage.status.writing", {
+        skin: skin ? clip(skin.name) : t("folder.run.theSkin"),
+        folder: state.folder ? clip(state.folder.name) : t("folder.stage.theFolder"),
+      });
     case "applied":
-      return `${fileBrowser} can take a second to catch up.`;
+      return t(`folder.stage.status.catchUp.${os}`);
     case "reverting":
-      return "Putting the default icon back";
+      return t("folder.stage.status.puttingIconBack");
     default:
       return "";
   }

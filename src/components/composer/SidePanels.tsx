@@ -1,3 +1,5 @@
+import "../../i18n/composer";
+import { t } from "../../i18n";
 import { useEffect, useId, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from "react";
 import { ChevronDownIcon } from "../icons/composer";
 
@@ -147,13 +149,13 @@ export function Resizer({
     <div
       role="separator"
       aria-orientation="horizontal"
-      aria-label="Resize the layers"
+      aria-label={t("composer.resizer.label")}
       aria-valuenow={now?.height}
       aria-valuemin={now?.min}
       aria-valuemax={now?.max}
       tabIndex={0}
       className={dragging ? "cmp-resizer is-dragging" : "cmp-resizer"}
-      data-tip="Drag to give the layers more room. Double-click to reset."
+      data-tip={t("composer.resizer.tip")}
       onPointerDown={drag}
       onKeyDown={keys}
       onFocus={() => setNow(measure())}

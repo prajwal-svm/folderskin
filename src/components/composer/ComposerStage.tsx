@@ -1,3 +1,5 @@
+import "../../i18n/composer";
+import { t } from "../../i18n";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { makeCanvas, ctx2d, type Assets } from "../../composer/assets";
 import { drawView, type TemplateImages, type View } from "../../composer/composite";
@@ -304,7 +306,7 @@ export function ComposerStage({
       {loader && (
         <div className="cmp-stage-loader" role="status">
           <LoaderIcon size={22} />
-          <span>{loader === "folder" ? "Getting the folder ready" : "Getting the picture ready"}</span>
+          <span>{loader === "folder" ? t("composer.stage.folderLoading") : t("composer.stage.pictureLoading")}</span>
         </div>
       )}
       {hint && (

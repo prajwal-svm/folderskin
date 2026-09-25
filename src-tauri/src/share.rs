@@ -421,7 +421,7 @@ fn prepare(files: crate::community::PackFiles, request: &ShareRequest) -> Result
     let manifest = manifest
         .first()
         .ok_or_else(|| "the pack has no pack.json".to_string())?;
-    let pack = Pack::parse(&manifest.1).map_err(|problems| problems.join("; "))?;
+    let pack = Pack::parse(&manifest.1).map_err(|problems| problems.join(". "))?;
     let mut items = Vec::with_capacity(pictures.len());
     for (file, bytes) in &pictures {
         let (width, height) = pack::check_new_picture(bytes).map_err(|e| format!("{file} {e}"))?;

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged into the Info.plist Tauri writes. FolderSkin is translated in the webview
+	     (src/locales), and these tell macOS which languages it speaks, so the parts macOS draws
+	     for it (the open and save panels, Services, the Edit menu's own items) come in the
+	     person's language rather than always in English. The .lproj folders (bundle.macOS.files
+	     in tauri.conf.json) say the same to anything that looks for them. -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>fr</string>
+		<string>es</string>
+	</array>
+</dict>
+</plist>

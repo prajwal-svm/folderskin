@@ -1,0 +1,46 @@
+{
+  "welcome": {
+    "go": "Let's go",
+    "fine": "Free · Open source · No account"
+  },
+  "install": {
+    "waiting": "Waiting",
+    "downloading": "Downloading",
+    "downloadingOf": "Downloading {{done}} of {{total}}",
+    "saving": "Adding to your library",
+    "added_one": "Added {{count}} skin",
+    "added_other": "Added {{count}} skins",
+    "failed": "Couldn't add it: {{reason}}"
+  },
+  "note": {
+    "inLibrary_one": "{{count}} skin is in your library.",
+    "inLibrary_other": "{{count}} skins are in your library.",
+    "adding": "Adding {{name}}. This takes a few seconds.",
+    "failedWhy_one": "{{names}} couldn't be added: {{reason}}.",
+    "failedWhy_other": "{{names}} couldn't be added: {{reason}}.",
+    "failed_one": "{{names}} couldn't be added. Try again, or add it later from Community.",
+    "failed_other": "{{names}} couldn't be added. Try again, or add them later from Community.",
+    "anyTime": "You can add or remove packs any time from Community.",
+    "getting": "Getting the packs"
+  },
+  "packs": {
+    "title": "Start with a few skins",
+    "sub": "Packs are free sets of skins people share through FolderSkin.",
+    "subPick": "Packs are free sets of skins people share through FolderSkin. Pick any you like.",
+    "subPicked": "Packs are free sets of skins people share through FolderSkin. {{name}} is picked for you. Add more if you like.",
+    "loadFailedText": "{{reason}}. You can carry on without them and add packs later from Community.",
+    "back": "Back",
+    "allSet": "All set",
+    "continue": "Continue",
+    "continueWithout": "Continue without packs",
+    "addOne": "Add {{name}}",
+    "addMany_one": "Add {{count}} pack",
+    "addMany_other": "Add {{count}} packs"
+  },
+  "pack": {
+    "label_one": "{{name}}, {{count}} skin by {{author}}",
+    "label_other": "{{name}}, {{count}} skins by {{author}}",
+    "failed": "Couldn't add it",
+    "already": "Already in your library"
+  }
+}

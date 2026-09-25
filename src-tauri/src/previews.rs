@@ -302,7 +302,7 @@ pub async fn manifest(
                 )
                 .await
                 .map_err(|e| match e {
-                    Fetch::Damaged => "that pack's list arrived damaged; try again".to_string(),
+                    Fetch::Damaged => "that pack's list arrived damaged. Try again".to_string(),
                     e => e.to_string(),
                 })?;
             if let Some(files) = files {
@@ -314,7 +314,7 @@ pub async fn manifest(
     };
     let published = PublishedPack::parse(&bytes)?;
     if published.id != id || published.hash != hash {
-        return Err("that pack's list doesn't match the catalog; try Refresh".into());
+        return Err("that pack's list doesn't match the catalog. Try Refresh".into());
     }
     Ok(published)
 }

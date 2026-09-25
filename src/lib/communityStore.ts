@@ -15,6 +15,7 @@ import { useSyncExternalStore } from "react";
 import type { ToastTone } from "../hooks/useToasts";
 import { clip } from "./names";
 import { tagLabel } from "./tags";
+import { t } from "../i18n";
 import { api, errorMessage, type CommunityPack, type CommunitySort, type PackProgress, type Skin, type SkinHit } from "./tauri";
 
 /** Packs a page holds. */
@@ -152,19 +153,17 @@ export class CommunityStore {
     try {
       pack = await api.communityPack(id);
     } catch (e) {
-      this.handlers?.toast(`Couldn't add “${id}”: ${errorMessage(e)}`, { tone: "danger" });
+      this.handlers?.toast(t("community.toast.addLinkFailed", { id, reason: errorMessage(e) }), { tone: "danger" });
       return;
     }
     if (!pack) {
-      this.handlers?.toast(`Couldn't add “${id}”: there's no pack by that name in Community. Search for it there; it may have been renamed.`, {
-        tone: "danger",
-      });
+      this.handlers?.toast(t("community.toast.noSuchPack", { id }), { tone: "danger" });
       return;
     }
     this.open(pack);
     if (pack.added) {
-      const newer = pack.update ? "; Update gets its newer version" : "";
-      this.handlers?.toast(`${clip(pack.name)} is in your library already${newer}`, { tone: "ok", action: this.show(pack) });
+      const said = pack.update ? t("community.toast.alreadyNewer", { name: clip(pack.name) }) : t("community.toast.already", { name: clip(pack.name) });
+      this.handlers?.toast(said, { tone: "ok", action: this.show(pack) });
       return;
     }
     await this.add(pack);
@@ -320,8 +319,8 @@ export class CommunityStore {
   private waiting(): boolean {
     const working = this.working;
     if (!this.state.busy || !working) return false;
-    const doing = this.state.task === "add" ? "added" : this.state.task === "update" ? "updated" : "removed";
-    this.handlers?.toast(`${clip(working.name)} is still being ${doing}. Try again once it's done.`);
+    const task = this.state.task === "add" ? "add" : this.state.task === "update" ? "update" : "remove";
+    this.handlers?.toast(t(`community.toast.stillBusy.${task}`, { name: clip(working.name) }));
     return true;
   }
 
@@ -333,9 +332,9 @@ export class CommunityStore {
       const skins = await api.addPack(pack.id, this.hear(pack.id));
       this.mark(pack.id, true);
       this.handlers?.onAdded(skins);
-      this.handlers?.toast(`Added ${skins.length} skins from ${clip(pack.name)}`, { tone: "ok", action: this.show(pack) });
+      this.handlers?.toast(t("community.toast.added", { count: skins.length, name: clip(pack.name) }), { tone: "ok", action: this.show(pack) });
     } catch (e) {
-      this.handlers?.toast(`Couldn't add ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
+      this.handlers?.toast(t("community.toast.addFailed", { name: clip(pack.name), reason: errorMessage(e) }), { tone: "danger" });
     } finally {
       this.working = null;
       this.set({ busy: null, task: null, progress: null });
@@ -351,9 +350,9 @@ export class CommunityStore {
       if (removed.length) this.handlers?.onRemoved(removed);
       this.handlers?.onAdded(skins);
       this.mark(pack.id, true);
-      this.handlers?.toast(`Updated ${clip(pack.name)}`, { tone: "ok", action: this.show(pack) });
+      this.handlers?.toast(t("community.toast.updated", { name: clip(pack.name) }), { tone: "ok", action: this.show(pack) });
     } catch (e) {
-      this.handlers?.toast(`Couldn't update ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
+      this.handlers?.toast(t("community.toast.updateFailed", { name: clip(pack.name), reason: errorMessage(e) }), { tone: "danger" });
     } finally {
       this.working = null;
       this.set({ busy: null, task: null, progress: null });
@@ -367,9 +366,9 @@ export class CommunityStore {
     try {
       this.handlers?.onRemoved(await api.removePack(pack.id));
       this.mark(pack.id, false);
-      this.handlers?.toast(`Removed ${clip(pack.name)}`, { tone: "ok" });
+      this.handlers?.toast(t("community.toast.removed", { name: clip(pack.name) }), { tone: "ok" });
     } catch (e) {
-      this.handlers?.toast(`Couldn't remove ${clip(pack.name)}: ${errorMessage(e)}`, { tone: "danger" });
+      this.handlers?.toast(t("community.toast.removeFailed", { name: clip(pack.name), reason: errorMessage(e) }), { tone: "danger" });
     } finally {
       this.working = null;
       this.set({ busy: null, task: null });
@@ -391,11 +390,11 @@ export class CommunityStore {
       const { updates } = await api.communityRefresh();
       await this.search();
       this.handlers?.toast(
-        updates ? `${updates} of your packs ${updates === 1 ? "has" : "have"} an update` : "Community is up to date",
+        updates ? t("community.toast.updates", { count: updates }) : t("community.toast.upToDate"),
         { tone: "ok" },
       );
     } catch (e) {
-      this.handlers?.toast(`Couldn't refresh: ${errorMessage(e)}`, { tone: "danger" });
+      this.handlers?.toast(t("community.toast.refreshFailed", { reason: errorMessage(e) }), { tone: "danger" });
     } finally {
       this.set({ refreshing: false });
     }
@@ -405,7 +404,7 @@ export class CommunityStore {
   private show(pack: CommunityPack) {
     const tag = pack.tags[0];
     const handlers = this.handlers;
-    return tag && handlers ? { label: "Show", run: () => handlers.onShowTag(tag) } : undefined;
+    return tag && handlers ? { label: t("community.toast.show"), run: () => handlers.onShowTag(tag) } : undefined;
   }
 }
 
@@ -424,21 +423,36 @@ export function progressShare(p: PackProgress | null): number {
 }
 
 /** "Downloading 3 of 16", "Saving 16 of 16", or `before` ("Adding", "Updating") until anything is heard. */
-export function progressLabel(p: PackProgress | null, before = "Adding"): string {
-  if (!p) return before;
-  return `${p.stage === "download" ? "Downloading" : "Saving"} ${Math.min(p.done, p.total)} of ${p.total}`;
+export function progressLabel(p: PackProgress | null, before?: string): string {
+  if (!p) return before ?? t("community.progress.adding");
+  const done = Math.min(p.done, p.total);
+  return p.stage === "download" ? t("community.progress.downloading", { done, total: p.total }) : t("community.progress.saving", { done, total: p.total });
 }
 
-const numbers = new Intl.NumberFormat("en-GB");
+/**
+ * Why the list is the one from the last visit, as a sentence: the Rust side says why as the start
+ * of one in English ("you're offline", catalog.rs `LastVisit`), which is said again here.
+ */
+function lastVisitLine(why: string): string {
+  if (why === "you're offline") return t("community.count.lastVisit.offline");
+  if (why === "the newest list of packs didn't arrive") return t("community.count.lastVisit.behind");
+  const host = /^(?<host>\S+) isn't answering$/.exec(why)?.groups?.host;
+  if (host) return t("community.count.lastVisit.unanswered", { host });
+  return t("community.count.lastVisit.other", { why: why.charAt(0).toUpperCase() + why.slice(1) });
+}
 
 /** What the list holds, in a few words: "10,000 packs", "1 pack matches “koi”", "23 packs match “koi”". */
 export function countLine(shown: Shown | null, error: string | null): string {
   if (!shown) return "";
-  if (error) return `Couldn't search: ${error}`;
-  const one = shown.total === 1;
-  const packs = `${numbers.format(shown.total)} ${one ? "pack" : "packs"}`;
-  const words = shown.q ? ` ${one ? "matches" : "match"} “${shown.q}”` : "";
-  const tagged = shown.tag ? ` tagged ${tagLabel(shown.tag)}` : "";
-  const lastVisit = shown.lastVisit ? `. ${shown.lastVisit.charAt(0).toUpperCase()}${shown.lastVisit.slice(1)}, so these are the packs from your last visit` : "";
-  return `${packs}${words}${tagged}${lastVisit}`;
+  if (error) return t("community.count.searchFailed", { reason: error });
+  const count = shown.total;
+  const tag = shown.tag ? tagLabel(shown.tag) : "";
+  const line = shown.q
+    ? tag
+      ? t("community.count.matchingTagged", { count, query: shown.q, tag })
+      : t("community.count.matching", { count, query: shown.q })
+    : tag
+      ? t("community.count.tagged", { count, tag })
+      : t("community.count.packs", { count });
+  return shown.lastVisit ? t("community.count.withLastVisit", { line, why: lastVisitLine(shown.lastVisit) }) : line;
 }

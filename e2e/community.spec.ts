@@ -247,7 +247,7 @@ test("a folderskin://install link opens Community on its pack and adds it, as Ad
 test("an install link for a pack Community doesn't have says so, and what to do", async ({ page }) => {
   await openApp(page, { query: "packs=0&install=gone-pack" });
   await expect(
-    page.getByText("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there; it may have been renamed."),
+    page.getByText("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there, as it may have been renamed."),
   ).toBeVisible();
   await expect(page.locator(".community .view-title")).toHaveText("Community");
   await expect(page.getByRole("dialog")).toHaveCount(0);

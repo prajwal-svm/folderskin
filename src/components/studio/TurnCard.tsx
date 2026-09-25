@@ -7,6 +7,10 @@ import { FolderGhost } from "../FolderGhost";
 import { OkBadge } from "../OkBadge";
 import { ChevronDownIcon, StopIcon, TerminalIcon } from "../icons/composer";
 import { CopyIcon } from "../icons/copy";
+import { useT } from "../../i18n";
+import { formatNumber } from "../../i18n/format";
+import { explain } from "../../lib/sentences";
+import { madeWith, providerName } from "../../lib/providerNames";
 
 /** What the chat can do for a turn, from the card's buttons. */
 export type TurnActions = {
@@ -22,14 +26,21 @@ export type TurnActions = {
   apply: (skin: Skin) => void;
   chooseFolder: () => void;
   menu: (skin: Skin, anchor: HTMLElement) => void;
-  copy: (text: string, what: string) => void;
+  /** Copies the question for Claude about a failure. */
+  copy: (text: string) => void;
 };
 
 const secondsSince = (from: number, to = Date.now()) => Math.max(0, Math.floor((to - from) / 1000));
-const duration = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`);
+/** "42s", "3m 05s": how long a request has taken, in the language's short units. */
+function useDuration() {
+  const t = useT();
+  return (s: number) =>
+    s < 60 ? t("ai.turn.seconds", { seconds: formatNumber(s) }) : t("ai.turn.minutes", { minutes: formatNumber(Math.floor(s / 60)), seconds: String(s % 60).padStart(2, "0") });
+}
 
 /** The log a request wrote, behind a disclosure: there to look at, never in the way. */
 function Log({ lines, open, onToggle }: { lines: string[]; open: boolean; onToggle: () => void }) {
+  const t = useT();
   const box = useRef<HTMLPreElement>(null);
   useEffect(() => {
     if (open && box.current) box.current.scrollTop = box.current.scrollHeight;
@@ -38,13 +49,13 @@ function Log({ lines, open, onToggle }: { lines: string[]; open: boolean; onTogg
     <div className="turn-log">
       <button type="button" className="turn-log-toggle" aria-expanded={open} onClick={onToggle}>
         <TerminalIcon size={13} />
-        {open ? "Hide the details" : "Details"}
+        {open ? t("ai.turn.hideDetails") : t("ai.turn.details")}
         <span className="turn-log-chevron" aria-hidden="true">
           <ChevronDownIcon size={13} />
         </span>
       </button>
       {open && (
-        <pre className="turn-log-lines" ref={box} tabIndex={0} aria-label="what it did">
+        <pre className="turn-log-lines" ref={box} tabIndex={0} aria-label={t("ai.turn.logLabel")}>
           {lines.join("\n")}
         </pre>
       )}
@@ -54,19 +65,17 @@ function Log({ lines, open, onToggle }: { lines: string[]; open: boolean; onTogg
 
 /** A picture on its way: the folder developing, what's happening now, how far it is, and Stop. */
 function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
+  const t = useT();
+  const duration = useDuration();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 500);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
   }, []);
   const [logOpen, setLogOpen] = useState(false);
   const progress = progressOf(turn);
   const stopping = turn.stage === "Stopping";
-  const detail = turn.download
-    ? `${turn.download.file}`
-    : turn.step
-      ? `Step ${turn.step.done} of ${turn.step.total}`
-      : null;
+  const detail = turn.download ? `${turn.download.file}` : turn.step ? t("ai.turn.step", { done: turn.step.done, total: turn.step.total }) : null;
   return (
     <div className="turn-result is-developing" aria-live="polite">
       <div className="develop">
@@ -75,18 +84,18 @@ function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
       </div>
       <div className="turn-meta">
         <p className="turn-name develop-step" key={turn.stage ?? "start"}>
-          {turn.stage ?? `Sending your idea to ${turn.where.split(" · ")[0]}`}
+          {stopping ? t("ai.turn.stopping") : turn.stage ? explain(turn.stage) : t("ai.turn.sending", { provider: providerName(turn.where.split(" · ")[0]) })}
         </p>
         <div className={progress === null ? "turn-progress is-waiting" : "turn-progress"} style={{ "--done": `${Math.round((progress ?? 0) * 100)}%` } as CSSProperties} aria-hidden="true">
           <span />
         </div>
         <p className="turn-where">
-          {[detail, turn.where, duration(secondsSince(turn.started, now))].filter(Boolean).join(" · ")}
+          {[detail, madeWith(turn.where), duration(secondsSince(turn.started, now))].filter(Boolean).join(" · ")}
         </p>
         <div className="turn-actions">
           <button type="button" className="btn btn-secondary btn-sm" disabled={stopping} onClick={onStop}>
             <StopIcon size={12} />
-            {stopping ? "Stopping" : "Stop"}
+            {stopping ? t("ai.turn.stopping") : t("folder.stage.stop")}
           </button>
         </div>
         {turn.log && turn.log.length > 0 && <Log lines={turn.log} open={logOpen} onToggle={() => setLogOpen((o) => !o)} />}
@@ -97,26 +106,27 @@ function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
 
 /** What the chat offers when a request fails, by what went wrong. */
 function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
+  const t = useT();
   const [logOpen, setLogOpen] = useState(false);
-  const error = turn.error ?? { code: "failed", message: "It didn't finish." };
-  const provider = turn.where.split(" · ")[0];
+  const error = turn.error ?? { code: "failed", message: t("ai.turn.didntFinish") };
+  const provider = providerName(turn.where.split(" · ")[0]);
   const primary =
     error.code === "missing_key"
-      ? { label: `Add your ${provider} key`, run: () => act.settings(turn.provider) }
+      ? { label: t("ai.turn.addKey", { provider }), run: () => act.settings(turn.provider) }
       : error.code === "unauthorized"
-        ? { label: "Check the key", run: () => act.settings(turn.provider) }
+        ? { label: t("ai.turn.checkKey"), run: () => act.settings(turn.provider) }
         : error.code === "local_not_ready" || error.code === "runtime_failed_to_start"
-          ? { label: "Set up the local model", run: () => act.settings("local") }
+          ? { label: t("ai.turn.setUpLocal"), run: () => act.settings("local") }
           : error.code === "refused"
-            ? { label: "Reword it", run: () => act.reword(turn) }
+            ? { label: t("ai.turn.reword"), run: () => act.reword(turn) }
             : null;
   return (
     <div className="turn-error" role="alert">
-      <p className="turn-error-text">{error.message}</p>
+      <p className="turn-error-text">{explain(error.message)}</p>
       {error.fix && error.fix.length > 0 && (
         <ul className="turn-fix">
           {error.fix.map((f) => (
-            <li key={f}>{f}</li>
+            <li key={f}>{explain(f)}</li>
           ))}
         </ul>
       )}
@@ -128,18 +138,18 @@ function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
         )}
         {worthRetrying(error.code) && (
           <button type="button" className={primary ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"} onClick={() => act.again(turn)}>
-            Try again
+            {t("community.tryAgain")}
           </button>
         )}
         {error.ask && (
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            data-tip="Copies a ready-to-paste question about this error, for Claude or any assistant"
-            onClick={() => act.copy(error.ask!, "The question for Claude")}
+            data-tip={t("ai.turn.askTip")}
+            onClick={() => act.copy(error.ask!)}
           >
             <CopyIcon size={13} />
-            Ask Claude to fix it
+            {t("ai.turn.ask")}
           </button>
         )}
       </div>
@@ -171,6 +181,8 @@ export function TurnCard({
   applied: boolean;
   act: TurnActions;
 }) {
+  const t = useT();
+  const duration = useDuration();
   const [logOpen, setLogOpen] = useState(false);
   return (
     <article className="turn" data-status={turn.status}>
@@ -188,9 +200,9 @@ export function TurnCard({
       {turn.status === "error" && <Failed turn={turn} act={act} />}
       {turn.status === "stopped" && (
         <div className="turn-stopped">
-          <p>Stopped before it finished{turn.finished ? `, after ${duration(secondsSince(turn.started, turn.finished))}` : ""}.</p>
+          <p>{turn.finished ? t("ai.turn.stoppedAfter", { time: duration(secondsSince(turn.started, turn.finished)) }) : t("ai.turn.stopped")}</p>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => act.again(turn)}>
-            Try again
+            {t("community.tryAgain")}
           </button>
         </div>
       )}
@@ -206,9 +218,9 @@ export function TurnCard({
                 <button
                   type="button"
                   className="icon-btn turn-more"
-                  aria-label={`options for ${live.name}`}
+                  aria-label={t("library.tile.optionsLabel", { name: live.name })}
                   aria-haspopup="dialog"
-                  data-tip="Name, tags and details"
+                  data-tip={t("ai.turn.options")}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={(e) => act.menu(live, e.currentTarget)}
                 >
@@ -229,23 +241,23 @@ export function TurnCard({
                 </div>
               )}
               <p className="turn-where">
-                {turn.where}
-                {turn.finished ? ` · ${duration(secondsSince(turn.started, turn.finished))}` : ""} · in Yours
+                {madeWith(turn.where)}
+                {turn.finished ? ` · ${duration(secondsSince(turn.started, turn.finished))}` : ""} · {t("ai.turn.inYours")}
               </p>
               <div className="turn-actions">
                 {folderName ? (
                   applied ? (
                     <span className="turn-applied">
-                      <OkBadge size={16} /> On {clip(folderName, 24)}
+                      <OkBadge size={16} /> {t("ai.turn.on", { name: clip(folderName, 24) })}
                     </span>
                   ) : (
                     <button type="button" className="btn btn-primary btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={() => act.apply(live)}>
-                      Apply to {clip(folderName, 24)}
+                      {t("ai.turn.applyTo", { name: clip(folderName, 24) })}
                     </button>
                   )
                 ) : (
                   <button type="button" className="btn btn-primary btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={act.chooseFolder}>
-                    Choose a folder
+                    {t("common.dialog.chooseFolder")}
                   </button>
                 )}
                 {folderName && !applied && (
@@ -253,15 +265,15 @@ export function TurnCard({
                     type="button"
                     className="btn btn-secondary btn-sm"
                     disabled={onFolder}
-                    data-tip={onFolder ? undefined : `See it on ${clip(folderName, 24)} before applying it`}
+                    data-tip={onFolder ? undefined : t("ai.turn.previewTip", { name: clip(folderName, 24) })}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => act.preview(live)}
                   >
-                    {onFolder ? "On show" : "Preview"}
+                    {onFolder ? t("ai.turn.onShow") : t("ai.turn.preview")}
                   </button>
                 )}
                 <button type="button" className="btn btn-ghost btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={() => act.again(turn)}>
-                  Make another
+                  {t("ai.turn.another")}
                 </button>
               </div>
               {turn.log && turn.log.length > 0 && <Log lines={turn.log} open={logOpen} onToggle={() => setLogOpen((o) => !o)} />}
@@ -269,9 +281,9 @@ export function TurnCard({
           </div>
         ) : (
           <div className="turn-stopped">
-            <p>This picture has been deleted from your library.</p>
+            <p>{t("ai.turn.deleted")}</p>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => act.again(turn)}>
-              Make it again
+              {t("ai.turn.makeAgain")}
             </button>
           </div>
         ))}

@@ -583,7 +583,7 @@ async fn published_pack(
         .packs(&[pack_id.to_string()])?
         .into_iter()
         .next()
-        .ok_or_else(|| "that pack isn't listed any more; try Refresh".to_string())?;
+        .ok_or_else(|| "that pack isn't listed any more. Try Refresh".to_string())?;
     previews::manifest(source, files, &row).await
 }
 
@@ -704,7 +704,7 @@ async fn download_published(
                     .map_err(|e| match e {
                         // Its size is known, so one bigger is the wrong file too.
                         Fetch::Damaged | Fetch::TooBig(_) => {
-                            format!("{} arrived damaged; try again", skin.file)
+                            format!("{} arrived damaged. Try again", skin.file)
                         }
                         e => format!("{}: {e}", skin.file),
                     })?;
@@ -739,7 +739,7 @@ async fn download_pack_from(
         pack::MAX_MANIFEST_BYTES,
     )
     .await?;
-    let pack = Pack::parse(&manifest).map_err(|problems| problems.join("; "))?;
+    let pack = Pack::parse(&manifest).map_err(|problems| problems.join(". "))?;
     let total = pack.skins.len();
     progress(PackProgress::download(0, total));
     let arrived = AtomicUsize::new(0);
@@ -817,7 +817,7 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
             .ok_or_else(|| "that folder's name has no letters or digits to use".to_string())?;
         let manifest = read_capped(&dir.join(pack::MANIFEST_FILE), pack::MAX_MANIFEST_BYTES)
             .map_err(|_| "that folder has no pack.json. See docs/PACKS.md".to_string())?;
-        let pack = Pack::parse(&manifest).map_err(|problems| problems.join("; "))?;
+        let pack = Pack::parse(&manifest).map_err(|problems| problems.join(". "))?;
         // Where packs are published, addresses are case-sensitive, so a name that only matches
         // in another case here would work on this Mac and then fail for everyone else.
         let on_disk: std::collections::HashSet<String> = std::fs::read_dir(&dir)
@@ -906,7 +906,7 @@ pub(crate) fn build_pack(
     let pack_tags = pack::clean_tags(tags, pack::MAX_PACK_TAGS);
     if skin_ids.len() > pack::MAX_SKINS {
         return Err(format!(
-            "that's {} skins; a pack holds at most {}",
+            "that's {} skins, and a pack holds at most {}",
             skin_ids.len(),
             pack::MAX_SKINS
         ));
@@ -967,7 +967,7 @@ pub(crate) fn build_pack(
     let bytes: usize = files.iter().map(|(_, b)| b.len()).sum();
     if bytes > pack::MAX_PACK_BYTES {
         return Err(format!(
-            "the pictures come to {} MB, and a pack's come to {} MB at most; split them into two \
+            "the pictures come to {} MB, and a pack's come to {} MB at most. Split them into two \
              packs",
             bytes.div_ceil(MB),
             pack::MAX_PACK_BYTES / MB
@@ -983,7 +983,7 @@ pub(crate) fn build_pack(
     };
     let problems = pack.problems();
     if !problems.is_empty() {
-        return Err(problems.join("; "));
+        return Err(problems.join(". "));
     }
     let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())? + "\n";
     files.push((pack::MANIFEST_FILE.to_string(), json.into_bytes()));
@@ -1087,12 +1087,12 @@ impl std::fmt::Display for Fetch {
                 f,
                 "couldn't reach {host}. Check your connection and try again"
             ),
-            Fetch::NotFound(host) => write!(f, "it isn't on {host} any more; try Refresh"),
+            Fetch::NotFound(host) => write!(f, "it isn't on {host} any more. Try Refresh"),
             Fetch::Refused(host, status) => {
-                write!(f, "{host} answered {status}; try again in a minute")
+                write!(f, "{host} answered {status}. Try again in a minute")
             }
             Fetch::TooBig(max) => write!(f, "it's over {} KB", max / 1024),
-            Fetch::Damaged => write!(f, "it arrived damaged; try again"),
+            Fetch::Damaged => write!(f, "it arrived damaged. Try again"),
         }
     }
 }
@@ -1835,7 +1835,7 @@ pub(crate) mod tests {
             lock(&heard).push(p)
         }))
         .unwrap_err();
-        assert_eq!(err, "b.png: it isn't on 127.0.0.1 any more; try Refresh");
+        assert_eq!(err, "b.png: it isn't on 127.0.0.1 any more. Try Refresh");
         assert_eq!(
             heard.into_inner().unwrap().first(),
             Some(&PackProgress::download(0, 2))
@@ -2263,7 +2263,7 @@ pub(crate) mod tests {
         let (base, _) = serve(tampered);
         let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let err = block_on(download_pack(&source, "blues", &no_progress)).unwrap_err();
-        assert_eq!(err, "navy.png arrived damaged; try again");
+        assert_eq!(err, "navy.png arrived damaged. Try again");
         let err = block_on(download_pack(&source, "greens", &no_progress)).unwrap_err();
         assert!(err.contains("isn't listed"), "{err}");
 
@@ -2287,7 +2287,7 @@ pub(crate) mod tests {
         let (base, _) = serve(swapped);
         let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let err = block_on(download_pack(&source, "blues", &no_progress)).unwrap_err();
-        assert_eq!(err, "that pack's list arrived damaged; try again");
+        assert_eq!(err, "that pack's list arrived damaged. Try again");
     }
 
     #[test]
@@ -2723,14 +2723,14 @@ pub(crate) mod tests {
             .unwrap();
         assert_eq!(
             err,
-            "the newest list of packs isn't there yet; try again in a minute"
+            "the newest list of packs isn't there yet. Try again in a minute"
         );
         let err = block_on(catalog::load(&Origin::repo(&behind), None, false))
             .err()
             .unwrap();
         assert_eq!(
             err,
-            "the newest list of packs isn't there yet; try again in a minute"
+            "the newest list of packs isn't there yet. Try again in a minute"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2853,11 +2853,11 @@ pub(crate) mod tests {
         // No bare "not found": every reason is a sentence.
         assert_eq!(
             Fetch::NotFound("GitHub".into()).to_string(),
-            "it isn't on GitHub any more; try Refresh"
+            "it isn't on GitHub any more. Try Refresh"
         );
         assert_eq!(
             Fetch::Refused("GitHub".into(), "503 Service Unavailable".into()).to_string(),
-            "GitHub answered 503 Service Unavailable; try again in a minute"
+            "GitHub answered 503 Service Unavailable. Try again in a minute"
         );
     }
 }

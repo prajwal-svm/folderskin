@@ -2,8 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffe
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type AiCatalogue } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
-import { keys } from "../lib/platform";
-import { LICENSES, PACKS_GUIDE_URL, REPO_URL } from "../lib/packs";
+import { keys, osOf, type Os } from "../lib/platform";
+import { LICENSES, REPO_URL } from "../lib/packs";
+import { licenceOption } from "../lib/licences";
+import { docsUrl, t as tNow, useT } from "../i18n";
 import {
   defaultProfile,
   loadProfiles,
@@ -43,41 +45,27 @@ import { SlidersHorizontalIcon } from "./icons/sliders-horizontal";
 import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 import { SunIcon } from "./icons/sun";
-import { Brand, branded } from "./Brand";
+import { branded } from "./Brand";
+import { providerName } from "../lib/providerNames";
 
 export type SettingsTab = "general" | "ai" | "sharing" | "about";
 
 /**
  * The pages down the side, and the words each answers to in the search above them: its section
- * titles and the words of its settings. A section's title, and a row's own words (its label and
- * `find`), light it up on its page.
+ * titles and the words of its settings (`settings.pages.<id>` and `settings.find.<id>`). A
+ * section's title, and a row's own words (its label and `find`), light it up on its page.
  */
-const PAGES: { id: SettingsTab; label: string; Icon: typeof SunIcon; find: string }[] = [
-  {
-    id: "general",
-    label: "General",
-    Icon: SlidersHorizontalIcon,
-    find: "appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
-  },
-  {
-    id: "ai",
-    label: "AI Provider",
-    Icon: SparklesIcon,
-    find: "ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
-  },
-  {
-    id: "sharing",
-    label: "Sharing",
-    Icon: EarthIcon,
-    find: "sharing share author credit credited licence license profile profiles cc0 cc by mit community pack",
-  },
-  {
-    id: "about",
-    label: "About",
-    Icon: InfoIcon,
-    find: "about folderskin what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star",
-  },
+const PAGES: { id: SettingsTab; Icon: typeof SunIcon }[] = [
+  { id: "general", Icon: SlidersHorizontalIcon },
+  { id: "ai", Icon: SparklesIcon },
+  { id: "sharing", Icon: EarthIcon },
+  { id: "about", Icon: InfoIcon },
 ];
+
+const pageLabel = (id: SettingsTab) => tNow(`settings.pages.${id}`);
+
+/** A page's name and the words it answers to in search, in the language on show. */
+const pageFind = (id: SettingsTab) => `${pageLabel(id)} ${tNow(`settings.find.${id}`)}`;
 
 type Toast = (text: string, opts?: { tone?: ToastTone }) => void;
 
@@ -106,7 +94,7 @@ export function Settings({
   onThemePref,
   rail,
   onRail,
-  fileBrowser,
+  os,
   savedCount,
   onKeysChanged,
   onClose,
@@ -123,7 +111,8 @@ export function Settings({
   /** The sidebar is folded to its rail of icons. */
   rail: boolean;
   onRail: (rail: boolean) => void;
-  fileBrowser: string;
+  /** The system, whose file browser the page names. */
+  os: string;
   /** Skins saved on this computer: your own and community ones. */
   savedCount: number;
   /** A key was saved or removed, so the studio reloads its providers. */
@@ -134,12 +123,14 @@ export function Settings({
   onCheckUpdates: () => void;
   onShowUpdate: () => void;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<SettingsTab>(first);
   const [search, setSearch] = useState("");
   /** The page open has something leaving it would lose: a profile being changed, or an Undo. */
   const [busy, setBusy] = useState(false);
   const query = search.trim().toLowerCase();
-  const shown = useMemo(() => PAGES.filter((p) => !query || hasWords(query, `${p.label} ${p.find}`)), [query]);
+  // The words are the language's, so the pages are found again when it changes.
+  const shown = useMemo(() => PAGES.filter((p) => !query || hasWords(query, pageFind(p.id))), [query, t]);
   // Searching moves to the first page that has it, unless the one open has it too, or has
   // something open that moving would lose.
   useEffect(() => {
@@ -167,16 +158,16 @@ export function Settings({
   };
 
   return (
-    <Modal bare title="Settings" className="modal-settings" onClose={onClose}>
+    <Modal bare title={t("settings.title")} className="modal-settings" onClose={onClose}>
       <div className="settings">
-        <nav className="settings-nav" aria-label="settings">
+        <nav className="settings-nav" aria-label={t("settings.navLabel")}>
           <label className="settings-search">
             <SearchIcon size={15} />
             <input
               type="search"
               value={search}
-              placeholder="Search"
-              aria-label="search settings"
+              placeholder={t("settings.search")}
+              aria-label={t("settings.searchLabel")}
               spellCheck={false}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -184,8 +175,8 @@ export function Settings({
               }}
             />
           </label>
-          <p className="settings-nav-label">Settings</p>
-          <div className="settings-nav-list" role="tablist" aria-orientation="vertical" aria-label="settings pages">
+          <p className="settings-nav-label">{t("settings.title")}</p>
+          <div className="settings-nav-list" role="tablist" aria-orientation="vertical" aria-label={t("settings.pagesLabel")}>
             {shown.map((p, i) => (
               <button
                 key={p.id}
@@ -204,7 +195,7 @@ export function Settings({
                 onKeyDown={onNavKey}
               >
                 <p.Icon size={17} />
-                <span className="settings-nav-text">{p.label}</span>
+                <span className="settings-nav-text">{pageLabel(p.id)}</span>
               </button>
             ))}
           </div>
@@ -215,10 +206,10 @@ export function Settings({
           role="tabpanel"
           id={panelId}
           aria-labelledby={listed ? `${panelId}-${page.id}` : undefined}
-          aria-label={listed ? undefined : empty ? "settings" : page.label}
+          aria-label={listed ? undefined : empty ? t("settings.navLabel") : pageLabel(page.id)}
           key={tab}
         >
-          {empty && <p className="settings-empty">No setting matches “{search.trim()}”</p>}
+          {empty && <p className="settings-empty">{t("settings.noMatch", { query: search.trim() })}</p>}
           <Query.Provider value={query}>
             {tab === "general" && (
               <General
@@ -227,13 +218,13 @@ export function Settings({
                 onThemePref={onThemePref}
                 rail={rail}
                 onRail={onRail}
-                fileBrowser={fileBrowser}
+                os={osOf(os)}
                 savedCount={savedCount}
               />
             )}
             {tab === "ai" && <AiPage onKeysChanged={onKeysChanged} toast={toast} />}
             {tab === "sharing" && <Sharing onBusy={setBusy} />}
-            {tab === "about" && <About fileBrowser={fileBrowser} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
+            {tab === "about" && <About os={osOf(os)} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
           </Query.Provider>
         </div>
       </div>
@@ -316,15 +307,15 @@ function Seg<T extends string | boolean>({ label, value, options, onChange }: { 
 
 // ---------- General ----------
 
-const THEMES: SegOption<ThemePref>[] = [
-  { value: "system", Icon: MonitorCheckIcon, tip: "Match the computer" },
-  { value: "light", Icon: SunIcon, tip: "Light" },
-  { value: "dark", Icon: MoonIcon, tip: "Dark" },
+const THEMES = (): SegOption<ThemePref>[] => [
+  { value: "system", Icon: MonitorCheckIcon, tip: tNow("settings.general.themes.system") },
+  { value: "light", Icon: SunIcon, tip: tNow("settings.general.themes.light") },
+  { value: "dark", Icon: MoonIcon, tip: tNow("settings.general.themes.dark") },
 ];
 
-const MOTIONS: SegOption<Motion>[] = [
-  { value: "system", label: "System", tip: "As much as the computer's own setting allows" },
-  { value: "reduced", label: "Reduced", tip: "Things appear and change without moving" },
+const MOTIONS = (): SegOption<Motion>[] => [
+  { value: "system", label: tNow("settings.general.motions.system"), tip: tNow("settings.general.motions.systemTip") },
+  { value: "reduced", label: tNow("settings.general.motions.reduced"), tip: tNow("settings.general.motions.reducedTip") },
 ];
 
 function General({
@@ -333,7 +324,7 @@ function General({
   onThemePref,
   rail,
   onRail,
-  fileBrowser,
+  os,
   savedCount,
 }: {
   folderPicture?: string | null;
@@ -341,9 +332,10 @@ function General({
   onThemePref: (pref: ThemePref) => void;
   rail: boolean;
   onRail: (rail: boolean) => void;
-  fileBrowser: string;
+  os: Os;
   savedCount: number;
 }) {
+  const t = useT();
   const prefs = usePrefs();
   const [folder, setFolder] = useState<string | null>(null);
   const [folderError, setFolderError] = useState<string | null>(null);
@@ -369,12 +361,12 @@ function General({
 
   return (
     <>
-      <Section title="Appearance">
-        <Row label="Theme" find="dark light system mode">
-          <Seg label="theme" value={themePref} options={THEMES} onChange={onThemePref} />
+      <Section title={t("settings.general.appearance")}>
+        <Row label={t("settings.general.theme")} find={t("settings.general.themeFind")}>
+          <Seg label={t("settings.general.themeLabel")} value={themePref} options={THEMES()} onChange={onThemePref} />
         </Row>
-        <Row label="Accent colour" note="Buttons, selections and the glow around a folder you drop." find="color accent">
-          <div className="set-swatches" role="radiogroup" aria-label="accent colour">
+        <Row label={t("settings.general.accent")} note={t("settings.general.accentNote")} find={t("settings.general.accentFind")}>
+          <div className="set-swatches" role="radiogroup" aria-label={t("settings.general.accentLabel")}>
             {ACCENTS.map((a, i) => (
               <button
                 key={a.id}
@@ -384,9 +376,9 @@ function General({
                 type="button"
                 role="radio"
                 aria-checked={prefs.accent === a.id}
-                aria-label={a.label}
+                aria-label={t(`settings.general.accents.${a.id}`)}
                 tabIndex={prefs.accent === a.id ? 0 : -1}
-                data-tip={a.label}
+                data-tip={t(`settings.general.accents.${a.id}`)}
                 className={["set-swatch", a.id === "mono" && "is-mono", prefs.accent === a.id && "is-on"].filter(Boolean).join(" ")}
                 style={{ "--swatch": `var(--swatch-${a.id})` } as CSSProperties}
                 onClick={() => setPrefs({ accent: a.id })}
@@ -395,39 +387,39 @@ function General({
             ))}
           </div>
         </Row>
-        <Row label="Motion" note="Less movement in the library, the dialogs and the icons." find="animation reduce reduced">
-          <Seg label="motion" value={prefs.motion} options={MOTIONS} onChange={(motion) => setPrefs({ motion })} />
+        <Row label={t("settings.general.motion")} note={t("settings.general.motionNote")} find={t("settings.general.motionFind")}>
+          <Seg label={t("settings.general.motionLabel")} value={prefs.motion} options={MOTIONS()} onChange={(motion) => setPrefs({ motion })} />
         </Row>
       </Section>
 
-      <Section title="Window">
-        <Row label="Sidebar" note={`Icons only folds it to a narrow strip. ${keys("\\")} switches between them.`} find="rail collapse fold icons">
+      <Section title={t("settings.general.window")}>
+        <Row label={t("settings.general.sidebar")} note={t("settings.general.sidebarNote", { keys: keys("\\") })} find={t("settings.general.sidebarFind")}>
           <Seg
-            label="sidebar"
+            label={t("settings.general.sidebarLabel")}
             value={rail}
             options={[
-              { value: false, label: "Full" },
-              { value: true, label: "Icons only" },
+              { value: false, label: t("settings.general.full") },
+              { value: true, label: t("settings.general.iconsOnly") },
             ]}
             onChange={onRail}
           />
         </Row>
       </Section>
 
-      <Section title="Your skins" note={folderError ?? "Everything you add stays here between launches. Copy this folder to back it up."}>
+      <Section title={t("settings.general.yourSkins")} note={folderError ?? t("settings.general.yourSkinsNote")}>
         <Row
-          label={savedCount === 1 ? "1 skin" : `${savedCount} skins`}
-          find="storage folder backup skins"
+          label={t("settings.general.skins", { count: savedCount })}
+          find={t("settings.general.skinsFind")}
           lead={folderPicture ? <img className="set-row-folder" src={folderPicture} alt="" draggable={false} /> : undefined}
           note={
             <span className="set-path" data-tip={folder ?? undefined} data-tip-overflow>
-              {folder ? prettyPath(folder) : folderError ? "Kept until you quit" : " "}
+              {folder ? prettyPath(folder) : folderError ? t("settings.general.keptUntilQuit") : " "}
             </span>
           }
         >
           {folder && (
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => void revealItemInDir(folder).catch(() => {})}>
-              Show in {fileBrowser}
+              {t(`common.showIn.${os}`)}
             </button>
           )}
         </Row>
@@ -439,6 +431,7 @@ function General({
 // ---------- AI ----------
 
 function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: Toast }) {
+  const t = useT();
   const [catalogue, setCatalogue] = useState<AiCatalogue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [providerId, setProviderId] = useState("");
@@ -458,16 +451,16 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
 
   return (
     <Section
-      title="Where pictures are made"
-      find={`key keys api provider providers model ${catalogue?.providers.map((p) => p.label).join(" ") ?? ""}`}
-      note="FolderSkin has no server. With a key, Generate with AI sends your request straight from your machine to the provider, billed to your account. The Local Model makes them for free, once it's set up."
+      title={t("settings.ai.title")}
+      find={`${t("settings.ai.find")} ${catalogue?.providers.map((p) => `${p.label} ${providerName(p.label)}`).join(" ") ?? ""}`}
+      note={t("settings.ai.note")}
     >
       <div className="set-block">
         {error ? (
           <p className="field-note is-error">{error}</p>
         ) : !catalogue ? (
           <p className="field-note">
-            <LoaderIcon /> Loading providers
+            <LoaderIcon /> {t("settings.ai.loading")}
           </p>
         ) : (
           <ProviderKeys
@@ -489,6 +482,7 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
 // ---------- Sharing ----------
 
 function Sharing({ onBusy }: { onBusy: (busy: boolean) => void }) {
+  const t = useT();
   const [profiles, setProfiles] = useState<Profiles>(loadProfiles);
   const change = useCallback((next: Profiles) => {
     setProfiles(next);
@@ -502,14 +496,14 @@ function Sharing({ onBusy }: { onBusy: (busy: boolean) => void }) {
   return (
     <>
       <Section
-        title="Licence profiles"
-        note="A pack you share says who made it and how others may use it. Keep a profile for each way you share: sharing starts from the default one."
+        title={t("settings.sharing.title")}
+        note={t("settings.sharing.note")}
       >
         <ProfileList profiles={profiles} onChange={change} onBusy={setListBusy} />
       </Section>
 
-      <button type="button" className="link-btn set-link" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
-        How sharing works <ExternalLinkIcon size={12} />
+      <button type="button" className="link-btn set-link" onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}>
+        {t("settings.sharing.howItWorks")} <ExternalLinkIcon size={12} />
       </button>
     </>
   );
@@ -518,7 +512,7 @@ function Sharing({ onBusy }: { onBusy: (busy: boolean) => void }) {
 /** How long a deleted profile can be brought back. */
 const UNDO_MS = 8000;
 
-const LICENCE_OPTIONS = LICENSES.map((l) => ({ value: l.id as LicenseId, label: `${l.label}: ${l.note}` }));
+const licenceOptions = () => LICENSES.map((l) => ({ value: l.id as LicenseId, label: licenceOption(l) }));
 const licenceName = (id: LicenseId) => LICENSES.find((l) => l.id === id)?.label ?? id;
 
 function ProfileList({
@@ -531,6 +525,7 @@ function ProfileList({
   /** A profile is open for changes, or Undo is offered. */
   onBusy: (busy: boolean) => void;
 }) {
+  const t = useT();
   /** The profile open for changes, or a new one not yet kept. */
   const [editing, setEditing] = useState<{ profile: LicenceProfile; isNew: boolean } | null>(null);
   /** The profiles as they were before one was deleted, and that one, while Undo is offered. */
@@ -603,10 +598,10 @@ function ProfileList({
               <span className="set-profile-text">
                 <span className="set-profile-name">
                   {p.name}
-                  {p.id === profiles.defaultId && <span className="set-chip">Default</span>}
+                  {p.id === profiles.defaultId && <span className="set-chip">{t("settings.profile.default")}</span>}
                 </span>
                 <span className="set-profile-meta">
-                  {p.author ? `Credited to ${p.author}` : "No one to credit yet"} · {licenceName(p.license)}
+                  {p.author ? t("settings.profile.creditedTo", { author: p.author }) : t("settings.profile.noCredit")} · {licenceName(p.license)}
                 </span>
               </span>
               <span className="set-profile-actions">
@@ -614,8 +609,8 @@ function ProfileList({
                   <button
                     type="button"
                     className="icon-btn"
-                    aria-label={`make ${p.name} the default`}
-                    data-tip="Make default"
+                    aria-label={t("settings.profile.makeDefaultLabel", { name: p.name })}
+                    data-tip={t("settings.profile.makeDefault")}
                     onClick={() => {
                       set(makeDefault(profiles, p.id));
                       focusNext.current = [`change ${p.id}`];
@@ -628,8 +623,8 @@ function ProfileList({
                   ref={hold(`change ${p.id}`)}
                   type="button"
                   className="icon-btn"
-                  aria-label={`change ${p.name}`}
-                  data-tip="Change"
+                  aria-label={t("settings.profile.changeLabel", { name: p.name })}
+                  data-tip={t("settings.profile.change")}
                   onClick={() => setEditing({ profile: p, isNew: false })}
                 >
                   <PencilIcon size={15} />
@@ -638,8 +633,8 @@ function ProfileList({
                   <button
                     type="button"
                     className="icon-btn is-danger"
-                    aria-label={`delete ${p.name}`}
-                    data-tip="Delete"
+                    aria-label={t("settings.profile.deleteLabel", { name: p.name })}
+                    data-tip={t("settings.profile.delete")}
                     onClick={() => {
                       onChange(removeProfile(profiles, p.id));
                       setDeleted({ before: profiles, id: p.id, name: p.name });
@@ -666,7 +661,7 @@ function ProfileList({
       <div role="status">
         {deleted && (
           <p className="set-undo">
-            Deleted {deleted.name}.
+            {t("settings.profile.deleted", { name: deleted.name })}
             <button
               ref={hold("undo")}
               type="button"
@@ -677,7 +672,7 @@ function ProfileList({
                 focusNext.current = [`change ${deleted.id}`];
               }}
             >
-              Undo
+              {t("settings.profile.undo")}
             </button>
           </p>
         )}
@@ -685,7 +680,7 @@ function ProfileList({
       {!editing && profiles.list.length < MAX_PROFILES && (
         <button ref={hold("add")} type="button" className="btn btn-secondary btn-sm set-add" onClick={add}>
           <PlusIcon size={14} />
-          Add a profile
+          {t("settings.profile.add")}
         </button>
       )}
     </>
@@ -703,6 +698,7 @@ function ProfileForm({
   onSave: (p: LicenceProfile) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState(profile.name);
   const [author, setAuthor] = useState(profile.author);
   const [license, setLicense] = useState<LicenseId>(profile.license);
@@ -739,7 +735,7 @@ function ProfileForm({
     <form
       ref={form}
       className="set-profile-form"
-      aria-label={profile.name ? `change ${profile.name}` : "new profile"}
+      aria-label={profile.name ? t("settings.profile.changeLabel", { name: profile.name }) : t("settings.profile.newLabel")}
       onSubmit={(e) => {
         e.preventDefault();
         save();
@@ -747,7 +743,7 @@ function ProfileForm({
     >
       <div className="field">
         <label className="field-label" htmlFor={`${id}-name`}>
-          Name
+          {t("settings.profile.name")}
         </label>
         <input
           ref={nameRef}
@@ -755,7 +751,7 @@ function ProfileForm({
           className="input"
           value={name}
           maxLength={MAX_PROFILE_NAME}
-          placeholder="Personal, or For work"
+          placeholder={t("settings.profile.namePlaceholder")}
           onChange={(e) => setName(e.target.value)}
           {...marks("name")}
         />
@@ -763,7 +759,7 @@ function ProfileForm({
       </div>
       <div className="field">
         <label className="field-label" htmlFor={`${id}-author`}>
-          Credited to
+          {t("settings.profile.creditedToLabel")}
         </label>
         <input
           ref={authorRef}
@@ -773,23 +769,23 @@ function ProfileForm({
           maxLength={39}
           spellCheck={false}
           autoCapitalize="off"
-          placeholder="your-name"
+          placeholder={t("settings.profile.authorPlaceholder")}
           onChange={(e) => setAuthor(e.target.value)}
           {...marks("author")}
         />
         {note("author")}
       </div>
       <div className="field">
-        <span className="field-label">Licence</span>
-        <Select label="licence" className="is-field" value={license} onChange={setLicense} options={LICENCE_OPTIONS} />
+        <span className="field-label">{t("settings.profile.licence")}</span>
+        <Select label={t("settings.profile.licenceLabel")} className="is-field" value={license} onChange={setLicense} options={licenceOptions()} />
       </div>
       {note("list")}
       <div className="set-form-actions">
         <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </button>
         <button type="submit" className="btn btn-primary btn-sm">
-          {profile.name ? "Save" : "Add profile"}
+          {profile.name ? t("settings.profile.save") : t("settings.profile.addProfile")}
         </button>
       </div>
     </form>
@@ -799,16 +795,17 @@ function ProfileForm({
 // ---------- About ----------
 
 function About({
-  fileBrowser,
+  os,
   updates,
   onCheckUpdates,
   onShowUpdate,
 }: {
-  fileBrowser: string;
+  os: Os;
   updates: UpdateStatus;
   onCheckUpdates: () => void;
   onShowUpdate: () => void;
 }) {
+  const t = useT();
   const link = (url: string, label: string, icon: ReactNode) => (
     <button type="button" className="about-link" onClick={() => void openUrl(url).catch(() => {})}>
       {icon}
@@ -823,34 +820,30 @@ function About({
           <p className="about-title">
             Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
           </p>
-          <p className="about-line">Free and open source · GPL-3.0</p>
+          <p className="about-line">{t("common.about.licence")}</p>
         </div>
       </div>
       <div className="set-block about-pitch">
-        <p className="about-tagline">Give any folder a skin.</p>
-        <p className="about-intro">
-          Your best memories wear the same plain folder as your old paperwork. <Brand /> gives every folder a look that fits
-          what&apos;s inside: a golden-hour film still for summer photos, a vintage travel poster for a trip, pop art for a video
-          project, soft pastels for a birthday.
-        </p>
+        <p className="about-tagline">{t("common.about.tagline")}</p>
+        <p className="about-intro">{branded(t("settings.about.intro"))}</p>
         <ul className="about-points">
-          <li>Skins from free community packs, from your own photos, or designed by you.</li>
-          <li>Describe a style and AI paints it, with your own key or free with the Local Model.</li>
-          <li>Skins show up right in {fileBrowser}, and any folder gets its own icon back in one click.</li>
-          <li>Free and open source. No account, no tracking.</li>
+          <li>{t("settings.about.points.skins")}</li>
+          <li>{t("settings.about.points.ai")}</li>
+          <li>{t(`settings.about.points.fileBrowser.${os}`)}</li>
+          <li>{t("settings.about.points.free")}</li>
         </ul>
       </div>
-      <Section title="Updates">
-        <Row label="Newer versions" note="They come from FolderSkin's releases on GitHub, and install when you say so." find="update updates release version">
+      <Section title={t("settings.about.updates")}>
+        <Row label={t("settings.about.newer")} note={t("settings.about.newerNote")} find={t("settings.about.newerFind")}>
           <UpdateButton status={updates} onCheck={onCheckUpdates} onShow={onShowUpdate} />
         </Row>
       </Section>
-      <Section title="Links">
+      <Section title={t("settings.about.links")}>
         <div className="set-block about-links">
-          {link(REPO_URL, "Source code", <GithubMark size={15} />)}
-          {link(`${REPO_URL}/issues`, "Report issues", <BadgeAlertIcon size={15} />)}
-          {link(`${REPO_URL}/releases`, "Releases", <DownloadIcon size={15} />)}
-          {link(REPO_URL, "Star project", <StarIcon size={15} className="about-star" />)}
+          {link(REPO_URL, t("settings.about.sourceCode"), <GithubMark size={15} />)}
+          {link(`${REPO_URL}/issues`, t("common.about.reportIssues"), <BadgeAlertIcon size={15} />)}
+          {link(`${REPO_URL}/releases`, t("settings.about.releases"), <DownloadIcon size={15} />)}
+          {link(REPO_URL, t("common.about.star"), <StarIcon size={15} className="about-star" />)}
         </div>
       </Section>
     </>

@@ -98,7 +98,7 @@ impl OutputParser {
                 level: Level::Warn,
                 message: format!(
                     "too little memory is free to hold the model, so it's read from the disk as \
-                     it paints, which is several times slower; closing other programs helps ({text})"
+                     it paints, which is several times slower. Closing other programs helps ({text})"
                 ),
             });
         }

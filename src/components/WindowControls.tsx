@@ -14,10 +14,12 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "../lib/devMock";
+import { useT } from "../i18n";
 
 const GLYPH = { width: 10, height: 10, viewBox: "0 0 10 10", "aria-hidden": true, focusable: false } as const;
 
 export function WindowControls() {
+  const t = useT();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -37,8 +39,8 @@ export function WindowControls() {
 
   const win = () => (isTauri() ? getCurrentWindow() : { minimize: async () => {}, toggleMaximize: async () => {}, close: async () => {} });
   return (
-    <div className="winctl" role="group" aria-label="window">
-      <button type="button" className="winctl-btn" aria-label="Minimise" data-tip="Minimise" onClick={() => void win().minimize()}>
+    <div className="winctl" role="group" aria-label={t("common.window.label")}>
+      <button type="button" className="winctl-btn" aria-label={t("common.window.minimise")} data-tip={t("common.window.minimise")} onClick={() => void win().minimize()}>
         <svg {...GLYPH}>
           <path d="M0 5.5h10" stroke="currentColor" strokeWidth="1" />
         </svg>
@@ -46,8 +48,8 @@ export function WindowControls() {
       <button
         type="button"
         className="winctl-btn"
-        aria-label={maximized ? "Restore" : "Maximise"}
-        data-tip={maximized ? "Restore" : "Maximise"}
+        aria-label={maximized ? t("common.window.restore") : t("common.window.maximise")}
+        data-tip={maximized ? t("common.window.restore") : t("common.window.maximise")}
         onClick={() => void win().toggleMaximize()}
       >
         {maximized ? (
@@ -61,7 +63,7 @@ export function WindowControls() {
           </svg>
         )}
       </button>
-      <button type="button" className="winctl-btn is-close" aria-label="Close" data-tip="Close" onClick={() => void win().close()}>
+      <button type="button" className="winctl-btn is-close" aria-label={t("common.window.close")} data-tip={t("common.window.close")} onClick={() => void win().close()}>
         <svg {...GLYPH}>
           <path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" strokeWidth="1" />
         </svg>

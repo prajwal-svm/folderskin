@@ -1,3 +1,5 @@
+import "../../i18n/composer";
+import { t, useLocale } from "../../i18n";
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { cssColor } from "../../composer/color";
 import { layerContent, layerLabel, mainColor, type Doc, type Layer } from "../../composer/doc";
@@ -50,8 +52,6 @@ function Thumb({ layer }: { layer: Layer }) {
   }
 }
 
-/** The hint under the rename field: renaming a layer never changes what's on the folder. */
-const RENAME_HINT = "Names the layer in this list. What it shows on the folder stays as it is.";
 
 /**
  * The layers, top first, as the eye sees them stacked. Click to select, double-click a name to
@@ -79,6 +79,7 @@ export function ComposerLayers({
   onMove: (id: string, index: number) => void;
   onDelete: (id: string) => void;
 }) {
+  useLocale();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ id: string; slot: number; offset: number } | null>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -114,10 +115,10 @@ export function ComposerLayers({
     el.addEventListener("pointercancel", up);
   };
 
-  if (n === 0) return <p className="cmp-layers-empty">Nothing here yet. Add a colour, words or a picture from the bar above the folder.</p>;
+  if (n === 0) return <p className="cmp-layers-empty">{t("composer.layers.empty")}</p>;
 
   return (
-    <div className="cmp-layers" ref={list} role="listbox" aria-label="layers" style={{ height: n * ROW }}>
+    <div className="cmp-layers" ref={list} role="listbox" aria-label={t("composer.layers.label")} style={{ height: n * ROW }}>
       {rows.map((layer, row) => {
         const index = n - 1 - row;
         const lifted = dragging?.id === layer.id;
@@ -174,8 +175,8 @@ export function ComposerLayers({
                 placeholder={auto}
                 autoFocus
                 maxLength={40}
-                aria-label="layer name"
-                aria-description={RENAME_HINT}
+                aria-label={t("composer.inspector.layerNameLabel")}
+                aria-description={t("composer.layers.renameHint")}
                 onFocus={(e) => e.currentTarget.select()}
                 onBlur={(e) => {
                   // Only a real change is one: leaving the field as it was adds no undo step, and
@@ -197,14 +198,14 @@ export function ComposerLayers({
             ) : (
               <span className="cmp-layer-name">
                 <span className="cmp-layer-label">{label}</span>
-                {content && <span className="cmp-layer-content">“{content}”</span>}
+                {content && <span className="cmp-layer-content">{t("composer.layers.quoted", { content })}</span>}
               </span>
             )}
             <button
               type="button"
               className={layer.locked ? "cmp-layer-btn is-set" : "cmp-layer-btn"}
-              aria-label={layer.locked ? `unlock ${label}` : `lock ${label}`}
-              data-tip={layer.locked ? "Unlock" : "Lock, so it can't be moved on the canvas"}
+              aria-label={layer.locked ? t("composer.layers.unlockLabel", { name: label }) : t("composer.layers.lockLabel", { name: label })}
+              data-tip={layer.locked ? t("composer.layers.unlock") : t("composer.layers.lock")}
               onClick={() => onToggle(layer.id, "locked")}
             >
               {layer.locked ? <LockIcon size={13} /> : <LockOpenIcon size={13} />}
@@ -212,13 +213,13 @@ export function ComposerLayers({
             <button
               type="button"
               className={layer.hidden ? "cmp-layer-btn is-set" : "cmp-layer-btn"}
-              aria-label={layer.hidden ? `show ${label}` : `hide ${label}`}
-              data-tip={layer.hidden ? "Show" : "Hide"}
+              aria-label={layer.hidden ? t("composer.layers.showLabel", { name: label }) : t("composer.layers.hideLabel", { name: label })}
+              data-tip={layer.hidden ? t("composer.layers.show") : t("composer.layers.hide")}
               onClick={() => onToggle(layer.id, "hidden")}
             >
               {layer.hidden ? <EyeOffIcon size={14} /> : <EyeOpenIcon size={14} />}
             </button>
-            <button type="button" className="cmp-layer-btn is-danger" aria-label={`delete ${label}`} data-tip="Delete layer" onClick={() => onDelete(layer.id)}>
+            <button type="button" className="cmp-layer-btn is-danger" aria-label={t("composer.layers.deleteLabel", { name: label })} data-tip={t("composer.layers.delete")} onClick={() => onDelete(layer.id)}>
               <TrashIcon size={13} />
             </button>
           </div>

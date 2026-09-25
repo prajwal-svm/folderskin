@@ -6,6 +6,7 @@ import { UpdateButton } from "./UpdateDialog";
 import { BadgeAlertIcon } from "./icons/badge-alert";
 import { GithubMark } from "./icons/githubMark";
 import { StarIcon } from "./icons/star";
+import { useT } from "../i18n";
 
 const open = (url: string) => void openUrl(url).catch(() => {});
 
@@ -29,13 +30,14 @@ export function AboutMenu({
   onCheckUpdates: () => void;
   onShowUpdate: () => void;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!shown) return;
     const close = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (ref.current && !ref.current.contains(t) && !t.closest('[aria-label="about FolderSkin"]')) onClose();
+      const target = e.target as HTMLElement;
+      if (ref.current && !ref.current.contains(target) && !target.closest(".brand-version")) onClose();
     };
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("mousedown", close);
@@ -57,7 +59,7 @@ export function AboutMenu({
     <div
       className="about-pop"
       role="dialog"
-      aria-label="about FolderSkin"
+      aria-label={t("sidebar.about")}
       ref={ref}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
@@ -69,16 +71,16 @@ export function AboutMenu({
           <p className="about-title">
             Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
           </p>
-          <p className="about-line">Free and open source · GPL-3.0</p>
+          <p className="about-line">{t("common.about.licence")}</p>
         </div>
-        <button type="button" className="icon-btn about-source" aria-label="View Source" data-tip="View source" onClick={() => open(REPO_URL)}>
+        <button type="button" className="icon-btn about-source" aria-label={t("updates.about.sourceLabel")} data-tip={t("updates.about.source")} onClick={() => open(REPO_URL)}>
           <GithubMark size={17} />
         </button>
       </div>
-      <p className="about-note">Give any folder a skin: a photo, a painting, a design of your own, or a style you describe.</p>
+      <p className="about-note">{t("updates.about.note")}</p>
       <div className="about-links">
-        {link(`${REPO_URL}/issues`, "Report issues", <BadgeAlertIcon size={15} />)}
-        {link(REPO_URL, "Star project", <StarIcon size={15} className="about-star" />)}
+        {link(`${REPO_URL}/issues`, t("common.about.reportIssues"), <BadgeAlertIcon size={15} />)}
+        {link(REPO_URL, t("common.about.star"), <StarIcon size={15} className="about-star" />)}
       </div>
       <UpdateButton status={updates} onCheck={onCheckUpdates} onShow={onShowUpdate} />
     </div>

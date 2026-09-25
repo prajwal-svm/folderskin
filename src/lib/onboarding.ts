@@ -5,6 +5,7 @@
  */
 import type { PackProgress } from "./tauri";
 import { clip } from "./names";
+import { t } from "../i18n";
 
 /** The pack a first launch starts with, when the list has it: Classic Art, by the id it was first
  *  published under. Packs can move to a new id, and the list says where each old one went. */
@@ -63,15 +64,15 @@ export function installFraction(state: InstallState | undefined): number {
 export function installLine(state: InstallState): string {
   switch (state.kind) {
     case "queued":
-      return "Waiting";
+      return t("onboarding.install.waiting");
     case "download":
-      return state.total ? `Downloading ${state.done} of ${state.total}` : "Downloading";
+      return state.total ? t("onboarding.install.downloadingOf", { done: state.done, total: state.total }) : t("onboarding.install.downloading");
     case "save":
-      return "Adding to your library";
+      return t("onboarding.install.saving");
     case "done":
-      return `Added ${state.count} ${state.count === 1 ? "skin" : "skins"}`;
+      return t("onboarding.install.added", { count: state.count });
     case "failed":
-      return `Couldn't add it: ${state.error}`;
+      return t("onboarding.install.failed", { reason: state.error });
   }
 }
 
@@ -98,7 +99,7 @@ export function toInstall<P extends PackLike>(packs: P[], picked: ReadonlySet<st
 
 /** The words on the main button of the packs step while nothing is installing. */
 export function continueLabel(next: PackLike[], anyAdded: boolean): string {
-  if (next.length === 1) return `Add ${clip(next[0].name, 24)}`;
-  if (next.length > 1) return `Add ${next.length} packs`;
-  return anyAdded ? "Continue" : "Continue without packs";
+  if (next.length === 1) return t("onboarding.packs.addOne", { name: clip(next[0].name, 24) });
+  if (next.length > 1) return t("onboarding.packs.addMany", { count: next.length });
+  return anyAdded ? t("onboarding.packs.continue") : t("onboarding.packs.continueWithout");
 }

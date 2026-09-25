@@ -1,3 +1,6 @@
+import "../../i18n/composer";
+import { t, useLocale } from "../../i18n";
+import { formatNumber } from "../../i18n/format";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ICON_LOOKS, iconName, makeIcon, type Doc, type IconDrawing, type IconLayer, type IconLook } from "../../composer/doc";
 import { ICON_PACKS, type IconPackInfo } from "../../composer/icons/catalog";
@@ -34,9 +37,13 @@ function rememberPack(id: string) {
   }
 }
 
-const size = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`);
+/** A download's size, as the pack list gives it: "3.2 MB", "640 KB" (in 1,024s, as it always has). */
+const size = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? t("common.size.mb", { value: formatNumber(bytes / 1024 / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })
+    : t("common.size.kb", { value: formatNumber(Math.round(bytes / 1024)) });
 /** "2,112 icons", or "327 logos" for a pack of brands. */
-const counted = (p: IconPackInfo) => `${p.count.toLocaleString("en-US")} ${p.brands ? "logos" : "icons"}`;
+const counted = (p: IconPackInfo) => (p.brands ? t("composer.icons.logos", { count: p.count }) : t("composer.icons.icons", { count: p.count }));
 
 /** An icon drawn with SVG, for the grid: cheap enough for the few hundred on screen at once. */
 export const IconGlyph = memo(function IconGlyph({ pack, icon, size }: { pack: IconPack; icon: IconDef; size: number }) {
@@ -88,7 +95,7 @@ function PackList({
   onRemove: (info: IconPackInfo) => void;
 }) {
   return (
-    <div className="icon-packs" role="list" aria-label="icon packs">
+    <div className="icon-packs" role="list" aria-label={t("composer.icons.packsLabel")}>
       {ICON_PACKS.map((p) => {
         const have = available.has(p.id);
         const got = progress[p.id];
@@ -99,7 +106,7 @@ function PackList({
               className="icon-pack-main"
               disabled={!have}
               aria-current={p.id === current}
-              data-tip={have ? undefined : `Download ${p.name} to use it`}
+              data-tip={have ? undefined : t("composer.icons.downloadToUse", { name: p.name })}
               onClick={() => onChoose(p.id)}
             >
               <PackLogo id={p.id} name={p.name} size={18} />
@@ -114,14 +121,14 @@ function PackList({
                 type="button"
                 className="icon-pack-get"
                 disabled={got !== undefined}
-                aria-label={`download ${p.name}`}
-                data-tip={got !== undefined ? undefined : `Download ${p.name}, ${size(p.bytes)}`}
+                aria-label={t("composer.icons.downloadLabel", { name: p.name })}
+                data-tip={got !== undefined ? undefined : t("composer.icons.downloadTip", { name: p.name, size: size(p.bytes) })}
                 onClick={() => onDownload(p)}
               >
                 {got !== undefined ? (
                   <>
                     <LoaderIcon size={13} />
-                    {Math.round(got * 100)}%
+                    {formatNumber(got, { style: "percent", maximumFractionDigits: 0 })}
                   </>
                 ) : (
                   <>
@@ -132,7 +139,7 @@ function PackList({
               </button>
             )}
             {have && !p.builtin && (
-              <button type="button" className="icon-pack-remove" aria-label={`remove ${p.name}`} data-tip="Remove from this computer" onClick={() => onRemove(p)}>
+              <button type="button" className="icon-pack-remove" aria-label={t("composer.icons.removeLabel", { name: p.name })} data-tip={t("composer.icons.removeTip")} onClick={() => onRemove(p)}>
                 <TrashIcon size={13} />
               </button>
             )}
@@ -186,6 +193,7 @@ export function IconLibrary({
   onPreview: (doc: Doc | null) => void;
   onError: (message: string) => void;
 }) {
+  useLocale();
   const [packId, setPackId] = useState(rememberedPack);
   const [available, setAvailable] = useState<Set<string>>(() => new Set([BUILTIN_PACK]));
   const [loaded, setLoaded] = useState<LoadedPack | null>(null);
@@ -247,7 +255,7 @@ export function IconLibrary({
       setAvailable(await availablePacks());
       choosePack(info.id);
     } catch (e) {
-      onError(`Couldn't download ${info.name}: ${errorMessage(e)}`);
+      onError(t("composer.icons.downloadFailed", { name: info.name, reason: errorMessage(e) }));
     } finally {
       setProgress(({ [info.id]: _, ...rest }) => rest);
     }
@@ -259,7 +267,7 @@ export function IconLibrary({
       setAvailable(await availablePacks());
       if (packId === info.id) choosePack(BUILTIN_PACK);
     } catch (e) {
-      onError(`Couldn't remove ${info.name}: ${errorMessage(e)}`);
+      onError(t("composer.icons.removeFailed", { name: info.name, reason: errorMessage(e) }));
     }
   };
 
@@ -344,8 +352,8 @@ export function IconLibrary({
           className="cmp-pick-btn icon-pack-btn"
           aria-haspopup="dialog"
           aria-expanded={packsAnchor !== null}
-          aria-label={`icon pack: ${info?.name ?? usable}`}
-          data-tip="Icon packs"
+          aria-label={t("composer.icons.packLabel", { name: info?.name ?? usable })}
+          data-tip={t("composer.icons.packs")}
           onClick={(e) => setPacksAnchor(packsAnchor ? null : e.currentTarget)}
         >
           <PackLogo id={usable} name={info?.name ?? usable} size={15} />
@@ -353,11 +361,14 @@ export function IconLibrary({
           <ChevronDownIcon size={14} />
         </button>
         <Segmented<IconLook>
-          label={target ? "how the selected icon looks" : "how new icons look"}
+          label={target ? t("composer.icons.lookSelected") : t("composer.icons.lookNew")}
           small
           value={shownLook}
           onChange={onLook}
-          options={looks.map((l) => ({ value: l.id, label: l.label, title: target ? `${l.label}: changes ${iconName(target.icon)} on the folder` : `${l.label}: how the next icon looks` }))}
+          options={looks.map((l) => {
+            const label = t(`composer.iconLooks.${l.id}`);
+            return { value: l.id, label, title: target ? t("composer.icons.lookChanges", { look: label, icon: iconName(target.icon) }) : t("composer.icons.lookNext", { look: label }) };
+          })}
         />
       </div>
       <label className="search icon-search">
@@ -365,8 +376,8 @@ export function IconLibrary({
         <input
           type="search"
           value={query}
-          placeholder={pack ? `Search ${pack.icons.length.toLocaleString("en-US")} ${info?.brands ? "logos" : "icons"}` : "Search icons"}
-          aria-label="search icons"
+          placeholder={pack ? (info?.brands ? t("composer.icons.searchLogos", { count: pack.icons.length }) : t("composer.icons.searchIcons", { count: pack.icons.length })) : t("composer.icons.search")}
+          aria-label={t("composer.icons.searchLabel")}
           spellCheck={false}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -381,7 +392,7 @@ export function IconLibrary({
         <p className="icon-empty">{failed}</p>
       ) : !pack ? (
         <p className="icon-empty">
-          <LoaderIcon size={15} /> Opening {info?.name ?? "the icons"}
+          <LoaderIcon size={15} /> {info ? t("composer.icons.opening", { name: info.name }) : t("composer.icons.openingIcons")}
         </p>
       ) : (
         <div className="icon-grid-wrap" onKeyDown={onKey} onPointerMove={() => keyed && setKeyed(false)}>
@@ -395,8 +406,8 @@ export function IconLibrary({
             getKey={(icon) => icon.n}
             className="icon-grid"
             role="grid"
-            aria-label={`${pack.name} icons`}
-            empty={<p className="icon-empty">No icons in {pack.name} match “{deferred.trim()}”. Try another word, or another pack.</p>}
+            aria-label={t("composer.icons.gridLabel", { name: pack.name })}
+            empty={<p className="icon-empty">{t("composer.icons.noMatch", { name: pack.name, query: deferred.trim() })}</p>}
             renderItem={(icon, i) => (
               <button
                 type="button"
@@ -429,10 +440,10 @@ export function IconLibrary({
             </span>
             <span className="icon-status-text">
               <strong>{iconName(target.icon)}</strong>
-              <span>Click an icon to put it in its place.</span>
+              <span>{t("composer.icons.swapHint")}</span>
             </span>
-            <button type="button" className="btn btn-secondary btn-xs" data-tip="Stop swapping, to add icons" onClick={onDone}>
-              Done
+            <button type="button" className="btn btn-secondary btn-xs" data-tip={t("composer.icons.doneTip")} onClick={onDone}>
+              {t("share.done")}
             </button>
           </>
         ) : named && pack ? (
@@ -442,23 +453,23 @@ export function IconLibrary({
             </span>
             <span className="icon-status-text">
               <strong>{iconName(named.n)}</strong>
-              <span>{candidate ? "On your folder to try. Add it to keep it." : "Click to try it on your folder."}</span>
+              <span>{candidate ? t("composer.icons.trying") : t("composer.icons.clickToTry")}</span>
             </span>
             {candidate && (
-              <button type="button" className="btn btn-primary btn-xs" data-tip={`Add ${iconName(candidate.n)} to the design`} data-tip-kbd="Enter" onClick={() => keep(candidate)}>
+              <button type="button" className="btn btn-primary btn-xs" data-tip={t("composer.icons.addTip", { icon: iconName(candidate.n) })} data-tip-kbd="Enter" onClick={() => keep(candidate)}>
                 <PlusIcon size={13} />
-                Add to canvas
+                {t("composer.icons.add")}
               </button>
             )}
           </>
         ) : (
           <span className="icon-status-text">
-            <span>Click an icon to try it on your folder. A double-click adds it.</span>
+            <span>{t("composer.icons.hint")}</span>
           </span>
         )}
       </div>
       {packsAnchor && (
-        <Popover anchor={packsAnchor} onClose={() => setPacksAnchor(null)} width={280} label="Icon packs">
+        <Popover anchor={packsAnchor} onClose={() => setPacksAnchor(null)} width={280} label={t("composer.icons.packs")}>
           <PackList current={usable} available={available} progress={progress} onChoose={choosePack} onDownload={(p) => void download(p)} onRemove={(p) => void remove(p)} />
         </Popover>
       )}

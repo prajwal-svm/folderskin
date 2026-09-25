@@ -3,7 +3,9 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type ShareStatus } from "../lib/tauri";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
-import { Brand } from "./Brand";
+import { branded } from "./Brand";
+import { useT } from "../i18n";
+import { Rich } from "../i18n/Rich";
 
 /**
  * Verifying this computer for sharing packs. The check that keeps automated uploads out
@@ -12,6 +14,7 @@ import { Brand } from "./Brand";
  * that it is waiting, and the page can be opened again if the browser was closed on it.
  */
 export function ShareVerify({ handle, onVerified, onCancel }: { handle: string; onVerified: (status: ShareStatus) => void; onCancel: () => void }) {
+  const t = useT();
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The latest callback, so a parent that passes a new function each render doesn't start the
@@ -45,7 +48,7 @@ export function ShareVerify({ handle, onVerified, onCancel }: { handle: string; 
       <div className="share-verify">
         <p className="field-note is-error">{error}</p>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Back
+          {t("share.verify.back")}
         </button>
       </div>
     );
@@ -53,22 +56,20 @@ export function ShareVerify({ handle, onVerified, onCancel }: { handle: string; 
 
   return (
     <div className="share-verify">
-      <p className="share-verify-lead">
-        A page from <Brand />&apos;s sharing service has opened in your browser. Once you&apos;re through its quick check, <Brand /> carries on by itself.
-      </p>
+      <p className="share-verify-lead">{branded(t("share.verify.lead"))}</p>
       <p className="field-note">
-        Your packs will be credited to <strong>{handle}</strong>. <Brand /> asks this once per computer.
+        <Rich k="share.verify.creditedTo" vars={{ handle }} tags={{ b: (s) => <strong>{s}</strong> }} text={branded} />
       </p>
       <button type="button" className="btn btn-primary share-verify-open" disabled={!url} onClick={() => url && void openUrl(url).catch(() => {})}>
         <ExternalLinkIcon />
-        Open the page again
+        {t("share.verify.openAgain")}
       </button>
       <p className="share-waiting" role="status">
         <LoaderIcon />
-        {url ? "Waiting for the check in your browser" : "Getting the page ready"}
+        {url ? t("share.verify.waiting") : t("share.verify.gettingReady")}
       </p>
       <button type="button" className="link-btn share-verify-cancel" onClick={onCancel}>
-        Cancel
+        {t("common.cancel")}
       </button>
     </div>
   );

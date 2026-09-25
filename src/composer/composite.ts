@@ -6,6 +6,9 @@
  * to its render), and it's cheap enough to redo on every frame of a drag.
  */
 import type { Shape } from "./doc";
+// Not the composer's own catalog: the browser preview (lib/devMock.ts) draws with this too, and
+// that catalog comes with the composer's chunk.
+import { t } from "../i18n";
 
 export type TemplateImages = {
   back: CanvasImageSource;
@@ -21,7 +24,7 @@ function load(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("couldn't load the folder template"));
+    img.onerror = () => reject(new Error(t("common.errors.templateLoad")));
     img.src = src;
   });
 }

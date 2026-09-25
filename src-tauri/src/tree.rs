@@ -707,7 +707,7 @@ mod tests {
         );
         let other = Error::other("the disk made a noise");
         assert_eq!(reason(&ApplyError::Io(other)), "the disk made a noise");
-        let refused = "this is your home folder; pick a folder inside it instead";
+        let refused = "this is your home folder. Pick a folder inside it instead";
         assert_eq!(reason(&ApplyError::Refused(refused.into())), refused);
         let platform = "macOS refused to change this folder's icon (is it writable?)";
         assert_eq!(reason(&ApplyError::Platform(platform.into())), platform);

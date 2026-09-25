@@ -12,6 +12,9 @@ import { Select } from "./Select";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
 import { branded } from "./Brand";
+import { t as tNow, useT } from "../i18n";
+import { explain } from "../lib/sentences";
+import { providerName } from "../lib/providerNames";
 
 /**
  * The AI providers, the key for the chosen one, and optionally its model. Shared by the
@@ -36,6 +39,7 @@ export function ProviderKeys({
   onChanged: () => void;
   toast: (text: string, opts?: { tone?: ToastTone }) => void;
 }) {
+  const t = useT();
   const provider = catalogue.providers.find((p) => p.id === providerId) ?? catalogue.providers[0];
   const model = provider?.models.find((m) => m.id === modelId) ?? provider?.models[0];
   const [draft, setDraft] = useState("");
@@ -59,20 +63,20 @@ export function ProviderKeys({
     onChanged();
     try {
       await api.aiTestKey(provider.id);
-      toast(`${provider.label} accepted the key`, { tone: "ok" });
+      toast(tNow("ai.keys.accepted", { provider: provider.label }), { tone: "ok" });
     } catch (e) {
-      setNote({ text: `Saved, but ${provider.label} didn't accept it: ${errorMessage(e)}`, bad: true });
+      setNote({ text: tNow("ai.keys.notAccepted", { provider: provider.label, reason: errorMessage(e) }), bad: true });
     } finally {
       setBusy(false);
     }
   }, [provider, draft, onChanged, toast]);
 
   const copy = useCallback(
-    (text: string, what: string) => {
+    (text: string) => {
       navigator.clipboard
         .writeText(text)
-        .then(() => toast(`${what} is copied`, { tone: "ok" }))
-        .catch(() => toast("Couldn't copy it", { tone: "danger" }));
+        .then(() => toast(tNow("ai.studio.questionCopied"), { tone: "ok" }))
+        .catch(() => toast(tNow("ai.studio.copyFailed"), { tone: "danger" }));
     },
     [toast],
   );
@@ -82,7 +86,7 @@ export function ProviderKeys({
     setBusy(true);
     try {
       await api.aiClearKey(provider.id);
-      setNote({ text: `Removed the ${provider.label} key from this computer.`, bad: false });
+      setNote({ text: tNow("ai.keys.removed", { provider: provider.label }), bad: false });
       onChanged();
     } catch (e) {
       setNote({ text: errorMessage(e), bad: true });
@@ -92,11 +96,11 @@ export function ProviderKeys({
   }, [provider, onChanged]);
 
   if (!provider) return null;
-  const where = isTauri() ? "on this device" : "in this browser preview";
+
 
   return (
     <>
-      <div className="provider-list" role="radiogroup" aria-label="provider">
+      <div className="provider-list" role="radiogroup" aria-label={t("ai.keys.providerLabel")}>
         {catalogue.providers.map((p) => (
           <button
             key={p.id}
@@ -112,17 +116,17 @@ export function ProviderKeys({
           >
             <span className="provider-name">
               {p.kind === "local" ? <CpuIcon size={18} /> : <ProviderLogo id={p.id} size={18} />}
-              {p.label}
+              {providerName(p.label)}
             </span>
             {p.kind === "local" && settingUp ? (
               // Downloading, whichever provider is shown below.
-              <span className="provider-state provider-busy" role="img" aria-label="downloading" data-tip="Downloading the model">
+              <span className="provider-state provider-busy" role="img" aria-label={t("ai.keys.downloadingLabel")} data-tip={t("ai.keys.downloadingTip")}>
                 <LoaderIcon size={16} />
               </span>
             ) : p.has_key ? (
-              <OkBadge size={17} playOnMount label={p.kind === "local" ? "Set up" : "Key saved"} />
+              <OkBadge size={17} playOnMount label={p.kind === "local" ? t("ai.keys.setUp") : t("ai.prompt.status.keySaved")} />
             ) : (
-              <span className="provider-state">{p.kind === "local" ? "Not set up" : "No key"}</span>
+              <span className="provider-state">{p.kind === "local" ? t("ai.keys.notSetUp") : t("ai.keys.noKey")}</span>
             )}
           </button>
         ))}
@@ -131,35 +135,33 @@ export function ProviderKeys({
       {/* The Local Model has one model, which its own panel below names. */}
       {onModel && provider.kind !== "local" && (
         <div className="field">
-          <span className="field-label">Model</span>
+          <span className="field-label">{t("ai.keys.model")}</span>
           <Select
-            label="model"
+            label={t("ai.keys.modelLabel")}
             className="is-field"
             value={model?.id ?? ""}
             onChange={onModel}
-            options={provider.models.map((m) => ({ value: m.id, label: `${m.label} (${m.price_hint})` }))}
+            options={provider.models.map((m) => ({ value: m.id, label: t("ai.keys.modelOption", { model: m.label, price: explain(m.price_hint) }) }))}
           />
-          <span className="field-note">
-            {branded(model?.native_alpha ? "Returns a transparent background by itself." : "No transparency, so FolderSkin paints on a plain backdrop and cuts it out.")}
-          </span>
+          <span className="field-note">{branded(model?.native_alpha ? t("ai.keys.alpha") : t("ai.keys.noAlpha"))}</span>
         </div>
       )}
 
       {provider.kind === "local" ? (
         <div className="field">
-          <span className="field-label">On your machine</span>
+          <span className="field-label">{t("ai.keys.onYourMachine")}</span>
           <LocalSetup onChanged={onChanged} copy={copy} />
         </div>
       ) : (
       <div className="field">
-        <span className="field-label">{provider.label} API key</span>
+        <span className="field-label">{t("ai.keys.keyLabel", { provider: provider.label })}</span>
         {provider.has_key ? (
           <div className="key-row">
             <span className="chip chip-ok">
-              <OkBadge size={15} playOnMount /> Saved {where}
+              <OkBadge size={15} playOnMount /> {isTauri() ? t("ai.keys.savedHere") : t("ai.keys.savedPreview")}
             </span>
             <button type="button" className="link-btn" disabled={busy} onClick={forget}>
-              Remove key
+              {t("ai.keys.remove")}
             </button>
           </div>
         ) : (
@@ -168,7 +170,7 @@ export function ProviderKeys({
               className="input"
               type="password"
               value={draft}
-              placeholder={`Paste your key (${provider.key_hint})`}
+              placeholder={t("ai.keys.paste", { hint: explain(provider.key_hint) })}
               autoComplete="off"
               spellCheck={false}
               onChange={(e) => setDraft(e.target.value)}
@@ -176,28 +178,24 @@ export function ProviderKeys({
             />
             <button type="button" className="btn btn-primary" disabled={busy || !draft.trim()} onClick={save}>
               {busy ? <LoaderIcon /> : null}
-              {busy ? "Checking" : "Save and check"}
+              {busy ? t("ai.keys.checking") : t("ai.keys.save")}
             </button>
           </div>
         )}
         {note && <span className={note.bad ? "field-note is-bad" : "field-note"}>{branded(note.text)}</span>}
         <div className="key-links">
           <button type="button" className="link-btn" onClick={() => void openUrl(provider.keys_url).catch(() => {})}>
-            Get a key <ExternalLinkIcon size={12} />
+            {t("ai.keys.getKey")} <ExternalLinkIcon size={12} />
           </button>
           <button type="button" className="link-btn" onClick={() => void openUrl(provider.docs_url).catch(() => {})}>
-            Pricing and docs <ExternalLinkIcon size={12} />
+            {t("ai.keys.pricing")} <ExternalLinkIcon size={12} />
           </button>
         </div>
       </div>
       )}
 
       <p className="field-note">
-        {provider.kind === "local"
-          ? "Skins generated on this machine stay on it until you decide to share them with the community."
-          : isTauri()
-            ? "Your API keys are securely stored on this device."
-            : "In this browser preview, keys last until you reload."}
+        {provider.kind === "local" ? t("ai.keys.localNote") : isTauri() ? t("ai.keys.storedNote") : t("ai.keys.previewNote")}
       </p>
     </>
   );

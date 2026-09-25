@@ -10,6 +10,9 @@ import { DownloadIcon } from "./icons/download";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
+import { t, useT } from "../i18n";
+import { formatNumber } from "../i18n/format";
+import { Rich } from "../i18n/Rich";
 
 /**
  * A community pack opened to look through: every skin drawn as the folder it makes, with its
@@ -44,6 +47,7 @@ export function PackViewer({
   onRemove: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [skins, setSkins] = useState<PackSkinPreview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const focused = useRef<HTMLLIElement>(null);
@@ -76,7 +80,7 @@ export function PackViewer({
       onClick={onAdd}
     >
       {working ? <LoaderIcon /> : <DownloadIcon size={15} />}
-      {working ? progressLabel(progress) : `Add ${pack.count} ${pack.count === 1 ? "skin" : "skins"}`}
+      {working ? progressLabel(progress) : t("community.viewer.add", { count: pack.count })}
     </button>
   ) : pack.update ? (
     <button
@@ -88,11 +92,11 @@ export function PackViewer({
       onClick={onUpdate}
     >
       {working ? <LoaderIcon /> : <RefreshCwIcon size={15} />}
-      {working ? progressLabel(progress, "Updating") : "Update"}
+      {working ? progressLabel(progress, t("community.progress.updating")) : t("community.pack.update")}
     </button>
   ) : (
     <span className="chip chip-ok">
-      <OkBadge size={16} /> Added
+      <OkBadge size={16} /> {t("community.viewer.added")}
     </span>
   );
 
@@ -102,9 +106,8 @@ export function PackViewer({
       title={pack.name}
       sub={
         <>
-          by{" "}
-          <span className="pack-author">@{pack.author}</span>{" "}
-          · {pack.count} {pack.count === 1 ? "skin" : "skins"} · {licenseLabel(pack.license)}
+          <Rich k="community.pack.by" vars={{ author: pack.author }} tags={{ a: (s) => <span className="pack-author">{s}</span> }} /> ·{" "}
+          {t("community.pack.skins", { count: pack.count })} · {licenseLabel(pack.license)}
           {pack.bytes > 0 && <> · {megabytes(pack.bytes)}</>}
         </>
       }
@@ -116,11 +119,11 @@ export function PackViewer({
             className="link-btn pack-view-github"
             onClick={() => void openUrl(`${PACKS_URL}/${pack.id}`).catch(() => {})}
           >
-            Open on GitHub <ExternalLinkIcon size={13} />
+            {t("community.viewer.github")} <ExternalLinkIcon size={13} />
           </button>
           {pack.added && (
             <button type="button" className="btn btn-ghost" disabled={busy || blocked} onClick={onRemove}>
-              Remove
+              {t("community.remove.action")}
             </button>
           )}
           {primary}
@@ -138,10 +141,10 @@ export function PackViewer({
         </div>
       )}
       {error ? (
-        <p className="field-note is-error">Couldn't open this pack: {error}.</p>
+        <p className="field-note is-error">{t("community.viewer.openFailed", { reason: error })}</p>
       ) : skins === null ? (
         <p className="community-note">
-          <LoaderIcon /> Getting {pack.count} {pack.count === 1 ? "skin" : "skins"} to show them
+          <LoaderIcon /> {t("community.viewer.getting", { count: pack.count })}
         </p>
       ) : (
         <ul className="pack-skins">
@@ -166,5 +169,6 @@ export function PackViewer({
 
 /** "3.2 MB", "640 KB". */
 function megabytes(bytes: number): string {
-  return bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1000))} KB`;
+  if (bytes >= 1_000_000) return t("common.size.mb", { value: formatNumber(bytes / 1_000_000, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+  return t("common.size.kb", { value: formatNumber(Math.max(1, Math.round(bytes / 1000))) });
 }

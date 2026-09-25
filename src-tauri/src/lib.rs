@@ -10,6 +10,7 @@ pub mod deep_link;
 pub mod folder_icon;
 pub mod icons;
 pub mod installs;
+pub mod language;
 pub mod look;
 pub mod onboarding;
 pub mod pack_views;
@@ -140,6 +141,7 @@ pub fn run() {
             icons::icon_pack_remove,
             look::folder_look,
             look::set_folder_look,
+            language::set_language,
             chats::chats_list,
             chats::chat_read,
             chats::chat_save,

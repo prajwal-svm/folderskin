@@ -4,6 +4,8 @@
  * once a session.
  */
 import { api, type IconPackProgress } from "../../lib/tauri";
+import "../../i18n/composer";
+import { t } from "../../i18n";
 import { ICON_PACKS, ICON_RELEASE, type IconPackInfo } from "./catalog";
 import { indexPack, parsePack, type IconIndex, type IconPack } from "./index";
 
@@ -20,7 +22,7 @@ export function packInfo(id: string): IconPackInfo | undefined {
 async function read(id: string): Promise<LoadedPack> {
   const raw: unknown = id === BUILTIN_PACK ? (await import("./lucide.json")).default : await api.iconPackRead(id);
   const pack = parsePack(raw);
-  if (!pack) throw new Error("that icon pack couldn't be read. Remove it and download it again");
+  if (!pack) throw new Error(t("composer.icons.readFailed"));
   return { pack, index: indexPack(pack) };
 }
 

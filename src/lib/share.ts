@@ -3,14 +3,14 @@
  * src-tauri/src/share.rs, and the service it talks to is services/community.
  */
 import type { MySubmission, ScaledPicture, ShareProgress } from "./tauri";
+import { t } from "../i18n";
+import { formatList } from "../i18n/format";
 
-/** Where the pictures came from, as the dialog asks it. The service keeps the answer for the review. */
-export const PICTURE_SOURCES = [
-  { id: "own", label: "I made them myself" },
-  { id: "ai", label: "I made them with an AI model" },
-  { id: "mixed", label: "Some of each" },
-  { id: "licensed", label: "Someone else's, under an open licence" },
-] as const;
+/**
+ * Where the pictures came from, as the dialog asks it (`share.sources.<id>`). The service keeps the
+ * answer for the review.
+ */
+export const PICTURE_SOURCES = [{ id: "own" }, { id: "ai" }, { id: "mixed" }, { id: "licensed" }] as const;
 
 export type PictureSource = (typeof PICTURE_SOURCES)[number]["id"];
 
@@ -37,17 +37,17 @@ export function handleFrom(text: string): string {
 export function shareProgressLabel(p: ShareProgress): string {
   switch (p.stage) {
     case "preparing":
-      return "Getting the pictures ready";
+      return t("share.progress.preparing");
     case "encoding":
-      return `Getting the pictures ready (${p.done} of ${p.total})`;
+      return t("share.progress.encoding", { done: p.done, total: p.total });
     case "checking":
-      return "Checking the pack with FolderSkin";
+      return t("share.progress.checking");
     case "uploading":
-      return `Sending pictures (${Math.min(p.done + 1, p.total)} of ${p.total})`;
+      return t("share.progress.uploading", { done: Math.min(p.done + 1, p.total), total: p.total });
     case "finishing":
-      return "Putting it in the review queue";
+      return t("share.progress.finishing");
     case "waiting":
-      return p.seconds > 1 ? `Trying again in ${p.seconds} seconds` : "Trying again";
+      return p.seconds > 1 ? t("share.progress.retryIn", { count: p.seconds }) : t("share.progress.retry");
   }
 }
 
@@ -61,30 +61,29 @@ export const MAX_PICTURE_MB = 1.5;
  */
 export function scaledNote(scaled: ScaledPicture[]): string | null {
   if (scaled.length === 0) return null;
-  const shown = scaled.slice(0, 3).map((s) => `${s.name} (${s.side} px)`);
+  const shown = scaled.slice(0, 3).map((s) => t("share.scaled.picture", { name: s.name, side: s.side }));
   const more = scaled.length - shown.length;
-  const names = more > 0 ? `${shown.join(", ")} and ${more} more` : shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
-  const one = scaled.length === 1;
-  return `${names} ${one ? "is" : "are"} smaller than 1024 px: kept lossless, ${one ? "it was" : "they were"} over the ${MAX_PICTURE_MB} MB a picture can be at full size.`;
+  const names = formatList(more > 0 ? [...shown, t("share.scaled.more", { count: more })] : shown);
+  return t("share.scaled.note", { count: scaled.length, names, max: MAX_PICTURE_MB });
 }
 
 /** A submission's status as the author reads it, and the colour its chip takes. */
 export function statusLabel(status: MySubmission["status"]): { label: string; tone: "ok" | "danger" | "accent" | "plain" } {
   switch (status) {
     case "uploading":
-      return { label: "Not finished sending", tone: "plain" };
+      return { label: t("share.status.uploading"), tone: "plain" };
     case "in_review":
-      return { label: "Waiting for review", tone: "accent" };
+      return { label: t("share.status.inReview"), tone: "accent" };
     case "approved":
-      return { label: "Approved", tone: "ok" };
+      return { label: t("share.status.approved"), tone: "ok" };
     case "rejected":
-      return { label: "Turned down", tone: "danger" };
+      return { label: t("share.status.rejected"), tone: "danger" };
     case "withdrawn":
-      return { label: "Withdrawn", tone: "plain" };
+      return { label: t("share.status.withdrawn"), tone: "plain" };
     case "taken_down":
-      return { label: "Taken down", tone: "danger" };
+      return { label: t("share.status.takenDown"), tone: "danger" };
     case "expired":
-      return { label: "Never finished sending", tone: "plain" };
+      return { label: t("share.status.expired"), tone: "plain" };
   }
 }
 

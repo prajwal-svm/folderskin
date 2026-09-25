@@ -225,7 +225,7 @@ mod tests {
         assert!(e.fix[0].contains("UTF-8 or UTF-16"), "{e:?}");
         let e = apply_error(
             folder,
-            ApplyError::Refused("this is your home folder; pick a folder inside it instead".into()),
+            ApplyError::Refused("this is your home folder. Pick a folder inside it instead".into()),
         );
         assert!(e.why.starts_with("This is your home folder"), "{e:?}");
         assert_eq!(e.fix.len(), 1, "{e:?}");

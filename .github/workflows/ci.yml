@@ -62,6 +62,12 @@ jobs:
           fi
           exit "$status"
 
+      # Every language has English's messages, with its own plural forms and the same placeholders
+      # and tags, and no message in any language has an em dash or a semicolon. A language not
+      # translated yet is a warning. The rules are in src/locales/TRANSLATORS.md.
+      - name: Check the translations
+        run: pnpm check:locales
+
       # `pnpm build` type-checks with tsc, then bundles with Vite.
       - name: Typecheck and build
         run: pnpm build

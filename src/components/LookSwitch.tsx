@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { FolderStyle } from "../composer/parts";
+import { useT } from "../i18n";
 
 /** The Apple and Windows marks (Simple Icons, CC0), only to name the two folders. */
 function AppleMark() {
@@ -18,9 +19,9 @@ function WindowsMark() {
   );
 }
 
-const LOOKS: { value: FolderStyle; label: string; tip: string; Mark: typeof AppleMark }[] = [
-  { value: "mac", label: "Mac", tip: "Switch to Mac folder as base", Mark: AppleMark },
-  { value: "windows", label: "Windows", tip: "Switch to Windows folder as base", Mark: WindowsMark },
+const LOOKS: { value: FolderStyle; Mark: typeof AppleMark }[] = [
+  { value: "mac", Mark: AppleMark },
+  { value: "windows", Mark: WindowsMark },
 ];
 
 /**
@@ -28,7 +29,8 @@ const LOOKS: { value: FolderStyle; label: string; tip: string; Mark: typeof Appl
  * chooses for the whole app, and under the composer's canvas, where it chooses for one design.
  * Arrow keys move the choice, as radio buttons do.
  */
-export function LookSwitch({ value, onChange, label = "which folder", className }: { value: FolderStyle; onChange: (look: FolderStyle) => void; label?: string; className?: string }) {
+export function LookSwitch({ value, onChange, label, className }: { value: FolderStyle; onChange: (look: FolderStyle) => void; label?: string; className?: string }) {
+  const t = useT();
   const onKey = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
     e.preventDefault();
@@ -37,8 +39,8 @@ export function LookSwitch({ value, onChange, label = "which folder", className 
     (e.currentTarget.parentElement?.querySelector(`[data-look="${next}"]`) as HTMLButtonElement | null)?.focus();
   };
   return (
-    <div className={["cmp-seg is-small look-switch", className].filter(Boolean).join(" ")} role="radiogroup" aria-label={label}>
-      {LOOKS.map(({ value: v, label: text, tip, Mark }) => (
+    <div className={["cmp-seg is-small look-switch", className].filter(Boolean).join(" ")} role="radiogroup" aria-label={label ?? t("folder.look.label")}>
+      {LOOKS.map(({ value: v, Mark }) => (
         <button
           key={v}
           type="button"
@@ -46,13 +48,13 @@ export function LookSwitch({ value, onChange, label = "which folder", className 
           aria-checked={v === value}
           tabIndex={v === value ? 0 : -1}
           data-look={v}
-          data-tip={tip}
+          data-tip={t(`folder.look.tip.${v}`)}
           className={v === value ? "cmp-seg-btn is-on" : "cmp-seg-btn"}
           onClick={() => onChange(v)}
           onKeyDown={onKey}
         >
           <Mark />
-          {text}
+          {t(`folder.look.name.${v}`)}
         </button>
       ))}
     </div>

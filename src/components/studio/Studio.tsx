@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type AiCatalogue, type Skin } from "../../lib/tauri";
+import { explain } from "../../lib/sentences";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
@@ -18,7 +19,9 @@ import { ChatDrawer } from "./ChatDrawer";
 import { FolderTarget } from "./FolderTarget";
 import { PromptBox, refLimit } from "./PromptBox";
 import { TurnCard, type TurnActions } from "./TurnCard";
-import { Brand } from "../Brand";
+import { branded } from "../Brand";
+import { t as tNow, useT } from "../../i18n";
+import { chatTitle } from "../../state/chats";
 
 const CHOICE_KEY = "folderskin.ai.choice";
 
@@ -73,6 +76,7 @@ export const Studio = forwardRef<
   }
 >(function Studio(props, ref) {
   const { active, folder, shownId, appliedId, panelShown, skinOf, toast } = props;
+  const t = useT();
   const chats = useChats();
   const chat = chats.active;
   const [catalogue, setCatalogue] = useState<AiCatalogue | null>(null);
@@ -171,7 +175,7 @@ export const Studio = forwardRef<
         if (openChatId.current !== at) return;
         setRefs((rs) => (rs.some((r) => r.id === kept.id) ? rs : [...rs, kept]));
       } catch (e) {
-        toast(`Couldn't use that picture: ${errorMessage(e)}`, { tone: "danger" });
+        toast(tNow("ai.studio.refFailed", { reason: errorMessage(e) }), { tone: "danger" });
       } finally {
         setAdding(false);
       }
@@ -182,7 +186,7 @@ export const Studio = forwardRef<
 
   const pickReference = useCallback(async () => {
     if (!isTauri()) return addReference("/Users/you/Pictures/Reference.jpg");
-    const picked = await open({ multiple: false, title: "Choose a picture to paint from", filters: [{ name: "Pictures", extensions: IMAGE_EXTENSIONS }] }).catch(() => null);
+    const picked = await open({ multiple: false, title: tNow("ai.studio.chooseRef"), filters: [{ name: tNow("common.dialog.pictures"), extensions: IMAGE_EXTENSIONS }] }).catch(() => null);
     if (typeof picked === "string") await addReference(picked);
   }, [addReference]);
 
@@ -192,8 +196,7 @@ export const Studio = forwardRef<
   }, []);
 
   // This computer paints one picture at a time, whichever chat asked for the one it's on.
-  const busy = "The local model is still painting the last one";
-  const blocked = provider?.kind === "local" && chats.localRunning ? busy : null;
+  const blocked = provider?.kind === "local" && chats.localRunning ? t("ai.studio.localBusy") : null;
 
   /** Sent before the providers were in (the first list of a session takes a moment): it goes when they are. */
   const [queued, setQueued] = useState(false);
@@ -247,7 +250,7 @@ export const Studio = forwardRef<
         { idea: turn.idea, shape: turn.shape, provider: turn.provider, model: turn.model, where: p && m ? `${p.label} · ${m.label}` : turn.where, local, refs: turn.refs, tags: styleTags(turn.idea), size: m?.sizes[0] ?? null },
         props.onGenerated,
       );
-      if (!sent && local) toast(`${busy}. Try again once it's done.`);
+      if (!sent && local) toast(tNow("ai.studio.localBusyToast"));
     },
     reword: (turn) => {
       setIdea(turn.idea);
@@ -264,15 +267,16 @@ export const Studio = forwardRef<
     },
     apply: async (skin) => {
       const r = await props.onApply(skin);
-      if (r.ok || r.message) toast(r.message ?? `${clip(folder?.name ?? "The folder")} now wears ${clip(skin.name)}`, { tone: r.tone ?? "ok", action: r.action });
+      if (r.ok || r.message)
+        toast(r.message ?? tNow("ai.studio.nowWears", { folder: folder ? clip(folder.name) : tNow("ai.studio.theFolder"), skin: clip(skin.name) }), { tone: r.tone ?? "ok", action: r.action });
     },
     chooseFolder: props.onChooseFolder,
     menu: props.onMenu,
-    copy: (text, what) => {
+    copy: (text) => {
       navigator.clipboard
         .writeText(text)
-        .then(() => toast(`${what} is copied. Paste it into Claude.`, { tone: "ok" }))
-        .catch(() => toast("Couldn't copy it", { tone: "danger" }));
+        .then(() => toast(tNow("ai.studio.questionCopied"), { tone: "ok" }))
+        .catch(() => toast(tNow("ai.studio.copyFailed"), { tone: "danger" }));
     },
   };
 
@@ -316,12 +320,10 @@ export const Studio = forwardRef<
           <span className="empty-glyph">
             <SparklesIcon size={22} />
           </span>
-          <p className="empty-title">The assistant isn't in this build</p>
-          <p className="empty-text">
-            <Brand /> couldn&apos;t load its provider list: {loadError}. Rebuild the app, then open this again.
-          </p>
+          <p className="empty-title">{t("ai.studio.noAssistant")}</p>
+          <p className="empty-text">{branded(t("ai.studio.noAssistantText", { reason: loadError }))}</p>
           <button type="button" className="btn btn-secondary" onClick={load}>
-            Try again
+            {t("community.tryAgain")}
           </button>
         </div>
       </section>
@@ -331,36 +333,36 @@ export const Studio = forwardRef<
   const turns = chat?.turns ?? [];
   const hasThread = turns.length > 0;
   const local = provider?.kind === "local";
-  const placeholder = folder ? `Describe a folder for ${clip(folder.name)}` : "Describe the folder you want";
+  const placeholder = folder ? t("ai.studio.placeholderFor", { name: clip(folder.name) }) : t("ai.studio.placeholder");
   const foot = !provider
     ? null
     : local
       ? provider.has_key
-        ? "Free, and generated right here on your machine."
-        : "Free once the local model is set up."
+        ? t("ai.studio.foot.localReady")
+        : t("ai.studio.foot.localNotReady")
       : provider.has_key
-        ? `${model?.price_hint ?? "Priced by the picture"}, billed to your ${provider.label} account.`
-        : `Add your ${provider.label} key to start. It stays on this computer.`;
+        ? t("ai.studio.foot.billed", { price: model?.price_hint ? explain(model.price_hint) : t("ai.studio.foot.priced"), provider: provider.label })
+        : t("ai.studio.foot.addKey", { provider: provider.label });
   // Once a chat has started the box sits at the bottom with nothing under it, unless the
   // provider can't paint yet: then the line says why, and offers the way without a key.
   const showFoot = !hasThread || !provider?.has_key;
 
   return (
-    <section className={hasThread ? "studio has-thread" : "studio"} hidden={!active} aria-label="generate with AI">
+    <section className={hasThread ? "studio has-thread" : "studio"} hidden={!active} aria-label={t("ai.studio.label")}>
       <header className="studio-head" data-tauri-drag-region>
         <button
           type="button"
           className={drawer ? "icon-btn studio-chats-btn is-on" : "icon-btn studio-chats-btn"}
-          aria-label="chats"
+          aria-label={t("ai.chats.label")}
           aria-expanded={drawer}
-          data-tip="Chats"
+          data-tip={t("ai.chats.title")}
           data-tip-side="bottom"
           onClick={() => setDrawer((d) => !d)}
         >
           <HistoryIcon size={17} />
         </button>
-        <p className="studio-chat-title" data-tip={chat?.title} data-tip-overflow>
-          {chat?.title ?? "New chat"}
+        <p className="studio-chat-title" data-tip={chat ? chatTitle(chat.title) : undefined} data-tip-overflow>
+          {chat ? chatTitle(chat.title) : t("ai.chats.newChat")}
         </p>
         <span className="studio-head-space" data-tauri-drag-region />
         <FolderTarget
@@ -373,7 +375,7 @@ export const Studio = forwardRef<
             props.onUseFolder(null);
           }}
         />
-        <button type="button" className="icon-btn" aria-label="new chat" data-tip="New chat" data-tip-side="bottom" onClick={() => startNewChat(folder)}>
+        <button type="button" className="icon-btn" aria-label={t("ai.chats.newChatLabel")} data-tip={t("ai.chats.newChat")} data-tip-side="bottom" onClick={() => startNewChat(folder)}>
           <SquarePenIcon size={16} />
         </button>
       </header>
@@ -382,7 +384,7 @@ export const Studio = forwardRef<
         <p className="studio-problem" role="status">
           {chats.problem}
           <button type="button" className="link-btn" onClick={dismissProblem}>
-            OK
+            {t("ai.studio.ok")}
           </button>
         </p>
       )}
@@ -407,14 +409,14 @@ export const Studio = forwardRef<
             <span className="studio-hero-glyph">
               <SparklesIcon size={22} playOnMount />
             </span>
-            <h2 className="studio-title">What should your folder look like?</h2>
+            <h2 className="studio-title">{t("ai.studio.heroTitle")}</h2>
             <p className="studio-sub">
               {/* Where it goes once the providers are in: until then, nothing that might not be so. */}
               {!catalogue
-                ? "Describe a scene, or tap a style below for an idea to start from."
+                ? t("ai.studio.heroSub")
                 : local
-                  ? "Describe a scene, or tap a style below for an idea to start from. It's generated right here, on your machine."
-                  : `Describe a scene, or tap a style below for an idea to start from. It goes straight from this computer to ${provider?.label ?? "the provider"} with your own key.`}
+                  ? t("ai.studio.heroSubLocal")
+                  : t("ai.studio.heroSubKey", { provider: provider?.label ?? t("ai.studio.theProvider") })}
             </p>
           </div>
         )}
@@ -443,22 +445,22 @@ export const Studio = forwardRef<
         />
 
         {!hasThread && (
-          <div className="style-chips" aria-label="ideas to start from">
+          <div className="style-chips" aria-label={t("ai.studio.stylesLabel")}>
             {STYLES.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 aria-pressed={chosen === s.id}
                 className={chosen === s.id ? "style-chip is-active" : "style-chip"}
-                data-tip={chosen === s.id ? "Click again for another idea in this style" : `Fill in a ${s.label.toLowerCase()} idea`}
+                data-tip={chosen === s.id ? t("ai.studio.styleAgain") : t(`ai.styleTips.${s.id}`)}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(s.id)}
               >
-                {s.label}
+                {t(`ai.styles.${s.id}`)}
               </button>
             ))}
             <button type="button" className="style-chip is-surprise" onMouseDown={(e) => e.preventDefault()} onClick={surprise}>
-              <SparklesIcon size={13} /> Surprise me
+              <SparklesIcon size={13} /> {t("ai.studio.surprise")}
             </button>
           </div>
         )}
@@ -467,7 +469,7 @@ export const Studio = forwardRef<
             {foot && <span>{foot}</span>}
             {catalogue && !local && (
               <button type="button" className="link-btn" onClick={() => setHelperOpen(true)}>
-                No API key? Use Grok or ChatGPT's chat
+                {t("ai.studio.noKey")}
               </button>
             )}
           </p>
@@ -495,9 +497,9 @@ export const Studio = forwardRef<
 
       {deleting && (
         <Confirm
-          title={`Delete “${clip(deleting.title)}”?`}
-          text="The chat goes for good. The pictures it made stay in Yours."
-          action="Delete"
+          title={t("ai.chats.deleteTitle", { name: clip(chatTitle(deleting.title)) })}
+          text={t("ai.chats.deleteText")}
+          action={t("library.delete.action")}
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
             const d = deleting;

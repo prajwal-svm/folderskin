@@ -667,7 +667,7 @@ fn read_bytes(path: &Path, max_bytes: usize) -> Result<Vec<u8>, String> {
     let most = max_bytes.min(MAX_READ_PICTURE_BYTES);
     if len > most as u64 {
         return Err(format!(
-            "is {} KB; the most is {} KB",
+            "is {} KB, and the most is {} KB",
             len.div_ceil(1024),
             most / 1024
         ));
@@ -849,7 +849,7 @@ mod tests {
             ("broken", "\"license\" must be one of "),
             (
                 "broken",
-                "tiny.png is 200×200 px; each side needs at least 256 px",
+                "tiny.png is 200×200 px, but each side needs at least 256 px",
             ),
             ("broken", "clear.png is completely transparent"),
             ("broken", "gone.png is missing"),

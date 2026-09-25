@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { canWithdraw, statusLabel } from "../lib/share";
-import { PACK_TERMS_URL, licenseLabel } from "../lib/packs";
+import { licenseLabel } from "../lib/packs";
+import { docsUrl, t, useT } from "../i18n";
+import { formatDate } from "../i18n/format";
 import { api, errorMessage, type MySubmission } from "../lib/tauri";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
-import { Brand, branded } from "./Brand";
+import { branded } from "./Brand";
 
-const when = (seconds: number) => new Date(seconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const when = (seconds: number) => formatDate(seconds * 1000, { day: "numeric", month: "short", year: "numeric" });
 
 /** What withdrawing does to a pack, said before the second press. */
 function withdrawNote(s: MySubmission): string {
-  if (s.status !== "approved") return "It leaves the review queue.";
+  if (s.status !== "approved") return t("share.subs.withdraw.queued");
   // Only the maintainer can take a pack out of the community packs, so it isn't gone at once.
-  if (s.pulled) return "It leaves the community for everyone once FolderSkin's maintainer has taken it out, usually within a few days. Copies people already have stay theirs.";
-  return "It won't join the community packs.";
+  if (s.pulled) return t("share.subs.withdraw.published");
+  return t("share.subs.withdraw.approved");
 }
 
 /**
@@ -24,6 +26,7 @@ function withdrawNote(s: MySubmission): string {
  * community packs comes out once the maintainer has taken it out of them, which the row says.
  */
 export function MySubmissions() {
+  const t = useT();
   const [list, setList] = useState<MySubmission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** The pack whose Withdraw was pressed once, waiting for the press that means it. */
@@ -61,15 +64,15 @@ export function MySubmissions() {
     ) : (
       <p className="share-waiting">
         <LoaderIcon />
-        Asking <Brand />&apos;s sharing service
+        {branded(t("share.subs.asking"))}
       </p>
     );
   }
-  if (list.length === 0) return <p className="field-note">Nothing yet. Packs you share show up here.</p>;
+  if (list.length === 0) return <p className="field-note">{t("share.subs.none")}</p>;
 
   return (
     <>
-      <ul className="share-subs" aria-label="your submissions">
+      <ul className="share-subs" aria-label={t("share.subs.label")}>
         {list.map((s) => {
           const status = statusLabel(s.status);
           return (
@@ -81,43 +84,39 @@ export function MySubmissions() {
                 <span className={status.tone === "plain" ? "chip" : `chip chip-${status.tone}`}>{status.label}</span>
               </div>
               <p className="share-sub-meta">
-                {s.pictures === 1 ? "1 picture" : `${s.pictures} pictures`} · {licenseLabel(s.license)} · sent {when(s.created_at)}
-                {s.status === "approved" ? (s.pulled && s.pack_id ? ` · published as ${s.pack_id}` : " · joins the community packs soon") : ""}
+                {t("share.subs.pictures", { count: s.pictures })} · {licenseLabel(s.license)} · {t("share.subs.sent", { date: when(s.created_at) })}
+                {s.status === "approved" ? ` · ${s.pulled && s.pack_id ? t("share.subs.publishedAs", { id: s.pack_id }) : t("share.subs.joinsSoon")}` : ""}
               </p>
               {s.reasons.length > 0 && (
                 <ul className="share-sub-reasons">
                   {s.reasons.map((r) => (
                     <li key={r.code}>
                       {r.message}{" "}
-                      <button type="button" className="link-btn" onClick={() => void openUrl(PACK_TERMS_URL).catch(() => {})}>
-                        Rule {r.term} <ExternalLinkIcon size={12} />
+                      <button type="button" className="link-btn" onClick={() => void openUrl(docsUrl("pack-terms")).catch(() => {})}>
+                        {t("share.subs.rule", { term: String(r.term) })} <ExternalLinkIcon size={12} />
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-              {s.note && <p className="share-sub-note">“{s.note}”</p>}
-              {s.status === "withdrawn" && s.pulled && (
-                <p className="share-sub-note">
-                  It was in the community packs, so <Brand />&apos;s maintainer has been told to take it out. That can take a few days.
-                </p>
-              )}
+              {s.note && <p className="share-sub-note">{t("share.subs.quoted", { note: s.note })}</p>}
+              {s.status === "withdrawn" && s.pulled && <p className="share-sub-note">{branded(t("share.subs.takingOut"))}</p>}
               {canWithdraw(s.status) && (
                 <div className="share-sub-actions">
                   {asking === s.id ? (
                     <>
                       <span className="field-note">{branded(withdrawNote(s))}</span>
                       <button type="button" className="btn btn-ghost" onClick={() => setAsking(null)} disabled={busy === s.id}>
-                        Keep it
+                        {t("share.subs.keep")}
                       </button>
                       <button type="button" className="btn btn-danger" aria-busy={busy === s.id} disabled={busy === s.id} onClick={() => void withdraw(s.id)}>
                         {busy === s.id ? <LoaderIcon /> : null}
-                        Withdraw it
+                        {t("share.subs.withdrawIt")}
                       </button>
                     </>
                   ) : (
                     <button type="button" className="link-btn" onClick={() => setAsking(s.id)}>
-                      Withdraw
+                      {t("share.subs.withdraw.button")}
                     </button>
                   )}
                 </div>

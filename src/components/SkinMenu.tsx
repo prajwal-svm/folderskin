@@ -10,6 +10,7 @@ import { EarthIcon } from "./icons/earth";
 import { PaletteIcon } from "./icons/palette";
 import { PencilIcon } from "./icons/pencil";
 import { branded } from "./Brand";
+import { useT } from "../i18n";
 
 /** Wide enough for a whole name, tags and facts without cutting any of them short. */
 const WIDTH = 360;
@@ -52,6 +53,7 @@ export function SkinMenu({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const panel = useRef<HTMLDivElement>(null);
   const nameField = useRef<HTMLTextAreaElement>(null);
   const nameId = useId();
@@ -163,7 +165,7 @@ export function SkinMenu({
     <div
       className={pos?.above ? "skin-menu is-above" : "skin-menu"}
       role="dialog"
-      aria-label={`${skin.name}: name, tags and details`}
+      aria-label={t("library.menu.label", { name: skin.name })}
       tabIndex={-1}
       ref={panel}
       style={pos ? { left: pos.left, top: pos.top, width: pos.width } : { visibility: "hidden", width: widthNow() }}
@@ -172,7 +174,7 @@ export function SkinMenu({
         {canRename ? (
           <>
             <label className="skin-menu-label" htmlFor={nameId}>
-              Name
+              {t("library.menu.name")}
             </label>
             <div className="skin-menu-field">
               <textarea
@@ -207,8 +209,8 @@ export function SkinMenu({
         )}
       </div>
       <div className="skin-menu-block">
-        <p className="skin-menu-label">Tags</p>
-        <TagInput value={tags} onChange={saveTags} suggestions={suggestions} label="add a tag" />
+        <p className="skin-menu-label">{t("library.menu.tags")}</p>
+        <TagInput value={tags} onChange={saveTags} suggestions={suggestions} label={t("library.menu.addTag")} />
       </div>
       {facts.length > 0 && (
         <dl className="skin-facts">
@@ -223,17 +225,17 @@ export function SkinMenu({
       <div className="skin-menu-actions">
         <button type="button" className="menu-item" onClick={onDesign}>
           <PaletteIcon size={16} />
-          {skin.source === "composer" ? "Edit design" : "Remix in the composer"}
+          {skin.source === "composer" ? t("library.menu.editDesign") : t("library.menu.remix")}
         </button>
         {onShare && (
           <button type="button" className="menu-item" onClick={onShare}>
             <EarthIcon size={16} />
-            Share with community
+            {t("library.menu.share")}
           </button>
         )}
         <button type="button" className="menu-item is-danger" onClick={onDelete}>
           <DeleteIcon size={16} />
-          Delete
+          {t("library.delete.action")}
         </button>
       </div>
     </div>,

@@ -7,15 +7,13 @@
 import type { Skin } from "./tauri";
 import { COLOURS, type Palette } from "./palette";
 import { licenseLabel } from "./packs";
+import { getLocale, INTL_LOCALES, t } from "../i18n";
+import { madeWith } from "./providerNames";
 
 export type Sort = "newest" | "oldest" | "az" | "za";
 
-export const SORTS: { id: Sort; label: string }[] = [
-  { id: "newest", label: "Newest" },
-  { id: "oldest", label: "Oldest" },
-  { id: "az", label: "A–Z" },
-  { id: "za", label: "Z–A" },
-];
+/** The orders the library comes in; each is named by `library.sort.<id>`. */
+export const SORTS: { id: Sort }[] = [{ id: "newest" }, { id: "oldest" }, { id: "az" }, { id: "za" }];
 
 export type FacetId = "source" | "pack" | "colour" | "tone" | "added" | "model" | "author" | "license";
 
@@ -49,18 +47,15 @@ export type Facet = {
 const DAY = 24 * 60 * 60 * 1000;
 
 /** When a skin was added, as the choices the Added facet offers, newest first. */
-const ADDED = [
-  { value: "today", label: "Today" },
-  { value: "week", label: "Past week" },
-  { value: "month", label: "Past month" },
-  { value: "older", label: "Older" },
-];
+const ADDED = ["today", "week", "month", "older"] as const;
 
-const SOURCES: Record<string, string> = { community: "Community packs", import: "Your pictures", ai: "Made with AI", composer: "Your designs" };
+/** Where a skin came from, in the order the From facet lists them. */
+const SOURCES = ["community", "import", "ai", "composer"] as const;
+
+const isOneOf = <T extends string>(list: readonly T[], value: string): value is T => (list as readonly string[]).includes(value);
 
 type FacetDef = {
   id: FacetId;
-  label: string;
   single?: boolean;
   /** The values a skin has in this facet: none when it doesn't apply to the skin. */
   values: (skin: Skin, ctx: FilterContext) => string[];
@@ -86,58 +81,51 @@ function addedValues(skin: Skin, now: number): string[] {
 const FACETS: FacetDef[] = [
   {
     id: "source",
-    label: "From",
     values: (s) => (s.source ? [s.source] : []),
-    label_of: (v) => SOURCES[v] ?? v,
-    order: Object.keys(SOURCES),
+    label_of: (v) => (isOneOf(SOURCES, v) ? t(`library.filters.sources.${v}`) : v),
+    order: [...SOURCES],
   },
   {
     id: "pack",
-    label: "Pack",
     values: (s) => (s.pack ? [s.pack] : []),
     label_of: (v, skins) => skins.find((s) => s.pack === v)?.pack_name ?? v,
   },
   {
     id: "colour",
-    label: "Colour",
     values: (s, ctx) => ctx.palettes.get(s.id)?.colours ?? [],
-    label_of: (v) => COLOURS.find((c) => c.id === v)?.label ?? v,
+    label_of: (v) => (COLOURS.some((c) => c.id === v) ? t(`library.colours.${v as Palette["colours"][number]}`) : v),
     order: COLOURS.map((c) => c.id),
     swatch: (v) => COLOURS.find((c) => c.id === v)?.swatch,
   },
   {
     id: "tone",
-    label: "Brightness",
     single: true,
     values: (s, ctx) => {
       const tone = ctx.palettes.get(s.id)?.tone;
       return tone ? [tone] : [];
     },
-    label_of: (v) => (v === "light" ? "Light" : "Dark"),
+    label_of: (v) => (v === "light" ? t("library.filters.light") : t("library.filters.dark")),
     order: ["light", "dark"],
   },
   {
     id: "added",
-    label: "Added",
     single: true,
     values: (s, ctx) => addedValues(s, ctx.now),
-    label_of: (v) => ADDED.find((a) => a.value === v)?.label ?? v,
-    order: ADDED.map((a) => a.value),
+    label_of: (v) => (isOneOf(ADDED, v) ? t(`library.filters.added.${v}`) : v),
+    order: [...ADDED],
   },
   {
     id: "model",
-    label: "Made with",
     values: (s) => (s.made_with ? [s.made_with] : []),
+    label_of: madeWith,
   },
   {
     id: "author",
-    label: "Author",
     values: (s) => (s.author ? [s.author] : []),
     label_of: (v) => `@${v}`,
   },
   {
     id: "license",
-    label: "Licence",
     values: (s) => (s.license ? [s.license] : []),
     label_of: licenseLabel,
   },
@@ -193,7 +181,7 @@ export function facets(skins: Skin[], filters: Filters, ctx: FilterContext): Fac
       .sort((a, b) =>
         order ? order.indexOf(a.value) - order.indexOf(b.value) : b.count - a.count || a.label.localeCompare(b.label),
       );
-    out.push({ id: def.id, label: def.label, single: def.single ?? false, options });
+    out.push({ id: def.id, label: t(`library.filters.facets.${def.id}`), single: def.single ?? false, options });
   }
   return out;
 }
@@ -207,7 +195,8 @@ export function toggleChoice(filters: Filters, facet: FacetId, value: string, si
   return { ...filters, chosen };
 }
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+/** Names sort the way the language on show sorts them. */
+const collator = () => new Intl.Collator(INTL_LOCALES[getLocale()], { numeric: true, sensitivity: "base" });
 
 /** The skins in the chosen order. Newest keeps the library's own order, where a pack stays in its order. */
 export function sortSkins(skins: Skin[], sort: Sort): Skin[] {
@@ -216,10 +205,14 @@ export function sortSkins(skins: Skin[], sort: Sort): Skin[] {
       return skins;
     case "oldest":
       return [...skins].reverse();
-    case "az":
-      return [...skins].sort((a, b) => collator.compare(a.name, b.name));
-    case "za":
-      return [...skins].sort((a, b) => collator.compare(b.name, a.name));
+    case "az": {
+      const c = collator();
+      return [...skins].sort((a, b) => c.compare(a.name, b.name));
+    }
+    case "za": {
+      const c = collator();
+      return [...skins].sort((a, b) => c.compare(b.name, a.name));
+    }
   }
 }
 

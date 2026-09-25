@@ -46,7 +46,7 @@ describe("runs over a folder and its subfolders", () => {
   it("says where a stopped run got to", () => {
     const s = runSummary(run({ changed: paths(12), remaining: paths(13, 12), stopped: true }), "Coral");
     expect(s.title).toBe("Stopped after 12 folders");
-    expect(s.detail).toBe("Those 12 wear Coral; 13 weren't reached.");
+    expect(s.detail).toBe("Those 12 wear Coral. 13 weren't reached.");
     expect(runSummary(run({ stopped: true, remaining: paths(25) }), "Coral")).toEqual({ title: "Stopped before any folder was changed", detail: null, tone: "warn" });
   });
 

@@ -3,18 +3,25 @@ import { ACCENTS, applyPrefs, readPrefs, reducesMotion, setPrefs } from "./prefs
 
 describe("appearance preferences", () => {
   it("read back what was saved, and the defaults for anything else", () => {
-    expect(readPrefs({ accent: "purple", motion: "reduced" })).toEqual({ accent: "purple", motion: "reduced" });
-    expect(readPrefs({ accent: "chartreuse", motion: "wild" })).toEqual({ accent: "blue", motion: "system" });
-    expect(readPrefs(null)).toEqual({ accent: "blue", motion: "system" });
-    expect(readPrefs("blue")).toEqual({ accent: "blue", motion: "system" });
+    expect(readPrefs({ accent: "purple", motion: "reduced" })).toEqual({ accent: "purple", motion: "reduced", language: null });
+    expect(readPrefs({ accent: "chartreuse", motion: "wild" })).toEqual({ accent: "blue", motion: "system", language: null });
+    expect(readPrefs(null)).toEqual({ accent: "blue", motion: "system", language: null });
+    expect(readPrefs("blue")).toEqual({ accent: "blue", motion: "system", language: null });
     expect(readPrefs({ accent: "graphite" }).accent).toBe("mono");
+  });
+
+  it("keep a language the app speaks, and follow the computer's for anything else", () => {
+    expect(readPrefs({ language: "ja" }).language).toBe("ja");
+    expect(readPrefs({ language: "zh-CN" }).language).toBe("zh-CN");
+    expect(readPrefs({ language: "de" }).language).toBeNull();
+    expect(readPrefs({ language: 3 }).language).toBeNull();
   });
 
   it("set the attributes the stylesheets read, and none for the defaults", () => {
     const root = { dataset: {} as Record<string, string> } as unknown as HTMLElement;
-    applyPrefs({ accent: "green", motion: "reduced" }, root);
+    applyPrefs({ accent: "green", motion: "reduced", language: "fr" }, root);
     expect(root.dataset).toEqual({ accent: "green", motion: "reduced" });
-    applyPrefs({ accent: "blue", motion: "system" }, root);
+    applyPrefs({ accent: "blue", motion: "system", language: null }, root);
     expect(root.dataset).toEqual({});
   });
 

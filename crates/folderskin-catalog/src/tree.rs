@@ -230,7 +230,7 @@ impl PublishedPack {
         if problems.is_empty() {
             Ok(published)
         } else {
-            Err(problems.join("; "))
+            Err(problems.join(". "))
         }
     }
 

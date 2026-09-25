@@ -1,0 +1,134 @@
+{
+  "title": "Community",
+  "sub": "Free skins and packs people share. Add one and its skins join your library.",
+  "addFromFolder": "Add from a folder",
+  "shareYours": "Share your skins",
+  "tabsLabel": "filter packs by tag",
+  "search": "Search packs",
+  "searchLabel": "search packs",
+  "refreshTip": "Look for new and updated packs",
+  "refreshLabel": "refresh packs",
+  "viewLabel": "show packs as",
+  "views": {
+    "gallery": "Gallery",
+    "list": "List"
+  },
+  "hits": {
+    "label": "skins whose names match",
+    "title": "Skins",
+    "tip": "{{name}}, in {{pack}}"
+  },
+  "tryAgain": "Try again",
+  "checked": "Every pack is checked before it's listed",
+  "loadFailed": "The packs didn't load",
+  "loadFailedText": "{{reason}}. You can still add a pack from a folder.",
+  "loading": "Loading packs",
+  "gridLabel": "community packs",
+  "empty": {
+    "noMatch": "No pack matches",
+    "none": "No packs yet",
+    "noMatchText": "Try another word or tag.",
+    "noneText": "Be the first: share yours."
+  },
+  "remove": {
+    "title": "Remove \"{{name}}\"?",
+    "text": "Its skins leave your library. Folders that already use them keep their icon.",
+    "action": "Remove"
+  },
+  "dialog": {
+    "choosePackFolder": "Choose a pack folder"
+  },
+  "pack": {
+    "viewLabel": "view {{name}}",
+    "viewTip": "View {{name}}",
+    "added": "Added to your library",
+    "by": "by <a>@{{author}}</a>",
+    "skins_one": "{{count}} skin",
+    "skins_other": "{{count}} skins",
+    "view": "View",
+    "updateTip": "A newer version of this pack is out",
+    "update": "Update",
+    "removing": "Removing",
+    "removingLabel": "removing {{name}}",
+    "removeTip": "Remove this pack",
+    "removeLabel": "remove {{name}}",
+    "add": "Add"
+  },
+  "viewer": {
+    "add_one": "Add {{count}} skin",
+    "add_other": "Add {{count}} skins",
+    "added": "Added",
+    "github": "Open on GitHub",
+    "openFailed": "Couldn't open this pack: {{reason}}.",
+    "getting_one": "Getting {{count}} skin to show it",
+    "getting_other": "Getting {{count}} skins to show them"
+  },
+  "progress": {
+    "adding": "Adding",
+    "updating": "Updating",
+    "addingLabel": "Adding {{name}}",
+    "updatingLabel": "Updating {{name}}",
+    "downloading": "Downloading {{done}} of {{total}}",
+    "saving": "Saving {{done}} of {{total}}"
+  },
+  "sort": {
+    "bestMatch": "Best match",
+    "featured": "Featured",
+    "newest": "Newest",
+    "name": "Name",
+    "mostSkins": "Most skins"
+  },
+  "options": {
+    "button": "Sort and more tags",
+    "label": "sort and tags",
+    "title": "Sort and tags",
+    "tagCount_one": "{{count}} tag in these packs",
+    "tagCount_other": "{{count}} tags in these packs",
+    "allTags": "All tags",
+    "tags": "Tags"
+  },
+  "count": {
+    "searchFailed": "Couldn't search: {{reason}}",
+    "packs_one": "{{count}} pack",
+    "packs_other": "{{count}} packs",
+    "matching_one": "{{count}} pack matches “{{query}}”",
+    "matching_other": "{{count}} packs match “{{query}}”",
+    "tagged_one": "{{count}} pack tagged {{tag}}",
+    "tagged_other": "{{count}} packs tagged {{tag}}",
+    "matchingTagged_one": "{{count}} pack matches “{{query}}” tagged {{tag}}",
+    "matchingTagged_other": "{{count}} packs match “{{query}}” tagged {{tag}}",
+    "withLastVisit": "{{line}}. {{why}}",
+    "lastVisit": {
+      "offline": "You're offline, so these are the packs from your last visit",
+      "unanswered": "{{host}} isn't answering, so these are the packs from your last visit",
+      "behind": "The newest list of packs didn't arrive, so these are the packs from your last visit",
+      "other": "{{why}}, so these are the packs from your last visit"
+    }
+  },
+  "toast": {
+    "addLinkFailed": "Couldn't add “{{id}}”: {{reason}}",
+    "noSuchPack": "Couldn't add “{{id}}”: there's no pack by that name in Community. Search for it there, as it may have been renamed.",
+    "already": "{{name}} is in your library already",
+    "alreadyNewer": "{{name}} is in your library already, and Update gets its newer version",
+    "stillBusy": {
+      "add": "{{name}} is still being added. Try again once it's done.",
+      "update": "{{name}} is still being updated. Try again once it's done.",
+      "remove": "{{name}} is still being removed. Try again once it's done."
+    },
+    "added_one": "Added {{count}} skin from {{name}}",
+    "added_other": "Added {{count}} skins from {{name}}",
+    "addFailed": "Couldn't add {{name}}: {{reason}}",
+    "updated": "Updated {{name}}",
+    "updateFailed": "Couldn't update {{name}}: {{reason}}",
+    "removed": "Removed {{name}}",
+    "removeFailed": "Couldn't remove {{name}}: {{reason}}",
+    "updates_one": "{{count}} of your packs has an update",
+    "updates_other": "{{count}} of your packs have an update",
+    "upToDate": "Community is up to date",
+    "refreshFailed": "Couldn't refresh: {{reason}}",
+    "show": "Show",
+    "addedFromFolder_one": "Added {{count}} skin from that folder",
+    "addedFromFolder_other": "Added {{count}} skins from that folder",
+    "addFolderFailed": "Couldn't add that pack: {{reason}}"
+  }
+}

@@ -13,8 +13,8 @@ describe("what setting the local model up takes", () => {
   });
 
   it("says what is left when only one part is", () => {
-    expect(whatItTakes({ download_bytes: 0, installs: "mflux" })).toBe("Installs mflux; the model is already here.");
-    expect(whatItTakes({ download_bytes: 0, installs: null })).toBe("Nothing left to download; setting up checks what's here.");
+    expect(whatItTakes({ download_bytes: 0, installs: "mflux" })).toBe("Installs mflux. The model is already here.");
+    expect(whatItTakes({ download_bytes: 0, installs: null })).toBe("Nothing left to download. Setting up checks what's here.");
   });
 });
 

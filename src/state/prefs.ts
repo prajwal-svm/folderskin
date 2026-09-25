@@ -1,19 +1,22 @@
 /**
- * How the app looks beyond light and dark (state/theme.ts): its accent colour and how much it
- * moves. Both are kept on this computer and set on <html> as data attributes, which tokens.css and
- * base.css read, so every part of the app follows without being told.
+ * How the app looks beyond light and dark (state/theme.ts): its accent colour, how much it moves,
+ * and the language it speaks. All are kept on this computer. The first two are set on <html> as
+ * data attributes, which tokens.css and base.css read, so every part of the app follows without
+ * being told; the language is state/language.ts's to put on show.
  */
 import { useSyncExternalStore } from "react";
+import { isLocale, type Locale } from "../i18n/locales";
 
-/** The accents Settings offers, each drawn by its --swatch-<id> in tokens.css. */
+/** The accents Settings offers, each drawn by its --swatch-<id> in tokens.css and named by
+ *  `settings.general.accents.<id>`. */
 export const ACCENTS = [
-  { id: "blue", label: "Blue" },
-  { id: "purple", label: "Purple" },
-  { id: "pink", label: "Pink" },
-  { id: "orange", label: "Orange" },
-  { id: "green", label: "Green" },
+  { id: "blue" },
+  { id: "purple" },
+  { id: "pink" },
+  { id: "orange" },
+  { id: "green" },
   /** Black on a light window, white on a dark one. */
-  { id: "mono", label: "Black and white" },
+  { id: "mono" },
 ] as const;
 
 export type Accent = (typeof ACCENTS)[number]["id"];
@@ -21,10 +24,14 @@ export type Accent = (typeof ACCENTS)[number]["id"];
 /** "system" follows the computer's own reduce-motion setting; "reduced" is always still. */
 export type Motion = "system" | "reduced";
 
-export type Prefs = { accent: Accent; motion: Motion };
+/**
+ * The language chosen from the sidebar's language menu, or null while none has been: the app then
+ * follows the computer's.
+ */
+export type Prefs = { accent: Accent; motion: Motion; language: Locale | null };
 
 export const PREFS_KEY = "folderskin.prefs";
-const DEFAULTS: Prefs = { accent: "blue", motion: "system" };
+const DEFAULTS: Prefs = { accent: "blue", motion: "system", language: null };
 
 /** What was saved, with anything unknown or missing back at its default. */
 export function readPrefs(raw: unknown): Prefs {
@@ -34,7 +41,8 @@ export function readPrefs(raw: unknown): Prefs {
   const saved = v.accent === "graphite" ? "mono" : v.accent;
   const accent = ACCENTS.some((a) => a.id === saved) ? (saved as Accent) : DEFAULTS.accent;
   const motion = v.motion === "reduced" ? "reduced" : "system";
-  return { accent, motion };
+  const language = isLocale(v.language) ? v.language : null;
+  return { accent, motion, language };
 }
 
 export function loadPrefs(): Prefs {

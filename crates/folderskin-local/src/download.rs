@@ -181,7 +181,7 @@ async fn fetch_with(
                 ),
             )
             .fix("Run the same command again to download it afresh.")
-            .fix("If it happens twice, your network may be changing downloads; try another one."));
+            .fix("If it happens twice, your network may be changing downloads. Try another one."));
         }
     }
     if part != dest {
@@ -756,7 +756,7 @@ fn unreachable_error(name: &str, url: &str, e: &reqwest::Error) -> Error {
         format!("{host} couldn't be reached: {}.", root_cause(e)),
     )
     .fix("Check the internet connection (and any proxy or firewall), then run the command again.")
-    .fix("Whatever was already downloaded is kept; the next run carries on from there.")
+    .fix("Whatever was already downloaded is kept. The next run carries on from there.")
 }
 
 fn status_error(name: &str, url: &str, status: u16) -> Error {

@@ -38,12 +38,12 @@ pub fn validate_folder(path: &Path) -> Result<PathBuf, ApplyError> {
     }
     if is_home(&canonical) {
         return Err(ApplyError::Refused(
-            "this is your home folder; pick a folder inside it instead".into(),
+            "this is your home folder. Pick a folder inside it instead".into(),
         ));
     }
     if is_system_location(&canonical) {
         return Err(ApplyError::Refused(
-            "that folder belongs to the operating system or an app; pick one of your own folders"
+            "that folder belongs to the operating system or an app. Pick one of your own folders"
                 .into(),
         ));
     }

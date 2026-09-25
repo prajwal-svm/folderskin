@@ -281,7 +281,7 @@ fn heic_to_png(path: &Path) -> Result<Vec<u8>, String> {
 
 #[cfg(not(target_os = "macos"))]
 fn heic_to_png(_path: &Path) -> Result<Vec<u8>, String> {
-    Err("HEIC pictures aren't supported here yet — export it as PNG or JPEG first".into())
+    Err("HEIC pictures aren't supported here yet. Export it as PNG or JPEG first".into())
 }
 
 // ---------- commands ----------
