@@ -1,1 +1,29 @@
-{}
+{
+  "title": "アップデートがあります",
+  "sub": "FolderSkin {{version}}が公開されました。お使いのバージョンは{{current}}です。",
+  "close": "閉じる",
+  "later": "あとで",
+  "tryAgain": "もう一度試す",
+  "updateAndRestart": "アップデートして再起動",
+  "failed": "アップデートが完了しなかったため、何も変更されていません。もう一度試すか、<link>リリースページ</link>からダウンロードしてください。",
+  "installed": "FolderSkin {{version}}をインストールしました。使うには、FolderSkinを終了してもう一度開いてください。",
+  "downloading": "ダウンロード中",
+  "downloadingShare": "ダウンロード中（{{share}}）",
+  "installing": "インストール中",
+  "restarting": "再起動中",
+  "progressLabel": "アップデート",
+  "noNotes": "このバージョンにはリリースノートがありません。",
+  "button": {
+    "checking": "アップデートを確認中",
+    "available": "{{version}}にアップデート",
+    "current": "最新の状態です",
+    "failed": "確認できませんでした。もう一度試す",
+    "check": "アップデートを確認",
+    "checkAgain": "もう一度確認"
+  },
+  "about": {
+    "sourceLabel": "ソースを表示",
+    "source": "ソースを表示",
+    "note": "どんなフォルダにもスキンを。写真でも、絵画でも、自分でデザインしたものでも、言葉で伝えたスタイルでも。"
+  }
+}

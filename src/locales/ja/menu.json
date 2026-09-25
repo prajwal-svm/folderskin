@@ -1,1 +1,23 @@
-{}
+{
+  "about": "FolderSkinについて",
+  "services": "サービス",
+  "hide": "FolderSkinを非表示",
+  "hideOthers": "ほかを非表示",
+  "showAll": "すべてを表示",
+  "quit": "FolderSkinを終了",
+  "file": "ファイル",
+  "closeWindow": "ウインドウを閉じる",
+  "edit": "編集",
+  "undo": "取り消す",
+  "redo": "やり直す",
+  "cut": "カット",
+  "copy": "コピー",
+  "paste": "ペースト",
+  "selectAll": "すべてを選択",
+  "view": "表示",
+  "fullScreen": "フルスクリーンにする",
+  "window": "ウインドウ",
+  "minimize": "しまう",
+  "zoom": "拡大／縮小",
+  "help": "ヘルプ"
+}

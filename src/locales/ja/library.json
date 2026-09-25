@@ -1,1 +1,144 @@
-{}
+{
+  "label": "ライブラリ",
+  "resize": {
+    "sidebar": "サイドバーの幅",
+    "composer": "レイヤーと設定の幅",
+    "folder": "フォルダパネルの幅"
+  },
+  "tabs": {
+    "all": "すべて"
+  },
+  "toast": {
+    "importedFolder": "{{name}}をマイスキンに追加しました（背景を除去）",
+    "importedArtwork": "{{name}}をマイスキンに追加しました（フォルダにはめ込み）",
+    "deleted": "{{name}}を削除しました"
+  },
+  "errors": {
+    "delete": "{{name}}を削除できませんでした：{{reason}}",
+    "save": "{{name}}を保存できませんでした：{{reason}}"
+  },
+  "empty": {
+    "loadFailed": "スキンを読み込めませんでした",
+    "noMatchFiltered": "このフィルタでは「{{query}}」に一致するものはありません",
+    "noneFiltered": "このフィルタに一致するスキンはありません",
+    "filteredText": "フィルタをいくつか外すか、すべて解除してください。",
+    "clearFilters": "フィルタを解除",
+    "clearSearch": "検索を解除",
+    "noMatch": "「{{query}}」に一致するものはありません",
+    "noMatchText": "別の言葉で試すか、「すべて」を見てください。",
+    "noFaves": "お気に入りはまだありません",
+    "noFavesText": "スキンの星をタップすると、ここに並びます。",
+    "noSkins": "スキンはまだありません",
+    "noSkinsText": "コミュニティから無料のパックを追加するか、自分の画像を取り込むか、AIに描いてもらいましょう。",
+    "browsePacks": "パックを見る"
+  },
+  "delete": {
+    "title": "「{{name}}」を削除しますか？",
+    "text": "ライブラリから完全に削除されます。すでにこのスキンを使っているフォルダのアイコンはそのまま残ります。",
+    "action": "削除"
+  },
+  "addPicture": "画像を追加",
+  "toolbar": {
+    "tabsLabel": "タグでスキンを絞り込む",
+    "search": "スキンを検索",
+    "searchLabel": "スキンを検索"
+  },
+  "tile": {
+    "madeWithAi": "{{name}}（AIで作成）",
+    "yours": "{{name}}（マイスキン）",
+    "faveLabel": "{{name}}をお気に入りに追加",
+    "unfaveLabel": "{{name}}をお気に入りから外す",
+    "fave": "お気に入りに追加",
+    "unfave": "お気に入りから外す",
+    "optionsLabel": "{{name}}のオプション",
+    "optionsYours": "名前の変更、タグ、詳細",
+    "options": "タグと詳細"
+  },
+  "menu": {
+    "label": "{{name}}：名前、タグ、詳細",
+    "name": "名前",
+    "tags": "タグ",
+    "addTag": "タグを追加",
+    "editDesign": "デザインを編集",
+    "remix": "デザイナーでリミックス",
+    "share": "コミュニティで共有"
+  },
+  "facts": {
+    "madeWith": "使用モデル",
+    "prompt": "プロンプト",
+    "shape": "形",
+    "made": "作成日",
+    "pack": "パック",
+    "sharedBy": "共有した人",
+    "licence": "ライセンス",
+    "added": "追加日",
+    "from": "入手元",
+    "wholeFolder": "フォルダ全体",
+    "artOnFolder": "FolderSkinのフォルダに載せた絵",
+    "finishedFolder": "完成したフォルダ",
+    "pictureOnFolder": "FolderSkinのフォルダに載せた画像",
+    "designedHere": "ここであなたがデザイン",
+    "pictureAdded": "あなたが追加した画像",
+    "finishedCutOut": "完成したフォルダ（背景を除去）",
+    "comesWith": "FolderSkinに付属"
+  },
+  "sort": {
+    "newest": "新しい順",
+    "oldest": "古い順",
+    "az": "A–Z",
+    "za": "Z–A"
+  },
+  "colours": {
+    "red": "赤",
+    "orange": "オレンジ",
+    "yellow": "黄",
+    "green": "緑",
+    "teal": "青緑",
+    "blue": "青",
+    "purple": "紫",
+    "pink": "ピンク",
+    "brown": "茶",
+    "black": "黒",
+    "grey": "グレー",
+    "white": "白"
+  },
+  "filters": {
+    "title": "フィルタ",
+    "buttonOn": "フィルタ（{{count}}件）",
+    "label": "スキンの絞り込みと並べ替え",
+    "matching_other": "{{count}}個中{{matching}}個のスキン",
+    "skins_other": "{{count}}個のスキン",
+    "clearAll": "すべて解除",
+    "sortBy": "並べ替え",
+    "sortByLabel": "並べ替え",
+    "favouritesOnly": "お気に入りのみ",
+    "readingColours": "色を読み取り中",
+    "allAlike": "今のところ、どのスキンも似ています。パックや自分の画像を追加すると、絞り込める項目が増えます。",
+    "swatchLabel": "{{label}}、{{count}}",
+    "swatchTip": "{{label}} · {{count}}",
+    "light": "明るい",
+    "dark": "暗い",
+    "sources": {
+      "community": "コミュニティパック",
+      "import": "自分の画像",
+      "ai": "AIで作成",
+      "composer": "自分のデザイン"
+    },
+    "added": {
+      "today": "今日",
+      "week": "過去1週間",
+      "month": "過去1か月",
+      "older": "それ以前"
+    },
+    "facets": {
+      "source": "入手元",
+      "pack": "パック",
+      "colour": "色",
+      "tone": "明るさ",
+      "added": "追加日",
+      "model": "使用モデル",
+      "author": "作者",
+      "license": "ライセンス"
+    }
+  }
+}

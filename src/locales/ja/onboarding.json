@@ -1,1 +1,40 @@
-{}
+{
+  "welcome": {
+    "go": "はじめる",
+    "fine": "無料 · オープンソース · アカウント不要"
+  },
+  "install": {
+    "waiting": "待機中",
+    "downloading": "ダウンロード中",
+    "downloadingOf": "ダウンロード中（{{done}}/{{total}}）",
+    "saving": "ライブラリに追加中",
+    "added_other": "{{count}}個のスキンを追加しました",
+    "failed": "追加できませんでした：{{reason}}"
+  },
+  "note": {
+    "inLibrary_other": "ライブラリに{{count}}個のスキンがあります。",
+    "adding": "{{name}}を追加しています。数秒かかります。",
+    "failedWhy_other": "{{names}}を追加できませんでした：{{reason}}。",
+    "failed_other": "{{names}}を追加できませんでした。もう一度試すか、あとでコミュニティから追加してください。",
+    "anyTime": "パックはいつでもコミュニティで追加・削除できます。",
+    "getting": "パックを取得中"
+  },
+  "packs": {
+    "title": "まずはスキンをいくつか",
+    "sub": "パックは、みんながFolderSkinで共有している無料のスキンのセットです。",
+    "subPick": "パックは、みんながFolderSkinで共有している無料のスキンのセットです。好きなものを選んでください。",
+    "subPicked": "パックは、みんながFolderSkinで共有している無料のスキンのセットです。{{name}}を選んでおきました。ほかにも好きなだけ追加できます。",
+    "loadFailedText": "{{reason}}。パックなしで続けて、あとからコミュニティで追加することもできます。",
+    "back": "戻る",
+    "allSet": "準備完了",
+    "continue": "続ける",
+    "continueWithout": "パックなしで続ける",
+    "addOne": "{{name}}を追加",
+    "addMany_other": "{{count}}個のパックを追加"
+  },
+  "pack": {
+    "label_other": "{{name}}、{{author}}による{{count}}個のスキン",
+    "failed": "追加できませんでした",
+    "already": "ライブラリに追加済み"
+  }
+}

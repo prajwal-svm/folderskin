@@ -1,1 +1,157 @@
-{}
+{
+  "title": "パックを共有",
+  "sub": "パックは無料です。人が審査したあと、誰でもFolderSkinに追加できるようになります。",
+  "done": "完了",
+  "saving": "保存中",
+  "saveFolder": "フォルダとして保存",
+  "sending": "送信中",
+  "send": "審査に送信",
+  "verifyAndSend": "確認して送信",
+  "sources": {
+    "own": "自分で作った",
+    "ai": "AIモデルで作った",
+    "mixed": "両方",
+    "licensed": "ほかの人の作品（オープンライセンス）"
+  },
+  "progress": {
+    "preparing": "画像を準備中",
+    "encoding": "画像を準備中（{{done}}/{{total}}）",
+    "checking": "FolderSkinでパックを確認中",
+    "uploading": "画像を送信中（{{done}}/{{total}}）",
+    "finishing": "審査待ちの列に追加中",
+    "retryIn_other": "{{count}}秒後にもう一度試します",
+    "retry": "もう一度試しています"
+  },
+  "scaled": {
+    "picture": "{{name}}（{{side}}px）",
+    "more_other": "ほか{{count}}個",
+    "note_other": "{{names}}は1024pxより小さくしてあります。フルサイズでは1枚の上限の{{max}}MBを超えていたため、ロスレスのまま縮小しました。"
+  },
+  "status": {
+    "uploading": "送信が完了していません",
+    "inReview": "審査待ち",
+    "approved": "承認済み",
+    "rejected": "却下",
+    "withdrawn": "取り下げ済み",
+    "takenDown": "公開停止",
+    "expired": "送信が完了しませんでした"
+  },
+  "problems": {
+    "noSkins": "自分のスキンがまだありません",
+    "tickOne": "スキンを1つ以上選んでください",
+    "tooMany_other": "{{count}}個のスキンは、1パックの上限の{{max}}個を超えています",
+    "noName": "パックに名前を付けてください",
+    "noTag": "タグを1つ以上追加してください",
+    "noHandle": "パックに表示する名前を決めてください",
+    "checking": "使えるかどうか確認中",
+    "unavailable": "現在は利用できません",
+    "noSource": "画像の出どころを選んでください",
+    "agree": "規約に同意してください"
+  },
+  "dialogs": {
+    "saveWhere": "パックの保存先を選択",
+    "saveKey": "復元用ファイルを保存",
+    "chooseKey": "復元用ファイルを選択",
+    "keyFile": "復元用ファイル"
+  },
+  "key": {
+    "saved": "保存しました。人に渡さないでください。このファイルがあれば、誰でもあなたとして共有できます。",
+    "saveNote": "別のコンピュータからこの名前で共有するには、<link>復元用ファイルを保存</link>してください。",
+    "use": "復元用ファイルを使う"
+  },
+  "sent": {
+    "title": "パックは審査待ちです",
+    "sub": "{{name}}はFolderSkinの審査待ちの列に入りました。",
+    "seeSubmissions": "送信履歴を見る",
+    "note": "どのパックも、ほかの人に公開される前に人が確認します。承認されると、<b>{{handle}}</b>の名前でコミュニティに公開され、誰でも見られるようになります。却下された場合は、送信履歴で理由を確認できます。"
+  },
+  "verify": {
+    "title": "このコンピュータを確認",
+    "sub": "パックを審査に送れるのが、スクリプトではなく人だけになるようにするためです。",
+    "back": "戻る",
+    "lead": "FolderSkinの共有サービスのページがブラウザで開きました。そこで簡単な確認を終えると、FolderSkinが自動で続きを進めます。",
+    "creditedTo": "パックは<b>{{handle}}</b>の名前でクレジットされます。この確認はコンピュータごとに1回だけです。",
+    "openAgain": "ページをもう一度開く",
+    "waiting": "ブラウザでの確認を待っています",
+    "gettingReady": "ページを準備中"
+  },
+  "subs": {
+    "title": "送信履歴",
+    "sub": "共有したパックと、それぞれの状況です。",
+    "back": "共有に戻る",
+    "label": "送信履歴",
+    "asking": "FolderSkinの共有サービスに問い合わせ中",
+    "none": "まだありません。共有したパックがここに表示されます。",
+    "pictures_other": "{{count}}枚の画像",
+    "sent": "{{date}}に送信",
+    "publishedAs": "{{id}}として公開",
+    "joinsSoon": "まもなくコミュニティパックに加わります",
+    "rule": "規約{{term}}",
+    "quoted": "「{{note}}」",
+    "takingOut": "コミュニティパックに入っていたため、FolderSkinのメンテナに削除を依頼しました。数日かかることがあります。",
+    "keep": "残す",
+    "withdrawIt": "取り下げる",
+    "withdraw": {
+      "button": "取り下げ",
+      "queued": "審査待ちの列から外れます。",
+      "published": "FolderSkinのメンテナが削除すると、コミュニティから全員に対して外れます。通常は数日以内です。すでに入手した人のコピーは、その人の手元に残ります。",
+      "approved": "コミュニティパックには加わりません。"
+    }
+  },
+  "saved": {
+    "title": "パックの準備ができました",
+    "sub": "フォルダ{{folder}}として保存しました。",
+    "note": "画像と、それを説明するpack.jsonが入っています。どこにも何も送信していません。コミュニティの「フォルダから追加」を使えば、誰でもFolderSkinに追加できます。",
+    "howPacksWork": "パックのしくみ"
+  },
+  "form": {
+    "skins": "スキン",
+    "chosenOf": "{{total}}個中{{chosen}}個",
+    "clear": "クリア",
+    "selectAll": "すべて選択",
+    "whichLabel": "表示するスキン",
+    "allOfYours": "自分のスキンすべて（{{count}}）",
+    "tagged": "タグ「{{tag}}」（{{count}}）",
+    "nothingYet": "まだ何もありません。",
+    "packName": "パックの名前",
+    "packNamePlaceholder": "ネオンの夜",
+    "tags": "タグ",
+    "tagsLabel": "パックにタグを追加",
+    "tagsNote": "最初のタグが、みんなのフィルタでこのパックを表す名前になります。",
+    "profile": "プロフィール",
+    "profileLabel": "プロフィール",
+    "creditedTo": "クレジット：{{author}}",
+    "licence": "ライセンス",
+    "licenceLabel": "ライセンス",
+    "thisPackOnly": "このパックだけに適用されます。{{profile}}プロフィールは{{licence}}のままです。",
+    "author": "作者",
+    "checking": "共有できるかどうか確認中",
+    "unavailable": "現在、共有は利用できません。",
+    "verified": "このコンピュータで確認済み",
+    "handlePlaceholder": "your-name",
+    "handleLabel": "パックに表示する名前",
+    "handleNote": "パックに表示する名前です。英字、数字、ハイフンを使えます。",
+    "confirmOnce": "ブラウザで一度だけ確認します。",
+    "otherCredit": "{{profile}}プロフィールのクレジットは{{author}}です。このコンピュータから送ったパックは、確認したときの名前でクレジットされます。",
+    "pictures": "画像について",
+    "picturesLabel": "画像について",
+    "picturesPlaceholder": "どこから来た画像ですか？",
+    "credits": "クレジット",
+    "creditsPlaceholder": "元の写真：山田花子、CC0"
+  },
+  "how": {
+    "label": "共有のしくみ",
+    "reviewed": "<b>まず審査。</b>FolderSkinの担当者がすべてのパックを確認します。承認されるまで、何も公開されません。",
+    "public": "<b>承認後に公開。</b>画像、パックの名前とタグ、あなたの名前が、選んだライセンスのもとで全員に公開されます。すでに入手された人のコピーから、ライセンスを取り消すことはできません。",
+    "noAccount": "<b>アカウント不要。</b>サービスが保存するのは、このコンピュータの鍵とあなたの名前だけです。ネットワークアドレスは、読み取れない形でしか保存しません。",
+    "withdraw": "<b>いつでも取り下げ可能。</b>送信履歴では、各パックの状況や却下された理由を確認でき、パックを取り下げることもできます。"
+  },
+  "terms": {
+    "yours": "画像はあなたのもの、またはCC0で、あなたが確認済みです。どこかから持ってきたものではありません。",
+    "nothingHarmful": "性的なもの、差別的なもの、残酷なもの、自傷に関するものは含みません。子どもが関わるものも含みません。",
+    "nobodyElse": "本人の許可なく、他人のロゴ、キャラクター、肖像を使っていません。",
+    "maintainer": "メンテナはパックを却下したり、あとから削除したりできます。",
+    "agree": "パックの規約を読み、このパックがそれに従っていることを確認しました。",
+    "read": "規約を読む"
+  }
+}

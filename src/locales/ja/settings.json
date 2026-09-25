@@ -1,1 +1,127 @@
-{}
+{
+  "title": "設定",
+  "navLabel": "設定",
+  "search": "検索",
+  "searchLabel": "設定を検索",
+  "pagesLabel": "設定のページ",
+  "noMatch": "「{{query}}」に一致する設定はありません",
+  "pages": {
+    "general": "一般",
+    "ai": "AIプロバイダ",
+    "sharing": "共有",
+    "about": "情報"
+  },
+  "find": {
+    "general": "外観 テーマ ダーク ライト システム モード アクセント カラー 色 動き アニメーション 減らす ウィンドウ サイドバー アイコン マイスキン スキン フォルダ 保存場所 バックアップ appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
+    "ai": "AI 画像 作る場所 キー プロバイダ API モデル ローカルモデル このコンピュータ セットアップ 生成 無料 削除 ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
+    "sharing": "共有 作者 クレジット ライセンス プロフィール コミュニティ パック sharing share author credit credited licence license profile profiles cc0 cc by mit community pack",
+    "about": "情報 FolderSkin スキン パック 写真 デザイン AI ローカルモデル 無料 オープンソース バージョン 新しいバージョン アップデート リリース リンク ソースコード 問題 スター about folderskin what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star"
+  },
+  "general": {
+    "appearance": "外観",
+    "theme": "テーマ",
+    "themeLabel": "テーマ",
+    "themeFind": "ダーク ライト システム モード 外観 dark light system mode",
+    "themes": {
+      "system": "自動",
+      "light": "ライト",
+      "dark": "ダーク"
+    },
+    "accent": "アクセントカラー",
+    "accentNote": "ボタン、選択範囲、ドロップしたフォルダのまわりの光に使われます。",
+    "accentFind": "色 アクセント カラー color accent",
+    "accentLabel": "アクセントカラー",
+    "accents": {
+      "blue": "ブルー",
+      "purple": "パープル",
+      "pink": "ピンク",
+      "orange": "オレンジ",
+      "green": "グリーン",
+      "mono": "モノクロ"
+    },
+    "motion": "動き",
+    "motionNote": "ライブラリ、ダイアログ、アイコンの動きを少なくします。",
+    "motionFind": "アニメーション 動き 減らす 視差効果 animation reduce reduced",
+    "motionLabel": "動き",
+    "motions": {
+      "system": "システム",
+      "systemTip": "コンピュータの設定が許す範囲で動きます",
+      "reduced": "控えめ",
+      "reducedTip": "動かさずに表示や切り替えをします"
+    },
+    "window": "ウィンドウ",
+    "sidebar": "サイドバー",
+    "sidebarNote": "「アイコンのみ」にすると、細い帯に折りたたまれます。{{keys}}で切り替えられます。",
+    "sidebarFind": "レール 折りたたむ たたむ アイコン rail collapse fold icons",
+    "sidebarLabel": "サイドバー",
+    "full": "フル",
+    "iconsOnly": "アイコンのみ",
+    "yourSkins": "スキンの保存場所",
+    "yourSkinsNote": "追加したものはすべてここに保存され、次に起動したときも残っています。バックアップするには、このフォルダをコピーしてください。",
+    "skins_other": "{{count}}個のスキン",
+    "skinsFind": "保存場所 フォルダ バックアップ スキン storage folder backup skins",
+    "keptUntilQuit": "終了するまで保持されます"
+  },
+  "ai": {
+    "title": "画像を作る場所",
+    "find": "キー API プロバイダ モデル key keys api provider providers model",
+    "note": "FolderSkinにはサーバがありません。キーを使う場合、「AIで生成」はこのコンピュータからプロバイダにリクエストを直接送り、料金はあなたのアカウントに請求されます。ローカルモデルなら、一度セットアップすれば無料で作れます。",
+    "loading": "プロバイダを読み込み中"
+  },
+  "sharing": {
+    "title": "ライセンスのプロフィール",
+    "note": "共有するパックには、誰が作ったか、ほかの人がどう使えるかが記されます。共有のしかたごとにプロフィールを用意しておきましょう。共有はデフォルトのプロフィールから始まります。",
+    "howItWorks": "共有のしくみ"
+  },
+  "profile": {
+    "firstName": "個人",
+    "fallbackName": "プロフィール",
+    "default": "デフォルト",
+    "creditedTo": "クレジット：{{author}}",
+    "noCredit": "クレジットする名前がまだありません",
+    "makeDefaultLabel": "{{name}}をデフォルトにする",
+    "makeDefault": "デフォルトにする",
+    "changeLabel": "{{name}}を変更",
+    "change": "変更",
+    "deleteLabel": "{{name}}を削除",
+    "delete": "削除",
+    "deleted": "{{name}}を削除しました。",
+    "undo": "取り消す",
+    "add": "プロフィールを追加",
+    "newLabel": "新しいプロフィール",
+    "name": "名前",
+    "namePlaceholder": "個人、仕事用など",
+    "creditedToLabel": "クレジット先",
+    "authorPlaceholder": "your-name",
+    "licence": "ライセンス",
+    "licenceLabel": "ライセンス",
+    "save": "保存",
+    "addProfile": "プロフィールを追加",
+    "problems": {
+      "noName": "プロフィールに名前を付けてください。",
+      "taken": "{{name}}という名前のプロフィールはすでにあります。",
+      "author": "クレジットの名前には、英字、数字、1つずつのハイフンだけを使えます。",
+      "full_other": "プロフィールは{{count}}個までです。追加するには、どれかを削除してください。"
+    }
+  },
+  "about": {
+    "intro": "最高の思い出も、昔の書類と同じ味気ないフォルダの中。FolderSkinなら、どのフォルダにも中身にぴったりの見た目を与えられます。夏の写真にはゴールデンアワーの映画のワンシーン、旅行にはヴィンテージの旅行ポスター、動画プロジェクトにはポップアート、誕生日にはやさしいパステルカラー。",
+    "points": {
+      "skins": "スキンは、無料のコミュニティパック、自分の写真、自分でデザインしたものから手に入ります。",
+      "ai": "スタイルを言葉で伝えれば、AIが描きます。自分のキーを使うことも、ローカルモデルで無料で描くこともできます。",
+      "fileBrowser": {
+        "macos": "スキンはFinderにそのまま表示され、どのフォルダもワンクリックで元のアイコンに戻せます。",
+        "windows": "スキンはエクスプローラーにそのまま表示され、どのフォルダもワンクリックで元のアイコンに戻せます。",
+        "linux": "スキンは「ファイル」にそのまま表示され、どのフォルダもワンクリックで元のアイコンに戻せます。"
+      },
+      "free": "無料のオープンソースです。アカウント不要で、トラッキングもありません。"
+    },
+    "updates": "アップデート",
+    "newer": "新しいバージョン",
+    "newerNote": "GitHubにあるFolderSkinのリリースから入手し、あなたが指示したときにインストールします。",
+    "newerFind": "アップデート 更新 リリース バージョン update updates release version",
+    "links": "リンク",
+    "sourceCode": "ソースコード",
+    "releases": "リリース"
+  }
+}
