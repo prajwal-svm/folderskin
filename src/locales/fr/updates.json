@@ -1,1 +1,29 @@
-{}
+{
+  "title": "Mise à jour disponible",
+  "sub": "FolderSkin {{version}} est sorti. Vous avez la {{current}}.",
+  "close": "Fermer",
+  "later": "Plus tard",
+  "tryAgain": "Réessayer",
+  "updateAndRestart": "Mettre à jour et redémarrer",
+  "failed": "La mise à jour n'a pas abouti, donc rien n'a changé. Réessayez, ou téléchargez-la depuis la <link>page des versions</link>.",
+  "installed": "FolderSkin {{version}} est installé. Quittez FolderSkin et rouvrez-le pour l'utiliser.",
+  "downloading": "Téléchargement",
+  "downloadingShare": "Téléchargement : {{share}}",
+  "installing": "Installation",
+  "restarting": "Redémarrage",
+  "progressLabel": "mise à jour",
+  "noNotes": "Aucune note n'accompagne cette version.",
+  "button": {
+    "checking": "Recherche de mises à jour",
+    "available": "Mettre à jour vers la {{version}}",
+    "current": "Vous êtes à jour",
+    "failed": "Vérification impossible. Réessayer",
+    "check": "Rechercher des mises à jour",
+    "checkAgain": "Vérifier à nouveau"
+  },
+  "about": {
+    "sourceLabel": "Voir le code source",
+    "source": "Voir le code source",
+    "note": "Habillez n'importe quel dossier : une photo, une peinture, une création à vous, ou un style que vous décrivez."
+  }
+}

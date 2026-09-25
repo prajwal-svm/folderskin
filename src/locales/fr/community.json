@@ -1,1 +1,145 @@
-{}
+{
+  "title": "Communauté",
+  "sub": "Des habillages et des packs gratuits, partagés par tout le monde. Ajoutez-en un et ses habillages rejoignent votre bibliothèque.",
+  "addFromFolder": "Ajouter depuis un dossier",
+  "shareYours": "Partager vos habillages",
+  "tabsLabel": "filtrer les packs par tag",
+  "search": "Rechercher des packs",
+  "searchLabel": "rechercher des packs",
+  "refreshTip": "Chercher des packs nouveaux ou mis à jour",
+  "refreshLabel": "actualiser les packs",
+  "viewLabel": "afficher les packs en",
+  "views": {
+    "gallery": "Galerie",
+    "list": "Liste"
+  },
+  "hits": {
+    "label": "habillages dont le nom correspond",
+    "title": "Habillages",
+    "tip": "{{name}}, dans {{pack}}"
+  },
+  "tryAgain": "Réessayer",
+  "checked": "Chaque pack est vérifié avant d'être publié",
+  "loadFailed": "Les packs ne se sont pas chargés",
+  "loadFailedText": "{{reason}}. Vous pouvez quand même ajouter un pack depuis un dossier.",
+  "loading": "Chargement des packs",
+  "gridLabel": "packs de la communauté",
+  "empty": {
+    "noMatch": "Aucun pack ne correspond",
+    "none": "Pas encore de packs",
+    "noMatchText": "Essayez un autre mot ou un autre tag.",
+    "noneText": "Lancez-vous : partagez les vôtres."
+  },
+  "remove": {
+    "title": "Retirer « {{name}} » ?",
+    "text": "Ses habillages quittent votre bibliothèque. Les dossiers qui les utilisent déjà gardent leur icône.",
+    "action": "Retirer"
+  },
+  "dialog": {
+    "choosePackFolder": "Choisir le dossier d'un pack"
+  },
+  "pack": {
+    "viewLabel": "voir {{name}}",
+    "viewTip": "Voir {{name}}",
+    "added": "Ajouté à votre bibliothèque",
+    "by": "par <a>@{{author}}</a>",
+    "skins_one": "{{count}} habillage",
+    "skins_many": "{{count}} d'habillages",
+    "skins_other": "{{count}} habillages",
+    "view": "Voir",
+    "updateTip": "Une nouvelle version de ce pack est disponible",
+    "update": "Mettre à jour",
+    "removing": "Retrait en cours",
+    "removingLabel": "retrait de {{name}}",
+    "removeTip": "Retirer ce pack",
+    "removeLabel": "retirer {{name}}",
+    "add": "Ajouter"
+  },
+  "viewer": {
+    "add_one": "Ajouter {{count}} habillage",
+    "add_many": "Ajouter {{count}} d'habillages",
+    "add_other": "Ajouter {{count}} habillages",
+    "added": "Ajouté",
+    "github": "Ouvrir sur GitHub",
+    "openFailed": "Impossible d'ouvrir ce pack : {{reason}}.",
+    "getting_one": "Récupération de {{count}} habillage pour l'afficher",
+    "getting_many": "Récupération de {{count}} d'habillages pour les afficher",
+    "getting_other": "Récupération de {{count}} habillages pour les afficher"
+  },
+  "progress": {
+    "adding": "Ajout",
+    "updating": "Mise à jour",
+    "addingLabel": "Ajout de {{name}}",
+    "updatingLabel": "Mise à jour de {{name}}",
+    "downloading": "Téléchargement : {{done}} sur {{total}}",
+    "saving": "Enregistrement : {{done}} sur {{total}}"
+  },
+  "sort": {
+    "bestMatch": "Pertinence",
+    "featured": "À la une",
+    "newest": "Récents",
+    "name": "Nom",
+    "mostSkins": "Plus fournis"
+  },
+  "options": {
+    "button": "Tri et autres tags",
+    "label": "tri et tags",
+    "title": "Tri et tags",
+    "tagCount_one": "{{count}} tag dans ces packs",
+    "tagCount_many": "{{count}} de tags dans ces packs",
+    "tagCount_other": "{{count}} tags dans ces packs",
+    "allTags": "Tous les tags",
+    "tags": "Tags"
+  },
+  "count": {
+    "searchFailed": "Recherche impossible : {{reason}}",
+    "packs_one": "{{count}} pack",
+    "packs_many": "{{count}} de packs",
+    "packs_other": "{{count}} packs",
+    "matching_one": "{{count}} pack correspond à « {{query}} »",
+    "matching_many": "{{count}} de packs correspondent à « {{query}} »",
+    "matching_other": "{{count}} packs correspondent à « {{query}} »",
+    "tagged_one": "{{count}} pack avec le tag {{tag}}",
+    "tagged_many": "{{count}} de packs avec le tag {{tag}}",
+    "tagged_other": "{{count}} packs avec le tag {{tag}}",
+    "matchingTagged_one": "{{count}} pack avec le tag {{tag}} correspond à « {{query}} »",
+    "matchingTagged_many": "{{count}} de packs avec le tag {{tag}} correspondent à « {{query}} »",
+    "matchingTagged_other": "{{count}} packs avec le tag {{tag}} correspondent à « {{query}} »",
+    "withLastVisit": "{{line}}. {{why}}",
+    "lastVisit": {
+      "offline": "Vous êtes hors ligne, voici donc les packs de votre dernière visite",
+      "unanswered": "{{host}} ne répond pas, voici donc les packs de votre dernière visite",
+      "behind": "La liste de packs la plus récente n'est pas arrivée, voici donc ceux de votre dernière visite",
+      "other": "{{why}}, voici donc les packs de votre dernière visite"
+    }
+  },
+  "toast": {
+    "addLinkFailed": "Impossible d'ajouter « {{id}} » : {{reason}}",
+    "noSuchPack": "Impossible d'ajouter « {{id}} » : aucun pack de ce nom dans la Communauté. Cherchez-le là-bas, il a peut-être été renommé.",
+    "already": "{{name}} est déjà dans votre bibliothèque",
+    "alreadyNewer": "{{name}} est déjà dans votre bibliothèque, et Mettre à jour récupère sa nouvelle version",
+    "stillBusy": {
+      "add": "{{name}} est encore en cours d'ajout. Réessayez quand ce sera fini.",
+      "update": "{{name}} est encore en cours de mise à jour. Réessayez quand ce sera fini.",
+      "remove": "{{name}} est encore en cours de retrait. Réessayez quand ce sera fini."
+    },
+    "added_one": "{{count}} habillage ajouté depuis {{name}}",
+    "added_many": "{{count}} d'habillages ajoutés depuis {{name}}",
+    "added_other": "{{count}} habillages ajoutés depuis {{name}}",
+    "addFailed": "Impossible d'ajouter {{name}} : {{reason}}",
+    "updated": "{{name}} mis à jour",
+    "updateFailed": "Impossible de mettre à jour {{name}} : {{reason}}",
+    "removed": "{{name}} retiré",
+    "removeFailed": "Impossible de retirer {{name}} : {{reason}}",
+    "updates_one": "{{count}} de vos packs a une mise à jour",
+    "updates_many": "{{count}} de vos packs ont une mise à jour",
+    "updates_other": "{{count}} de vos packs ont une mise à jour",
+    "upToDate": "La Communauté est à jour",
+    "refreshFailed": "Impossible d'actualiser : {{reason}}",
+    "show": "Afficher",
+    "addedFromFolder_one": "{{count}} habillage ajouté depuis ce dossier",
+    "addedFromFolder_many": "{{count}} d'habillages ajoutés depuis ce dossier",
+    "addedFromFolder_other": "{{count}} habillages ajoutés depuis ce dossier",
+    "addFolderFailed": "Impossible d'ajouter ce pack : {{reason}}"
+  }
+}

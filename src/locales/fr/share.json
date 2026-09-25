@@ -1,1 +1,167 @@
-{}
+{
+  "title": "Partager un pack",
+  "sub": "Les packs sont gratuits. Tout le monde peut en ajouter un à FolderSkin une fois qu'une personne l'a relu.",
+  "done": "Terminé",
+  "saving": "Enregistrement",
+  "saveFolder": "Enregistrer dans un dossier",
+  "sending": "Envoi",
+  "send": "Envoyer pour relecture",
+  "verifyAndSend": "Vérifier et envoyer",
+  "sources": {
+    "own": "Je les ai créées moi-même",
+    "ai": "Je les ai créées avec un modèle d'IA",
+    "mixed": "Un peu des deux",
+    "licensed": "Celles de quelqu'un d'autre, sous licence libre"
+  },
+  "progress": {
+    "preparing": "Préparation des images",
+    "encoding": "Préparation des images ({{done}} sur {{total}})",
+    "checking": "Vérification du pack avec FolderSkin",
+    "uploading": "Envoi des images ({{done}} sur {{total}})",
+    "finishing": "Mise en file de relecture",
+    "retryIn_one": "Nouvel essai dans {{count}} seconde",
+    "retryIn_many": "Nouvel essai dans {{count}} de secondes",
+    "retryIn_other": "Nouvel essai dans {{count}} secondes",
+    "retry": "Nouvel essai"
+  },
+  "scaled": {
+    "picture": "{{name}} ({{side}} px)",
+    "more_one": "{{count}} de plus",
+    "more_many": "{{count}} de plus",
+    "more_other": "{{count}} de plus",
+    "note_one": "{{names}} fait moins de 1024 px : gardée sans perte, elle dépassait les {{max}} Mo permis pour une image en taille réelle.",
+    "note_many": "{{names}} font moins de 1024 px : gardées sans perte, elles dépassaient les {{max}} Mo permis pour une image en taille réelle.",
+    "note_other": "{{names}} font moins de 1024 px : gardées sans perte, elles dépassaient les {{max}} Mo permis pour une image en taille réelle."
+  },
+  "status": {
+    "uploading": "Envoi inachevé",
+    "inReview": "En attente de relecture",
+    "approved": "Approuvé",
+    "rejected": "Refusé",
+    "withdrawn": "Retiré",
+    "takenDown": "Dépublié",
+    "expired": "Envoi jamais terminé"
+  },
+  "problems": {
+    "noSkins": "Vous n'avez pas encore d'habillages à vous",
+    "tickOne": "Cochez au moins un habillage",
+    "tooMany_one": "{{count}} habillage dépasse les {{max}} qu'un pack peut contenir",
+    "tooMany_many": "{{count}} d'habillages dépassent les {{max}} qu'un pack peut contenir",
+    "tooMany_other": "{{count}} habillages dépassent les {{max}} qu'un pack peut contenir",
+    "noName": "Donnez un nom au pack",
+    "noTag": "Ajoutez au moins un tag",
+    "noHandle": "Choisissez le nom qu'affichent vos packs",
+    "checking": "Vérification de la disponibilité",
+    "unavailable": "Indisponible pour le moment",
+    "noSource": "Indiquez d'où viennent les images",
+    "agree": "Acceptez les conditions"
+  },
+  "dialogs": {
+    "saveWhere": "Choisissez où enregistrer le pack",
+    "saveKey": "Enregistrez votre fichier de récupération",
+    "chooseKey": "Choisissez votre fichier de récupération",
+    "keyFile": "Fichier de récupération"
+  },
+  "key": {
+    "saved": "Enregistré. Gardez-le pour vous : toute personne qui l'a peut partager en votre nom.",
+    "saveNote": "<link>Enregistrez un fichier de récupération</link> pour partager sous ce nom depuis un autre ordinateur.",
+    "use": "Utiliser un fichier de récupération"
+  },
+  "sent": {
+    "title": "Votre pack attend sa relecture",
+    "sub": "{{name}} est dans la file de relecture de FolderSkin.",
+    "seeSubmissions": "Voir vos envois",
+    "note": "Une personne examine chaque pack avant que quiconque puisse le voir. Une fois approuvé, il rejoint la Communauté pour tout le monde, crédité à <b>{{handle}}</b>. S'il est refusé, Vos envois indique pourquoi."
+  },
+  "verify": {
+    "title": "Vérifiez cet ordinateur",
+    "sub": "Pour que seules des personnes, et pas des scripts, puissent envoyer des packs pour relecture.",
+    "back": "Retour",
+    "lead": "Une page du service de partage de FolderSkin s'est ouverte dans votre navigateur. Une fois sa vérification rapide passée, FolderSkin continue tout seul.",
+    "creditedTo": "Vos packs seront crédités à <b>{{handle}}</b>. FolderSkin ne le demande qu'une fois par ordinateur.",
+    "openAgain": "Rouvrir la page",
+    "waiting": "En attente de la vérification dans votre navigateur",
+    "gettingReady": "Préparation de la page"
+  },
+  "subs": {
+    "title": "Vos envois",
+    "sub": "Les packs que vous avez partagés, et où en est chacun.",
+    "back": "Retour au partage",
+    "label": "vos envois",
+    "asking": "Interrogation du service de partage de FolderSkin",
+    "none": "Rien pour l'instant. Les packs que vous partagez apparaissent ici.",
+    "pictures_one": "{{count}} image",
+    "pictures_many": "{{count}} d'images",
+    "pictures_other": "{{count}} images",
+    "sent": "envoyé le {{date}}",
+    "publishedAs": "publié sous {{id}}",
+    "joinsSoon": "rejoint bientôt les packs de la communauté",
+    "rule": "Règle {{term}}",
+    "quoted": "« {{note}} »",
+    "takingOut": "Il était dans les packs de la communauté, donc le mainteneur de FolderSkin a été prévenu pour le retirer. Cela peut prendre quelques jours.",
+    "keep": "Le garder",
+    "withdrawIt": "Le retirer",
+    "withdraw": {
+      "button": "Retirer",
+      "queued": "Il quitte la file de relecture.",
+      "published": "Il quitte la Communauté pour tout le monde une fois que le mainteneur de FolderSkin l'a retiré, en général en quelques jours. Les copies que les gens ont déjà leur restent.",
+      "approved": "Il ne rejoindra pas les packs de la communauté."
+    }
+  },
+  "saved": {
+    "title": "Votre pack est prêt",
+    "sub": "Enregistré dans le dossier {{folder}}.",
+    "note": "Il contient les images et le pack.json qui les décrit, et rien n'a été envoyé nulle part. Tout le monde peut l'ajouter à FolderSkin avec Ajouter depuis un dossier, dans la Communauté.",
+    "howPacksWork": "Comment fonctionnent les packs"
+  },
+  "form": {
+    "skins": "Habillages",
+    "chosenOf": "{{chosen}} sur {{total}}",
+    "clear": "Tout désélectionner",
+    "selectAll": "Tout sélectionner",
+    "whichLabel": "quels habillages afficher",
+    "allOfYours": "Tous les vôtres ({{count}})",
+    "tagged": "Avec le tag {{tag}} ({{count}})",
+    "nothingYet": "Rien ici pour l'instant.",
+    "packName": "Nom du pack",
+    "packNamePlaceholder": "Nuits de néon",
+    "tags": "Tags",
+    "tagsLabel": "ajouter un tag au pack",
+    "tagsNote": "Le premier désigne le pack dans les filtres de tout le monde.",
+    "profile": "Profil",
+    "profileLabel": "profil",
+    "creditedTo": "crédité à {{author}}",
+    "licence": "Licence",
+    "licenceLabel": "licence",
+    "thisPackOnly": "Pour ce pack seulement : le profil {{profile}} reste en {{licence}}.",
+    "author": "Auteur",
+    "checking": "Vérification de la disponibilité du partage",
+    "unavailable": "Le partage n'est pas disponible pour le moment.",
+    "verified": "Vérifié sur cet ordinateur",
+    "handlePlaceholder": "votre-nom",
+    "handleLabel": "le nom qu'affichent vos packs",
+    "handleNote": "Le nom qu'affichent vos packs : lettres, chiffres et tirets.",
+    "confirmOnce": "Vous le confirmerez une fois dans votre navigateur.",
+    "otherCredit": "Le profil {{profile}} crédite {{author}}. Les packs envoyés depuis cet ordinateur sont crédités au nom sous lequel il a été vérifié.",
+    "pictures": "Les images",
+    "picturesLabel": "les images",
+    "picturesPlaceholder": "D'où viennent-elles ?",
+    "credits": "Crédits",
+    "creditsPlaceholder": "Photo de base par Marie Dupont, CC0"
+  },
+  "how": {
+    "label": "comment fonctionne le partage",
+    "reviewed": "<b>Relu d'abord.</b> Une personne chez FolderSkin examine chaque pack. Rien n'est public avant d'être approuvé.",
+    "public": "<b>Public une fois approuvé.</b> Les images, le nom et les tags du pack, ainsi que votre nom, sont diffusés à tout le monde sous la licence choisie, et une licence ne peut pas être retirée des copies que les gens ont déjà.",
+    "noAccount": "<b>Sans compte.</b> Le service garde la clé de cet ordinateur et votre nom. Votre adresse réseau n'est jamais conservée qu'anonymisée.",
+    "withdraw": "<b>À retirer quand vous voulez.</b> Vos envois indique où en est chaque pack, dit pourquoi si l'un d'eux est refusé, et permet de le reprendre."
+  },
+  "terms": {
+    "yours": "Les images sont à vous, ou sous CC0 et vous l'avez vérifié. Elles ne sont pas récupérées ailleurs.",
+    "nothingHarmful": "Rien de sexuel, de haineux, de gore, ni sur l'automutilation. Rien qui implique un enfant.",
+    "nobodyElse": "Ni logo, ni personnage, ni ressemblance de quelqu'un d'autre sans son accord.",
+    "maintainer": "Un mainteneur peut refuser un pack, ou le retirer plus tard.",
+    "agree": "J'ai lu les conditions des packs et ce pack les respecte.",
+    "read": "Les lire"
+  }
+}
