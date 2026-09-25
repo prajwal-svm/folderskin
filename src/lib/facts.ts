@@ -1,6 +1,7 @@
 import { licenseLabel } from "./packs";
 import type { Skin } from "./tauri";
 import { getLocale, INTL_LOCALES, t } from "../i18n";
+import { madeWith } from "./providerNames";
 
 /** A date and time the way the language on show writes them, such as "18 Sept 2026, 15:02". */
 export function formatWhen(ms: number, locale?: string): string {
@@ -15,7 +16,7 @@ export function skinFacts(skin: Skin, locale?: string): [string, string][] {
   const facts: [string, string][] = [];
   const added = skin.created_at ? formatWhen(skin.created_at, locale) : null;
   if (skin.source === "ai") {
-    if (skin.made_with) facts.push([t("library.facts.madeWith"), skin.made_with]);
+    if (skin.made_with) facts.push([t("library.facts.madeWith"), madeWith(skin.made_with)]);
     if (skin.idea) facts.push([t("library.facts.prompt"), skin.idea]);
     facts.push([t("library.facts.shape"), skin.kind === "folder" ? t("library.facts.wholeFolder") : t("library.facts.artOnFolder")]);
     if (added) facts.push([t("library.facts.made"), added]);

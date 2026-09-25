@@ -40,7 +40,7 @@ language doesn't have is shown in English too, so the app never shows a blank or
 
 ## The rules
 
-These hold for every language, English included. `pnpm check:locales` checks all but the last two.
+These hold for every language, English included. `pnpm check:locales` checks the first six.
 
 - **Keys stay the same.** Only the values are translated.
 - **Placeholders** are the words in double braces, like `{{name}}` or `{{count}}`. The app fills
@@ -70,9 +70,22 @@ These hold for every language, English included. `pnpm check:locales` checks all
 - **No empty messages.**
 - **No em dashes and no semicolons**, in any language: no `—`, `――`, `––`, `——`, `;` or `；`. Rewrite
   the sentence instead: two sentences, a colon, a comma, or brackets.
-- **Never translate** FolderSkin, macOS, Windows, Linux, Finder, Explorer, GitHub, API, GPL-3.0,
-  FLUX.2, MIT, CC0, CC BY, Manrope, the AI providers' names (OpenAI, Google Gemini, xAI Grok, Recraft,
-  Black Forest Labs, Stability AI, Ideogram), file names, commands, code and addresses.
+- **Never translate** FolderSkin, macOS, Windows, Linux, Finder, GitHub, API, GPL-3.0, FLUX.2, MIT,
+  CC0, CC BY, Manrope, the AI providers' names (OpenAI, Google Gemini, xAI Grok, Recraft, Black
+  Forest Labs, Stability AI, Ideogram), file names, commands, code and addresses.
+- **File managers** go by the name each system gives them in your language. Finder stays "Finder"
+  in every language, as Apple writes it. Windows' File Explorer and Linux's Files (GNOME's file
+  manager) take the names Windows and GNOME give them:
+
+  | English | zh-CN | ja | ko | fr | es |
+  |---|---|---|---|---|---|
+  | Finder (macOS) | Finder | Finder | Finder | Finder | Finder |
+  | Explorer (Windows) | 文件资源管理器 | エクスプローラー | 파일 탐색기 | Explorateur de fichiers | Explorador de archivos |
+  | Files (Linux) | 文件 | ファイル | 파일 | Fichiers | Archivos |
+
+  They're in `common.showIn.*`, `composer.sizes.tip.*`, `folder.stage.status.catchesUp.*`,
+  `folder.stage.status.catchUp.*` and `settings.about.points.fileBrowser.*`, each with a `macos`,
+  a `windows` and a `linux` message, of which the app shows the one for the computer it runs on.
 - **Tone:** natural and native, the way the app would read if it had been written in your language.
   Rewrite rather than translate word for word. Buttons stay short. Say it plainly and warmly, as the
   English does.

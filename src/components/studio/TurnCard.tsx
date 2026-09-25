@@ -10,6 +10,7 @@ import { CopyIcon } from "../icons/copy";
 import { useT } from "../../i18n";
 import { formatNumber } from "../../i18n/format";
 import { explain } from "../../lib/sentences";
+import { madeWith, providerName } from "../../lib/providerNames";
 
 /** What the chat can do for a turn, from the card's buttons. */
 export type TurnActions = {
@@ -83,13 +84,13 @@ function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
       </div>
       <div className="turn-meta">
         <p className="turn-name develop-step" key={turn.stage ?? "start"}>
-          {stopping ? t("ai.turn.stopping") : turn.stage ? explain(turn.stage) : t("ai.turn.sending", { provider: turn.where.split(" · ")[0] })}
+          {stopping ? t("ai.turn.stopping") : turn.stage ? explain(turn.stage) : t("ai.turn.sending", { provider: providerName(turn.where.split(" · ")[0]) })}
         </p>
         <div className={progress === null ? "turn-progress is-waiting" : "turn-progress"} style={{ "--done": `${Math.round((progress ?? 0) * 100)}%` } as CSSProperties} aria-hidden="true">
           <span />
         </div>
         <p className="turn-where">
-          {[detail, turn.where, duration(secondsSince(turn.started, now))].filter(Boolean).join(" · ")}
+          {[detail, madeWith(turn.where), duration(secondsSince(turn.started, now))].filter(Boolean).join(" · ")}
         </p>
         <div className="turn-actions">
           <button type="button" className="btn btn-secondary btn-sm" disabled={stopping} onClick={onStop}>
@@ -108,7 +109,7 @@ function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
   const t = useT();
   const [logOpen, setLogOpen] = useState(false);
   const error = turn.error ?? { code: "failed", message: t("ai.turn.didntFinish") };
-  const provider = turn.where.split(" · ")[0];
+  const provider = providerName(turn.where.split(" · ")[0]);
   const primary =
     error.code === "missing_key"
       ? { label: t("ai.turn.addKey", { provider }), run: () => act.settings(turn.provider) }
@@ -240,7 +241,7 @@ export function TurnCard({
                 </div>
               )}
               <p className="turn-where">
-                {turn.where}
+                {madeWith(turn.where)}
                 {turn.finished ? ` · ${duration(secondsSince(turn.started, turn.finished))}` : ""} · {t("ai.turn.inYours")}
               </p>
               <div className="turn-actions">

@@ -10,6 +10,7 @@
 import { flatten, PLACEHOLDER, type Vars } from "../i18n/core";
 import { t, type MessageKey } from "../i18n";
 import native from "../locales/en/native.json";
+import { providerName } from "./providerNames";
 
 type Matcher = { key: MessageKey; re: RegExp };
 
@@ -83,7 +84,9 @@ export function explain(message: string): string {
     const m = re.exec(text);
     if (!m) continue;
     const vars: Vars = {};
-    for (const [name, value] of Object.entries(m.groups ?? {})) vars[name] = NESTED.has(name) ? explain(value) : value;
+    for (const [name, value] of Object.entries(m.groups ?? {})) {
+      vars[name] = NESTED.has(name) ? explain(value) : name === "provider" ? providerName(value) : value;
+    }
     return shapedLike(t(key, vars), text, english);
   }
   // "b.png: it isn't on github.com any more. Try Refresh": a file's name, then a known sentence.

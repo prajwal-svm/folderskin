@@ -247,7 +247,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
     const image = drag.kind === "image";
     return (
       <div className="stage-copy" key={`drag:${drag.kind}`}>
-        <h2 className="stage-title">{image ? t("folder.stage.drag.imageTitle") : t("folder.stage.drag.folderTitle")}</h2>
+        <h2 className="stage-title is-words">{image ? t("folder.stage.drag.imageTitle") : t("folder.stage.drag.folderTitle")}</h2>
         <p className="stage-sub">
           {image
             ? drag.name
@@ -264,7 +264,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
   if (!folder) {
     return (
       <div className="stage-copy" key={skin ? `waiting:${skin.id}` : "empty"}>
-        <h2 className="stage-title">{skin ? t("folder.stage.empty.titleWithSkin") : t("folder.stage.empty.title")}</h2>
+        <h2 className="stage-title is-words">{skin ? t("folder.stage.empty.titleWithSkin") : t("folder.stage.empty.title")}</h2>
         <p className="stage-sub">
           {skin
             ? t("folder.stage.empty.subWithSkin", { name: clip(skin.name), place: browseLabel })
