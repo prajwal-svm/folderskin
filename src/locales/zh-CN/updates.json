@@ -1,1 +1,29 @@
-{}
+{
+  "title": "有新版本可用",
+  "sub": "FolderSkin {{version}} 已发布，你现在用的是 {{current}}。",
+  "close": "关闭",
+  "later": "稍后",
+  "tryAgain": "重试",
+  "updateAndRestart": "更新并重启",
+  "failed": "更新没有完成，所以什么都没有改变。请重试，或者从<link>发布页面</link>下载。",
+  "installed": "FolderSkin {{version}} 已安装。退出 FolderSkin 再重新打开，就能用上新版本。",
+  "downloading": "正在下载",
+  "downloadingShare": "正在下载 {{share}}",
+  "installing": "正在安装",
+  "restarting": "正在重启",
+  "progressLabel": "更新",
+  "noNotes": "这个版本没有附带更新说明。",
+  "button": {
+    "checking": "正在检查更新",
+    "available": "更新到 {{version}}",
+    "current": "已是最新版本",
+    "failed": "检查失败，请重试",
+    "check": "检查更新",
+    "checkAgain": "再检查一次"
+  },
+  "about": {
+    "sourceLabel": "查看源代码",
+    "source": "查看源代码",
+    "note": "给任何文件夹换上皮肤：一张照片、一幅画、你自己的设计，或者你描述的一种风格。"
+  }
+}

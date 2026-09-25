@@ -1,1 +1,123 @@
-{}
+{
+  "title": "社区",
+  "sub": "大家分享的免费皮肤和皮肤包。添加一个，其中的皮肤就会进入你的皮肤库。",
+  "addFromFolder": "从文件夹添加",
+  "shareYours": "分享你的皮肤",
+  "tabsLabel": "按标签筛选皮肤包",
+  "search": "搜索皮肤包",
+  "searchLabel": "搜索皮肤包",
+  "refreshTip": "查找新的和有更新的皮肤包",
+  "refreshLabel": "刷新皮肤包",
+  "viewLabel": "皮肤包的显示方式",
+  "views": {
+    "gallery": "画廊",
+    "list": "列表"
+  },
+  "hits": {
+    "label": "名称匹配的皮肤",
+    "title": "皮肤",
+    "tip": "{{name}}，来自 {{pack}}"
+  },
+  "tryAgain": "重试",
+  "checked": "每个皮肤包在上架前都经过检查",
+  "loadFailed": "皮肤包没能加载出来",
+  "loadFailedText": "{{reason}}。你仍然可以从文件夹添加皮肤包。",
+  "loading": "正在加载皮肤包",
+  "gridLabel": "社区皮肤包",
+  "empty": {
+    "noMatch": "没有匹配的皮肤包",
+    "none": "还没有皮肤包",
+    "noMatchText": "换个词或标签试试。",
+    "noneText": "来做第一个吧：分享你的皮肤。"
+  },
+  "remove": {
+    "title": "移除“{{name}}”？",
+    "text": "其中的皮肤会从你的皮肤库中移除。已经在用它们的文件夹会保留现有的图标。",
+    "action": "移除"
+  },
+  "dialog": {
+    "choosePackFolder": "选择皮肤包文件夹"
+  },
+  "pack": {
+    "viewLabel": "查看 {{name}}",
+    "viewTip": "查看 {{name}}",
+    "added": "已添加到你的皮肤库",
+    "by": "作者 <a>@{{author}}</a>",
+    "skins_other": "{{count}} 款皮肤",
+    "view": "查看",
+    "updateTip": "这个皮肤包有新版本了",
+    "update": "更新",
+    "removing": "正在移除",
+    "removingLabel": "正在移除 {{name}}",
+    "removeTip": "移除这个皮肤包",
+    "removeLabel": "移除 {{name}}",
+    "add": "添加"
+  },
+  "viewer": {
+    "add_other": "添加 {{count}} 款皮肤",
+    "added": "已添加",
+    "github": "在 GitHub 上打开",
+    "openFailed": "无法打开这个皮肤包：{{reason}}。",
+    "getting_other": "正在加载 {{count}} 款皮肤的预览"
+  },
+  "progress": {
+    "adding": "正在添加",
+    "updating": "正在更新",
+    "addingLabel": "正在添加 {{name}}",
+    "updatingLabel": "正在更新 {{name}}",
+    "downloading": "正在下载 {{done}}/{{total}}",
+    "saving": "正在保存 {{done}}/{{total}}"
+  },
+  "sort": {
+    "bestMatch": "最匹配",
+    "featured": "精选",
+    "newest": "最新",
+    "name": "名称",
+    "mostSkins": "皮肤最多"
+  },
+  "options": {
+    "button": "排序和更多标签",
+    "label": "排序和标签",
+    "title": "排序和标签",
+    "tagCount_other": "这些皮肤包共有 {{count}} 个标签",
+    "allTags": "全部标签",
+    "tags": "标签"
+  },
+  "count": {
+    "searchFailed": "无法搜索：{{reason}}",
+    "packs_other": "{{count}} 个皮肤包",
+    "matching_other": "{{count}} 个皮肤包与“{{query}}”匹配",
+    "tagged_other": "{{count}} 个皮肤包带有标签 {{tag}}",
+    "matchingTagged_other": "{{count}} 个带有标签 {{tag}} 的皮肤包与“{{query}}”匹配",
+    "withLastVisit": "{{line}}。{{why}}",
+    "lastVisit": {
+      "offline": "你现在离线，所以显示的是你上次访问时的皮肤包",
+      "unanswered": "{{host}} 没有响应，所以显示的是你上次访问时的皮肤包",
+      "behind": "没能获取到最新的皮肤包列表，所以显示的是你上次访问时的皮肤包",
+      "other": "{{why}}，所以显示的是你上次访问时的皮肤包"
+    }
+  },
+  "toast": {
+    "addLinkFailed": "无法添加“{{id}}”：{{reason}}",
+    "noSuchPack": "无法添加“{{id}}”：社区里没有这个名称的皮肤包。它可能已经改名，请在社区里搜索一下。",
+    "already": "{{name}} 已经在你的皮肤库里了",
+    "alreadyNewer": "{{name}} 已经在你的皮肤库里了，点“更新”即可获取新版本",
+    "stillBusy": {
+      "add": "{{name}} 还在添加中。等它完成后再试。",
+      "update": "{{name}} 还在更新中。等它完成后再试。",
+      "remove": "{{name}} 还在移除中。等它完成后再试。"
+    },
+    "added_other": "已从 {{name}} 添加 {{count}} 款皮肤",
+    "addFailed": "无法添加 {{name}}：{{reason}}",
+    "updated": "已更新 {{name}}",
+    "updateFailed": "无法更新 {{name}}：{{reason}}",
+    "removed": "已移除 {{name}}",
+    "removeFailed": "无法移除 {{name}}：{{reason}}",
+    "updates_other": "你有 {{count}} 个皮肤包可以更新",
+    "upToDate": "社区已是最新",
+    "refreshFailed": "无法刷新：{{reason}}",
+    "show": "查看",
+    "addedFromFolder_other": "已从该文件夹添加 {{count}} 款皮肤",
+    "addFolderFailed": "无法添加这个皮肤包：{{reason}}"
+  }
+}

@@ -1,1 +1,144 @@
-{}
+{
+  "label": "皮肤库",
+  "resize": {
+    "sidebar": "侧边栏宽度",
+    "composer": "图层和设置面板宽度",
+    "folder": "文件夹面板宽度"
+  },
+  "tabs": {
+    "all": "全部"
+  },
+  "toast": {
+    "importedFolder": "{{name}} 已加入我的皮肤，背景已去除",
+    "importedArtwork": "{{name}} 已加入我的皮肤，并包裹到了文件夹上",
+    "deleted": "已删除 {{name}}"
+  },
+  "errors": {
+    "delete": "无法删除 {{name}}：{{reason}}",
+    "save": "无法保存 {{name}}：{{reason}}"
+  },
+  "empty": {
+    "loadFailed": "皮肤没能加载出来",
+    "noMatchFiltered": "在这些筛选条件下，没有与“{{query}}”匹配的皮肤",
+    "noneFiltered": "没有符合这些筛选条件的皮肤",
+    "filteredText": "去掉一两个筛选条件，或者全部清除。",
+    "clearFilters": "清除筛选",
+    "clearSearch": "清除搜索",
+    "noMatch": "没有与“{{query}}”匹配的皮肤",
+    "noMatchText": "换个词试试，或者到“全部”里找找。",
+    "noFaves": "还没有收藏",
+    "noFavesText": "点一下任意皮肤上的星标，它就会在这里等你。",
+    "noSkins": "还没有皮肤",
+    "noSkinsText": "从社区添加一个免费的皮肤包，用你自己的图片，或者让 AI 画一款。",
+    "browsePacks": "浏览皮肤包"
+  },
+  "delete": {
+    "title": "删除“{{name}}”？",
+    "text": "它会从你的皮肤库中永久删除。已经在用它的文件夹会保留现有的图标。",
+    "action": "删除"
+  },
+  "addPicture": "添加图片",
+  "toolbar": {
+    "tabsLabel": "按标签筛选皮肤",
+    "search": "搜索皮肤",
+    "searchLabel": "搜索皮肤"
+  },
+  "tile": {
+    "madeWithAi": "{{name}}（AI 生成）",
+    "yours": "{{name}}（你的）",
+    "faveLabel": "收藏 {{name}}",
+    "unfaveLabel": "取消收藏 {{name}}",
+    "fave": "收藏",
+    "unfave": "取消收藏",
+    "optionsLabel": "{{name}} 的选项",
+    "optionsYours": "重命名、标签和详情",
+    "options": "标签和详情"
+  },
+  "menu": {
+    "label": "{{name}}：名称、标签和详情",
+    "name": "名称",
+    "tags": "标签",
+    "addTag": "添加标签",
+    "editDesign": "编辑设计",
+    "remix": "在设计器中再创作",
+    "share": "分享到社区"
+  },
+  "facts": {
+    "madeWith": "生成模型",
+    "prompt": "提示词",
+    "shape": "形式",
+    "made": "制作时间",
+    "pack": "皮肤包",
+    "sharedBy": "分享者",
+    "licence": "许可协议",
+    "added": "添加时间",
+    "from": "来源",
+    "wholeFolder": "整个文件夹",
+    "artOnFolder": "FolderSkin 文件夹上的图案",
+    "finishedFolder": "成品文件夹",
+    "pictureOnFolder": "FolderSkin 文件夹上的图片",
+    "designedHere": "你在这里设计的",
+    "pictureAdded": "你添加的图片",
+    "finishedCutOut": "成品文件夹，已去除背景",
+    "comesWith": "FolderSkin 自带"
+  },
+  "sort": {
+    "newest": "最新",
+    "oldest": "最早",
+    "az": "A–Z",
+    "za": "Z–A"
+  },
+  "colours": {
+    "red": "红色",
+    "orange": "橙色",
+    "yellow": "黄色",
+    "green": "绿色",
+    "teal": "青色",
+    "blue": "蓝色",
+    "purple": "紫色",
+    "pink": "粉色",
+    "brown": "棕色",
+    "black": "黑色",
+    "grey": "灰色",
+    "white": "白色"
+  },
+  "filters": {
+    "title": "筛选",
+    "buttonOn": "筛选，已启用 {{count}} 项",
+    "label": "筛选和排序皮肤",
+    "matching_other": "{{count}} 款皮肤中的 {{matching}} 款",
+    "skins_other": "{{count}} 款皮肤",
+    "clearAll": "全部清除",
+    "sortBy": "排序方式",
+    "sortByLabel": "排序方式",
+    "favouritesOnly": "只看收藏",
+    "readingColours": "仍在读取颜色",
+    "allAlike": "目前这些皮肤都差不多。再添加一个皮肤包或你自己的图片，就会有更多可以筛选的内容。",
+    "swatchLabel": "{{label}}，{{count}}",
+    "swatchTip": "{{label}} · {{count}}",
+    "light": "浅色",
+    "dark": "深色",
+    "sources": {
+      "community": "社区皮肤包",
+      "import": "你的图片",
+      "ai": "AI 生成",
+      "composer": "你的设计"
+    },
+    "added": {
+      "today": "今天",
+      "week": "最近一周",
+      "month": "最近一个月",
+      "older": "更早"
+    },
+    "facets": {
+      "source": "来源",
+      "pack": "皮肤包",
+      "colour": "颜色",
+      "tone": "明暗",
+      "added": "添加时间",
+      "model": "生成模型",
+      "author": "作者",
+      "license": "许可协议"
+    }
+  }
+}

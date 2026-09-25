@@ -1,1 +1,61 @@
-{}
+{
+  "cancel": "取消",
+  "close": "关闭",
+  "twoSentences": "{{first}}{{second}}",
+  "official": "官方",
+  "tags": {
+    "remove": "移除标签 {{tag}}",
+    "add": "添加标签",
+    "addAnother": "再加一个",
+    "most_other": "最多 {{count}} 个标签。"
+  },
+  "window": {
+    "label": "窗口",
+    "minimise": "最小化",
+    "maximise": "最大化",
+    "restore": "向下还原",
+    "close": "关闭"
+  },
+  "size": {
+    "bytes_other": "{{count}} 字节",
+    "kb": "{{value}} KB",
+    "mb": "{{value}} MB",
+    "gb": "{{value}} GB",
+    "tb": "{{value}} TB"
+  },
+  "place": {
+    "macos": "你的 Mac 电脑",
+    "windows": "你的电脑",
+    "linux": "你的电脑"
+  },
+  "showIn": {
+    "macos": "在 Finder 中显示",
+    "windows": "在 Explorer 中显示",
+    "linux": "在“文件”中显示"
+  },
+  "dialog": {
+    "chooseFolder": "选择文件夹",
+    "choosePicture": "选择图片",
+    "pictures": "图片"
+  },
+  "about": {
+    "licence": "免费开源 · GPL-3.0",
+    "tagline": "给任何文件夹换上皮肤。",
+    "reportIssues": "反馈问题",
+    "star": "给项目点 Star"
+  },
+  "licences": {
+    "option": "{{label}}：{{note}}",
+    "cc0": "任何人都可以用于任何用途。",
+    "ccBy": "任何人都可以使用，但要注明你是作者。",
+    "mit": "和 FolderSkin 相同的许可协议。你的名字会一直保留在上面。"
+  },
+  "control": {
+    "typed": "{{name}}，手动输入",
+    "value": "数值"
+  },
+  "errors": {
+    "somethingWrong": "出了点问题",
+    "templateLoad": "无法加载文件夹模板"
+  }
+}

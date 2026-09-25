@@ -1,1 +1,157 @@
-{}
+{
+  "title": "分享皮肤包",
+  "sub": "皮肤包都是免费的。经过真人审核后，任何人都可以把它添加到 FolderSkin。",
+  "done": "完成",
+  "saving": "正在保存",
+  "saveFolder": "保存为文件夹",
+  "sending": "正在提交",
+  "send": "提交审核",
+  "verifyAndSend": "验证并提交",
+  "sources": {
+    "own": "我自己做的",
+    "ai": "我用 AI 模型做的",
+    "mixed": "两者都有",
+    "licensed": "别人的作品，采用开放许可协议"
+  },
+  "progress": {
+    "preparing": "正在准备图片",
+    "encoding": "正在准备图片（{{done}}/{{total}}）",
+    "checking": "正在让 FolderSkin 检查皮肤包",
+    "uploading": "正在发送图片（{{done}}/{{total}}）",
+    "finishing": "正在放入审核队列",
+    "retryIn_other": "{{count}} 秒后重试",
+    "retry": "正在重试"
+  },
+  "scaled": {
+    "picture": "{{name}}（{{side}} px）",
+    "more_other": "另外 {{count}} 张",
+    "note_other": "{{names}} 已缩小到 1024 px 以下：以无损方式保存时，它们在原尺寸下超过了每张图片 {{max}} MB 的上限。"
+  },
+  "status": {
+    "uploading": "未发送完",
+    "inReview": "等待审核",
+    "approved": "已通过",
+    "rejected": "未通过",
+    "withdrawn": "已撤回",
+    "takenDown": "已下架",
+    "expired": "发送未完成"
+  },
+  "problems": {
+    "noSkins": "你还没有自己的皮肤",
+    "tickOne": "至少勾选一款皮肤",
+    "tooMany_other": "{{count}} 款皮肤超过了一个皮肤包最多 {{max}} 款的上限",
+    "noName": "给皮肤包起个名字",
+    "noTag": "至少添加一个标签",
+    "noHandle": "选一个皮肤包上显示的名字",
+    "checking": "正在检查是否可用",
+    "unavailable": "暂时不可用",
+    "noSource": "说明图片的来源",
+    "agree": "同意条款"
+  },
+  "dialogs": {
+    "saveWhere": "选择皮肤包的保存位置",
+    "saveKey": "保存你的恢复文件",
+    "chooseKey": "选择你的恢复文件",
+    "keyFile": "恢复文件"
+  },
+  "key": {
+    "saved": "已保存。请妥善保管：拿到它的人都能以你的名义分享。",
+    "saveNote": "<link>保存恢复文件</link>，就能在其他电脑上以这个名字分享。",
+    "use": "使用恢复文件"
+  },
+  "sent": {
+    "title": "你的皮肤包正在等待审核",
+    "sub": "{{name}} 已进入 FolderSkin 的审核队列。",
+    "seeSubmissions": "查看我的投稿",
+    "note": "每个皮肤包都会先由真人审核，之后其他人才能看到。审核通过后，它会出现在所有人的社区里，署名为 <b>{{handle}}</b>。如果没有通过，“我的投稿”里会说明原因。"
+  },
+  "verify": {
+    "title": "验证这台电脑",
+    "sub": "确保提交皮肤包的是真人，而不是脚本。",
+    "back": "返回",
+    "lead": "浏览器里已经打开了 FolderSkin 分享服务的页面。通过那里的快速验证后，FolderSkin 会自动继续。",
+    "creditedTo": "你的皮肤包将署名为 <b>{{handle}}</b>。每台电脑只需验证一次。",
+    "openAgain": "重新打开页面",
+    "waiting": "正在等待浏览器中的验证",
+    "gettingReady": "正在准备页面"
+  },
+  "subs": {
+    "title": "我的投稿",
+    "sub": "你分享过的皮肤包，以及每个的进展。",
+    "back": "返回分享",
+    "label": "我的投稿",
+    "asking": "正在询问 FolderSkin 分享服务",
+    "none": "还没有投稿。你分享的皮肤包会显示在这里。",
+    "pictures_other": "{{count}} 张图片",
+    "sent": "提交于 {{date}}",
+    "publishedAs": "已发布为 {{id}}",
+    "joinsSoon": "即将加入社区皮肤包",
+    "rule": "第 {{term}} 条",
+    "quoted": "“{{note}}”",
+    "takingOut": "它已在社区皮肤包中，所以已通知 FolderSkin 的维护者将它下架。这可能需要几天时间。",
+    "keep": "保留",
+    "withdrawIt": "撤回",
+    "withdraw": {
+      "button": "撤回",
+      "queued": "它会离开审核队列。",
+      "published": "FolderSkin 的维护者将它下架后，它就会从所有人的社区里消失，通常需要几天。已经添加它的人仍会保留各自的副本。",
+      "approved": "它不会加入社区皮肤包。"
+    }
+  },
+  "saved": {
+    "title": "你的皮肤包已准备好",
+    "sub": "已保存为文件夹 {{folder}}。",
+    "note": "里面有图片和描述它们的 pack.json，没有向任何地方发送任何内容。任何人都可以在社区里用“从文件夹添加”把它添加到 FolderSkin。",
+    "howPacksWork": "了解皮肤包"
+  },
+  "form": {
+    "skins": "皮肤",
+    "chosenOf": "{{chosen}}/{{total}}",
+    "clear": "清除",
+    "selectAll": "全选",
+    "whichLabel": "要显示哪些皮肤",
+    "allOfYours": "我的全部皮肤（{{count}}）",
+    "tagged": "标签 {{tag}}（{{count}}）",
+    "nothingYet": "这里还没有内容。",
+    "packName": "皮肤包名称",
+    "packNamePlaceholder": "霓虹之夜",
+    "tags": "标签",
+    "tagsLabel": "为皮肤包添加标签",
+    "tagsNote": "第一个标签就是这个皮肤包在所有人筛选项里显示的名字。",
+    "profile": "预设",
+    "profileLabel": "预设",
+    "creditedTo": "署名为 {{author}}",
+    "licence": "许可协议",
+    "licenceLabel": "许可协议",
+    "thisPackOnly": "只对这个皮肤包生效：{{profile}} 预设仍然是 {{licence}}。",
+    "author": "作者",
+    "checking": "正在检查分享是否可用",
+    "unavailable": "分享功能暂时不可用。",
+    "verified": "已在这台电脑上验证",
+    "handlePlaceholder": "your-name",
+    "handleLabel": "皮肤包上显示的名字",
+    "handleNote": "皮肤包上显示的名字：可以用字母、数字和连字符。",
+    "confirmOnce": "你只需在浏览器里确认一次。",
+    "otherCredit": "{{profile}} 预设的署名是 {{author}}。从这台电脑发送的皮肤包，都会署上这台电脑验证时登记的名字。",
+    "pictures": "图片来源",
+    "picturesLabel": "图片来源",
+    "picturesPlaceholder": "这些图片是从哪里来的？",
+    "credits": "致谢",
+    "creditsPlaceholder": "底图由张三拍摄，CC0"
+  },
+  "how": {
+    "label": "分享流程",
+    "reviewed": "<b>先审核。</b>FolderSkin 会有真人查看每个皮肤包。审核通过之前，一切都不会公开。",
+    "public": "<b>通过后公开。</b>图片、皮肤包的名称和标签，以及你的名字，都会按你选的许可协议向所有人公开。对于别人已经拿到的副本，许可协议无法撤回。",
+    "noAccount": "<b>无需账号。</b>服务只保存这台电脑的密钥和你的名字。你的网络地址只会以不可还原的形式保存。",
+    "withdraw": "<b>随时可以撤回。</b>“我的投稿”会显示每个皮肤包的进展，没有通过时会说明原因，也可以把皮肤包撤回。"
+  },
+  "terms": {
+    "yours": "图片是你的，或者是你核实过的 CC0 作品。不是从别处拿来的。",
+    "nothingHarmful": "不含色情、仇恨、血腥或涉及自我伤害的内容。不涉及任何儿童。",
+    "nobodyElse": "未经同意，不使用他人的标志、角色或肖像。",
+    "maintainer": "维护者可以拒绝皮肤包，也可以之后将它移除。",
+    "agree": "我已阅读皮肤包条款，这个皮肤包符合要求。",
+    "read": "阅读条款"
+  }
+}
