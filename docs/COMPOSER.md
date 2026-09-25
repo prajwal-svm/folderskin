@@ -4,6 +4,8 @@
 to a heavily layered design. It works entirely offline. What you design is saved to **Yours** like
 any other skin, and **Save & apply** puts it straight on the folder you picked.
 
+![The composer: a bug from the icon library pressed into a blue folder, with the icon search beside it and Save & apply below](images/composer.webp)
+
 ## What people make with it
 
 | You want | Start from | Then |

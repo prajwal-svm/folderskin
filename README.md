@@ -33,12 +33,12 @@ Free · Open source · No account · No tracking
 </div>
 
 <div align="center">
-  <img src="docs/images/app.webp" alt="FolderSkin on macOS: a library of painted folder skins in the middle, and the folder panel waiting for a folder on the right" width="100%" />
+  <img src="docs/images/app.webp" alt="FolderSkin 0.1.7 on macOS: the Scientists Pop Art pack in the library, and Isaac Newton tried on the Downloads folder" width="100%" />
 </div>
 
 <details><summary>Dark mode</summary>
 
-![FolderSkin in dark mode](docs/images/app-dark.png)
+![FolderSkin in dark mode](docs/images/app-dark.webp)
 
 </details>
 
@@ -146,21 +146,24 @@ details.
 
 <details><summary>The composer</summary>
 
-![Designing a skin: a gingham folder with a strawberry sticker, its layers and settings beside it](docs/images/composer.webp)
+![Designing a skin: a bug from the icon library pressed into a blue folder, with the icon search beside it](docs/images/composer.webp)
 
 </details>
 
 ## Generate a skin with AI
 
-FolderSkin can make a skin from a description, using **your own API key** from a provider you
-already use. The key is encrypted and stored on your computer (with no keychain password
-prompts), FolderSkin has no server of its own, and nothing is sent anywhere until you press
-Enter. Open **Generate with AI**, describe a scene, pick a style, and
+FolderSkin can make a skin from a description. The **Local Model** paints it on your own
+computer, for free: set it up once, and it needs no key and sends nothing anywhere. It runs on
+Apple silicon Macs with macOS 14 or later, and on Windows and Linux PCs. Or use **your own API
+key** from a provider you already use. The key is encrypted and stored on your computer (with no
+keychain password prompts), FolderSkin has no server of its own, and nothing is sent anywhere
+until you press Enter. Open **Generate with AI**, describe a scene, pick a style, and
 choose **Whole folder** (the model paints the whole folder from FolderSkin's template, like a
 poster) or **Just the art** (flat art wrapped onto FolderSkin's folder). Every result is saved to
 **Yours** and can be tried on at once.
 
-Paste a key into **Settings → AI keys**. Each provider's name links to the page where you make one.
+Choose where pictures are made in **Settings → AI Provider**: set up the Local Model there, or
+paste a key. Each provider's name links to the page where you make one.
 
 | | Provider | Models | Per image |
 | :-: | --- | --- | --- |

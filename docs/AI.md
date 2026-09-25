@@ -1,11 +1,22 @@
 # The AI assistant
 
-FolderSkin can generate a skin from a description. The feature is **bring your own key**: you
-paste an API key from a provider you already have an account with, the key is saved in a private
-file on your computer, and FolderSkin talks to that provider directly from your machine.
+FolderSkin can generate a skin from a description, in one of two ways:
 
-There is no FolderSkin server, no proxy, no bundled key and no free tier to subsidise. Nothing
-is sent anywhere until you press **Generate**, and what is sent is your prompt, your chosen
+- **The Local Model** paints on your own computer, for free. Set it up once (FLUX.2 [klein] 4B, a
+  4.6 GB download on a Mac and 5.2 GB elsewhere), and it works offline with no key and nothing
+  sent anywhere. It runs on Apple silicon Macs with macOS 14 or later, and on Windows and Linux
+  PCs.
+- **Bring your own key**: you paste an API key from a provider you already have an account with,
+  the key is saved in a private file on your computer, and FolderSkin talks to that provider
+  directly from your machine.
+
+**Settings → AI Provider** is where you choose. A tick shows the Local Model is set up, or that a
+provider has a key.
+
+![Settings, AI Provider: the Local Model and seven providers, each ticked or marked No key, and the model on this machine below them](images/ai-providers.webp)
+
+There is no FolderSkin server, no proxy, no bundled key and no free tier to subsidise. With a key,
+nothing is sent anywhere until you press **Generate**, and what is sent is your prompt, your chosen
 size, and the reference picture if you picked one (for a whole folder without one, FolderSkin's
 own blank folder template).
 
