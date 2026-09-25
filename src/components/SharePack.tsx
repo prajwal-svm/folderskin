@@ -328,8 +328,8 @@ export function SharePack({
         }
       >
         <p className="field-note">
-          It holds the pictures and the pack.json that describes them. Anyone can add it to <Brand /> with Add from a folder in Community,
-          and it stays on this computer until you share it.{" "}
+          It holds the pictures and the pack.json that describes them, and nothing was sent anywhere. Anyone can add it to <Brand /> with
+          Add from a folder in Community.{" "}
           <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
             How packs work <ExternalLinkIcon size={12} />
           </button>
