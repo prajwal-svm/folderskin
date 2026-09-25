@@ -165,6 +165,7 @@
     "none": "No usar ninguna carpeta"
   },
   "local": {
+    "name": "Modelo local",
     "looking": "Revisando tu equipo",
     "aboutLabel": "acerca del modelo local",
     "machine": "Equipo",

@@ -1,8 +1,8 @@
 {
   "sizes": {
     "tip": {
-      "macos": "Cómo se ve en Finder a 64, 32 y 16 puntos",
-      "windows": "Cómo se ve en Explorer a 64, 32 y 16 puntos",
+      "macos": "Cómo se ve en el Finder a 64, 32 y 16 puntos",
+      "windows": "Cómo se ve en el Explorador de archivos a 64, 32 y 16 puntos",
       "linux": "Cómo se ve en Archivos a 64, 32 y 16 puntos"
     },
     "label": "el icono a sus tamaños reales"
@@ -483,14 +483,14 @@
     "savedThen": "Guardado. {{message}}",
     "savedAndWears": "Guardado, y {{folder}} ya luce {{skin}}",
     "savedBut": "Guardado, pero {{problem}}",
-    "saveApplyTo_one": "Guardar y aplicar a {{count}} carpeta",
-    "saveApplyTo_many": "Guardar y aplicar a {{count}} de carpetas",
-    "saveApplyTo_other": "Guardar y aplicar a {{count}} carpetas",
+    "saveApplyTo_one": "Guardar y aplicar a {{count}}",
+    "saveApplyTo_many": "Guardar y aplicar a {{count}}",
+    "saveApplyTo_other": "Guardar y aplicar a {{count}}",
     "saveApply": "Guardar y aplicar",
     "saveChanges": "Guardar cambios",
     "saved": "Guardado",
     "saveToYours": "Guardar en Mis aspectos",
-    "saveAsNew": "Guardar como nuevo"
+    "saveAsNew": "Guardar copia"
   },
   "skeleton": {
     "label": "esqueleto de la carpeta",

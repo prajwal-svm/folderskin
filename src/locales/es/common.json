@@ -34,7 +34,7 @@
   },
   "showIn": {
     "macos": "Mostrar en Finder",
-    "windows": "Mostrar en Explorer",
+    "windows": "Mostrar en el Explorador",
     "linux": "Mostrar en Archivos"
   },
   "dialog": {
@@ -52,7 +52,7 @@
     "option": "{{label}}: {{note}}",
     "cc0": "Cualquiera puede usarlos para lo que sea.",
     "ccBy": "Cualquiera puede usarlos, dándote el crédito.",
-    "mit": "La misma licencia que FolderSkin. Tu nombre los acompaña."
+    "mit": "Cualquiera puede usarlos, siempre que los acompañe el aviso de la licencia."
   },
   "control": {
     "typed": "{{name}}, escribir el valor",

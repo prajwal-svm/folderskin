@@ -83,8 +83,8 @@
     "comesWith": "Viene con FolderSkin"
   },
   "sort": {
-    "newest": "Más recientes",
-    "oldest": "Más antiguos",
+    "newest": "Recientes",
+    "oldest": "Antiguos",
     "az": "A–Z",
     "za": "Z–A"
   },
