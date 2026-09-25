@@ -143,6 +143,7 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         featured,
         official,
         mirrors: opts.mirrors.clone(),
+        moved: Default::default(),
     };
     let json = serde_json::to_string_pretty(&head).map_err(|e| e.to_string())? + "\n";
     write_changed(&out.join(HEAD_FILE), json.as_bytes(), &mut changes)?;

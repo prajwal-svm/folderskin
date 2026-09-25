@@ -6,6 +6,7 @@
 //! contract in prose.
 
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 
 /// The contract version a `pack.json` declares in `"version"`.
@@ -14,6 +15,9 @@ pub const PACK_VERSION: u32 = 1;
 pub const INDEX_VERSION: u32 = 1;
 /// The file every pack has.
 pub const MANIFEST_FILE: &str = "pack.json";
+/// `moved.json`, beside `packs/`: the packs whose ids changed.
+pub const MOVED_FILE: &str = "moved.json";
+pub const MOVED_VERSION: u32 = 1;
 /// Most skins in one pack: a themed set that is quick to review and to download.
 pub const MAX_SKINS: usize = 50;
 /// Largest picture file.
@@ -170,6 +174,10 @@ impl Pack {
 pub struct Index {
     pub version: u32,
     pub packs: Vec<IndexEntry>,
+    /// Packs whose ids changed (`moved.json`), each old id to the one it has now. Left out when
+    /// none has.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub moved: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -294,6 +302,141 @@ pub fn slug(name: &str) -> String {
         format!("{out}-1")
     } else {
         out
+    }
+}
+
+/// The characters a generated id ends in: RFC 4648's base32 alphabet in lower case, which has
+/// no `0`, `1`, `8` or `9` to mistake for a letter.
+pub const ID_SUFFIX_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
+/// How many of them end an id: 32⁶, about a billion ids for each name.
+pub const ID_SUFFIX_LEN: usize = 6;
+/// How much of a pack's name its id keeps, so the name, a dash and the suffix fit in 40.
+pub const ID_BASE_MAX: usize = 40 - 1 - ID_SUFFIX_LEN;
+
+/// A new id for a pack called `name`: the name as a slug, a dash and six random characters, such
+/// as `classic-art-k7q2mx`. Names can repeat and ids never do, so an id `taken` says is in use
+/// (another pack's folder, an old id in `moved.json`) is drawn again. The name part is only there
+/// to make links readable: an id is fixed once given, whatever the pack is called later.
+pub fn new_id(name: &str, taken: impl Fn(&str) -> bool) -> Result<String, String> {
+    let mut base = slug(name);
+    base.truncate(ID_BASE_MAX);
+    let base = match base.trim_end_matches('-') {
+        "" => "pack",
+        kept => kept,
+    };
+    // A billion suffixes a name: a hundred draws that all collide mean `taken` says yes to
+    // everything, not bad luck.
+    for _ in 0..100 {
+        let id = format!("{base}-{}", id_suffix()?);
+        if is_generated_id(&id) && !taken(&id) {
+            return Ok(id);
+        }
+    }
+    Err(format!("no free id for {name:?}"))
+}
+
+/// Six characters of [`ID_SUFFIX_ALPHABET`], each from a byte of the system's secure random
+/// source. 256 is a multiple of 32, so masking a byte picks every character equally often.
+fn id_suffix() -> Result<String, String> {
+    let mut bytes = [0u8; ID_SUFFIX_LEN];
+    getrandom::fill(&mut bytes)
+        .map_err(|e| format!("no random numbers to make an id with: {e}"))?;
+    Ok(bytes
+        .iter()
+        .map(|b| char::from(ID_SUFFIX_ALPHABET[usize::from(b & 31)]))
+        .collect())
+}
+
+/// Whether `id` has the shape [`new_id`] gives: a pack id of at least one word from a name, then
+/// a last word of [`ID_SUFFIX_LEN`] characters from [`ID_SUFFIX_ALPHABET`].
+pub fn is_generated_id(id: &str) -> bool {
+    is_pack_id(id)
+        && id.rsplit_once('-').is_some_and(|(base, suffix)| {
+            !base.is_empty()
+                && suffix.len() == ID_SUFFIX_LEN
+                && suffix.bytes().all(|b| ID_SUFFIX_ALPHABET.contains(&b))
+        })
+}
+
+/// `moved.json`: packs whose ids changed, each old id to the one it has now, so links, install
+/// counts and the packs people added under an old id can follow the pack to its new one.
+///
+/// An old id always leads straight to a pack that exists: renaming a pack again updates every
+/// entry that led to it, so nothing ever has to be followed twice.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Moved {
+    pub version: u32,
+    #[serde(default)]
+    pub moved: BTreeMap<String, String>,
+}
+
+impl Default for Moved {
+    fn default() -> Self {
+        Moved {
+            version: MOVED_VERSION,
+            moved: BTreeMap::new(),
+        }
+    }
+}
+
+impl Moved {
+    /// Reads `moved.json`.
+    pub fn parse(bytes: &[u8]) -> Result<Moved, String> {
+        let moved: Moved =
+            serde_json::from_slice(bytes).map_err(|e| format!("{MOVED_FILE} isn't valid: {e}"))?;
+        if moved.version != MOVED_VERSION {
+            return Err(format!(
+                "{MOVED_FILE} is version {}, and this FolderSkin reads version {MOVED_VERSION}",
+                moved.version
+            ));
+        }
+        Ok(moved)
+    }
+
+    /// Records that pack `old` is now `new`. Whatever led to `old` leads to `new` now, and `new`
+    /// stops being an old id if it was one (a pack given back an id it had before).
+    pub fn record(&mut self, old: &str, new: &str) {
+        self.moved.remove(new);
+        for to in self.moved.values_mut() {
+            if to == old {
+                *to = new.to_string();
+            }
+        }
+        if old != new {
+            self.moved.insert(old.to_string(), new.to_string());
+        }
+    }
+
+    /// The id pack `id` has now: `id` itself unless it moved.
+    pub fn current<'a>(&'a self, id: &'a str) -> &'a str {
+        self.moved.get(id).map_or(id, String::as_str)
+    }
+
+    /// What's wrong with it, one sentence each, given the ids of the packs there are: every old
+    /// id is a pack id no pack has, and every new one is a pack that exists and hasn't moved.
+    pub fn problems(&self, packs: &BTreeSet<String>) -> Vec<String> {
+        let mut problems = Vec::new();
+        for (old, new) in &self.moved {
+            if !is_pack_id(old) {
+                problems.push(format!("{MOVED_FILE}: {old:?} isn't a pack id"));
+            } else if packs.contains(old) {
+                problems.push(format!(
+                    "{MOVED_FILE}: {old} moved to {new}, but a pack still has the id {old}"
+                ));
+            }
+            // An old id leading to another old id is its own mistake, whatever else is wrong.
+            if self.moved.contains_key(new) {
+                problems.push(format!(
+                    "{MOVED_FILE}: {old} moved to {new}, which moved again; point {old} at where {new} went"
+                ));
+            } else if !is_pack_id(new) || !packs.contains(new) {
+                problems.push(format!(
+                    "{MOVED_FILE}: {old} moved to {new}, and there's no pack {new}"
+                ));
+            }
+        }
+        problems
     }
 }
 
@@ -460,6 +603,132 @@ fn check_tags(tags: &[String], max: usize, whose: &str, problems: &mut Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_id_is_the_name_then_six_random_characters() {
+        let id = new_id("Classic Art", |_| false).unwrap();
+        let (base, suffix) = id.rsplit_once('-').unwrap();
+        assert_eq!(base, "classic-art");
+        assert_eq!(suffix.len(), ID_SUFFIX_LEN);
+        assert!(is_generated_id(&id), "{id}");
+        // Two packs with one name still get two ids.
+        assert_ne!(id, new_id("Classic Art", |_| false).unwrap());
+    }
+
+    #[test]
+    fn a_new_id_fits_in_forty_characters_whatever_the_name() {
+        let long = "The Complete Illustrated History of Every Folder Ever Made";
+        let id = new_id(long, |_| false).unwrap();
+        assert!(id.len() <= 40 && is_generated_id(&id), "{id}");
+        assert!(id.starts_with("the-complete-illustrated-history"), "{id}");
+        // A cut that lands on a dash doesn't leave two dashes in a row.
+        let cut = format!("{}-b", "a".repeat(ID_BASE_MAX - 1));
+        assert!(is_generated_id(&new_id(&cut, |_| false).unwrap()));
+        for nameless in ["", "!!!", "東京"] {
+            let id = new_id(nameless, |_| false).unwrap();
+            assert!(id.starts_with("pack-") && is_generated_id(&id), "{id}");
+        }
+        let device = new_id("con", |_| false).unwrap();
+        assert!(is_pack_id(&device) && is_generated_id(&device), "{device}");
+    }
+
+    #[test]
+    fn a_new_id_is_drawn_again_while_taken_and_gives_up_on_a_rigged_check() {
+        let seen = std::cell::Cell::new(0);
+        let id = new_id("Colours", |_| {
+            seen.set(seen.get() + 1);
+            seen.get() <= 3
+        })
+        .unwrap();
+        assert_eq!(seen.get(), 4);
+        assert!(is_generated_id(&id));
+        assert!(new_id("Colours", |_| true).is_err());
+    }
+
+    #[test]
+    fn every_suffix_character_comes_from_the_alphabet() {
+        let mut seen = BTreeSet::new();
+        for _ in 0..200 {
+            let id = new_id("x", |_| false).unwrap();
+            seen.extend(id.rsplit_once('-').unwrap().1.bytes());
+        }
+        assert!(seen.iter().all(|b| ID_SUFFIX_ALPHABET.contains(b)));
+        // 1,200 draws from 32 characters: all of them turn up (missing one is a ~1e-15 chance).
+        assert_eq!(seen.len(), 32);
+    }
+
+    #[test]
+    fn only_the_generated_shape_counts_as_a_generated_id() {
+        for id in [
+            "classic-art-k7q2mx",
+            "pack-aaaaaa",
+            "a-222222",
+            "x1-y2-zzzzzz",
+        ] {
+            assert!(is_generated_id(id), "{id}");
+        }
+        for id in [
+            "classic-art",
+            "k7q2mx",
+            "-k7q2mx",
+            "classic-art-k7q2m",
+            "classic-art-k7q2mxa",
+            "classic-art-k7q2m1",
+            "classic-art-k7q2m8",
+            "classic-art-K7Q2MX",
+            "classic--art-k7q2mx",
+            &format!("{}-k7q2mx", "a".repeat(34)),
+        ] {
+            assert!(!is_generated_id(id), "{id}");
+        }
+    }
+
+    #[test]
+    fn moved_ids_lead_straight_to_the_pack_however_often_it_moves() {
+        let mut moved = Moved::default();
+        moved.record("classic-art", "classic-art-k7q2mx");
+        moved.record("classic-art-k7q2mx", "old-masters-a2b3c4");
+        assert_eq!(moved.current("classic-art"), "old-masters-a2b3c4");
+        assert_eq!(moved.current("classic-art-k7q2mx"), "old-masters-a2b3c4");
+        assert_eq!(moved.current("colours"), "colours");
+        // Given back its first id, the pack stops being moved away from it.
+        moved.record("old-masters-a2b3c4", "classic-art");
+        assert_eq!(moved.current("classic-art"), "classic-art");
+        assert_eq!(moved.current("classic-art-k7q2mx"), "classic-art");
+        assert!(!moved.moved.contains_key("classic-art"));
+        let packs = BTreeSet::from(["classic-art".to_string()]);
+        assert_eq!(moved.problems(&packs), Vec::<String>::new());
+    }
+
+    #[test]
+    fn moved_json_reads_back_and_says_what_is_wrong_with_it() {
+        let moved = Moved::parse(br#"{ "version": 1, "moved": { "a": "b-k7q2mx" } }"#).unwrap();
+        assert_eq!(moved.current("a"), "b-k7q2mx");
+        assert!(Moved::parse(br#"{ "version": 2, "moved": {} }"#).is_err());
+        assert!(Moved::parse(br#"{ "version": 1, "moved": {}, "note": "x" }"#).is_err());
+
+        let packs = BTreeSet::from(["a".to_string(), "c-k7q2mx".to_string()]);
+        let broken = Moved {
+            version: 1,
+            moved: BTreeMap::from([
+                ("a".into(), "c-k7q2mx".into()),
+                ("Not An Id".into(), "c-k7q2mx".into()),
+                ("gone".into(), "nowhere-k7q2mx".into()),
+                ("x".into(), "gone".into()),
+            ]),
+        };
+        let problems = broken.problems(&packs).join("\n");
+        assert!(problems.contains("a pack still has the id a"), "{problems}");
+        assert!(
+            problems.contains("\"Not An Id\" isn't a pack id"),
+            "{problems}"
+        );
+        assert!(
+            problems.contains("there's no pack nowhere-k7q2mx"),
+            "{problems}"
+        );
+        assert!(problems.contains("which moved again"), "{problems}");
+    }
 
     fn pack_json(extra_skins: usize) -> String {
         let mut skins = vec![
