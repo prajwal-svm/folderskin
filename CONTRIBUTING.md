@@ -128,5 +128,5 @@ Security problems go through [SECURITY.md](SECURITY.md) instead, not the issue t
 
 ## Licence
 
-FolderSkin is MIT. By contributing you agree that your contribution is released under the MIT
-licence and that you have the right to release it.
+FolderSkin is GPL-3.0 (`GPL-3.0-only`). By contributing you agree that your contribution is
+released under the same licence and that you have the right to release it.

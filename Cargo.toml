@@ -15,7 +15,7 @@ members = [
 [workspace.package]
 version = "0.1.6"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-only"
 repository = "https://github.com/prajwal-svm/folderskin"
 
 [workspace.dependencies]

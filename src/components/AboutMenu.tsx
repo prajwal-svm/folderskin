@@ -69,7 +69,7 @@ export function AboutMenu({
           <p className="about-title">
             Folder<span className="brand-accent">Skin</span> <span className="about-version">v{__APP_VERSION__}</span>
           </p>
-          <p className="about-line">Free and open source · MIT</p>
+          <p className="about-line">Free and open source · GPL-3.0</p>
         </div>
         <button type="button" className="icon-btn about-source" aria-label="View Source" data-tip="View source" onClick={() => open(REPO_URL)}>
           <GithubMark size={17} />

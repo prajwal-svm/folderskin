@@ -15,7 +15,7 @@ The CI jobs:
 | Frontend | Ubuntu | `pnpm audit` of production dependencies, `pnpm build` (tsc, then Vite), `pnpm test:coverage` |
 | Rust | Ubuntu | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo llvm-cov` over the workspace's tests, `packs check` on a fresh checkout of the community packs |
 | Rust (macOS), Rust (Windows) | macOS, Windows | clippy and tests again, because the code that writes icons only compiles on its own system |
-| cargo-deny | Ubuntu | RustSec advisories, and licences an MIT app can ship (`deny.toml`) |
+| cargo-deny | Ubuntu | RustSec advisories, and the licences a third-party crate may have (`deny.toml`) |
 | SonarQube Cloud | Ubuntu | static analysis and coverage, once it's set up (below) |
 | Bundle | all three | the installers, unsigned, kept for 14 days to try a change on a system you don't have |
 
