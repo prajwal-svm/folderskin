@@ -403,6 +403,14 @@
   animation: fade-up var(--t-base) var(--ease-out) both;
 }
 
+/* A title that's a sentence ("Drop a folder here") rather than a folder's name: it wraps, as a
+   longer language needs, instead of being cut short. */
+.stage-title.is-words {
+  white-space: normal;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
 .stage-sub {
   max-width: 290px;
   font-weight: 600;

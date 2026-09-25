@@ -94,6 +94,30 @@
   --t-slow: 420ms;
 }
 
+/* Chinese, Japanese and Korean. Manrope has only Latin letters, so these keep it for the Latin
+   and the digits and take each script's own system font for the rest: macOS's first, then
+   Windows', then the Noto and Source Han fonts Linux has. Each language gets its own, since the
+   same character is drawn differently in each. <html lang> is the language on show
+   (state/language.ts). */
+:root:lang(zh) {
+  --font: "Manrope", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+}
+
+:root:lang(ja) {
+  --font: "Manrope", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans CJK JP",
+    "Noto Sans JP", "Source Han Sans JP", system-ui, sans-serif;
+}
+
+:root:lang(ko) {
+  --font: "Manrope", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR",
+    system-ui, sans-serif;
+  /* Korean puts spaces between words, and a line breaks at them rather than inside a word. A
+     word too long for its line still breaks. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 /* Dark is warm grey, built around the islands' #2c2929: the canvas a step darker, wells a step
    lighter, and the text and tints warmed to match. */
 :root[data-theme="dark"] {
