@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import jaMenu from "../locales/ja/menu.json";
 
 const setLanguage = vi.fn(async (_language: string, _menu: Record<string, string>, _pin: boolean) => {});
 vi.mock("../lib/tauri", () => ({ api: { setLanguage } }));
@@ -32,8 +33,8 @@ describe("the language the app speaks", () => {
     await startLanguage();
     expect(getLocale()).toBe("ja");
     expect(root.lang).toBe("ja");
-    // The app hears it for its menu bar, not pinned: the computer's language may change.
-    expect(setLanguage).toHaveBeenCalledWith("ja", expect.objectContaining({ copy: "Copy", quit: "Quit FolderSkin" }), false);
+    // The app hears it for its menu bar, in Japanese words, not pinned: the computer's language may change.
+    expect(setLanguage).toHaveBeenCalledWith("ja", expect.objectContaining({ copy: jaMenu.copy, quit: jaMenu.quit }), false);
   });
 
   it("is English when the app speaks none of the computer's", async () => {
