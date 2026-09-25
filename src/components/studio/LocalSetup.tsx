@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { api, LOCAL_SETUP_JOB, type LocalStatus } from "../../lib/tauri";
 import { aiFailure, worthRetrying } from "../../lib/aiError";
-import { formatBytes } from "../../lib/tree";
+import { formatBytes } from "../../i18n/format";
+import { useT } from "../../i18n";
+import { explain } from "../../lib/sentences";
+import { Rich } from "../../i18n/Rich";
 import { duration, spaceShort, whatItTakes } from "../../lib/localSetup";
 import type { AiEvent, TurnError } from "../../state/chats";
 import { heard, setupBegan, useSetupProgress, wholeDone } from "../../state/localSetupRun";
@@ -22,7 +25,8 @@ import { LoaderIcon } from "../icons/loader";
  * opened (it was closed, or another provider picked) is joined, so its progress and its Stop are
  * back. Whether it's ready shows on its tile in the provider list, not here.
  */
-export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string, what: string) => void }) {
+export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (text: string) => void }) {
+  const t = useT();
   const [status, setStatus] = useState<LocalStatus | null>(null);
   const [problem, setProblem] = useState<TurnError | null>(null);
   // Kept for the window (state/localSetupRun.ts), so opened again part-way it counts on.
@@ -120,7 +124,7 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
   if (!status && !problem) {
     return (
       <p className="local-note">
-        <LoaderIcon size={14} /> Looking at your machine
+        <LoaderIcon size={14} /> {t("ai.local.looking")}
       </p>
     );
   }
@@ -139,38 +143,36 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
               <CpuIcon size={15} />
               <span className="local-model-name">{status.model}</span>
               <span className="local-muted">
-                {status.quality} · {formatBytes(status.model_bytes)}
+                {explain(status.quality)} · {formatBytes(status.model_bytes)}
               </span>
             </span>
             <span className="local-info" aria-hidden="true">
               <InfoIcon size={15} />
             </span>
           </button>
-          <div className="local-more" id={factsId} role="region" aria-label="about the local model" inert={!factsOpen}>
+          <div className="local-more" id={factsId} role="region" aria-label={t("ai.local.aboutLabel")} inert={!factsOpen}>
             <div className="local-more-inner">
               <dl className="local-list">
                 <div>
-                  <dt>Machine</dt>
-                  <dd>{status.device}</dd>
+                  <dt>{t("ai.local.machine")}</dt>
+                  <dd>{explain(status.device)}</dd>
                 </div>
                 <div>
-                  <dt>Runs with</dt>
+                  <dt>{t("ai.local.runsWith")}</dt>
                   <dd>{status.backend}</dd>
                 </div>
                 <div>
-                  <dt>Last picture</dt>
+                  <dt>{t("ai.local.lastPicture")}</dt>
                   <dd>
                     {status.seconds_per_image === null ? (
-                      <span className="local-muted">Shows after your first one</span>
+                      <span className="local-muted">{t("ai.local.afterFirst")}</span>
                     ) : (
-                      <>
-                        {duration(status.seconds_per_image)} <span className="local-muted">on this machine</span>
-                      </>
+                      <Rich k="ai.local.took" vars={{ time: duration(status.seconds_per_image) }} tags={{ muted: (s) => <span className="local-muted">{s}</span> }} />
                     )}
                   </dd>
                 </div>
                 <div>
-                  <dt>Stored at</dt>
+                  <dt>{t("ai.local.storedAt")}</dt>
                   <dd>
                     {/* It names the user: veiled until it's pointed at or reached with the keyboard. */}
                     <span className="local-path" tabIndex={factsOpen ? 0 : -1}>
@@ -183,23 +185,23 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
                 <div className="local-more-foot">
                   <button type="button" className="btn btn-ghost btn-sm local-remove-btn" disabled={removal === "removing"} onClick={() => setRemoval("ask")}>
                     {removal === "removing" ? <LoaderIcon size={13} /> : <DeleteIcon size={13} />}
-                    {removal === "removing" ? "Removing the model" : "Remove the model"}
+                    {removal === "removing" ? t("ai.local.removingModel") : t("ai.local.removeModel")}
                   </button>
                 </div>
               )}
             </div>
           </div>
-          {status.note && <p className="local-note">{status.note}</p>}
+          {status.note && <p className="local-note">{explain(status.note)}</p>}
         </div>
       )}
       {status && status.unused_bytes > 0 && !setup && (
         // An earlier build's files (the other tier's, Z-Image Turbo's) that setting up again
         // doesn't use or take away: said here, not only in the fold, with the way to get the room back.
         <div className="local-go">
-          <span className="local-note">An earlier setup left {formatBytes(status.unused_bytes)} of model files this model doesn't use.</span>
+          <span className="local-note">{t("ai.local.leftovers", { size: formatBytes(status.unused_bytes) })}</span>
           <button type="button" className="btn btn-secondary btn-sm" disabled={leftovers === "removing"} onClick={() => setLeftovers("ask")}>
             {leftovers === "removing" ? <LoaderIcon size={13} /> : <DeleteIcon size={13} />}
-            {leftovers === "removing" ? "Removing them" : "Remove them"}
+            {leftovers === "removing" ? t("ai.local.removingThem") : t("ai.local.removeThem")}
           </button>
         </div>
       )}
@@ -207,16 +209,16 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
         <div className="local-go">
           <span className={short ? "local-note is-warn" : "local-note"}>{short ?? whatItTakes(status)}</span>
           <button type="button" className="btn btn-primary" disabled={short !== null || recounting} onClick={() => void start()}>
-            Set up the local model
+            {t("ai.turn.setUpLocal")}
           </button>
         </div>
       )}
       {setup && (
         <div className="local-progress" role="status" aria-live="polite">
           <p className="local-stage">
-            <LoaderIcon size={14} /> {stopping ? "Stopping" : setup.stage}
+            <LoaderIcon size={14} /> {stopping ? t("ai.turn.stopping") : setup.stage ? explain(setup.stage) : t("ai.local.gettingReady")}
             <button type="button" className="btn btn-ghost btn-sm local-stop" disabled={stopping} onClick={stop}>
-              Stop
+              {t("folder.stage.stop")}
             </button>
           </p>
           <div className="turn-progress" style={{ "--done": `${share}%` } as CSSProperties} aria-hidden="true">
@@ -225,8 +227,12 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
           <p className="local-note">
             {[
               // The file the stage above names, once it's coming; between files, the whole alone.
-              setup.file ? `${setup.file}: ${formatBytes(setup.done)} of ${formatBytes(setup.total)}` : wholeDone(setup) === 0 ? "Starting" : null,
-              setup.whole > 0 ? `${formatBytes(Math.min(wholeDone(setup), setup.whole))} of ${formatBytes(setup.whole)} in all` : null,
+              setup.file
+                ? t("ai.local.fileProgress", { file: setup.file, done: formatBytes(setup.done), total: formatBytes(setup.total) })
+                : wholeDone(setup) === 0
+                  ? t("ai.local.starting")
+                  : null,
+              setup.whole > 0 ? t("ai.local.wholeProgress", { done: formatBytes(Math.min(wholeDone(setup), setup.whole)), total: formatBytes(setup.whole) }) : null,
             ]
               .filter(Boolean)
               .join(" · ")}
@@ -235,35 +241,35 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       )}
       {stopped && !setup && (
         <div className="local-go" role="status">
-          <span className="local-note">{problem.message}</span>
+          <span className="local-note">{explain(problem.message)}</span>
           {status?.can_set_up && (
             <button type="button" className="btn btn-primary" disabled={recounting} onClick={() => void start()}>
               {recounting && <LoaderIcon size={15} />}
-              Carry on setting up
+              {t("ai.local.carryOn")}
             </button>
           )}
         </div>
       )}
       {problem && !stopped && (
         <div className="turn-error" role="alert">
-          <p className="turn-error-text">{problem.message}</p>
+          <p className="turn-error-text">{explain(problem.message)}</p>
           {problem.fix && (
             <ul className="turn-fix">
               {problem.fix.map((f) => (
-                <li key={f}>{f}</li>
+                <li key={f}>{explain(f)}</li>
               ))}
             </ul>
           )}
           <div className="turn-actions">
             {status?.can_set_up && worthRetrying(problem.code) && (
               <button type="button" className="btn btn-secondary btn-sm" disabled={recounting} onClick={() => void start()}>
-                Try again
+                {t("community.tryAgain")}
               </button>
             )}
             {problem.ask && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => copy(problem.ask!, "The question for Claude")}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => copy(problem.ask!)}>
                 <CopyIcon size={13} />
-                Ask Claude to fix it
+                {t("ai.turn.ask")}
               </button>
             )}
           </div>
@@ -271,18 +277,18 @@ export function LocalSetup({ onChanged, copy }: { onChanged: () => void; copy: (
       )}
       {leftovers === "ask" && status && (
         <Confirm
-          title="Remove the files the model doesn't use?"
-          text={`This deletes ${formatBytes(status.unused_bytes)} of model files an earlier setup left, which the model doesn't use now. What it runs with stays.`}
-          action="Remove"
+          title={t("ai.local.removeLeftoversTitle")}
+          text={t("ai.local.removeLeftoversText", { size: formatBytes(status.unused_bytes) })}
+          action={t("community.remove.action")}
           onCancel={() => setLeftovers(null)}
           onConfirm={() => void removeLeftovers()}
         />
       )}
       {removal === "ask" && status && (
         <Confirm
-          title="Remove the local model?"
-          text={`This deletes the model and everything its setup downloaded (${formatBytes(status.kept_bytes)}). Your skins stay, and you can set it up again whenever you like.`}
-          action="Remove"
+          title={t("ai.local.removeTitle")}
+          text={t("ai.local.removeText", { size: formatBytes(status.kept_bytes) })}
+          action={t("community.remove.action")}
           onCancel={() => setRemoval(null)}
           onConfirm={() => void remove()}
         />

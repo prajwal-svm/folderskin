@@ -3,6 +3,7 @@
  * request went and what it made. Pure, so every rule is unit-tested; chatStore.ts keeps them and
  * saves them through the app (chats.rs), so they're there the next time the app opens.
  */
+import { t } from "../i18n";
 
 export type Shape = "folder" | "skin";
 
@@ -54,8 +55,8 @@ export type ChatSummary = { id: string; title: string; created: number; updated:
 
 /** How many pictures a chat made, as the history list says it. */
 export function picturesMade(n: number): string {
-  if (n === 0) return "no pictures";
-  return n === 1 ? "1 picture" : `${n} pictures`;
+  if (n === 0) return t("ai.chats.noPictures");
+  return t("ai.chats.pictures", { count: n });
 }
 
 /** What an AI run reports while it works (the Tauri channel's messages). */
@@ -65,7 +66,12 @@ export type AiEvent =
   | { type: "download"; file: string; done: number; total: number }
   | { type: "log"; level: "info" | "warn" | "error"; message: string };
 
+/** The title a chat has until its first idea names it. Kept in the chat as it is, and shown as
+ *  `ai.chats.newChat` in the language on show (see `chatTitle`). */
 export const NEW_TITLE = "New chat";
+
+/** A chat's title as it's shown: an untitled chat's in the language on show. */
+export const chatTitle = (title: string) => (title === NEW_TITLE ? t("ai.chats.newChat") : title);
 /** How many log lines a running turn keeps, and how many are saved with it. */
 export const LOG_LINES = 400;
 export const SAVED_LOG_LINES = 40;
@@ -171,17 +177,17 @@ export function upsertSummary(list: ChatSummary[], summary: ChatSummary): ChatSu
 const DAY = 24 * 60 * 60 * 1000;
 
 /** The chats grouped the way people look for them: today, yesterday, this week, before that. */
-export function groupChats(list: ChatSummary[], now: number): { label: string; chats: ChatSummary[] }[] {
+export function groupChats(list: ChatSummary[], now: number): { id: string; label: string; chats: ChatSummary[] }[] {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const today = start.getTime();
-  const groups: { label: string; from: number }[] = [
-    { label: "Today", from: today },
-    { label: "Yesterday", from: today - DAY },
-    { label: "Previous 7 days", from: today - 7 * DAY },
-    { label: "Earlier", from: -Infinity },
-  ];
-  const out = groups.map((g) => ({ label: g.label, chats: [] as ChatSummary[] }));
+  const groups = [
+    { id: "today", from: today },
+    { id: "yesterday", from: today - DAY },
+    { id: "week", from: today - 7 * DAY },
+    { id: "earlier", from: -Infinity },
+  ] as const;
+  const out = groups.map((g) => ({ id: g.id, label: t(`ai.chats.groups.${g.id}`), chats: [] as ChatSummary[] }));
   for (const chat of [...list].sort((a, b) => b.updated - a.updated)) {
     const i = groups.findIndex((g) => chat.updated >= g.from);
     out[i].chats.push(chat);

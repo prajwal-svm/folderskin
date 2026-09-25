@@ -18,7 +18,7 @@ import { BadgeAlertIcon } from "./icons/badge-alert";
 import { XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
 import { clip } from "../lib/names";
-import { explain } from "../lib/errors";
+import { explain } from "../lib/sentences";
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 

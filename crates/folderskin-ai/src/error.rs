@@ -47,7 +47,7 @@ pub enum AiError {
     /// A keyed whole-folder render came back without its flat backdrop.
     #[error(
         "the model drew a scene instead of a folder on a plain backdrop. Try again, or switch to \
-         Artwork, which does not need one."
+         Just the art, which does not need one."
     )]
     NoBackdrop,
 }

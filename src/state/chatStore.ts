@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { api, errorMessage, type Skin } from "../lib/tauri";
 import { aiFailure } from "../lib/aiError";
+import { t } from "../i18n";
 import {
   addTurn,
   applyEvent,
@@ -86,7 +87,7 @@ function saveNow(id: string): Promise<void> {
   return api
     .chatSave(persistable(chat))
     .then((summary) => set({ list: upsertSummary(state.list, summary), problem: null }))
-    .catch((e) => set({ problem: `Chats aren't being saved: ${errorMessage(e)}` }));
+    .catch((e) => set({ problem: t("ai.chats.problems.notSaved", { reason: errorMessage(e) }) }));
 }
 
 const saving = new Map<string, number>();
@@ -133,7 +134,7 @@ export function startChats() {
   api
     .chatsList()
     .then((list) => set({ list, active: fresh(), ready: true }))
-    .catch((e) => set({ ready: true, active: fresh(), problem: `Earlier chats couldn't be read: ${errorMessage(e)}` }));
+    .catch((e) => set({ ready: true, active: fresh(), problem: t("ai.chats.problems.notRead", { reason: errorMessage(e) }) }));
 }
 
 export async function openChat(id: string) {
@@ -141,7 +142,7 @@ export async function openChat(id: string) {
   try {
     set({ active: await load(id) });
   } catch (e) {
-    set({ problem: `Couldn't open that chat: ${errorMessage(e)}` });
+    set({ problem: t("ai.chats.problems.open", { reason: errorMessage(e) }) });
   }
 }
 
@@ -164,7 +165,7 @@ export async function renameChatTo(id: string, title: string) {
     try {
       chat = await load(id);
     } catch (e) {
-      set({ problem: `Couldn't rename that chat: ${errorMessage(e)}` });
+      set({ problem: t("ai.chats.problems.rename", { reason: errorMessage(e) }) });
       return;
     }
     // Deleted while it was being read.
@@ -182,7 +183,7 @@ export async function deleteChat(id: string) {
   try {
     await api.chatDelete(id);
   } catch (e) {
-    set({ problem: `Couldn't delete that chat: ${errorMessage(e)}` });
+    set({ problem: t("ai.chats.problems.delete", { reason: errorMessage(e) }) });
     return;
   }
   chats.delete(id);

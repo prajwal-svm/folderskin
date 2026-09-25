@@ -6,7 +6,7 @@ import type { FolderStyle, Parts } from "../composer/parts";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import type { AiEvent } from "../state/chats";
 import { t } from "../i18n";
-import { explain } from "./errors";
+import { explain } from "./sentences";
 
 /** A skin in the library: a picture the user added, an AI result, or one from a community pack. All are saved on disk. */
 export type Skin = {
@@ -492,7 +492,7 @@ export const api: typeof tauriApi = import.meta.env.DEV && !isTauri() ? mockApi 
 
 /**
  * Turns any thrown value from `invoke` into a sentence the drop zone can show, in the language on
- * show when it's one the app knows (lib/errors.ts).
+ * show when it's one the app knows (lib/sentences.ts).
  */
 export function errorMessage(err: unknown): string {
   if (typeof err === "string") return explain(err);

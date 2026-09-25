@@ -1,4 +1,5 @@
 import type { TurnError } from "../state/chats";
+import { t as tr } from "../i18n";
 
 /**
  * What an AI request's failure was, from whatever the app threw: a structured error (a code, a
@@ -13,7 +14,7 @@ export function aiFailure(err: unknown): TurnError {
       return { code: e.code, message, fix: Array.isArray(e.fix) ? e.fix.filter((f): f is string => typeof f === "string") : undefined, ask: typeof e.ask === "string" ? e.ask : undefined };
     }
   }
-  const message = err instanceof Error ? err.message : typeof err === "string" ? err : "Something went wrong.";
+  const message = err instanceof Error ? err.message : typeof err === "string" ? err : tr("ai.somethingWrong");
   return { code: codeOf(message), message: sentence(message) };
 }
 
@@ -41,7 +42,7 @@ export function codeOf(message: string): string {
 /** A message as a sentence: capital first, full stop last. */
 function sentence(text: string): string {
   const t = text.trim();
-  if (!t) return "Something went wrong.";
+  if (!t) return tr("ai.somethingWrong");
   const s = t.charAt(0).toUpperCase() + t.slice(1);
   return /[.!?…)]$/.test(s) ? s : `${s}.`;
 }

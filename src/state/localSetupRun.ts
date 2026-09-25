@@ -38,7 +38,8 @@ function tell() {
  */
 export function setupBegan(whole = 0): () => void {
   runs += 1;
-  progress ??= { stage: "Getting ready", file: null, done: 0, total: 0, whole, from: {}, got: {} };
+  // No stage heard yet: the panel says it's getting ready.
+  progress ??= { stage: "", file: null, done: 0, total: 0, whole, from: {}, got: {} };
   tell();
   let ended = false;
   return () => {

@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
-import { explain } from "./lib/errors";
+import { explain } from "./lib/sentences";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
 import { browseLabel } from "./lib/platform";

@@ -3,22 +3,27 @@
  * in docs/PROMPTS.md; keep them in step.
  */
 
+/** The styles' ids; each chip is named by `ai.styles.<id>`. */
+export type StyleId = "travel" | "ukiyoe" | "airbrush" | "collage" | "nouveau" | "oil" | "film" | "diorama" | "riso" | "clay";
+
 /**
  * Styles that hold up at folder size: strong shapes, clear light, a recognisable technique.
  * `tag` is what an AI result in that style is tagged with, and `words` is how a description
- * gives the style away.
+ * gives the style away. `text`, the briefs below and the prompt for the chat apps stay in
+ * English whatever language the app is in: they're what the models read, and they read English
+ * best.
  */
-export const STYLES: { id: string; label: string; text: string; tag: string; words: RegExp }[] = [
-  { id: "travel", label: "Travel poster", text: "vintage travel poster, flat colour, grainy print texture", tag: "travel poster", words: /travel poster/i },
-  { id: "ukiyoe", label: "Woodblock", text: "ukiyo-e woodblock print with bold outlines", tag: "woodblock", words: /ukiyo|woodblock/i },
-  { id: "airbrush", label: "70s airbrush", text: "1970s airbrushed poster with glossy chrome", tag: "airbrush", words: /airbrush/i },
-  { id: "collage", label: "Collage", text: "surreal photo collage with cut-paper edges and halftone dots", tag: "collage", words: /collage/i },
-  { id: "nouveau", label: "Art nouveau", text: "art nouveau poster with ornate borders and thin gold lines", tag: "art nouveau", words: /art nouveau/i },
-  { id: "oil", label: "Oil painting", text: "Renaissance oil painting with dramatic light", tag: "oil painting", words: /oil painting/i },
-  { id: "film", label: "Film still", text: "cinematic photograph at golden hour, 35 mm film grain", tag: "film still", words: /film still|35 ?mm|cinematic/i },
-  { id: "diorama", label: "Tiny diorama", text: "miniature diorama shot with a tilt-shift lens", tag: "diorama", words: /diorama|tilt-shift|miniature/i },
-  { id: "riso", label: "Risograph", text: "risograph print in three inks", tag: "risograph", words: /risograph/i },
-  { id: "clay", label: "Clay", text: "soft clay render, like a stop-motion set", tag: "clay", words: /\bclay|claymation|stop-motion/i },
+export const STYLES: { id: StyleId; text: string; tag: string; words: RegExp }[] = [
+  { id: "travel", text: "vintage travel poster, flat colour, grainy print texture", tag: "travel poster", words: /travel poster/i },
+  { id: "ukiyoe", text: "ukiyo-e woodblock print with bold outlines", tag: "woodblock", words: /ukiyo|woodblock/i },
+  { id: "airbrush", text: "1970s airbrushed poster with glossy chrome", tag: "airbrush", words: /airbrush/i },
+  { id: "collage", text: "surreal photo collage with cut-paper edges and halftone dots", tag: "collage", words: /collage/i },
+  { id: "nouveau", text: "art nouveau poster with ornate borders and thin gold lines", tag: "art nouveau", words: /art nouveau/i },
+  { id: "oil", text: "Renaissance oil painting with dramatic light", tag: "oil painting", words: /oil painting/i },
+  { id: "film", text: "cinematic photograph at golden hour, 35 mm film grain", tag: "film still", words: /film still|35 ?mm|cinematic/i },
+  { id: "diorama", text: "miniature diorama shot with a tilt-shift lens", tag: "diorama", words: /diorama|tilt-shift|miniature/i },
+  { id: "riso", text: "risograph print in three inks", tag: "risograph", words: /risograph/i },
+  { id: "clay", text: "soft clay render, like a stop-motion set", tag: "clay", words: /\bclay|claymation|stop-motion/i },
 ];
 
 /** Tags for an AI result: the styles its description asks for, such as "airbrush". */

@@ -8,6 +8,7 @@ import { CpuIcon, XIcon } from "../icons/composer";
 import { LoaderIcon } from "../icons/loader";
 import { PaperclipIcon } from "../icons/paperclip";
 import { SlidersHorizontalIcon } from "../icons/sliders-horizontal";
+import { useT } from "../../i18n";
 
 /** How many reference pictures a model takes: several on this computer, one elsewhere, none when it can't. */
 export function refLimit(provider: AiProvider | undefined, model: AiModel | undefined): number {
@@ -52,6 +53,7 @@ export const PromptBox = forwardRef<
   { idea, onIdea, placeholder, rows, refs, adding, onAddRef, onRemoveRef, shape, onShape, provider, model, onSettings, onSend, loading, queued, blocked, dropping, boxRef },
   ref,
 ) {
+  const t = useT();
   const limit = refLimit(provider, model);
   const ready = provider?.kind === "local" ? provider.has_key : Boolean(provider?.has_key);
   const canSend = Boolean(idea.trim()) && (Boolean(model) || loading) && !blocked && !queued;
@@ -65,8 +67,9 @@ export const PromptBox = forwardRef<
       submit();
     }
   };
-  const status = provider?.kind === "local" ? (ready ? "Set up and ready" : "Not set up yet") : ready ? "Key saved" : "No key yet";
+  const status = provider?.kind === "local" ? (ready ? t("ai.prompt.status.localReady") : t("ai.prompt.status.localNotReady")) : ready ? t("ai.prompt.status.keySaved") : t("ai.prompt.status.noKey");
   const where = `${provider?.label ?? ""} · ${model?.label ?? ""}`;
+  const modelName = model?.label ?? t("ai.prompt.thisModel");
   return (
     <form className={dropping ? "composer is-drop-target" : "composer"} onSubmit={submit} ref={boxRef}>
       <textarea
@@ -74,8 +77,8 @@ export const PromptBox = forwardRef<
         className="composer-input"
         rows={rows}
         value={idea}
-        placeholder={dropping ? "Drop the picture to paint from it" : placeholder}
-        aria-label="describe the folder"
+        placeholder={dropping ? t("ai.prompt.dropRef") : placeholder}
+        aria-label={t("ai.prompt.label")}
         spellCheck
         onChange={(e) => onIdea(e.target.value)}
         onKeyDown={onKey}
@@ -88,11 +91,11 @@ export const PromptBox = forwardRef<
               <span
                 key={r.id}
                 className={unused ? "composer-ref is-unused" : "composer-ref"}
-                data-tip={unused ? (limit === 0 ? `${model?.label ?? "This model"} can't paint from a picture, so this one won't be sent.` : `${model?.label ?? "This model"} takes ${limit === 1 ? "one picture" : `${limit} pictures`}, so this one won't be sent.`) : r.name}
+                data-tip={unused ? (limit === 0 ? t("ai.prompt.noRefs", { model: modelName }) : t("ai.prompt.refLimit", { model: modelName, count: limit })) : r.name}
               >
                 <img src={r.thumb} alt="" draggable={false} />
                 <span className="composer-ref-name">{r.name}</span>
-                <button type="button" className="composer-ref-x" aria-label={`remove ${r.name}`} data-tip="Remove" onClick={() => onRemoveRef(r.id)}>
+                <button type="button" className="composer-ref-x" aria-label={t("ai.prompt.removeRefLabel", { name: r.name })} data-tip={t("ai.prompt.removeRef")} onClick={() => onRemoveRef(r.id)}>
                   <XIcon size={12} />
                 </button>
               </span>
@@ -100,46 +103,46 @@ export const PromptBox = forwardRef<
           })}
           {adding && (
             <span className="composer-ref is-adding">
-              <LoaderIcon size={13} /> Adding the picture
+              <LoaderIcon size={13} /> {t("ai.prompt.addingRef")}
             </span>
           )}
         </div>
       )}
       <div className="composer-bar">
         <Segmented<Shape>
-          label="what to make"
+          label={t("ai.prompt.shapeLabel")}
           small
           value={shape}
           onChange={onShape}
           options={[
-            { value: "folder", label: "Whole folder", title: "The model paints the whole folder, like a poster. Shapes can vary a little." },
-            { value: "skin", label: "Just the art", title: "The model paints flat art; FolderSkin wraps it onto its own folder." },
+            { value: "folder", label: t("ai.prompt.shape.folder"), title: t("ai.prompt.shape.folderTip") },
+            { value: "skin", label: t("ai.prompt.shape.skin"), title: t("ai.prompt.shape.skinTip") },
           ]}
         />
         <button
           type="button"
           className="icon-btn composer-attach"
-          aria-label="add a reference picture"
+          aria-label={t("ai.prompt.addRefLabel")}
           disabled={limit === 0}
-          data-tip={limit === 0 ? `${model?.label ?? "This model"} can't paint from a picture` : "Add a picture to paint from (or drop one here)"}
+          data-tip={limit === 0 ? t("ai.prompt.cantRef", { model: modelName }) : t("ai.prompt.addRef")}
           onClick={onAddRef}
         >
           <PaperclipIcon />
         </button>
         <span className="composer-spacer" />
-        <button type="button" className="model-pill" onClick={onSettings} data-tip={provider ? `${where}: ${status.toLowerCase()}. Choose the provider and model` : "Choose the provider and model"}>
+        <button type="button" className="model-pill" onClick={onSettings} data-tip={provider ? t("ai.prompt.pillTip", { where, status: status.charAt(0).toLocaleLowerCase() + status.slice(1) }) : t("ai.prompt.choose")}>
           <span className={ready ? "model-dot is-ready" : "model-dot"} aria-hidden="true" />
           {provider?.kind === "local" ? <CpuIcon size={14} /> : provider ? <ProviderLogo id={provider.id} size={14} /> : loading && <LoaderIcon size={14} />}
-          <span className="model-pill-text">{provider ? where : loading ? "Loading the providers" : "Choose a provider"}</span>
+          <span className="model-pill-text">{provider ? where : loading ? t("ai.prompt.loading") : t("ai.prompt.chooseProvider")}</span>
           <SlidersHorizontalIcon size={14} />
         </button>
         <button
           type="submit"
           className="send-btn"
           disabled={!canSend}
-          aria-label="generate"
+          aria-label={t("ai.prompt.generateLabel")}
           aria-busy={queued || undefined}
-          data-tip={blocked ?? (queued ? "Sends once the providers are loaded" : "Generate")}
+          data-tip={blocked ?? (queued ? t("ai.prompt.queued") : t("ai.prompt.generate"))}
           data-tip-kbd={blocked || queued ? undefined : "Enter"}
         >
           {queued ? <LoaderIcon size={16} /> : <ArrowUpIcon size={17} />}
