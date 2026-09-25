@@ -13,10 +13,10 @@
 
 use crate::skin::Skin;
 use folderskin_core::pack::{
-    self, Index, IndexEntry, Moved, Pack, INDEX_VERSION, MANIFEST_FILE, MAX_PACK_BYTES,
+    self, Index, IndexEntry, Moved, Pack, PackSkin, INDEX_VERSION, MANIFEST_FILE, MAX_PACK_BYTES,
     MAX_PICTURE_BYTES, MAX_READ_PICTURE_BYTES, MOVED_FILE,
 };
-use folderskin_core::{matte, raster};
+use folderskin_core::{matte, raster, shape};
 use image::RgbaImage;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::FileType;
@@ -70,6 +70,10 @@ pub struct CheckOptions {
     /// asked, because the packs from before are lossy WebP, and one has a 2 MB PNG, until they're
     /// made again; `packs make` always asks.
     pub require_lossless: bool,
+    /// Turn down a pack whose finished folders aren't one shape: two of them more than
+    /// [`shape::ONE_SHAPE`] apart, as width ÷ height goes, which folders redrawn at one shape
+    /// never are. Off unless asked, and meant for folderskin-community's workflow.
+    pub require_one_shape: bool,
 }
 
 impl Default for CheckOptions {
@@ -78,6 +82,7 @@ impl Default for CheckOptions {
             max_bytes: MAX_READ_PICTURE_BYTES,
             require_generated_ids: false,
             require_lossless: false,
+            require_one_shape: false,
         }
     }
 }
@@ -296,15 +301,20 @@ pub fn check_pack_with(
         return Err(problems);
     };
     let mut total = 0;
+    let mut folders: Vec<(&PackSkin, f32)> = Vec::new();
     for skin in &listing.skins {
         // A name Pack::parse turned down is reported already, and could point outside the folder.
         if pack::is_picture_file_name(&skin.file) {
             match check_listed_picture(folder, &files, &skin.file, opts) {
-                Ok(bytes) => total += bytes,
+                Ok((bytes, aspect)) => {
+                    total += bytes;
+                    folders.extend(aspect.map(|a| (skin, a)));
+                }
                 Err(e) => problems.push(e),
             }
         }
     }
+    problems.extend(not_one_shape(name, &folders));
     if total > MAX_PACK_BYTES {
         problems.push(format!(
             "its pictures come to {} MB, and a pack's come to {} MB at most; split it into two \
@@ -564,13 +574,13 @@ fn read_manifest(folder: &Path, files: &Files, problems: &mut Vec<String>) -> Op
 }
 
 /// Checks one picture a pack lists, the way the app does before it saves it, and returns its
-/// size.
+/// size and, when `opts` asks for one shape and it is a finished folder, its shape.
 fn check_listed_picture(
     folder: &Path,
     files: &Files,
     file: &str,
     opts: &CheckOptions,
-) -> Result<usize, String> {
+) -> Result<(usize, Option<f32>), String> {
     match files.get(file) {
         None => return Err(missing(files, file)),
         Some(kind) if !kind.is_file() => return Err(not_a_file(file)),
@@ -594,12 +604,54 @@ fn check_listed_picture(
     if matte::alpha_bounds(&rgba, 8).is_none() {
         return Err(format!("{file} is completely transparent"));
     }
-    Ok(bytes.len())
+    // The split the app makes: a finished folder is used as it is drawn, so its shape shows.
+    let aspect = opts
+        .require_one_shape
+        .then(|| matte::finished_cutout(&rgba, matte::MAGENTA))
+        .flatten()
+        .and_then(|cut| shape::aspect(&cut));
+    Ok((bytes.len(), aspect))
+}
+
+/// The problem with a pack whose finished `folders`, each with its shape, aren't one shape
+/// ([`shape::is_one_shape`]): which two are furthest apart, and how to give them one.
+fn not_one_shape(id: &str, folders: &[(&PackSkin, f32)]) -> Option<String> {
+    let aspects: Vec<f32> = folders.iter().map(|(_, a)| *a).collect();
+    if shape::is_one_shape(&aspects) {
+        return None;
+    }
+    let widest = folders.iter().max_by(|a, b| a.1.total_cmp(&b.1))?;
+    let narrowest = folders.iter().min_by(|a, b| a.1.total_cmp(&b.1))?;
+    Some(format!(
+        "its finished folders aren't one shape: \"{}\" ({}) is {:.2} times as wide as it is tall \
+         and \"{}\" ({}) {:.2}, {} apart, and a pack's are held within {}. `folderskin-tools \
+         packs normalize {id}` redraws them at one shape; one more than {} off it is left for you \
+         to drop with --drop-outliers or make again",
+        widest.0.name,
+        widest.0.file,
+        widest.1,
+        narrowest.0.name,
+        narrowest.0.file,
+        narrowest.1,
+        percent(shape::spread(&aspects)),
+        percent(shape::ONE_SHAPE),
+        percent(shape::TOLERANCE),
+    ))
+}
+
+/// A share as people read one: "8%", "0.3%", "26%".
+pub fn percent(share: f32) -> String {
+    let p = share.abs() * 100.0;
+    if p >= 10.0 || (p - p.round()).abs() < 0.05 {
+        format!("{}%", p.round())
+    } else {
+        format!("{p:.1}%")
+    }
 }
 
 /// Reads and decodes a picture within the limits a pack is read with and at most `max_bytes`.
 /// The error finishes a sentence that starts with the file's name.
-fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, String> {
+pub(crate) fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, String> {
     let bytes = read_bytes(path, max_bytes)?;
     // decode_picture runs check_picture first: the real file type, then the dimensions.
     pack::decode_picture(&bytes)
@@ -664,7 +716,7 @@ fn not_a_file(name: &str) -> String {
 }
 
 /// "1 pack", "2 packs".
-fn count(n: usize, noun: &str) -> String {
+pub(crate) fn count(n: usize, noun: &str) -> String {
     format!("{n} {noun}{}", if n == 1 { "" } else { "s" })
 }
 
@@ -1157,6 +1209,78 @@ mod tests {
             .collect();
         assert_eq!(bad.len(), 1, "{bad:?}");
         assert_eq!(strict.summary(), "2 problems in 2 packs");
+    }
+
+    /// A finished folder `w` wide and 230 tall, cut out on transparency.
+    fn folder_of(w: u32) -> RgbaImage {
+        RgbaImage::from_fn(w + 40, 270, |x, y| {
+            if (20..20 + w).contains(&x) && (20..250).contains(&y) {
+                Rgba([40, 90, 200, 255])
+            } else {
+                Rgba([0, 0, 0, 0])
+            }
+        })
+    }
+
+    #[test]
+    fn one_shape_is_required_of_finished_folders_only_when_asked() {
+        let c = Community::new("one-shape");
+        // 1.30 and 1.03 times as wide as tall: what came out of one batch of renders.
+        c.pack(
+            "apart",
+            &[
+                ("wide.png", &folder_of(299)),
+                ("narrow.png", &folder_of(237)),
+            ],
+        );
+        // A pixel apart, as folders redrawn at one shape measure.
+        c.pack(
+            "together",
+            &[("a.png", &folder_of(240)), ("b.png", &folder_of(241))],
+        );
+        // Artwork has no shape of its own, and one folder is always one shape.
+        c.pack(
+            "mixed",
+            &[
+                ("art.png", &artwork([200, 40, 40])),
+                ("art2.png", &artwork([40, 40, 200])),
+                ("one.png", &folder_of(237)),
+            ],
+        );
+        assert!(check(&c.0).unwrap().problems.is_empty(), "off unless asked");
+
+        let strict = check_with(
+            &c.0,
+            &CheckOptions {
+                require_one_shape: true,
+                ..CheckOptions::default()
+            },
+        )
+        .unwrap();
+        let ids: Vec<&str> = strict.packs.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, ["mixed", "together"]);
+        let line = format!(
+            "{}: its finished folders aren't one shape: \"Skin\" (wide.png) is 1.30 times as wide \
+             as it is tall and \"Skin\" (narrow.png) 1.03, 26% apart, and a pack's are held within \
+             1%. `folderskin-tools packs normalize apart` redraws them at one shape",
+            c.path(PACKS_DIR).join("apart").display()
+        );
+        assert_eq!(strict.problems.len(), 1, "{:?}", strict.problems);
+        assert!(
+            strict.problems[0].starts_with(&line),
+            "{:?}",
+            strict.problems
+        );
+    }
+
+    #[test]
+    fn shares_read_as_people_say_them() {
+        assert_eq!(percent(0.08), "8%");
+        assert_eq!(percent(0.01), "1%");
+        assert_eq!(percent(0.2621), "26%");
+        assert_eq!(percent(-0.12), "12%");
+        assert_eq!(percent(0.0031), "0.3%");
+        assert_eq!(percent(0.075), "7.5%");
     }
 
     #[test]

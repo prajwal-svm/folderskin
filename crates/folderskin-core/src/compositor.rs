@@ -240,6 +240,19 @@ impl Template {
         Pixmap::new(self.size, self.size).expect("render size")
     }
 
+    /// The whole folder's extent in this template's pixels, as `[left, top, right, bottom]`: its
+    /// back panel, whose tab is its top, and its front panel, its widest part and its bottom.
+    fn extent(&self) -> [f32; 4] {
+        let bounds = |path: &Path| path.compute_tight_bounds().unwrap_or(path.bounds());
+        let (back, front) = (bounds(&self.back), bounds(&self.front));
+        [
+            back.left().min(front.left()),
+            back.top().min(front.top()),
+            back.right().max(front.right()),
+            back.bottom().max(front.bottom()),
+        ]
+    }
+
     /// The anti-aliased coverage of `path`, which the rims along its edges are clipped to.
     fn mask(&self, path: &Path) -> Mask {
         let mut m = Mask::new(self.size, self.size).expect("mask size");
@@ -656,19 +669,59 @@ pub fn blank_template_cutout(width: u32, height: u32) -> image::RgbaImage {
         rgba: image::RgbaImage::from_pixel(8, 8, image::Rgba(TEMPLATE_GREY)),
         focus: (0.5, 0.5),
     };
-    // The folder's extent in canvas units: the front panel is its widest part, the tab its top.
-    let (x0, x1, y0, y1) = (g::FRONT.x0, g::FRONT.x1, g::TAB_TOP, g::FRONT.y1);
-    let usable = 1.0 - 2.0 * TEMPLATE_MARGIN;
-    let px_per_unit = (width as f32 * usable / (x1 - x0)).min(height as f32 * usable / (y1 - y0));
-    let size = ((g::CANVAS * px_per_unit).round() as u32).max(1);
-    let icon = render_icon_set(&art, &[size]).sizes.remove(0).1;
-
-    let s = size as f32 / g::CANVAS;
-    let left = (width as f32 / 2.0 - (x0 + x1) / 2.0 * s).round() as i64;
-    let top = (height as f32 / 2.0 - (y0 + y1) / 2.0 * s).round() as i64;
+    let place = BlankPlacement::new(width, height);
+    let icon = render_icon_set(&art, &[place.size]).sizes.remove(0).1;
     let mut frame = image::RgbaImage::new(width, height);
-    image::imageops::replace(&mut frame, &icon, left, top);
+    image::imageops::replace(&mut frame, &icon, place.left, place.top);
     frame
+}
+
+/// The pixels FolderSkin's folder fills in [`blank_template_cutout`] of a `width` × `height`
+/// frame, as `[x0, y0, x1, y1]` with the far edges left out: each column and row its outline
+/// covers more than half of, which are the ones more than half opaque. At 1024 × 1024, the mask
+/// `folderskin-tools template --mask` writes, that is columns 31 to 993 and rows 58 to 966: 962 px
+/// wide, standing on row 966.
+///
+/// It comes from the template's own outlines, placed where the blank template puts them.
+pub fn blank_template_folder_box(width: u32, height: u32) -> [u32; 4] {
+    let place = BlankPlacement::new(width, height);
+    let [left, top, right, bottom] = Template::new(place.size, Style::Mac).extent();
+    // An edge at 30.53 leaves column 30 less than half covered and column 31 more; one at 993.47
+    // covers column 992 more than half and column 993 less, so the box ends before 993.
+    let at = |offset: i64, edge: f32| (offset as f32 + edge).round().max(0.0) as u32;
+    [
+        at(place.left, left),
+        at(place.top, top),
+        at(place.left, right),
+        at(place.top, bottom),
+    ]
+}
+
+/// Where [`blank_template_cutout`] puts FolderSkin's folder in its frame: the side of the square
+/// icon it renders, and where that icon's top-left corner goes.
+struct BlankPlacement {
+    size: u32,
+    left: i64,
+    top: i64,
+}
+
+impl BlankPlacement {
+    /// The folder as big as it fits in a `width` × `height` frame less a [`TEMPLATE_MARGIN`] on
+    /// every side, centred.
+    fn new(width: u32, height: u32) -> BlankPlacement {
+        // The folder's extent in canvas units, from the template's outlines at one pixel a unit.
+        let [x0, y0, x1, y1] = Template::new(g::CANVAS as u32, Style::Mac).extent();
+        let usable = 1.0 - 2.0 * TEMPLATE_MARGIN;
+        let px_per_unit =
+            (width as f32 * usable / (x1 - x0)).min(height as f32 * usable / (y1 - y0));
+        let size = ((g::CANVAS * px_per_unit).round() as u32).max(1);
+        let s = size as f32 / g::CANVAS;
+        BlankPlacement {
+            size,
+            left: (width as f32 / 2.0 - (x0 + x1) / 2.0 * s).round() as i64,
+            top: (height as f32 / 2.0 - (y0 + y1) / 2.0 * s).round() as i64,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -968,6 +1021,23 @@ mod tests {
             "{paper:?}"
         );
         assert_eq!(at(700.0, 60.0), magenta, "beside the tab");
+    }
+
+    #[test]
+    fn the_folders_box_in_the_blank_template_is_where_its_silhouette_is() {
+        // What `folderskin-tools template --mask` writes at 1024, measured: columns 31 to 993,
+        // rows 58 to 966.
+        assert_eq!(blank_template_folder_box(1024, 1024), [31, 58, 993, 966]);
+        // Worked out from the outlines, it is the rendered silhouette's own box, at any size.
+        for (w, h) in [(1024, 1024), (1024, 960), (512, 480), (1166, 1091)] {
+            let cut = blank_template_cutout(w, h);
+            let (x0, y0, x1, y1) = crate::matte::alpha_bounds(&cut, 128).unwrap();
+            assert_eq!(
+                blank_template_folder_box(w, h),
+                [x0, y0, x1 + 1, y1 + 1],
+                "{w}×{h}"
+            );
+        }
     }
 
     #[test]

@@ -184,7 +184,8 @@ A themed set, such as 3D folders rendered with an image model, becomes a communi
 command. Packs live in their own repository,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community); check it out beside this one. `folderskin-tools packs make` cuts finished folders out of their magenta background
 (`--flat-backdrop` for any other flat background, such as a pink drift or plain grey), shrinks
-and compresses every picture to fit, and writes `pack.json`:
+and compresses every picture to fit, gives the finished folders one shape, and writes
+`pack.json`:
 
 ```sh
 cargo run -p folderskin-tools -- packs make ~/Pictures/renders --dir ../folderskin-community \

@@ -4,15 +4,18 @@
 //! A pack shared from the app arrives here the way any other pack would: a folder of pictures and
 //! a `pack.json`, credited to the handle of the computer that sent it, under the generated id the
 //! service gave it on approval. Every file is checked against the size and SHA-256 the service
-//! recorded when it was uploaded, and the finished folder against the same rules `packs check`
-//! holds every pack to, before it takes its place. A folder that is there already is never
-//! renumbered or written over.
+//! recorded when it was uploaded. Its finished folders are then given one shape, as `packs
+//! normalize` gives them, so packs people share arrive consistent; a folder too far off that
+//! shape to reshape is kept as it is and reported, and nobody's skin is ever dropped here. The
+//! pack is checked against the same rules `packs check` holds every pack to before it takes its
+//! place. A folder that is there already is never renumbered or written over.
 //!
 //! Only then is the service told the pack has been pulled (`done`), so a pack that fails comes
 //! back next time. A person pulling by hand tells it at once. The Packs workflow in
 //! folderskin-community tells it later, from the list [`write_list`] saves, once the packs are
 //! pushed: a check or a push that fails leaves them at the service for the next run.
 
+use crate::normalize::{self, Normalized};
 use crate::packs;
 use folderskin_core::pack::{self, Pack, MANIFEST_FILE};
 use folderskin_share::api::Export;
@@ -52,6 +55,9 @@ pub struct Pulled {
     /// The folder held exactly this pack already: an earlier pull wrote it, but the service
     /// never heard, so it is told now instead of the pack being refused.
     pub was_there: bool,
+    /// What giving its finished folders one shape did: the folders redrawn, and those kept as
+    /// they are for being too far off the pack's shape.
+    pub shaped: Normalized,
 }
 
 /// What a pull did: the packs written, and a sentence for each that wasn't.
@@ -188,30 +194,28 @@ fn pull_one(source: &mut dyn Exports, export: &Export, packs_dir: &Path) -> Resu
         return Err("pack.json doesn't list the files the service holds".into());
     }
 
-    let pulled = |was_there| Pulled {
+    let folder = packs_dir.join(id);
+    let pulled = |was_there, shaped| Pulled {
         id: export.id.clone(),
-        folder: packs_dir.join(id),
+        folder: folder.clone(),
         pack_id: id.clone(),
         name: pack.name.clone(),
         author: pack.author.clone(),
         skins: pack.skins.len(),
         was_there,
+        shaped,
     };
-    let folder = packs_dir.join(id);
-    if std::fs::symlink_metadata(&folder).is_ok() {
-        if holds_exactly(&folder, &manifest, export) {
-            return Ok(pulled(true));
-        }
-        return Err(format!(
-            "{} is there already and holds something else, so it isn't written over; nothing \
-             was written",
-            folder.display()
-        ));
+    let there = std::fs::symlink_metadata(&folder).is_ok();
+    // Exactly as the service recorded it: a pull from before packs were given one shape as they
+    // arrive wrote it, and the service never heard.
+    if there && holds_exactly(&folder, &manifest, export) {
+        return Ok(pulled(true, Normalized::default()));
     }
-    let name = id.clone();
-    let partial = packs_dir.join(format!(".pull-{name}-{}", std::process::id()));
+    let partial = packs_dir.join(format!(".pull-{id}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&partial);
-    let written = (|| -> Result<(), String> {
+    // Written, given one shape and checked beside the packs first, in a folder whose leading dot
+    // every check passes over.
+    let written = (|| -> Result<Normalized, String> {
         std::fs::create_dir_all(&partial).map_err(|e| e.to_string())?;
         std::fs::write(partial.join(MANIFEST_FILE), &manifest).map_err(|e| e.to_string())?;
         for file in &export.files {
@@ -225,14 +229,36 @@ fn pull_one(source: &mut dyn Exports, export: &Export, packs_dir: &Path) -> Resu
             }
             std::fs::write(partial.join(&file.file), &bytes).map_err(|e| e.to_string())?;
         }
-        packs::check_pack(&partial, &name).map_err(|problems| problems.join("; "))?;
-        std::fs::rename(&partial, &folder).map_err(|e| e.to_string())
+        // Outliers are kept as they are: nobody's skin is dropped without a person deciding.
+        let shaped = normalize::normalize_folder(&partial, &normalize::Options::default())?;
+        packs::check_pack(&partial, id).map_err(|problems| problems.join("; "))?;
+        Ok(shaped)
     })();
-    if let Err(e) = written {
+    let shaped = match written {
+        Ok(shaped) => shaped,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&partial);
+            return Err(e);
+        }
+    };
+    if there {
+        // An earlier pull wrote it and the service never heard, or it is another pack's.
+        let same = same_files(&partial, &folder);
         let _ = std::fs::remove_dir_all(&partial);
-        return Err(e);
+        if same {
+            return Ok(pulled(true, shaped));
+        }
+        return Err(format!(
+            "{} is there already and holds something else, so it isn't written over; nothing \
+             was written",
+            folder.display()
+        ));
     }
-    Ok(pulled(false))
+    if let Err(e) = std::fs::rename(&partial, &folder) {
+        let _ = std::fs::remove_dir_all(&partial);
+        return Err(e.to_string());
+    }
+    Ok(pulled(false, shaped))
 }
 
 /// Whether `folder` holds exactly the pack `export` describes: `manifest` as its `pack.json`, and
@@ -260,6 +286,29 @@ fn holds_exactly(folder: &Path, manifest: &[u8], export: &Export) -> bool {
             std::fs::read(folder.join(&f.file))
                 .is_ok_and(|kept| kept.len() == f.bytes && sha256_hex(&kept) == f.sha256)
         })
+}
+
+/// Whether folders `a` and `b` hold the same files, byte for byte, leaving out dotfiles.
+fn same_files(a: &Path, b: &Path) -> bool {
+    let names = |dir: &Path| -> Option<Vec<String>> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .ok()?
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.starts_with('.'))
+            .collect();
+        names.sort_unstable();
+        Some(names)
+    };
+    match (names(a), names(b)) {
+        (Some(ours), Some(theirs)) if ours == theirs => ours.iter().all(|name| {
+            match (std::fs::read(a.join(name)), std::fs::read(b.join(name))) {
+                (Ok(x), Ok(y)) => x == y,
+                _ => false,
+            }
+        }),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -301,7 +350,30 @@ mod tests {
 
     /// One approved pack of two pictures, as the service would hand it over.
     fn approved(id: &str, pack_id: &str, handle: &str) -> Fake {
-        let pictures = [("dawn.png", picture(10)), ("dusk.png", picture(200))];
+        approved_with(
+            id,
+            pack_id,
+            handle,
+            vec![("dawn.png", picture(10)), ("dusk.png", picture(200))],
+        )
+    }
+
+    /// One approved pack of `pictures`, each skin named after its file, as the service would
+    /// hand it over.
+    fn approved_with(
+        id: &str,
+        pack_id: &str,
+        handle: &str,
+        pictures: Vec<(&str, Vec<u8>)>,
+    ) -> Fake {
+        let skins: Vec<String> = pictures
+            .iter()
+            .map(|(file, _)| {
+                let stem = file.split('.').next().unwrap_or(file);
+                let name = stem[..1].to_uppercase() + &stem[1..];
+                format!(r#"    {{ "file": "{file}", "name": "{name}" }}"#)
+            })
+            .collect();
         let manifest = format!(
             r#"{{
   "version": 1,
@@ -310,11 +382,11 @@ mod tests {
   "license": "CC0-1.0",
   "tags": ["sky"],
   "skins": [
-    {{ "file": "dawn.png", "name": "Dawn" }},
-    {{ "file": "dusk.png", "name": "Dusk" }}
+{}
   ]
 }}
-"#
+"#,
+            skins.join(",\n")
         );
         Fake {
             exports: vec![Export {
@@ -521,6 +593,86 @@ mod tests {
             0,
             "nothing was left behind"
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A finished folder `w`×300 px on transparency, as a PNG.
+    fn folder_png(w: u32, shade: u8) -> Vec<u8> {
+        let img = image::RgbaImage::from_fn(w + 40, 340, |x, y| {
+            if (20..20 + w).contains(&x) && (20..320).contains(&y) {
+                image::Rgba([shade, 90, 160, 255])
+            } else {
+                image::Rgba([0, 0, 0, 0])
+            }
+        });
+        folderskin_core::raster::encode_png(&img)
+    }
+
+    /// Four finished folders, 1.2, 1.15, 1.24 and 1.7 times as wide as tall: the pack's shape
+    /// is 1.22, and the last is 39% off it.
+    fn folders_of_four_shapes() -> Vec<(&'static str, Vec<u8>)> {
+        vec![
+            ("a.png", folder_png(360, 10)),
+            ("b.png", folder_png(345, 60)),
+            ("c.png", folder_png(372, 110)),
+            ("odd.png", folder_png(510, 160)),
+        ]
+    }
+
+    #[test]
+    fn a_pulled_packs_folders_arrive_one_shape_and_an_outlier_is_kept_as_it_is() {
+        let dir = community("shape");
+        let packs_dir = dir.join(packs::PACKS_DIR);
+        let id = "sub_hhhhhhhhhhhhhhhhhhhh";
+        let mut source = approved_with(id, SKY, "sunny-otter", folders_of_four_shapes());
+        let report = pull(&mut source, &packs_dir, Tell::Later).unwrap();
+        assert!(report.problems.is_empty(), "{:?}", report.problems);
+        let shaped = &report.pulled[0].shaped;
+        assert_eq!(shaped.folders, 4);
+        assert!((shaped.shape.unwrap() - 1.22).abs() < 0.001);
+        let redrawn: Vec<&str> = shaped.redrawn.iter().map(|r| r.file.as_str()).collect();
+        assert_eq!(redrawn, ["a.webp", "b.webp", "c.webp"]);
+        assert_eq!(shaped.outliers.len(), 1);
+        assert_eq!(
+            (
+                shaped.outliers[0].name.as_str(),
+                shaped.outliers[0].file.as_str()
+            ),
+            ("Odd", "odd.png")
+        );
+        assert_eq!(report.pulled[0].skins, 4, "nothing is dropped");
+
+        // The pack as it now is: WebPs at one shape, the outlier as it came, and it checks.
+        let pack =
+            Pack::parse(&std::fs::read(packs_dir.join(SKY).join(MANIFEST_FILE)).unwrap()).unwrap();
+        let files: Vec<&str> = pack.skins.iter().map(|s| s.file.as_str()).collect();
+        assert_eq!(files, ["a.webp", "b.webp", "c.webp", "odd.png"]);
+        assert_eq!(
+            std::fs::read(packs_dir.join(SKY).join("odd.png")).unwrap(),
+            folders_of_four_shapes()[3].1
+        );
+        assert!(packs::check(&dir).unwrap().problems.is_empty());
+        assert_eq!(folders(&dir), [SKY], "nothing half-written is left");
+
+        // Pulled again after a push that failed, it meets the folder the first pull wrote.
+        let again = pull(&mut source, &packs_dir, Tell::Later).unwrap();
+        assert!(again.problems.is_empty(), "{:?}", again.problems);
+        assert!(again.pulled[0].was_there);
+        assert_eq!(folders(&dir), [SKY]);
+
+        // A pull from before packs were given one shape wrote the pack as it was uploaded: that
+        // is the same pack too, and it is left as it is.
+        let folder = packs_dir.join(SKY);
+        std::fs::remove_dir_all(&folder).unwrap();
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join(MANIFEST_FILE), &source.manifests[id]).unwrap();
+        for (file, bytes) in folders_of_four_shapes() {
+            std::fs::write(folder.join(file), bytes).unwrap();
+        }
+        let older = pull(&mut source, &packs_dir, Tell::Later).unwrap();
+        assert!(older.problems.is_empty(), "{:?}", older.problems);
+        assert!(older.pulled[0].was_there);
+        assert!(folder.join("a.png").is_file(), "left as it was");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

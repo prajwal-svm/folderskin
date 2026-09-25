@@ -228,10 +228,35 @@ pub enum PacksCommand {
         /// 0.1.7: lossless (PNG, or lossless WebP) and at most 1536 KB
         #[arg(long)]
         require_lossless: bool,
+        /// Also turn down a pack whose finished folders aren't one shape: two more than 1% apart
+        /// as width ÷ height goes, which `packs normalize` fixes
+        #[arg(long)]
+        require_one_shape: bool,
+    },
+    /// Give the finished folders in each pack one shape: the median of their own, each redrawn
+    /// as wide as FolderSkin's folder and on its baseline in a 1024 px square, as lossless WebP.
+    /// A folder more than the tolerance off it is reported and left as it is. Running it again
+    /// changes nothing
+    Normalize {
+        /// The folderskin-community checkout, holding packs/
+        #[arg(long, default_value = ".")]
+        dir: PathBuf,
+        /// The packs to go through, by id; every pack when there are none
+        ids: Vec<String>,
+        /// How much a folder may be reshaped to take its pack's shape, as a share of its width ÷
+        /// height: 0.08 is 8%
+        #[arg(long, default_value_t = folderskin_core::shape::TOLERANCE, value_parser = parse_tolerance)]
+        tolerance: f32,
+        /// Take a folder more than the tolerance off its pack's shape out of pack.json and delete
+        /// its picture, instead of leaving it as it is. For the maintainer
+        #[arg(long)]
+        drop_outliers: bool,
     },
     /// Make a pack from pictures: finished folders (on magenta or transparency) are cut out,
-    /// everything is shrunk to 1024 px and saved as lossless WebP, and pack.json is written. A new
-    /// pack gets an id of its own, its name and six random characters, which is its folder's name
+    /// everything is shrunk to 1024 px and saved as lossless WebP, and pack.json is written. Two
+    /// finished folders or more are given one shape, as `packs normalize` does, and one too far off
+    /// it is left out. A new pack gets an id of its own, its name and six random characters, which
+    /// is its folder's name
     Make {
         /// Pictures (PNG, JPEG or WebP), or folders of them, taken in name order
         #[arg(required = true)]
@@ -266,6 +291,10 @@ pub enum PacksCommand {
         /// drifted to pink or raspberry. Only the backdrop reaching the edge goes
         #[arg(long)]
         flat_backdrop: bool,
+        /// Keep a finished folder more than 8% off the pack's shape, as it is, instead of leaving
+        /// it out
+        #[arg(long)]
+        keep_outliers: bool,
     },
     /// Give packs generated ids, a name and six random characters such as classic-art-k7q2mx:
     /// each folder moves with git mv, featured.json and official.json follow, and moved.json
@@ -313,6 +342,18 @@ pub enum PacksCommand {
 /// `packs index` writes into that folder too.
 pub fn catalog_out(dir: &std::path::Path, out: Option<PathBuf>) -> PathBuf {
     out.unwrap_or_else(|| dir.join("v2"))
+}
+
+/// `--tolerance`: a share from 0 up to, not including, 1, such as 0.08.
+pub fn parse_tolerance(s: &str) -> Result<f32, String> {
+    let share: f32 = s
+        .trim()
+        .parse()
+        .map_err(|_| "the tolerance is a share, such as 0.08 for 8%".to_string())?;
+    if !(0.0..1.0).contains(&share) {
+        return Err("the tolerance is a share from 0 to less than 1, such as 0.08 for 8%".into());
+    }
+    Ok(share)
 }
 
 pub fn parse_focus(s: &str) -> Result<(f32, f32), String> {
@@ -464,12 +505,14 @@ mod tests {
                         max_kb,
                         require_generated_ids,
                         require_lossless,
+                        require_one_shape,
                     },
             } => {
                 assert_eq!(dir, PathBuf::from("."));
                 assert_eq!(max_kb, None);
                 assert!(!require_generated_ids, "off unless asked");
                 assert!(!require_lossless, "off unless asked");
+                assert!(!require_one_shape, "off unless asked");
             }
             other => panic!("{other:?}"),
         }
@@ -479,6 +522,7 @@ mod tests {
             "check",
             "--require-generated-ids",
             "--require-lossless",
+            "--require-one-shape",
         ])
         .command
         {
@@ -487,9 +531,10 @@ mod tests {
                     PacksCommand::Check {
                         require_generated_ids,
                         require_lossless,
+                        require_one_shape,
                         ..
                     },
-            } => assert!(require_generated_ids && require_lossless),
+            } => assert!(require_generated_ids && require_lossless && require_one_shape),
             other => panic!("{other:?}"),
         }
         match Cli::parse_from(["folderskin-tools", "packs", "index", "--dir", "/tmp/c"]).command {
@@ -686,6 +731,7 @@ mod tests {
                         max_kb,
                         license,
                         flat_backdrop,
+                        keep_outliers,
                         ..
                     },
             } => {
@@ -699,16 +745,80 @@ mod tests {
                 assert_eq!(max_kb, 1536);
                 assert_eq!(license, "CC0-1.0");
                 assert!(!flat_backdrop);
+                assert!(!keep_outliers, "an outlier is left out unless asked");
             }
             other => panic!("{other:?}"),
         }
-        let again = Cli::parse_from([&make[..], &["--id", "3d-k7q2mx"]].concat());
+        let again =
+            Cli::parse_from([&make[..], &["--id", "3d-k7q2mx", "--keep-outliers"]].concat());
         match again.command {
             Command::Packs {
-                command: PacksCommand::Make { id, .. },
-            } => assert_eq!(id.as_deref(), Some("3d-k7q2mx")),
+                command:
+                    PacksCommand::Make {
+                        id, keep_outliers, ..
+                    },
+            } => {
+                assert_eq!(id.as_deref(), Some("3d-k7q2mx"));
+                assert!(keep_outliers);
+            }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_packs_normalize_for_every_pack_or_some_at_8_percent() {
+        let parse = |args: &[&str]| {
+            Cli::try_parse_from([&["folderskin-tools", "packs", "normalize"], args].concat())
+                .map(|cli| cli.command)
+        };
+        match parse(&[]).unwrap() {
+            Command::Packs {
+                command:
+                    PacksCommand::Normalize {
+                        dir,
+                        ids,
+                        tolerance,
+                        drop_outliers,
+                    },
+            } => {
+                assert_eq!(dir, PathBuf::from("."));
+                assert!(ids.is_empty(), "every pack");
+                assert_eq!(tolerance, 0.08);
+                assert!(!drop_outliers, "nothing is removed unless asked");
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse(&[
+            "--dir",
+            "../folderskin-community",
+            "classic-art-5rxas2",
+            "dreamscapes-ppfia6",
+            "--tolerance",
+            "0.3",
+            "--drop-outliers",
+        ])
+        .unwrap()
+        {
+            Command::Packs {
+                command:
+                    PacksCommand::Normalize {
+                        dir,
+                        ids,
+                        tolerance,
+                        drop_outliers,
+                    },
+            } => {
+                assert_eq!(dir, PathBuf::from("../folderskin-community"));
+                assert_eq!(ids, ["classic-art-5rxas2", "dreamscapes-ppfia6"]);
+                assert_eq!(tolerance, 0.3);
+                assert!(drop_outliers);
+            }
+            other => panic!("{other:?}"),
+        }
+        for bad in ["-0.1", "1", "8%", "lots"] {
+            assert!(parse(&["--tolerance", bad]).is_err(), "{bad}");
+        }
+        assert_eq!(parse_tolerance("0"), Ok(0.0));
     }
 
     #[test]
