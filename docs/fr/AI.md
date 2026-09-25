@@ -96,10 +96,10 @@ tests unitaires, y compris le cas d'un sujet vraiment rose sur un fond magenta.
 `crates/folderskin-ai/src/prompts.rs` compose le prompt à partir de vos mots et d'un contrat. Les
 parties qui font le travail relèvent de la structure plus que du style :
 
-- **Les prompts d'illustration** interdisent de dessiner un dossier, une icône, un appareil ou une
-  maquette, et réservent le huitième supérieur et une bordure de 6 % comme zones mortes, car le
+- **Les prompts du mode Juste l'image** interdisent de dessiner un dossier, une icône, un appareil
+  ou une maquette, et réservent le huitième supérieur et une bordure de 6 % comme zones mortes, car le
   gabarit les recadre ou les courbe.
-- **Les prompts de dossier entier** fixent la construction : exactement trois parties, un onglet, un
+- **Les prompts du mode Dossier entier** fixent la construction : exactement trois parties, un onglet, un
   bord de papier visible, un panneau avant, et une consigne explicite de ne pas ajouter de couches.
   Sans cette phrase, les modèles produisent à coup sûr des dossiers empilés et des onglets doublés.
 - **Les prompts de gabarit** (`compose_on_template`) accompagnent le gabarit vierge : l'image jointe

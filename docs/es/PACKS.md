@@ -42,12 +42,12 @@ elimina esa opción.
    marca la casilla que confirma que puedes compartirlas.
 3. La primera vez, FolderSkin verifica este equipo en tu navegador, con el nombre al que se
    atribuirán tus paquetes. Solo lo pide una vez por equipo.
-4. Envíalo. FolderSkin comprueba el paquete según el contrato de abajo antes de que nada salga de tu
-   equipo. **Tus envíos** muestra cada paquete que enviaste y, si alguno se rechaza, por qué.
+4. Envíalo. FolderSkin comprueba que el paquete cumpla el contrato de abajo antes de que nada salga
+   de tu equipo. **Tus envíos** muestra cada paquete que enviaste y, si alguno se rechaza, por qué.
 
 Cada imagen se comparte sin pérdida, así que un paquete se ve exactamente como lo hiciste, incluido
 el borde transparente de una carpeta terminada. FolderSkin convierte cada imagen a WebP sin pérdida
-antes de enviarla, lo que lleva unos segundos por imagen, y las va contando a medida que están
+antes de enviarla, lo que lleva unos segundos por imagen, y va mostrando cuántas están
 listas. Una imagen demasiado detallada para caber en 1.5 MB a 1024 px pasa a 896 px y luego a
 768 px, siempre sin pérdida, y FolderSkin te dice cuáles. Las imágenes de un paquete suman 64 MB como
 máximo. Uno más grande se rechaza, con la sugerencia de dividirlo en dos paquetes.
@@ -58,7 +58,7 @@ solo, en unos 15 minutos
 paquetes pueden compartir nombre: el que elijas es el que ven todos, y el paquete recibe su propio
 identificador ([Identificadores de paquete](#identificadores-de-paquete)).
 
-Los paquetes también pueden llegar a mano, con un pull request a
+Un paquete también se puede proponer a mano, con un pull request a
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) que añade una carpeta
 dentro de `packs/`. Crea la carpeta con `packs make` ([Crear un paquete a partir de
 imágenes](#crear-un-paquete-a-partir-de-imágenes)), que le da un identificador generado, y el pull
@@ -146,7 +146,7 @@ Aprobar un paquete lo publica. Nadie copia archivos a mano.
    demasiado alejada de esa forma se queda tal cual, y el registro de la ejecución lo avisa con una
    advertencia.
 4. `packs check` comprueba cada paquete, igual que en un pull request.
-5. github-actions[bot] hace un commit de cada paquete con el mensaje “Add the <name> pack” y lo sube
+5. github-actions[bot] hace un commit de cada paquete con el mensaje `Add the <name> pack` y lo sube
    a `main`.
 6. Solo entonces `community done` le dice al servicio que el paquete está publicado. Si una
    comprobación o una subida falla, el paquete sigue esperando en el servicio, y la siguiente

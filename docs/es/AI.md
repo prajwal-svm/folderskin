@@ -95,10 +95,10 @@ incluido el caso de un motivo realmente rosa sobre un fondo magenta.
 `crates/folderskin-ai/src/prompts.rs` compone el prompt a partir de tus palabras más un contrato. Las
 partes que hacen el trabajo son de estructura, no de estilo:
 
-- **Los prompts de ilustración** prohíben dibujar una carpeta, un icono, un dispositivo o una
-  maqueta, y reservan el octavo superior y un borde del 6 % como espacio muerto, porque la plantilla
+- **Los prompts del modo Solo la imagen** prohíben dibujar una carpeta, un icono, un dispositivo o
+  una maqueta, y reservan el octavo superior y un borde del 6 % como espacio muerto, porque la plantilla
   recorta o curva esas zonas.
-- **Los prompts de carpeta entera** fijan la construcción: exactamente tres partes, una pestaña, un
+- **Los prompts del modo Carpeta entera** fijan la construcción: exactamente tres partes, una pestaña, un
   borde de papel visible, un panel delantero y una instrucción explícita de no añadir capas. Sin esa
   frase, los modelos producen sin falta carpetas apiladas y pestañas dobles.
 - **Los prompts de plantilla** (`compose_on_template`) acompañan a la plantilla en blanco: la imagen

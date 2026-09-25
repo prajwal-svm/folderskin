@@ -136,9 +136,9 @@ design   masked by back: the back panel's coverage, tab included
 ```
 
 La zone de travail empile ces quatre calques à chaque rafraîchissement (`src/composer/composite.ts`),
-ce qui est assez léger pour suivre un glisser-déposer. L'icône enregistrée vient de `compositor::render_master_placed`, qui
-dessine le même gabarit avec les mêmes fonctions, les deux panneaux remplis par la création à sa
-place. Le test `the_layers_stacked_around_a_design_are_the_saved_icon` garantit un écart de 3 niveaux
+ce qui est assez léger pour suivre un glisser-déposer. L'icône enregistrée vient de
+`compositor::render_master_placed`, qui dessine le même gabarit avec les mêmes fonctions, les deux
+panneaux remplis par la création à sa place. Le test `the_layers_stacked_around_a_design_are_the_saved_icon` garantit un écart de 3 niveaux
 par canal au maximum entre les deux, si bien que le canevas montre l'icône qui sera écrite. Un
 cinquième calque, `outline`, correspond aux bords visibles du dossier. La vue à plat le teinte, et il
 ne fait jamais partie d'une icône.

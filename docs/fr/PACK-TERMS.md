@@ -18,7 +18,7 @@ on découvre après sa publication qu'il les enfreint est retiré.
    photographié ou créé d'une autre manière chaque image du pack, ou bien chaque image est sous CC0
    ou sous une licence qui vous permet de la partager de cette façon, et vous l'avez vérifié
    vous-même au lieu de le supposer.
-2. **Elles ne sont prises nulle part.** Ni dans une autre app, ni dans un jeu, ni dans une banque
+2. **Elles ne sont pas récupérées ailleurs.** Ni dans une autre app, ni dans un jeu, ni dans une banque
    d'images, ni dans le portfolio de quelqu'un, ni aspirées depuis une recherche. « Je l'ai trouvée
    en ligne » n'est pas une licence.
 3. **Les images faites par IA suivent la même règle.** Si un modèle les a créées, c'est à vous de

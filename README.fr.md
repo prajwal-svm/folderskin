@@ -12,8 +12,8 @@
 
 **Habillez n'importe quel dossier.**
 
-Vos plus beaux souvenirs portent le même dossier terne que vos vieux papiers. FolderSkin donne à
-chaque dossier un habillage à l'image de ce qu'il contient : un plan de cinéma à l'heure dorée pour
+Vos plus beaux souvenirs dorment dans le même dossier terne que vos vieilles paperasses. FolderSkin
+donne à chaque dossier un habillage à l'image de ce qu'il contient : un plan de cinéma à l'heure dorée pour
 les photos de l'été, une affiche de voyage vintage pour un séjour, du pop art pour un projet vidéo,
 des pastels tout doux pour un anniversaire. Déposez un dossier sur la fenêtre, essayez plusieurs
 habillages et appliquez celui qui vous plaît. Piochez dans les packs gratuits de la communauté,
@@ -63,9 +63,9 @@ Gratuit · Open source · Sans compte · Sans pistage
 ## Ce qui reste sur votre ordinateur
 
 Tout, sauf les rares choses qui ont besoin d'Internet. Pas de compte, rien à payer, rien qui vous
-piste : la seule chose que FolderSkin signale, c'est qu'un pack de la communauté a été ajouté, avec
-son seul identifiant, pour que folderskin.app puisse afficher combien de fois chaque pack est
-ajouté. Sur Mac, le téléchargement fait moins de 20 Mo.
+piste : la seule chose que FolderSkin signale, c'est l'ajout d'un pack de la communauté, par son
+seul identifiant, pour que folderskin.app puisse afficher combien de fois chaque pack est ajouté.
+Sur Mac, le téléchargement fait moins de 20 Mo.
 
 | Reste sur votre ordinateur | Passe par Internet |
 | --- | --- |
@@ -90,8 +90,8 @@ bibliothèque plus tard depuis **Communauté**. L'accueil ne s'affiche qu'une se
 1. Faites glisser un dossier sur le panneau du dossier, à droite, ou cliquez sur le dossier vide pour
    en choisir un.
 2. Cliquez sur un habillage de la bibliothèque pour l'essayer. Le panneau du dossier affiche aussitôt
-   le résultat. La barre latérale choisit entre **Tous les habillages**, **Mes habillages** et
-   **Favoris**, les tags en haut affinent la sélection, et ⌘F / Ctrl+F lance une recherche.
+   le résultat. Dans la barre latérale, choisissez **Tous les habillages**, **Mes habillages** ou
+   **Favoris**. Les tags en haut affinent la sélection, et ⌘F / Ctrl+F lance une recherche.
 3. Cliquez sur **Appliquer l'habillage**. Le dossier est marqué **Appliqué**, et **Afficher dans le
    Finder** l'ouvre.
 4. Cliquez sur **Rétablir** pour remettre l'icône par défaut du système. Si le dossier a déjà une
@@ -99,7 +99,7 @@ bibliothèque plus tard depuis **Communauté**. L'accueil ne s'affiche qu'une se
 
 Pour donner le même habillage aux dossiers qu'il contient, activez **Inclure les sous-dossiers** sous
 le nom du dossier. FolderSkin les compte d'abord (à tous les niveaux, sans les dossiers cachés ni les
-paquets d'applications), et le bouton devient **Appliquer à 25 dossiers**, selon leur nombre. Au-delà
+paquets d'applications), et le bouton devient **Appliquer à 25 dossiers**, avec le nombre trouvé. Au-delà
 de dix, il demande confirmation avant de commencer. Le panneau du dossier montre chaque dossier au
 fur et à mesure, **Arrêter** interrompt l'opération après le dossier en cours, et le récapitulatif
 indique ce qui a changé, quels dossiers n'ont pas pu l'être et pourquoi, puis propose de continuer ou
@@ -111,20 +111,22 @@ FolderSkin vous fait confirmer. Un dossier fini sur fond magenta uni, comme ceux
 prompt pour chat ci-dessous, est détouré et utilisé tel quel. Toute autre image est plaquée sur le
 dossier de FolderSkin.
 
-Chaque habillage que vous ajoutez a un menu ⋯ : renommez-le (un double-clic sur son nom, ou F2, y
-mène directement), ajoutez-lui des tags (ils deviennent des filtres en haut), voyez comment il a été
-créé (le modèle d'IA et le prompt, ou le pack et la personne qui l'a partagé), partagez-le ou
-supprimez-le. Les résultats de l'IA reçoivent dès leur arrivée un tag à leur style, comme `airbrush`.
+Chaque habillage que vous ajoutez a un menu ⋯ qui permet de le renommer (un double-clic sur son nom,
+ou F2, y mène directement), de lui ajouter des tags (ils deviennent des filtres en haut), de voir
+comment il a été créé (le modèle d'IA et le prompt, ou le pack et la personne qui l'a partagé), de le
+partager ou de le supprimer. Les résultats de l'IA reçoivent dès leur arrivée un tag qui indique leur
+style, comme `airbrush`.
 
-**Réglages**, en bas de la barre latérale, regroupe le thème, vos clés d'API, ce que le partage
-remplit pour vous et l'endroit où vos habillages sont enregistrés. Survolez le badge de version, à
+**Réglages**, en bas de la barre latérale, regroupe le thème, vos clés d'API, les informations que
+le partage préremplit et l'endroit où vos habillages sont enregistrés. Survolez le badge de version, à
 côté du logo, pour afficher « À propos ».
 
 ## Habillages de la communauté
 
 FolderSkin n'est livré avec aucun habillage. Ce sont les utilisateurs qui partagent des habillages et
 des packs d'habillages via FolderSkin, gratuitement pour tout le monde. Le premier lancement vous les
-propose, et **Communauté** les rassemble à tout moment. Ajouter un pack place ses habillages dans
+propose, et vous les retrouvez à tout moment dans **Communauté**. Ajouter un pack place ses
+habillages dans
 votre bibliothèque avec leurs tags, et le bouton **Installer** d'un pack, dans la galerie de
 [folderskin.app](https://folderskin.app/fr/community/), ouvre FolderSkin et l'ajoute pour vous. Les
 packs marqués **Officiel** sont ceux dont le mainteneur se porte garant. **Classic Art** est un bon
@@ -165,7 +167,7 @@ son menu ⋯, la rouvre. [docs/fr/COMPOSER.md](docs/fr/COMPOSER.md) donne tous l
 ## Générer un habillage avec l'IA
 
 FolderSkin peut créer un habillage à partir d'une description. Le **Modèle local** le peint sur
-votre propre ordinateur, gratuitement : installez-le une fois, et il ne demande aucune clé et
+votre propre ordinateur, gratuitement : une fois installé, il ne demande aucune clé et
 n'envoie rien nulle part. Il fonctionne sur les Mac à puce Apple sous macOS 14 ou plus récent, et sur
 les PC Windows et Linux. Vous pouvez aussi utiliser **votre propre clé d'API** chez un fournisseur
 que vous utilisez déjà. La clé est chiffrée et stockée sur votre ordinateur (sans aucune demande de
@@ -197,7 +199,7 @@ message d'erreur.
 
 ## Créer un pack
 
-Une série sur un thème, par exemple des dossiers en 3D rendus avec un modèle d'image, devient un
+Une série thématique, par exemple des dossiers en 3D rendus avec un modèle d'image, devient un
 pack de la communauté en une seule commande. Les packs vivent dans leur propre dépôt,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) : clonez-le à côté de
 celui-ci. `folderskin-tools packs make` détoure les dossiers finis de leur fond magenta

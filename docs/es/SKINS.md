@@ -42,8 +42,8 @@ constantes):
   se conserva el ~87 % central de su altura: se recorta más o menos un 6 % por arriba y otro tanto
   por abajo.
 
-Leído como franjas de una imagen de 1024 × 958 (una imagen con la misma forma a otro tamaño se escala
-igual). Las franjas se solapan porque los dos paneles muestran partes de la misma imagen que se
+Así se reparte en franjas una imagen de 1024 × 958 (una imagen con la misma forma a otro tamaño se
+escala igual). Las franjas se solapan porque los dos paneles muestran partes de la misma imagen que se
 solapan: el panel trasero muestra toda la altura y el delantero, el centro.
 
 | filas (de 958) | parte de la altura | dónde acaba |

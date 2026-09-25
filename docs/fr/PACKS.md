@@ -1,8 +1,8 @@
 # Habillages et packs de la communauté
 
 Tout le monde peut partager gratuitement des habillages avec tous les utilisateurs de FolderSkin.
-Une série d'habillages partagée s'appelle un **pack**, et un habillage seul forme un pack d'un seul
-habillage. Les packs vivent dans leur propre dépôt,
+Une série d'habillages partagée s'appelle un **pack**, et un habillage seul forme un pack à lui tout
+seul. Les packs vivent dans leur propre dépôt,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community), dans `packs/`, et en
 ajouter un ne demande aucun compte. FolderSkin n'est livré avec aucun habillage : tous viennent des
 packs, de vos propres images ou des résultats de l'IA.
@@ -17,7 +17,7 @@ dossiers qui utilisent déjà l'un de ses habillages gardent leur icône, car l'
 le dossier lui-même.
 
 **Ajouter depuis un dossier** fait de même avec un dossier de pack présent sur votre ordinateur.
-C'est aussi comme ça qu'on teste un pack avant de le partager.
+C'est aussi la façon de tester un pack avant de le partager.
 
 La galerie de [folderskin.app](https://folderskin.app/fr/community/) affiche un bouton **Installer**
 sur chaque pack. Il ouvre FolderSkin sur ce pack, dans la Communauté, et l'ajoute, exactement comme
@@ -42,13 +42,13 @@ Vous partagez depuis l'app, et FolderSkin envoie le pack à son service communau
    la case qui confirme que vous avez le droit de les partager.
 3. La première fois, FolderSkin vérifie cet ordinateur dans votre navigateur, sous le nom auquel
    vos packs seront crédités. Il ne le demande qu'une fois par ordinateur.
-4. Envoyez-le. FolderSkin vérifie le pack selon le contrat ci-dessous avant que quoi que ce soit ne
-   quitte votre ordinateur. **Vos envois** affiche chaque pack que vous avez envoyé et, si l'un
+4. Envoyez-le. FolderSkin vérifie que le pack respecte le contrat ci-dessous avant que quoi que ce
+   soit ne quitte votre ordinateur. **Vos envois** affiche chaque pack que vous avez envoyé et, si l'un
    d'eux est refusé, la raison.
 
 Chaque image est partagée sans perte : un pack s'affiche exactement tel que vous l'avez créé, bord
 transparent des dossiers finis compris. FolderSkin convertit chaque image en WebP sans perte avant
-l'envoi, ce qui prend quelques secondes par image, et les compte au fur et à mesure. Une image trop
+l'envoi, ce qui prend quelques secondes par image, et affiche le décompte au fur et à mesure. Une image trop
 détaillée pour tenir dans 1,5 Mo en 1024 px passe à 896 px, puis à 768 px, toujours sans perte, et
 FolderSkin indique lesquelles. Les images d'un pack pèsent 64 Mo au maximum. Un pack plus lourd est
 refusé, avec la suggestion de le scinder en deux.
@@ -59,7 +59,7 @@ publié automatiquement en 15 minutes environ
 peuvent porter le même nom : celui que vous choisissez est celui que tout le monde voit, et le pack
 reçoit son propre identifiant ([Identifiants de pack](#identifiants-de-pack)).
 
-Les packs peuvent aussi arriver à la main, par une pull request sur
+Un pack peut aussi être proposé à la main, par une pull request sur
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) qui ajoute un dossier
 dans `packs/`. Créez ce dossier avec `packs make` ([Créer un pack à partir
 d'images](#créer-un-pack-à-partir-dimages)), qui lui donne un identifiant généré, et la pull
@@ -76,8 +76,8 @@ l'identifiant doit être unique. `packs make` crée les identifiants des packs f
 service communautaire ceux des packs partagés depuis l'app. Un identifiant ne change plus jamais
 ensuite, même quand le nom du pack change.
 
-La partie aléatoire compte six caractères de `a` à `z` et de `2` à `7`, tirés de la source d'aléa
-sécurisée du système. Un nouvel identifiant n'est jamais le nom d'un dossier de `packs/`, ni un
+La partie aléatoire compte six caractères de `a` à `z` et de `2` à `7`, tirés par le générateur
+aléatoire sécurisé du système. Un nouvel identifiant n'est jamais le nom d'un dossier de `packs/`, ni un
 ancien identifiant de `moved.json`.
 
 ### moved.json
@@ -147,7 +147,7 @@ Approuver un pack le publie. Personne ne copie de fichiers à la main.
    dossier trop éloigné de cette forme est gardé tel quel, et le journal de l'exécution le signale
    par un avertissement.
 4. `packs check` vérifie chaque pack, comme pour une pull request.
-5. Chaque pack est commité par github-actions[bot] avec le message « Add the <name> pack », puis
+5. Chaque pack est commité par github-actions[bot] avec le message `Add the <name> pack`, puis
    poussé sur `main`.
 6. Ce n'est qu'ensuite que `community done` signale au service que le pack est publié. Une
    vérification ou un push qui échoue laisse le pack en attente auprès du service, et l'exécution
@@ -164,8 +164,8 @@ quand il est surchargé, et il désactive la planification dans un dépôt sans 
 
 Le workflow a besoin de la clé de signature du mainteneur, c'est-à-dire du fichier entier écrit par
 `community keygen`, dans le secret de dépôt `FOLDERSKIN_ADMIN_KEY`. Sans elle, les packs approuvés
-attendent auprès du service, et l'exécution le signale. La variable de dépôt
-`REQUIRE_GENERATED_IDS`, réglée sur `true`, fait refuser par chaque vérification tout pack sans
+attendent auprès du service, et l'exécution le signale. Réglée sur `true`, la
+variable de dépôt `REQUIRE_GENERATED_IDS` fait refuser, à chaque vérification, tout pack sans
 identifiant généré.
 
 La récupération à la main fonctionne toujours. `community pull` écrit les packs et prévient aussitôt
@@ -251,7 +251,7 @@ lieu d'être ignorée.
 | tags | lettres minuscules, chiffres, espaces et tirets, 24 caractères au maximum |
 | `pack.json` | 64 Ko au maximum |
 
-Pourquoi 50 et 64 Mo : un pack est une série sur un thème, et chaque personne qui l'ajoute le
+Pourquoi 50 et 64 Mo : un pack est une série thématique, et chaque personne qui l'ajoute le
 télécharge en entier. Cinquante habillages restent rapides à relire, et 64 Mo contiennent les
 cinquante à 1,3 Mo l'image, ou quarante-deux à la taille maximale.
 
@@ -262,16 +262,16 @@ vous-même](#vérifier-un-pack-vous-même)), et le service communautaire n'accep
 
 ### Images
 
-Chaque image appartient à l'une de deux catégories, distinguées de la même façon que pour une image
-déposée sur la fenêtre :
+Chaque image appartient à l'une des deux catégories suivantes, distinguées de la même façon que pour
+une image déposée sur la fenêtre :
 
 - **Un dossier fini**, sur fond transparent ou sur un magenta uni `#FF00FF` que FolderSkin retire.
   Il devient l'icône exactement tel qu'il est dessiné.
 - **Tout le reste** est plaqué sur le dossier de FolderSkin. [SKINS.md](SKINS.md) montre où le
   dossier recadre une image, pour que le sujet reste visible.
 
-1024 px est la plus grande icône que dessine chacun des trois systèmes : une image plus grande
-n'apporte rien.
+Aucun des trois systèmes ne dessine d'icône de plus de 1024 px : une image plus grande n'apporte
+rien.
 
 Chaque image est sans perte, si bien qu'un pack s'affiche exactement tel qu'il a été créé : pas de
 blocs dans un dégradé, pas de halos autour des lettres, et un bord de dossier fini aussi net qu'au
@@ -373,8 +373,8 @@ a pris chaque image. Les habillages prennent le nom de leurs fichiers : nommez 
 d'abord, ou corrigez les noms dans `pack.json` ensuite. `--preview` dessine chaque habillage sous
 forme de dossier dans un seul PNG, pour tout passer en revue.
 
-À partir de deux dossiers finis, ils reçoivent une seule forme ([Une seule forme pour les dossiers
-d'un pack](#une-seule-forme-pour-les-dossiers-dun-pack)), et le rapport indique lesquels ont été
+Dès qu'un pack compte deux dossiers finis ou plus, ceux-ci reçoivent une seule forme ([Une seule
+forme pour les dossiers d'un pack](#une-seule-forme-pour-les-dossiers-dun-pack)), et le rapport indique lesquels ont été
 redessinés. Un dossier qui s'écarte de plus de 8 % de la forme des autres est écarté, et le rapport
 précise de combien. `--keep-outliers` le garde plutôt tel quel. Un pack créé sans garder
 d'exception passe `packs check --require-one-shape`.
@@ -385,8 +385,8 @@ ajouté reçoivent la nouvelle version comme une mise à jour. Le nouveau dossie
 vérifié à part, et ne prend la place de l'ancien que s'il passe les vérifications. Sans `--id`,
 `packs make` crée toujours un nouveau pack.
 
-Les modèles d'image à qui l'on demande du `#FF00FF` peignent souvent à la place un framboise ou un
-rose vif uniformes (Grok l'a fait pour le pack Classic Art). `--flat-backdrop` retire un fond uni de
+Les modèles d'image à qui l'on demande du `#FF00FF` peignent souvent à la place un aplat framboise
+ou rose vif (Grok l'a fait pour le pack Classic Art). `--flat-backdrop` retire un fond uni de
 n'importe quelle couleur : il mesure le fond propre à chaque image, n'enlève que ce qui touche le
 bord (une cape rouge à l'intérieur du dossier reste donc en place), emporte au passage une ombre
 portée douce, et donne au bord les couleurs du tableau plutôt qu'un liseré rose. Sur un fond gris ou
@@ -412,7 +412,7 @@ cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 La commande vérifie chaque dossier de `packs/` avec les règles qu'utilise l'app, et décrit chaque
 problème en une phrase. Lancée dans un clone de folderskin-community, elle peut se passer de
 `--dir` : les outils regardent par défaut dans le dossier courant. Elle limite chaque image aux
-2 Mo sous lesquels les packs publiés avant la 0.1.7 ont été créés, et les images de chaque pack à
+2 Mo qui s'appliquaient aux packs publiés avant la 0.1.7, et les images de chaque pack à
 64 Mo au total. `--require-lossless` soumet chaque image aux règles que suivent les nouveaux packs :
 PNG ou WebP sans perte, 1,5 Mo au maximum, c'est-à-dire ce qu'accepte le service communautaire et
 ce qu'écrit `packs make`. Cette option est désactivée sauf demande, le temps que les anciens packs

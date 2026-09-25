@@ -12,7 +12,7 @@
 
 **Dale un aspecto a cualquier carpeta.**
 
-Tus mejores recuerdos llevan la misma carpeta sin gracia que tus papeles viejos. FolderSkin le da a
+Tus mejores recuerdos viven en la misma carpeta sin gracia que tus viejos papeles. FolderSkin le da a
 cada carpeta un aspecto que va con lo que guarda: un fotograma de cine a la hora dorada para las
 fotos del verano, un póster de viaje vintage para una escapada, pop art para un proyecto de video,
 pasteles suaves para un cumpleaños. Suelta una carpeta en la ventana, pruébale aspectos y aplica el
@@ -90,10 +90,10 @@ paquete se añade entero o no se añade, y siempre puedes llenar la biblioteca m
 1. Arrastra una carpeta al panel de la carpeta, a la derecha, o haz clic en la carpeta vacía para
    elegir una.
 2. Haz clic en un aspecto de la biblioteca para probarlo. El panel de la carpeta muestra el
-   resultado al instante. En la barra lateral eliges **Todos los aspectos**, **Mis aspectos** o
-   **Favoritos**, las etiquetas de arriba acotan la lista y ⌘F / Ctrl+F busca.
-3. Haz clic en **Aplicar aspecto**. La carpeta queda marcada como **Aplicado** y **Mostrar en
-   Finder** la abre.
+   resultado al instante. En la barra lateral, elige **Todos los aspectos**, **Mis aspectos** o
+   **Favoritos**. Las etiquetas de arriba acotan la lista y ⌘F / Ctrl+F busca.
+3. Haz clic en **Aplicar aspecto**. La carpeta muestra **Aplicado** y **Mostrar en Finder** la
+   abre.
 4. Haz clic en **Restaurar** para volver a poner el icono predeterminado del sistema operativo. Si
    la carpeta ya tiene un icono personalizado, en cuanto la eliges aparece **Quitar el icono
    personalizado**.
@@ -102,18 +102,18 @@ Para darles el mismo aspecto a las carpetas que contiene, activa **Incluir subca
 nombre de la carpeta. Primero las cuenta (en todos los niveles, sin las carpetas ocultas ni las
 apps), y el botón pasa a ser **Aplicar a 25 carpetas**, o las que haya. Si son más de diez, te
 pregunta antes de empezar. El panel de la carpeta muestra cada carpeta a medida que termina,
-**Detener** para el proceso después de la carpeta en curso, y el resumen indica qué cambió, qué
+**Detener** termina el proceso después de la carpeta en curso, y el resumen indica qué cambió, qué
 carpetas no se pudieron cambiar y por qué, y te ofrece continuar o volver a intentarlo con esas.
 **Restaurar todo** quita exactamente lo que puso el proceso.
 
 Para usar tu propia imagen, suéltala en la ventana o haz clic en **Añadir tu foto**. Se guarda en
-**Mis aspectos** y se queda ahí hasta que la borres, y FolderSkin te lo pregunta antes. Una carpeta
+**Mis aspectos** y se queda ahí hasta que la borres (FolderSkin te pide confirmación antes). Una carpeta
 terminada sobre un fondo magenta liso, como las que produce el prompt para chat de más abajo, se
 recorta y se usa tal cual. Cualquier otra imagen se coloca sobre la carpeta de FolderSkin.
 
-Cada aspecto que añades tiene un menú ⋯: cámbiale el nombre (un doble clic en el nombre, o F2, te
-lleva directo ahí), ponle etiquetas (se convierten en filtros en la parte de arriba), mira cómo se
-hizo (el modelo de IA y el prompt, o el paquete y quién lo compartió), compártelo o bórralo. Los
+Cada aspecto que añades tiene un menú ⋯ para cambiarle el nombre (un doble clic en el nombre, o F2,
+te lleva directo ahí), ponerle etiquetas (se convierten en filtros en la parte de arriba), ver cómo
+se hizo (el modelo de IA y el prompt, o el paquete y quién lo compartió), compartirlo o borrarlo. Los
 resultados de la IA llegan ya etiquetados con su estilo, como `airbrush`.
 
 **Ajustes**, al final de la barra lateral, reúne el tema, tus claves de API, los datos que se
@@ -200,7 +200,7 @@ Una serie temática, como carpetas en 3D renderizadas con un modelo de imagen, s
 paquete de la comunidad con un solo comando. Los paquetes viven en su propio repositorio,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community): clónalo junto a este.
 `folderskin-tools packs make` recorta las carpetas terminadas de su fondo magenta (`--flat-backdrop`
-para cualquier otro fondo liso, como un magenta que derivó a rosa o un gris liso), reduce y comprime
+para cualquier otro fondo liso, como un magenta que viró a rosa o un gris liso), reduce y comprime
 cada imagen para que quepa en los límites, les da una sola forma a las carpetas terminadas y escribe
 `pack.json`:
 
@@ -252,7 +252,7 @@ Gratis · Código abierto · Sin cuenta · Sin rastreo
 | Linux · x86_64 | AppImage, DEB o RPM | [![Descargar para Linux](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest) |
 | Linux · ARM64 | AppImage, DEB o RPM | [![Descargar para Linux](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest) |
 
-La app de macOS está firmada y notarizada por Apple, así que se abre como cualquier otra. El
+La app de macOS está firmada y notarizada por Apple, por lo que se abre como cualquier otra. El
 instalador de Windows todavía no está firmado, así que SmartScreen pregunta antes: elige “Más
 información” y luego “Ejecutar de todas formas”. Las versiones para Linux necesitan glibc 2.35 o
 posterior (Ubuntu 22.04, Debian 12, Fedora 36 y posteriores).

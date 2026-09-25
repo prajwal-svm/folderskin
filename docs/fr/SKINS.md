@@ -96,8 +96,8 @@ lui-même.
 ## Images pour un pack
 
 Les images d'un pack sont partagées sans perte : un pack s'affiche exactement tel que vous l'avez
-créé. [PACKS.md](PACKS.md) donne les limites : 1024 px de côté au maximum (la plus grande icône que
-dessine chacun des trois systèmes), 256 au minimum, 1,5 Mo au maximum par image et 64 Mo pour tout
+créé. [PACKS.md](PACKS.md) donne les limites : 1024 px de côté au maximum (aucun des trois systèmes ne
+dessine d'icône plus grande), 256 au minimum, 1,5 Mo au maximum par image et 64 Mo pour tout
 le pack. L'app et `packs make` réduisent et encodent chaque image pour vous, en WebP sans perte :
 
 | image | format | pourquoi |
