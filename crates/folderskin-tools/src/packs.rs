@@ -232,6 +232,7 @@ pub fn write_index(
     let index = Index {
         version: INDEX_VERSION,
         packs: entries,
+        moved: Default::default(),
     };
     let json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())? + "\n";
     write_if_changed(&dir.join(INDEX_FILE), json.as_bytes(), &mut changes)?;

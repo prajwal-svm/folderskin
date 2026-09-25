@@ -1805,6 +1805,7 @@ pub(crate) mod tests {
             featured: Vec::new(),
             official: Vec::new(),
             mirrors: Vec::new(),
+            moved: Default::default(),
         };
         serve(format!("/v2/{}", tree::catalog_path(&generation)), gz);
         serve("/v2/head.json".into(), serde_json::to_vec(&head).unwrap());

@@ -1357,6 +1357,7 @@ dependencies = [
 name = "folderskin-core"
 version = "0.1.6"
 dependencies = [
+ "getrandom 0.3.4",
  "image",
  "libc",
  "objc2",

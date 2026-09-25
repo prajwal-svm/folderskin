@@ -15,6 +15,7 @@
 
 use folderskin_core::pack::{self, Pack, PackSkin};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::io::{Read, Write};
 
 /// The version `head.json` declares, and the name of the folder the tree sits in.
@@ -57,6 +58,10 @@ pub struct Head {
     /// Other places serving this same tree, tried in order before the one `head.json` came from.
     #[serde(default)]
     pub mirrors: Vec<String>,
+    /// Packs whose ids changed (`moved.json` beside `packs/`), each old id to the one it has now,
+    /// so an app can follow a pack it added under an old id. Left out when none has.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub moved: BTreeMap<String, String>,
 }
 
 /// Where the catalog is and how to know it arrived whole.
@@ -104,6 +109,15 @@ impl Head {
     /// The official ids that are pack ids, in order, without repeats.
     pub fn official_ids(&self) -> Vec<String> {
         pack_ids(&self.official)
+    }
+
+    /// The id pack `id` has now: where `moved` says it went, or `id` itself. An entry that
+    /// isn't two pack ids is passed over rather than followed.
+    pub fn current_id<'a>(&'a self, id: &'a str) -> &'a str {
+        match self.moved.get(id) {
+            Some(to) if pack::is_pack_id(id) && pack::is_pack_id(to) => to,
+            _ => id,
+        }
     }
 }
 
@@ -315,6 +329,24 @@ mod tests {
   "official": ["classic-art", "Not An Id", "classic-art"], "mirrors": [] }}"#,
             "a".repeat(64)
         )
+    }
+
+    #[test]
+    fn a_head_follows_packs_that_moved_and_leaves_the_field_out_when_none_did() {
+        let with = head("catalog/0123456789abcdef.sqlite.gz").replace(
+            r#""mirrors": []"#,
+            r#""mirrors": [], "moved": { "classic-art": "classic-art-k7q2mx", "Bad Id": "colours-k7q2mx", "colours": "../up" }"#,
+        );
+        let h = Head::parse(with.as_bytes()).unwrap();
+        assert_eq!(h.current_id("classic-art"), "classic-art-k7q2mx");
+        assert_eq!(h.current_id("greek-art"), "greek-art");
+        // Entries that aren't two pack ids are passed over, not followed.
+        assert_eq!(h.current_id("Bad Id"), "Bad Id");
+        assert_eq!(h.current_id("colours"), "colours");
+        // A head written with nothing moved has no "moved" at all, as before there was one.
+        let none = Head::parse(head("catalog/0123456789abcdef.sqlite.gz").as_bytes()).unwrap();
+        assert!(none.moved.is_empty());
+        assert!(!serde_json::to_string(&none).unwrap().contains("moved"));
     }
 
     #[test]
