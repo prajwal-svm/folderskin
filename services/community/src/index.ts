@@ -4,12 +4,14 @@
  *
  * The app verifies the computer once (a Turnstile check in the browser, bound to the computer's
  * Ed25519 key), then sends packs here, signed with that key. Every pack waits in a private bucket
- * until the maintainer approves it; approved packs are pulled into folderskin-community's packs/ with
- * `folderskin-tools community pull` and published the same way every other pack is.
+ * until the maintainer approves it. Approval gives it an id of its own and asks
+ * folderskin-community's workflow to publish it (publish.ts), which pulls it into packs/ with
+ * `folderskin-tools community pull` and publishes it the same way every other pack is.
  *
  * Built for the Workers free plan: no picture is ever decoded here (10 ms of CPU per request), the
  * quotas and the global daily cap keep D1 and R2 inside their free allowances, and a burst limit
- * sits in front of all of it. Cloudflare's own network absorbs floods before they get this far.
+ * sits in front of all of it. Refusals turn into waits that double and into bans (penalties.ts),
+ * and Cloudflare's own network absorbs floods before they get this far.
  */
 import * as account from "./account";
 import * as admin from "./admin";
@@ -19,7 +21,9 @@ import { errorResponse, fail, html, HttpError } from "./http";
 import * as installs from "./installs";
 import { networkHash } from "./ip";
 import { verifyPage, VERIFY_SCRIPT } from "./pages";
+import { burstStrike } from "./penalties";
 import { actOnLink, linkSheet, showLink } from "./phone";
+import * as publish from "./publish";
 import { report } from "./reports";
 import * as submissions from "./submissions";
 
@@ -42,6 +46,7 @@ const ROUTES: Route[] = [
   ["POST", new RegExp(`^/v1/submissions/${ID}/finalize$`), (req, env, ctx, [id]) => submissions.finalize(req, env, ctx, id)],
   ["DELETE", new RegExp(`^/v1/packs/${ID}$`), (req, env, ctx, [id]) => submissions.remove(req, env, ctx, id)],
   ["POST", /^\/v1\/reports$/, (req, env, ctx) => report(req, env, ctx)],
+  ["GET", /^\/v1\/exports\/pending$/, (_, env) => publish.pending(env)],
   ["GET", /^\/v1\/packs\/installs$/, (req, env) => installs.counts(req, env)],
   ["OPTIONS", /^\/v1\/packs\/installs$/, (req) => installs.preflight(req)],
   ["POST", /^\/v1\/packs\/([^/]{1,100})\/installs$/, (req, env, _, [id]) => installs.count(req, env, id)],
@@ -50,20 +55,26 @@ const ROUTES: Route[] = [
   ["GET", new RegExp(`^/v1/admin/submissions/${ID}$`), (req, env, _, [id]) => admin.detail(req, env, id)],
   ["GET", new RegExp(`^/v1/admin/submissions/${ID}/items/([0-9a-f]{64})$`), (req, env, _, [id, sha]) => admin.item(req, env, id, sha)],
   ["GET", new RegExp(`^/v1/admin/submissions/${ID}/sheets/([0-3])$`), (req, env, _, [id, n]) => admin.sheet(req, env, id, Number(n))],
-  ["POST", new RegExp(`^/v1/admin/submissions/${ID}/decision$`), (req, env, _, [id]) => admin.decision(req, env, id)],
+  ["POST", new RegExp(`^/v1/admin/submissions/${ID}/decision$`), (req, env, ctx, [id]) => admin.decision(req, env, ctx, id)],
   ["POST", new RegExp(`^/v1/admin/submissions/${ID}/takedown$`), (req, env, _, [id]) => admin.takeDown(req, env, id)],
   ["POST", /^\/v1\/admin\/keys\/([A-Za-z0-9_-]{43})\/tier$/, (req, env, _, [key]) => admin.setTier(req, env, key)],
+  ["POST", /^\/v1\/admin\/keys\/([A-Za-z0-9_-]{43})\/unban$/, (req, env, _, [key]) => admin.unbanKey(req, env, key)],
+  ["POST", /^\/v1\/admin\/networks\/([0-9a-f]{32})\/unban$/, (req, env, _, [network]) => admin.unbanNetwork(req, env, network)],
   ["POST", /^\/v1\/admin\/pause$/, (req, env) => admin.pause(req, env)],
   ["GET", /^\/v1\/admin\/exports$/, (req, env) => admin.exportList(req, env)],
   ["GET", new RegExp(`^/v1/admin/exports/${ID}/pack\\.json$`), (req, env, _, [id]) => admin.exportManifest(req, env, id)],
   ["GET", new RegExp(`^/v1/admin/exports/${ID}/files/([A-Za-z0-9._-]{1,64})$`), (req, env, _, [id, file]) => admin.exportFile(req, env, id, file)],
   ["POST", new RegExp(`^/v1/admin/exports/${ID}/done$`), (req, env, _, [id]) => admin.exportDone(req, env, id)],
   ["GET", /^\/v1\/admin\/reports$/, (req, env) => admin.reports(req, env)],
+  ["PUT", /^\/v1\/admin\/tree\/([^?#]{1,300})$/, (req, env, _, [path]) => publish.putTree(req, env, path)],
 
   ["GET", /^\/l\/([A-Za-z0-9._-]{1,300})\/sheets\/([0-3])$/, (_, env, __, [token, n]) => linkSheet(env, token, Number(n))],
   ["GET", /^\/l\/([A-Za-z0-9._-]{1,300})$/, (_, env, __, [token]) => showLink(env, token)],
-  ["POST", /^\/l\/([A-Za-z0-9._-]{1,300})$/, (req, env, __, [token]) => actOnLink(req, env, token)],
+  ["POST", /^\/l\/([A-Za-z0-9._-]{1,300})$/, (req, env, ctx, [token]) => actOnLink(req, env, ctx, token)],
 ];
+
+/** Whether a request sends a pack, and so is held back while its key or network is cooling down (penalties.ts). */
+const sharing = (method: string, pathname: string) => (method === "POST" || method === "PUT") && pathname.startsWith("/v1/submissions");
 
 function script(source: string): Response {
   return new Response(source, {
@@ -79,11 +90,15 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   const { pathname } = new URL(request.url);
   // A burst limit per network before anything else, the database included. Its key needs IP_SALT;
   // the install counts need nothing but D1, so they go without the limit until IP_SALT is set,
-  // rather than answer "not set up" to the website.
+  // rather than answer "not set up" to the website. A sharing request it turns away is a strike on
+  // the network, which only writes when the network isn't cooling down already.
   const open = pathname === installs.COUNTS_PATH && !env.IP_SALT;
   if (env.BURST && pathname !== "/" && !open) {
     const { success } = await env.BURST.limit({ key: await networkHash(env, request) });
-    if (!success) throw fail(429, "slow_down", "Too many requests from your network. Wait a minute and try again.", { "Retry-After": "60" });
+    if (!success) {
+      if (sharing(request.method, pathname)) await burstStrike(env, request);
+      throw fail(429, "slow_down", "Too many requests from your network. Wait a minute and try again.", { "Retry-After": "60" });
+    }
   }
   let allowed = false;
   for (const [method, pattern, handler] of ROUTES) {

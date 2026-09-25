@@ -12,6 +12,11 @@
  * one can't be sent twice. The verification link from the app is signed the same
  * way over a message that starts with "verify|", which no method name does, so neither signature
  * can stand in for the other. crates/folderskin-share makes these signatures in Rust.
+ *
+ * A body too large to read here (a catalog file, up to 64 MB) is signed the same way, with its
+ * SHA-256 also sent as X-Content-SHA256: the signature is checked against that, and whatever
+ * stores the body checks the bytes against it, so the Worker never reads or hashes them
+ * (verifySignedDigest).
  */
 import { fromB64url, sha256Hex, now } from "./bytes";
 import type { Env } from "./env";
@@ -63,6 +68,38 @@ export async function verifySigned<T>(
   maxBody: number,
   allow: (key: string) => Promise<T> | T,
 ): Promise<SignedRequest & { signer: T }> {
+  const head = signedHeaders(request);
+  // Only once the headers are in order: an unsigned upload is turned away before it is read.
+  const body = await readBody(request, maxBody);
+  const digest = await sha256Hex(body);
+  const signer = await accept(request, env, head, digest, allow);
+  return { key: head.key, body, digest, signer };
+}
+
+/**
+ * Like `verifySigned`, for a body too large to read here: the signature is checked against the
+ * SHA-256 that X-Content-SHA256 declares, and the body is left unread for the caller to stream to
+ * storage that holds it to that digest (R2's `sha256`). A body that isn't the one signed for is
+ * then turned away by the storage, as surely as by a hash worked out here.
+ */
+export async function verifySignedDigest<T>(
+  request: Request,
+  env: Env,
+  allow: (key: string) => Promise<T> | T,
+): Promise<{ key: string; digest: string; signer: T }> {
+  const head = signedHeaders(request);
+  const digest = request.headers.get("X-Content-SHA256") ?? "";
+  if (!/^[0-9a-f]{64}$/.test(digest)) {
+    throw fail(400, "bad_digest", "Say the body's SHA-256 in X-Content-SHA256, as 64 lower-case hex digits.");
+  }
+  const signer = await accept(request, env, head, digest, allow);
+  return { key: head.key, digest, signer };
+}
+
+type SignedHeaders = { key: string; sig: string; ts: number };
+
+/** The signing headers, once they are all there and the time in them is near enough to ours. */
+function signedHeaders(request: Request): SignedHeaders {
   const key = request.headers.get("X-FS-Key") ?? "";
   const sig = request.headers.get("X-FS-Sig") ?? "";
   const tsText = request.headers.get("X-FS-Ts") ?? "";
@@ -77,10 +114,12 @@ export async function verifySigned<T>(
       "X-FS-Time": String(time),
     });
   }
-  // Only once the headers are in order: an unsigned upload is turned away before it is read.
-  const body = await readBody(request, maxBody);
+  return { key, sig, ts };
+}
+
+/** Checks the signature over the request and `digest`, asks `allow`, and remembers a request that changes something. */
+async function accept<T>(request: Request, env: Env, { key, sig, ts }: SignedHeaders, digest: string, allow: (key: string) => Promise<T> | T): Promise<T> {
   const url = new URL(request.url);
-  const digest = await sha256Hex(body);
   const message = `${request.method}|${url.pathname}${url.search}|${ts}|${digest}`;
   if (!(await verifySignature(key, sig, message))) {
     throw fail(401, "bad_signature", "That request wasn't signed by this computer's key.");
@@ -95,7 +134,7 @@ export async function verifySigned<T>(
       .run();
     if (fresh.meta.changes !== 1) throw fail(409, "replayed", "That request was already received.");
   }
-  return { key, body, digest, signer };
+  return signer;
 }
 
 /** For `verifySigned` on reads of a key's own data, which any key may ask for. */
@@ -106,6 +145,11 @@ export async function requireAccount(env: Env, key: string): Promise<Account> {
   const account = await env.DB.prepare("SELECT key, handle, tier, approved, rejected FROM keys WHERE key = ?1")
     .bind(key)
     .first<Account>();
+  return allowedAccount(account);
+}
+
+/** `account` when it may act at all: a key that isn't verified, or is banned for good, is turned away. */
+export function allowedAccount(account: Account | null): Account {
   if (!account) throw fail(403, "not_verified", "This computer hasn't been verified yet. Verify it in FolderSkin first.");
   if (account.tier === "banned") {
     throw fail(403, "banned", "This computer can't share packs any more, because a pack from it broke the pack terms.");

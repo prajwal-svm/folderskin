@@ -1,6 +1,7 @@
 /**
  * Answers and errors. Every error the app can see is `{"error": {"code", "message"}}`, and the
- * message is a sentence it can show as it is.
+ * message is a sentence it can show as it is. A refusal that ends at a known time also says in
+ * how many seconds, as `retry_after`.
  */
 
 export class HttpError extends Error {
@@ -9,13 +10,15 @@ export class HttpError extends Error {
     readonly code: string,
     message: string,
     readonly headers: Record<string, string> = {},
+    /** Seconds until the request can succeed, for a refusal that runs out. */
+    readonly retryAfter?: number,
   ) {
     super(message);
   }
 }
 
-export const fail = (status: number, code: string, message: string, headers: Record<string, string> = {}) =>
-  new HttpError(status, code, message, headers);
+export const fail = (status: number, code: string, message: string, headers: Record<string, string> = {}, retryAfter?: number) =>
+  new HttpError(status, code, message, headers, retryAfter);
 
 /** Headers every answer carries: nothing is cached on the way, and nothing may frame or sniff it. */
 const COMMON: Record<string, string> = {
@@ -32,7 +35,8 @@ export function json(value: unknown, status = 200, headers: Record<string, strin
 }
 
 export function errorResponse(e: HttpError): Response {
-  return json({ error: { code: e.code, message: e.message } }, e.status, e.headers);
+  const later = e.retryAfter === undefined ? {} : { retry_after: e.retryAfter };
+  return json({ error: { code: e.code, message: e.message, ...later } }, e.status, e.headers);
 }
 
 /**

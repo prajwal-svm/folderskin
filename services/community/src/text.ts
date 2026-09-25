@@ -4,7 +4,10 @@
  */
 import { englishDataset, englishRecommendedTransformers, RegExpMatcher } from "obscenity";
 import {
+  ID_BASE_CHARS,
+  ID_SUFFIX_CHARS,
   LICENSES,
+  MAX_PACK_ID_CHARS,
   MAX_PACK_NAME_CHARS,
   MAX_PACK_TAGS,
   MAX_SKIN_NAME_CHARS,
@@ -104,10 +107,10 @@ export function handleProblem(name: unknown): string | null {
 
 /** A pack's folder name (`pack::is_pack_id`): lower-case letters and digits in words joined by single dashes, at most 40 characters. */
 export function isPackId(id: unknown): id is string {
-  return typeof id === "string" && id.length <= 40 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(id) && !isWindowsDeviceName(id);
+  return typeof id === "string" && id.length <= MAX_PACK_ID_CHARS && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(id) && !isWindowsDeviceName(id);
 }
 
-/** The folder name a pack gets from its name (`pack::slug`). */
+/** A pack's name as a pack id would start (`pack::slug`): `"Ukiyo-e Nights!"` is `"ukiyo-e-nights"`. */
 export function slug(name: string): string {
   let out = "";
   for (const c of name.toLowerCase()) {
@@ -116,6 +119,42 @@ export function slug(name: string): string {
   }
   const cut = out.replace(/-+$/, "").slice(0, 40).replace(/-+$/, "");
   return isWindowsDeviceName(cut) ? `${cut}-1` : cut;
+}
+
+/** What a generated id's last six characters are drawn from: lower-case base32, like a submission's id. */
+const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+/** How many ids `newPackId` draws before it gives up, which only a `taken` that says yes to everything makes it do. */
+const ID_ATTEMPTS = 100;
+
+/**
+ * A new id for a pack called `name` (`pack::new_id`): the name's slug cut to 33 characters (or
+ * "pack" when it has no letters or digits), a dash, and six characters drawn at random, such as
+ * `classic-art-k7q2mx`. Names can repeat as often as they like; ids never do, since an id `taken`
+ * says is in use is drawn again. With 2^30 endings for each name that practically never happens,
+ * but it is checked all the same. An id never changes once a pack has it, even if the pack is
+ * renamed.
+ */
+export async function newPackId(name: string, taken: (id: string) => boolean | Promise<boolean>): Promise<string> {
+  const base = slug(name).slice(0, ID_BASE_CHARS).replace(/-+$/, "") || "pack";
+  for (let attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
+    // 256 is a multiple of 32, so the low five bits of a random byte are uniform: every character
+    // of the alphabet is exactly as likely as the others, with no modulo bias.
+    let suffix = "";
+    for (const byte of crypto.getRandomValues(new Uint8Array(ID_SUFFIX_CHARS))) suffix += ID_ALPHABET[byte & 31];
+    const id = `${base}-${suffix}`;
+    if (isPackId(id) && !(await taken(id))) return id;
+  }
+  throw new Error(`no free pack id for ${base} in ${ID_ATTEMPTS} tries`);
+}
+
+const GENERATED_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-z2-7]{6}$/;
+
+/**
+ * Whether `id` has the shape `newPackId` gives (`pack::is_generated_id`). It is a shape and no
+ * more: an id from before ids were generated can happen to have it, as `night-prints-bright` does.
+ */
+export function isGeneratedId(id: unknown): id is string {
+  return typeof id === "string" && id.length <= MAX_PACK_ID_CHARS && GENERATED_ID.test(id) && isPackId(id);
 }
 
 /**

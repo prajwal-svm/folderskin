@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { sha256Hex } from "../src/bytes";
 import { daily, digest } from "../src/daily";
 import { makeLink } from "../src/links";
+import { forgetPublished } from "../src/published";
 import {
   BASE,
   call,
@@ -20,7 +21,11 @@ import {
   type Device,
 } from "./helpers";
 
+beforeEach(() => forgetPublished());
 afterEach(() => vi.restoreAllMocks());
+
+/** A generated id for a pack of this name: its slug, a dash and six random characters. */
+const idOf = (slug: string) => new RegExp(`^${slug}-[a-z2-7]{6}$`);
 
 let maintainer: Device;
 beforeAll(async () => {
@@ -60,8 +65,11 @@ describe("the maintainer's endpoints", () => {
     expect(queue.submissions.find((s) => s.id === id)).toMatchObject({ handle: "night-painter" });
 
     const approved = await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
-    expect(await approved.json()).toEqual({ status: "approved", pack_id: "night-prints" });
-    expect((await mine(who))[0]).toMatchObject({ id, status: "approved", pack_id: "night-prints" });
+    const { status, pack_id: packId } = (await approved.json()) as { status: string; pack_id: string };
+    expect(status).toBe("approved");
+    expect(packId).toMatch(idOf("night-prints"));
+    expect((await mine(who))[0]).toMatchObject({ id, status: "approved", pack_id: packId });
+    expect((await env.PUBLIC.list({ prefix: `packs/${packId}/` })).objects).toHaveLength(3);
     // Moved, not copied: the private copies of the pictures are gone.
     expect((await env.HOLD.list({ prefix: `hold/${id}/` })).objects.map((o) => o.key)).toEqual([`hold/${id}/sheet-0`]);
 
@@ -87,7 +95,7 @@ describe("the maintainer's endpoints", () => {
     expect(new Uint8Array(await file.arrayBuffer())).toEqual(list[1].bytes);
     expect((await admin("GET", `/v1/admin/exports/${id}/files/..%2Fpack.json`)).status).toBe(404);
 
-    expect(await (await admin("POST", `/v1/admin/exports/${id}/done`, {})).json()).toEqual({ exported: true, folder: "night-prints" });
+    expect(await (await admin("POST", `/v1/admin/exports/${id}/done`, {})).json()).toEqual({ exported: true, folder: packId });
     const after = (await (await admin("GET", "/v1/admin/exports")).json()) as { packs: { id: string }[] };
     expect(after.packs.some((p) => p.id === id)).toBe(false);
 
@@ -95,25 +103,28 @@ describe("the maintainer's endpoints", () => {
     expect(await (await call(await signed(who, "GET", "/v1/me"))).json()).toMatchObject({ tier: "active" });
   });
 
-  it("give a second pack of the same name a folder of its own", async () => {
+  it("give packs of the same name ids of their own, so names can repeat", async () => {
     const one = await author("twin-one");
     const two = await author("twin-two");
     const first = await submit(one, pictures(1, 21), { name: "Twins" });
     const second = await submit(two, pictures(1, 22), { name: "Twins" });
-    expect(await (await admin("POST", `/v1/admin/submissions/${first}/decision`, { decision: "approve" })).json()).toMatchObject({ pack_id: "twins" });
-    expect(await (await admin("POST", `/v1/admin/submissions/${second}/decision`, { decision: "approve" })).json()).toMatchObject({ pack_id: "twins-2" });
+    const approve = async (id: string) =>
+      ((await (await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" })).json()) as { pack_id: string }).pack_id;
+    const ids = [await approve(first), await approve(second)];
+    for (const packId of ids) expect(packId).toMatch(idOf("twins"));
+    expect(ids[0]).not.toBe(ids[1]);
   });
 
   it("turn a pack down with reasons the author reads, and keep its pictures from coming back", async () => {
     const who = await author("rule-breaker");
     const list = pictures(1, 23);
     const id = await submit(who, list);
-    const rejected = await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "reject", reasons: ["sexual"], note: "Not for everyone." });
-    expect(await rejected.json()).toEqual({ status: "rejected" });
+    const rejected = await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "reject", reasons: ["gore"], note: "Not for everyone." });
+    expect(await rejected.json()).toEqual({ status: "rejected", bans: [] });
     expect((await mine(who))[0]).toMatchObject({
       status: "rejected",
       note: "Not for everyone.",
-      reasons: [{ code: "sexual", term: 6, message: "The pictures include sexual or suggestive content." }],
+      reasons: [{ code: "gore", term: 10, message: "The pictures include gore or shocking violence." }],
     });
     expect((await env.HOLD.list({ prefix: `hold/${id}/` })).objects).toEqual([]);
     const later = { ts: Math.floor(Date.now() / 1000) + 1 };
@@ -144,11 +155,12 @@ describe("the maintainer's endpoints", () => {
   it("take an approved pack down from the public bucket", async () => {
     const who = await author("soon-gone");
     const id = await submit(who, pictures(1, 26), { name: "Soon gone" });
-    await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
-    expect((await env.PUBLIC.list({ prefix: "packs/soon-gone/" })).objects).toHaveLength(2);
+    const approved = await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
+    const { pack_id: packId } = (await approved.json()) as { pack_id: string };
+    expect((await env.PUBLIC.list({ prefix: `packs/${packId}/` })).objects).toHaveLength(2);
     const down = await admin("POST", `/v1/admin/submissions/${id}/takedown`, { reasons: ["brand"] });
-    expect(await down.json()).toEqual({ status: "taken_down", pack_id: "soon-gone", exported: false, folder: null });
-    expect((await env.PUBLIC.list({ prefix: "packs/soon-gone/" })).objects).toEqual([]);
+    expect(await down.json()).toEqual({ status: "taken_down", pack_id: packId, exported: false, folder: null, bans: [] });
+    expect((await env.PUBLIC.list({ prefix: `packs/${packId}/` })).objects).toEqual([]);
   });
 
   it("export a pack credited as it was approved, even after its author changes their name", async () => {
@@ -164,13 +176,15 @@ describe("the maintainer's endpoints", () => {
     expect(manifest.author).toBe("first-name");
   });
 
-  it("go by the folder a pack was pulled into when a pack from GitHub had its name", async () => {
+  it("go by the folder a pack was pulled into when an older pull wrote it somewhere else", async () => {
     const who = await author("clash-author");
     const id = await submit(who, pictures(1, 51), { name: "Sky moods" });
-    expect(await (await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" })).json()).toMatchObject({ pack_id: "sky-moods" });
+    const approved = await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
+    const { pack_id: packId } = (await approved.json()) as { pack_id: string };
+    expect(packId).toMatch(idOf("sky-moods"));
     const bad = await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "../sky-moods" });
     expect((await errorOf(bad)).code).toBe("bad_folder");
-    // `pull` found packs/sky-moods taken by a pack from GitHub, and wrote sky-moods-2.
+    // A folderskin-tools from before generated ids numbered the name it found taken, and says so.
     const done = await admin("POST", `/v1/admin/exports/${id}/done`, { folder: "sky-moods-2" });
     expect(await done.json()).toEqual({ exported: true, folder: "sky-moods-2" });
     expect((await mine(who))[0]).toMatchObject({ id, status: "approved", pack_id: "sky-moods-2", pulled: true });
@@ -185,7 +199,7 @@ describe("the maintainer's endpoints", () => {
     expect(await aboutOf(`${repo}/sky-moods-2/`)).toBe(id);
 
     const down = await admin("POST", `/v1/admin/submissions/${id}/takedown`, { reasons: ["brand"] });
-    expect(await down.json()).toEqual({ status: "taken_down", pack_id: "sky-moods", exported: true, folder: "sky-moods-2" });
+    expect(await down.json()).toEqual({ status: "taken_down", pack_id: packId, exported: true, folder: "sky-moods-2", bans: [] });
   });
 
   it("tell the maintainer at once when a pack already in the repository is withdrawn", async () => {
@@ -241,7 +255,9 @@ describe("phone links", () => {
     const form = new FormData();
     form.set("decision", "approve");
     const done = await call(new Request(`${BASE}${path}`, { method: "POST", body: form }));
-    expect(await done.text()).toContain("published as phone-pack");
+    const { pack_id: packId } = (await mine(who))[0] as { pack_id: string };
+    expect(packId).toMatch(idOf("phone-pack"));
+    expect(await done.text()).toContain(`approved as ${packId}.`);
     expect((await mine(who))[0]).toMatchObject({ status: "approved" });
 
     const again = await call(new Request(`${BASE}${path}`, { method: "POST", body: form }));
@@ -265,10 +281,11 @@ describe("phone links", () => {
   it("take a reported pack down without the maintainer's signing key", async () => {
     const who = await author("reported-one");
     const id = await submit(who, pictures(1, 32), { name: "Reported" });
-    await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
+    const approved = await admin("POST", `/v1/admin/submissions/${id}/decision`, { decision: "approve" });
+    const { pack_id: packId } = (await approved.json()) as { pack_id: string };
 
     const hook = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
-    const report = await call(postJson("/v1/reports", { target: "https://example.com/packs/reported", reason: "csam", details: "Please look." }), {
+    const report = await call(postJson("/v1/reports", { target: `https://example.com/packs/${packId}`, reason: "csam", details: "Please look." }), {
       NOTIFY_WEBHOOK_URL: "https://ntfy.sh/folderskin-secret-topic",
     });
     expect(report.status).toBe(201);
@@ -286,8 +303,12 @@ describe("phone links", () => {
     form.set("decision", "takedown");
     form.set("reason", "minor");
     const done = await call(new Request(`${BASE}${new URL(takedown).pathname}`, { method: "POST", body: form }));
-    expect(await done.text()).toContain("gone from FolderSkin");
-    expect((await env.PUBLIC.list({ prefix: "packs/reported/" })).objects).toEqual([]);
+    const page = await done.text();
+    expect(page).toContain("gone from FolderSkin");
+    // A child in the pictures is abuse, whether the box was ticked or not.
+    expect(page).toContain("The computer that sent it is banned for good: its pack was turned down as abuse.");
+    expect(page).toContain("Its network is banned for 30 days: a pack turned down as abuse came from it.");
+    expect((await env.PUBLIC.list({ prefix: `packs/${packId}/` })).objects).toEqual([]);
     expect(await (await call(await signed(who, "GET", "/v1/me"))).json()).toMatchObject({ tier: "banned" });
   });
 

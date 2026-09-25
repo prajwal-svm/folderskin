@@ -2,19 +2,25 @@
  * The maintainer's side, every request signed by a key in ADMIN_KEYS (`folderskin-tools community`
  * makes them):
  *
- *   GET  /v1/admin/queue                              packs waiting, flagged first
+ *   GET  /v1/admin/queue                              packs waiting, flagged first, and the bans in force
  *   GET  /v1/admin/submissions/<id>                   one pack: flags, reports, pictures
  *   GET  /v1/admin/submissions/<id>/items/<sha256>    a picture
  *   GET  /v1/admin/submissions/<id>/sheets/<n>        a contact sheet
- *   POST /v1/admin/submissions/<id>/decision          {"decision": "approve" | "reject", "reasons", "note"}
- *   POST /v1/admin/submissions/<id>/takedown          {"reasons", "note"}
+ *   POST /v1/admin/submissions/<id>/decision          {"decision": "approve" | "reject", "reasons", "note", "ban"}
+ *   POST /v1/admin/submissions/<id>/takedown          {"reasons", "note", "ban"}
  *   POST /v1/admin/keys/<key>/tier                    {"tier"}
+ *   POST /v1/admin/keys/<key>/unban                   lifts every ban on a computer
+ *   POST /v1/admin/networks/<network>/unban           lifts a network's ban (the queue lists them)
  *   POST /v1/admin/pause                              {"paused", "message"}: the kill switch
  *   GET  /v1/admin/exports                            approved packs not yet pulled into the repository
  *   GET  /v1/admin/exports/<id>/pack.json             …and each one's files, for `community pull`
  *   GET  /v1/admin/exports/<id>/files/<file>
  *   POST /v1/admin/exports/<id>/done                  {"folder"}: the folder it was written to
  *   GET  /v1/admin/reports?days=<n>                   reports from the last n days (7 unless said)
+ *   PUT  /v1/admin/tree/<path>                        one file of the catalog, into R2 (publish.ts)
+ *
+ * `"ban": true` turns a pack down as abuse: its computer can't share any more, and its network
+ * can't for 30 days (penalties.ts).
  */
 import { isKey, requireAdmin, verifySigned } from "./auth";
 import { now } from "./bytes";
@@ -22,6 +28,7 @@ import type { Env } from "./env";
 import { fail, json, parseJson } from "./http";
 import { isTier, MAX_JSON_BYTES } from "./limits";
 import { record } from "./notify";
+import { currentBans, liftKeyBan, liftNetworkBan } from "./penalties";
 import { setPause } from "./quota";
 import {
   approve,
@@ -50,6 +57,13 @@ function readNote(value: unknown): string {
   if (value === undefined || value === "") return "";
   if (!hasText(value, 500)) throw fail(400, "bad_note", "Keep the note to 500 characters of plain text.");
   return value.trim();
+}
+
+/** Whether a decision turns the pack down as abuse, and bans for it. */
+function readBan(value: unknown): boolean {
+  if (value === undefined || value === false) return false;
+  if (value === true) return true;
+  throw fail(400, "bad_ban", 'Say "ban": true to turn it down as abuse, or leave it out.');
 }
 
 function summary(s: Submission & { handle?: string; tier?: string; reports?: number }) {
@@ -92,7 +106,7 @@ export async function queue(request: Request, env: Env): Promise<Response> {
   )
     .bind(...wanted)
     .all<Submission & { handle: string; tier: string; reports: number }>();
-  return json({ submissions: results.map(summary) });
+  return json({ submissions: results.map(summary), bans: await currentBans(env) });
 }
 
 export async function detail(request: Request, env: Env, id: string): Promise<Response> {
@@ -150,14 +164,19 @@ export async function sheet(request: Request, env: Env, id: string, n: number): 
   return stream(env.HOLD, `hold/${id}/sheet-${n}`);
 }
 
-export async function decision(request: Request, env: Env, id: string): Promise<Response> {
+/** A decision: an approval asks folderskin-community to publish the pack, after the answer; a rejection says what it banned. */
+export async function decision(request: Request, env: Env, ctx: ExecutionContext, id: string): Promise<Response> {
   const signed = await admin(request, env, MAX_JSON_BYTES);
   const body = parseJson(signed.body);
   const note = readNote(body.note);
-  if (body.decision === "approve") return json({ status: "approved", ...(await approve(env, id, note)) });
+  const ban = readBan(body.ban);
+  if (body.decision === "approve") {
+    if (ban) throw fail(400, "bad_ban", 'Only turning a pack down can ban. Leave "ban" out to approve it.');
+    return json({ status: "approved", ...(await approve(env, ctx, id, note)) });
+  }
   if (body.decision === "reject") {
-    await reject(env, id, readReasons(body.reasons), note);
-    return json({ status: "rejected" });
+    const bans = await reject(env, id, readReasons(body.reasons), note, ban);
+    return json({ status: "rejected", bans });
   }
   throw fail(400, "bad_decision", 'Decide "approve" or "reject".');
 }
@@ -165,7 +184,7 @@ export async function decision(request: Request, env: Env, id: string): Promise<
 export async function takeDown(request: Request, env: Env, id: string): Promise<Response> {
   const signed = await admin(request, env, MAX_JSON_BYTES);
   const body = parseJson(signed.body);
-  const result = await takedown(env, id, readReasons(body.reasons), readNote(body.note));
+  const result = await takedown(env, id, readReasons(body.reasons), readNote(body.note), readBan(body.ban));
   return json({ status: "taken_down", ...result });
 }
 
@@ -178,6 +197,25 @@ export async function setTier(request: Request, env: Env, key: string): Promise<
   if (done.meta.changes !== 1) throw fail(404, "not_found", "There's no such key.");
   await record(env, "tier", key, tier);
   return json({ tier });
+}
+
+/**
+ * Lifts every ban on a computer: one for a while, with the marks and strikes behind it, and one for
+ * good, which puts it back on probation. The network its pack came from stays banned until that is
+ * lifted too.
+ */
+export async function unbanKey(request: Request, env: Env, key: string): Promise<Response> {
+  await admin(request, env, MAX_JSON_BYTES);
+  const tier = isKey(key) ? await liftKeyBan(env, key) : null;
+  if (!tier) throw fail(404, "not_found", "There's no such key.");
+  return json({ key, tier, banned: false });
+}
+
+/** Lifts a network's ban, by the id the queue lists it under. */
+export async function unbanNetwork(request: Request, env: Env, network: string): Promise<Response> {
+  await admin(request, env, MAX_JSON_BYTES);
+  await liftNetworkBan(env, network);
+  return json({ network, banned: false });
 }
 
 export async function pause(request: Request, env: Env): Promise<Response> {
@@ -233,9 +271,10 @@ export async function exportFile(request: Request, env: Env, id: string, file: s
 }
 
 /**
- * Records that a pack is in folderskin-community now, and under which folder: `pull` numbers the name
- * when a pack from GitHub has it already, and reports, takedowns and the author all have to go by
- * the folder it is really in.
+ * Records that a pack is in folderskin-community now, and under which folder. That is its id, which
+ * `pull` writes it under or stops; a `pull` from before ids were generated numbered the name when a
+ * pack from GitHub had it already, and reports, takedowns and the author all have to go by the
+ * folder it is really in.
  */
 export async function exportDone(request: Request, env: Env, id: string): Promise<Response> {
   const signed = await admin(request, env, MAX_JSON_BYTES);
