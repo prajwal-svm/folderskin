@@ -50,7 +50,7 @@
     "option": "{{label}}: {{note}}",
     "cc0": "Anyone can use them for anything.",
     "ccBy": "Anyone can use them, and credits you.",
-    "mit": "The same licence as FolderSkin. Your name stays with them."
+    "mit": "Anyone can use them, as long as the licence notice goes with them."
   },
   "control": {
     "typed": "{{name}}, typed",
