@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 
 /**
- * The licences shared skins can use: Creative Commons, or MIT like FolderSkin's own code.
+ * The licences shared skins can use: Creative Commons, or MIT. (FolderSkin's own code is GPL-3.0.)
  * `folderskin_core::pack::LICENSES` is the same list. CC0 comes first: most skins are made with
  * AI, and CC0 claims the least over them. What each lets people do is `common.licences.<key>`.
  */

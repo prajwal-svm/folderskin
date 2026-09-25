@@ -9,6 +9,7 @@ import { LoaderIcon } from "../icons/loader";
 import { PaperclipIcon } from "../icons/paperclip";
 import { SlidersHorizontalIcon } from "../icons/sliders-horizontal";
 import { useT } from "../../i18n";
+import { providerName } from "../../lib/providerNames";
 
 /** How many reference pictures a model takes: several on this computer, one elsewhere, none when it can't. */
 export function refLimit(provider: AiProvider | undefined, model: AiModel | undefined): number {
@@ -68,7 +69,7 @@ export const PromptBox = forwardRef<
     }
   };
   const status = provider?.kind === "local" ? (ready ? t("ai.prompt.status.localReady") : t("ai.prompt.status.localNotReady")) : ready ? t("ai.prompt.status.keySaved") : t("ai.prompt.status.noKey");
-  const where = `${provider?.label ?? ""} · ${model?.label ?? ""}`;
+  const where = `${providerName(provider?.label ?? "")} · ${model?.label ?? ""}`;
   const modelName = model?.label ?? t("ai.prompt.thisModel");
   return (
     <form className={dropping ? "composer is-drop-target" : "composer"} onSubmit={submit} ref={boxRef}>

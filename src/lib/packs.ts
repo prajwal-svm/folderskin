@@ -7,14 +7,9 @@ export const REPO_URL = "https://github.com/prajwal-svm/folderskin";
 export const COMMUNITY_REPO_URL = "https://github.com/prajwal-svm/folderskin-community";
 /** The pack folders, to look through on GitHub. */
 export const PACKS_URL = `${COMMUNITY_REPO_URL}/tree/main/packs`;
-/** FolderSkin's website, where the guides live. */
-export const SITE_URL = "https://folderskin.app";
-/** The pack contract and how to share one. */
-export const PACKS_GUIDE_URL = `${SITE_URL}/docs/packs/`;
-
-/** What someone agrees to before a pack goes up. The version they agree to is the service's
- *  (`ShareStatus.terms_version`), which it records with the pack. */
-export const PACK_TERMS_URL = `${SITE_URL}/docs/pack-terms/`;
+// The guides (the pack contract, the pack terms) are on the website in each language:
+// `docsUrl("packs")` and `docsUrl("pack-terms")` from src/i18n. The version of the terms someone
+// agrees to is the service's (`ShareStatus.terms_version`), which it records with the pack.
 
 /** Most skins in one pack; `folderskin_core::pack::MAX_SKINS` is the same. */
 export const MAX_PACK_SKINS = 50;

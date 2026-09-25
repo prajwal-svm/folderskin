@@ -46,6 +46,7 @@ import { SparklesIcon } from "./icons/sparkles";
 import { StarIcon } from "./icons/star";
 import { SunIcon } from "./icons/sun";
 import { branded } from "./Brand";
+import { providerName } from "../lib/providerNames";
 
 export type SettingsTab = "general" | "ai" | "sharing" | "about";
 
@@ -451,7 +452,7 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
   return (
     <Section
       title={t("settings.ai.title")}
-      find={`${t("settings.ai.find")} ${catalogue?.providers.map((p) => p.label).join(" ") ?? ""}`}
+      find={`${t("settings.ai.find")} ${catalogue?.providers.map((p) => `${p.label} ${providerName(p.label)}`).join(" ") ?? ""}`}
       note={t("settings.ai.note")}
     >
       <div className="set-block">

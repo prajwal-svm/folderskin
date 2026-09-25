@@ -8,6 +8,7 @@ import type { Skin } from "./tauri";
 import { COLOURS, type Palette } from "./palette";
 import { licenseLabel } from "./packs";
 import { getLocale, INTL_LOCALES, t } from "../i18n";
+import { madeWith } from "./providerNames";
 
 export type Sort = "newest" | "oldest" | "az" | "za";
 
@@ -116,6 +117,7 @@ const FACETS: FacetDef[] = [
   {
     id: "model",
     values: (s) => (s.made_with ? [s.made_with] : []),
+    label_of: madeWith,
   },
   {
     id: "author",

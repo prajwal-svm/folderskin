@@ -163,6 +163,7 @@
     "none": "Don't use a folder"
   },
   "local": {
+    "name": "Local Model",
     "looking": "Looking at your machine",
     "aboutLabel": "about the local model",
     "machine": "Machine",
