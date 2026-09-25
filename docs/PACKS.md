@@ -133,7 +133,7 @@ Approving a pack publishes it. Nobody copies files by hand.
    folders](#one-shape-for-a-packs-folders)) before it is checked. A folder too far off that shape
    is kept as it is, and the run's log says so in a warning.
 4. `packs check` checks every pack, as it does for a pull request.
-5. Each pack is committed by github-actions[bot] as "Add the <name> pack", and pushed to `main`.
+5. Each pack is committed by github-actions[bot] as `Add the <name> pack`, and pushed to `main`.
 6. Only then does `community done` tell the service the pack is published. A check or a push that
    fails leaves the pack waiting at the service, and the next run tries it again.
 7. The same run rebuilds `index.json`, the previews and `v2/`, copies `v2/` to the mirror

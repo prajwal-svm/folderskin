@@ -52,7 +52,7 @@ and deleting `keys.json` removes them all.
 
 This is the choice that matters most, and it is not about quality.
 
-**Artwork** asks the model for a flat 1024 × 958 picture and FolderSkin wraps it onto its own
+**Just the art** asks the model for a flat 1024 × 958 picture and FolderSkin wraps it onto its own
 folder template, exactly like a photo you add. The geometry is ours, so every skin lines up with
 every other, at every icon size. Any provider can do this, including the ones with no
 transparency support. This is the default and the right answer most of the time.
@@ -91,7 +91,7 @@ case of a genuinely pink subject on a magenta backdrop.
 `crates/folderskin-ai/src/prompts.rs` composes the prompt from your words plus a contract. The
 parts that do the work are structural rather than stylistic:
 
-- **Artwork prompts** forbid drawing a folder, an icon, a device or a mockup, and reserve the
+- **Just-the-art prompts** forbid drawing a folder, an icon, a device or a mockup, and reserve the
   top eighth and a 6% border as dead space, because the template crops or curves those away.
 - **Whole-folder prompts** pin the construction: exactly three parts, one tab, one visible paper
   edge, one front panel, and an explicit instruction not to add layers. Without that sentence
@@ -126,13 +126,13 @@ fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks with
 | "add your … API key first" | No key saved for that provider |
 | "that key was rejected by …" | The provider returned 401 or 403 |
 | "… is rate limiting you right now" | 429, so wait and try again |
-| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Artwork |
+| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Just the art |
 | "the provider returned something that is not an image" | A malformed or non-image response |
 
 ## Folders made in a chat assistant
 
 You can also paint a whole folder in ChatGPT, Grok or any other chat assistant and bring it in
-with **Your photo**. Ask for the folder on a solid #FF00FF background, or on a transparent one.
+with **Add your photo**. Ask for the folder on a solid #FF00FF background, or on a transparent one.
 FolderSkin recognises either and uses the picture as the icon as it is, cut out and trimmed,
 instead of wrapping it in its own folder a second time. Any other picture is treated as
 artwork for the template. [ARCHITECTURE.md](ARCHITECTURE.md#artwork-or-a-finished-folder) has

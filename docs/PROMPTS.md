@@ -41,7 +41,7 @@ two words, because long text comes out garbled.
 
 ## 3. Bring it into FolderSkin
 
-Save the image, then drop it on the FolderSkin window or use **Your photo**. The magenta is
+Save the image, then drop it on the FolderSkin window or use **Add your photo**. The magenta is
 removed automatically and the folder appears under **Yours**, ready to apply.
 
 If the edges show a pink fringe, the model drifted from pure magenta. Ask it to "repaint the
