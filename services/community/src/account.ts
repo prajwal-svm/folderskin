@@ -111,7 +111,7 @@ export async function verifyKey(request: Request, env: Env): Promise<Response> {
     return json({ handle: existing.handle });
   }
   try {
-    return json({ handle: await claimHandle(env, k, handle, at) }, 201);
+    return json({ handle: await addKey(env, k, handle, at) }, 201);
   } catch (e) {
     await giveItBack();
     throw e;
@@ -151,23 +151,16 @@ async function checkChallenge(env: Env, request: Request, token: string, nonce: 
 const TEST_SECRET = "1x0000000000000000000000000000000AA";
 
 /**
- * Records a new key under `wanted`, or under the first free `wanted-2`, `wanted-3`… if someone
- * has it already. The app shows whichever it got.
+ * Records a new key under the name it asked for. Names repeat as often as people like, the way pack
+ * names do: the key is what tells two people apart, and nobody sees it.
  */
-async function claimHandle(env: Env, key: string, wanted: string, at: number): Promise<string> {
-  for (let n = 1; n <= 20; n++) {
-    const suffix = n === 1 ? "" : `-${n}`;
-    const handle = `${wanted.slice(0, 39 - suffix.length).replace(/-+$/, "")}${suffix}`;
-    const added = await env.DB.prepare(
-      "INSERT INTO keys (key, handle, tier, verified_at) VALUES (?1, ?2, 'probation', ?3) ON CONFLICT DO NOTHING",
-    )
-      .bind(key, handle, at)
-      .run();
-    if (added.meta.changes === 1) return handle;
-    const mine = await env.DB.prepare("SELECT handle FROM keys WHERE key = ?1").bind(key).first<{ handle: string }>();
-    if (mine) return mine.handle;
-  }
-  throw fail(409, "handle_taken", "That name and the ones like it are taken. Choose another in FolderSkin and start again.");
+async function addKey(env: Env, key: string, handle: string, at: number): Promise<string> {
+  await env.DB.prepare("INSERT INTO keys (key, handle, tier, verified_at) VALUES (?1, ?2, 'probation', ?3) ON CONFLICT (key) DO NOTHING")
+    .bind(key, handle, at)
+    .run();
+  // A second check of the same computer that got here first keeps the name it was given.
+  const mine = await env.DB.prepare("SELECT handle FROM keys WHERE key = ?1").bind(key).first<{ handle: string }>();
+  return mine?.handle ?? handle;
 }
 
 /** Who this computer is to the service, and what it has left today. Unverified keys get `verified: false`. */
@@ -207,11 +200,6 @@ export async function rename(request: Request, env: Env): Promise<Response> {
       error: fail(429, "quota", "You've changed your name enough for one day. Try again tomorrow."),
     },
   ]);
-  try {
-    await env.DB.prepare("UPDATE keys SET handle = ?2 WHERE key = ?1").bind(signed.key, handle).run();
-  } catch (e) {
-    if (e instanceof Error && /UNIQUE/i.test(e.message)) throw fail(409, "handle_taken", "Someone already uses that name. Try another.");
-    throw e;
-  }
+  await env.DB.prepare("UPDATE keys SET handle = ?2 WHERE key = ?1").bind(signed.key, handle).run();
   return json({ handle });
 }
