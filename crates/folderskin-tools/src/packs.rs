@@ -72,7 +72,7 @@ pub struct CheckOptions {
     pub require_lossless: bool,
     /// Turn down a pack whose finished folders aren't one shape: two of them more than
     /// [`shape::ONE_SHAPE`] apart, as width ÷ height goes, which folders redrawn at one shape
-    /// never are. Off unless asked; folderskin-community's workflow asks.
+    /// never are. Off unless asked, and meant for folderskin-community's workflow.
     pub require_one_shape: bool,
 }
 
