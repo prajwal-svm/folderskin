@@ -5,6 +5,8 @@
 //! every pull request, so a pack that passes CI is a pack the app accepts. docs/PACKS.md is this
 //! contract in prose.
 
+use crate::raster;
+use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
@@ -20,8 +22,15 @@ pub const MOVED_FILE: &str = "moved.json";
 pub const MOVED_VERSION: u32 = 1;
 /// Most skins in one pack: a themed set that is quick to review and to download.
 pub const MAX_SKINS: usize = 50;
-/// Largest picture file.
-pub const MAX_PICTURE_BYTES: usize = 2 * 1024 * 1024;
+/// Largest picture in a pack made or shared from FolderSkin 0.1.7 on, which has to be lossless
+/// too ([`check_new_picture`]): 1.5 MB, which a lossless WebP of a 1024 px picture fits in.
+pub const MAX_PICTURE_BYTES: usize = 1_572_864;
+/// Largest picture FolderSkin reads in a pack: the 2 MB packs were held to before 0.1.7, so the
+/// packs published then still open, until they're made again within [`MAX_PICTURE_BYTES`].
+pub const MAX_READ_PICTURE_BYTES: usize = 2 * 1024 * 1024;
+/// Most a pack's pictures may come to together: 64 MB, which fifty detailed lossless pictures of
+/// about 1.2 MB each fit in.
+pub const MAX_PACK_BYTES: usize = 64 * 1024 * 1024;
 /// Largest side of a picture. 1024 px is the biggest icon any of the three systems draws.
 pub const MAX_PICTURE_SIDE: u32 = 1024;
 /// Smallest side of a picture, so no icon is blown up from a thumbnail.
@@ -42,6 +51,9 @@ pub const MAX_TAG_CHARS: usize = 24;
 pub const LICENSES: &[&str] = &["CC0-1.0", "CC-BY-4.0", "MIT"];
 /// File name extensions a pack's pictures can have.
 pub const PICTURE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+/// The sides a picture is tried at as it is made ready for a pack ([`encode_picture`]), largest
+/// first: one whose lossless file is over the limit at 1024 px is made 896 px, then 768 px.
+pub const PICTURE_SIDES: [u32; 3] = [MAX_PICTURE_SIDE, 896, 768];
 
 /// `pack.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -509,16 +521,12 @@ pub fn clean_tags<'a>(tags: impl IntoIterator<Item = &'a String>, max: usize) ->
     out
 }
 
-/// Checks one picture against the limits without decoding all of it: its size, what it really
-/// is (PNG, JPEG or WebP, whatever its name says) and its dimensions. Returns the dimensions.
+/// Checks one picture against the limits a pack is read with, without decoding all of it: its
+/// size (within [`MAX_READ_PICTURE_BYTES`]), what it really is (PNG, JPEG or WebP, whatever its
+/// name says) and its dimensions. Returns the dimensions. A picture going into a pack made or
+/// shared now is held to [`check_new_picture`] as well.
 pub fn check_picture(bytes: &[u8]) -> Result<(u32, u32), String> {
-    if bytes.len() > MAX_PICTURE_BYTES {
-        return Err(format!(
-            "is {} KB; the most is {} KB",
-            bytes.len().div_ceil(1024),
-            MAX_PICTURE_BYTES / 1024
-        ));
-    }
+    within(bytes, MAX_READ_PICTURE_BYTES)?;
     let reader = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|_| "couldn't be read".to_string())?;
@@ -542,6 +550,141 @@ pub fn check_picture(bytes: &[u8]) -> Result<(u32, u32), String> {
         ));
     }
     Ok((w, h))
+}
+
+/// Checks a picture going into a pack made or shared now: [`check_picture`], within
+/// [`MAX_PICTURE_BYTES`], and lossless ([`is_lossless_picture`]), so a pack looks exactly as it was
+/// made. Returns the dimensions.
+pub fn check_new_picture(bytes: &[u8]) -> Result<(u32, u32), String> {
+    within(bytes, MAX_PICTURE_BYTES)?;
+    let dimensions = check_picture(bytes)?;
+    if !is_lossless_picture(bytes) {
+        return Err("isn't lossless: a pack's pictures are PNG or lossless WebP".into());
+    }
+    Ok(dimensions)
+}
+
+/// A picture made ready for a pack by [`encode_picture`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EncodedPicture {
+    /// A lossless WebP, at most [`MAX_PICTURE_SIDE`] px on its longer side.
+    pub webp: Vec<u8>,
+    /// The side it was made smaller to, 896 or 768 px, when its file was over the size limit at
+    /// 1024 px, or at its own size when that is smaller.
+    pub scaled_to: Option<u32>,
+}
+
+/// `img` as a pack's picture: a lossless WebP ([`raster::encode_webp_lossless`]) at most
+/// [`MAX_PICTURE_SIDE`] px on its longer side and within `max_bytes`. One whose file is over it is
+/// made smaller, still lossless, to each of [`PICTURE_SIDES`] in turn, and never below
+/// [`MIN_PICTURE_SIDE`]; [`EncodedPicture::scaled_to`] says when it was. The error finishes a
+/// sentence that starts with the picture's name: it's too small for a pack, or too detailed to
+/// fit even at the smallest side. `packs make` and the app share packs with this, so a pack
+/// comes out the same whichever made it.
+pub fn encode_picture(img: RgbaImage, max_bytes: usize) -> Result<EncodedPicture, String> {
+    fit_picture(img, max_bytes, raster::encode_webp_lossless)
+}
+
+/// [`encode_picture`], encoding each side with `encode`. Tests pass a quicker encoder.
+pub fn fit_picture(
+    img: RgbaImage,
+    max_bytes: usize,
+    encode: impl Fn(&RgbaImage) -> Vec<u8>,
+) -> Result<EncodedPicture, String> {
+    let img = raster::shrink_to(img, MAX_PICTURE_SIDE);
+    let big_enough = |img: &RgbaImage| check_picture_size(img.width(), img.height());
+    big_enough(&img)?;
+    let longest = img.width().max(img.height());
+    let mut tried = longest;
+    for side in PICTURE_SIDES {
+        // A picture no bigger than this side was tried at its own size already.
+        if side < MAX_PICTURE_SIDE && side >= longest {
+            continue;
+        }
+        let smaller = raster::shrink_to(img.clone(), side);
+        // Never made smaller than a pack allows, however big its file.
+        if big_enough(&smaller).is_err() {
+            break;
+        }
+        let webp = encode(&smaller);
+        if webp.len() <= max_bytes {
+            return Ok(EncodedPicture {
+                webp,
+                scaled_to: (side < longest).then_some(side),
+            });
+        }
+        tried = side.min(longest);
+    }
+    Err(format!(
+        "is too detailed to fit in {} without losing detail, even at {tried} px",
+        size_label(max_bytes)
+    ))
+}
+
+/// Refuses a `w`×`h` picture that is too small for a pack once [`encode_picture`] has made it
+/// [`MAX_PICTURE_SIDE`] px at most: under [`MIN_PICTURE_SIDE`] px on a side. It needs only the
+/// size, so a picture can be turned down before the slow part. The error finishes a sentence
+/// that starts with the picture's name.
+pub fn check_picture_size(w: u32, h: u32) -> Result<(), String> {
+    let (w, h) = raster::shrunk_size(w, h, MAX_PICTURE_SIDE);
+    if w.min(h) < MIN_PICTURE_SIDE {
+        return Err(format!(
+            "is {w}×{h} px; a pack needs at least {MIN_PICTURE_SIDE} px on each side"
+        ));
+    }
+    Ok(())
+}
+
+/// A size limit as people read one: "1.5 MB", "64 MB", "400 KB".
+pub fn size_label(bytes: usize) -> String {
+    const MB: usize = 1024 * 1024;
+    if bytes < MB {
+        return format!("{} KB", bytes / 1024);
+    }
+    let tenths = bytes * 10 / MB;
+    if tenths.is_multiple_of(10) {
+        format!("{} MB", tenths / 10)
+    } else {
+        format!("{}.{} MB", tenths / 10, tenths % 10)
+    }
+}
+
+/// Refuses a picture bigger than `max` bytes, in a sentence.
+fn within(bytes: &[u8], max: usize) -> Result<(), String> {
+    if bytes.len() > max {
+        return Err(format!(
+            "is {} KB; the most is {} KB",
+            bytes.len().div_ceil(1024),
+            max / 1024
+        ));
+    }
+    Ok(())
+}
+
+/// Whether `bytes` are a picture stored without loss: a PNG, or a WebP whose picture is lossless
+/// (a `VP8L` chunk, on its own or in an extended file). A JPEG, a lossy WebP (`VP8 `, even one
+/// with lossless alpha) and an animation aren't. Only the headers are read.
+pub fn is_lossless_picture(bytes: &[u8]) -> bool {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return true;
+    }
+    if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WEBP" {
+        return false;
+    }
+    // Chunks follow the header: a four-letter name, a little-endian length, the data, and a
+    // padding byte after data of odd length. The extended header (VP8X), a colour profile and a
+    // lossy picture's alpha (ALPH) come before the picture itself.
+    let mut at = 12;
+    while let Some(head) = bytes.get(at..at + 8) {
+        let length = u32::from_le_bytes([head[4], head[5], head[6], head[7]]) as usize;
+        match &head[..4] {
+            b"VP8L" => return true,
+            b"VP8 " | b"ANIM" | b"ANMF" => return false,
+            _ => {}
+        }
+        at = at.saturating_add(8 + length + (length & 1));
+    }
+    false
 }
 
 /// Decodes a picture that passed [`check_picture`]. The decoder is held to the same limits, so a
@@ -947,12 +1090,202 @@ mod tests {
             .contains("at least"));
         assert!(check_picture(b"GIF89a....").is_err());
         assert_eq!(
-            check_picture(&vec![0; MAX_PICTURE_BYTES + 1]).unwrap_err(),
+            check_picture(&vec![0; MAX_READ_PICTURE_BYTES + 1]).unwrap_err(),
             "is 2049 KB; the most is 2048 KB"
         );
         assert_eq!(
             decode_picture(&png(300, 300)).unwrap().dimensions(),
             (300, 300)
         );
+    }
+
+    /// A WebP file of `chunks`, each a name and its data, as RIFF lays them out.
+    fn riff(chunks: &[(&[u8; 4], &[u8])]) -> Vec<u8> {
+        let mut body = b"WEBP".to_vec();
+        for (name, data) in chunks {
+            body.extend_from_slice(*name);
+            body.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            body.extend_from_slice(data);
+            if data.len() % 2 == 1 {
+                body.push(0);
+            }
+        }
+        [
+            b"RIFF".as_slice(),
+            &(body.len() as u32).to_le_bytes(),
+            &body,
+        ]
+        .concat()
+    }
+
+    #[test]
+    fn only_png_and_lossless_webp_are_lossless() {
+        let opaque = image::RgbaImage::from_fn(300, 260, |x, y| {
+            image::Rgba([x as u8, y as u8, (x * y) as u8, 255])
+        });
+        let cutout = image::RgbaImage::from_fn(300, 260, |x, _| {
+            image::Rgba([200, 90, 40, if x < 30 { 0 } else { 255 }])
+        });
+        let lossless = crate::raster::encode_webp_lossless(&opaque);
+        assert!(is_lossless_picture(&crate::raster::encode_png(&opaque)));
+        assert!(is_lossless_picture(&lossless));
+        assert!(is_lossless_picture(&crate::raster::encode_webp_lossless(
+            &cutout
+        )));
+        // A lossless picture in an extended file, after a colour profile.
+        let vp8l = &lossless[20..];
+        let extended = riff(&[
+            (b"VP8X", &[0x20, 0, 0, 0, 43, 1, 0, 3, 1, 0]),
+            (b"ICCP", b"odd"),
+            (b"VP8L", vp8l),
+        ]);
+        assert!(is_lossless_picture(&extended));
+
+        // Lossy, with or without lossless alpha beside it.
+        assert!(!is_lossless_picture(&crate::raster::encode_webp_lossy(
+            &opaque, 90.0
+        )));
+        let lossy_alpha = crate::raster::encode_webp_lossy(&cutout, 90.0);
+        assert_eq!(&lossy_alpha[12..16], b"VP8X");
+        assert!(!is_lossless_picture(&lossy_alpha));
+        let mut jpeg = Vec::new();
+        image::DynamicImage::ImageRgba8(opaque)
+            .into_rgb8()
+            .write_to(&mut Cursor::new(&mut jpeg), image::ImageFormat::Jpeg)
+            .unwrap();
+        assert!(!is_lossless_picture(&jpeg));
+        // An animation, and files that aren't whole.
+        assert!(!is_lossless_picture(&riff(&[
+            (b"VP8X", &[2, 0, 0, 0, 43, 1, 0, 3, 1, 0]),
+            (b"ANIM", &[0; 6]),
+            (b"ANMF", vp8l),
+        ])));
+        assert!(!is_lossless_picture(&lossless[..16]));
+        assert!(!is_lossless_picture(
+            b"RIFF\xff\xff\xff\xffWEBPVP8X\xff\xff\xff\xff"
+        ));
+        assert!(!is_lossless_picture(b""));
+    }
+
+    #[test]
+    fn a_new_picture_is_lossless_and_within_the_new_limit() {
+        let img = image::RgbaImage::from_fn(512, 480, |x, y| {
+            image::Rgba([(x / 2) as u8, (y / 2) as u8, 90, 255])
+        });
+        let webp = crate::raster::encode_webp_lossless(&img);
+        assert_eq!(check_new_picture(&webp), Ok((512, 480)));
+        assert_eq!(
+            check_new_picture(&crate::raster::encode_png(&img)),
+            Ok((512, 480))
+        );
+        assert_eq!(
+            check_new_picture(&crate::raster::encode_webp_lossy(&img, 90.0)).unwrap_err(),
+            "isn't lossless: a pack's pictures are PNG or lossless WebP"
+        );
+        // Bigger than 1.5 MB is too big for a new pack, though a published one is read up to 2 MB.
+        let big = vec![0; MAX_PICTURE_BYTES + 1];
+        assert_eq!(
+            check_new_picture(&big).unwrap_err(),
+            "is 1537 KB; the most is 1536 KB"
+        );
+        assert_eq!(
+            check_picture(&big).unwrap_err(),
+            "isn't a PNG, JPEG or WebP picture",
+            "within the size a published picture can be"
+        );
+        assert_eq!(MAX_PACK_BYTES, 67_108_864, "64 MB");
+    }
+
+    /// Grain, as a photo has, which a smaller picture averages away, so its file is smaller too.
+    fn grain(w: u32, h: u32) -> RgbaImage {
+        let mut state = 0x9e37_79b9_u32;
+        RgbaImage::from_fn(w, h, |_, _| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            let [r, g, b, _] = state.to_le_bytes();
+            image::Rgba([r, g, b, 255])
+        })
+    }
+
+    #[test]
+    fn a_picture_is_shrunk_to_1024_px_and_kept_lossless() {
+        let img = RgbaImage::from_fn(1600, 1200, |x, y| {
+            image::Rgba([(x / 7) as u8, (y / 5) as u8, ((x + y) / 11) as u8, 255])
+        });
+        let made = encode_picture(img.clone(), MAX_PICTURE_BYTES).unwrap();
+        assert_eq!(
+            made.scaled_to, None,
+            "1024 px is where every picture starts"
+        );
+        assert!(is_lossless_picture(&made.webp));
+        let back = image::load_from_memory(&made.webp).unwrap().to_rgba8();
+        assert_eq!(
+            back,
+            raster::shrink_to(img, MAX_PICTURE_SIDE),
+            "every pixel"
+        );
+        assert_eq!(back.dimensions(), (1024, 768));
+
+        // Too small for a pack, before anything is encoded, and told from its size alone.
+        assert_eq!(
+            encode_picture(RgbaImage::new(1000, 200), MAX_PICTURE_BYTES).unwrap_err(),
+            "is 1000×200 px; a pack needs at least 256 px on each side"
+        );
+        assert_eq!(
+            check_picture_size(4000, 900).unwrap_err(),
+            "is 1024×230 px; a pack needs at least 256 px on each side",
+            "measured as it would be made"
+        );
+        assert_eq!(check_picture_size(4000, 1000), Ok(()));
+    }
+
+    #[test]
+    fn a_picture_over_the_limit_is_made_smaller_still_lossless_or_refused() {
+        // The quick encoder keeps this test quick; its files are lossless WebP all the same.
+        let img = grain(1000, 700);
+        let quick = raster::encode_webp_lossless_quick;
+        let size_at = |side| quick(&raster::shrink_to(img.clone(), side)).len();
+        let (at_1000, at_896, at_768) = (size_at(1000), size_at(896), size_at(768));
+        assert!(at_768 < at_896 && at_896 < at_1000);
+
+        // Over the limit at its own size, so it steps down, and says to what.
+        let fit = |max| fit_picture(img.clone(), max, quick);
+        let made = fit(at_896).unwrap();
+        assert_eq!((made.webp.len(), made.scaled_to), (at_896, Some(896)));
+        let made = fit(at_768).unwrap();
+        assert_eq!((made.webp.len(), made.scaled_to), (at_768, Some(768)));
+        let back = image::load_from_memory(&made.webp).unwrap().to_rgba8();
+        assert_eq!(
+            back,
+            raster::shrink_to(img.clone(), 768),
+            "still every pixel"
+        );
+
+        // Within the limit, it's left as it is.
+        assert_eq!(fit(at_1000).unwrap().scaled_to, None);
+
+        // Not even 768 px fits.
+        assert_eq!(
+            fit(at_768 - 1).unwrap_err(),
+            format!(
+                "is too detailed to fit in {} without losing detail, even at 768 px",
+                size_label(at_768 - 1)
+            )
+        );
+        // A wide picture stops at 896 px: at 768 it would be less than 256 px high.
+        let wide = RgbaImage::from_fn(1000, 300, |x, y| *img.get_pixel(x, y));
+        assert_eq!(
+            fit_picture(wide, 1024, quick).unwrap_err(),
+            "is too detailed to fit in 1 KB without losing detail, even at 896 px"
+        );
+    }
+
+    #[test]
+    fn size_limits_read_as_people_say_them() {
+        assert_eq!(size_label(MAX_PICTURE_BYTES), "1.5 MB");
+        assert_eq!(size_label(MAX_READ_PICTURE_BYTES), "2 MB");
+        assert_eq!(size_label(MAX_PACK_BYTES), "64 MB");
+        assert_eq!(size_label(400 * 1024), "400 KB");
     }
 }

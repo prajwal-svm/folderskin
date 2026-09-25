@@ -2,8 +2,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import { INTRO_FRAMES, LOGO } from "../assets/onboarding";
 import {
   continueLabel,
-  DEFAULT_PACK,
-  defaultPicks,
+  defaultPick,
   frameAt,
   fromProgress,
   INTRO_SLOTS,
@@ -61,9 +60,9 @@ function decodeAll(sources: string[], wait: number): Promise<void> {
 
 /**
  * The first launch: a welcome where folders flip through skins and land on the FolderSkin logo,
- * then a step that adds the first community packs (Classic Art, picked for you). It fills the
- * window until `onDone`, fades away (`leaving`), then calls `onGone` for the app to open. It shows
- * once: finishing it tells the app not to show it again.
+ * then a step that adds the first community packs (Classic Art, picked for you, under whatever id
+ * it has now). It fills the window until `onDone`, fades away (`leaving`), then calls `onGone` for
+ * the app to open. It shows once: finishing it tells the app not to show it again.
  */
 export function Onboarding({ leaving, onDone, onGone }: { leaving: boolean; onDone: () => void; onGone: () => void }) {
   const [step, setStep] = useState<"welcome" | "packs">("welcome");
@@ -259,6 +258,8 @@ function usePackSetup() {
   const [packs, setPacks] = useState<CommunityPack[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  /** The pack picked for them when the list arrived, which the heading names. */
+  const [suggested, setSuggested] = useState<CommunityPack | null>(null);
   const [states, setStates] = useState<Record<string, InstallState>>({});
   /** The pack being added right now; nothing else can happen until it's done. */
   const [current, setCurrent] = useState<string | null>(null);
@@ -276,10 +277,12 @@ function usePackSetup() {
     setPacks(null);
     api
       .communityPacks()
-      .then((list) => {
+      .then(({ packs: list, moved }) => {
         if (!live.current) return;
+        const pick = defaultPick(list, moved) ?? null;
         setPacks(list);
-        setPicked(new Set(defaultPicks(list)));
+        setSuggested(pick);
+        setPicked(new Set(pick ? [pick.id] : []));
         list.slice(0, 8).forEach((p) => prefetchPreview(p.preview));
       })
       .catch((e) => {
@@ -324,11 +327,11 @@ function usePackSetup() {
     return failed;
   }, []);
 
-  return { packs, loadError, picked, states, current, load, toggle, install };
+  return { packs, loadError, picked, suggested, states, current, load, toggle, install };
 }
 
 function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () => void; onFinish: () => void }) {
-  const { packs, loadError, picked, states, current, load, toggle, install } = setup;
+  const { packs, loadError, picked, suggested, states, current, load, toggle, install } = setup;
   const [allSet, setAllSet] = useState(false);
   const primary = useRef<HTMLButtonElement>(null);
   const running = current !== null;
@@ -400,7 +403,7 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
           ? "You can add or remove packs any time from Community."
           : loadError
             ? ""
-            : "Getting the packs from GitHub";
+            : "Getting the packs";
 
   return (
     <section className="packstep" aria-labelledby="packs-title" ref={section}>
@@ -409,8 +412,8 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
           Start with a few skins
         </h1>
         <p className="packstep-sub">
-          Packs are free sets of skins people share on GitHub.{" "}
-          {list.some((p) => p.id === DEFAULT_PACK) ? "Classic Art is picked for you; add more if you like." : packs ? "Pick any you like." : ""}
+          Packs are free sets of skins people share through FolderSkin.{" "}
+          {suggested ? `${clip(suggested.name)} is picked for you; add more if you like.` : packs ? "Pick any you like." : ""}
         </p>
       </header>
 

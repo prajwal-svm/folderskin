@@ -4,7 +4,16 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.7 — 2026-09-25
+
+### Added
+
+- **Sending a pack tries again by itself.** When the connection drops or FolderSkin's sharing
+  service is busy while a pack is on its way, the share dialog waits a moment and sends again, up
+  to five times, waiting a little longer each time and never less than the service asks. When the
+  service says to leave it for longer, because too many requests from your computer were turned
+  down or sharing is paused, the dialog shows what the service said and doesn't try again on its
+  own.
 
 ### Changed
 
@@ -13,6 +22,49 @@ All notable changes to FolderSkin are recorded here. The format follows
   changed version someone shares has to come with its source, under the same licence. Releases up
   to 0.1.6 came out under MIT and keep it. The FolderSkin name and logo aren't covered by either;
   [TRADEMARKS.md](TRADEMARKS.md) says how to use them. Skins keep their own licences.
+- **Packs are shared through FolderSkin.** The share dialog sends every pack to FolderSkin's review
+  queue: verify your computer once in the browser, with no account anywhere, and a person looks at
+  the pack before it joins Community. With one way in, every pack gets the same checks and the
+  same review, whether or not you have a GitHub account. **Save a folder** is still there for
+  anyone who wants the pack as files.
+- **Packs can share a name.** Every pack now has an id of its own, made from its name and six
+  random characters, such as `classic-art-k7q2mx`, so two packs can both be called Classic Art.
+  A pack saved as a folder gets one too.
+- **Packs download faster.** The list of packs and their pictures now come from
+  packs.folderskin.app, served from close to where you are, with the packs repository on GitHub
+  as the fallback. Every file is still checked before it's used, wherever it came from.
+- **Packs you added keep updating when their ids change.** A pack added under the id it had
+  before still shows as added and still gets its updates under its new id, and an Install link
+  with the old id still finds it. The first launch still starts with Classic Art picked.
+- **The pack terms are at version 2.** They describe sharing through FolderSkin rather than
+  through pull requests on GitHub: a pack is credited to the name your computer was verified
+  under, and the version you agreed to is recorded with the pack when you send it. The rules
+  themselves are the same. FolderSkin sends a pack under whichever version the sharing service
+  asks for, so the terms can change without a new FolderSkin.
+- A pack's author shows as plain text in Community and when you look through a pack, rather than
+  as a link to a GitHub profile: authors are FolderSkin names now.
+- **Pictures are shared losslessly.** Every picture in a pack you share or save as a folder is now
+  a lossless WebP, so the pack looks exactly as you made it: no blur in a gradient or around
+  lettering, and a finished folder's transparent edge exactly as drawn. The limits are 1024 px
+  and 1.5 MB a picture, and 64 MB a pack. A picture too detailed to fit is made 896 px, then
+  768 px, still lossless, and the dialog says which; a pack over 64 MB is turned down with a
+  suggestion to split it in two. Making the pictures ready takes under a second each, and the
+  dialog counts them as it goes.
+- **Your library takes less space.** A picture you add, paint or design is now saved as a
+  lossless WebP rather than a PNG: every pixel the same, in about two thirds of the space.
+  Pictures saved before stay as they are, and work as they always did.
+- For pack maintainers: `packs make` writes every picture as a lossless WebP of at most 1.5 MB,
+  with the encoder built in, so it no longer needs `cwebp`. `packs check` holds each pack's
+  pictures to 64 MB together, and `--require-lossless` holds every picture to the rules new packs
+  follow: PNG or lossless WebP, at most 1.5 MB.
+
+### Removed
+
+- **Sharing through GitHub.** The share dialog no longer signs in to GitHub, forks
+  folderskin-community or opens a pull request, and Settings → Sharing no longer has a GitHub
+  section. A GitHub sign-in an earlier version kept is forgotten.
+- Setting up the local AI model no longer downloads `cwebp` on Windows, or asks for it on macOS and
+  Linux: packs were its only use, and they no longer need it.
 
 ## 0.1.6 — 2026-09-25
 

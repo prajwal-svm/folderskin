@@ -114,10 +114,10 @@ pub fn check(img: &RgbaImage, bytes: usize, name: &str, look: Style) -> Report {
         None => artwork(img, name, look, &mut findings),
     };
     if bytes > MAX_PICTURE_BYTES {
-        // Only a pack has a size limit, and making one shrinks the picture anyway.
+        // Only a pack has a size limit, and making one fits the picture to it anyway.
         findings.push(ok(format!(
             "The file is {}: fine for your own folders, and `folderskin packs make` \
-             shrinks it for a pack, whose limit is 2 MB.",
+             fits it to a pack, whose limit is 1.5 MB a picture.",
             crate::images::file_size(bytes)
         )));
     }
@@ -495,7 +495,10 @@ mod tests {
             .findings
             .iter()
             .any(|f| f.what.contains("magenta key colour")));
-        assert!(r.findings.iter().any(|f| f.what.contains("limit is 2 MB")));
+        assert!(r
+            .findings
+            .iter()
+            .any(|f| f.what.contains("limit is 1.5 MB a picture")));
         assert_eq!((r.problems(), r.warnings()), (0, 1));
     }
 }

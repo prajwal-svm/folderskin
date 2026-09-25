@@ -18,7 +18,7 @@ function withdrawNote(s: MySubmission): string {
 }
 
 /**
- * The packs this computer has shared without GitHub, and where each one is: waiting, approved, or
+ * The packs this computer has shared, and where each one is: waiting, approved, or
  * turned down with the rule it broke and the maintainer's note. A pack can be taken back from here,
  * after a second press, since an approved one leaves the community for everyone. One already in the
  * community packs comes out once the maintainer has taken it out of them, which the row says.
@@ -59,13 +59,13 @@ export function MySubmissions() {
     return error ? (
       <p className="field-note is-error">{error}</p>
     ) : (
-      <p className="gh-waiting">
+      <p className="share-waiting">
         <LoaderIcon />
         Asking <Brand />&apos;s sharing service
       </p>
     );
   }
-  if (list.length === 0) return <p className="field-note">Nothing yet. Packs you share without GitHub show up here.</p>;
+  if (list.length === 0) return <p className="field-note">Nothing yet. Packs you share show up here.</p>;
 
   return (
     <>

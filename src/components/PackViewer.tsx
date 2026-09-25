@@ -103,9 +103,7 @@ export function PackViewer({
       sub={
         <>
           by{" "}
-          <button type="button" className="pack-author" onClick={() => void openUrl(`https://github.com/${pack.author}`).catch(() => {})}>
-            @{pack.author}
-          </button>{" "}
+          <span className="pack-author">@{pack.author}</span>{" "}
           · {pack.count} {pack.count === 1 ? "skin" : "skins"} · {licenseLabel(pack.license)}
           {pack.bytes > 0 && <> · {megabytes(pack.bytes)}</>}
         </>

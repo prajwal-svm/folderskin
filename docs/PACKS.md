@@ -42,6 +42,13 @@ option.
 4. Send it. FolderSkin checks the pack against the contract below before anything leaves your
    computer. **Your submissions** shows each pack you sent and, if one is turned down, why.
 
+Every picture is shared losslessly, so a pack looks exactly as you made it, a finished folder's
+transparent edge included. FolderSkin makes each one a lossless WebP before it's sent, which takes
+a few seconds a picture, and counts them as they're ready. A picture too detailed to fit in 1.5 MB
+at 1024 px is made 896 px, then 768 px, still lossless, and FolderSkin says which. A pack's
+pictures come to 64 MB at most; a bigger one is turned down with a suggestion to split it into
+two packs.
+
 A person looks at every pack before anyone else can see it. Once it's approved, it's published
 on its own, within about 15 minutes ([How approval publishes](#how-approval-publishes) below).
 Many packs can share a name: the one you pick is what everyone sees, and the pack gets an id of
@@ -176,8 +183,8 @@ A pack is one folder:
 ```
 packs/night-prints-h4x2qe/
   pack.json
-  koi.png
-  fox-in-the-rain.jpg
+  koi.webp
+  fox-in-the-rain.webp
 ```
 
 `pack.json`:
@@ -190,8 +197,8 @@ packs/night-prints-h4x2qe/
   "license": "CC0-1.0",
   "tags": ["woodblock", "night"],
   "skins": [
-    { "file": "koi.png", "name": "Koi over the wave", "tags": ["animals"] },
-    { "file": "fox-in-the-rain.jpg", "name": "Fox in the rain" }
+    { "file": "koi.webp", "name": "Koi over the wave", "tags": ["animals"] },
+    { "file": "fox-in-the-rain.webp", "name": "Fox in the rain" }
   ]
 }
 ```
@@ -215,15 +222,22 @@ No other fields are allowed, so a typo such as `"tag"` fails the check instead o
 | | limit |
 |---|---|
 | skins in a pack | 1 to 50 |
-| each picture | PNG, JPEG or WebP, at most 2 MB |
+| each picture | lossless: PNG, or lossless WebP. At most 1.5 MB |
+| a pack's pictures together | at most 64 MB |
 | picture sides | 256 to 1024 px |
-| file names | letters, digits, `.`, `-` and `_`, ending in `.png`, `.jpg`, `.jpeg` or `.webp` |
+| file names | letters, digits, `.`, `-` and `_`, ending in `.png` or `.webp` |
 | id, the folder's name | a name and six random characters, such as `night-prints-h4x2qe` ([Pack ids](#pack-ids)): lower-case letters and digits in words joined by single dashes, at most 40 characters |
 | tags | lower case letters, digits, spaces and dashes, at most 24 characters |
 | `pack.json` | at most 64 KB |
 
-Why 24: a pack is a themed set. Twenty-four skins fill about two screens of the library, stay
-quick to review on GitHub, and keep a download under 48 MB even at the largest pictures.
+Why 50 and 64 MB: a pack is a themed set, and everyone who adds it downloads all of it. Fifty
+skins stay quick to review, and 64 MB holds all fifty at 1.3 MB a picture, or forty-two at the
+largest.
+
+Packs published before FolderSkin 0.1.7 were held to 2 MB a picture in PNG, JPEG or any WebP,
+and the app still reads them. Made again with `packs make`, they follow the rules above.
+`packs check` holds a pack to them with `--require-lossless` ([Checking a pack
+yourself](#checking-a-pack-yourself)), and the community service takes nothing else.
 
 ### Pictures
 
@@ -235,6 +249,12 @@ Each picture is one of two kinds, told apart the same way as a picture dropped o
   folder crops a picture, so the subject survives.
 
 1024 px is the largest icon any of the three systems draws, so a bigger picture adds nothing.
+
+Every picture is lossless, so a pack looks exactly as it was made: no blocks in a gradient, no
+ringing around lettering, and a finished folder's edge as clean as it was drawn. A lossless WebP
+is about a third smaller than the same PNG, which is why the app and `packs make` write WebP. A
+detailed 1024 px picture comes to between 0.6 and 1.5 MB, most of them about 800 KB; one that
+doesn't fit in 1.5 MB is made 896 px, then 768 px, still lossless, rather than blurred to fit.
 
 ### Licences
 
@@ -265,13 +285,15 @@ has, or an old id in `moved.json`.
 Each picture gets the split the app makes when you add one. A finished folder, painted on
 magenta the way the chat prompt in [PROMPTS.md](PROMPTS.md) asks, or on real transparency, is cut
 out and becomes the icon itself; anything else is artwork for FolderSkin's folder. Every picture
-is shrunk to 1024 px and compressed to at most 400 KB (`--max-kb` changes that), since a pack is
-downloaded by everyone who adds it: folders as WebP when `cwebp` is installed (`brew install
-webp`, or the `webp` package on Linux), which keeps the transparency at a fraction of a PNG's
-size, and artwork as JPEG. [SKINS.md](SKINS.md#pictures-for-a-pack) says more about the formats.
-The report says which way each picture went. Skins are named after their files, so name the files
-first or fix the names in `pack.json` afterwards, and `--preview` draws every skin as its folder in
-one PNG to look over.
+is shrunk to 1024 px and saved as a lossless WebP, with the encoder the app shares packs with
+built in, so there is nothing to install. One still over 1.5 MB is made 896 px, then 768 px, and
+the report says so; `--max-kb` holds the pictures to less than 1.5 MB. Pictures that come to more
+than 64 MB together are turned down, with a suggestion to split them into two packs. libwebp's
+most thorough setting takes several seconds a picture, so they're made on every core at once.
+[SKINS.md](SKINS.md#pictures-for-a-pack) says more about the formats. The report says which way
+each picture went. Skins are named after their files, so name the files first or fix the names
+in `pack.json` afterwards, and `--preview` draws every skin as its folder in one PNG to look
+over.
 
 `--id` makes a pack that is there already again, from new pictures: `--id 3d-k7q2mx` replaces
 everything in `packs/3d-k7q2mx/`, and the pack keeps its id, so everyone who added it gets the new
@@ -303,7 +325,11 @@ cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 
 It checks every folder in `packs/` with the rules the app uses, and prints each problem as a
 sentence. Run inside a folderskin-community checkout, `--dir` can be left out: the tools look in the
-current folder by default. `--max-kb` holds the pictures to a smaller size than the 2 MB limit.
+current folder by default. It holds each picture to the 2 MB the packs published before 0.1.7 were
+made under, and each pack's pictures to 64 MB together. `--require-lossless` holds every picture
+to the rules new packs follow: PNG or lossless WebP, at most 1.5 MB, which is what the community
+service takes and `packs make` writes. It's off unless asked, while the packs from before are made
+again. `--max-kb` holds the pictures to less.
 
 It also checks the ids between them: two folders whose names differ only in capitals are one
 folder on macOS and Windows, and a pack can't take an old id from `moved.json`, which has to

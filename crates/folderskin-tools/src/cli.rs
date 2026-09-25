@@ -217,17 +217,21 @@ pub enum PacksCommand {
         /// The folderskin-community checkout, holding packs/
         #[arg(long, default_value = ".")]
         dir: PathBuf,
-        /// The largest a picture may be, in KB, if less than the pack limit of 2048
+        /// The largest a picture may be, in KB, if less than the 2048 a published picture can be
         #[arg(long, value_name = "KB")]
         max_kb: Option<usize>,
         /// Also turn down a pack whose id isn't a generated one, a name and six random characters
         /// such as classic-art-k7q2mx
         #[arg(long)]
         require_generated_ids: bool,
+        /// Also hold every picture to the rules packs are made and shared under from FolderSkin
+        /// 0.1.7: lossless (PNG, or lossless WebP) and at most 1536 KB
+        #[arg(long)]
+        require_lossless: bool,
     },
     /// Make a pack from pictures: finished folders (on magenta or transparency) are cut out,
-    /// everything is shrunk and compressed to fit, and pack.json is written. A new pack gets an
-    /// id of its own, its name and six random characters, which is its folder's name
+    /// everything is shrunk to 1024 px and saved as lossless WebP, and pack.json is written. A new
+    /// pack gets an id of its own, its name and six random characters, which is its folder's name
     Make {
         /// Pictures (PNG, JPEG or WebP), or folders of them, taken in name order
         #[arg(required = true)]
@@ -251,9 +255,9 @@ pub enum PacksCommand {
         /// The folderskin-community checkout, holding packs/
         #[arg(long, default_value = ".")]
         dir: PathBuf,
-        /// The largest a picture may be, in KB. The pack limit is 2048; smaller pictures make a
-        /// pack quicker to add
-        #[arg(long, value_name = "KB", default_value_t = 400)]
+        /// The largest a picture may be, in KB: the pack limit, 1536, or less. A picture over it at
+        /// 1024 px is made 896 and then 768 px, still lossless
+        #[arg(long, value_name = "KB", default_value_t = 1536)]
         max_kb: usize,
         /// Also write a PNG showing every skin as the folder it makes
         #[arg(long, value_name = "PNG")]
@@ -459,11 +463,13 @@ mod tests {
                         dir,
                         max_kb,
                         require_generated_ids,
+                        require_lossless,
                     },
             } => {
                 assert_eq!(dir, PathBuf::from("."));
                 assert_eq!(max_kb, None);
                 assert!(!require_generated_ids, "off unless asked");
+                assert!(!require_lossless, "off unless asked");
             }
             other => panic!("{other:?}"),
         }
@@ -472,6 +478,7 @@ mod tests {
             "packs",
             "check",
             "--require-generated-ids",
+            "--require-lossless",
         ])
         .command
         {
@@ -479,9 +486,10 @@ mod tests {
                 command:
                     PacksCommand::Check {
                         require_generated_ids,
+                        require_lossless,
                         ..
                     },
-            } => assert!(require_generated_ids),
+            } => assert!(require_generated_ids && require_lossless),
             other => panic!("{other:?}"),
         }
         match Cli::parse_from(["folderskin-tools", "packs", "index", "--dir", "/tmp/c"]).command {
@@ -688,7 +696,7 @@ mod tests {
                 assert_eq!(id, None, "a new pack gets an id of its own");
                 assert_eq!(tags, ["3d", "glossy"]);
                 assert_eq!(dir, PathBuf::from("."));
-                assert_eq!(max_kb, 400);
+                assert_eq!(max_kb, 1536);
                 assert_eq!(license, "CC0-1.0");
                 assert!(!flat_backdrop);
             }

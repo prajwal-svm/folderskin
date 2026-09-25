@@ -53,7 +53,7 @@ describe("licence profiles", () => {
     const others = [profile("a", "Personal")];
     expect(profileProblem({ name: "  ", author: "" }, others)).toMatchObject({ field: "name", text: expect.stringMatching(/name/) });
     expect(profileProblem({ name: "personal", author: "" }, others)).toMatchObject({ field: "name", text: expect.stringMatching(/already/) });
-    expect(profileProblem({ name: "Work", author: "two  words" }, others)).toMatchObject({ field: "author", text: expect.stringMatching(/GitHub user name/) });
+    expect(profileProblem({ name: "Work", author: "two  words" }, others)).toMatchObject({ field: "author", text: expect.stringMatching(/letters, numbers and single dashes/) });
     expect(profileProblem({ name: "Work", author: "acme-studio" }, others)).toBeNull();
     expect(profileProblem({ name: "Work", author: "" }, others)).toBeNull();
   });

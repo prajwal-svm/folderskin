@@ -11,7 +11,7 @@ export type LicenceProfile = {
   id: string;
   /** What the profile is called in Settings and the share dialog. */
   name: string;
-  /** The name packs are credited to: a GitHub user name's shape. Empty until one is given. */
+  /** The name packs are credited to: letters, digits and single dashes. Empty until one is given. */
   author: string;
   license: LicenseId;
 };
@@ -123,7 +123,7 @@ export function profileProblem(p: Pick<LicenceProfile, "name" | "author">, other
   const name = cleanProfileName(p.name);
   if (!name) return { field: "name", text: "Give the profile a name." };
   if (others.some((o) => o.name.toLowerCase() === name.toLowerCase())) return { field: "name", text: `There's a profile called ${name} already.` };
-  if (p.author && !isGithubUser(p.author)) return { field: "author", text: "Credit goes to a GitHub user name: letters, numbers and single dashes." };
+  if (p.author && !isGithubUser(p.author)) return { field: "author", text: "Credit goes to a name made of letters, numbers and single dashes." };
   if (others.length >= MAX_PROFILES) return { field: "list", text: `There can be ${MAX_PROFILES} profiles at most. Delete one to add this one.` };
   return null;
 }

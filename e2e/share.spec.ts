@@ -1,15 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openApp, openView } from "./app";
 
-/** Opens Community → Share your skins, which shares without GitHub unless GitHub is picked. */
-async function shareWithoutGithub(page: Page, query = "") {
+/** Opens Community → Share your skins. */
+async function openShare(page: Page, query = "") {
   await openApp(page, { query });
   await openView(page, /community/i);
   await page.getByRole("button", { name: "Share your skins" }).click();
   const dialog = page.getByRole("dialog", { name: "Share a pack" });
   await expect(dialog).toBeVisible();
-  // With a sharing service in the build, it is the first choice, and GitHub the alternative.
-  await expect(dialog.getByRole("radio", { name: "Without GitHub" })).toHaveAttribute("aria-checked", "true");
+  // One way to share, through FolderSkin's review: there's no other to choose.
+  await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
+  await expect(dialog.getByText(/GitHub/)).toHaveCount(0);
   return dialog;
 }
 
@@ -27,8 +28,8 @@ async function fillPack(dialog: ReturnType<Page["getByRole"]>) {
   await dialog.getByText("I've read the pack terms and this pack follows them.").click();
 }
 
-test("a pack goes to the review queue without a GitHub account", async ({ page }) => {
-  const dialog = await shareWithoutGithub(page);
+test("a pack goes to the review queue once the computer is verified", async ({ page }) => {
+  const dialog = await openShare(page);
   // What happens to it is said before anything is sent.
   await expect(dialog.getByText("Reviewed first.")).toBeVisible();
   await expect(dialog.getByText("Public once approved.")).toBeVisible();
@@ -57,7 +58,7 @@ test("a pack goes to the review queue without a GitHub account", async ({ page }
 });
 
 test("a verified computer sends straight away, and sees why a pack was turned down", async ({ page }) => {
-  const dialog = await shareWithoutGithub(page, "shared");
+  const dialog = await openShare(page, "shared");
   await expect(dialog.getByText("sunny-otter")).toBeVisible();
   await expect(dialog.getByText("Verified on this computer")).toBeVisible();
 
@@ -85,30 +86,77 @@ test("a verified computer sends straight away, and sees why a pack was turned do
   await expect(page.getByRole("dialog", { name: "Your pack is waiting for review" })).toBeVisible({ timeout: 15_000 });
 });
 
-test("a build without the service shares only through GitHub", async ({ page }) => {
-  await openApp(page, { query: "noshare" });
-  await openView(page, /community/i);
-  await page.getByRole("button", { name: "Share your skins" }).click();
-  const dialog = page.getByRole("dialog", { name: "Share a pack" });
-  await expect(dialog).toBeVisible();
-  // No way on offer that the build can't use: the pack goes to folderskin-community on GitHub.
-  await expect(dialog.getByRole("radiogroup", { name: "how to share" })).toHaveCount(0);
-  await expect(dialog.getByRole("radio", { name: "Without GitHub" })).toHaveCount(0);
-  await expect(dialog.getByText(/Sharing without GitHub/)).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Connect to GitHub" })).toBeVisible();
+test("a burst the service turns down is waited out and sent again", async ({ page }) => {
+  const dialog = await openShare(page, "shared&slowdown");
+  await fillPack(dialog);
+  await dialog.getByRole("button", { name: "Send for review" }).click();
+  await expect(dialog.getByRole("status").filter({ hasText: "Trying again in 2 seconds" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Your pack is waiting for review" })).toBeVisible({ timeout: 15_000 });
+});
+
+test("a computer cooling down is told when it can share again, and nothing is tried again", async ({ page }) => {
+  const dialog = await openShare(page, "shared&cooling");
+  await fillPack(dialog);
+  await dialog.getByRole("button", { name: "Send for review" }).click();
+  await expect(dialog.getByText("You've sent too many requests that were turned down. You can share again in 2 hours.")).toBeVisible();
+  await expect(dialog.getByText(/Trying again/)).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Send for review" })).toBeEnabled();
+});
+
+test("a build without the service says so, and still saves the pack as a folder", async ({ page }) => {
+  const dialog = await openShare(page, "noshare");
+  await expect(dialog.getByText("This build of FolderSkin can't share packs. You can still save the pack as a folder.")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Verify and send" })).toBeDisabled();
   await dialog.getByPlaceholder("Neon nights").fill("Night prints");
   await dialog.getByRole("button", { name: "+ photo" }).click();
-  await dialog.getByText("I've read the pack terms and this pack follows them.").click();
-  await expect(dialog.getByText("Connect to GitHub first")).toBeVisible();
+  // Saving a folder needs a name to credit, and nothing from the service.
+  const save = dialog.getByRole("button", { name: "Save a folder" });
+  await expect(dialog.getByText("Choose the name your packs show")).toBeVisible();
+  await expect(save).toBeDisabled();
+  await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("sunny-otter");
+  await expect(save).toBeEnabled();
+  await save.click();
+
+  // The folder is named after the pack's new id: its name, then six random characters.
+  const ready = page.getByRole("dialog", { name: "Your pack is ready" });
+  await expect(ready).toBeVisible();
+  await expect(ready.getByText(/^Saved as the folder night-prints-[a-z2-7]{6}\.$/)).toBeVisible();
+  await expect(ready.getByText(/Add from a folder in Community/)).toBeVisible();
+  await expect(ready.getByText(/GitHub/)).toHaveCount(0);
+  await expect(ready.getByText(/smaller than 1024 px/)).toHaveCount(0);
+});
+
+test("every picture is made ready first, and one made smaller to fit is named", async ({ page }) => {
+  const dialog = await openShare(page, "shared&scaled");
+  await fillPack(dialog);
+  await dialog.getByRole("button", { name: "Send for review" }).click();
+  // Lossless pictures take a moment each, so they're counted as they're ready.
+  await expect(dialog.getByRole("status").filter({ hasText: /^Getting the pictures ready \(\d of 8\)$/ })).toBeVisible();
+  const sent = page.getByRole("dialog", { name: "Your pack is waiting for review" });
+  await expect(sent).toBeVisible({ timeout: 15_000 });
+  await expect(sent.getByText(/^.+ \(896 px\) is smaller than 1024 px: kept lossless, it was over the 1\.5 MB a picture can be at full size\.$/)).toBeVisible();
+});
+
+test("saving a folder counts the pictures too, and names one made smaller to fit", async ({ page }) => {
+  const dialog = await openShare(page, "noshare&scaled");
+  await dialog.getByPlaceholder("Neon nights").fill("Night prints");
+  await dialog.getByRole("button", { name: "+ photo" }).click();
+  await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("sunny-otter");
+  await dialog.getByRole("button", { name: "Save a folder" }).click();
+  await expect(dialog.getByRole("button", { name: "Saving" })).toBeDisabled();
+  await expect(dialog.getByRole("status").filter({ hasText: /^Getting the pictures ready \(\d of 8\)$/ })).toBeVisible();
+  const ready = page.getByRole("dialog", { name: "Your pack is ready" });
+  await expect(ready).toBeVisible();
+  await expect(ready.getByText(/\(896 px\) is smaller than 1024 px: kept lossless/)).toBeVisible();
 });
 
 test("without a connection to the service, it says that too", async ({ page }) => {
-  const dialog = await shareWithoutGithub(page, "offline");
+  const dialog = await openShare(page, "offline");
   await expect(dialog.getByText(/can't be reached right now/)).toBeVisible();
 });
 
 test("the send button says what is still missing", async ({ page }) => {
-  const dialog = await shareWithoutGithub(page);
+  const dialog = await openShare(page);
   await dialog.getByPlaceholder("Neon nights").fill("Night prints");
   await dialog.getByRole("button", { name: "+ photo" }).click();
   await expect(dialog.getByText("Say where the pictures came from")).toBeVisible();
@@ -148,18 +196,13 @@ test.describe("licence profiles", () => {
   const kept = (page: Page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), PROFILES_KEY);
 
   /** Opens the share dialog with the two profiles above kept in Settings. */
-  async function openShare(page: Page, query = "") {
+  async function openWithProfiles(page: Page, query = "") {
     await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PROFILES_KEY, JSON.stringify(profiles)]);
-    await openApp(page, { query });
-    await openView(page, /community/i);
-    await page.getByRole("button", { name: "Share your skins" }).click();
-    const dialog = page.getByRole("dialog", { name: "Share a pack" });
-    await expect(dialog).toBeVisible();
-    return dialog;
+    return openShare(page, query);
   }
 
   test("give the pack its credit and licence, and a licence changed here is for this pack only", async ({ page }) => {
-    const dialog = await openShare(page);
+    const dialog = await openWithProfiles(page);
     const profile = dialog.getByRole("button", { name: /^profile:/ });
     const licence = dialog.getByRole("button", { name: /^licence:/ });
     // The default first.
@@ -176,36 +219,28 @@ test.describe("licence profiles", () => {
     await page.getByRole("listbox", { name: "licence" }).getByRole("option", { name: /^MIT/ }).click();
     await expect(dialog.getByText("For this pack only: the For work profile stays CC BY 4.0.")).toBeVisible();
 
-    // Without GitHub, the name it credits is the one typed for a computer not yet verified.
-    await dialog.getByRole("radio", { name: "Without GitHub" }).click();
+    // The name it credits is the one typed for a computer not yet verified.
     await expect(dialog.getByRole("textbox", { name: "the name your packs show" })).toHaveValue("acme-studio");
     expect(await kept(page)).toEqual(profiles);
   });
 
-  test("say when the pack is credited to someone else, and publishing changes none of them", async ({ page }) => {
-    const dialog = await openShare(page, "shared");
+  test("say when the pack is credited to someone else, and saving a folder changes only a profile that credits no one", async ({ page }) => {
+    const dialog = await openWithProfiles(page, "shared");
     await dialog.getByRole("button", { name: /^profile:/ }).click();
     await page.getByRole("listbox", { name: "profile" }).getByRole("option", { name: /For work/ }).click();
     await dialog.getByRole("button", { name: /^licence:/ }).click();
     await page.getByRole("listbox", { name: "licence" }).getByRole("option", { name: /^MIT/ }).click();
 
     // A verified computer sends under the name it was verified as.
-    await dialog.getByRole("radio", { name: "Without GitHub" }).click();
     await expect(dialog.getByText("Verified on this computer")).toBeVisible();
     await expect(dialog.getByText(/The For work profile credits acme-studio\. Packs sent from this computer are credited to the name it was verified under\./)).toBeVisible();
 
-    // Through GitHub, the pack is credited to the account connected.
-    await dialog.getByRole("radio", { name: "GitHub", exact: true }).click();
-    await dialog.getByRole("button", { name: "Connect to GitHub" }).click();
-    await expect(dialog.getByText(/The For work profile credits acme-studio\. Through GitHub, packs are credited to the account connected here\./)).toBeVisible({ timeout: 10_000 });
-    await expect(dialog.getByText("octocat")).toBeVisible();
     await dialog.getByPlaceholder("Neon nights").fill("Night prints");
     await dialog.getByRole("button", { name: "+ photo" }).click();
-    await dialog.getByText("I've read the pack terms and this pack follows them.").click();
-    await dialog.getByRole("button", { name: "Publish" }).click();
-    await expect(page.getByRole("dialog", { name: "Your pack is on its way" })).toBeVisible({ timeout: 20_000 });
+    await dialog.getByRole("button", { name: "Save a folder" }).click();
+    await expect(page.getByRole("dialog", { name: "Your pack is ready" })).toBeVisible();
 
-    // The default profile, which credited no one, now credits that account; nothing else changed.
-    expect(await kept(page)).toEqual({ ...profiles, list: [{ ...profiles.list[0], author: "octocat" }, profiles.list[1]] });
+    // The default profile, which credited no one, now credits that name; nothing else changed.
+    expect(await kept(page)).toEqual({ ...profiles, list: [{ ...profiles.list[0], author: "sunny-otter" }, profiles.list[1]] });
   });
 });

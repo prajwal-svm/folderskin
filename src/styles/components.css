@@ -859,67 +859,25 @@ select.input {
   background: var(--danger-soft);
 }
 
-/* sharing one skin: the skin itself instead of the picker */
-/* sharing a pack: the skins going in, then the steps on GitHub */
-.share-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-left: 20px;
-  font-weight: 600;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--ink-2);
-}
-
-.share-steps li::marker {
-  color: var(--accent-ink);
-  font-weight: 800;
-}
-
 .field-note.is-error {
   color: var(--danger);
 }
 
-/* Connecting to GitHub: the code is the whole of the interaction, so it is the biggest thing on
-   the panel and sits where the eye lands first. */
-.gh-connect {
+/* Verifying this computer for sharing: what's happening in the browser, the button that opens it
+   again, and what's being waited for, one under another. */
+.share-verify {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.gh-code {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 14px 14px 18px;
-  border: 1px solid var(--island-line);
-  border-radius: var(--r-card);
-  background: var(--well);
-}
-
-.gh-code-value {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 26px;
-  font-weight: 700;
-  /* The gap between halves of the code is what people read it in. */
-  letter-spacing: 0.14em;
-  color: var(--ink);
-  user-select: all;
-}
-
-.gh-copy {
-  flex: none;
-}
-
-.gh-open {
+.share-verify-open {
   width: 100%;
   justify-content: center;
 }
 
-.gh-waiting {
+/* Something under way, said beside a spinner. */
+.share-waiting {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -928,7 +886,7 @@ select.input {
   color: var(--ink-2);
 }
 
-.gh-cancel {
+.share-verify-cancel {
   align-self: center;
 }
 
@@ -1070,39 +1028,6 @@ select.input {
   color: var(--on-accent);
 }
 
-/* Connecting from the author row, when they have not already. It stands where the account row
-   will, so it is shaped like one rather than like a line of text. */
-.gh-pick {
-  justify-content: center;
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--island-line);
-  background: var(--well);
-}
-
-/* Who the pack will be credited to. A GitHub name can be long, so it is the part that gives. */
-.gh-signed-in {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
-.gh-signed-in strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink);
-}
-
-.gh-signed-in .link-btn {
-  flex: none;
-  margin-left: auto;
-}
-
 /* What they are agreeing to, said plainly, above the one tick that agrees to it. It sits under
    both columns: the terms cover the pack, not one half of the form. */
 .share-terms {
@@ -1153,7 +1078,8 @@ select.input {
   text-overflow: ellipsis;
 }
 
-.gh-account {
+/* Who a verified computer's packs are credited to. */
+.share-account {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1164,18 +1090,16 @@ select.input {
   background: var(--well);
 }
 
-.gh-account .btn {
+.share-account .btn {
   flex: none;
 }
 
-.gh-avatar {
+/* The name's first letter, where a picture of its owner would be. */
+.share-avatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
   flex: none;
-}
-
-.gh-avatar.is-letter {
   display: grid;
   place-items: center;
   background: var(--accent-soft);
@@ -1243,7 +1167,7 @@ select.input {
   transform: translateY(0);
 }
 
-.gh-account-who {
+.share-account-who {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1253,20 +1177,20 @@ select.input {
   line-height: 1.4;
 }
 
-.gh-account-who span {
+.share-account-who span {
   color: var(--ink-2);
 }
 
-/* GitHub logins run to 39 characters. The name gives way rather than widening the dialog. */
-.gh-account-who strong,
-.gh-account-who span {
+/* Names run to 39 characters. The name gives way rather than widening the dialog. */
+.share-account-who strong,
+.share-account-who span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.gh-account .link-btn,
-.gh-account .btn {
+.share-account .link-btn,
+.share-account .btn {
   flex: none;
 }
 

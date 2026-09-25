@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type AiCatalogue, type GithubAccount } from "../lib/tauri";
+import { api, errorMessage, type AiCatalogue } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
 import { keys } from "../lib/platform";
 import { LICENSES, PACKS_GUIDE_URL, REPO_URL } from "../lib/packs";
@@ -23,8 +23,6 @@ import { ACCENTS, setPrefs, usePrefs, type Motion } from "../state/prefs";
 import type { ThemePref } from "../state/theme";
 import type { ToastTone } from "../hooks/useToasts";
 import type { UpdateStatus } from "../hooks/useUpdates";
-import { GithubAvatar } from "./GithubAvatar";
-import { GithubConnect } from "./GithubConnect";
 import { Modal } from "./Modal";
 import { ProviderKeys } from "./ProviderKeys";
 import { Select } from "./Select";
@@ -71,7 +69,7 @@ const PAGES: { id: SettingsTab; label: string; Icon: typeof SunIcon; find: strin
     id: "sharing",
     label: "Sharing",
     Icon: EarthIcon,
-    find: "sharing share github connect account author credit credited licence license profile profiles cc0 cc by mit community pack",
+    find: "sharing share author credit credited licence license profile profiles cc0 cc by mit community pack",
   },
   {
     id: "about",
@@ -138,7 +136,7 @@ export function Settings({
 }) {
   const [tab, setTab] = useState<SettingsTab>(first);
   const [search, setSearch] = useState("");
-  /** The page open has something leaving it would lose: a profile being changed, an Undo, a connection to GitHub. */
+  /** The page open has something leaving it would lose: a profile being changed, or an Undo. */
   const [busy, setBusy] = useState(false);
   const query = search.trim().toLowerCase();
   const shown = useMemo(() => PAGES.filter((p) => !query || hasWords(query, `${p.label} ${p.find}`)), [query]);
@@ -234,7 +232,7 @@ export function Settings({
               />
             )}
             {tab === "ai" && <AiPage onKeysChanged={onKeysChanged} toast={toast} />}
-            {tab === "sharing" && <Sharing toast={toast} onBusy={setBusy} />}
+            {tab === "sharing" && <Sharing onBusy={setBusy} />}
             {tab === "about" && <About fileBrowser={fileBrowser} updates={updates} onCheckUpdates={onCheckUpdates} onShowUpdate={onShowUpdate} />}
           </Query.Provider>
         </div>
@@ -490,119 +488,24 @@ function AiPage({ onKeysChanged, toast }: { onKeysChanged: () => void; toast: To
 
 // ---------- Sharing ----------
 
-/** Whether the focus is nowhere, having gone with what it was on, or inside `el`. */
-const focusIsIn = (el: HTMLElement | null) => {
-  const at = document.activeElement;
-  return !at || at === document.body || !!el?.contains(at);
-};
-
-function Sharing({ toast, onBusy }: { toast: Toast; onBusy: (busy: boolean) => void }) {
+function Sharing({ onBusy }: { onBusy: (busy: boolean) => void }) {
   const [profiles, setProfiles] = useState<Profiles>(loadProfiles);
-  // The profiles as last changed, for what finishes later than the render that started it.
-  const latest = useRef(profiles);
   const change = useCallback((next: Profiles) => {
-    latest.current = next;
     setProfiles(next);
     saveProfiles(next);
   }, []);
-  /** The default profile takes the GitHub name when it has none yet. */
-  const creditTo = useCallback(
-    (login: string) => {
-      const p = defaultProfile(latest.current);
-      if (!p.author) change(upsertProfile(latest.current, { ...p, author: login }));
-    },
-    [change],
-  );
 
-  const [account, setAccount] = useState<GithubAccount | null>(null);
-  const [connecting, setConnecting] = useState(false);
   const [listBusy, setListBusy] = useState(false);
-  useEffect(() => onBusy(connecting || listBusy), [connecting, listBusy, onBusy]);
+  useEffect(() => onBusy(listBusy), [listBusy, onBusy]);
   useEffect(() => () => onBusy(false), [onBusy]);
-  useEffect(() => {
-    let live = true;
-    void api
-      .githubAccount()
-      .then((who) => {
-        if (!live || !who) return;
-        setAccount(who);
-        creditTo(who.login);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [creditTo]);
-
-  // Connecting, cancelling and disconnecting each take away the button that had the focus; it
-  // goes to the one in the GitHub row now. As the render that shows it is put on screen: an
-  // earlier render's effects still waiting to run would find the old row.
-  const connectBox = useRef<HTMLDivElement>(null);
-  const githubButton = useRef<HTMLButtonElement>(null);
-  const refocus = useRef(false);
-  useLayoutEffect(() => {
-    if (!refocus.current) return;
-    refocus.current = false;
-    githubButton.current?.focus();
-  });
 
   return (
     <>
-      <Section title="GitHub">
-        {connecting ? (
-          <div className="set-block" ref={connectBox}>
-            <GithubConnect
-              onConnected={(who) => {
-                refocus.current = focusIsIn(connectBox.current);
-                setAccount(who);
-                setConnecting(false);
-                creditTo(who.login);
-                toast(`Connected to GitHub as ${who.login}`, { tone: "ok" });
-              }}
-              onCancel={() => {
-                refocus.current = focusIsIn(connectBox.current);
-                setConnecting(false);
-              }}
-            />
-          </div>
-        ) : account ? (
-          <Row label={account.login} note={account.name || "Connected"} find="github account connected disconnect" lead={<GithubAvatar account={account} />}>
-            <button
-              ref={githubButton}
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                void api.githubSignOut().catch(() => {});
-                refocus.current = true;
-                setAccount(null);
-              }}
-            >
-              Disconnect
-            </button>
-          </Row>
-        ) : (
-          <Row
-            label="Connect to GitHub"
-            note="Share packs from your own GitHub account, credited to you."
-            find="github account connect sign in"
-            lead={
-              <span className="set-row-lead" aria-hidden="true">
-                <GithubMark size={17} />
-              </span>
-            }
-          >
-            <button ref={githubButton} type="button" className="btn btn-primary btn-sm" onClick={() => setConnecting(true)}>
-              Connect
-            </button>
-          </Row>
-        )}
-      </Section>
-
       <Section
         title="Licence profiles"
         note="A pack you share says who made it and how others may use it. Keep a profile for each way you share: sharing starts from the default one."
       >
-        <ProfileList profiles={profiles} account={account} onChange={change} onBusy={setListBusy} />
+        <ProfileList profiles={profiles} onChange={change} onBusy={setListBusy} />
       </Section>
 
       <button type="button" className="link-btn set-link" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
@@ -620,12 +523,10 @@ const licenceName = (id: LicenseId) => LICENSES.find((l) => l.id === id)?.label 
 
 function ProfileList({
   profiles,
-  account,
   onChange,
   onBusy,
 }: {
   profiles: Profiles;
-  account: GithubAccount | null;
   onChange: (p: Profiles) => void;
   /** A profile is open for changes, or Undo is offered. */
   onBusy: (busy: boolean) => void;
@@ -673,7 +574,7 @@ function ProfileList({
 
   const add = () =>
     setEditing({
-      profile: { id: newProfileId(), name: "", author: defaultProfile(profiles).author || account?.login || "", license: LICENSES[0].id },
+      profile: { id: newProfileId(), name: "", author: defaultProfile(profiles).author, license: LICENSES[0].id },
       isNew: true,
     });
   const close = (id: string, isNew: boolean) => {
@@ -694,7 +595,6 @@ function ProfileList({
               key={p.id}
               profile={editing.profile}
               others={profiles.list.filter((o) => o.id !== p.id)}
-              account={account}
               onCancel={() => close(p.id, false)}
               onSave={(saved) => save(saved, false)}
             />
@@ -757,7 +657,6 @@ function ProfileList({
           <ProfileForm
             profile={editing.profile}
             others={profiles.list}
-            account={account}
             onCancel={() => close(editing.profile.id, true)}
             onSave={(saved) => save(saved, true)}
           />
@@ -796,13 +695,11 @@ function ProfileList({
 function ProfileForm({
   profile,
   others,
-  account,
   onSave,
   onCancel,
 }: {
   profile: LicenceProfile;
   others: LicenceProfile[];
-  account: GithubAccount | null;
   onSave: (p: LicenceProfile) => void;
   onCancel: () => void;
 }) {
@@ -868,25 +765,18 @@ function ProfileForm({
         <label className="field-label" htmlFor={`${id}-author`}>
           Credited to
         </label>
-        <div className="set-author">
-          <input
-            ref={authorRef}
-            id={`${id}-author`}
-            className="input"
-            value={author}
-            maxLength={39}
-            spellCheck={false}
-            autoCapitalize="off"
-            placeholder="A GitHub user name"
-            onChange={(e) => setAuthor(e.target.value)}
-            {...marks("author")}
-          />
-          {account && author.trim() !== account.login && (
-            <button type="button" className="btn btn-ghost btn-sm" data-tip={account.login} onClick={() => setAuthor(account.login)}>
-              Use GitHub name
-            </button>
-          )}
-        </div>
+        <input
+          ref={authorRef}
+          id={`${id}-author`}
+          className="input"
+          value={author}
+          maxLength={39}
+          spellCheck={false}
+          autoCapitalize="off"
+          placeholder="your-name"
+          onChange={(e) => setAuthor(e.target.value)}
+          {...marks("author")}
+        />
         {note("author")}
       </div>
       <div className="field">

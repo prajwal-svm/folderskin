@@ -1,14 +1,14 @@
 # What you agree to when you share a pack
 
-Version 1.
+Version 2.
 
 Sharing a pack puts your pictures in front of everyone who uses FolderSkin, under your name,
-permanently and in public. Before FolderSkin opens the pull request it asks you to confirm the
-list below. The confirmation is recorded in the pull request, so a maintainer can see what you
-agreed to and when.
+permanently and in public. Before FolderSkin sends a pack to its review queue, it asks you to
+confirm the list below. The service records the version you agreed to with the pack, so a
+maintainer can see what you agreed to and when.
 
 These are not suggestions. A pack that breaks any of them is declined, and one that is found to
-break them after it was merged is removed.
+break them after it was published is removed.
 
 ## The pictures are yours to give
 
@@ -21,9 +21,10 @@ break them after it was merged is removed.
 3. **AI-made pictures follow the same rule.** If a model made them, you are responsible for
    whether its terms let you share the result, and for not having asked it to copy a living
    artist's style or an existing character.
-4. **The name you put on it is yours.** The GitHub account publishing the pack is the one being
-   credited.
-5. **The licence you pick is real and irrevocable.** Once the pack is merged, people will use
+4. **The name you put on it is yours.** The pack is credited to your FolderSkin name, the one
+   your computer was verified under, not to a GitHub account, and it has to be a name that is
+   yours to use.
+5. **The licence you pick is real and irrevocable.** Once the pack is published, people will use
    these pictures under that licence. You cannot take that back later for copies already out
    there.
 
@@ -32,8 +33,8 @@ break them after it was merged is removed.
 6. **Nothing sexual.** No nudity, no sexual acts, no sexually suggestive imagery, no fetish
    content, however stylised or cartooned.
 7. **Nothing sexualising a child.** Any depiction of a minor in a sexual context is reported to
-   the platform and the authorities, not simply declined. There is no artistic-intent exception
-   and no stylisation exception.
+   the authorities, not simply declined. There is no artistic-intent exception and no
+   stylisation exception.
 8. **Nothing about self-harm.** No depiction, glamorisation or encouragement of suicide,
    self-injury or disordered eating, including symbols used by communities that promote them.
 9. **No hate.** No slurs, no hate symbols, nothing attacking or demeaning people for their race,
@@ -56,23 +57,26 @@ break them after it was merged is removed.
 
 15. **A maintainer decides.** Packs can be declined for any of these reasons, and also for being
     a poor fit, low quality, or a near-duplicate of a pack that already exists. There is no
-    obligation to merge anything.
-16. **It can be removed later.** If something turns up after a merge — a licence problem, a
-    report, anything on the list above — the pack is removed without waiting for a discussion.
-17. **It is public and it is kept.** The pull request, your pictures, your GitHub name and your
-    answers are public, and git keeps history, so assume anything you send is permanent even if
-    the pack is later removed.
-18. **Your sign-in is yours.** FolderSkin acts as you when it opens the pull request. Do not
-    publish a pack on someone else's account.
+    obligation to publish anything.
+16. **It can be removed later.** If something turns up after a pack is published — a licence
+    problem, a report, anything on the list above — the pack is removed without waiting for a
+    discussion.
+17. **It is public and it is kept.** Once the pack is published, the pack, its pictures and your
+    FolderSkin name are public, and the packs repository keeps its history, so assume anything
+    published is permanent even if the pack is later removed.
+18. **Your verified computer is yours.** Packs sent from it are credited to the name it was
+    verified under. Do not send a pack from someone else's computer, and do not share your key:
+    the recovery file FolderSkin saves is that key.
 
 ## Reporting a pack
 
-If a pack that is already merged breaks any of this, open an issue on
-[the packs repository](https://github.com/prajwal-svm/folderskin-community/issues) with a link to it. For anything
-involving a child, report it to GitHub directly as well — GitHub acts faster than a maintainer
-reading issues, and the content needs to be taken down at the platform level.
+If a published pack breaks any of this, open an issue on
+[the packs repository](https://github.com/prajwal-svm/folderskin-community/issues) with a link to
+it. For anything involving a child, report it to the authorities as well: in the United States to
+NCMEC's [CyberTipline](https://report.cybertip.org/), and elsewhere to the police or your
+country's hotline for it.
 
 ## Changes
 
-If this list changes, the version at the top goes up, and what you agreed to is whatever version
-your pull request recorded.
+If this list changes, the version at the top goes up. What you agreed to is the version recorded
+with your pack when you sent it.

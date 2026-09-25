@@ -85,21 +85,21 @@ draws the template in a flat colour, to look at the template itself.
 
 ## Pictures for a pack
 
-A pack's pictures are downloaded when someone adds the pack, the first-launch welcome included,
-so smaller is better. [PACKS.md](PACKS.md) has the limits: at most 1024 px on a side (the largest
-icon any of the three systems draws), at least 256, and at most 2 MB each. `packs make` shrinks
-and encodes every picture for you, aiming for 400 KB each:
+A pack's pictures are shared losslessly, so a pack looks exactly as you made it.
+[PACKS.md](PACKS.md) has the limits: at most 1024 px on a side (the largest icon any of the three
+systems draws), at least 256, at most 1.5 MB each and 64 MB for the whole pack. The app and
+`packs make` shrink and encode every picture for you, as a lossless WebP:
 
 | picture | format | why |
 |---|---|---|
-| a finished folder | WebP with lossy colour and lossless alpha, from `cwebp` | keeps the transparency, and the edge stays clean, at a fraction of a PNG's size |
-| a finished folder, without `cwebp` | PNG | keeps the transparency, but several times bigger |
-| artwork: photographs, paintings, gradients, grain | JPEG, quality 90 down to 70 until it fits | 80 to 250 KB at 1024 px; grain would blow up a PNG |
+| a finished folder | lossless WebP, with its transparency | every pixel as drawn, the edge included, at about two thirds of a PNG's size |
+| artwork: photographs, paintings, gradients, grain | lossless WebP | no blocks or ringing; a detailed 1024 px picture comes to about 800 KB |
+| either, too detailed for 1.5 MB at 1024 px | lossless WebP at 896, then 768 px | smaller rather than blurred, and the app says which |
 
-Encoding by hand, flat artwork (solid colour, hard-edged shapes, halftone dots, stripes) is
-usually smaller as a PNG, and JPEG rings around hard edges: try both and keep the smaller file.
-Artwork has no transparency to keep, since the template supplies the folder's shape. Artwork at
-1024 × 958 loses the least to the crop, but any size works.
+Encoding by hand, a PNG is fine too, and so is `cwebp -lossless -z 9`. JPEG and lossy WebP
+aren't taken for a new pack: the community service turns them down, and so does `packs check
+--require-lossless`. Artwork has no transparency to keep, since the template supplies the
+folder's shape. Artwork at 1024 × 958 loses the least to the crop, but any size works.
 
 ## Licensing
 

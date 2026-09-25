@@ -18,7 +18,8 @@
 //! [`InstallLinks`] until the webview takes it with `install_link_take`. The webview asks as it
 //! starts, since a link can come before it has (or during the first-launch welcome, which it
 //! waits out), and again whenever [`EVENT`] says another has come. It opens Community on that
-//! pack and adds it the way the pack's Add button does.
+//! pack and adds it the way the pack's Add button does. A link with an id the pack had before it
+//! moved still finds it: `community_pack` follows head.json's `moved` (community.rs).
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};

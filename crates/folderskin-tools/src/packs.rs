@@ -13,8 +13,8 @@
 
 use crate::skin::Skin;
 use folderskin_core::pack::{
-    self, Index, IndexEntry, Moved, Pack, INDEX_VERSION, MANIFEST_FILE, MAX_PICTURE_BYTES,
-    MOVED_FILE,
+    self, Index, IndexEntry, Moved, Pack, INDEX_VERSION, MANIFEST_FILE, MAX_PACK_BYTES,
+    MAX_PICTURE_BYTES, MAX_READ_PICTURE_BYTES, MOVED_FILE,
 };
 use folderskin_core::{matte, raster};
 use image::RgbaImage;
@@ -53,23 +53,31 @@ pub struct Report {
     pub moved: Moved,
 }
 
-/// How [`check_with`] holds the packs.
+/// How [`check_with`] holds the packs. Every pack's pictures come to [`MAX_PACK_BYTES`] at most,
+/// whatever these say.
 #[derive(Debug, Clone)]
 pub struct CheckOptions {
-    /// The largest a picture may be: the pack limit, or less, such as the 400 KB `packs make`
-    /// keeps to.
+    /// The largest a picture may be: the most a published picture can be
+    /// ([`MAX_READ_PICTURE_BYTES`]), or less, such as a smaller size `packs make` is asked to
+    /// keep to.
     pub max_bytes: usize,
     /// Turn down a pack whose id isn't a generated one ([`pack::is_generated_id`]). Off unless
     /// asked, because the packs from before generated ids have ids made from their names alone,
     /// until `packs rename` gives them new ones.
     pub require_generated_ids: bool,
+    /// Hold every picture to the rules a pack made or shared from FolderSkin 0.1.7 on keeps:
+    /// lossless ([`pack::is_lossless_picture`]) and at most [`MAX_PICTURE_BYTES`]. Off unless
+    /// asked, because the packs from before are lossy WebP, and one has a 2 MB PNG, until they're
+    /// made again; `packs make` always asks.
+    pub require_lossless: bool,
 }
 
 impl Default for CheckOptions {
     fn default() -> Self {
         CheckOptions {
-            max_bytes: MAX_PICTURE_BYTES,
+            max_bytes: MAX_READ_PICTURE_BYTES,
             require_generated_ids: false,
+            require_lossless: false,
         }
     }
 }
@@ -125,8 +133,7 @@ pub fn check(dir: &Path) -> Result<Report, String> {
     check_with(dir, &CheckOptions::default())
 }
 
-/// [`check`] with a tighter limit on each picture's size, such as the 400 KB `packs make` keeps
-/// to.
+/// [`check`] with a tighter limit on each picture's size.
 pub fn check_within(dir: &Path, max_bytes: usize) -> Result<Report, String> {
     check_with(
         dir,
@@ -146,7 +153,7 @@ pub fn check_with(dir: &Path, opts: &CheckOptions) -> Result<Report, String> {
     let mut report = Report::default();
     for (name, kind) in &entries {
         let (pack, mut problems) = if kind.is_dir() {
-            match check_pack_within(&packs_dir.join(name), name, opts.max_bytes) {
+            match check_pack_with(&packs_dir.join(name), name, opts) {
                 Ok(pack) => (Some(pack), Vec::new()),
                 Err(problems) => (None, problems),
             }
@@ -261,14 +268,19 @@ fn not_generated(id: &str) -> String {
     )
 }
 
-/// Checks one pack folder called `name`: the name, `pack.json`, every picture it lists, and
-/// that nothing else is in it. Dotfiles such as `.DS_Store` are ignored.
+/// Checks one pack folder called `name`: the name, `pack.json`, every picture it lists, what
+/// they come to together, and that nothing else is in it. Dotfiles such as `.DS_Store` are
+/// ignored.
 pub fn check_pack(folder: &Path, name: &str) -> Result<Pack, Vec<String>> {
-    check_pack_within(folder, name, MAX_PICTURE_BYTES)
+    check_pack_with(folder, name, &CheckOptions::default())
 }
 
-/// [`check_pack`] with pictures of at most `max_bytes`.
-pub fn check_pack_within(folder: &Path, name: &str, max_bytes: usize) -> Result<Pack, Vec<String>> {
+/// [`check_pack`], holding the pictures to `opts`.
+pub fn check_pack_with(
+    folder: &Path,
+    name: &str,
+    opts: &CheckOptions,
+) -> Result<Pack, Vec<String>> {
     let mut problems = Vec::new();
     if !pack::is_pack_id(name) {
         problems.push(bad_id(name));
@@ -283,13 +295,23 @@ pub fn check_pack_within(folder: &Path, name: &str, max_bytes: usize) -> Result<
     let Some(listing) = read_manifest(folder, &files, &mut problems) else {
         return Err(problems);
     };
+    let mut total = 0;
     for skin in &listing.skins {
         // A name Pack::parse turned down is reported already, and could point outside the folder.
         if pack::is_picture_file_name(&skin.file) {
-            if let Err(e) = check_listed_picture(folder, &files, &skin.file, max_bytes) {
-                problems.push(e);
+            match check_listed_picture(folder, &files, &skin.file, opts) {
+                Ok(bytes) => total += bytes,
+                Err(e) => problems.push(e),
             }
         }
+    }
+    if total > MAX_PACK_BYTES {
+        problems.push(format!(
+            "its pictures come to {} MB, and a pack's come to {} MB at most; split it into two \
+             packs",
+            total.div_ceil(1024 * 1024),
+            MAX_PACK_BYTES / (1024 * 1024)
+        ));
     }
     let listed: Vec<&str> = listing
         .skins
@@ -441,7 +463,7 @@ pub fn preview_strip(folder: &Path, pack: &Pack) -> Result<RgbaImage, String> {
     let shown = &pack.skins[..pack.skins.len().min(PREVIEW_SKINS)];
     let mut strip = RgbaImage::new(PREVIEW_SIDE * shown.len() as u32, PREVIEW_SIDE);
     for (i, skin) in shown.iter().enumerate() {
-        let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
+        let rgba = read_picture(&folder.join(&skin.file), MAX_READ_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
         let icon = render_skin(rgba, PREVIEW_SIDE).map_err(|e| format!("{} {e}", skin.file))?;
         // Copied rather than blended: the tiles never overlap, and copying keeps them exact.
@@ -468,7 +490,7 @@ pub fn contact_sheet(
     let [r, g, b] = SHEET_GREY;
     let mut sheet = RgbaImage::from_pixel(side * columns, side * rows, image::Rgba([r, g, b, 255]));
     for (i, skin) in pack.skins.iter().enumerate() {
-        let rgba = read_picture(&folder.join(&skin.file), MAX_PICTURE_BYTES)
+        let rgba = read_picture(&folder.join(&skin.file), MAX_READ_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
         let icon = render_skin(rgba, side).map_err(|e| format!("{} {e}", skin.file))?;
         let (col, row) = (i as u32 % columns, i as u32 / columns);
@@ -541,33 +563,56 @@ fn read_manifest(folder: &Path, files: &Files, problems: &mut Vec<String>) -> Op
     }
 }
 
-/// Checks one picture a pack lists, the way the app does before it saves it.
+/// Checks one picture a pack lists, the way the app does before it saves it, and returns its
+/// size.
 fn check_listed_picture(
     folder: &Path,
     files: &Files,
     file: &str,
-    max_bytes: usize,
-) -> Result<(), String> {
+    opts: &CheckOptions,
+) -> Result<usize, String> {
     match files.get(file) {
         None => return Err(missing(files, file)),
         Some(kind) if !kind.is_file() => return Err(not_a_file(file)),
         Some(_) => {}
     }
-    let rgba = read_picture(&folder.join(file), max_bytes).map_err(|e| format!("{file} {e}"))?;
+    let max_bytes = if opts.require_lossless {
+        opts.max_bytes.min(MAX_PICTURE_BYTES)
+    } else {
+        opts.max_bytes
+    };
+    let path = folder.join(file);
+    let bytes = read_bytes(&path, max_bytes).map_err(|e| format!("{file} {e}"))?;
+    if opts.require_lossless && !pack::is_lossless_picture(&bytes) {
+        return Err(format!(
+            "{file} isn't lossless; a pack's pictures are PNG or lossless WebP, which `packs make` \
+             writes"
+        ));
+    }
+    // decode_picture runs check_picture first: the real file type, then the dimensions.
+    let rgba = pack::decode_picture(&bytes).map_err(|e| format!("{file} {e}"))?;
     if matte::alpha_bounds(&rgba, 8).is_none() {
         return Err(format!("{file} is completely transparent"));
     }
-    Ok(())
+    Ok(bytes.len())
 }
 
-/// Reads and decodes a picture within the pack limits and at most `max_bytes`. The error
-/// finishes a sentence that starts with the file's name.
+/// Reads and decodes a picture within the limits a pack is read with and at most `max_bytes`.
+/// The error finishes a sentence that starts with the file's name.
 fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, String> {
+    let bytes = read_bytes(path, max_bytes)?;
+    // decode_picture runs check_picture first: the real file type, then the dimensions.
+    pack::decode_picture(&bytes)
+}
+
+/// Reads a picture file of at most `max_bytes`, and never more than a published picture can be.
+/// The error finishes a sentence that starts with the file's name.
+fn read_bytes(path: &Path, max_bytes: usize) -> Result<Vec<u8>, String> {
     let len = std::fs::metadata(path)
         .map_err(|e| format!("couldn't be read: {e}"))?
         .len();
     // Measured before reading, so an oversized file is never loaded.
-    let most = max_bytes.min(MAX_PICTURE_BYTES);
+    let most = max_bytes.min(MAX_READ_PICTURE_BYTES);
     if len > most as u64 {
         return Err(format!(
             "is {} KB; the most is {} KB",
@@ -575,9 +620,7 @@ fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, String> {
             most / 1024
         ));
     }
-    let bytes = std::fs::read(path).map_err(|e| format!("couldn't be read: {e}"))?;
-    // decode_picture runs check_picture first: the real file type, then the dimensions.
-    pack::decode_picture(&bytes)
+    std::fs::read(path).map_err(|e| format!("couldn't be read: {e}"))
 }
 
 /// Writes `bytes` to `path` unless it holds them already.
@@ -985,6 +1028,93 @@ mod tests {
         assert_eq!(report.problems, Vec::<String>::new());
         assert_eq!(report.packs.len(), 3);
         assert!(report.packs.iter().all(|(_, p)| p.name == "Test"));
+    }
+
+    /// A picture no smaller as a PNG than it is raw, of `w`×`h` px.
+    fn noise(w: u32, h: u32) -> RgbaImage {
+        let mut state = 0x2545_f491_u32;
+        RgbaImage::from_fn(w, h, |_, _| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            let [r, g, b, _] = state.to_le_bytes();
+            Rgba([r, g, b, 255])
+        })
+    }
+
+    #[test]
+    fn lossless_pictures_within_1_5_mb_are_required_only_when_asked() {
+        let c = Community::new("lossless");
+        let lossy = raster::encode_webp_lossy(&artwork([200, 40, 40]), 90.0);
+        let listed = vec![skin("a.webp")];
+        c.put("lossy", MANIFEST_FILE, manifest(&listed).as_bytes());
+        c.put("lossy", "a.webp", &lossy);
+        c.pack("png", &[("a.png", &artwork([40, 40, 200]))]);
+        c.put("webp", MANIFEST_FILE, manifest(&listed).as_bytes());
+        c.put(
+            "webp",
+            "a.webp",
+            &raster::encode_webp_lossless(&cutout([40, 200, 40])),
+        );
+        // A 1.7 MB PNG: within the 2 MB packs were published under, over the 1.5 MB now.
+        c.pack("big", &[("a.png", &noise(760, 760))]);
+
+        let lenient = check(&c.0).unwrap();
+        assert_eq!(lenient.problems, Vec::<String>::new());
+        assert_eq!(lenient.packs.len(), 4);
+
+        let strict = check_with(
+            &c.0,
+            &CheckOptions {
+                require_lossless: true,
+                ..CheckOptions::default()
+            },
+        )
+        .unwrap();
+        let ids: Vec<&str> = strict.packs.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, ["png", "webp"]);
+        let problems = strict.problems.join("\n");
+        assert!(
+            problems.contains("a.webp isn't lossless; a pack's pictures are PNG or lossless WebP"),
+            "{problems}"
+        );
+        assert!(problems.contains("the most is 1536 KB"), "{problems}");
+    }
+
+    #[test]
+    fn a_packs_pictures_come_to_64_mb_at_most() {
+        let c = Community::new("total");
+        // Pictures of almost 2 MB, each within the limit: as many as come to 64 MB, and one more.
+        let picture = raster::encode_png(&noise(760, 760));
+        assert!(
+            picture.len() > 1_900_000 && picture.len() <= MAX_READ_PICTURE_BYTES,
+            "{}",
+            picture.len()
+        );
+        let fit = MAX_PACK_BYTES / picture.len();
+        assert!(fit < pack::MAX_SKINS);
+        let files: Vec<String> = (0..=fit).map(|i| format!("p{i}.png")).collect();
+        let listed: Vec<String> = files.iter().map(|f| skin(f)).collect();
+        c.put("heavy", MANIFEST_FILE, manifest(&listed).as_bytes());
+        for file in &files {
+            c.put("heavy", file, &picture);
+        }
+        let report = check(&c.0).unwrap();
+        assert_eq!(report.failed, 1);
+        let total = (picture.len() * files.len()).div_ceil(1024 * 1024);
+        assert!(total > 64);
+        let expected = format!(
+            "{}: its pictures come to {total} MB, and a pack's come to 64 MB at most; split it \
+             into two packs",
+            c.path(PACKS_DIR).join("heavy").display()
+        );
+        assert_eq!(report.problems, [expected]);
+
+        // One picture fewer is within it.
+        std::fs::remove_file(c.path(PACKS_DIR).join("heavy").join(&files[fit])).unwrap();
+        let listed: Vec<String> = files[..fit].iter().map(|f| skin(f)).collect();
+        c.put("heavy", MANIFEST_FILE, manifest(&listed).as_bytes());
+        assert_eq!(check(&c.0).unwrap().problems, Vec::<String>::new());
     }
 
     #[test]

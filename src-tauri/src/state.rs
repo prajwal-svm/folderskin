@@ -4,8 +4,9 @@
 
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinSource, Store, THUMB_SIZE};
 use folderskin_core::compositor::Style;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 /// How many decoded saved skins stay in memory (up to 16 MB each at 2048 px).
@@ -357,6 +358,25 @@ impl AppState {
         Ok(ids)
     }
 
+    /// Moves the community skins of every pack `moved` names, saved or kept for this session,
+    /// from the pack's old id to the one it has now ([`Store::move_packs`]), and says how many
+    /// moved. The skins themselves, their ids and the version each pack was added at stay as
+    /// they were, so the pack is the same pack under its new id: added, and with any update it
+    /// had.
+    pub fn follow_moved(&self, moved: &BTreeMap<String, String>) -> Result<usize, String> {
+        let mut count = 0;
+        for unsaved in lock(&self.0.unsaved).values_mut() {
+            if let Some(now) = store::moved_to(&unsaved.entry, moved) {
+                unsaved.entry.pack = Some(now);
+                count += 1;
+            }
+        }
+        match self.store() {
+            Some(store) => Ok(count + store.move_packs(moved)?),
+            None => Ok(count),
+        }
+    }
+
     /// The community packs with at least one skin saved, each with the pack hash recorded when
     /// it was added (`None` for one added before FolderSkin kept one).
     pub fn installed_packs(&self) -> HashMap<String, Option<String>> {
@@ -396,6 +416,46 @@ impl AppState {
         let slot = usize::from(style == Style::Windows);
         self.0.default_thumb[slot].get_or_init(draw).clone()
     }
+}
+
+/// `f` applied to every item, on up to `max_threads` threads (and no more than one a core), each
+/// taking the next item as it finishes one, with the results in item order. For work that takes
+/// seconds and a lot of memory an item, such as making a pack's pictures, where one slow item
+/// shouldn't hold up the rest and every core at once would use too much memory.
+pub(crate) fn parallel_queue<T: Sync, R: Send>(
+    items: &[T],
+    max_threads: usize,
+    f: impl Fn(&T) -> R + Sync,
+) -> Vec<R> {
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .min(max_threads)
+        .clamp(1, items.len().max(1));
+    let next = AtomicUsize::new(0);
+    let mut done: Vec<(usize, R)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut mine = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(i) else { break };
+                        mine.push((i, f(item)));
+                    }
+                    mine
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|w| {
+                w.join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect()
+    });
+    done.sort_by_key(|(i, _)| *i);
+    done.into_iter().map(|(_, r)| r).collect()
 }
 
 /// `f` applied to every item, on up to one thread per core, with the results in item order.
@@ -576,6 +636,38 @@ mod tests {
         assert!(state.resolve(&ids[1]).is_ok());
     }
 
+    #[test]
+    fn a_pack_that_moved_is_listed_by_its_new_id_saved_or_kept_for_the_session() {
+        let dir =
+            std::env::temp_dir().join(format!("folderskin-state-moved-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let state = AppState::default();
+        state.open_store(dir.clone());
+        let (saved, kept) = (skin_id(b"moved saved"), skin_id(b"moved kept"));
+        state
+            .save_many(vec![(pack_skin(&saved), folder(3))], &|| {})
+            .unwrap();
+        // One that couldn't be written, kept for the session.
+        state.keep_unsaved(pack_skin(&kept), folder(4));
+        assert_eq!(
+            state.installed_packs().keys().collect::<Vec<_>>(),
+            ["test-pack"]
+        );
+
+        let moved = BTreeMap::from([("test-pack".to_string(), "test-pack-k7q2mx".to_string())]);
+        assert_eq!(state.follow_moved(&moved).unwrap(), 2);
+        assert_eq!(
+            state.installed_packs().keys().collect::<Vec<_>>(),
+            ["test-pack-k7q2mx"]
+        );
+        assert_eq!(state.follow_moved(&moved).unwrap(), 0, "moved once");
+        assert!(state
+            .saved_skins()
+            .iter()
+            .all(|(entry, _)| entry.pack.as_deref() == Some("test-pack-k7q2mx")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     fn design_skin(id: &str, name: &str) -> NewSkin {
         NewSkin {
             source: SkinSource::Composer,
@@ -688,5 +780,21 @@ mod tests {
         let doubled = parallel_map(&numbers, |n| n * 2);
         assert_eq!(doubled, numbers.iter().map(|n| n * 2).collect::<Vec<_>>());
         assert!(parallel_map(&[] as &[u32], |n| *n).is_empty());
+    }
+
+    #[test]
+    fn parallel_queue_keeps_the_order_and_its_limit() {
+        let numbers: Vec<u32> = (0..37).collect();
+        let (running, most) = (AtomicUsize::new(0), AtomicUsize::new(0));
+        let doubled = parallel_queue(&numbers, 3, |n| {
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            most.fetch_max(now, Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            running.fetch_sub(1, Ordering::SeqCst);
+            n * 2
+        });
+        assert_eq!(doubled, numbers.iter().map(|n| n * 2).collect::<Vec<_>>());
+        assert!(most.load(Ordering::SeqCst) <= 3);
+        assert!(parallel_queue(&[] as &[u32], 3, |n| *n).is_empty());
     }
 }

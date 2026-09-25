@@ -1,30 +1,34 @@
 //! Community skin packs: searching them, each pack's preview, adding and removing a pack,
-//! adding one from a folder on this computer, and saving your own skins as a pack to share.
+//! adding one from a folder on this computer, and saving your own skins as a pack.
 //!
-//! Packs live in their own repository, github.com/prajwal-svm/folderskin-community, so reading them
-//! needs no account and no server. The app searches a catalog of all of them on this computer
-//! (catalog.rs), and fetches pictures from the published tree, `v2/`, where each file is named
-//! after its contents; until that tree is published it reads `index.json`, `previews/<id>.png`
-//! and `packs/<id>/` as it always has. The rules every pack follows are in
-//! `folderskin_core::pack`, and docs/PACKS.md says the same in prose.
+//! Packs live in their own repository, github.com/prajwal-svm/folderskin-community, and its
+//! published tree is copied to packs.folderskin.app, so reading them needs no account. The app
+//! searches a catalog of all of them on this computer (catalog.rs), and fetches pictures from the
+//! published tree, `v2/`, where each file is named after its contents; until that tree is
+//! published it reads `index.json`, `previews/<id>.png` and `packs/<id>/` as it always has. The
+//! rules every pack follows are in `folderskin_core::pack`, and docs/PACKS.md says the same in
+//! prose.
+//!
+//! A pack's id can change (head.json's `moved`, from `moved.json` beside `packs/`). Every id that
+//! comes from outside the catalog is looked up through [`Source::current_id`], and the library's
+//! records of packs added under an old id move to the new one ([`follow_moves`]), so a pack added
+//! before it moved still shows as added and still gets its updates.
 
-use crate::catalog::{Community, Source};
+use crate::catalog::{Community, Origin, Source};
 use crate::commands::{data_url, prepare_import, SkinDto};
 use crate::pack_views::PackViews;
 use crate::previews;
-use crate::state::{parallel_map, AppState};
+use crate::state::{parallel_map, parallel_queue, AppState};
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_catalog::tree::{self, PublishedPack};
 use folderskin_catalog::{Facet, PackRow, Query, Sort};
 use folderskin_core::pack::{self, Pack, PackSkin};
 use futures_util::{StreamExt, TryStreamExt};
-use image::codecs::jpeg::JpegEncoder;
-use image::{ExtendedColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
@@ -33,10 +37,19 @@ use tauri::{AppHandle, Manager, State};
 /// instead, such as a checkout served locally while testing.
 const COMMUNITY_URL: &str =
     "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
+/// FolderSkin's own copy of the repository's published tree (`<url>/v2/`), kept in step with it
+/// as packs are published and served from a CDN: head.json is asked for here first, and GitHub
+/// answers when this doesn't.
+const PACKS_URL: &str = "https://packs.folderskin.app";
 /// How many of a pack's pictures download at once.
 const PARALLEL_DOWNLOADS: usize = 4;
 /// How many packs the first launch offers when no packs are featured.
 const FIRST_PACKS: usize = 24;
+/// How many of a pack's pictures are made ready at once as it is shared or saved as a folder.
+/// Each takes libwebp several seconds and about 60 MB, so more at once would use a lot of memory
+/// for little more speed.
+const PARALLEL_ENCODES: usize = 6;
+const MB: usize = 1024 * 1024;
 
 /// One pack in the Community list.
 #[derive(Serialize)]
@@ -186,6 +199,15 @@ pub struct PackUpdateDto {
     pub skins: Vec<SkinDto>,
 }
 
+/// What the first launch offers: its packs, and where any old id moved among them.
+#[derive(Serialize)]
+pub struct FirstPacksDto {
+    pub packs: Vec<PackDto>,
+    /// Each old id that now leads to one of `packs`, to the id it leads to: how the onboarding
+    /// finds the pack it picks by the id that pack had first.
+    pub moved: BTreeMap<String, String>,
+}
+
 /// The packs the first launch offers: the featured ones, or the first few of the best order
 /// when none are, each marked with whether it has been added and whether it has changed since.
 /// `fresh` asks past every cache on the way, for Refresh.
@@ -195,38 +217,49 @@ pub async fn community_packs(
     state: State<'_, AppState>,
     community: State<'_, Community>,
     fresh: bool,
-) -> Result<Vec<PackDto>, String> {
+) -> Result<FirstPacksDto, String> {
     community.init_cache(&app);
     let source = if fresh {
-        community.refresh(&base_url()).await?
+        community.refresh(&origin()).await?
     } else {
-        community.current(&base_url()).await?
+        community.current(&origin()).await?
     };
-    let installed = state.installed_packs();
-    tauri::async_runtime::spawn_blocking(move || {
-        let rows = if source.featured.is_empty() {
-            source
-                .search(&Query {
-                    limit: FIRST_PACKS,
-                    ..Query::default()
-                })?
-                .packs
-        } else {
-            source.packs(&source.featured)?
-        };
-        Ok(rows
-            .into_iter()
-            .map(|row| PackDto::new(row, &installed, &source))
-            .collect())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || first_packs(&state, &source))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// [`community_packs`] from `source`.
+fn first_packs(state: &AppState, source: &Source) -> Result<FirstPacksDto, String> {
+    let installed = library(state, source);
+    let rows = if source.featured.is_empty() {
+        source
+            .search(&Query {
+                limit: FIRST_PACKS,
+                ..Query::default()
+            })?
+            .packs
+    } else {
+        source.packs(&source.featured)?
+    };
+    let packs: Vec<PackDto> = rows
+        .into_iter()
+        .map(|row| PackDto::new(row, &installed, source))
+        .collect();
+    let moved = source
+        .moved()
+        .iter()
+        .filter(|(_, now)| packs.iter().any(|p| &p.id == *now))
+        .map(|(old, now)| (old.clone(), now.clone()))
+        .collect();
+    Ok(FirstPacksDto { packs, moved })
 }
 
 /// Pack `pack_id` as the Community list shows it, for a `folderskin://install` link; `None` when
-/// no pack has that id. A pack the list this session loaded doesn't have is looked for again
-/// past every cache, as Refresh does, since the link may be for one published since; when that
-/// can't be done (offline, say), the error says why.
+/// no pack has that id or had it before it moved. A pack the list this session loaded doesn't
+/// have is looked for again past every cache, as Refresh does, since the link may be for one
+/// published since; when that can't be done (offline, say), the error says why.
 #[tauri::command]
 pub async fn community_pack(
     app: AppHandle,
@@ -235,39 +268,66 @@ pub async fn community_pack(
     pack_id: String,
 ) -> Result<Option<PackDto>, String> {
     community.init_cache(&app);
-    let installed = state.installed_packs();
-    look_up(&community, &base_url(), &pack_id, &installed).await
+    let state = state.inner();
+    look_up(&community, &origin(), &pack_id, |source| {
+        library(state, source)
+    })
+    .await
 }
 
-/// [`community_pack`] with the packs at `base`.
+/// [`community_pack`] with the packs at `origin`, marked against what `installed` says the
+/// library holds by the catalog it's given.
 async fn look_up(
     community: &Community,
-    base: &str,
+    origin: &Origin,
     pack_id: &str,
-    installed: &HashMap<String, Option<String>>,
+    installed: impl Fn(&Source) -> HashMap<String, Option<String>>,
 ) -> Result<Option<PackDto>, String> {
     if !pack::is_pack_id(pack_id) {
         return Ok(None);
     }
-    let source = community.current(base).await?;
-    if let Some(found) = find_pack(&source, pack_id, installed)? {
+    let source = community.current(origin).await?;
+    if let Some(found) = find_pack(&source, pack_id, &installed(&source))? {
         return Ok(Some(found));
     }
-    let source = community.refresh(base).await?;
-    find_pack(&source, pack_id, installed)
+    let source = community.refresh(origin).await?;
+    find_pack(&source, pack_id, &installed(&source))
 }
 
-/// Pack `id` in `source`, marked against the library, or `None` when it isn't listed.
+/// Pack `id`, or the pack it moved to, in `source`, marked against the library; `None` when it
+/// isn't listed.
 fn find_pack(
     source: &Source,
     id: &str,
     installed: &HashMap<String, Option<String>>,
 ) -> Result<Option<PackDto>, String> {
     Ok(source
-        .packs(&[id.to_string()])?
+        .packs(&[source.current_id(id).to_string()])?
         .into_iter()
         .next()
         .map(|row| PackDto::new(row, installed, source)))
+}
+
+/// The packs in the library, by the id each has now, with the version each was added at: what
+/// every list is marked against. The library's records follow `source`'s moves first.
+fn library(state: &AppState, source: &Source) -> HashMap<String, Option<String>> {
+    follow_moves(state, source);
+    state.installed_packs()
+}
+
+/// Moves the library's records of packs added under an id that `source` says moved to the id
+/// the pack has now, once for each catalog: after that there's nothing left under an old id, and
+/// a later catalog finds nothing to do unless another pack moved. A record that can't be moved
+/// (a full disk) is tried again with the next command, and until then its pack shows as not
+/// added, as it did before.
+pub(crate) fn follow_moves(state: &AppState, source: &Source) {
+    let Some(moved) = source.moves_to_follow() else {
+        return;
+    };
+    match state.follow_moved(moved) {
+        Ok(_) => source.followed_moves(),
+        Err(e) => eprintln!("folderskin: couldn't move packs to their new ids: {e}"),
+    }
 }
 
 /// One page of the packs matching `q` (every word the start of a word in a pack's name,
@@ -287,12 +347,12 @@ pub async fn community_search(
     limit: usize,
 ) -> Result<SearchDto, String> {
     community.init_cache(&app);
-    let source = community.current(&base_url()).await?;
-    let installed = state.installed_packs();
+    let source = community.current(&origin()).await?;
+    let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         search(
             &source,
-            &installed,
+            &library(&state, &source),
             &Query {
                 q: &q,
                 tag: &tag,
@@ -366,9 +426,10 @@ pub async fn community_refresh(
     community: State<'_, Community>,
 ) -> Result<RefreshDto, String> {
     community.init_cache(&app);
-    let source = community.refresh(&base_url()).await?;
-    let installed = state.installed_packs();
+    let source = community.refresh(&origin()).await?;
+    let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let installed = library(&state, &source);
         let ids: Vec<String> = installed.keys().cloned().collect();
         let updates = source
             .packs(&ids)?
@@ -387,15 +448,20 @@ pub async fn community_refresh(
 /// The packs in the library now, each with the version it was added at (`None` when it was
 /// added before FolderSkin kept one). The Community view keeps its list while it is away, and
 /// the library may have changed meanwhile: this marks the packs it shows again, from this
-/// computer alone.
+/// computer alone, by the ids the catalog in use gives them.
 #[tauri::command]
 pub async fn community_installed(
     state: State<'_, AppState>,
+    community: State<'_, Community>,
 ) -> Result<HashMap<String, Option<String>>, String> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.installed_packs())
-        .await
-        .map_err(|e| e.to_string())
+    let source = community.in_use_now();
+    tauri::async_runtime::spawn_blocking(move || match source {
+        Some(source) => library(&state, &source),
+        None => state.installed_packs(),
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// Whether a pack added with hash `have` (itself `None` when it was added before FolderSkin kept
@@ -418,8 +484,9 @@ fn has_update(have: Option<&Option<String>>, listed: &str) -> bool {
 /// arrives; then `save` with nothing saved, as each is ready to write, and with all of them once
 /// they are saved.
 ///
-/// Once it is added, the community service is told the pack's id, so folderskin.app can count
-/// it ([`crate::installs`]). That goes on by itself: the command doesn't wait for it.
+/// Once it is added, the community service is told the pack's id, the one it has now however it
+/// was asked for, so folderskin.app can count it ([`crate::installs`]). That goes on by itself:
+/// the command doesn't wait for it.
 #[tauri::command]
 pub async fn community_add(
     app: AppHandle,
@@ -433,17 +500,32 @@ pub async fn community_add(
         let _ = on_progress.send(p);
     };
     community.init_cache(&app);
-    let source = community.current(&base_url()).await?;
-    let (pack, hash, pictures) = download_pack(&source, &pack_id, &progress).await?;
-    let state = state.inner().clone();
-    let id = pack_id.clone();
+    let source = community.current(&origin()).await?;
+    let (id, skins) = add_pack(state.inner(), source, &pack_id, progress).await?;
+    crate::installs::report(&id);
+    Ok(skins)
+}
+
+/// [`community_add`] from `source`: the id pack `pack_id` has now, which its skins are saved
+/// under, and the skins.
+async fn add_pack(
+    state: &AppState,
+    source: Arc<Source>,
+    pack_id: &str,
+    progress: impl Fn(PackProgress) + Send + Sync + 'static,
+) -> Result<(String, Vec<SkinDto>), String> {
+    let id = source.current_id(pack_id).to_string();
+    let (pack, hash, pictures) = download_pack(&source, &id, &progress).await?;
+    let (state, saved_as) = (state.clone(), id.clone());
     let skins = tauri::async_runtime::spawn_blocking(move || {
-        save_pack(&state, &id, &pack, &pictures, Some(hash), &progress)
+        // A picture it shares with a copy added under an old id comes back as that copy saved
+        // it, so the copy's records move to this id first.
+        follow_moves(&state, &source);
+        save_pack(&state, &saved_as, &pack, &pictures, Some(hash), &progress)
     })
     .await
     .map_err(|e| e.to_string())??;
-    crate::installs::report(&pack_id);
-    Ok(skins)
+    Ok((id, skins))
 }
 
 /// Every skin of pack `pack_id`, drawn as the folder it makes, to look through before adding it.
@@ -459,7 +541,8 @@ pub async fn community_pack_skins(
     hash: String,
 ) -> Result<Vec<PackSkinDto>, String> {
     community.init_cache(&app);
-    let source = community.current(&base_url()).await?;
+    let source = community.current(&origin()).await?;
+    let pack_id = source.current_id(&pack_id).to_string();
     let Some(base) = source.index_base() else {
         let published = published_pack(&source, community.files(), &pack_id).await?;
         return Ok(published_skins(&published));
@@ -544,7 +627,8 @@ async fn pack_skins(
 
 /// Replaces an added pack's skins with the version published now. The new version is
 /// downloaded and checked before the old skins go, so a failed update leaves the pack as it was.
-/// `on_progress` hears how far it has got, as [`community_add`]'s does.
+/// `on_progress` hears how far it has got, as [`community_add`]'s does. A pack added before it
+/// moved to a new id is updated under the new one.
 #[tauri::command]
 pub async fn community_update(
     app: AppHandle,
@@ -557,11 +641,24 @@ pub async fn community_update(
         let _ = on_progress.send(p);
     };
     community.init_cache(&app);
-    let source = community.current(&base_url()).await?;
-    let (pack, hash, pictures) = download_pack(&source, &pack_id, &progress).await?;
-    let state = state.inner().clone();
+    let source = community.current(&origin()).await?;
+    update_pack(state.inner(), source, &pack_id, progress).await
+}
+
+/// [`community_update`] from `source`.
+async fn update_pack(
+    state: &AppState,
+    source: Arc<Source>,
+    pack_id: &str,
+    progress: impl Fn(PackProgress) + Send + Sync + 'static,
+) -> Result<PackUpdateDto, String> {
+    let id = source.current_id(pack_id).to_string();
+    let (pack, hash, pictures) = download_pack(&source, &id, &progress).await?;
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        replace_pack(&state, &pack_id, &pack, &pictures, hash, &progress)
+        // The old version's skins are the ones under this id, wherever they were added.
+        follow_moves(&state, &source);
+        replace_pack(&state, &id, &pack, &pictures, hash, &progress)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -655,7 +752,7 @@ async fn download_pack_from(
             let url = format!("{base}/{file}");
             let arrived = &arrived;
             async move {
-                let bytes = fetch(&url, pack::MAX_PICTURE_BYTES)
+                let bytes = fetch(&url, pack::MAX_READ_PICTURE_BYTES)
                     .await
                     .map_err(|e| format!("{file}: {e}"))?;
                 let done = arrived.fetch_add(1, Ordering::Relaxed) + 1;
@@ -677,24 +774,37 @@ async fn download_pack_from(
     Ok((pack, hash, pictures))
 }
 
-/// Deletes every skin a pack added and returns their ids.
+/// Deletes every skin a pack added and returns their ids. Nothing is downloaded for it: when a
+/// catalog is in use, the library's records follow its moves first and the id is looked up
+/// through it, and otherwise the id is taken as it is.
 #[tauri::command]
 pub async fn community_remove(
     state: State<'_, AppState>,
+    community: State<'_, Community>,
     pack_id: String,
 ) -> Result<Vec<String>, String> {
     if !pack::is_pack_id(&pack_id) {
         return Err("that isn't a pack".into());
     }
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.remove_pack(&pack_id))
-        .await
-        .map_err(|e| e.to_string())?
+    let source = community.in_use_now();
+    tauri::async_runtime::spawn_blocking(move || {
+        let id = match &source {
+            Some(source) => {
+                follow_moves(&state, source);
+                source.current_id(&pack_id)
+            }
+            None => &pack_id,
+        };
+        state.remove_pack(id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-/// Adds a pack from a folder on this computer, with the same checks as one from GitHub. The
-/// folder's name is the pack's id, so a pack tried out before it is shared and the same pack
-/// added from GitHub later are one pack.
+/// Adds a pack from a folder on this computer, with the same checks as one from Community. The
+/// folder's name is the pack's id, so a copy of a community pack's folder and the same pack added
+/// from Community are one pack.
 #[tauri::command]
 pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec<SkinDto>, String> {
     let state = state.inner().clone();
@@ -708,8 +818,8 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
         let manifest = read_capped(&dir.join(pack::MANIFEST_FILE), pack::MAX_MANIFEST_BYTES)
             .map_err(|_| "that folder has no pack.json. See docs/PACKS.md".to_string())?;
         let pack = Pack::parse(&manifest).map_err(|problems| problems.join("; "))?;
-        // GitHub's URLs are case-sensitive, so a name that only matches in another case here
-        // would work on this Mac and then fail for everyone else.
+        // Where packs are published, addresses are case-sensitive, so a name that only matches
+        // in another case here would work on this Mac and then fail for everyone else.
         let on_disk: std::collections::HashSet<String> = std::fs::read_dir(&dir)
             .map(|entries| {
                 entries
@@ -728,7 +838,7 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
             .skins
             .iter()
             .map(|s| {
-                read_capped(&dir.join(&s.file), pack::MAX_PICTURE_BYTES)
+                read_capped(&dir.join(&s.file), pack::MAX_READ_PICTURE_BYTES)
                     .map_err(|e| format!("{} {e}", s.file))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -748,9 +858,40 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
 /// A pack's files: each name with its bytes.
 pub(crate) type PackFiles = Vec<(String, Vec<u8>)>;
 
-/// The files a pack is made of: every picture, then `pack.json`. The pack is checked here, so
-/// whatever comes back already passes the pull-request checks — whether it is written to a folder
-/// ([`export_pack`]) or sent straight to GitHub ([`crate::github::publish_pack`]).
+/// How far making a pack's pictures ready has got: `done` of `total`. Several are made at once.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MakeProgress {
+    pub done: usize,
+    pub total: usize,
+}
+
+/// A picture made smaller than 1024 px to fit the size a pack's picture can be
+/// ([`pack::MAX_PICTURE_BYTES`]), still lossless: its skin's name and the side it was made.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct Scaled {
+    pub name: String,
+    pub side: u32,
+}
+
+/// A pack [`build_pack`] made.
+pub(crate) struct Built {
+    /// Its new id.
+    pub id: String,
+    /// Every picture, then `pack.json`.
+    pub files: PackFiles,
+    /// The pictures made smaller to fit, in the pack's order.
+    pub scaled: Vec<Scaled>,
+}
+
+/// The files a pack is made of: every picture as a lossless WebP ([`encode_for_pack`]), then
+/// `pack.json`, and a new id for it ([`pack::new_id`]: the name, then six random characters) that
+/// `taken` says nothing has. The pack is checked here, so whatever comes back already passes the
+/// checks every pack does, whether it is written to a folder ([`export_pack`]) or sent for review
+/// ([`crate::share::share_submit`]).
+///
+/// The pictures are made [`PARALLEL_ENCODES`] at a time, and `progress` hears how many are ready
+/// as each one is. Everything that can be refused without them is refused first.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_pack(
     state: &AppState,
     name: &str,
@@ -758,14 +899,19 @@ pub(crate) fn build_pack(
     license: &str,
     tags: &[String],
     skin_ids: &[String],
-) -> Result<(String, PackFiles), String> {
-    let id = pack::slug(name);
-    if !pack::is_pack_id(&id) {
-        return Err("give the pack a name with letters or digits in it".into());
-    }
+    taken: impl Fn(&str) -> bool,
+    progress: &(dyn Fn(MakeProgress) + Sync),
+) -> Result<Built, String> {
+    let id = pack::new_id(name, taken)?;
     let pack_tags = pack::clean_tags(tags, pack::MAX_PACK_TAGS);
-    let mut skins = Vec::new();
-    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    if skin_ids.len() > pack::MAX_SKINS {
+        return Err(format!(
+            "that's {} skins; a pack holds at most {}",
+            skin_ids.len(),
+            pack::MAX_SKINS
+        ));
+    }
+    let mut chosen = Vec::with_capacity(skin_ids.len());
     for skin_id in skin_ids {
         let (entry, _) = state
             .find_saved(skin_id)
@@ -777,9 +923,29 @@ pub(crate) fn build_pack(
             ));
         }
         let image = state.resolve(skin_id)?;
-        let (bytes, ext) = encode_for_pack(&image).map_err(|e| format!("{} {e}", entry.name))?;
+        let (w, h) = image.rgba().dimensions();
+        pack::check_picture_size(w, h).map_err(|e| format!("{} {e}", entry.name))?;
+        chosen.push((entry, image));
+    }
+
+    // The slow part: seconds a picture.
+    let total = chosen.len();
+    progress(MakeProgress { done: 0, total });
+    let ready = AtomicUsize::new(0);
+    let made = parallel_queue(&chosen, PARALLEL_ENCODES, |(entry, image)| {
+        let made = encode_for_pack(image).map_err(|e| format!("{} {e}", entry.name));
+        let done = ready.fetch_add(1, Ordering::Relaxed) + 1;
+        progress(MakeProgress { done, total });
+        made
+    });
+
+    let mut skins = Vec::new();
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut scaled = Vec::new();
+    for ((entry, _), made) in chosen.iter().zip(made) {
+        let made = made?;
         let stem = unique_stem(&entry.name, files.len(), &files);
-        let file = format!("{stem}.{ext}");
+        let file = format!("{stem}.webp");
         let own: Vec<&String> = entry
             .tags
             .iter()
@@ -790,7 +956,22 @@ pub(crate) fn build_pack(
             name: entry.name.clone(),
             tags: pack::clean_tags(own, pack::MAX_SKIN_TAGS),
         });
-        files.push((file, bytes));
+        if let Some(side) = made.scaled_to {
+            scaled.push(Scaled {
+                name: entry.name.clone(),
+                side,
+            });
+        }
+        files.push((file, made.webp));
+    }
+    let bytes: usize = files.iter().map(|(_, b)| b.len()).sum();
+    if bytes > pack::MAX_PACK_BYTES {
+        return Err(format!(
+            "the pictures come to {} MB, and a pack's come to {} MB at most; split them into two \
+             packs",
+            bytes.div_ceil(MB),
+            pack::MAX_PACK_BYTES / MB
+        ));
     }
     let pack = Pack {
         version: pack::PACK_VERSION,
@@ -806,11 +987,22 @@ pub(crate) fn build_pack(
     }
     let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())? + "\n";
     files.push((pack::MANIFEST_FILE.to_string(), json.into_bytes()));
-    Ok((id, files))
+    Ok(Built { id, files, scaled })
 }
 
-/// Writes some of the user's own skins as a pack folder inside `folder`, ready to upload to
-/// GitHub, and returns the folder it made.
+/// A pack saved as a folder: where it is, and the pictures made smaller to fit.
+#[derive(Serialize, Clone, Debug)]
+pub struct Exported {
+    pub folder: String,
+    pub scaled: Vec<Scaled>,
+}
+
+/// Writes some of the user's own skins as a pack folder inside `folder`, and returns the folder
+/// it made, with the pictures made smaller to fit: pack.json and the pictures, for anyone who
+/// wants the pack as files. The folder is named after the pack's new id, which no folder there
+/// has yet, and adds to FolderSkin as it is ([`import_pack`]). `on_progress` hears how many
+/// pictures are ready as each one is.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn export_pack(
     state: State<'_, AppState>,
@@ -820,11 +1012,26 @@ pub async fn export_pack(
     license: String,
     tags: Vec<String>,
     skin_ids: Vec<String>,
-) -> Result<String, String> {
+    on_progress: Channel<MakeProgress>,
+) -> Result<Exported, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let (id, files) = build_pack(&state, &name, &author, &license, &tags, &skin_ids)?;
-        let out = PathBuf::from(folder).join(&id);
+        let folder = PathBuf::from(folder);
+        let progress = |p: MakeProgress| {
+            let _ = on_progress.send(p);
+        };
+        let Built { id, files, scaled } = build_pack(
+            &state,
+            &name,
+            &author,
+            &license,
+            &tags,
+            &skin_ids,
+            |id| folder.join(id).exists(),
+            &progress,
+        )?;
+        let out = folder.join(&id);
+        // Taken between the id being drawn and now: a clash of ids nothing else will ever see.
         if out.exists() {
             return Err(format!("there's already a folder called {id} there"));
         }
@@ -839,7 +1046,10 @@ pub async fn export_pack(
             let _ = std::fs::remove_dir_all(&out);
             format!("couldn't write the pack: {e}")
         })?;
-        Ok(out.display().to_string())
+        Ok(Exported {
+            folder: out.display().to_string(),
+            scaled,
+        })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -904,13 +1114,21 @@ pub(crate) fn uncached(url: &str, fresh: bool) -> String {
     }
 }
 
-/// Where the packs are: the packs repository on GitHub, or `FOLDERSKIN_COMMUNITY_URL`.
-pub(crate) fn base_url() -> String {
-    std::env::var("FOLDERSKIN_COMMUNITY_URL")
-        .ok()
-        .map(|url| url.trim().trim_end_matches('/').to_string())
-        .filter(|url| !url.is_empty())
-        .unwrap_or_else(|| COMMUNITY_URL.to_string())
+/// Where the packs are: packs.folderskin.app, then the packs repository on GitHub; or only the
+/// copy of the repository `FOLDERSKIN_COMMUNITY_URL` names, which is what testing wants.
+pub(crate) fn origin() -> Origin {
+    origin_for(std::env::var("FOLDERSKIN_COMMUNITY_URL").ok().as_deref())
+}
+
+/// [`origin`] with the value `FOLDERSKIN_COMMUNITY_URL` has, if any.
+fn origin_for(named: Option<&str>) -> Origin {
+    match named.map(|url| url.trim().trim_end_matches('/')) {
+        Some(url) if !url.is_empty() => Origin::repo(url),
+        _ => Origin {
+            trees: vec![PACKS_URL.to_string()],
+            repo: COMMUNITY_URL.to_string(),
+        },
+    }
 }
 
 fn client() -> Result<&'static reqwest::Client, String> {
@@ -1094,46 +1312,12 @@ fn read_capped(path: &Path, max: usize) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|_| "couldn't be read".into())
 }
 
-/// A skin's picture the way a pack wants it: at most 1024 px on a side and 2 MB. A finished
-/// folder stays PNG to keep its transparency; artwork has none to keep, so it becomes a JPEG at
-/// a fraction of the size.
-fn encode_for_pack(image: &SkinImage) -> Result<(Vec<u8>, &'static str), String> {
-    let too_small = |img: &image::RgbaImage| {
-        let (w, h) = img.dimensions();
-        (w.min(h) < pack::MIN_PICTURE_SIDE).then(|| {
-            format!(
-                "is {w}×{h} px; a pack needs at least {} px on each side",
-                pack::MIN_PICTURE_SIDE
-            )
-        })
-    };
-    match image {
-        SkinImage::Folder(rgba) => {
-            for side in [pack::MAX_PICTURE_SIDE, 896, 768] {
-                let img = store::shrink_to((**rgba).clone(), side);
-                if let Some(e) = too_small(&img) {
-                    return Err(e);
-                }
-                let png = folderskin_core::raster::encode_png(&img);
-                if png.len() <= pack::MAX_PICTURE_BYTES {
-                    return Ok((png, "png"));
-                }
-            }
-            Err("is too detailed to fit in 2 MB".into())
-        }
-        SkinImage::Artwork(art) => {
-            let img = store::shrink_to(art.rgba.clone(), pack::MAX_PICTURE_SIDE);
-            if let Some(e) = too_small(&img) {
-                return Err(e);
-            }
-            let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
-            let mut jpg = Vec::new();
-            JpegEncoder::new_with_quality(&mut jpg, 90)
-                .write_image(&rgb, rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-                .map_err(|e| e.to_string())?;
-            Ok((jpg, "jpg"))
-        }
-    }
+/// A skin's picture the way a pack wants it: a lossless WebP at most 1024 px on a side and
+/// within [`pack::MAX_PICTURE_BYTES`], so the pack looks exactly as the skin does, a finished
+/// folder's transparency included. One too detailed for that at 1024 px is made 896 px, then
+/// 768 px, still lossless, and says so ([`pack::encode_picture`], which `packs make` uses too).
+fn encode_for_pack(image: &SkinImage) -> Result<pack::EncodedPicture, String> {
+    pack::encode_picture(image.rgba().clone(), pack::MAX_PICTURE_BYTES)
 }
 
 /// A file name stem for a skin: its name as a slug, or `skin-<n>`, never one already used.
@@ -1198,7 +1382,7 @@ pub(crate) mod tests {
     }
 
     /// Made before the state that opens a store in it, so it drops after the store has closed.
-    fn temp_dir(name: &str) -> TempDir {
+    pub(crate) fn temp_dir(name: &str) -> TempDir {
         let d = std::env::temp_dir().join(format!(
             "folderskin-community-{}-{}",
             name,
@@ -1356,23 +1540,37 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn exported_pictures_fit_the_pack_limits() {
+    fn exported_pictures_are_lossless_and_fit_the_pack_limits() {
+        let rgba = image::RgbaImage::from_fn(2048, 1916, |x, y| {
+            image::Rgba([(x / 9) as u8, (y / 8) as u8, 90, 255])
+        });
         let art = SkinImage::Artwork(std::sync::Arc::new(folderskin_core::compositor::Artwork {
-            rgba: image::RgbaImage::from_pixel(2048, 1916, image::Rgba([200, 90, 40, 255])),
+            rgba: rgba.clone(),
             focus: (0.5, 0.5),
         }));
-        let (bytes, ext) = encode_for_pack(&art).unwrap();
-        assert_eq!(ext, "jpg");
-        assert_eq!(pack::check_picture(&bytes).unwrap(), (1024, 958));
+        let made = encode_for_pack(&art).unwrap();
+        assert_eq!(made.scaled_to, None);
+        assert_eq!(pack::check_new_picture(&made.webp).unwrap(), (1024, 958));
+        let back = image::load_from_memory(&made.webp).unwrap().to_rgba8();
+        assert_eq!(back, store::shrink_to(rgba, 1024), "every pixel");
 
-        let folder = SkinImage::Folder(std::sync::Arc::new(image::RgbaImage::from_pixel(
-            1100,
-            1000,
-            image::Rgba([0, 0, 0, 0]),
-        )));
-        let (bytes, ext) = encode_for_pack(&folder).unwrap();
-        assert_eq!(ext, "png");
-        assert!(pack::check_picture(&bytes).is_ok());
+        // A finished folder keeps its transparency exactly.
+        let cut = image::RgbaImage::from_fn(1100, 1000, |x, y| {
+            let alpha = if x < 100 { 0 } else { (x / 5) as u8 };
+            image::Rgba([(y / 4) as u8, 40, 200, alpha])
+        });
+        let folder = SkinImage::Folder(std::sync::Arc::new(cut.clone()));
+        let made = encode_for_pack(&folder).unwrap();
+        assert!(pack::check_new_picture(&made.webp).is_ok());
+        let back = image::load_from_memory(&made.webp).unwrap().to_rgba8();
+        let expected = store::shrink_to(cut, 1024);
+        assert_eq!(back.dimensions(), expected.dimensions());
+        for (got, want) in back.pixels().zip(expected.pixels()) {
+            assert_eq!(got.0[3], want.0[3], "alpha");
+            if want.0[3] > 0 {
+                assert_eq!(got, want, "every colour that shows");
+            }
+        }
 
         let tiny = SkinImage::Folder(std::sync::Arc::new(image::RgbaImage::new(120, 120)));
         assert!(encode_for_pack(&tiny).unwrap_err().contains("at least 256"));
@@ -1490,7 +1688,7 @@ pub(crate) mod tests {
         // Something in the way of the second picture, as a full disk would be.
         let second = store::skin_id(&pictures[1]);
         let stem = second.strip_prefix("user:").unwrap();
-        std::fs::create_dir(dir.join(format!("{stem}.png"))).unwrap();
+        std::fs::create_dir(dir.join(format!("{stem}.webp"))).unwrap();
 
         let err =
             save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
@@ -1502,7 +1700,7 @@ pub(crate) mod tests {
             .flatten()
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(left, [format!("{stem}.png")], "only what was in the way");
+        assert_eq!(left, [format!("{stem}.webp")], "only what was in the way");
     }
 
     /// Serves `files` (path, body, delay before answering) over HTTP on a free local port, and
@@ -1812,6 +2010,21 @@ pub(crate) mod tests {
         (files, head, hashes)
     }
 
+    /// `files` with their head.json changed by `change`.
+    pub(crate) fn changed_head(files: Served, change: impl Fn(&mut Head)) -> Served {
+        files
+            .into_iter()
+            .map(|(path, body, delay)| {
+                if path != "/v2/head.json" {
+                    return (path, body, delay);
+                }
+                let mut head = Head::parse(&body).unwrap();
+                change(&mut head);
+                (path, serde_json::to_vec(&head).unwrap(), delay)
+            })
+            .collect()
+    }
+
     pub(crate) fn colour_packs() -> Vec<Published<'static>> {
         vec![
             (
@@ -1853,7 +2066,7 @@ pub(crate) mod tests {
             index.as_bytes().to_vec(),
             Duration::ZERO,
         )]);
-        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         assert!(!source.is_tree());
         assert_eq!(source.index_base(), Some(base.as_str()));
 
@@ -1884,7 +2097,7 @@ pub(crate) mod tests {
         );
 
         let (nothing, _) = serve(Vec::new());
-        let err = block_on(catalog::load(&nothing, None, false))
+        let err = block_on(catalog::load(&Origin::repo(&nothing), None, false))
             .err()
             .unwrap();
         assert_eq!(err, "the community packs aren't published yet");
@@ -1895,7 +2108,7 @@ pub(crate) mod tests {
         let (files, head, hashes) = tree_files(&colour_packs());
         let (base, _, asked) = serve_logged(files);
         let dir = temp_dir("tree-cache");
-        let source = block_on(catalog::load(&base, Some(&dir), false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), Some(&dir), false)).unwrap();
         assert!(source.is_tree() && source.last_visit.is_none());
         let found = search(&source, &HashMap::new(), &query("nav")).unwrap();
         assert_eq!(
@@ -1927,7 +2140,7 @@ pub(crate) mod tests {
 
         // Nothing listens here: the copy kept from the visit before, marked as such.
         let nowhere = "http://127.0.0.1:9";
-        let offline = block_on(catalog::load(nowhere, Some(&dir), false)).unwrap();
+        let offline = block_on(catalog::load(&Origin::repo(nowhere), Some(&dir), false)).unwrap();
         assert!(offline.is_tree());
         assert_eq!(offline.last_visit, Some(LastVisit::Offline));
         let found = search(&offline, &HashMap::new(), &query("sky")).unwrap();
@@ -1942,7 +2155,8 @@ pub(crate) mod tests {
             b"<html>Sign in to the network</html>".to_vec(),
             Duration::ZERO,
         )]);
-        let signed_out = block_on(catalog::load(&portal, Some(&dir), false)).unwrap();
+        let signed_out =
+            block_on(catalog::load(&Origin::repo(&portal), Some(&dir), false)).unwrap();
         assert_eq!(
             signed_out.last_visit,
             Some(LastVisit::Unanswered("127.0.0.1".into()))
@@ -1963,8 +2177,8 @@ pub(crate) mod tests {
         let last = bytes.len() - 1;
         bytes[last] ^= 0xff;
         std::fs::write(&kept, bytes).unwrap();
-        assert!(block_on(catalog::load(nowhere, Some(&dir), false)).is_err());
-        let again = block_on(catalog::load(&base, Some(&dir), false)).unwrap();
+        assert!(block_on(catalog::load(&Origin::repo(nowhere), Some(&dir), false)).is_err());
+        let again = block_on(catalog::load(&Origin::repo(&base), Some(&dir), false)).unwrap();
         assert_eq!(
             search(&again, &HashMap::new(), &query("sky"))
                 .unwrap()
@@ -1973,14 +2187,14 @@ pub(crate) mod tests {
         );
         drop(again);
         // Refresh says it couldn't get through, rather than pass old packs off as new.
-        let err = block_on(catalog::load(nowhere, Some(&dir), true))
+        let err = block_on(catalog::load(&Origin::repo(nowhere), Some(&dir), true))
             .err()
             .unwrap();
         assert!(err.starts_with("couldn't reach 127.0.0.1."), "{err}");
 
         // Refresh asks for head.json past the caches, and for nothing else it already has.
         lock(&asked).clear();
-        drop(block_on(catalog::load(&base, Some(&dir), true)).unwrap());
+        drop(block_on(catalog::load(&Origin::repo(&base), Some(&dir), true)).unwrap());
         let asked = lock(&asked).clone();
         assert_eq!(asked.len(), 1, "{asked:?}");
         assert!(asked[0].starts_with("/v2/head.json?t="), "{asked:?}");
@@ -2003,7 +2217,7 @@ pub(crate) mod tests {
         }
         let (base, _) = serve(files);
         let dir = temp_dir("tampered");
-        let err = block_on(catalog::load(&base, Some(&dir), false))
+        let err = block_on(catalog::load(&Origin::repo(&base), Some(&dir), false))
             .err()
             .unwrap();
         assert!(err.contains("arrived damaged"), "{err}");
@@ -2016,7 +2230,7 @@ pub(crate) mod tests {
         let packs = colour_packs();
         let (files, _, hashes) = tree_files(&packs);
         let (base, _, asked) = serve_logged(files.clone());
-        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let heard = Mutex::new(Vec::new());
         let (pack, hash, pictures) =
             block_on(download_pack(&source, "blues", &|p| lock(&heard).push(p))).unwrap();
@@ -2047,7 +2261,7 @@ pub(crate) mod tests {
             })
             .collect();
         let (base, _) = serve(tampered);
-        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let err = block_on(download_pack(&source, "blues", &no_progress)).unwrap_err();
         assert_eq!(err, "navy.png arrived damaged; try again");
         let err = block_on(download_pack(&source, "greens", &no_progress)).unwrap_err();
@@ -2071,7 +2285,7 @@ pub(crate) mod tests {
             })
             .collect();
         let (base, _) = serve(swapped);
-        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let err = block_on(download_pack(&source, "blues", &no_progress)).unwrap_err();
         assert_eq!(err, "that pack's list arrived damaged; try again");
     }
@@ -2080,7 +2294,7 @@ pub(crate) mod tests {
     fn a_published_pack_is_looked_through_by_its_thumbnails() {
         let (files, _, hashes) = tree_files(&colour_packs());
         let (base, _) = serve(files);
-        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let published = block_on(published_pack(&source, None, "blues")).unwrap();
         assert_eq!(published.hash, hashes["blues"]);
         let skins = published_skins(&published);
@@ -2109,13 +2323,13 @@ pub(crate) mod tests {
             hash: hash.clone(),
             position: 1,
         };
-        let picture = block_on(previews::serve(&community, &base, strip())).unwrap();
+        let picture = block_on(previews::serve(&community, &Origin::repo(&base), strip())).unwrap();
         assert_eq!(
             (picture.bytes, picture.mime, picture.lasting),
             (webp(&hash), "image/webp", true)
         );
         let sky_sha = tree::sha256_hex(&colour_packs()[1].3[1].2);
-        let picture = block_on(previews::serve(&community, &base, sky())).unwrap();
+        let picture = block_on(previews::serve(&community, &Origin::repo(&base), sky())).unwrap();
         assert_eq!(
             picture.bytes,
             webp(&sky_sha),
@@ -2123,15 +2337,15 @@ pub(crate) mod tests {
         );
 
         let before = lock(&asked).len();
-        block_on(previews::serve(&community, &base, strip())).unwrap();
-        block_on(previews::serve(&community, &base, sky())).unwrap();
+        block_on(previews::serve(&community, &Origin::repo(&base), strip())).unwrap();
+        block_on(previews::serve(&community, &Origin::repo(&base), sky())).unwrap();
         assert_eq!(lock(&asked).len(), before, "both came from the disk");
 
         let missing = Asked::Thumb {
             sha256: "0".repeat(64),
         };
         assert_eq!(
-            block_on(previews::serve(&community, &base, missing)).unwrap_err(),
+            block_on(previews::serve(&community, &Origin::repo(&base), missing)).unwrap_err(),
             StatusCode::NOT_FOUND
         );
         let past_the_end = Asked::Skin {
@@ -2140,7 +2354,12 @@ pub(crate) mod tests {
             position: 5,
         };
         assert_eq!(
-            block_on(previews::serve(&community, &base, past_the_end)).unwrap_err(),
+            block_on(previews::serve(
+                &community,
+                &Origin::repo(&base),
+                past_the_end
+            ))
+            .unwrap_err(),
             StatusCode::NOT_FOUND
         );
         drop(community);
@@ -2160,15 +2379,17 @@ pub(crate) mod tests {
         files.push(("/v2/head.json?".into(), head, Duration::from_millis(1500)));
         let (base, _) = serve(files);
         let community = Arc::new(Community::with_cache(None));
-        block_on(community.current(&base)).unwrap();
+        block_on(community.current(&Origin::repo(&base))).unwrap();
 
         let refreshing = {
             let (community, base) = (community.clone(), base.clone());
-            std::thread::spawn(move || block_on(community.refresh(&base)).map(|_| ()))
+            std::thread::spawn(move || {
+                block_on(community.refresh(&Origin::repo(&base))).map(|_| ())
+            })
         };
         std::thread::sleep(Duration::from_millis(200));
         let started = std::time::Instant::now();
-        let source = block_on(community.current(&base)).unwrap();
+        let source = block_on(community.current(&Origin::repo(&base))).unwrap();
         assert_eq!(
             search(&source, &HashMap::new(), &query("sky"))
                 .unwrap()
@@ -2196,7 +2417,7 @@ pub(crate) mod tests {
             index.as_bytes().to_vec(),
             Duration::ZERO,
         )]);
-        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
         let all = search(&source, &HashMap::new(), &query("")).unwrap();
         let marks: Vec<(&str, bool)> = all
             .packs
@@ -2236,7 +2457,9 @@ pub(crate) mod tests {
         let (base, _, asked) = serve_logged(files);
         let community = Community::with_cache(None);
         let installed = HashMap::from([("reds".to_string(), None)]);
-        let look = |id: &str| block_on(look_up(&community, &base, id, &installed)).unwrap();
+        let origin = Origin::repo(&base);
+        let look =
+            |id: &str| block_on(look_up(&community, &origin, id, |_| installed.clone())).unwrap();
 
         let reds = look("reds").unwrap();
         assert!(reds.added && !reds.official);
@@ -2262,12 +2485,220 @@ pub(crate) mod tests {
         assert_eq!(lock(&asked).len(), before, "not a pack id: nothing asked");
     }
 
+    /// `packs` published with `moved` in their head.json, served, and the catalog loaded from
+    /// them, with the community it's in use in.
+    fn moved_catalog(
+        packs: &[Published],
+        moved: &[(&str, &str)],
+    ) -> (Community, Origin, Arc<Source>, HashMap<String, String>) {
+        let (files, _, hashes) = tree_files(packs);
+        let moved: BTreeMap<String, String> = moved
+            .iter()
+            .map(|(old, now)| (old.to_string(), now.to_string()))
+            .collect();
+        let files = changed_head(files, |head| head.moved = moved.clone());
+        let (base, _) = serve(files);
+        let community = Community::with_cache(None);
+        let origin = Origin::repo(&base);
+        let source = block_on(community.current(&origin)).unwrap();
+        (community, origin, source, hashes)
+    }
+
+    #[test]
+    fn a_pack_added_under_its_old_id_shows_as_added_under_its_new_one_and_gets_its_update() {
+        // Reds was published as "rubies", with a garnet as well as the ruby, and added then.
+        // It has moved to "reds" since, and dropped the garnet.
+        let store = temp_dir("moved-update");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let packs = colour_packs();
+        let ruby = packs[0].3[0].2.clone();
+        let garnet = png(256, 256, [120, 10, 40, 255]);
+        let old = listing(&[("ruby.png", "Ruby"), ("garnet.png", "Garnet")]);
+        let old = Pack::parse(old.as_bytes()).unwrap();
+        let before = save_pack(
+            &state,
+            "rubies",
+            &old,
+            &[ruby, garnet],
+            Some("0000000000000001".into()),
+            &no_progress,
+        )
+        .unwrap();
+        let (community, origin, source, hashes) = moved_catalog(&packs, &[("rubies", "reds")]);
+
+        // Listed, it's added and has an update, under the id it has now.
+        let found = search(&source, &library(&state, &source), &query("")).unwrap();
+        let reds = found.packs.iter().find(|p| p.name == "Reds").unwrap();
+        assert_eq!(reds.id, "reds");
+        assert!(
+            reds.added && reds.update,
+            "added before it moved, changed since"
+        );
+        assert!(found.packs.iter().all(|p| p.id != "rubies"));
+        assert_eq!(
+            state.installed_packs(),
+            HashMap::from([("reds".to_string(), Some("0000000000000001".to_string()))]),
+            "the same version it was added at"
+        );
+
+        // A link with the old id finds it too, as the pack it is now.
+        let linked = block_on(look_up(&community, &origin, "rubies", |source| {
+            library(&state, source)
+        }))
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            (linked.id.as_str(), linked.added, linked.update),
+            ("reds", true, true)
+        );
+
+        // The update swaps the skins under the new id, and keeps the one both versions share.
+        let update = block_on(update_pack(&state, source, "reds", no_progress)).unwrap();
+        assert_eq!(update.removed, [before[1].id.clone()], "the garnet goes");
+        assert_eq!(update.skins.len(), 1);
+        assert_eq!(update.skins[0].id, before[0].id, "the ruby stays itself");
+        assert_eq!(
+            state.installed_packs(),
+            HashMap::from([("reds".to_string(), Some(hashes["reds"].clone()))])
+        );
+        assert!(state
+            .saved_skins()
+            .iter()
+            .all(|(entry, _)| entry.pack.as_deref() == Some("reds")));
+    }
+
+    #[test]
+    fn an_old_id_adds_the_pack_it_moved_to_and_is_counted_under_the_new_one() {
+        let store = temp_dir("moved-add");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let (_community, _, source, hashes) =
+            moved_catalog(&colour_packs(), &[("sky-blues", "blues")]);
+        // As a folderskin://install link with the old id asks for it.
+        let (id, skins) = block_on(add_pack(&state, source, "sky-blues", no_progress)).unwrap();
+        assert_eq!(
+            id, "blues",
+            "the id community_add reports the install under"
+        );
+        assert_eq!(skins.len(), 2);
+        assert!(skins.iter().all(|s| s.pack.as_deref() == Some("blues")));
+        assert_eq!(
+            state.installed_packs(),
+            HashMap::from([("blues".to_string(), Some(hashes["blues"].clone()))])
+        );
+    }
+
+    #[test]
+    fn the_first_launch_hears_where_old_ids_moved_among_its_packs() {
+        let state = AppState::default();
+        let (_community, _, source, _) = moved_catalog(
+            &colour_packs(),
+            &[
+                ("rubies", "reds"),
+                ("scarlets", "reds"),
+                ("emeralds", "greens"),
+            ],
+        );
+        let first = first_packs(&state, &source).unwrap();
+        let ids: Vec<&str> = first.packs.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids.len(), 2);
+        assert_eq!(
+            first.moved,
+            BTreeMap::from([
+                ("rubies".to_string(), "reds".to_string()),
+                ("scarlets".to_string(), "reds".to_string()),
+            ]),
+            "only moves to the packs it offers"
+        );
+    }
+
+    #[test]
+    fn a_pack_saved_as_a_folder_gets_a_new_id_whatever_its_name() {
+        let store = temp_dir("build");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let picture = png(512, 480, [30, 90, 160, 255]);
+        let (entry, _) = state
+            .save(
+                NewSkin {
+                    id: store::skin_id(&picture),
+                    name: "Harbour at night".into(),
+                    source: SkinSource::Import,
+                    provider: None,
+                    model: None,
+                    idea: None,
+                    tags: vec!["night".into()],
+                    pack: None,
+                    pack_name: None,
+                    author: None,
+                    license: None,
+                    pack_hash: None,
+                },
+                SkinImage::Artwork(Arc::new(folderskin_core::compositor::Artwork {
+                    rgba: image::load_from_memory(&picture).unwrap().to_rgba8(),
+                    focus: (0.5, 0.5),
+                })),
+            )
+            .unwrap();
+        let heard = Mutex::new(Vec::new());
+        let build = |name: &str, taken: &dyn Fn(&str) -> bool| {
+            build_pack(
+                &state,
+                name,
+                "sunny-otter",
+                "CC0-1.0",
+                &["woodblock".into()],
+                std::slice::from_ref(&entry.id),
+                taken,
+                &|p| heard.lock().unwrap().push(p),
+            )
+            .map(|built| (built.id, built.files))
+        };
+
+        let (id, files) = build("Night prints", &|_| false).unwrap();
+        assert_eq!(
+            *heard.lock().unwrap(),
+            [
+                MakeProgress { done: 0, total: 1 },
+                MakeProgress { done: 1, total: 1 }
+            ]
+        );
+        let names: Vec<&str> = files.iter().map(|(f, _)| f.as_str()).collect();
+        assert_eq!(names, ["harbour-at-night.webp", pack::MANIFEST_FILE]);
+        assert!(pack::check_new_picture(&files[0].1).is_ok());
+        assert!(
+            id.starts_with("night-prints-") && pack::is_generated_id(&id),
+            "{id}"
+        );
+        let manifest = files
+            .iter()
+            .find(|(f, _)| f == pack::MANIFEST_FILE)
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&manifest.1).contains(&id),
+            "the id isn't in pack.json"
+        );
+        // Two packs with one name are two packs.
+        assert_ne!(build("Night prints", &|_| false).unwrap().0, id);
+        // An id that's taken (a folder of that name already there) is drawn again.
+        let first = std::cell::Cell::new(true);
+        let again = build("Night prints", &|_| first.replace(false)).unwrap().0;
+        assert!(pack::is_generated_id(&again) && !first.get());
+        // A name with nothing an address can use still makes a pack.
+        let (id, _) = build("東京の夜", &|_| false).unwrap();
+        assert!(
+            id.starts_with("pack-") && pack::is_generated_id(&id),
+            "{id}"
+        );
+    }
+
     #[test]
     fn a_catalog_that_doesnt_arrive_leaves_the_last_visits_packs() {
         let (files, _, _) = tree_files(&colour_packs());
         let (base, _) = serve(files);
         let dir = temp_dir("behind");
-        drop(block_on(catalog::load(&base, Some(&dir), false)).unwrap());
+        drop(block_on(catalog::load(&Origin::repo(&base), Some(&dir), false)).unwrap());
 
         // A newer head.json whose catalog isn't there (a mirror or CDN a moment behind).
         let (newer, _, _) = tree_files(&colour_packs()[..1]);
@@ -2276,7 +2707,7 @@ pub(crate) mod tests {
             .filter(|(path, ..)| !path.ends_with(".sqlite.gz"))
             .collect();
         let (behind, _) = serve(newer);
-        let source = block_on(catalog::load(&behind, Some(&dir), false)).unwrap();
+        let source = block_on(catalog::load(&Origin::repo(&behind), Some(&dir), false)).unwrap();
         assert_eq!(source.last_visit, Some(LastVisit::Behind));
         let found = search(&source, &HashMap::new(), &query("sky")).unwrap();
         assert_eq!(found.total, 1, "Blues, from the last visit");
@@ -2287,14 +2718,16 @@ pub(crate) mod tests {
         drop(source);
 
         // Refresh, or a first visit with nothing kept, says what happened in a sentence.
-        let err = block_on(catalog::load(&behind, Some(&dir), true))
+        let err = block_on(catalog::load(&Origin::repo(&behind), Some(&dir), true))
             .err()
             .unwrap();
         assert_eq!(
             err,
             "the newest list of packs isn't there yet; try again in a minute"
         );
-        let err = block_on(catalog::load(&behind, None, false)).err().unwrap();
+        let err = block_on(catalog::load(&Origin::repo(&behind), None, false))
+            .err()
+            .unwrap();
         assert_eq!(
             err,
             "the newest list of packs isn't there yet; try again in a minute"
@@ -2307,26 +2740,29 @@ pub(crate) mod tests {
         let (files, _, _) = tree_files(&colour_packs());
         let (base, _) = serve(files);
         let dir = temp_dir("retry");
-        drop(block_on(catalog::load(&base, Some(&dir), false)).unwrap());
+        drop(block_on(catalog::load(&Origin::repo(&base), Some(&dir), false)).unwrap());
         let nowhere = "http://127.0.0.1:9";
 
         // Within the minute, the last visit's packs stay.
         let patient = Community::with_cache(Some(dir.clone()));
-        let first = block_on(patient.current(nowhere)).unwrap();
+        let first = block_on(patient.current(&Origin::repo(nowhere))).unwrap();
         assert_eq!(first.last_visit, Some(LastVisit::Offline));
-        let still = block_on(patient.current(&base)).unwrap();
+        let still = block_on(patient.current(&Origin::repo(&base))).unwrap();
         assert!(Arc::ptr_eq(&first, &still));
         drop((first, still, patient));
 
         // After it, the next request asks again, and the packs published now take over.
         let eager = Community::with_cache(Some(dir.clone())).retrying_after(Duration::ZERO);
-        let first = block_on(eager.current(nowhere)).unwrap();
+        let first = block_on(eager.current(&Origin::repo(nowhere))).unwrap();
         assert_eq!(first.last_visit, Some(LastVisit::Offline));
-        let failed_again = block_on(eager.current(nowhere)).unwrap();
+        let failed_again = block_on(eager.current(&Origin::repo(nowhere))).unwrap();
         assert!(Arc::ptr_eq(&first, &failed_again), "still offline");
-        let back = block_on(eager.current(&base)).unwrap();
+        let back = block_on(eager.current(&Origin::repo(&base))).unwrap();
         assert_eq!(back.last_visit, None);
-        assert!(Arc::ptr_eq(&back, &block_on(eager.current(&base)).unwrap()));
+        assert!(Arc::ptr_eq(
+            &back,
+            &block_on(eager.current(&Origin::repo(&base))).unwrap()
+        ));
         drop((first, failed_again, back, eager));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2360,10 +2796,10 @@ pub(crate) mod tests {
                 .filter(|p| p.starts_with("/previews/"))
                 .count()
         };
-        let picture = block_on(previews::serve(&community, &base, strip())).unwrap();
+        let picture = block_on(previews::serve(&community, &Origin::repo(&base), strip())).unwrap();
         assert_eq!(picture.mime, "image/png");
         assert!(!picture.lasting, "nothing ties previews/x.png to a version");
-        block_on(previews::serve(&community, &base, strip())).unwrap();
+        block_on(previews::serve(&community, &Origin::repo(&base), strip())).unwrap();
         assert_eq!(strips_asked(), 1, "kept while this list is in use");
         let on_disk: Vec<_> = std::fs::read_dir(dir.join("files"))
             .into_iter()
@@ -2373,11 +2809,27 @@ pub(crate) mod tests {
         assert!(on_disk.is_empty(), "never kept on disk: {on_disk:?}");
 
         // Refresh makes a new list, which asks for its strips again.
-        block_on(community.refresh(&base)).unwrap();
-        block_on(previews::serve(&community, &base, strip())).unwrap();
+        block_on(community.refresh(&Origin::repo(&base))).unwrap();
+        block_on(previews::serve(&community, &Origin::repo(&base), strip())).unwrap();
         assert_eq!(strips_asked(), 2);
         drop(community);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn packs_come_from_packs_folderskin_app_then_github_unless_another_copy_is_named() {
+        let release = origin_for(None);
+        assert_eq!(release.trees, ["https://packs.folderskin.app"]);
+        assert_eq!(
+            release.repo,
+            "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main"
+        );
+        // A copy served for testing is read on its own, so nothing goes to the real packs.
+        assert_eq!(
+            origin_for(Some(" http://127.0.0.1:8000/ ")),
+            Origin::repo("http://127.0.0.1:8000")
+        );
+        assert_eq!(origin_for(Some("  ")), release);
     }
 
     #[test]

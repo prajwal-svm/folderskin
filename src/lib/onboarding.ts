@@ -6,7 +6,8 @@
 import type { PackProgress } from "./tauri";
 import { clip } from "./names";
 
-/** The pack a first launch starts with, when GitHub lists it. */
+/** The pack a first launch starts with, when the list has it: Classic Art, by the id it was first
+ *  published under. Packs can move to a new id, and the list says where each old one went. */
 export const DEFAULT_PACK = "classic-art";
 
 /** How many folders the intro shows side by side; the middle one is the biggest. */
@@ -76,11 +77,15 @@ export function installLine(state: InstallState): string {
 
 type PackLike = { id: string; name: string; added: boolean };
 
-/** The packs picked when the list arrives: Classic Art, or else the first pack not added yet. */
-export function defaultPicks(packs: PackLike[]): string[] {
+/**
+ * The pack picked when the list arrives: Classic Art under whatever id it has now (`moved` maps
+ * each old id to the new one), or else the first pack not added yet, which is the first of the
+ * featured ones when the list is those.
+ */
+export function defaultPick<P extends PackLike>(packs: P[], moved: Record<string, string> = {}): P | undefined {
   const open = packs.filter((p) => !p.added);
-  const pick = open.find((p) => p.id === DEFAULT_PACK) ?? open[0];
-  return pick ? [pick.id] : [];
+  const id = moved[DEFAULT_PACK] ?? DEFAULT_PACK;
+  return open.find((p) => p.id === id) ?? open[0];
 }
 
 /**

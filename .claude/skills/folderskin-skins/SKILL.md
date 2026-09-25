@@ -74,12 +74,12 @@ cargo run -p folderskin-tools -- packs make "<folder or files>" --dir ../folders
 
 - It writes `../folderskin-community/packs/<id>/` (`--dir` names the folderskin-community checkout; it
   defaults to the current folder) with `pack.json` and one
-  picture per skin, each shrunk to 1024 px and compressed to at most 400 KB (`--max-kb 400` is
-  the default; the pack limit is 2 MB, but everyone who adds the pack downloads it). The report
-  says the id; use it for every step below.
-- Finished folders are saved as WebP when `cwebp` is installed, and as PNG otherwise, which is
-  several times bigger and often over 400 KB. If the report says `cwebp` is missing, install it
-  (`brew install webp`, or the `webp` package on Linux) and make the pack again.
+  picture per skin, each shrunk to 1024 px and saved as a lossless WebP of at most 1.5 MB (the
+  pack limit; `--max-kb` holds them to less). A picture too detailed for that is made 896 px, then
+  768 px, and the report says so. A pack's pictures come to 64 MB at most, so split a bigger set
+  into two packs. The report says the id; use it for every step below.
+- Nothing needs installing: the encoder is built in. It takes several seconds a picture, on every
+  core at once.
 - `--license` defaults to `CC0-1.0`; pass the licence from step 1 if it is another.
 - Run again without `--id`, it makes a second pack. To make the same pack again, pass its id:
   `--id <id>` replaces `packs/<id>/` once the new folder passes, and the pack keeps its id.
@@ -186,8 +186,8 @@ folderskin-community, where a pull request proposes the pack.
 - Only pictures the user made or is allowed to share, under `CC0-1.0`, `CC-BY-4.0` or `MIT`, with
   their GitHub name as the author. Never art extracted from another product, a stock photo, a
   wallpaper, or model output whose terms have not been checked.
-- 1 to 50 skins a pack; pictures 256 to 1024 px on each side and at most 2 MB, which
-  `packs make` keeps to 400 KB.
+- 1 to 50 skins a pack; pictures lossless (PNG or lossless WebP, which `packs make` writes),
+  256 to 1024 px on each side and at most 1.5 MB; 64 MB a pack.
 - Never hand-edit `index.json`, `previews/` or `v2/` in folderskin-community.
 - FolderSkin ships no skins: nothing goes under `assets/`, and there is no skin manifest and no
   pack built into the app.

@@ -29,8 +29,11 @@ folderskin-core.workspace = true
 folderskin-ai = { path = "../crates/folderskin-ai" }
 # "This computer": open-weight models set up and run here, shared with the command line.
 folderskin-local = { path = "../crates/folderskin-local" }
-# Sharing without GitHub: the computer's key and signed requests to the community service.
+# Sharing a pack: the computer's key and signed requests to the community service.
 folderskin-share = { path = "../crates/folderskin-share" }
+# The random part of the pause before an upload is tried again. Already in the tree through
+# folderskin-core, which draws pack ids with it.
+getrandom = "0.3"
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true

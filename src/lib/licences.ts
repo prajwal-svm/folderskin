@@ -11,7 +11,8 @@ export const LICENSES = [
 
 export const licenseLabel = (id: string) => LICENSES.find((l) => l.id === id)?.label ?? id;
 
-/** A GitHub user name: letters, digits and single dashes, not at either end, at most 39. */
+/** A name a pack can be credited to, shaped like a GitHub user name: letters, digits and single
+ *  dashes, not at either end, at most 39. pack.json's `author` has always had that shape. */
 export function isGithubUser(name: string): boolean {
   return name.length <= 39 && /^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/.test(name);
 }
