@@ -1008,7 +1008,7 @@ mod tests {
         assert_eq!(ids, ["classic-art-k7q2mx"]);
         let line = format!(
             "{}: classic-art isn't a generated id",
-            c.path("packs/classic-art").display()
+            c.path(PACKS_DIR).join("classic-art").display()
         );
         assert!(
             strict.problems.iter().any(|p| p.starts_with(&line)),
