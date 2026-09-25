@@ -4,6 +4,31 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.8 - 2026-09-25
+
+### Added
+
+- **FolderSkin speaks six languages:** English, 简体中文, 日本語, 한국어, Français and Español. Pick
+  one from **Language** in the sidebar, under Dark mode. The first time you open FolderSkin it
+  follows your system's language. Numbers, sizes, times and dates follow the language too, and
+  links to the guides open them in it.
+- **macOS speaks it too.** The menu bar changes with the language at once, and the parts macOS
+  draws itself, such as the open panel and the Services menu, follow it from the next launch.
+- **The guides, the READMEs and folderskin.app** are in the same six languages. The website's
+  pages are at folderskin.app/zh-cn/, /ja/, /ko/, /fr/ and /es/, each with its own guides.
+
+### Changed
+
+- **Plainer English everywhere:** no em dashes and no semicolons in anything the app says, and
+  the sentences that had them read more simply now.
+- **The MIT licence says what it means** in the share dialog: anyone can use the pack, as long
+  as the licence notice goes with it. It used to say it was FolderSkin's own licence, which has
+  been GPL-3.0 since 0.1.7.
+- **Two people can share under the same name.** Names repeat the way pack names do, and each
+  computer is told apart by its own key, which nobody sees.
+- **Pack tools:** `packs make` gives a pack's finished folders one shape, `packs normalize` does
+  it for packs already made, and `packs check --require-one-shape` holds a pack to it.
+
 ## 0.1.7 - 2026-09-25
 
 ### Added
