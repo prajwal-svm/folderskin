@@ -72,7 +72,7 @@ incumplirlos después de publicarse se retira.
     que se verificó. No envíes un paquete desde el equipo de otra persona y no compartas tu clave: el
     archivo de recuperación que guarda FolderSkin es esa clave.
 
-## Reportar un paquete
+## Denunciar un paquete
 
 Si un paquete publicado incumple algo de esto, abre una incidencia (issue) en
 [el repositorio de paquetes](https://github.com/prajwal-svm/folderskin-community/issues) con un
