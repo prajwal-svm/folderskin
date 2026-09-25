@@ -1,1 +1,52 @@
-{}
+{
+  "welcome": {
+    "go": "Empecemos",
+    "fine": "Gratis · Código abierto · Sin cuenta"
+  },
+  "install": {
+    "waiting": "En espera",
+    "downloading": "Descargando",
+    "downloadingOf": "Descargando {{done}} de {{total}}",
+    "saving": "Añadiendo a tu biblioteca",
+    "added_one": "{{count}} aspecto añadido",
+    "added_many": "{{count}} de aspectos añadidos",
+    "added_other": "{{count}} aspectos añadidos",
+    "failed": "No se pudo añadir: {{reason}}"
+  },
+  "note": {
+    "inLibrary_one": "Tienes {{count}} aspecto en tu biblioteca.",
+    "inLibrary_many": "Tienes {{count}} de aspectos en tu biblioteca.",
+    "inLibrary_other": "Tienes {{count}} aspectos en tu biblioteca.",
+    "adding": "Añadiendo {{name}}. Tarda unos segundos.",
+    "failedWhy_one": "No se pudo añadir {{names}}: {{reason}}.",
+    "failedWhy_many": "No se pudieron añadir {{names}}: {{reason}}.",
+    "failedWhy_other": "No se pudieron añadir {{names}}: {{reason}}.",
+    "failed_one": "No se pudo añadir {{names}}. Vuelve a intentarlo o añádelo más tarde desde Comunidad.",
+    "failed_many": "No se pudieron añadir {{names}}. Vuelve a intentarlo o añádelos más tarde desde Comunidad.",
+    "failed_other": "No se pudieron añadir {{names}}. Vuelve a intentarlo o añádelos más tarde desde Comunidad.",
+    "anyTime": "Puedes añadir o quitar paquetes cuando quieras desde Comunidad.",
+    "getting": "Obteniendo los paquetes"
+  },
+  "packs": {
+    "title": "Empieza con algunos aspectos",
+    "sub": "Los paquetes son conjuntos gratuitos de aspectos que la gente comparte a través de FolderSkin.",
+    "subPick": "Los paquetes son conjuntos gratuitos de aspectos que la gente comparte a través de FolderSkin. Elige los que quieras.",
+    "subPicked": "Los paquetes son conjuntos gratuitos de aspectos que la gente comparte a través de FolderSkin. {{name}} ya está seleccionado. Añade más si quieres.",
+    "loadFailedText": "{{reason}}. Puedes seguir sin ellos y añadir paquetes más tarde desde Comunidad.",
+    "back": "Atrás",
+    "allSet": "Listo",
+    "continue": "Continuar",
+    "continueWithout": "Continuar sin paquetes",
+    "addOne": "Añadir {{name}}",
+    "addMany_one": "Añadir {{count}} paquete",
+    "addMany_many": "Añadir {{count}} de paquetes",
+    "addMany_other": "Añadir {{count}} paquetes"
+  },
+  "pack": {
+    "label_one": "{{name}}, {{count}} aspecto de {{author}}",
+    "label_many": "{{name}}, {{count}} de aspectos de {{author}}",
+    "label_other": "{{name}}, {{count}} aspectos de {{author}}",
+    "failed": "No se pudo añadir",
+    "already": "Ya está en tu biblioteca"
+  }
+}

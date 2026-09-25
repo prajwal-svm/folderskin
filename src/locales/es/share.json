@@ -1,1 +1,167 @@
-{}
+{
+  "title": "Compartir un paquete",
+  "sub": "Los paquetes son gratis. Cualquiera puede añadir uno a FolderSkin cuando una persona lo haya revisado.",
+  "done": "Listo",
+  "saving": "Guardando",
+  "saveFolder": "Guardar en una carpeta",
+  "sending": "Enviando",
+  "send": "Enviar a revisión",
+  "verifyAndSend": "Verificar y enviar",
+  "sources": {
+    "own": "Las hice yo",
+    "ai": "Las hice con un modelo de IA",
+    "mixed": "Un poco de cada",
+    "licensed": "Son de otra persona, con una licencia abierta"
+  },
+  "progress": {
+    "preparing": "Preparando las imágenes",
+    "encoding": "Preparando las imágenes ({{done}} de {{total}})",
+    "checking": "Comprobando el paquete con FolderSkin",
+    "uploading": "Enviando imágenes ({{done}} de {{total}})",
+    "finishing": "Poniéndolo en la cola de revisión",
+    "retryIn_one": "Reintentando en {{count}} segundo",
+    "retryIn_many": "Reintentando en {{count}} de segundos",
+    "retryIn_other": "Reintentando en {{count}} segundos",
+    "retry": "Reintentando"
+  },
+  "scaled": {
+    "picture": "{{name}} ({{side}} px)",
+    "more_one": "{{count}} más",
+    "more_many": "{{count}} más",
+    "more_other": "{{count}} más",
+    "note_one": "{{names}} es menor de 1024 px: sin pérdida, pasaba de los {{max}} MB que puede ocupar una imagen a tamaño completo.",
+    "note_many": "{{names}} son menores de 1024 px: sin pérdida, pasaban de los {{max}} MB que puede ocupar una imagen a tamaño completo.",
+    "note_other": "{{names}} son menores de 1024 px: sin pérdida, pasaban de los {{max}} MB que puede ocupar una imagen a tamaño completo."
+  },
+  "status": {
+    "uploading": "Envío sin terminar",
+    "inReview": "Esperando revisión",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+    "withdrawn": "Retirado",
+    "takenDown": "Dado de baja",
+    "expired": "El envío no terminó"
+  },
+  "problems": {
+    "noSkins": "Aún no tienes aspectos propios",
+    "tickOne": "Marca al menos un aspecto",
+    "tooMany_one": "{{count}} aspecto supera los {{max}} que caben en un paquete",
+    "tooMany_many": "{{count}} de aspectos superan los {{max}} que caben en un paquete",
+    "tooMany_other": "{{count}} aspectos superan los {{max}} que caben en un paquete",
+    "noName": "Ponle un nombre al paquete",
+    "noTag": "Añade al menos una etiqueta",
+    "noHandle": "Elige el nombre que muestran tus paquetes",
+    "checking": "Comprobando si está disponible",
+    "unavailable": "Ahora mismo no está disponible",
+    "noSource": "Indica de dónde salieron las imágenes",
+    "agree": "Acepta las condiciones"
+  },
+  "dialogs": {
+    "saveWhere": "Elige dónde guardar el paquete",
+    "saveKey": "Guarda tu archivo de recuperación",
+    "chooseKey": "Elige tu archivo de recuperación",
+    "keyFile": "Archivo de recuperación"
+  },
+  "key": {
+    "saved": "Guardado. Mantenlo en privado: cualquiera que lo tenga puede compartir en tu nombre.",
+    "saveNote": "<link>Guarda un archivo de recuperación</link> para compartir con este nombre desde otro equipo.",
+    "use": "Usar un archivo de recuperación"
+  },
+  "sent": {
+    "title": "Tu paquete está esperando revisión",
+    "sub": "{{name}} está en la cola de revisión de FolderSkin.",
+    "seeSubmissions": "Ver tus envíos",
+    "note": "Una persona revisa cada paquete antes de que nadie más pueda verlo. Cuando se aprueba, aparece en Comunidad para todos, atribuido a <b>{{handle}}</b>. Si se rechaza, Tus envíos te dice por qué."
+  },
+  "verify": {
+    "title": "Verifica este equipo",
+    "sub": "Para que solo las personas, y no los scripts, puedan enviar paquetes a revisión.",
+    "back": "Atrás",
+    "lead": "Se abrió en tu navegador una página del servicio para compartir de FolderSkin. Cuando pases su comprobación rápida, FolderSkin seguirá solo.",
+    "creditedTo": "Tus paquetes se atribuirán a <b>{{handle}}</b>. FolderSkin lo pide una vez por equipo.",
+    "openAgain": "Volver a abrir la página",
+    "waiting": "Esperando la comprobación en tu navegador",
+    "gettingReady": "Preparando la página"
+  },
+  "subs": {
+    "title": "Tus envíos",
+    "sub": "Los paquetes que compartiste y en qué punto está cada uno.",
+    "back": "Volver a compartir",
+    "label": "tus envíos",
+    "asking": "Consultando el servicio para compartir de FolderSkin",
+    "none": "Nada por ahora. Aquí aparecen los paquetes que compartes.",
+    "pictures_one": "{{count}} imagen",
+    "pictures_many": "{{count}} de imágenes",
+    "pictures_other": "{{count}} imágenes",
+    "sent": "enviado el {{date}}",
+    "publishedAs": "publicado como {{id}}",
+    "joinsSoon": "pronto estará en los paquetes de la comunidad",
+    "rule": "Regla {{term}}",
+    "quoted": "“{{note}}”",
+    "takingOut": "Estaba en los paquetes de la comunidad, así que se avisó al mantenedor de FolderSkin para que lo retire. Puede tardar unos días.",
+    "keep": "Conservarlo",
+    "withdrawIt": "Retirarlo",
+    "withdraw": {
+      "button": "Retirar",
+      "queued": "Sale de la cola de revisión.",
+      "published": "Sale de la comunidad para todos cuando el mantenedor de FolderSkin lo retire, normalmente en pocos días. Las copias que ya tiene la gente siguen siendo suyas.",
+      "approved": "No se sumará a los paquetes de la comunidad."
+    }
+  },
+  "saved": {
+    "title": "Tu paquete está listo",
+    "sub": "Guardado como la carpeta {{folder}}.",
+    "note": "Contiene las imágenes y el pack.json que las describe, y no se envió nada a ninguna parte. Cualquiera puede añadirlo a FolderSkin con Añadir desde una carpeta, en Comunidad.",
+    "howPacksWork": "Cómo funcionan los paquetes"
+  },
+  "form": {
+    "skins": "Aspectos",
+    "chosenOf": "{{chosen}} de {{total}}",
+    "clear": "Deseleccionar todo",
+    "selectAll": "Seleccionar todo",
+    "whichLabel": "qué aspectos mostrar",
+    "allOfYours": "Todos los tuyos ({{count}})",
+    "tagged": "Con la etiqueta {{tag}} ({{count}})",
+    "nothingYet": "Aún no hay nada aquí.",
+    "packName": "Nombre del paquete",
+    "packNamePlaceholder": "Noches de neón",
+    "tags": "Etiquetas",
+    "tagsLabel": "añadir una etiqueta al paquete",
+    "tagsNote": "La primera identifica el paquete en los filtros de todo el mundo.",
+    "profile": "Perfil",
+    "profileLabel": "perfil",
+    "creditedTo": "atribuido a {{author}}",
+    "licence": "Licencia",
+    "licenceLabel": "licencia",
+    "thisPackOnly": "Solo para este paquete: el perfil {{profile}} sigue con {{licence}}.",
+    "author": "Autor",
+    "checking": "Comprobando si se puede compartir",
+    "unavailable": "Ahora mismo no se puede compartir.",
+    "verified": "Verificado en este equipo",
+    "handlePlaceholder": "tu-nombre",
+    "handleLabel": "el nombre que muestran tus paquetes",
+    "handleNote": "El nombre que muestran tus paquetes: letras, dígitos y guiones.",
+    "confirmOnce": "Lo confirmarás una vez en tu navegador.",
+    "otherCredit": "El perfil {{profile}} lo atribuye a {{author}}. Los paquetes enviados desde este equipo se atribuyen al nombre con el que se verificó.",
+    "pictures": "Las imágenes",
+    "picturesLabel": "las imágenes",
+    "picturesPlaceholder": "¿De dónde salieron?",
+    "credits": "Créditos",
+    "creditsPlaceholder": "Foto base de Ana García, CC0"
+  },
+  "how": {
+    "label": "cómo funciona compartir",
+    "reviewed": "<b>Primero, una revisión.</b> Una persona de FolderSkin revisa cada paquete. Nada es público hasta que se aprueba.",
+    "public": "<b>Público una vez aprobado.</b> Las imágenes, el nombre y las etiquetas del paquete, y tu nombre, llegan a todo el mundo con la licencia que elegiste, y una licencia no se puede retirar de las copias que la gente ya tiene.",
+    "noAccount": "<b>Sin cuenta.</b> El servicio guarda la clave de este equipo y tu nombre. Tu dirección de red solo se guarda anonimizada.",
+    "withdraw": "<b>Lo puedes retirar.</b> Tus envíos muestra en qué punto está cada paquete, dice por qué si alguno se rechaza y te permite retirarlo."
+  },
+  "terms": {
+    "yours": "Las imágenes son tuyas, o son CC0 y lo comprobaste. No están sacadas de ninguna parte.",
+    "nothingHarmful": "Nada sexual, de odio, gore ni sobre autolesiones. Nada que involucre a un menor.",
+    "nobodyElse": "Ningún logotipo, personaje ni imagen de otra persona sin su permiso.",
+    "maintainer": "Un mantenedor puede rechazar un paquete o retirarlo más adelante.",
+    "agree": "He leído las condiciones de los paquetes y este paquete las cumple.",
+    "read": "Leerlas"
+  }
+}

@@ -1,1 +1,65 @@
-{}
+{
+  "cancel": "Cancelar",
+  "close": "cerrar",
+  "twoSentences": "{{first}} {{second}}",
+  "official": "Oficial",
+  "tags": {
+    "remove": "quitar la etiqueta {{tag}}",
+    "add": "Añadir una etiqueta",
+    "addAnother": "Añadir otra",
+    "most_one": "Como máximo, {{count}} etiqueta.",
+    "most_many": "Como máximo, {{count}} de etiquetas.",
+    "most_other": "Como máximo, {{count}} etiquetas."
+  },
+  "window": {
+    "label": "ventana",
+    "minimise": "Minimizar",
+    "maximise": "Maximizar",
+    "restore": "Restaurar",
+    "close": "Cerrar"
+  },
+  "size": {
+    "bytes_one": "{{count}} byte",
+    "bytes_many": "{{count}} de bytes",
+    "bytes_other": "{{count}} bytes",
+    "kb": "{{value}} KB",
+    "mb": "{{value}} MB",
+    "gb": "{{value}} GB",
+    "tb": "{{value}} TB"
+  },
+  "place": {
+    "macos": "tu Mac",
+    "windows": "tu PC",
+    "linux": "tu equipo"
+  },
+  "showIn": {
+    "macos": "Mostrar en Finder",
+    "windows": "Mostrar en el Explorador",
+    "linux": "Mostrar en Archivos"
+  },
+  "dialog": {
+    "chooseFolder": "Elige una carpeta",
+    "choosePicture": "Elige una imagen",
+    "pictures": "Imágenes"
+  },
+  "about": {
+    "licence": "Gratis y de código abierto · GPL-3.0",
+    "tagline": "Dale un aspecto a cualquier carpeta.",
+    "reportIssues": "Informar de un problema",
+    "star": "Dar una estrella"
+  },
+  "licences": {
+    "option": "{{label}}: {{note}}",
+    "cc0": "Cualquiera puede usarlos para lo que sea.",
+    "ccBy": "Cualquiera puede usarlos, dándote el crédito.",
+    "mit": "Cualquiera puede usarlos, siempre que los acompañe el aviso de la licencia."
+  },
+  "control": {
+    "typed": "{{name}}, escribir el valor",
+    "value": "valor"
+  },
+  "errors": {
+    "somethingWrong": "algo salió mal",
+    "templateLoad": "no se pudo cargar la plantilla de la carpeta"
+  }
+}

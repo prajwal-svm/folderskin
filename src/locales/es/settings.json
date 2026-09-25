@@ -1,1 +1,131 @@
-{}
+{
+  "title": "Ajustes",
+  "navLabel": "ajustes",
+  "search": "Buscar",
+  "searchLabel": "buscar en los ajustes",
+  "pagesLabel": "páginas de ajustes",
+  "noMatch": "Ningún ajuste coincide con “{{query}}”",
+  "pages": {
+    "general": "General",
+    "ai": "Proveedor de IA",
+    "sharing": "Compartir",
+    "about": "Acerca de"
+  },
+  "find": {
+    "general": "apariencia tema oscuro claro sistema modo automático color de acento movimiento animación reducir reducido ventana barra lateral iconos tus aspectos carpeta almacenamiento copia de seguridad appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
+    "ai": "ia dónde se crean las imágenes clave claves proveedor proveedores api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate modelo local tu equipo configurar generar gratis quitar eliminar borrar where pictures are made key keys provider providers local model your machine set up generate free remove delete",
+    "sharing": "compartir autor atribuir atribuido crédito licencia perfil perfiles cc0 cc by mit comunidad paquete sharing share author credit credited licence license profile profiles community pack",
+    "about": "acerca de folderskin qué es aspectos paquetes fotos diseño ia modelo local gratis código abierto versión versiones nuevas actualizar actualización actualizaciones enlaces código fuente problemas estrella about what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star"
+  },
+  "general": {
+    "appearance": "Apariencia",
+    "theme": "Tema",
+    "themeLabel": "tema",
+    "themeFind": "oscuro claro sistema modo automático dark light system mode",
+    "themes": {
+      "system": "Automático",
+      "light": "Claro",
+      "dark": "Oscuro"
+    },
+    "accent": "Color de acento",
+    "accentNote": "Botones, selecciones y el brillo alrededor de la carpeta que sueltas.",
+    "accentFind": "color acento resaltado accent",
+    "accentLabel": "color de acento",
+    "accents": {
+      "blue": "Azul",
+      "purple": "Morado",
+      "pink": "Rosa",
+      "orange": "Naranja",
+      "green": "Verde",
+      "mono": "Blanco y negro"
+    },
+    "motion": "Movimiento",
+    "motionNote": "Menos movimiento en la biblioteca, los cuadros de diálogo y los iconos.",
+    "motionFind": "animación animaciones movimiento reducir reducido animation reduce reduced motion",
+    "motionLabel": "movimiento",
+    "motions": {
+      "system": "Sistema",
+      "systemTip": "Tanto como permita el ajuste del propio equipo",
+      "reduced": "Reducido",
+      "reducedTip": "Las cosas aparecen y cambian sin moverse"
+    },
+    "window": "Ventana",
+    "sidebar": "Barra lateral",
+    "sidebarNote": "Solo iconos la pliega en una franja estrecha. {{keys}} cambia entre las dos.",
+    "sidebarFind": "barra lateral contraer plegar iconos rail collapse fold icons",
+    "sidebarLabel": "barra lateral",
+    "full": "Completa",
+    "iconsOnly": "Solo iconos",
+    "yourSkins": "Tus aspectos",
+    "yourSkinsNote": "Todo lo que añades se queda aquí entre una sesión y otra. Copia esta carpeta para hacer una copia de seguridad.",
+    "skins_one": "{{count}} aspecto",
+    "skins_many": "{{count}} de aspectos",
+    "skins_other": "{{count}} aspectos",
+    "skinsFind": "almacenamiento carpeta copia de seguridad aspectos storage folder backup skins",
+    "keptUntilQuit": "Se guardan hasta que salgas"
+  },
+  "ai": {
+    "title": "Dónde se crean las imágenes",
+    "find": "clave claves api proveedor proveedores modelo key keys provider providers model",
+    "note": "FolderSkin no tiene servidor. Con una clave, Generar con IA envía tu solicitud directamente desde tu equipo al proveedor, que la factura a tu cuenta. El Modelo local las crea gratis, una vez configurado.",
+    "loading": "Cargando proveedores"
+  },
+  "sharing": {
+    "title": "Perfiles de licencia",
+    "note": "Un paquete que compartes dice quién lo hizo y cómo pueden usarlo los demás. Ten un perfil para cada forma de compartir: al compartir se parte del predeterminado.",
+    "howItWorks": "Cómo funciona compartir"
+  },
+  "profile": {
+    "firstName": "Personal",
+    "fallbackName": "Perfil",
+    "default": "Predeterminado",
+    "creditedTo": "Atribuido a {{author}}",
+    "noCredit": "Aún no hay a quién atribuirlo",
+    "makeDefaultLabel": "hacer que {{name}} sea el predeterminado",
+    "makeDefault": "Hacer predeterminado",
+    "changeLabel": "cambiar {{name}}",
+    "change": "Cambiar",
+    "deleteLabel": "eliminar {{name}}",
+    "delete": "Eliminar",
+    "deleted": "Se eliminó {{name}}.",
+    "undo": "Deshacer",
+    "add": "Añadir un perfil",
+    "newLabel": "perfil nuevo",
+    "name": "Nombre",
+    "namePlaceholder": "Personal, o Para el trabajo",
+    "creditedToLabel": "Atribuido a",
+    "authorPlaceholder": "tu-nombre",
+    "licence": "Licencia",
+    "licenceLabel": "licencia",
+    "save": "Guardar",
+    "addProfile": "Añadir perfil",
+    "problems": {
+      "noName": "Ponle un nombre al perfil.",
+      "taken": "Ya hay un perfil llamado {{name}}.",
+      "author": "El nombre al que se atribuye tiene que ser de letras, números y guiones simples.",
+      "full_one": "Puede haber {{count}} perfil como máximo. Elimina uno para añadir este.",
+      "full_many": "Puede haber {{count}} de perfiles como máximo. Elimina uno para añadir este.",
+      "full_other": "Puede haber {{count}} perfiles como máximo. Elimina uno para añadir este."
+    }
+  },
+  "about": {
+    "intro": "Tus mejores recuerdos viven en la misma carpeta sin gracia que tus viejos papeles. FolderSkin le da a cada carpeta un aspecto que va con lo que guarda: un fotograma de cine a la hora dorada para las fotos del verano, un póster de viaje vintage para una escapada, pop art para un proyecto de video, pasteles suaves para un cumpleaños.",
+    "points": {
+      "skins": "Aspectos de paquetes gratuitos de la comunidad, de tus propias fotos o diseñados por ti.",
+      "ai": "Describe un estilo y la IA lo pinta, con tu propia clave o gratis con el Modelo local.",
+      "fileBrowser": {
+        "macos": "Los aspectos aparecen directamente en el Finder, y cualquier carpeta recupera su icono original con un clic.",
+        "windows": "Los aspectos aparecen directamente en el Explorador de archivos, y cualquier carpeta recupera su icono original con un clic.",
+        "linux": "Los aspectos aparecen directamente en Archivos, y cualquier carpeta recupera su icono original con un clic."
+      },
+      "free": "Gratis y de código abierto. Sin cuenta ni rastreo."
+    },
+    "updates": "Actualizaciones",
+    "newer": "Versiones nuevas",
+    "newerNote": "Llegan desde las versiones de FolderSkin en GitHub y se instalan cuando tú lo dices.",
+    "newerFind": "actualizar actualización actualizaciones versión versiones update updates release version",
+    "links": "Enlaces",
+    "sourceCode": "Código fuente",
+    "releases": "Versiones"
+  }
+}
