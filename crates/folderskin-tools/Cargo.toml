@@ -15,9 +15,13 @@ path = "src/main.rs"
 [dependencies]
 folderskin-core.workspace = true
 image.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 clap = { version = "4", features = ["derive", "env"] }
 folderskin-catalog = { path = "../folderskin-catalog" }
 # `community`: signed requests to the community service, run to completion on a small runtime.
 folderskin-share = { path = "../folderskin-share" }
 tokio = { version = "1", default-features = false, features = ["rt", "time"] }
+# `community mirror`: asks the public mirror what it has, and uploads the rest through the service.
+# Already built for folderskin-share.
+reqwest.workspace = true

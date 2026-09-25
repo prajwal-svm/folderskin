@@ -1,6 +1,6 @@
 //! Command-line surface of folderskin-tools (clap derive).
 
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgGroup, Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -88,7 +88,7 @@ pub enum Command {
         #[command(subcommand)]
         command: PacksCommand,
     },
-    /// Look after the community service: packs shared without GitHub, their review, and pulling
+    /// Look after the community service: packs shared from the app, their review, and pulling
     /// approved ones into the packs repository (github.com/prajwal-svm/folderskin-community)
     Community {
         #[command(subcommand)]
@@ -171,11 +171,40 @@ pub enum CommunityCommand {
         service: Service,
     },
     /// Write approved packs into a folderskin-community checkout's packs/ as ordinary pack folders,
-    /// checked like any other
+    /// checked like any other, under the ids the service gave them. The service hears about each
+    /// pack as soon as it is written, unless --no-done leaves that to `community done`
     Pull {
         /// The packs folder
         #[arg(long, default_value = "packs")]
         out: PathBuf,
+        /// Don't tell the service yet: `community done --from <FILE>` does, once the packs are
+        /// pushed, so a pack that never gets there comes back next time. Needs --pulled
+        #[arg(long, requires = "pulled")]
+        no_done: bool,
+        /// Save the packs that were pulled here, as a JSON list for `community done --from`
+        #[arg(long, value_name = "FILE")]
+        pulled: Option<PathBuf>,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Tell the service that the packs `community pull --no-done` pulled are in the repository
+    /// now. Telling it twice does no harm
+    Done {
+        /// The list `community pull --pulled` saved
+        #[arg(long, value_name = "FILE")]
+        from: PathBuf,
+        #[command(flatten)]
+        service: Service,
+    },
+    /// Copy the published tree (v2/) to its public mirror through the service, which holds the
+    /// bucket's keys: every file the mirror lacks, then head.json, once all of them are there
+    Mirror {
+        /// The folder holding v2/, such as a folderskin-community checkout
+        #[arg(long, default_value = ".")]
+        tree: PathBuf,
+        /// Where the mirror serves the tree from, such as https://packs.folderskin.app
+        #[arg(long, value_name = "URL")]
+        public: String,
         #[command(flatten)]
         service: Service,
     },
@@ -191,16 +220,22 @@ pub enum PacksCommand {
         /// The largest a picture may be, in KB, if less than the pack limit of 2048
         #[arg(long, value_name = "KB")]
         max_kb: Option<usize>,
+        /// Also turn down a pack whose id isn't a generated one, a name and six random characters
+        /// such as classic-art-k7q2mx
+        #[arg(long)]
+        require_generated_ids: bool,
     },
     /// Make a pack from pictures: finished folders (on magenta or transparency) are cut out,
-    /// everything is shrunk and compressed to fit, and pack.json is written
+    /// everything is shrunk and compressed to fit, and pack.json is written. A new pack gets an
+    /// id of its own, its name and six random characters, which is its folder's name
     Make {
         /// Pictures (PNG, JPEG or WebP), or folders of them, taken in name order
         #[arg(required = true)]
         pictures: Vec<PathBuf>,
-        /// The pack's id, which is also its folder's name: lower-case words joined by dashes
+        /// Make the pack with this id again, which has to be in packs/ already: its folder is
+        /// replaced and it keeps its id. Leave it out for a new pack
         #[arg(long)]
-        id: String,
+        id: Option<String>,
         /// The pack's name as the app shows it
         #[arg(long)]
         name: String,
@@ -228,9 +263,26 @@ pub enum PacksCommand {
         #[arg(long)]
         flat_backdrop: bool,
     },
+    /// Give packs generated ids, a name and six random characters such as classic-art-k7q2mx:
+    /// each folder moves with git mv, featured.json and official.json follow, and moved.json
+    /// records every move. The rename is staged, ready to commit
+    #[command(group(ArgGroup::new("which").required(true).args(["all", "id"])))]
+    Rename {
+        /// The folderskin-community checkout, holding packs/
+        #[arg(long, default_value = ".")]
+        dir: PathBuf,
+        /// Every pack whose id isn't a generated one; packs that have one are left alone
+        #[arg(long)]
+        all: bool,
+        /// One pack, by its id
+        id: Option<String>,
+        /// The generated id it gets, instead of a new one; no pack can have it or have had it
+        #[arg(long, requires = "id", conflicts_with = "all", value_name = "NEW_ID")]
+        to: Option<String>,
+    },
     /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic).
-    /// Each pack is dated by the commit that added it, and marked official when official.json
-    /// lists it
+    /// Each pack is dated by the commit that added it, under its first id when moved.json says it
+    /// moved, and marked official when official.json lists it
     Index {
         /// The folderskin-community checkout, holding packs/ and, if there is one, official.json
         #[arg(long, default_value = ".")]
@@ -402,11 +454,34 @@ mod tests {
     fn parses_packs_commands_run_inside_a_skins_checkout_by_default() {
         match Cli::parse_from(["folderskin-tools", "packs", "check"]).command {
             Command::Packs {
-                command: PacksCommand::Check { dir, max_kb },
+                command:
+                    PacksCommand::Check {
+                        dir,
+                        max_kb,
+                        require_generated_ids,
+                    },
             } => {
                 assert_eq!(dir, PathBuf::from("."));
                 assert_eq!(max_kb, None);
+                assert!(!require_generated_ids, "off unless asked");
             }
+            other => panic!("{other:?}"),
+        }
+        match Cli::parse_from([
+            "folderskin-tools",
+            "packs",
+            "check",
+            "--require-generated-ids",
+        ])
+        .command
+        {
+            Command::Packs {
+                command:
+                    PacksCommand::Check {
+                        require_generated_ids,
+                        ..
+                    },
+            } => assert!(require_generated_ids),
             other => panic!("{other:?}"),
         }
         match Cli::parse_from(["folderskin-tools", "packs", "index", "--dir", "/tmp/c"]).command {
@@ -485,14 +560,61 @@ mod tests {
         };
         match parse(&["pull"]).unwrap() {
             Command::Community {
-                command: CommunityCommand::Pull { out, service },
+                command:
+                    CommunityCommand::Pull {
+                        out,
+                        no_done,
+                        pulled,
+                        service,
+                    },
             } => {
                 assert_eq!(out, PathBuf::from("packs"));
+                assert!(
+                    !no_done,
+                    "a person pulling by hand tells the service at once"
+                );
+                assert_eq!(pulled, None);
                 assert_eq!(service.api, "https://community.example.org");
                 assert_eq!(service.key, PathBuf::from("admin.key"));
             }
             other => panic!("{other:?}"),
         }
+        match parse(&["pull", "--no-done", "--pulled", "/tmp/pulled.json"]).unwrap() {
+            Command::Community {
+                command:
+                    CommunityCommand::Pull {
+                        no_done, pulled, ..
+                    },
+            } => {
+                assert!(no_done);
+                assert_eq!(pulled, Some(PathBuf::from("/tmp/pulled.json")));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            parse(&["pull", "--no-done"]).is_err(),
+            "the packs left untold have to be written down somewhere"
+        );
+        match parse(&["done", "--from", "/tmp/pulled.json"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Done { from, .. },
+            } => assert_eq!(from, PathBuf::from("/tmp/pulled.json")),
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&["done"]).is_err(), "done needs the list");
+        match parse(&["mirror", "--public", "https://packs.example.org"]).unwrap() {
+            Command::Community {
+                command: CommunityCommand::Mirror { tree, public, .. },
+            } => {
+                assert_eq!(tree, PathBuf::from("."), "a checkout, holding v2/");
+                assert_eq!(public, "https://packs.example.org");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            parse(&["mirror"]).is_err(),
+            "the mirror's address is needed"
+        );
         match parse(&[
             "decide",
             "sub_aaaaaaaaaaaaaaaaaaaa",
@@ -532,26 +654,25 @@ mod tests {
 
     #[test]
     fn parses_packs_make_into_the_community_folder_by_default() {
-        let cli = Cli::parse_from([
+        let make = [
             "folderskin-tools",
             "packs",
             "make",
             "renders/",
             "extra.png",
-            "--id",
-            "3d",
             "--name",
             "3D",
             "--tags",
             "3d,glossy",
             "--author",
             "prajwal-svm",
-        ]);
-        match cli.command {
+        ];
+        match Cli::parse_from(make).command {
             Command::Packs {
                 command:
                     PacksCommand::Make {
                         pictures,
+                        id,
                         tags,
                         dir,
                         max_kb,
@@ -564,6 +685,7 @@ mod tests {
                     pictures,
                     [PathBuf::from("renders/"), PathBuf::from("extra.png")]
                 );
+                assert_eq!(id, None, "a new pack gets an id of its own");
                 assert_eq!(tags, ["3d", "glossy"]);
                 assert_eq!(dir, PathBuf::from("."));
                 assert_eq!(max_kb, 400);
@@ -571,6 +693,49 @@ mod tests {
                 assert!(!flat_backdrop);
             }
             other => panic!("{other:?}"),
+        }
+        let again = Cli::parse_from([&make[..], &["--id", "3d-k7q2mx"]].concat());
+        match again.command {
+            Command::Packs {
+                command: PacksCommand::Make { id, .. },
+            } => assert_eq!(id.as_deref(), Some("3d-k7q2mx")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_packs_rename_for_every_pack_or_one() {
+        let parse = |args: &[&str]| {
+            Cli::try_parse_from([&["folderskin-tools", "packs", "rename"], args].concat())
+                .map(|cli| cli.command)
+        };
+        match parse(&["--all", "--dir", "../folderskin-community"]).unwrap() {
+            Command::Packs {
+                command: PacksCommand::Rename { dir, all, id, to },
+            } => {
+                assert_eq!(dir, PathBuf::from("../folderskin-community"));
+                assert!(all);
+                assert_eq!((id, to), (None, None));
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse(&["classic-art", "--to", "classic-art-k7q2mx"]).unwrap() {
+            Command::Packs {
+                command: PacksCommand::Rename { dir, all, id, to },
+            } => {
+                assert_eq!(dir, PathBuf::from("."));
+                assert!(!all);
+                assert_eq!(id.as_deref(), Some("classic-art"));
+                assert_eq!(to.as_deref(), Some("classic-art-k7q2mx"));
+            }
+            other => panic!("{other:?}"),
+        }
+        for wrong in [
+            vec![],
+            vec!["--all", "classic-art"],
+            vec!["--all", "--to", "x-k7q2mx"],
+        ] {
+            assert!(parse(&wrong).is_err(), "{wrong:?}");
         }
     }
 }

@@ -1423,6 +1423,8 @@ dependencies = [
  "folderskin-core",
  "folderskin-share",
  "image",
+ "reqwest",
+ "serde",
  "serde_json",
  "tokio",
 ]
