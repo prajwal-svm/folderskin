@@ -1,1 +1,23 @@
-{}
+{
+  "about": "À propos de FolderSkin",
+  "services": "Services",
+  "hide": "Masquer FolderSkin",
+  "hideOthers": "Masquer les autres",
+  "showAll": "Tout afficher",
+  "quit": "Quitter FolderSkin",
+  "file": "Fichier",
+  "closeWindow": "Fermer la fenêtre",
+  "edit": "Édition",
+  "undo": "Annuler",
+  "redo": "Rétablir",
+  "cut": "Couper",
+  "copy": "Copier",
+  "paste": "Coller",
+  "selectAll": "Tout sélectionner",
+  "view": "Présentation",
+  "fullScreen": "Passer en mode plein écran",
+  "window": "Fenêtre",
+  "minimize": "Réduire",
+  "zoom": "Réduire/agrandir",
+  "help": "Aide"
+}

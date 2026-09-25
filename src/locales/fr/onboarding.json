@@ -1,1 +1,52 @@
-{}
+{
+  "welcome": {
+    "go": "C'est parti",
+    "fine": "Gratuit · Open source · Sans compte"
+  },
+  "install": {
+    "waiting": "En attente",
+    "downloading": "Téléchargement",
+    "downloadingOf": "Téléchargement : {{done}} sur {{total}}",
+    "saving": "Ajout à votre bibliothèque",
+    "added_one": "{{count}} habillage ajouté",
+    "added_many": "{{count}} d'habillages ajoutés",
+    "added_other": "{{count}} habillages ajoutés",
+    "failed": "Impossible de l'ajouter : {{reason}}"
+  },
+  "note": {
+    "inLibrary_one": "Vous avez {{count}} habillage dans votre bibliothèque.",
+    "inLibrary_many": "Vous avez {{count}} d'habillages dans votre bibliothèque.",
+    "inLibrary_other": "Vous avez {{count}} habillages dans votre bibliothèque.",
+    "adding": "Ajout de {{name}}. Cela prend quelques secondes.",
+    "failedWhy_one": "Impossible d'ajouter {{names}} : {{reason}}.",
+    "failedWhy_many": "Impossible d'ajouter {{names}} : {{reason}}.",
+    "failedWhy_other": "Impossible d'ajouter {{names}} : {{reason}}.",
+    "failed_one": "Impossible d'ajouter {{names}}. Réessayez, ou ajoutez-le plus tard depuis la Communauté.",
+    "failed_many": "Impossible d'ajouter {{names}}. Réessayez, ou ajoutez-les plus tard depuis la Communauté.",
+    "failed_other": "Impossible d'ajouter {{names}}. Réessayez, ou ajoutez-les plus tard depuis la Communauté.",
+    "anyTime": "Vous pouvez ajouter ou retirer des packs à tout moment depuis la Communauté.",
+    "getting": "Récupération des packs"
+  },
+  "packs": {
+    "title": "Commencez avec quelques habillages",
+    "sub": "Les packs sont des séries gratuites d'habillages que les gens partagent via FolderSkin.",
+    "subPick": "Les packs sont des séries gratuites d'habillages que les gens partagent via FolderSkin. Choisissez ceux qui vous plaisent.",
+    "subPicked": "Les packs sont des séries gratuites d'habillages que les gens partagent via FolderSkin. {{name}} est déjà sélectionné pour vous. Ajoutez-en d'autres si vous voulez.",
+    "loadFailedText": "{{reason}}. Vous pouvez continuer sans eux et ajouter des packs plus tard depuis la Communauté.",
+    "back": "Retour",
+    "allSet": "C'est prêt",
+    "continue": "Continuer",
+    "continueWithout": "Continuer sans packs",
+    "addOne": "Ajouter {{name}}",
+    "addMany_one": "Ajouter {{count}} pack",
+    "addMany_many": "Ajouter {{count}} de packs",
+    "addMany_other": "Ajouter {{count}} packs"
+  },
+  "pack": {
+    "label_one": "{{name}}, {{count}} habillage par {{author}}",
+    "label_many": "{{name}}, {{count}} d'habillages par {{author}}",
+    "label_other": "{{name}}, {{count}} habillages par {{author}}",
+    "failed": "Impossible de l'ajouter",
+    "already": "Déjà dans votre bibliothèque"
+  }
+}

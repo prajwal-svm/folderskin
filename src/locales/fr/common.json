@@ -1,1 +1,65 @@
-{}
+{
+  "cancel": "Annuler",
+  "close": "fermer",
+  "twoSentences": "{{first}} {{second}}",
+  "official": "Officiel",
+  "tags": {
+    "remove": "retirer le tag {{tag}}",
+    "add": "Ajouter un tag",
+    "addAnother": "Ajouter un autre",
+    "most_one": "{{count}} tag au maximum.",
+    "most_many": "{{count}} de tags au maximum.",
+    "most_other": "{{count}} tags au maximum."
+  },
+  "window": {
+    "label": "fenêtre",
+    "minimise": "Réduire",
+    "maximise": "Agrandir",
+    "restore": "Restaurer",
+    "close": "Fermer"
+  },
+  "size": {
+    "bytes_one": "{{count}} octet",
+    "bytes_many": "{{count}} d'octets",
+    "bytes_other": "{{count}} octets",
+    "kb": "{{value}} Ko",
+    "mb": "{{value}} Mo",
+    "gb": "{{value}} Go",
+    "tb": "{{value}} To"
+  },
+  "place": {
+    "macos": "votre Mac",
+    "windows": "votre PC",
+    "linux": "votre ordinateur"
+  },
+  "showIn": {
+    "macos": "Afficher dans le Finder",
+    "windows": "Afficher dans l'Explorateur",
+    "linux": "Afficher dans Fichiers"
+  },
+  "dialog": {
+    "chooseFolder": "Choisir un dossier",
+    "choosePicture": "Choisir une image",
+    "pictures": "Images"
+  },
+  "about": {
+    "licence": "Gratuit et open source · GPL-3.0",
+    "tagline": "Habillez n'importe quel dossier.",
+    "reportIssues": "Signaler un problème",
+    "star": "Mettre une étoile"
+  },
+  "licences": {
+    "option": "{{label}} : {{note}}",
+    "cc0": "Tout le monde peut les utiliser pour n'importe quel usage.",
+    "ccBy": "Tout le monde peut les utiliser, en vous créditant.",
+    "mit": "Tout le monde peut les utiliser, à condition que l'avis de licence les accompagne."
+  },
+  "control": {
+    "typed": "{{name}}, saisir la valeur",
+    "value": "valeur"
+  },
+  "errors": {
+    "somethingWrong": "un problème est survenu",
+    "templateLoad": "impossible de charger le gabarit du dossier"
+  }
+}

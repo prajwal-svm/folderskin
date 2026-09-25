@@ -1,1 +1,148 @@
-{}
+{
+  "label": "bibliothèque",
+  "resize": {
+    "sidebar": "largeur de la barre latérale",
+    "composer": "largeur des calques et des réglages",
+    "folder": "largeur du panneau du dossier"
+  },
+  "tabs": {
+    "all": "Tous"
+  },
+  "toast": {
+    "importedFolder": "{{name}} est dans Mes habillages, fond retiré",
+    "importedArtwork": "{{name}} est dans Mes habillages, plaqué sur un dossier",
+    "deleted": "{{name}} supprimé"
+  },
+  "errors": {
+    "delete": "Impossible de supprimer {{name}} : {{reason}}",
+    "save": "Impossible d'enregistrer {{name}} : {{reason}}"
+  },
+  "empty": {
+    "loadFailed": "Les habillages ne se sont pas chargés",
+    "noMatchFiltered": "Rien ne correspond à « {{query}} » avec ces filtres",
+    "noneFiltered": "Aucun habillage ne correspond à ces filtres",
+    "filteredText": "Retirez un filtre ou deux, ou effacez-les tous.",
+    "clearFilters": "Effacer les filtres",
+    "clearSearch": "Effacer la recherche",
+    "noMatch": "Rien ne correspond à « {{query}} »",
+    "noMatchText": "Essayez un autre mot, ou cherchez dans Tous.",
+    "noFaves": "Pas encore de favoris",
+    "noFavesText": "Cliquez sur l'étoile d'un habillage, et il vous attendra ici.",
+    "noSkins": "Pas encore d'habillages",
+    "noSkinsText": "Ajoutez un pack gratuit depuis la Communauté, apportez une de vos images, ou laissez l'IA en peindre un.",
+    "browsePacks": "Parcourir les packs"
+  },
+  "delete": {
+    "title": "Supprimer « {{name}} » ?",
+    "text": "Il sera retiré de votre bibliothèque pour de bon. Les dossiers qui l'utilisent déjà gardent leur icône.",
+    "action": "Supprimer"
+  },
+  "addPicture": "Ajouter une image",
+  "toolbar": {
+    "tabsLabel": "filtrer les habillages par tag",
+    "search": "Rechercher des habillages",
+    "searchLabel": "rechercher des habillages"
+  },
+  "tile": {
+    "madeWithAi": "{{name}} (fait avec l'IA)",
+    "yours": "{{name}} (à vous)",
+    "faveLabel": "ajouter {{name}} aux favoris",
+    "unfaveLabel": "retirer {{name}} des favoris",
+    "fave": "Ajouter aux favoris",
+    "unfave": "Retirer des favoris",
+    "optionsLabel": "options de {{name}}",
+    "optionsYours": "Nom, tags et détails",
+    "options": "Tags et détails"
+  },
+  "menu": {
+    "label": "{{name}} : nom, tags et détails",
+    "name": "Nom",
+    "tags": "Tags",
+    "addTag": "ajouter un tag",
+    "editDesign": "Modifier la création",
+    "remix": "Remixer dans l'éditeur",
+    "share": "Partager avec la communauté"
+  },
+  "facts": {
+    "madeWith": "Fait avec",
+    "prompt": "Prompt",
+    "shape": "Forme",
+    "made": "Créé",
+    "pack": "Pack",
+    "sharedBy": "Partagé par",
+    "licence": "Licence",
+    "added": "Ajouté",
+    "from": "Origine",
+    "wholeFolder": "Dossier entier",
+    "artOnFolder": "Illustration sur le dossier de FolderSkin",
+    "finishedFolder": "Dossier fini",
+    "pictureOnFolder": "Image sur le dossier de FolderSkin",
+    "designedHere": "Créé par vous ici",
+    "pictureAdded": "Une image que vous avez ajoutée",
+    "finishedCutOut": "Dossier fini, fond retiré",
+    "comesWith": "Fourni avec FolderSkin"
+  },
+  "sort": {
+    "newest": "Récents",
+    "oldest": "Anciens",
+    "az": "A–Z",
+    "za": "Z–A"
+  },
+  "colours": {
+    "red": "Rouge",
+    "orange": "Orange",
+    "yellow": "Jaune",
+    "green": "Vert",
+    "teal": "Turquoise",
+    "blue": "Bleu",
+    "purple": "Violet",
+    "pink": "Rose",
+    "brown": "Marron",
+    "black": "Noir",
+    "grey": "Gris",
+    "white": "Blanc"
+  },
+  "filters": {
+    "title": "Filtres",
+    "buttonOn": "Filtres actifs : {{count}}",
+    "label": "filtrer et trier les habillages",
+    "matching_one": "{{matching}} sur {{count}} habillage",
+    "matching_many": "{{matching}} sur {{count}} d'habillages",
+    "matching_other": "{{matching}} sur {{count}} habillages",
+    "skins_one": "{{count}} habillage",
+    "skins_many": "{{count}} d'habillages",
+    "skins_other": "{{count}} habillages",
+    "clearAll": "Tout effacer",
+    "sortBy": "Trier par",
+    "sortByLabel": "trier par",
+    "favouritesOnly": "Favoris uniquement",
+    "readingColours": "lecture des couleurs en cours",
+    "allAlike": "Pour l'instant, ces habillages se ressemblent tous. Ajoutez un autre pack ou une de vos images, et il y aura davantage de quoi filtrer.",
+    "swatchLabel": "{{label}}, {{count}}",
+    "swatchTip": "{{label}} · {{count}}",
+    "light": "Clair",
+    "dark": "Sombre",
+    "sources": {
+      "community": "Packs de la communauté",
+      "import": "Vos images",
+      "ai": "Faits avec l'IA",
+      "composer": "Vos créations"
+    },
+    "added": {
+      "today": "Aujourd'hui",
+      "week": "Semaine passée",
+      "month": "Mois passé",
+      "older": "Plus anciens"
+    },
+    "facets": {
+      "source": "Origine",
+      "pack": "Pack",
+      "colour": "Couleur",
+      "tone": "Luminosité",
+      "added": "Ajouté",
+      "model": "Fait avec",
+      "author": "Auteur",
+      "license": "Licence"
+    }
+  }
+}

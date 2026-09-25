@@ -1,1 +1,131 @@
-{}
+{
+  "title": "Réglages",
+  "navLabel": "réglages",
+  "search": "Rechercher",
+  "searchLabel": "rechercher dans les réglages",
+  "pagesLabel": "pages des réglages",
+  "noMatch": "Aucun réglage ne correspond à « {{query}} »",
+  "pages": {
+    "general": "Général",
+    "ai": "Fournisseur d'IA",
+    "sharing": "Partage",
+    "about": "À propos"
+  },
+  "find": {
+    "general": "apparence thème sombre clair système mode automatique couleur accentuation accent animations mouvement réduire réduites fenêtre barre latérale icônes vos habillages dossier stockage sauvegarde appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
+    "ai": "ia où les images sont créées clé clés fournisseur fournisseurs api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate modèle local votre machine installer générer gratuit retirer supprimer where pictures are made key keys provider providers local model your machine set up generate free remove delete",
+    "sharing": "partage partager auteur crédit créditer crédité licence profil profils cc0 cc by mit communauté pack sharing share author credit credited license profile profiles community",
+    "about": "à propos folderskin habillages packs photos création ia modèle local gratuit open source version versions récentes mise à jour mises à jour liens code source problèmes étoile about what skins packs photos design ai local model free open source newer versions update updates release releases links source code issues star"
+  },
+  "general": {
+    "appearance": "Apparence",
+    "theme": "Thème",
+    "themeLabel": "thème",
+    "themeFind": "sombre clair système mode automatique dark light system mode",
+    "themes": {
+      "system": "Automatique",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "accent": "Couleur d'accentuation",
+    "accentNote": "Les boutons, les sélections et le halo autour d'un dossier que vous déposez.",
+    "accentFind": "couleur accentuation accent color colour",
+    "accentLabel": "couleur d'accentuation",
+    "accents": {
+      "blue": "Bleu",
+      "purple": "Violet",
+      "pink": "Rose",
+      "orange": "Orange",
+      "green": "Vert",
+      "mono": "Noir et blanc"
+    },
+    "motion": "Animations",
+    "motionNote": "Moins de mouvement dans la bibliothèque, les fenêtres et les icônes.",
+    "motionFind": "animation animations mouvement réduire réduites motion reduce reduced",
+    "motionLabel": "animations",
+    "motions": {
+      "system": "Système",
+      "systemTip": "Autant que le permet le réglage de l'ordinateur",
+      "reduced": "Réduites",
+      "reducedTip": "Les éléments apparaissent et changent sans bouger"
+    },
+    "window": "Fenêtre",
+    "sidebar": "Barre latérale",
+    "sidebarNote": "Icônes seules la replie en une bande étroite. {{keys}} passe de l'une à l'autre.",
+    "sidebarFind": "barre latérale replier icônes rail collapse fold icons",
+    "sidebarLabel": "barre latérale",
+    "full": "Complète",
+    "iconsOnly": "Icônes seules",
+    "yourSkins": "Vos habillages",
+    "yourSkinsNote": "Tout ce que vous ajoutez reste ici d'une session à l'autre. Copiez ce dossier pour le sauvegarder.",
+    "skins_one": "{{count}} habillage",
+    "skins_many": "{{count}} d'habillages",
+    "skins_other": "{{count}} habillages",
+    "skinsFind": "stockage dossier sauvegarde habillages storage folder backup skins",
+    "keptUntilQuit": "Conservés jusqu'à ce que vous quittiez"
+  },
+  "ai": {
+    "title": "Où les images sont créées",
+    "find": "clé clés api fournisseur fournisseurs modèle key keys provider providers model",
+    "note": "FolderSkin n'a pas de serveur. Avec une clé, Générer avec l'IA envoie votre demande directement de votre machine au fournisseur, et c'est votre compte qui est facturé. Le Modèle local les crée gratuitement, une fois installé.",
+    "loading": "Chargement des fournisseurs"
+  },
+  "sharing": {
+    "title": "Profils de licence",
+    "note": "Un pack que vous partagez indique qui l'a créé et comment les autres peuvent l'utiliser. Gardez un profil pour chaque façon de partager : le partage part du profil par défaut.",
+    "howItWorks": "Comment fonctionne le partage"
+  },
+  "profile": {
+    "firstName": "Personnel",
+    "fallbackName": "Profil",
+    "default": "Par défaut",
+    "creditedTo": "Crédité à {{author}}",
+    "noCredit": "Personne à créditer pour l'instant",
+    "makeDefaultLabel": "définir {{name}} comme profil par défaut",
+    "makeDefault": "Définir par défaut",
+    "changeLabel": "modifier {{name}}",
+    "change": "Modifier",
+    "deleteLabel": "supprimer {{name}}",
+    "delete": "Supprimer",
+    "deleted": "{{name}} supprimé.",
+    "undo": "Annuler",
+    "add": "Ajouter un profil",
+    "newLabel": "nouveau profil",
+    "name": "Nom",
+    "namePlaceholder": "Personnel, ou Pour le travail",
+    "creditedToLabel": "Crédité à",
+    "authorPlaceholder": "votre-nom",
+    "licence": "Licence",
+    "licenceLabel": "licence",
+    "save": "Enregistrer",
+    "addProfile": "Ajouter le profil",
+    "problems": {
+      "noName": "Donnez un nom au profil.",
+      "taken": "Il existe déjà un profil appelé {{name}}.",
+      "author": "Le nom crédité se compose de lettres, de chiffres et de tirets simples.",
+      "full_one": "Il peut y avoir {{count}} profil au maximum. Supprimez-en un pour ajouter celui-ci.",
+      "full_many": "Il peut y avoir {{count}} de profils au maximum. Supprimez-en un pour ajouter celui-ci.",
+      "full_other": "Il peut y avoir {{count}} profils au maximum. Supprimez-en un pour ajouter celui-ci."
+    }
+  },
+  "about": {
+    "intro": "Vos plus beaux souvenirs dorment dans le même dossier terne que vos vieilles paperasses. FolderSkin donne à chaque dossier un habillage à l'image de ce qu'il contient : un plan de cinéma à l'heure dorée pour les photos de l'été, une affiche de voyage vintage pour un séjour, du pop art pour un projet vidéo, des pastels tout doux pour un anniversaire.",
+    "points": {
+      "skins": "Des habillages tirés des packs gratuits de la communauté, de vos propres photos, ou créés par vous.",
+      "ai": "Décrivez un style et l'IA le peint, avec votre propre clé ou gratuitement avec le Modèle local.",
+      "fileBrowser": {
+        "macos": "Les habillages apparaissent directement dans le Finder, et n'importe quel dossier retrouve son icône d'origine en un clic.",
+        "windows": "Les habillages apparaissent directement dans l'Explorateur de fichiers, et n'importe quel dossier retrouve son icône d'origine en un clic.",
+        "linux": "Les habillages apparaissent directement dans Fichiers, et n'importe quel dossier retrouve son icône d'origine en un clic."
+      },
+      "free": "Gratuit et open source. Sans compte, sans pistage."
+    },
+    "updates": "Mises à jour",
+    "newer": "Versions plus récentes",
+    "newerNote": "Elles viennent des versions de FolderSkin publiées sur GitHub, et s'installent quand vous le décidez.",
+    "newerFind": "mise à jour mises à jour version versions update updates release",
+    "links": "Liens",
+    "sourceCode": "Code source",
+    "releases": "Versions"
+  }
+}
