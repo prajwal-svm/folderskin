@@ -114,7 +114,8 @@ fn run(cli: Cli) -> Result<(), String> {
                 dir,
                 max_kb,
                 require_generated_ids,
-            } => packs_check(&dir, max_kb, require_generated_ids),
+                require_lossless,
+            } => packs_check(&dir, max_kb, require_generated_ids, require_lossless),
             PacksCommand::Index { dir } => packs_index(&dir),
             PacksCommand::Rename { dir, all, id, to } => {
                 let which = match (all, id) {
@@ -148,7 +149,6 @@ fn run(cli: Cli) -> Result<(), String> {
                     license,
                     dir,
                     max_bytes: max_kb * 1024,
-                    cwebp: make::find_cwebp(),
                     flat_backdrop,
                 };
                 packs_make(&pictures, &opts, preview.as_deref())
@@ -613,9 +613,11 @@ fn packs_check(
     dir: &Path,
     max_kb: Option<usize>,
     require_generated_ids: bool,
+    require_lossless: bool,
 ) -> Result<(), String> {
     let mut opts = packs::CheckOptions {
         require_generated_ids,
+        require_lossless,
         ..packs::CheckOptions::default()
     };
     if let Some(kb) = max_kb {
@@ -633,20 +635,20 @@ fn packs_check(
 }
 
 /// Makes a pack from pictures and says what went into it: each skin's file, whether it is a
-/// finished folder or artwork, and its size.
+/// finished folder or artwork, its size, and whether it was made smaller to fit.
 fn packs_make(
     pictures: &[PathBuf],
     opts: &make::MakeOptions,
     preview: Option<&Path>,
 ) -> Result<(), String> {
-    if opts.cwebp.is_none() {
-        println!("cwebp isn't installed, so finished folders are saved as PNG, which is bigger");
-    }
     let (folder, made) = make::make(pictures, opts)?;
     for m in &made {
         let kind = if m.folder { "folder " } else { "artwork" };
+        let scaled = m.scaled_to.map_or(String::new(), |side| {
+            format!(", made {side} px to fit {} KB", opts.picture_limit() / 1024)
+        });
         println!(
-            "{kind}  {:>4} KB  {}  \"{}\"  from {}",
+            "{kind}  {:>4} KB  {}  \"{}\"  from {}{scaled}",
             m.bytes.div_ceil(1024),
             m.file,
             m.name,

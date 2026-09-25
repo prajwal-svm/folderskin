@@ -50,7 +50,7 @@ pub fn downloads_dir() -> PathBuf {
     home().join("downloads")
 }
 
-/// Where setup puts Google's cwebp on Windows, for `packs make`.
+/// Where setup put Google's cwebp on Windows, before packs were made without it.
 pub fn webp_dir() -> PathBuf {
     home().join("bin").join("webp")
 }
@@ -216,7 +216,8 @@ fn short_name(_: &Path) -> Option<PathBuf> {
     None
 }
 
-/// cwebp, from the PATH (or Homebrew's folder) or where setup put it.
+/// cwebp, from the PATH (or Homebrew's folder) or where setup put it: `packs catalog` makes
+/// smaller thumbnails with it. Nothing else needs it.
 pub fn cwebp() -> Option<PathBuf> {
     find_tool("cwebp").or_else(|| {
         let ours = webp_dir().join(if cfg!(windows) { "cwebp.exe" } else { "cwebp" });

@@ -1,9 +1,12 @@
-//! Pixel plumbing: premultiplied buffers, Lanczos3 downsampling and PNG encoding.
+//! Pixel plumbing: premultiplied buffers, Lanczos3 downsampling, and PNG and WebP encoding.
 //!
 //! tiny-skia renders into premultiplied RGBA8, and resampling has to happen on premultiplied
 //! channels or transparent pixels bleed their (black) colour into the edges. So the master
 //! render stays premultiplied through every downsample and is converted to straight alpha only
 //! at the very end, on the way into an `image::RgbaImage`.
+//!
+//! WebP comes from libwebp (the `webp` crate): lossless for pictures that are kept, such as a
+//! pack's pictures and the library's, and lossy only for previews nobody keeps.
 
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageBuffer, ImageEncoder, Rgba, RgbaImage};
@@ -69,6 +72,30 @@ pub fn straight_to_premul(img: &RgbaImage) -> Premul {
     }
 }
 
+/// `img` with its longer side at most `max_side`, resampled with Lanczos3 and keeping its shape.
+/// A picture that is small enough already comes back as it is.
+pub fn shrink_to(img: RgbaImage, max_side: u32) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let (nw, nh) = shrunk_size(w, h, max_side);
+    if (nw, nh) == (w, h) {
+        return img;
+    }
+    image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Lanczos3)
+}
+
+/// The size [`shrink_to`] makes a `w`×`h` picture.
+pub fn shrunk_size(w: u32, h: u32, max_side: u32) -> (u32, u32) {
+    let longest = w.max(h);
+    if longest <= max_side {
+        return (w, h);
+    }
+    let s = max_side as f32 / longest as f32;
+    (
+        ((w as f32 * s).round() as u32).max(1),
+        ((h as f32 * s).round() as u32).max(1),
+    )
+}
+
 /// Encodes an image as a PNG, compressed as hard as the encoder can (icons are written once
 /// and read forever).
 pub fn encode_png(img: &RgbaImage) -> Vec<u8> {
@@ -84,9 +111,144 @@ pub fn encode_png(img: &RgbaImage) -> Vec<u8> {
     buf
 }
 
+/// Encodes `img` as a lossless WebP, as small as libwebp makes one: its slowest, most thorough
+/// setting (`cwebp -lossless -z 9`: method 6, quality 100). What a pack's pictures are shared as.
+///
+/// Every pixel's alpha comes back exactly, and the colour of every pixel that shows; only the
+/// colour hidden under fully transparent pixels may change (libwebp's `exact` off), which lets a
+/// cut-out folder's clear surround cost almost nothing. A picture with no transparency is encoded
+/// without an alpha channel. It takes a few seconds for a 1024 px picture.
+pub fn encode_webp_lossless(img: &RgbaImage) -> Vec<u8> {
+    encode_lossless(img, 6, 100.0)
+}
+
+/// The same pixels as [`encode_webp_lossless`], at libwebp's fastest lossless setting (method 0,
+/// quality 0): about a tenth bigger, in about the time a PNG takes, and still about a third
+/// smaller than one. For pictures kept as they arrive, where waiting seconds for a smaller file
+/// isn't worth it.
+pub fn encode_webp_lossless_quick(img: &RgbaImage) -> Vec<u8> {
+    encode_lossless(img, 0, 0.0)
+}
+
+/// `img` as a lossless WebP at libwebp's `method` (0 to 6) and `quality`, which in lossless mode
+/// is how hard it looks for a smaller file rather than how much it keeps.
+fn encode_lossless(img: &RgbaImage, method: i32, quality: f32) -> Vec<u8> {
+    let mut config = webp::WebPConfig::new().expect("libwebp's default settings are valid");
+    config.lossless = 1;
+    config.method = method;
+    config.quality = quality;
+    config.exact = 0;
+    encode_webp(img, &config)
+}
+
+/// Encodes `img` as a lossy WebP at `quality` (0 to 100), with lossless alpha: for previews such
+/// as a contact sheet, which are looked at once and never kept.
+pub fn encode_webp_lossy(img: &RgbaImage, quality: f32) -> Vec<u8> {
+    let mut config = webp::WebPConfig::new().expect("libwebp's default settings are valid");
+    config.quality = quality.clamp(0.0, 100.0);
+    config.method = 6;
+    config.alpha_quality = 100;
+    encode_webp(img, &config)
+}
+
+/// `img` encoded by libwebp with `config`: as RGB when every pixel is opaque, so the file has no
+/// alpha channel, and as RGBA otherwise. libwebp takes any picture from 1 to 16,383 px a side,
+/// which every picture FolderSkin makes is.
+fn encode_webp(img: &RgbaImage, config: &webp::WebPConfig) -> Vec<u8> {
+    let (w, h) = img.dimensions();
+    let rgb;
+    let encoder = if img.pixels().all(|p| p.0[3] == 255) {
+        rgb = image::DynamicImage::ImageRgba8(img.clone()).into_rgb8();
+        webp::Encoder::from_rgb(rgb.as_raw(), w, h)
+    } else {
+        webp::Encoder::from_rgba(img.as_raw(), w, h)
+    };
+    encoder
+        .encode_advanced(config)
+        .map(|webp| webp.to_vec())
+        .unwrap_or_else(|e| panic!("libwebp couldn't encode a {w}×{h} picture: {e:?}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A picture whose every pixel differs from its neighbours, as a photo's do, with alpha
+    /// from `alpha`.
+    fn busy(w: u32, h: u32, alpha: impl Fn(u32, u32) -> u8) -> RgbaImage {
+        let mut state = 0x2545_f491_u32;
+        RgbaImage::from_fn(w, h, |x, y| {
+            let mut next = || {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                (state >> 24) as u8
+            };
+            Rgba([next(), next(), next(), alpha(x, y)])
+        })
+    }
+
+    #[test]
+    fn lossless_webp_gives_back_every_pixel_of_an_opaque_picture() {
+        let img = busy(300, 200, |_, _| 255);
+        for bytes in [encode_webp_lossless(&img), encode_webp_lossless_quick(&img)] {
+            assert_eq!(&bytes[..4], b"RIFF");
+            assert_eq!(&bytes[8..16], b"WEBPVP8L", "the lossless kind");
+            let back = image::load_from_memory(&bytes).unwrap();
+            // Encoded without an alpha channel, since it had nothing to say.
+            assert_eq!(back.color(), image::ColorType::Rgb8);
+            assert_eq!(back.to_rgba8(), img, "every pixel exact");
+        }
+    }
+
+    #[test]
+    fn lossless_webp_keeps_a_cutouts_alpha_and_every_colour_that_shows() {
+        // A cut-out: clear around the edge, a soft rim, solid inside.
+        let img = busy(257, 256, |x, y| match x.min(y).min(256 - x).min(255 - y) {
+            0..=9 => 0,
+            10..=19 => (x * 7 + y * 3) as u8 | 1,
+            _ => 255,
+        });
+        for bytes in [encode_webp_lossless(&img), encode_webp_lossless_quick(&img)] {
+            let back = image::load_from_memory(&bytes).unwrap();
+            assert_eq!(back.color(), image::ColorType::Rgba8);
+            let back = back.to_rgba8();
+            for (got, was) in back.pixels().zip(img.pixels()) {
+                assert_eq!(got.0[3], was.0[3], "alpha exact everywhere");
+                if was.0[3] > 0 {
+                    assert_eq!(got.0, was.0, "colour exact wherever it shows");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_thorough_setting_is_no_bigger_than_the_quick_one() {
+        // Smooth, as a painting is, so there's something to find.
+        let img = RgbaImage::from_fn(256, 256, |x, y| {
+            Rgba([x as u8, y as u8, (x ^ y) as u8, 255])
+        });
+        let small = encode_webp_lossless(&img);
+        let quick = encode_webp_lossless_quick(&img);
+        assert!(
+            small.len() <= quick.len(),
+            "{} > {}",
+            small.len(),
+            quick.len()
+        );
+        assert!(small.len() < encode_png(&img).len());
+    }
+
+    #[test]
+    fn lossy_webp_is_for_previews_and_keeps_its_alpha() {
+        let img = busy(256, 256, |x, _| if x < 128 { 0 } else { 255 });
+        let bytes = encode_webp_lossy(&img, 80.0);
+        assert_eq!(&bytes[..4], b"RIFF");
+        let back = image::load_from_memory(&bytes).unwrap().to_rgba8();
+        assert_eq!(back.dimensions(), (256, 256));
+        assert_eq!(back.get_pixel(10, 10).0[3], 0);
+        assert_eq!(back.get_pixel(200, 10).0[3], 255);
+    }
 
     #[test]
     fn downsample_halves_dimensions_and_keeps_opaque_pixels_opaque() {

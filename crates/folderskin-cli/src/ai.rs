@@ -139,13 +139,6 @@ fn doctor(args: &MachineArgs, out: &Arc<Out>) -> Result<(), CliError> {
         lines.push("          remove them: folderskin ai remove --unused".into());
     }
     lines.push(format!(
-        "cwebp:    {}",
-        status.cwebp.as_ref().map_or(
-            "not found (setup installs it on Windows; packs need it)".into(),
-            |p| p.display().to_string()
-        )
-    ));
-    lines.push(format!(
         "settings: {}",
         config::config_file().map_or("nowhere to keep them".into(), |p| p.display().to_string())
     ));

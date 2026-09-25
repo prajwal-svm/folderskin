@@ -1,5 +1,5 @@
-//! Getting a computer ready: the runtime, the models and cwebp, downloaded and checked; and a
-//! report of what is there.
+//! Getting a computer ready: the runtime and the models, downloaded and checked; and a report of
+//! what is there.
 
 use crate::download::{self, Remote};
 use crate::event::{Level, Reporter, Stage};
@@ -20,9 +20,9 @@ pub enum Runtime {
     Latest,
 }
 
-/// Downloads and installs everything `settings` needs on `machine`: cwebp (for packs), the
-/// runtime (mflux on Apple Silicon, with the uv and the Python it needs; stable-diffusion.cpp
-/// everywhere else), and the model's weights. Nothing has to be installed first. What is already
+/// Downloads and installs everything `settings` needs on `machine`: the runtime (mflux on Apple
+/// Silicon, with the uv and the Python it needs; stable-diffusion.cpp everywhere else), and the
+/// model's weights. Nothing has to be installed first. What is already
 /// there and checked is left alone, and an interrupted download carries on. One setup runs at a
 /// time on a computer, whichever program started it: another fails with "busy".
 pub async fn setup(
@@ -39,16 +39,6 @@ pub async fn setup(
     let _only_one = lock(&paths::home())?;
     check_space(machine, settings)?;
     let client = download::client()?;
-    if let Err(e) = install_webp(&client, machine, reporter, cancel).await {
-        if e.is_cancelled() {
-            return Err(e);
-        }
-        // Only a pack needs it; the models matter more.
-        reporter.log(
-            Level::Warn,
-            format!("cwebp wasn't installed: {} {}", e.what, e.why),
-        );
-    }
     if settings.backend == Backend::Mlx {
         // mflux first: it takes a minute, and whatever stops it is heard before the long
         // download of the weights.
@@ -469,54 +459,6 @@ async fn latest_assets(
     Ok((tag, out))
 }
 
-async fn install_webp(
-    client: &reqwest::Client,
-    machine: &Machine,
-    reporter: &Reporter,
-    cancel: &CancelToken,
-) -> Result<(), Error> {
-    if paths::cwebp().is_some() {
-        return Ok(());
-    }
-    if machine.os != Os::Windows {
-        reporter.log(
-            Level::Warn,
-            "cwebp is missing: install it (`brew install webp`, or the `webp` package) before \
-             making a pack",
-        );
-        return Ok(());
-    }
-    let zip = webp_zip();
-    let remote = Remote {
-        url: manifest::WEBP_WINDOWS_URL.to_string(),
-        size: manifest::WEBP_WINDOWS_SIZE,
-        sha256: Some(manifest::WEBP_WINDOWS_SHA256.to_string()),
-        label: None,
-    };
-    download::fetch(client, &remote, &zip, reporter, cancel).await?;
-    let dir = paths::webp_dir();
-    let from = zip.clone();
-    let to = dir.clone();
-    tokio::task::spawn_blocking(move || {
-        unzip::extract(&from, &to, |n| {
-            (n.ends_with("/bin/cwebp.exe") || n.ends_with("/bin/webpmux.exe"))
-                .then(|| n.rsplit('/').next().unwrap_or(n).to_string())
-        })
-    })
-    .await
-    .map_err(|e| Error::bug("Unpacking stopped unexpectedly.", e.to_string()))?
-    .map_err(|e| unpack_error(&zip, "The runtime", &e))?;
-    download::discard(&zip);
-    reporter.log(Level::Info, format!("installed cwebp in {}", dir.display()));
-    Ok(())
-}
-
-/// Where Google's cwebp build is downloaded to on Windows.
-fn webp_zip() -> PathBuf {
-    let url = manifest::WEBP_WINDOWS_URL;
-    paths::downloads_dir().join(url.rsplit('/').next().unwrap_or("libwebp.zip"))
-}
-
 /// Whether `settings` can paint here now: the runtime is installed and the model's files are all
 /// here. It only looks at files, so it is quick enough for a list the window shows; [`status`]
 /// also asks the runtime whether it starts.
@@ -535,15 +477,12 @@ pub fn is_set_up(settings: &Settings) -> bool {
 }
 
 /// The bytes [`setup`] would still download for `settings` on `machine`: stable-diffusion.cpp's
-/// tested build when it isn't installed, cwebp on Windows, and every model file that isn't here
+/// tested build when it isn't installed, and every model file that isn't here
 /// yet (one two models share counted once), less whatever interrupted downloads already brought;
 /// and on a Mac, uv when mflux has to be installed. mflux itself isn't counted: Python and a few
 /// hundred MB of packages, which uv fetches.
 pub fn download_size(machine: &Machine, settings: &Settings) -> u64 {
     let mut total = 0;
-    if machine.os == Os::Windows && paths::cwebp().is_none() {
-        total += download::remaining(&webp_zip(), manifest::WEBP_WINDOWS_SIZE);
-    }
     if settings.backend == Backend::Mlx
         && paths::mflux(MFLUX_PROBE).is_none()
         && !uv_installed(&paths::mflux_dir())
@@ -845,7 +784,6 @@ pub struct Status {
     pub settings: Settings,
     pub runtime: RuntimeStatus,
     pub models: Vec<ModelStatus>,
-    pub cwebp: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -960,7 +898,6 @@ pub fn status(machine: &Machine, settings: &Settings) -> Status {
         settings: *settings,
         runtime,
         models,
-        cwebp: paths::cwebp(),
     }
 }
 
@@ -1086,7 +1023,7 @@ mod tests {
                 .sum()
         };
         // A Mac downloads klein's MLX weights, and uv when mflux isn't installed: mflux's own
-        // packages are uv's to fetch, and cwebp comes from Homebrew or not at all.
+        // packages are uv's to fetch.
         let mac = machine(Os::Macos, Arch::Arm64, Gpu::Apple);
         let settings = Settings::for_machine(&mac);
         assert_eq!((settings.backend, settings.tier), (Backend::Mlx, Tier::Q4));
@@ -1098,7 +1035,7 @@ mod tests {
         assert!(uv <= manifest::UV_SIZE);
         assert_eq!(download_size(&mac, &settings), left(&settings) + uv);
         assert!(left(&settings) <= 4_619_699_678);
-        // No runtime build and no cwebp for ARM64 Linux, so at most the model's own files.
+        // No runtime build for ARM64 Linux, so at most the model's own files.
         let arm = machine(Os::Linux, Arch::Arm64, Gpu::None);
         let settings = Settings::for_machine(&arm);
         assert_eq!(download_size(&arm, &settings), left(&settings));

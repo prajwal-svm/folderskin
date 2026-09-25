@@ -123,6 +123,31 @@ test("a build without the service says so, and still saves the pack as a folder"
   await expect(ready.getByText(/^Saved as the folder night-prints-[a-z2-7]{6}\.$/)).toBeVisible();
   await expect(ready.getByText(/Add from a folder in Community/)).toBeVisible();
   await expect(ready.getByText(/GitHub/)).toHaveCount(0);
+  await expect(ready.getByText(/smaller than 1024 px/)).toHaveCount(0);
+});
+
+test("every picture is made ready first, and one made smaller to fit is named", async ({ page }) => {
+  const dialog = await openShare(page, "shared&scaled");
+  await fillPack(dialog);
+  await dialog.getByRole("button", { name: "Send for review" }).click();
+  // Lossless pictures take a few seconds each, so they're counted as they're ready.
+  await expect(dialog.getByRole("status").filter({ hasText: /^Getting the pictures ready \(\d of 8\)$/ })).toBeVisible();
+  const sent = page.getByRole("dialog", { name: "Your pack is waiting for review" });
+  await expect(sent).toBeVisible({ timeout: 15_000 });
+  await expect(sent.getByText(/^.+ \(896 px\) is smaller than 1024 px: kept lossless, it was over the 1\.5 MB a picture can be at full size\.$/)).toBeVisible();
+});
+
+test("saving a folder counts the pictures too, and names one made smaller to fit", async ({ page }) => {
+  const dialog = await openShare(page, "noshare&scaled");
+  await dialog.getByPlaceholder("Neon nights").fill("Night prints");
+  await dialog.getByRole("button", { name: "+ photo" }).click();
+  await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("sunny-otter");
+  await dialog.getByRole("button", { name: "Save a folder" }).click();
+  await expect(dialog.getByRole("button", { name: "Saving" })).toBeDisabled();
+  await expect(dialog.getByRole("status").filter({ hasText: /^Getting the pictures ready \(\d of 8\)$/ })).toBeVisible();
+  const ready = page.getByRole("dialog", { name: "Your pack is ready" });
+  await expect(ready).toBeVisible();
+  await expect(ready.getByText(/\(896 px\) is smaller than 1024 px: kept lossless/)).toBeVisible();
 });
 
 test("without a connection to the service, it says that too", async ({ page }) => {

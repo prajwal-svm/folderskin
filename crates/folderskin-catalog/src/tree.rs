@@ -187,7 +187,8 @@ pub struct PublishedSkin {
 
 impl PublishedPack {
     /// Reads a published pack and holds it to every rule a `pack.json` follows, plus its own:
-    /// the id and hash it claims, and a SHA-256 and a size within the limits for each picture.
+    /// the id and hash it claims, a SHA-256 and a size within the limits for each picture, and
+    /// pictures that come to [`pack::MAX_PACK_BYTES`] at most.
     pub fn parse(bytes: &[u8]) -> Result<PublishedPack, String> {
         if bytes.len() > MAX_MANIFEST_BYTES {
             return Err("that pack's list is too big".into());
@@ -209,12 +210,22 @@ impl PublishedPack {
         }
         for skin in &published.skins {
             let fits = skin.bytes > 0
-                && skin.bytes <= pack::MAX_PICTURE_BYTES as u64
+                && skin.bytes <= pack::MAX_READ_PICTURE_BYTES as u64
                 && (pack::MIN_PICTURE_SIDE..=pack::MAX_PICTURE_SIDE).contains(&skin.w)
                 && (pack::MIN_PICTURE_SIDE..=pack::MAX_PICTURE_SIDE).contains(&skin.h);
             if !is_hex(&skin.sha256, 64) || !fits {
                 problems.push(format!("{} isn't described properly", skin.file));
             }
+        }
+        let total = published
+            .skins
+            .iter()
+            .fold(0u64, |sum, skin| sum.saturating_add(skin.bytes));
+        if total > pack::MAX_PACK_BYTES as u64 {
+            problems.push(format!(
+                "its pictures come to more than the {} MB a pack can be",
+                pack::MAX_PACK_BYTES / (1024 * 1024)
+            ));
         }
         if problems.is_empty() {
             Ok(published)
@@ -403,6 +414,33 @@ mod tests {
             .contains("license"));
         let escape = published(&"b".repeat(64)).replace("\"colours\"", "\"../x\"");
         assert!(PublishedPack::parse(escape.as_bytes()).is_err());
+
+        // Pictures within 2 MB each, and 64 MB together at most.
+        let skin = |n: usize, bytes: u64| {
+            format!(
+                r#"{{ "file": "p{n}.png", "name": "P{n}", "sha256": "{}", "bytes": {bytes}, "w": 512, "h": 480 }}"#,
+                "b".repeat(64)
+            )
+        };
+        let with = |skins: Vec<String>| {
+            let one = format!(
+                r#"{{ "file": "Blue.PNG", "name": "Blue", "sha256": "{}", "bytes": 4370, "w": 512, "h": 480 }}"#,
+                "b".repeat(64)
+            );
+            published(&"b".repeat(64)).replace(&one, &skins.join(", "))
+        };
+        let two_mb = 2 * 1024 * 1024;
+        let fits: Vec<String> = (0..32).map(|n| skin(n, two_mb)).collect();
+        assert!(PublishedPack::parse(with(fits).as_bytes()).is_ok(), "64 MB");
+        let over: Vec<String> = (0..33).map(|n| skin(n, two_mb)).collect();
+        assert_eq!(
+            PublishedPack::parse(with(over).as_bytes()).unwrap_err(),
+            "its pictures come to more than the 64 MB a pack can be"
+        );
+        let big = with(vec![skin(0, two_mb + 1)]);
+        assert!(PublishedPack::parse(big.as_bytes())
+            .unwrap_err()
+            .contains("p0.png isn't described properly"));
     }
 
     #[test]

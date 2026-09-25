@@ -17,9 +17,10 @@
 //! computer is verified. See services/community/src/account.ts.
 //!
 //! **Sending a pack.** The pack is built and checked exactly as it is for a folder
-//! ([`crate::community::build_pack`]), with the handle as its author. The service is told what
-//! every picture is (hash, size, dimensions) first and answers with the ones it still needs; they
-//! go up one at a time, then contact sheets for the review, and the pack is sent for review.
+//! ([`crate::community::build_pack`]), with the handle as its author: every picture a lossless
+//! WebP, so the pack looks exactly as it does here. The service is told what every picture is
+//! (hash, size, dimensions) first and answers with the ones it still needs; they go up one at a
+//! time, then contact sheets for the review, and the pack is sent for review.
 //!
 //! **Trying again.** A request that fails in a way that passes by itself (no answer, the service
 //! failing, its limit on bursts of requests) is tried again after a pause: up to [`TRIES`] tries,
@@ -27,13 +28,14 @@
 //! for ([`pause`]). A cooldown or a ban is never tried again by itself: every refused request
 //! counts against the computer, so the dialog shows the service's sentence and leaves it there.
 
+use crate::community::{MakeProgress, Scaled};
 use crate::keys::Keys;
 use crate::state::AppState;
 use folderskin_core::pack::{self, Pack};
+use folderskin_core::raster;
 use folderskin_share::api::{Item, Manifest, ManifestSkin, NewSubmission, Submission};
 use folderskin_share::{Client, DeviceKey, Error};
-use image::codecs::jpeg::JpegEncoder;
-use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
+use image::{Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -378,8 +380,10 @@ pub struct ShareRequest {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "stage", rename_all = "camelCase")]
 pub enum ShareProgress {
-    /// Building the pack and its contact sheets.
+    /// Making sure the computer is verified, before the pack is built.
     Preparing,
+    /// Making the pictures ready (lossless WebP, several at once): `done` of `total` are.
+    Encoding { done: usize, total: usize },
     /// Telling the service what is coming.
     Checking,
     /// Sending the pictures, one at a time.
@@ -397,6 +401,8 @@ pub struct Shared {
     pub submission_id: String,
     pub name: String,
     pub pictures: usize,
+    /// The pictures made smaller than 1024 px to fit the size a pack's picture can be.
+    pub scaled: Vec<Scaled>,
 }
 
 /// A pack ready to send: the submission, each picture's bytes, and the contact sheets.
@@ -418,7 +424,7 @@ fn prepare(files: crate::community::PackFiles, request: &ShareRequest) -> Result
     let pack = Pack::parse(&manifest.1).map_err(|problems| problems.join("; "))?;
     let mut items = Vec::with_capacity(pictures.len());
     for (file, bytes) in &pictures {
-        let (width, height) = pack::check_picture(bytes).map_err(|e| format!("{file} {e}"))?;
+        let (width, height) = pack::check_new_picture(bytes).map_err(|e| format!("{file} {e}"))?;
         items.push(Item {
             file: file.clone(),
             sha256: folderskin_share::sign::sha256_hex(bytes),
@@ -458,8 +464,9 @@ fn prepare(files: crate::community::PackFiles, request: &ShareRequest) -> Result
     })
 }
 
-/// Up to sixteen pictures small, four to a row on a light ground, as a JPEG: what the service's
-/// triage and the maintainer's phone look at before the pictures themselves.
+/// Up to sixteen pictures small, four to a row on a light ground, as a lossy WebP: what the
+/// service's triage and the maintainer's phone look at before the pictures themselves. Only the
+/// pack's own pictures are lossless; a sheet is a preview, and has to be small.
 fn contact_sheet<'a>(pictures: impl Iterator<Item = &'a [u8]>) -> Result<Vec<u8>, String> {
     let pictures: Vec<RgbaImage> = pictures
         .map(pack::decode_picture)
@@ -481,14 +488,10 @@ fn contact_sheet<'a>(pictures: impl Iterator<Item = &'a [u8]>) -> Result<Vec<u8>
         let y = GAP + row * (TILE + GAP) + (TILE - th) / 2;
         image::imageops::overlay(&mut sheet, &small, i64::from(x), i64::from(y));
     }
-    let rgb = image::DynamicImage::ImageRgba8(sheet).to_rgb8();
-    for quality in [82, 70, 55] {
-        let mut jpg = Vec::new();
-        JpegEncoder::new_with_quality(&mut jpg, quality)
-            .write_image(&rgb, rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-            .map_err(|e| e.to_string())?;
-        if jpg.len() <= MAX_SHEET_BYTES {
-            return Ok(jpg);
+    for quality in [82.0, 70.0, 55.0] {
+        let webp = raster::encode_webp_lossy(&sheet, quality);
+        if webp.len() <= MAX_SHEET_BYTES {
+            return Ok(webp);
         }
     }
     Err("the contact sheet came out too big to send".into())
@@ -529,8 +532,9 @@ pub async fn share_submit(
             pack.tags.clone(),
             pack.skin_ids.clone(),
         );
+        let channel = on_progress.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            let (_, files) = crate::community::build_pack(
+            let built = crate::community::build_pack(
                 &app,
                 &name,
                 &handle,
@@ -538,17 +542,26 @@ pub async fn share_submit(
                 &tags,
                 &skin_ids,
                 |_| false,
+                &|p: MakeProgress| {
+                    let _ = channel.send(ShareProgress::Encoding {
+                        done: p.done,
+                        total: p.total,
+                    });
+                },
             )?;
-            prepare(files, &pack)
+            Ok::<_, String>((prepare(built.files, &pack)?, built.scaled))
         })
         .await
         .map_err(|e| e.to_string())??
     };
-    let Prepared {
-        submission,
-        pictures,
-        sheets,
-    } = prepared;
+    let (
+        Prepared {
+            submission,
+            pictures,
+            sheets,
+        },
+        scaled,
+    ) = prepared;
     let name = submission.manifest.name.clone();
 
     progress(ShareProgress::Checking);
@@ -600,6 +613,7 @@ pub async fn share_submit(
         submission_id: created.submission_id.clone(),
         name,
         pictures: pictures.len(),
+        scaled,
     })
 }
 
@@ -756,7 +770,11 @@ mod tests {
 
     #[test]
     fn a_built_pack_is_described_the_way_the_service_reads_it() {
-        let koi = picture(512, 400, 10);
+        let koi = raster::encode_webp_lossless(&RgbaImage::from_pixel(
+            512,
+            400,
+            Rgba([10, 120, 80, 255]),
+        ));
         let fox = picture(300, 300, 200);
         let manifest = br#"{
   "version": 1,
@@ -765,16 +783,18 @@ mod tests {
   "license": "CC-BY-4.0",
   "tags": ["woodblock"],
   "skins": [
-    { "file": "koi.png", "name": "Koi", "tags": ["fish"] },
+    { "file": "koi.webp", "name": "Koi", "tags": ["fish"] },
     { "file": "fox.png", "name": "Fox" }
   ]
 }"#;
-        let files = vec![
-            ("koi.png".to_string(), koi.clone()),
-            ("fox.png".to_string(), fox.clone()),
-            (pack::MANIFEST_FILE.to_string(), manifest.to_vec()),
-        ];
-        let prepared = prepare(files, &request()).unwrap();
+        let files = |koi: &[u8]| {
+            vec![
+                ("koi.webp".to_string(), koi.to_vec()),
+                ("fox.png".to_string(), fox.clone()),
+                (pack::MANIFEST_FILE.to_string(), manifest.to_vec()),
+            ]
+        };
+        let prepared = prepare(files(&koi), &request()).unwrap();
         let s = &prepared.submission;
         assert_eq!(s.manifest.name, "Night prints");
         assert_eq!(s.manifest.skins[0].tags, ["fish"]);
@@ -783,7 +803,7 @@ mod tests {
         assert_eq!(
             s.items[0],
             Item {
-                file: "koi.png".into(),
+                file: "koi.webp".into(),
                 sha256: folderskin_share::sign::sha256_hex(&koi),
                 bytes: koi.len(),
                 width: 512,
@@ -792,6 +812,16 @@ mod tests {
         );
         assert_eq!(prepared.pictures.len(), 2, "pack.json isn't a picture");
         assert_eq!(prepared.sheets.len(), 1);
+
+        // Nothing lossy is ever sent: the pack would no longer look as it was made.
+        let lossy = raster::encode_webp_lossy(
+            &RgbaImage::from_pixel(512, 400, Rgba([10, 120, 80, 255])),
+            90.0,
+        );
+        assert_eq!(
+            prepare(files(&lossy), &request()).err().unwrap(),
+            "koi.webp isn't lossless: a pack's pictures are PNG or lossless WebP"
+        );
     }
 
     #[test]
@@ -804,7 +834,11 @@ mod tests {
         assert_eq!(sheets.len(), 2);
         for sheet in &sheets {
             assert!(sheet.len() <= MAX_SHEET_BYTES, "{}", sheet.len());
-            assert!(sheet.starts_with(&[0xff, 0xd8]), "a JPEG");
+            assert!(
+                sheet.starts_with(b"RIFF") && &sheet[8..12] == b"WEBP",
+                "a WebP"
+            );
+            assert!(!pack::is_lossless_picture(sheet), "a preview, so lossy");
         }
         let full = image::load_from_memory(&sheets[0]).unwrap();
         assert_eq!(
@@ -988,6 +1022,10 @@ mod tests {
         assert_eq!(
             serde_json::to_value(ShareProgress::Waiting { seconds: 4 }).unwrap(),
             serde_json::json!({"stage": "waiting", "seconds": 4})
+        );
+        assert_eq!(
+            serde_json::to_value(ShareProgress::Encoding { done: 3, total: 16 }).unwrap(),
+            serde_json::json!({"stage": "encoding", "done": 3, "total": 16})
         );
     }
 

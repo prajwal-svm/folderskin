@@ -18,14 +18,12 @@ use crate::catalog::{Community, Origin, Source};
 use crate::commands::{data_url, prepare_import, SkinDto};
 use crate::pack_views::PackViews;
 use crate::previews;
-use crate::state::{parallel_map, AppState};
+use crate::state::{parallel_map, parallel_queue, AppState};
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use folderskin_catalog::tree::{self, PublishedPack};
 use folderskin_catalog::{Facet, PackRow, Query, Sort};
 use folderskin_core::pack::{self, Pack, PackSkin};
 use futures_util::{StreamExt, TryStreamExt};
-use image::codecs::jpeg::JpegEncoder;
-use image::{ExtendedColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -47,6 +45,11 @@ const PACKS_URL: &str = "https://packs.folderskin.app";
 const PARALLEL_DOWNLOADS: usize = 4;
 /// How many packs the first launch offers when no packs are featured.
 const FIRST_PACKS: usize = 24;
+/// How many of a pack's pictures are made ready at once as it is shared or saved as a folder.
+/// Each takes libwebp several seconds and about 60 MB, so more at once would use a lot of memory
+/// for little more speed.
+const PARALLEL_ENCODES: usize = 6;
+const MB: usize = 1024 * 1024;
 
 /// One pack in the Community list.
 #[derive(Serialize)]
@@ -749,7 +752,7 @@ async fn download_pack_from(
             let url = format!("{base}/{file}");
             let arrived = &arrived;
             async move {
-                let bytes = fetch(&url, pack::MAX_PICTURE_BYTES)
+                let bytes = fetch(&url, pack::MAX_READ_PICTURE_BYTES)
                     .await
                     .map_err(|e| format!("{file}: {e}"))?;
                 let done = arrived.fetch_add(1, Ordering::Relaxed) + 1;
@@ -835,7 +838,7 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
             .skins
             .iter()
             .map(|s| {
-                read_capped(&dir.join(&s.file), pack::MAX_PICTURE_BYTES)
+                read_capped(&dir.join(&s.file), pack::MAX_READ_PICTURE_BYTES)
                     .map_err(|e| format!("{} {e}", s.file))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -855,11 +858,40 @@ pub async fn import_pack(state: State<'_, AppState>, path: String) -> Result<Vec
 /// A pack's files: each name with its bytes.
 pub(crate) type PackFiles = Vec<(String, Vec<u8>)>;
 
-/// The files a pack is made of: every picture, then `pack.json`, and a new id for it
-/// ([`pack::new_id`]: the name, then six random characters) that `taken` says nothing has. The
-/// pack is checked here, so whatever comes back already passes the checks every pack does,
-/// whether it is written to a folder ([`export_pack`]) or sent for review
+/// How far making a pack's pictures ready has got: `done` of `total`. Several are made at once.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MakeProgress {
+    pub done: usize,
+    pub total: usize,
+}
+
+/// A picture made smaller than 1024 px to fit the size a pack's picture can be
+/// ([`pack::MAX_PICTURE_BYTES`]), still lossless: its skin's name and the side it was made.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct Scaled {
+    pub name: String,
+    pub side: u32,
+}
+
+/// A pack [`build_pack`] made.
+pub(crate) struct Built {
+    /// Its new id.
+    pub id: String,
+    /// Every picture, then `pack.json`.
+    pub files: PackFiles,
+    /// The pictures made smaller to fit, in the pack's order.
+    pub scaled: Vec<Scaled>,
+}
+
+/// The files a pack is made of: every picture as a lossless WebP ([`encode_for_pack`]), then
+/// `pack.json`, and a new id for it ([`pack::new_id`]: the name, then six random characters) that
+/// `taken` says nothing has. The pack is checked here, so whatever comes back already passes the
+/// checks every pack does, whether it is written to a folder ([`export_pack`]) or sent for review
 /// ([`crate::share::share_submit`]).
+///
+/// The pictures are made [`PARALLEL_ENCODES`] at a time, and `progress` hears how many are ready
+/// as each one is. Everything that can be refused without them is refused first.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_pack(
     state: &AppState,
     name: &str,
@@ -868,11 +900,18 @@ pub(crate) fn build_pack(
     tags: &[String],
     skin_ids: &[String],
     taken: impl Fn(&str) -> bool,
-) -> Result<(String, PackFiles), String> {
+    progress: &(dyn Fn(MakeProgress) + Sync),
+) -> Result<Built, String> {
     let id = pack::new_id(name, taken)?;
     let pack_tags = pack::clean_tags(tags, pack::MAX_PACK_TAGS);
-    let mut skins = Vec::new();
-    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    if skin_ids.len() > pack::MAX_SKINS {
+        return Err(format!(
+            "that's {} skins; a pack holds at most {}",
+            skin_ids.len(),
+            pack::MAX_SKINS
+        ));
+    }
+    let mut chosen = Vec::with_capacity(skin_ids.len());
     for skin_id in skin_ids {
         let (entry, _) = state
             .find_saved(skin_id)
@@ -884,9 +923,29 @@ pub(crate) fn build_pack(
             ));
         }
         let image = state.resolve(skin_id)?;
-        let (bytes, ext) = encode_for_pack(&image).map_err(|e| format!("{} {e}", entry.name))?;
+        let (w, h) = image.rgba().dimensions();
+        pack::check_picture_size(w, h).map_err(|e| format!("{} {e}", entry.name))?;
+        chosen.push((entry, image));
+    }
+
+    // The slow part: seconds a picture.
+    let total = chosen.len();
+    progress(MakeProgress { done: 0, total });
+    let ready = AtomicUsize::new(0);
+    let made = parallel_queue(&chosen, PARALLEL_ENCODES, |(entry, image)| {
+        let made = encode_for_pack(image).map_err(|e| format!("{} {e}", entry.name));
+        let done = ready.fetch_add(1, Ordering::Relaxed) + 1;
+        progress(MakeProgress { done, total });
+        made
+    });
+
+    let mut skins = Vec::new();
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut scaled = Vec::new();
+    for ((entry, _), made) in chosen.iter().zip(made) {
+        let made = made?;
         let stem = unique_stem(&entry.name, files.len(), &files);
-        let file = format!("{stem}.{ext}");
+        let file = format!("{stem}.webp");
         let own: Vec<&String> = entry
             .tags
             .iter()
@@ -897,7 +956,22 @@ pub(crate) fn build_pack(
             name: entry.name.clone(),
             tags: pack::clean_tags(own, pack::MAX_SKIN_TAGS),
         });
-        files.push((file, bytes));
+        if let Some(side) = made.scaled_to {
+            scaled.push(Scaled {
+                name: entry.name.clone(),
+                side,
+            });
+        }
+        files.push((file, made.webp));
+    }
+    let bytes: usize = files.iter().map(|(_, b)| b.len()).sum();
+    if bytes > pack::MAX_PACK_BYTES {
+        return Err(format!(
+            "the pictures come to {} MB, and a pack's come to {} MB at most; split them into two \
+             packs",
+            bytes.div_ceil(MB),
+            pack::MAX_PACK_BYTES / MB
+        ));
     }
     let pack = Pack {
         version: pack::PACK_VERSION,
@@ -913,13 +987,22 @@ pub(crate) fn build_pack(
     }
     let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())? + "\n";
     files.push((pack::MANIFEST_FILE.to_string(), json.into_bytes()));
-    Ok((id, files))
+    Ok(Built { id, files, scaled })
+}
+
+/// A pack saved as a folder: where it is, and the pictures made smaller to fit.
+#[derive(Serialize, Clone, Debug)]
+pub struct Exported {
+    pub folder: String,
+    pub scaled: Vec<Scaled>,
 }
 
 /// Writes some of the user's own skins as a pack folder inside `folder`, and returns the folder
-/// it made: pack.json and the pictures, for anyone who wants the pack as files. The folder is
-/// named after the pack's new id, which no folder there has yet, and adds to FolderSkin as it
-/// is ([`import_pack`]).
+/// it made, with the pictures made smaller to fit: pack.json and the pictures, for anyone who
+/// wants the pack as files. The folder is named after the pack's new id, which no folder there
+/// has yet, and adds to FolderSkin as it is ([`import_pack`]). `on_progress` hears how many
+/// pictures are ready as each one is.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn export_pack(
     state: State<'_, AppState>,
@@ -929,13 +1012,24 @@ pub async fn export_pack(
     license: String,
     tags: Vec<String>,
     skin_ids: Vec<String>,
-) -> Result<String, String> {
+    on_progress: Channel<MakeProgress>,
+) -> Result<Exported, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let folder = PathBuf::from(folder);
-        let (id, files) = build_pack(&state, &name, &author, &license, &tags, &skin_ids, |id| {
-            folder.join(id).exists()
-        })?;
+        let progress = |p: MakeProgress| {
+            let _ = on_progress.send(p);
+        };
+        let Built { id, files, scaled } = build_pack(
+            &state,
+            &name,
+            &author,
+            &license,
+            &tags,
+            &skin_ids,
+            |id| folder.join(id).exists(),
+            &progress,
+        )?;
         let out = folder.join(&id);
         // Taken between the id being drawn and now: a clash of ids nothing else will ever see.
         if out.exists() {
@@ -952,7 +1046,10 @@ pub async fn export_pack(
             let _ = std::fs::remove_dir_all(&out);
             format!("couldn't write the pack: {e}")
         })?;
-        Ok(out.display().to_string())
+        Ok(Exported {
+            folder: out.display().to_string(),
+            scaled,
+        })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1215,46 +1312,12 @@ fn read_capped(path: &Path, max: usize) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|_| "couldn't be read".into())
 }
 
-/// A skin's picture the way a pack wants it: at most 1024 px on a side and 2 MB. A finished
-/// folder stays PNG to keep its transparency; artwork has none to keep, so it becomes a JPEG at
-/// a fraction of the size.
-fn encode_for_pack(image: &SkinImage) -> Result<(Vec<u8>, &'static str), String> {
-    let too_small = |img: &image::RgbaImage| {
-        let (w, h) = img.dimensions();
-        (w.min(h) < pack::MIN_PICTURE_SIDE).then(|| {
-            format!(
-                "is {w}×{h} px; a pack needs at least {} px on each side",
-                pack::MIN_PICTURE_SIDE
-            )
-        })
-    };
-    match image {
-        SkinImage::Folder(rgba) => {
-            for side in [pack::MAX_PICTURE_SIDE, 896, 768] {
-                let img = store::shrink_to((**rgba).clone(), side);
-                if let Some(e) = too_small(&img) {
-                    return Err(e);
-                }
-                let png = folderskin_core::raster::encode_png(&img);
-                if png.len() <= pack::MAX_PICTURE_BYTES {
-                    return Ok((png, "png"));
-                }
-            }
-            Err("is too detailed to fit in 2 MB".into())
-        }
-        SkinImage::Artwork(art) => {
-            let img = store::shrink_to(art.rgba.clone(), pack::MAX_PICTURE_SIDE);
-            if let Some(e) = too_small(&img) {
-                return Err(e);
-            }
-            let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
-            let mut jpg = Vec::new();
-            JpegEncoder::new_with_quality(&mut jpg, 90)
-                .write_image(&rgb, rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-                .map_err(|e| e.to_string())?;
-            Ok((jpg, "jpg"))
-        }
-    }
+/// A skin's picture the way a pack wants it: a lossless WebP at most 1024 px on a side and
+/// within [`pack::MAX_PICTURE_BYTES`], so the pack looks exactly as the skin does, a finished
+/// folder's transparency included. One too detailed for that at 1024 px is made 896 px, then
+/// 768 px, still lossless, and says so ([`pack::encode_picture`], which `packs make` uses too).
+fn encode_for_pack(image: &SkinImage) -> Result<pack::EncodedPicture, String> {
+    pack::encode_picture(image.rgba().clone(), pack::MAX_PICTURE_BYTES)
 }
 
 /// A file name stem for a skin: its name as a slug, or `skin-<n>`, never one already used.
@@ -1477,23 +1540,37 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn exported_pictures_fit_the_pack_limits() {
+    fn exported_pictures_are_lossless_and_fit_the_pack_limits() {
+        let rgba = image::RgbaImage::from_fn(2048, 1916, |x, y| {
+            image::Rgba([(x / 9) as u8, (y / 8) as u8, 90, 255])
+        });
         let art = SkinImage::Artwork(std::sync::Arc::new(folderskin_core::compositor::Artwork {
-            rgba: image::RgbaImage::from_pixel(2048, 1916, image::Rgba([200, 90, 40, 255])),
+            rgba: rgba.clone(),
             focus: (0.5, 0.5),
         }));
-        let (bytes, ext) = encode_for_pack(&art).unwrap();
-        assert_eq!(ext, "jpg");
-        assert_eq!(pack::check_picture(&bytes).unwrap(), (1024, 958));
+        let made = encode_for_pack(&art).unwrap();
+        assert_eq!(made.scaled_to, None);
+        assert_eq!(pack::check_new_picture(&made.webp).unwrap(), (1024, 958));
+        let back = image::load_from_memory(&made.webp).unwrap().to_rgba8();
+        assert_eq!(back, store::shrink_to(rgba, 1024), "every pixel");
 
-        let folder = SkinImage::Folder(std::sync::Arc::new(image::RgbaImage::from_pixel(
-            1100,
-            1000,
-            image::Rgba([0, 0, 0, 0]),
-        )));
-        let (bytes, ext) = encode_for_pack(&folder).unwrap();
-        assert_eq!(ext, "png");
-        assert!(pack::check_picture(&bytes).is_ok());
+        // A finished folder keeps its transparency exactly.
+        let cut = image::RgbaImage::from_fn(1100, 1000, |x, y| {
+            let alpha = if x < 100 { 0 } else { (x / 5) as u8 };
+            image::Rgba([(y / 4) as u8, 40, 200, alpha])
+        });
+        let folder = SkinImage::Folder(std::sync::Arc::new(cut.clone()));
+        let made = encode_for_pack(&folder).unwrap();
+        assert!(pack::check_new_picture(&made.webp).is_ok());
+        let back = image::load_from_memory(&made.webp).unwrap().to_rgba8();
+        let expected = store::shrink_to(cut, 1024);
+        assert_eq!(back.dimensions(), expected.dimensions());
+        for (got, want) in back.pixels().zip(expected.pixels()) {
+            assert_eq!(got.0[3], want.0[3], "alpha");
+            if want.0[3] > 0 {
+                assert_eq!(got, want, "every colour that shows");
+            }
+        }
 
         let tiny = SkinImage::Folder(std::sync::Arc::new(image::RgbaImage::new(120, 120)));
         assert!(encode_for_pack(&tiny).unwrap_err().contains("at least 256"));
@@ -1611,7 +1688,7 @@ pub(crate) mod tests {
         // Something in the way of the second picture, as a full disk would be.
         let second = store::skin_id(&pictures[1]);
         let stem = second.strip_prefix("user:").unwrap();
-        std::fs::create_dir(dir.join(format!("{stem}.png"))).unwrap();
+        std::fs::create_dir(dir.join(format!("{stem}.webp"))).unwrap();
 
         let err =
             save_pack(&state, "test-colours", &pack, &pictures, None, &no_progress).unwrap_err();
@@ -1623,7 +1700,7 @@ pub(crate) mod tests {
             .flatten()
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(left, [format!("{stem}.png")], "only what was in the way");
+        assert_eq!(left, [format!("{stem}.webp")], "only what was in the way");
     }
 
     /// Serves `files` (path, body, delay before answering) over HTTP on a free local port, and
@@ -2564,6 +2641,7 @@ pub(crate) mod tests {
                 })),
             )
             .unwrap();
+        let heard = Mutex::new(Vec::new());
         let build = |name: &str, taken: &dyn Fn(&str) -> bool| {
             build_pack(
                 &state,
@@ -2573,10 +2651,22 @@ pub(crate) mod tests {
                 &["woodblock".into()],
                 std::slice::from_ref(&entry.id),
                 taken,
+                &|p| heard.lock().unwrap().push(p),
             )
+            .map(|built| (built.id, built.files))
         };
 
         let (id, files) = build("Night prints", &|_| false).unwrap();
+        assert_eq!(
+            *heard.lock().unwrap(),
+            [
+                MakeProgress { done: 0, total: 1 },
+                MakeProgress { done: 1, total: 1 }
+            ]
+        );
+        let names: Vec<&str> = files.iter().map(|(f, _)| f.as_str()).collect();
+        assert_eq!(names, ["harbour-at-night.webp", pack::MANIFEST_FILE]);
+        assert!(pack::check_new_picture(&files[0].1).is_ok());
         assert!(
             id.starts_with("night-prints-") && pack::is_generated_id(&id),
             "{id}"

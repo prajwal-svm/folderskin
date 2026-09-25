@@ -168,7 +168,7 @@ fn publish_pack(
         std::fs::read(folder.join(file)).map_err(|e| format!("{file} couldn't be read: {e}"))
     };
     let manifest = read(MANIFEST_FILE)?;
-    // One pack at a time is in memory: at most fifty pictures of 2 MB.
+    // One pack at a time is in memory: its pictures come to 64 MB at most, as `packs check` holds.
     let pictures = pack
         .skins
         .iter()

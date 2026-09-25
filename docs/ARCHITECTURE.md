@@ -76,7 +76,7 @@ the saved icon, so the canvas shows what gets written.
 
 | crate | responsibility |
 |---|---|
-| `folderskin-core` | `geometry` (the template as vector paths), `fit` (cover-fit maths), `raster` (premultiplied downsampling, PNG encoding), `compositor` (the render, for artwork, a finished folder or a design drawn in place, and the template split into the composer's layers), `ico` (Windows `.ico` writer with PNG entries), `matte` (keying and telling a finished folder from artwork), `pack` (the community pack contract and its checks), `apply` (per-OS icon writers) |
+| `folderskin-core` | `geometry` (the template as vector paths), `fit` (cover-fit maths), `raster` (premultiplied downsampling, PNG encoding, and WebP through libwebp), `compositor` (the render, for artwork, a finished folder or a design drawn in place, and the template split into the composer's layers), `ico` (Windows `.ico` writer with PNG entries), `matte` (keying and telling a finished folder from artwork), `pack` (the community pack contract and its checks), `apply` (per-OS icon writers) |
 | `folderskin-ai` | the AI providers: the catalogue, each provider's request body and response reader, and the prompt templates |
 | `folderskin-tools` | the maintainer CLI. Makes a community pack from pictures, checks the packs and writes their index, renders any picture as the folder the app makes of it, writes the safe-area guide, and applies or reverts an icon without the GUI — which is how the Windows and Linux writers get exercised |
 | `folderskin` (`src-tauri`) | the Tauri app: window, commands, caches. Holds no drawing code |
@@ -201,10 +201,15 @@ soon as it arrives, by `src-tauri/src/store.rs`, in a `skins` folder in the app 
 ```
 skins/
 ├── skins.json                 index: {"version": 1, "skins": [...]}
-├── 3f2a9c0b1d4e.png           the skin, longest side at most 2048 px
+├── 3f2a9c0b1d4e.webp          the skin, a lossless WebP, longest side at most 2048 px
 ├── 3f2a9c0b1d4e.thumb-v2.png  its 512 px gallery thumbnail
 └── 7c01e5a9b2d8.design.json   a design's document, beside a skin made in the composer
 ```
+
+A new picture is saved as a lossless WebP at libwebp's quickest setting, which takes about the
+time a PNG did and is about a third smaller. Pictures saved by 0.1.6 and before are PNGs
+(`<stem>.png`); they are read as they are and never written again, and go with their skin when
+it's deleted.
 
 Each index entry records the id, name, tags, kind (`artwork` or `folder`), source (`import`,
 `ai`, `community` or `composer`), `created_at` in Unix milliseconds, the focus point for artwork, for AI
@@ -235,7 +240,7 @@ it was saved. The pack's first skin gets the newest `created_at` and each after 
 all newer than anything saved before, so the library, newest first, shows a pack in its own
 order.
 
-`Store::open` then clears away what a crash left: pictures (`<stem>.png`) and thumbnails
+`Store::open` then clears away what a crash left: pictures (`<stem>.webp`, or `<stem>.png`) and thumbnails
 (`<stem>.thumb*.png`) of skins the index doesn't name, and `write_atomic` temp files
 (`.<name>.folderskin-<pid>-<seq>.tmp`), each logged. It only does so when the index was read
 whole (no entry dropped as damaged or with a bad id; a missing picture or a repeated entry is
@@ -435,7 +440,7 @@ never a frame.
 | `deep_link` | which links are install links and which are ignored; a good one waiting for the webview, which is told, and taken once |
 | `installs` | the count's address and when one is sent at all; the request itself, a bare POST, against a local server |
 | `onboarding` | when it shows, what forces it, and the marker |
-| `folderskin-tools` | the pack checks and the index (with `official.json` and each pack's date), making a pack (the split, `--flat-backdrop`, WebP), the picture split `render` and `apply` use |
+| `folderskin-tools` | the pack checks and the index (with `official.json` and each pack's date), making a pack (the split, `--flat-backdrop`, lossless WebP), the picture split `render` and `apply` use |
 | frontend | the drop-zone reducer, favourites, platform copy; the composer's document, undo, geometry, text layout, shapes, colours, picture adjustments and templates; the Community store, install links included (vitest) |
 
 The Windows writer is compile-checked from macOS with `cargo check --target
@@ -487,7 +492,8 @@ bundle 8.5 MB; with 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. T
 added 0.25 MB, to a 7.3 MB binary and an 8.8 MB bundle. The composer added 0.16 MB to the
 binary and Include subfolders 0.05 MB, to a 7.6 MB binary and an 8.9 MB bundle. The composer's
 script is a chunk of its own (114 KB, 41 KB gzipped) that the webview loads the first time it's
-opened, and the AI view's is too (19 KB). That keeps the first screen's script under
+opened, and the AI view's is too (19 KB). libwebp, built in for the lossless WebP that pack
+pictures and the library's pictures are saved as, added 0.18 MB of code to the binary. That keeps the first screen's script under
 500 KB (488 KB, 161 KB gzipped), the line Vite warns at; keep it there. `image` is built with `default-features = false` and
 only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one
 codegen unit. Any dependency that would move this budget needs a reason in the pull request.

@@ -44,13 +44,16 @@ import type {
   ComposerSaved,
   ComposerSaveHeader,
   ComposerTemplate,
+  ExportedPack,
   ExportPackRequest,
   FolderIcon,
   IconPackProgress,
   InstalledIconPack,
+  MakeProgress,
   MySubmission,
   PackProgress,
   PackToShare,
+  ScaledPicture,
   SharedPack,
   ShareProgress,
   ShareStatus,
@@ -557,6 +560,24 @@ const MOCK_TERMS_VERSION = 2;
 /** What the service says to a computer cooling down after too many refused requests (`?cooling`). */
 const SHARE_COOLING = "You've sent too many requests that were turned down. You can share again in 2 hours.";
 
+/** Making a pack's pictures ready, as the app does several at once: `total` of them, a little
+ *  while each, told as each is done. */
+async function mockEncode(total: number, onProgress: (p: MakeProgress) => void) {
+  onProgress({ done: 0, total });
+  for (let done = 1; done <= total; done++) {
+    await sleep(120);
+    onProgress({ done, total });
+  }
+}
+
+/** The pictures made smaller to fit: none, or with `?scaled` the first one, as a picture too
+ *  detailed for 1.5 MB at 1024 px is. */
+function mockScaled(skinIds: string[]): ScaledPicture[] {
+  if (!new URLSearchParams(location.search).has("scaled") || skinIds.length === 0) return [];
+  const first = library.find((s) => s.id === skinIds[0]);
+  return [{ name: first?.name ?? "A skin", side: 896 }];
+}
+
 /** A new id for a pack called `name`, the way `pack::new_id` draws one: the name as a slug, then
  *  six random characters. */
 function mockNewId(name: string): string {
@@ -875,9 +896,9 @@ export const mockApi = {
       // The preview shows the onboarding again next time; nothing else depends on it.
     }
   },
-  exportPack: async (req: ExportPackRequest): Promise<string> => {
-    await new Promise((r) => setTimeout(r, 600));
-    return `${req.folder}/${mockNewId(req.name)}`;
+  exportPack: async (req: ExportPackRequest, onProgress: (p: MakeProgress) => void): Promise<ExportedPack> => {
+    await mockEncode(req.skinIds.length, onProgress);
+    return { folder: `${req.folder}/${mockNewId(req.name)}`, scaled: mockScaled(req.skinIds) };
   },
   setWindowTheme: async () => {},
   aiCatalogue: async (): Promise<AiCatalogue> => {
@@ -1202,7 +1223,8 @@ export const mockApi = {
     if (!mockShare.handle) throw "Verify this computer first, so the service knows the pack is yours.";
     if (pack.termsVersion !== MOCK_TERMS_VERSION) throw "The pack terms have changed. Update FolderSkin, read them and send the pack again.";
     onProgress({ stage: "preparing" });
-    await sleep(500);
+    await sleep(300);
+    await mockEncode(pack.skinIds.length, (p) => onProgress({ stage: "encoding", ...p }));
     onProgress({ stage: "checking" });
     await sleep(400);
     const params = new URLSearchParams(location.search);
@@ -1220,7 +1242,12 @@ export const mockApi = {
     }
     onProgress({ stage: "finishing" });
     await sleep(500);
-    const shared: SharedPack = { submission_id: `sub_mock${Date.now().toString(36)}`, name: cleanName(pack.name), pictures: total };
+    const shared: SharedPack = {
+      submission_id: `sub_mock${Date.now().toString(36)}`,
+      name: cleanName(pack.name),
+      pictures: total,
+      scaled: mockScaled(pack.skinIds),
+    };
     mockShare.submissions.unshift({
       id: shared.submission_id,
       name: shared.name,

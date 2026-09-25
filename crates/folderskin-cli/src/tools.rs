@@ -191,9 +191,11 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             dir,
             max_kb,
             require_generated_ids,
+            require_lossless,
         } => {
             let mut opts = packs::CheckOptions {
                 require_generated_ids,
+                require_lossless,
                 ..packs::CheckOptions::default()
             };
             if let Some(kb) = max_kb {
@@ -280,11 +282,6 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             preview,
             flat_backdrop,
         } => {
-            // cwebp from the PATH, or the one `ai setup` put beside the models on Windows.
-            let cwebp = make::find_cwebp().or_else(folderskin_local::paths::cwebp);
-            if cwebp.is_none() {
-                out.warn("cwebp isn't installed, so finished folders are saved as PNG, which is bigger (folderskin ai setup installs it on Windows)");
-            }
             let opts = make::MakeOptions {
                 id,
                 name,
@@ -293,7 +290,6 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 license,
                 dir,
                 max_bytes: max_kb * 1024,
-                cwebp,
                 flat_backdrop,
             };
             make_pack(&pictures, &opts, preview.as_deref(), out)
@@ -315,7 +311,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 dates: catalog::git_dates(&dir, &report.moved),
             };
             if opts.cwebp.is_none() {
-                out.warn("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger (folderskin ai setup installs it on Windows)");
+                out.warn("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger (`brew install webp`, or the webp package on Linux)");
             }
             if opts.dates.is_empty() && !report.packs.is_empty() {
                 out.warn("no git history for these packs, so Newest can't tell them apart");
@@ -538,8 +534,11 @@ fn make_pack(
     let mut lines: Vec<String> = made
         .iter()
         .map(|m| {
+            let scaled = m.scaled_to.map_or(String::new(), |side| {
+                format!(", made {side} px to fit {} KB", opts.picture_limit() / 1024)
+            });
             format!(
-                "{}  {:>4} KB  {}  \"{}\"  from {}",
+                "{}  {:>4} KB  {}  \"{}\"  from {}{scaled}",
                 if m.folder { "folder " } else { "artwork" },
                 m.bytes.div_ceil(1024),
                 m.file,

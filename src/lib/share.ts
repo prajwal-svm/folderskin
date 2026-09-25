@@ -2,7 +2,7 @@
  * Sharing a pack: the words and rules the share dialog uses for it. The Rust side is
  * src-tauri/src/share.rs, and the service it talks to is services/community.
  */
-import type { MySubmission, ShareProgress } from "./tauri";
+import type { MySubmission, ScaledPicture, ShareProgress } from "./tauri";
 
 /** Where the pictures came from, as the dialog asks it. The service keeps the answer for the review. */
 export const PICTURE_SOURCES = [
@@ -38,6 +38,8 @@ export function shareProgressLabel(p: ShareProgress): string {
   switch (p.stage) {
     case "preparing":
       return "Getting the pictures ready";
+    case "encoding":
+      return `Getting the pictures ready (${p.done} of ${p.total})`;
     case "checking":
       return "Checking the pack with FolderSkin";
     case "uploading":
@@ -47,6 +49,23 @@ export function shareProgressLabel(p: ShareProgress): string {
     case "waiting":
       return p.seconds > 1 ? `Trying again in ${p.seconds} seconds` : "Trying again";
   }
+}
+
+/** The most one of a pack's pictures can be: the service and `packs check` hold it to the same. */
+export const MAX_PICTURE_MB = 1.5;
+
+/**
+ * Why some of a pack's pictures are smaller than the rest, or null when none are. A pack keeps
+ * every pixel of every picture, so one too detailed to fit {@link MAX_PICTURE_MB} MB at 1024 px is
+ * made 896 px, then 768 px, instead. Names a few and counts the rest.
+ */
+export function scaledNote(scaled: ScaledPicture[]): string | null {
+  if (scaled.length === 0) return null;
+  const shown = scaled.slice(0, 3).map((s) => `${s.name} (${s.side} px)`);
+  const more = scaled.length - shown.length;
+  const names = more > 0 ? `${shown.join(", ")} and ${more} more` : shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+  const one = scaled.length === 1;
+  return `${names} ${one ? "is" : "are"} smaller than 1024 px: kept lossless, ${one ? "it was" : "they were"} over the ${MAX_PICTURE_MB} MB a picture can be at full size.`;
 }
 
 /** A submission's status as the author reads it, and the colour its chip takes. */

@@ -123,8 +123,9 @@ public-domain paintings, from the Mona Lisa to The Starry Night, each painted on
 choose **Share with community**, or use **Community → Share your skins** for several. You verify
 your computer once in the browser, with no account, and a person reviews the pack before it joins
 Community for everyone. **Save a folder** in the same dialog writes the pack as files instead.
+Pictures are shared losslessly, so a pack looks exactly as you made it.
 [docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 50 skins a pack, pictures up
-to 1024 px and 2 MB, licensed CC0, CC BY 4.0 or MIT.
+to 1024 px and 1.5 MB, 64 MB a pack, licensed CC0, CC BY 4.0 or MIT.
 
 ## Design your own
 

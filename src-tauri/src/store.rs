@@ -6,12 +6,16 @@
 //! ```text
 //! skins/
 //! ├── skins.json                 the index: {"version": 1, "skins": [...]}
-//! ├── 3f2a9c0b1d4e.png           a skin's picture, longest side at most 2048 px
+//! ├── 3f2a9c0b1d4e.webp          a skin's picture, a lossless WebP, longest side at most 2048 px
 //! ├── 3f2a9c0b1d4e.thumb-v2.png  its gallery thumbnail, 512 px, so a launch renders nothing
 //! │                              (thumb-v2-windows.png on Windows, drawn on Windows' folder)
 //! └── 3f2a9c0b1d4e.design.json   a design from the composer: the document it was made from, so
 //!                                it can be edited again
 //! ```
+//!
+//! A picture saved by FolderSkin 0.1.6 or before is a PNG, `3f2a9c0b1d4e.png`, and is read as it
+//! is: only a new picture is written as WebP, which keeps every pixel as the PNG did in about two
+//! thirds of the space ([`encode_stored_picture`]).
 //!
 //! A skin's id is `user:` plus the first 12 hex digits of the SHA-256 of what the user brought in
 //! (the picture file, or the image the provider returned), so the same picture always maps to the
@@ -28,9 +32,8 @@
 
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
-use folderskin_core::pack;
-use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
-use image::{ExtendedColorType, ImageEncoder, RgbaImage};
+use folderskin_core::{pack, raster};
+use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -230,20 +233,10 @@ impl SkinImage {
     }
 }
 
-/// Downscales `img` so its longer side is at most `max_side`, keeping the aspect ratio.
+/// Downscales `img` so its longer side is at most `max_side`, keeping the aspect ratio: the
+/// resampling a pack's pictures get too ([`raster::shrink_to`]).
 pub fn shrink_to(img: RgbaImage, max_side: u32) -> RgbaImage {
-    let (w, h) = img.dimensions();
-    let longest = w.max(h);
-    if longest <= max_side {
-        return img;
-    }
-    let s = max_side as f32 / longest as f32;
-    image::imageops::resize(
-        &img,
-        ((w as f32 * s).round() as u32).max(1),
-        ((h as f32 * s).round() as u32).max(1),
-        image::imageops::FilterType::Lanczos3,
-    )
+    raster::shrink_to(img, max_side)
 }
 
 /// Longest name a skin can have, in characters. The webview's name field stops at the same length.
@@ -286,8 +279,24 @@ fn is_stem(s: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+/// A skin's picture, as it is written now.
 fn image_file(stem: &str) -> String {
+    format!("{stem}.webp")
+}
+
+/// A skin's picture as FolderSkin 0.1.6 and before wrote it. Read, and removed with its skin,
+/// but never written.
+fn old_image_file(stem: &str) -> String {
     format!("{stem}.png")
+}
+
+/// Where the picture of the skin with this stem is in `dir`: the WebP, or the PNG an older
+/// FolderSkin saved. `None` when it has neither.
+fn picture_path(dir: &Path, stem: &str) -> Option<PathBuf> {
+    [image_file(stem), old_image_file(stem)]
+        .into_iter()
+        .map(|file| dir.join(file))
+        .find(|path| path.is_file())
 }
 
 fn thumb_file(stem: &str) -> String {
@@ -314,19 +323,12 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Encodes a stored picture. Level 2 takes about a tenth of the time of the default level on a
-/// 2048 px photo for about a tenth more bytes, which keeps an import quick.
-pub(crate) fn encode_stored_png(img: &RgbaImage) -> Vec<u8> {
-    let mut buf = Vec::new();
-    PngEncoder::new_with_quality(&mut buf, CompressionType::Level(2), PngFilterType::Adaptive)
-        .write_image(
-            img.as_raw(),
-            img.width(),
-            img.height(),
-            ExtendedColorType::Rgba8,
-        )
-        .expect("encoding a PNG into memory cannot fail");
-    buf
+/// Encodes a stored picture: a lossless WebP at libwebp's quickest setting, which takes about the
+/// time the PNG it replaced did (a fraction of a second for a 2048 px photo) and is about a
+/// third smaller. The thorough setting a pack's pictures get would take many seconds a picture,
+/// too long for an import.
+pub(crate) fn encode_stored_picture(img: &RgbaImage) -> Vec<u8> {
+    raster::encode_webp_lossless_quick(img)
 }
 
 fn save_error(e: std::io::Error) -> String {
@@ -450,7 +452,7 @@ impl Store {
             return Ok((existing, false));
         }
         let image = image.bounded();
-        let png = encode_stored_png(image.rgba());
+        let picture = encode_stored_picture(image.rgba());
         let thumb = image.preview_png(THUMB_SIZE);
 
         let mut index = self.lock();
@@ -458,7 +460,7 @@ impl Store {
             return Ok((existing.clone(), false));
         }
         let written = self
-            .write_files(&stem, design, &png, &thumb)
+            .write_files(&stem, design, &picture, &thumb)
             .map_err(save_error)?;
 
         // Strictly increasing, so "newest first" is well defined even within one millisecond.
@@ -500,7 +502,7 @@ impl Store {
         // Checked before the slow part, so a refusal costs nothing, and again under the lock.
         design_at(&self.lock(), old_id)?;
         let image = image.bounded();
-        let png = encode_stored_png(image.rgba());
+        let picture = encode_stored_picture(image.rgba());
         let thumb = image.preview_png(THUMB_SIZE);
 
         let mut index = self.lock();
@@ -515,7 +517,7 @@ impl Store {
             return Ok((existing, false));
         }
         let written = self
-            .write_files(&new_stem, Some(design), &png, &thumb)
+            .write_files(&new_stem, Some(design), &picture, &thumb)
             .map_err(save_error)?;
         let entry = new.entry(&image, index[pos].created_at);
         let old = std::mem::replace(&mut index[pos], entry.clone());
@@ -567,13 +569,13 @@ impl Store {
         &self,
         stem: &str,
         design: Option<&[u8]>,
-        png: &[u8],
+        picture: &[u8],
         thumb: &[u8],
     ) -> std::io::Result<Vec<PathBuf>> {
         let files = design
             .map(|bytes| (design_file(stem), bytes))
             .into_iter()
-            .chain([(image_file(stem), png), (thumb_file(stem), thumb)]);
+            .chain([(image_file(stem), picture), (thumb_file(stem), thumb)]);
         let mut written = Vec::with_capacity(3);
         let wrote = std::fs::create_dir_all(&self.dir).and_then(|()| {
             for (file, bytes) in files {
@@ -635,7 +637,7 @@ impl Store {
         let mut files = crate::state::parallel_map(&fresh, |&i| {
             let image = skins[i].1.bounded();
             let files = (
-                encode_stored_png(image.rgba()),
+                encode_stored_picture(image.rgba()),
                 image.preview_png(THUMB_SIZE),
             );
             encoded();
@@ -646,8 +648,8 @@ impl Store {
             .into_iter()
             .map(|step| {
                 step.unwrap_or_else(|| {
-                    let (png, thumb) = files.next().expect("every new skin was encoded");
-                    Step::New(png, thumb)
+                    let (picture, thumb) = files.next().expect("every new skin was encoded");
+                    Step::New(picture, thumb)
                 })
             })
             .collect();
@@ -670,12 +672,13 @@ impl Store {
             let wrote = (|| -> std::io::Result<()> {
                 std::fs::create_dir_all(&self.dir)?;
                 for &i in &adding {
-                    let Step::New(png, thumb) = &steps[i] else {
+                    let Step::New(picture, thumb) = &steps[i] else {
                         continue;
                     };
-                    for (file, bytes) in
-                        [(image_file(stems[i]), png), (thumb_file(stems[i]), thumb)]
-                    {
+                    for (file, bytes) in [
+                        (image_file(stems[i]), picture),
+                        (thumb_file(stems[i]), thumb),
+                    ] {
                         let path = self.dir.join(file);
                         write_atomic(&path, bytes)?;
                         written.push(path);
@@ -733,8 +736,9 @@ impl Store {
         let (Some(entry), Some(stem)) = (self.get(id), stem(id)) else {
             return Ok(None);
         };
-        let bytes = std::fs::read(self.dir.join(image_file(stem)))
-            .map_err(|_| format!("the picture for {} is missing", entry.name))?;
+        let bytes = picture_path(&self.dir, stem)
+            .and_then(|path| std::fs::read(path).ok())
+            .ok_or_else(|| format!("the picture for {} is missing", entry.name))?;
         let rgba = image::load_from_memory(&bytes)
             .map_err(|_| format!("the picture for {} is damaged", entry.name))?
             .to_rgba8();
@@ -849,6 +853,7 @@ impl Store {
         let thumb_prefix = format!("{stem}.thumb");
         let mut doomed = vec![
             self.dir.join(image_file(stem)),
+            self.dir.join(old_image_file(stem)),
             self.dir.join(design_file(stem)),
         ];
         if let Ok(entries) = std::fs::read_dir(&self.dir) {
@@ -932,7 +937,7 @@ fn read_index(dir: &Path) -> (Vec<SavedSkin>, bool) {
                 whole = false;
                 return None;
             };
-            if !dir.join(image_file(stem)).is_file() {
+            if picture_path(dir, stem).is_none() {
                 eprintln!(
                     "folderskin: dropping saved skin {}: its picture is gone",
                     skin.id
@@ -988,9 +993,9 @@ fn remove_leftovers(dir: &Path, skins: &[SavedSkin], min_age: Duration) {
     }
 }
 
-/// Whether `name` is a file the store writes that no skin in `listed` owns: `<stem>.png`, a
-/// `<stem>.thumb….png` thumbnail or a `<stem>.design.json` design whose stem isn't listed, or a
-/// temp file of [`write_atomic`] for any file the store writes,
+/// Whether `name` is a file the store writes that no skin in `listed` owns: a `<stem>.webp` or
+/// `<stem>.png` picture, a `<stem>.thumb….png` thumbnail or a `<stem>.design.json` design whose
+/// stem isn't listed, or a temp file of [`write_atomic`] for any file the store writes,
 /// `.<name>.folderskin-<pid>-<seq>.tmp`.
 fn is_leftover(name: &str, listed: &HashSet<&str>) -> bool {
     if let Some(temp) = name.strip_prefix('.').and_then(|n| n.strip_suffix(".tmp")) {
@@ -1006,12 +1011,12 @@ fn is_leftover(name: &str, listed: &HashSet<&str>) -> bool {
     skin_file_stem(name).is_some_and(|stem| !listed.contains(stem))
 }
 
-/// The stem of `<stem>.png`, `<stem>.thumb….png` or `<stem>.design.json`, the names a skin's
-/// files have.
+/// The stem of `<stem>.webp`, `<stem>.png`, `<stem>.thumb….png` or `<stem>.design.json`, the
+/// names a skin's files have.
 fn skin_file_stem(name: &str) -> Option<&str> {
     let stem = name.get(..12).filter(|s| is_stem(s))?;
     let rest = &name[12..];
-    let picture = rest == ".png";
+    let picture = rest == ".webp" || rest == ".png";
     let thumbnail = rest.starts_with(".thumb") && rest.ends_with(".png");
     let design = rest == DESIGN_SUFFIX;
     (picture || thumbnail || design).then_some(stem)
@@ -1676,6 +1681,7 @@ mod tests {
 
         let leftovers = [
             "0123456789ab.png".to_string(),
+            "0123456789ab.webp".to_string(),
             "0123456789ab.thumb-v2.png".to_string(),
             "0123456789ab.thumb-v1.png".to_string(),
             thumb_file(lost_stem),
@@ -1691,6 +1697,7 @@ mod tests {
             "0123456789abc.png",
             "0123456789ab.jpg",
             "0123456789ab.png.bak",
+            "0123456789ab.webp.bak",
             "skins.json.folderskin-1-2.tmp",
             ".notes.txt.folderskin-1-2.tmp",
             ".skins.json.folderskin-x-2.tmp",
@@ -1726,6 +1733,84 @@ mod tests {
             assert!(names.contains(&name), "{name} was removed");
         }
         assert!(store.load(&kept.id).unwrap().is_some());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_library_saved_as_png_by_an_older_version_still_loads() {
+        // A library as FolderSkin 0.1.6 left it: an index and a PNG for each skin.
+        let dir = temp_dir("old-png");
+        let old = RgbaImage::from_fn(300, 200, |x, y| {
+            image::Rgba([(x % 256) as u8, (y % 256) as u8, 7, 255])
+        });
+        let id = skin_id(b"an old one");
+        let old_stem = stem(&id).unwrap();
+        std::fs::write(dir.join(old_image_file(old_stem)), raster::encode_png(&old)).unwrap();
+        let index = serde_json::json!({"version": 1, "skins": [{
+            "id": id, "name": "Old", "kind": "artwork", "focus": [0.5, 0.5],
+            "source": "import", "created_at": 1
+        }]});
+        std::fs::write(dir.join(INDEX_FILE), serde_json::to_vec(&index).unwrap()).unwrap();
+        age(&dir.join(old_image_file(old_stem)), HOUR);
+
+        let store = Store::open(dir.clone());
+        assert_eq!(store.list().len(), 1, "it's listed, not dropped as missing");
+        let SkinImage::Artwork(art) = store.load(&id).unwrap().unwrap() else {
+            panic!("an artwork skin came back as a folder");
+        };
+        assert_eq!(art.rgba, old, "every pixel of the PNG");
+        let entry = store.get(&id).unwrap();
+        assert!(store.thumbnail_png(&entry).unwrap().starts_with(b"\x89PNG"));
+
+        // A new picture is written as a lossless WebP, beside the old PNG, which stays a PNG.
+        let (new, _) = store
+            .add(
+                new_skin(&skin_id(b"a new one"), "New", SkinSource::Import),
+                &artwork([40, 90, 200], (0.5, 0.5)),
+            )
+            .unwrap();
+        let new_stem = stem(&new.id).unwrap();
+        let written = std::fs::read(dir.join(image_file(new_stem))).unwrap();
+        assert!(written.starts_with(b"RIFF") && pack::is_lossless_picture(&written));
+        assert!(!dir.join(old_image_file(new_stem)).exists());
+        assert!(
+            dir.join(old_image_file(old_stem)).is_file(),
+            "left as it was"
+        );
+
+        // Both come back after a restart, and deleting the old one removes its PNG.
+        let store = Store::open(dir.clone());
+        assert_eq!(store.list().len(), 2);
+        assert!(store.load(&new.id).unwrap().is_some());
+        store.delete(&id).unwrap();
+        assert!(!dir.join(old_image_file(old_stem)).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_stored_picture_is_lossless() {
+        let dir = temp_dir("lossless");
+        let store = Store::open(dir.clone());
+        // A cut-out folder: its alpha, and every colour that shows, come back exactly.
+        let cut = RgbaImage::from_fn(640, 600, |x, y| {
+            let alpha = if x < 60 { 0 } else { ((x + y) % 256) as u8 };
+            image::Rgba([(x % 256) as u8, (y % 256) as u8, 99, alpha])
+        });
+        let (entry, _) = store
+            .add(
+                new_skin(&skin_id(b"cut"), "Cut", SkinSource::Import),
+                &SkinImage::Folder(Arc::new(cut.clone())),
+            )
+            .unwrap();
+        let SkinImage::Folder(back) = store.load(&entry.id).unwrap().unwrap() else {
+            panic!("a folder skin came back as artwork");
+        };
+        for (got, want) in back.pixels().zip(cut.pixels()) {
+            assert_eq!(got.0[3], want.0[3], "alpha");
+            if want.0[3] > 0 {
+                assert_eq!(got, want, "every colour that shows");
+            }
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

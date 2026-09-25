@@ -2,25 +2,28 @@
 //!
 //! Each picture gets the split the app makes when you add one: a finished folder, painted on the
 //! magenta key or on real transparency, is cut out and becomes the icon itself, and any other
-//! picture is artwork for FolderSkin's folder. Then it is shrunk to the pack limit and compressed
-//! until it fits the size budget: a folder as WebP when `cwebp` is installed (PNG otherwise, which
-//! keeps the transparency but is several times bigger), artwork as JPEG. The folder that comes out
-//! passes `packs check`, which runs on it before anything is reported.
+//! picture is artwork for FolderSkin's folder. Then it is shrunk to 1024 px and saved as a
+//! lossless WebP (`raster::encode_webp_lossless`, the encoder the app shares packs with), so the
+//! pack looks exactly as the pictures did, a cut-out's transparency included. One still over the
+//! size limit is made 896 px, then 768 px, and says so. Nothing needs `cwebp` installed. The
+//! folder that comes out passes `packs check` with `--require-lossless`, which runs on it before
+//! anything is reported.
 //!
 //! A new pack gets an id of its own, its name and six random characters ([`pack::new_id`]), so
 //! two packs can share a name. The id is its folder's name, and it never changes after.
 
 use crate::packs;
 use folderskin_core::pack::{
-    self, Pack, PackSkin, MANIFEST_FILE, MAX_PACK_TAGS, MAX_PICTURE_SIDE, MAX_SKINS,
-    MAX_SKIN_NAME_CHARS, MIN_PICTURE_SIDE, PACK_VERSION, PICTURE_EXTENSIONS,
+    self, Pack, PackSkin, MANIFEST_FILE, MAX_PACK_BYTES, MAX_PACK_TAGS, MAX_PICTURE_BYTES,
+    MAX_PICTURE_SIDE, MAX_SKINS, MAX_SKIN_NAME_CHARS, MIN_PICTURE_SIDE, PACK_VERSION,
+    PICTURE_EXTENSIONS,
 };
 use folderskin_core::{matte, raster};
-use image::codecs::jpeg::JpegEncoder;
-use image::imageops::FilterType;
-use image::{ExtendedColorType, ImageEncoder, RgbaImage};
+use image::RgbaImage;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 /// Everything `make` needs besides the pictures.
 #[derive(Debug, Clone)]
@@ -37,14 +40,20 @@ pub struct MakeOptions {
     pub license: String,
     /// The community folder, holding `packs/`.
     pub dir: PathBuf,
-    /// The largest a picture may be once compressed.
+    /// The largest a picture may be once compressed: the pack limit ([`MAX_PICTURE_BYTES`]) or
+    /// less.
     pub max_bytes: usize,
-    /// The `cwebp` program, when there is one. Without it, folders are saved as PNG.
-    pub cwebp: Option<PathBuf>,
     /// Also cut away a flat backdrop of any colour, for renders whose #FF00FF drifted to pink or
     /// raspberry. Only the backdrop that reaches the edge goes, so the same colour inside the
     /// folder stays.
     pub flat_backdrop: bool,
+}
+
+impl MakeOptions {
+    /// The most a picture may come to: `max_bytes`, and never more than a pack's limit.
+    pub fn picture_limit(&self) -> usize {
+        self.max_bytes.min(MAX_PICTURE_BYTES)
+    }
 }
 
 /// One picture as it went into the pack.
@@ -58,6 +67,8 @@ pub struct Made {
     pub folder: bool,
     /// Its size in the pack.
     pub bytes: usize,
+    /// The side it was made smaller to, 896 or 768 px, when it was over `max_bytes` at 1024.
+    pub scaled_to: Option<u32>,
 }
 
 /// Makes `<dir>/packs/<id>` from `pictures` (files, or folders whose pictures are taken in name
@@ -82,25 +93,35 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
         ));
     }
 
+    // The pictures are made on every core at once: libwebp's smallest lossless file takes a few
+    // seconds a picture.
+    let prepared = prepare_all(&sources, opts)?;
+    let total: usize = prepared.iter().map(|p| p.bytes.len()).sum();
+    if total > MAX_PACK_BYTES {
+        return Err(format!(
+            "the pictures come to {} MB, and a pack's come to {} MB at most; split them into two \
+             packs",
+            total.div_ceil(1024 * 1024),
+            MAX_PACK_BYTES / (1024 * 1024)
+        ));
+    }
     let mut made = Vec::with_capacity(sources.len());
     let mut files: Vec<(String, Vec<u8>)> = Vec::with_capacity(sources.len());
-    for (n, source) in sources.iter().enumerate() {
-        let label = source.display();
-        let (bytes, ext, folder_kind) =
-            prepare(source, opts).map_err(|e| format!("{label} {e}"))?;
+    for (n, (source, picture)) in sources.iter().zip(prepared).enumerate() {
         let stem = source
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let file = format!("{}.{ext}", unique_stem(&stem, n, &files));
+        let file = format!("{}.webp", unique_stem(&stem, n, &files));
         made.push(Made {
             source: source.clone(),
             file: file.clone(),
             name: display_name(&stem, n),
-            folder: folder_kind,
-            bytes: bytes.len(),
+            folder: picture.folder,
+            bytes: picture.bytes.len(),
+            scaled_to: picture.scaled_to,
         });
-        files.push((file, bytes));
+        files.push((file, picture.bytes));
     }
 
     let manifest = Pack {
@@ -139,8 +160,12 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
     let placed = written
         .map_err(|e| format!("couldn't write {}: {e}", folder.display()))
         .and_then(|()| {
-            packs::check_pack_within(&staging, &id, opts.max_bytes)
-                .map_err(|problems| problems.join("; "))
+            let rules = packs::CheckOptions {
+                max_bytes: opts.max_bytes,
+                require_lossless: true,
+                ..packs::CheckOptions::default()
+            };
+            packs::check_pack_with(&staging, &id, &rules).map_err(|problems| problems.join("; "))
         })
         .and_then(|_| put_in_place(&staging, &folder));
     if let Err(e) = placed {
@@ -259,9 +284,48 @@ fn is_picture(path: &Path) -> bool {
     !hidden && PICTURE_EXTENSIONS.contains(&ext.as_str())
 }
 
-/// One picture, ready for the pack: its bytes, its extension, and whether it is a finished
-/// folder. The error finishes a sentence that starts with the picture's path.
-fn prepare(path: &Path, opts: &MakeOptions) -> Result<(Vec<u8>, &'static str, bool), String> {
+/// One picture, ready for the pack.
+struct Prepared {
+    /// A lossless WebP.
+    bytes: Vec<u8>,
+    /// True for a finished folder, false for artwork on FolderSkin's folder.
+    folder: bool,
+    /// The side it was made smaller to, when it was over the size limit at 1024 px.
+    scaled_to: Option<u32>,
+}
+
+/// [`prepare`] for every one of `sources`, on every core at once, in their order. The first that
+/// fails, in their order, is the error, and starts with the picture's path.
+fn prepare_all(sources: &[PathBuf], opts: &MakeOptions) -> Result<Vec<Prepared>, String> {
+    let next = AtomicUsize::new(0);
+    let done: Mutex<Vec<(usize, Result<Prepared, String>)>> = Mutex::new(Vec::new());
+    let workers = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(sources.len().max(1));
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some(source) = sources.get(i) else { break };
+                let prepared =
+                    prepare(source, opts).map_err(|e| format!("{} {e}", source.display()));
+                done.lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .push((i, prepared));
+            });
+        }
+    });
+    let mut done = done
+        .into_inner()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    done.sort_by_key(|(i, _)| *i);
+    done.into_iter().map(|(_, prepared)| prepared).collect()
+}
+
+/// One picture, ready for the pack: a lossless WebP of the finished folder cut out of it, or of
+/// the whole picture as artwork. The error finishes a sentence that starts with the picture's
+/// path.
+fn prepare(path: &Path, opts: &MakeOptions) -> Result<Prepared, String> {
     let rgba = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
         .map_err(|e| format!("couldn't be read: {e}"))?
@@ -278,47 +342,20 @@ fn prepare(path: &Path, opts: &MakeOptions) -> Result<(Vec<u8>, &'static str, bo
         let solid = cut.pixels().filter(|p| p.0[3] >= 128).count() as f32;
         (solid >= 0.02 * rgba.width() as f32 * rgba.height() as f32).then_some(cut)
     });
-    match cut {
-        Some(cut) => {
-            let (bytes, ext) = encode_folder(&cut, opts)?;
-            Ok((bytes, ext, true))
-        }
-        None => {
-            let img = shrink(rgba, MAX_PICTURE_SIDE);
-            big_enough(&img, "")?;
-            Ok((encode_jpeg(&img, opts.max_bytes)?, "jpg", false))
-        }
-    }
-}
-
-/// A finished folder at the largest size and best quality that fit `opts.max_bytes`.
-fn encode_folder(cut: &RgbaImage, opts: &MakeOptions) -> Result<(Vec<u8>, &'static str), String> {
-    let img = shrink(cut.clone(), MAX_PICTURE_SIDE);
-    big_enough(&img, " once cut out")?;
-    let limit = opts.max_bytes / 1024;
-    if let Some(cwebp) = &opts.cwebp {
-        for quality in [90, 85, 80, 75, 70, 60] {
-            let webp = run_cwebp(cwebp, &img, quality)?;
-            if webp.len() <= opts.max_bytes {
-                return Ok((webp, "webp"));
-            }
-        }
-        return Err(format!("is still over {limit} KB as a WebP at quality 60"));
-    }
-    for side in [MAX_PICTURE_SIDE, 896, 768] {
-        let smaller = shrink(img.clone(), side);
-        if big_enough(&smaller, "").is_err() {
-            break;
-        }
-        let png = raster::encode_png(&smaller);
-        if png.len() <= opts.max_bytes {
-            return Ok((png, "png"));
-        }
-    }
-    Err(format!(
-        "is over {limit} KB as a PNG. Install cwebp (the webp package) and run this again: \
-         as a WebP it keeps its transparency at a fraction of the size"
-    ))
+    let folder = cut.is_some();
+    let (img, when) = match cut {
+        Some(cut) => (cut, " once cut out"),
+        None => (rgba, ""),
+    };
+    // Measured here first, to say when it was measured.
+    let img = raster::shrink_to(img, MAX_PICTURE_SIDE);
+    big_enough(&img, when)?;
+    let made = pack::encode_picture(img, opts.picture_limit())?;
+    Ok(Prepared {
+        bytes: made.webp,
+        folder,
+        scaled_to: made.scaled_to,
+    })
 }
 
 /// `img` as a WebP from `cwebp`: lossy colour at `quality`, lossless alpha, so the folder's edge
@@ -368,38 +405,6 @@ pub(crate) fn run_cwebp(cwebp: &Path, img: &RgbaImage, quality: u8) -> Result<Ve
     let _ = std::fs::remove_file(&input);
     let _ = std::fs::remove_file(&output);
     result
-}
-
-/// `img` as a JPEG at the best quality that fits `max_bytes`.
-fn encode_jpeg(img: &RgbaImage, max_bytes: usize) -> Result<Vec<u8>, String> {
-    let rgb = image::DynamicImage::ImageRgba8(img.clone()).to_rgb8();
-    for quality in [90, 85, 80, 75, 70] {
-        let mut jpg = Vec::new();
-        JpegEncoder::new_with_quality(&mut jpg, quality)
-            .write_image(&rgb, rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-            .map_err(|e| format!("couldn't be encoded: {e}"))?;
-        if jpg.len() <= max_bytes {
-            return Ok(jpg);
-        }
-    }
-    Err(format!(
-        "is still over {} KB as a JPEG at quality 70",
-        max_bytes / 1024
-    ))
-}
-
-/// `img` with its longer side at most `max_side`, keeping its shape.
-fn shrink(img: RgbaImage, max_side: u32) -> RgbaImage {
-    let (w, h) = img.dimensions();
-    if w.max(h) <= max_side {
-        return img;
-    }
-    let scale = max_side as f32 / w.max(h) as f32;
-    let (nw, nh) = (
-        ((w as f32 * scale).round() as u32).max(1),
-        ((h as f32 * scale).round() as u32).max(1),
-    );
-    image::imageops::resize(&img, nw, nh, FilterType::Lanczos3)
 }
 
 /// Refuses a picture smaller than a pack allows. `when` says at what point it was measured.
@@ -489,8 +494,7 @@ mod tests {
                 author: "prajwal-svm".into(),
                 license: "CC0-1.0".into(),
                 dir: self.0.clone(),
-                max_bytes: 400 * 1024,
-                cwebp: None,
+                max_bytes: MAX_PICTURE_BYTES,
                 flat_backdrop: false,
             }
         }
@@ -524,7 +528,7 @@ mod tests {
     fn cuts_out_a_folder_on_magenta_and_keeps_a_photo_as_artwork() {
         let scratch = Scratch::new("split");
         scratch.picture("glass_folder.png", &on_magenta());
-        scratch.picture("sunset-photo.jpg", &photo());
+        let jpeg = scratch.picture("sunset-photo.jpg", &photo());
         let (folder, made) = make(&[scratch.0.join("in")], &scratch.options()).unwrap();
 
         assert_eq!(folder.parent(), Some(scratch.0.join("packs").as_path()));
@@ -540,8 +544,8 @@ mod tests {
         assert_eq!(
             names,
             [
-                ("glass-folder.png", "Glass folder", true),
-                ("sunset-photo.jpg", "Sunset photo", false),
+                ("glass-folder.webp", "Glass folder", true),
+                ("sunset-photo.webp", "Sunset photo", false),
             ]
         );
         let pack = Pack::parse(&std::fs::read(folder.join(MANIFEST_FILE)).unwrap()).unwrap();
@@ -549,19 +553,25 @@ mod tests {
         assert_eq!(pack.skins.len(), 2);
 
         // The folder was cut out of the magenta and trimmed to the subject.
-        let cut = image::open(folder.join("glass-folder.png"))
-            .unwrap()
-            .to_rgba8();
+        let cut_bytes = std::fs::read(folder.join("glass-folder.webp")).unwrap();
+        assert!(pack::is_lossless_picture(&cut_bytes));
+        let cut = image::load_from_memory(&cut_bytes).unwrap().to_rgba8();
         assert_eq!(cut.dimensions(), (400, 340));
         assert_eq!(
             cut.get_pixel(0, 0).0[3],
             255,
             "the subject reaches the corner"
         );
-        // The photo was shrunk to the pack limit and kept its shape.
-        let art = image::open(folder.join("sunset-photo.jpg")).unwrap();
-        assert_eq!((art.width(), art.height()), (1024, 805));
-        assert!(made.iter().all(|m| m.bytes <= 400 * 1024));
+        // The photo was shrunk to the pack limit, kept its shape, and every pixel of it.
+        let art_bytes = std::fs::read(folder.join("sunset-photo.webp")).unwrap();
+        assert!(pack::is_lossless_picture(&art_bytes));
+        let art = image::load_from_memory(&art_bytes).unwrap().to_rgba8();
+        let source = image::open(&jpeg).unwrap().to_rgba8();
+        assert_eq!(art, raster::shrink_to(source, MAX_PICTURE_SIDE), "lossless");
+        assert_eq!(art.dimensions(), (1024, 805));
+        assert!(made
+            .iter()
+            .all(|m| m.bytes <= MAX_PICTURE_BYTES && m.scaled_to.is_none()));
     }
 
     /// The names in `<scratch>/packs`, dotfolders too, sorted.
@@ -629,7 +639,7 @@ mod tests {
         };
         let (same, made) = make(&[second], &again).unwrap();
         assert_eq!(same, folder);
-        assert_eq!(made[0].file, "second-one.png");
+        assert_eq!(made[0].file, "second-one.webp");
         let mut files: Vec<String> = std::fs::read_dir(&folder)
             .unwrap()
             .flatten()
@@ -638,7 +648,7 @@ mod tests {
         files.sort();
         assert_eq!(
             files,
-            ["pack.json", "second-one.png"],
+            ["pack.json", "second-one.webp"],
             "the old pictures go"
         );
         let pack = Pack::parse(&std::fs::read(folder.join(MANIFEST_FILE)).unwrap()).unwrap();
@@ -656,7 +666,7 @@ mod tests {
         );
         let small = make(&[tiny], &again).unwrap_err();
         assert!(small.contains("at least 256 px"), "{small}");
-        assert!(folder.join("second-one.png").is_file());
+        assert!(folder.join("second-one.webp").is_file());
         assert_eq!(pack_folders(&scratch), [id]);
     }
 
@@ -720,7 +730,7 @@ mod tests {
         };
         let (folder, made) = make(&pictures, &opts).unwrap();
         assert!(made[0].folder);
-        let cut = image::open(folder.join("drifted.png")).unwrap().to_rgba8();
+        let cut = image::open(folder.join("drifted.webp")).unwrap().to_rgba8();
         assert_eq!(cut.dimensions(), (400, 340));
         assert_eq!(cut.get_pixel(200, 170).0[3], 255, "the crimson patch stays");
     }
@@ -733,24 +743,5 @@ mod tests {
         let used = vec![("glass.webp".to_string(), Vec::new())];
         assert_eq!(unique_stem("Glass", 1, &used), "glass-2");
         assert_eq!(unique_stem("!!!", 1, &used), "skin-2");
-    }
-
-    #[test]
-    fn a_folder_becomes_a_webp_with_its_transparency_when_cwebp_is_installed() {
-        let Some(cwebp) = find_cwebp() else {
-            eprintln!("cwebp isn't installed; skipping");
-            return;
-        };
-        let scratch = Scratch::new("webp");
-        scratch.picture("chrome.png", &on_magenta());
-        let opts = MakeOptions {
-            cwebp: Some(cwebp),
-            ..scratch.options()
-        };
-        let (folder, made) = make(&[scratch.0.join("in")], &opts).unwrap();
-        assert_eq!(made[0].file, "chrome.webp");
-        let cut = image::open(folder.join("chrome.webp")).unwrap().to_rgba8();
-        assert_eq!(cut.dimensions(), (400, 340));
-        assert_eq!(cut.get_pixel(200, 170).0[3], 255);
     }
 }

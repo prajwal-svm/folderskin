@@ -123,6 +123,15 @@ export type ExportPackRequest = {
   skinIds: string[];
 };
 
+/** How far making a pack's pictures ready has got: `done` of `total` are. Several are made at once. */
+export type MakeProgress = { done: number; total: number };
+
+/** A picture made smaller than 1024 px so it fits the 1.5 MB a pack's picture can be, still lossless. */
+export type ScaledPicture = { name: string; side: number };
+
+/** A pack saved as a folder: where it is, and the pictures made smaller to fit. */
+export type ExportedPack = { folder: string; scaled: ScaledPicture[] };
+
 export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path: string };
 
 /** A folder's icon as it looks now (a data URL), and whether it's a custom one a revert would take off. */
@@ -282,17 +291,19 @@ export type PackToShare = {
   termsVersion: number;
 };
 
-/** How far sending a pack for review has got. `waiting` is a pause before a request that failed in
- *  a way that may pass is tried again; the stage it was part of comes again after it. */
+/** How far sending a pack for review has got. `encoding` is the pictures being made lossless WebP,
+ *  several at once. `waiting` is a pause before a request that failed in a way that may pass is
+ *  tried again; the stage it was part of comes again after it. */
 export type ShareProgress =
   | { stage: "preparing" }
+  | { stage: "encoding"; done: number; total: number }
   | { stage: "checking" }
   | { stage: "uploading"; done: number; total: number }
   | { stage: "finishing" }
   | { stage: "waiting"; seconds: number };
 
-/** A pack in the review queue. */
-export type SharedPack = { submission_id: string; name: string; pictures: number };
+/** A pack in the review queue, and the pictures made smaller to fit. */
+export type SharedPack = { submission_id: string; name: string; pictures: number; scaled: ScaledPicture[] };
 
 /** One of this computer's packs, and where it is. */
 export type MySubmission = {
@@ -379,8 +390,10 @@ const tauriApi = {
   removePack: (packId: string) => invoke<string[]>("community_remove", { packId }),
   /** Adds a pack from a folder on this computer. */
   importPack: (path: string) => invoke<Skin[]>("import_pack", { path }),
-  /** Writes skins as a pack folder inside `folder`, named after a new id; resolves to the folder it made. */
-  exportPack: (req: ExportPackRequest) => invoke<string>("export_pack", { ...req }),
+  /** Writes skins as a pack folder inside `folder`, named after a new id; resolves to the folder it
+   *  made and the pictures made smaller to fit. `onProgress` hears how many pictures are ready. */
+  exportPack: (req: ExportPackRequest, onProgress: (p: MakeProgress) => void) =>
+    invoke<ExportedPack>("export_pack", { ...req, onProgress: new Channel<MakeProgress>(onProgress) }),
   // ---- first launch ----
   /** True until the first-launch onboarding has been finished on this computer. */
   onboardingNeeded: () => invoke<boolean>("onboarding_needed"),

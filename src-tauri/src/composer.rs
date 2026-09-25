@@ -19,6 +19,7 @@ use folderskin_core::compositor::Style;
 use folderskin_core::{compositor, matte, raster};
 use folderskin_core::{geometry as g, geometry_windows as gw};
 use image::codecs::jpeg::JpegEncoder;
+use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, ImageFormat, RgbaImage};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -481,6 +482,21 @@ fn decode_design(png: &[u8], max_side: u32) -> Result<RgbaImage, String> {
     Ok(store::shrink_to(img.to_rgba8(), max_side))
 }
 
+/// A PNG for the webview's canvas, made quickly: level 2 takes about a tenth of the time of the
+/// default level on a 2048 px picture for about a tenth more bytes, and the canvas reads it once.
+fn quick_png(img: &RgbaImage) -> Vec<u8> {
+    let mut buf = Vec::new();
+    PngEncoder::new_with_quality(&mut buf, CompressionType::Level(2), PngFilterType::Adaptive)
+        .write_image(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            ExtendedColorType::Rgba8,
+        )
+        .expect("encoding a PNG into memory cannot fail");
+    buf
+}
+
 /// A picture as the composer takes it: at most [`store::MAX_STORED_SIDE`] px on its longer side, as
 /// a PNG when it has any transparency and as a JPEG, far smaller for a photo, when it has none.
 fn image_dto(rgba: &RgbaImage, name: String) -> Result<ComposerImageDto, String> {
@@ -492,7 +508,7 @@ fn image_dto(rgba: &RgbaImage, name: String) -> Result<ComposerImageDto, String>
     let (width, height) = rgba.dimensions();
     let alpha = rgba.pixels().any(|p| p.0[3] < 255);
     let url = if alpha {
-        commands::data_url(&store::encode_stored_png(&rgba))
+        commands::data_url(&quick_png(&rgba))
     } else {
         let rgb = image::DynamicImage::ImageRgba8(rgba.into_owned()).to_rgb8();
         let mut jpg = Vec::new();

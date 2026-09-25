@@ -14,6 +14,11 @@ thiserror.workspace = true
 sha2.workspace = true
 # The random part of a new pack id, from the system's secure source. Already in the tree.
 getrandom = "0.3"
+# Lossless WebP for community pictures: libwebp itself (BSD-3-Clause), built from source by
+# libwebp-sys (MIT) and wrapped by this crate (MIT or Apache-2.0), so nothing needs cwebp
+# installed. The `image` crate's own lossless WebP encoder makes files no smaller than PNG.
+# Without its `img` feature, which only adds conversions from the `image` crate's types.
+webp = { version = "0.3.1", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"

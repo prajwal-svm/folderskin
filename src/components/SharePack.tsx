@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type SharedPack, type ShareProgress, type ShareStatus, type Skin } from "../lib/tauri";
+import { api, errorMessage, type ExportedPack, type SharedPack, type ShareProgress, type ShareStatus, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { cleanName } from "../lib/names";
 import { creditDefaultProfile, LICENSES, licenseLabel, MAX_PACK_SKINS, PACK_TERMS_URL, PACKS_GUIDE_URL } from "../lib/packs";
 import { defaultProfile, loadProfiles, type LicenceProfile, type LicenseId } from "../lib/profiles";
-import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, shareProgressLabel, type PictureSource } from "../lib/share";
+import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, scaledNote, shareProgressLabel, type PictureSource } from "../lib/share";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
 import { Modal } from "./Modal";
 import { MySubmissions } from "./MySubmissions";
@@ -47,6 +47,10 @@ function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; cou
  * A pack holds up to {@link MAX_PACK_SKINS} skins, so the picker is a grid of ticks rather than a
  * single choice: sharing one skin and sharing twenty are the same dialog. Saving the pack as a
  * folder is here too, for anyone who wants it as files, and works whether or not the service does.
+ *
+ * Either way every picture becomes a lossless WebP first, a few seconds each, so the line under the
+ * form counts them as they're ready; one too detailed for 1.5 MB at 1024 px is made smaller, and the
+ * dialog that follows says which.
  */
 export function SharePack({
   yours,
@@ -79,8 +83,10 @@ export function SharePack({
   const [notes, setNotes] = useState("");
   const [mine, setMine] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Set while the pack is being saved as a folder rather than sent. */
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<ExportedPack | null>(null);
 
   /** What the sharing service says about this computer. */
   const [direct, setDirect] = useState<ShareStatus | null>(null);
@@ -171,15 +177,21 @@ export function SharePack({
       : "/Users/you/Desktop";
     if (typeof folder !== "string") return;
     setBusy(true);
+    setSaving(true);
     setError(null);
+    setSending({ stage: "encoding", done: 0, total: chosen.length });
     try {
-      const path = await api.exportPack({ folder, name: clean, author, license, tags: packTags, skinIds: chosen.map((s) => s.id) });
+      const out = await api.exportPack({ folder, name: clean, author, license, tags: packTags, skinIds: chosen.map((s) => s.id) }, (p) =>
+        setSending({ stage: "encoding", ...p }),
+      );
       creditDefaultProfile(author);
-      setSaved(path);
+      setSaved(out);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
+      setSaving(false);
+      setSending(null);
     }
   };
 
@@ -249,6 +261,7 @@ export function SharePack({
 
   // ---- sent for review ----
   if (sent) {
+    const scaled = scaledNote(sent.scaled);
     return (
       <Modal
         narrow
@@ -277,6 +290,7 @@ export function SharePack({
           A person looks at every pack before anyone else can see it. Once it's approved it joins the Community view for everyone, credited to{" "}
           <strong>{direct?.handle ?? handle}</strong>. If it's turned down, Your submissions says why.
         </p>
+        {scaled && <p className="field-note">{scaled}</p>}
       </Modal>
     );
   }
@@ -311,7 +325,8 @@ export function SharePack({
 
   // ---- saved as a folder ----
   if (saved) {
-    const folder = saved.split(/[\\/]/).pop() || saved;
+    const folder = saved.folder.split(/[\\/]/).pop() || saved.folder;
+    const scaled = scaledNote(saved.scaled);
     return (
       <Modal
         narrow
@@ -320,7 +335,7 @@ export function SharePack({
         onClose={onClose}
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => void revealItemInDir(saved).catch(() => {})}>
+            <button type="button" className="btn btn-ghost" onClick={() => void revealItemInDir(saved.folder).catch(() => {})}>
               <FolderOpenIcon size={15} />
               Show in {fileBrowser}
             </button>
@@ -337,6 +352,7 @@ export function SharePack({
             How packs work <ExternalLinkIcon size={12} />
           </button>
         </p>
+        {scaled && <p className="field-note">{scaled}</p>}
       </Modal>
     );
   }
@@ -354,18 +370,19 @@ export function SharePack({
               {reason}
             </span>
           )}
-          <button type="button" className="btn btn-ghost" disabled={Boolean(saveProblem) || busy} onClick={() => void save()}>
-            Save a folder
+          <button type="button" className="btn btn-ghost" disabled={Boolean(saveProblem) || busy} aria-busy={saving} onClick={() => void save()}>
+            {saving && <LoaderIcon />}
+            {saving ? "Saving" : "Save a folder"}
           </button>
           <button
             type="button"
             className="btn btn-primary"
             disabled={Boolean(sendProblem) || busy}
-            aria-busy={busy}
+            aria-busy={busy && !saving}
             onClick={() => (verified && terms !== null ? void send(terms) : verifyAndSend())}
           >
-            {busy ? <LoaderIcon /> : <EarthIcon size={15} />}
-            {busy ? "Sending" : verified ? "Send for review" : "Verify and send"}
+            {busy && !saving ? <LoaderIcon /> : <EarthIcon size={15} />}
+            {busy && !saving ? "Sending" : verified ? "Send for review" : "Verify and send"}
           </button>
         </>
       }

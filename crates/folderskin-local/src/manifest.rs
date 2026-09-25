@@ -561,14 +561,6 @@ pub const KLEIN_MLX_Q8: MlxWeights = MlxWeights {
     ],
 };
 
-/// `packs make` saves a finished folder as WebP through cwebp, or as a PNG several times the
-/// size, too big for a pack. Homebrew and Linux have a `webp` package; on Windows this is
-/// Google's build.
-pub const WEBP_WINDOWS_URL: &str = "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0-windows-x64.zip";
-pub const WEBP_WINDOWS_SIZE: u64 = 4106264;
-pub const WEBP_WINDOWS_SHA256: &str =
-    "48886f506b21f62e4661f0f4cbfca19800897c385128e8902542d29a950c93f1";
-
 #[cfg(test)]
 mod tests {
     use super::*;

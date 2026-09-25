@@ -164,8 +164,8 @@ Say which check failed before painting again.
 
 The pictures in the output folder (not `previews/`, not `raw/`) are ready for the other skill.
 Packs live in github.com/prajwal-svm/folderskin-community; `--dir` names its checkout.
-`folderskin packs make` makes the pack, and uses the `cwebp` setup installed (on Windows) when
-there is none on the PATH, which whole-folder pictures need to fit in a pack:
+`folderskin packs make` makes the pack, every picture a lossless WebP, with nothing else to
+install:
 
 ```sh
 folderskin packs make renders/night-prints --dir ../folderskin-community \
@@ -203,7 +203,7 @@ Whole-folder pictures come out as `folder` in the report, everything else as `ar
 | `folderskin ai theme <root> [--style S] [--depth N] [--apply]` | paint every folder under a root from its name |
 | `folderskin ai styles` / `folderskin ai models` | the style presets / the models and providers |
 | `folderskin ai config [set\|unset\|get] …` | default provider, model, tier and backend |
-| `folderskin packs make <pictures…> --name … --tags … --author …` | make a pack, with cwebp; it gets an id of its own |
+| `folderskin packs make <pictures…> --name … --tags … --author …` | make a pack of lossless WebP pictures; it gets an id of its own |
 | `folderskin image check\|info\|trim\|clip\|cutout\|crop <picture>` | look at a picture and clean it up |
 | `folderskin image saturate\|brightness\|contrast\|invert\|adjust <picture> …` | the composer's colour adjustments |
 | `folderskin render <picture> --out preview.png` | a picture as the folder the app makes of it |

@@ -43,12 +43,28 @@ All notable changes to FolderSkin are recorded here. The format follows
   asks for, so the terms can change without a new FolderSkin.
 - A pack's author shows as plain text in Community and when you look through a pack, rather than
   as a link to a GitHub profile: authors are FolderSkin names now.
+- **Pictures are shared losslessly.** Every picture in a pack you share or save as a folder is now
+  a lossless WebP, so the pack looks exactly as you made it: no blur in a gradient or around
+  lettering, and a finished folder's transparent edge exactly as drawn. The limits are 1024 px
+  and 1.5 MB a picture, and 64 MB a pack. A picture too detailed to fit is made 896 px, then
+  768 px, still lossless, and the dialog says which; a pack over 64 MB is turned down with a
+  suggestion to split it in two. Making the pictures ready takes a few seconds each, and the
+  dialog counts them as it goes.
+- **Your library takes less space.** A picture you add, paint or design is now saved as a
+  lossless WebP rather than a PNG: every pixel the same, in about two thirds of the space.
+  Pictures saved before stay as they are, and work as they always did.
+- For pack maintainers: `packs make` writes every picture as a lossless WebP of at most 1.5 MB,
+  with the encoder built in, so it no longer needs `cwebp`. `packs check` holds each pack's
+  pictures to 64 MB together, and `--require-lossless` holds every picture to the rules new packs
+  follow: PNG or lossless WebP, at most 1.5 MB.
 
 ### Removed
 
 - **Sharing through GitHub.** The share dialog no longer signs in to GitHub, forks
   folderskin-community or opens a pull request, and Settings → Sharing no longer has a GitHub
   section. A GitHub sign-in an earlier version kept is forgotten.
+- Setting up the local AI model no longer downloads `cwebp` on Windows, or asks for it on macOS and
+  Linux: packs were its only use, and they no longer need it.
 
 ## 0.1.6 — 2026-09-25
 
