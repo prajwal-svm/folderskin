@@ -1,0 +1,129 @@
+{
+  "title": "Settings",
+  "navLabel": "settings",
+  "search": "Search",
+  "searchLabel": "search settings",
+  "pagesLabel": "settings pages",
+  "noMatch": "No setting matches “{{query}}”",
+  "pages": {
+    "general": "General",
+    "ai": "AI Provider",
+    "sharing": "Sharing",
+    "about": "About"
+  },
+  "find": {
+    "general": "appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
+    "ai": "ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
+    "sharing": "sharing share author credit credited licence license profile profiles cc0 cc by mit community pack",
+    "about": "about folderskin what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star"
+  },
+  "general": {
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeLabel": "theme",
+    "themeFind": "dark light system mode",
+    "themes": {
+      "system": "Match the computer",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "accent": "Accent colour",
+    "accentNote": "Buttons, selections and the glow around a folder you drop.",
+    "accentFind": "color accent",
+    "accentLabel": "accent colour",
+    "accents": {
+      "blue": "Blue",
+      "purple": "Purple",
+      "pink": "Pink",
+      "orange": "Orange",
+      "green": "Green",
+      "mono": "Black and white"
+    },
+    "motion": "Motion",
+    "motionNote": "Less movement in the library, the dialogs and the icons.",
+    "motionFind": "animation reduce reduced",
+    "motionLabel": "motion",
+    "motions": {
+      "system": "System",
+      "systemTip": "As much as the computer's own setting allows",
+      "reduced": "Reduced",
+      "reducedTip": "Things appear and change without moving"
+    },
+    "window": "Window",
+    "sidebar": "Sidebar",
+    "sidebarNote": "Icons only folds it to a narrow strip. {{keys}} switches between them.",
+    "sidebarFind": "rail collapse fold icons",
+    "sidebarLabel": "sidebar",
+    "full": "Full",
+    "iconsOnly": "Icons only",
+    "yourSkins": "Your skins",
+    "yourSkinsNote": "Everything you add stays here between launches. Copy this folder to back it up.",
+    "skins_one": "{{count}} skin",
+    "skins_other": "{{count}} skins",
+    "skinsFind": "storage folder backup skins",
+    "keptUntilQuit": "Kept until you quit"
+  },
+  "ai": {
+    "title": "Where pictures are made",
+    "find": "key keys api provider providers model",
+    "note": "FolderSkin has no server. With a key, Generate with AI sends your request straight from your machine to the provider, billed to your account. The Local Model makes them for free, once it's set up.",
+    "loading": "Loading providers"
+  },
+  "sharing": {
+    "title": "Licence profiles",
+    "note": "A pack you share says who made it and how others may use it. Keep a profile for each way you share: sharing starts from the default one.",
+    "howItWorks": "How sharing works"
+  },
+  "profile": {
+    "firstName": "Personal",
+    "fallbackName": "Profile",
+    "default": "Default",
+    "creditedTo": "Credited to {{author}}",
+    "noCredit": "No one to credit yet",
+    "makeDefaultLabel": "make {{name}} the default",
+    "makeDefault": "Make default",
+    "changeLabel": "change {{name}}",
+    "change": "Change",
+    "deleteLabel": "delete {{name}}",
+    "delete": "Delete",
+    "deleted": "Deleted {{name}}.",
+    "undo": "Undo",
+    "add": "Add a profile",
+    "newLabel": "new profile",
+    "name": "Name",
+    "namePlaceholder": "Personal, or For work",
+    "creditedToLabel": "Credited to",
+    "authorPlaceholder": "your-name",
+    "licence": "Licence",
+    "licenceLabel": "licence",
+    "save": "Save",
+    "addProfile": "Add profile",
+    "problems": {
+      "noName": "Give the profile a name.",
+      "taken": "There's a profile called {{name}} already.",
+      "author": "Credit goes to a name made of letters, numbers and single dashes.",
+      "full_one": "There can be {{count}} profile at most. Delete one to add this one.",
+      "full_other": "There can be {{count}} profiles at most. Delete one to add this one."
+    }
+  },
+  "about": {
+    "intro": "Your best memories wear the same plain folder as your old paperwork. FolderSkin gives every folder a look that fits what's inside: a golden-hour film still for summer photos, a vintage travel poster for a trip, pop art for a video project, soft pastels for a birthday.",
+    "points": {
+      "skins": "Skins from free community packs, from your own photos, or designed by you.",
+      "ai": "Describe a style and AI paints it, with your own key or free with the Local Model.",
+      "fileBrowser": {
+        "macos": "Skins show up right in Finder, and any folder gets its own icon back in one click.",
+        "windows": "Skins show up right in Explorer, and any folder gets its own icon back in one click.",
+        "linux": "Skins show up right in Files, and any folder gets its own icon back in one click."
+      },
+      "free": "Free and open source. No account, no tracking."
+    },
+    "updates": "Updates",
+    "newer": "Newer versions",
+    "newerNote": "They come from FolderSkin's releases on GitHub, and install when you say so.",
+    "newerFind": "update updates release version",
+    "links": "Links",
+    "sourceCode": "Source code",
+    "releases": "Releases"
+  }
+}

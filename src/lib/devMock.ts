@@ -901,6 +901,8 @@ export const mockApi = {
     return { folder: `${req.folder}/${mockNewId(req.name)}`, scaled: mockScaled(req.skinIds) };
   },
   setWindowTheme: async () => {},
+  // The browser has no menu bar and no system panels to put in another language.
+  setLanguage: async (_language: string, _menu: Record<string, string>, _pin: boolean): Promise<void> => {},
   aiCatalogue: async (): Promise<AiCatalogue> => {
     // `?slowcatalogue`: as the app's first catalogue of a session, which asks the local runtime
     // whether it starts and takes a couple of seconds.

@@ -5,6 +5,8 @@ import { frame } from "../composer/body";
 import type { FolderStyle, Parts } from "../composer/parts";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
 import type { AiEvent } from "../state/chats";
+import { t } from "../i18n";
+import { explain } from "./errors";
 
 /** A skin in the library: a picture the user added, an AI result, or one from a community pack. All are saved on disk. */
 export type Skin = {
@@ -402,6 +404,8 @@ const tauriApi = {
 
   /** Native window appearance; `null` follows the system. Keeps the macOS sidebar material in step with the app theme. */
   setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
+  /** Puts the menu bar in `language` with `menu`'s words; with `pin`, macOS's own panels follow it from the next launch (language.rs). */
+  setLanguage: (language: string, menu: Record<string, string>, pin: boolean) => invoke<void>("set_language", { language, menu, pin }),
 
   // ---- AI assistant (bring your own key) ----
   aiCatalogue: () => invoke<AiCatalogue>("ai_catalogue"),
@@ -486,11 +490,14 @@ const tauriApi = {
  */
 export const api: typeof tauriApi = import.meta.env.DEV && !isTauri() ? mockApi : tauriApi;
 
-/** Turns any thrown value from `invoke` into a sentence the drop zone can show. */
+/**
+ * Turns any thrown value from `invoke` into a sentence the drop zone can show, in the language on
+ * show when it's one the app knows (lib/errors.ts).
+ */
 export function errorMessage(err: unknown): string {
-  if (typeof err === "string") return err;
-  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return explain(err);
+  if (err instanceof Error) return explain(err.message);
   // A structured error (the AI commands' {code, message}) says itself in its message.
-  if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") return (err as { message: string }).message;
-  return "something went wrong";
+  if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") return explain((err as { message: string }).message);
+  return t("errors.somethingWrong");
 }

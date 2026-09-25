@@ -1,0 +1,55 @@
+{
+  "cancel": "Cancel",
+  "close": "close",
+  "twoSentences": "{{first}} {{second}}",
+  "official": "Official",
+  "tags": {
+    "remove": "remove the tag {{tag}}",
+    "add": "Add a tag",
+    "addAnother": "Add another",
+    "most_one": "{{count}} tag is the most.",
+    "most_other": "{{count}} tags is the most."
+  },
+  "window": {
+    "label": "window",
+    "minimise": "Minimise",
+    "maximise": "Maximise",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "size": {
+    "bytes_one": "{{count}} byte",
+    "bytes_other": "{{count}} bytes",
+    "kb": "{{value}} KB",
+    "mb": "{{value}} MB",
+    "gb": "{{value}} GB",
+    "tb": "{{value}} TB"
+  },
+  "place": {
+    "macos": "your Mac",
+    "windows": "your PC",
+    "linux": "your computer"
+  },
+  "showIn": {
+    "macos": "Show in Finder",
+    "windows": "Show in Explorer",
+    "linux": "Show in Files"
+  },
+  "dialog": {
+    "chooseFolder": "Choose a folder",
+    "choosePicture": "Choose a picture",
+    "pictures": "Pictures"
+  },
+  "about": {
+    "licence": "Free and open source · GPL-3.0",
+    "tagline": "Give any folder a skin.",
+    "reportIssues": "Report issues",
+    "star": "Star project"
+  },
+  "licences": {
+    "option": "{{label}}: {{note}}",
+    "cc0": "Anyone can use them for anything.",
+    "ccBy": "Anyone can use them, and credits you.",
+    "mit": "The same licence as FolderSkin. Your name stays with them."
+  }
+}

@@ -16,7 +16,21 @@ export default defineConfig({
     host: host || false,
     watch: { ignored: ["**/src-tauri/**", "**/crates/**", "**/target/**"] },
   },
-  build: { target: ["es2022", "safari15"], minify: true, sourcemap: false },
+  build: {
+    target: ["es2022", "safari15"],
+    minify: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // English is in the first chunk. Every other language is one chunk of its own, all its
+        // namespaces together, loaded the first time it's shown (src/i18n/index.ts).
+        manualChunks(id) {
+          const locale = /\/src\/locales\/([^/]+)\/[^/]+\.json$/.exec(id.replace(/\\/g, "/"))?.[1];
+          return locale && locale !== "en" ? `locale-${locale}` : undefined;
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

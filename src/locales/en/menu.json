@@ -1,0 +1,23 @@
+{
+  "about": "About FolderSkin",
+  "services": "Services",
+  "hide": "Hide FolderSkin",
+  "hideOthers": "Hide Others",
+  "showAll": "Show All",
+  "quit": "Quit FolderSkin",
+  "file": "File",
+  "closeWindow": "Close Window",
+  "edit": "Edit",
+  "undo": "Undo",
+  "redo": "Redo",
+  "cut": "Cut",
+  "copy": "Copy",
+  "paste": "Paste",
+  "selectAll": "Select All",
+  "view": "View",
+  "fullScreen": "Enter Full Screen",
+  "window": "Window",
+  "minimize": "Minimize",
+  "zoom": "Zoom",
+  "help": "Help"
+}

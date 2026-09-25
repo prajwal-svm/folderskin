@@ -46,7 +46,15 @@
     "macOS": {
       "minimumSystemVersion": "12.0",
       "hardenedRuntime": true,
-      "entitlements": "entitlements.plist"
+      "entitlements": "entitlements.plist",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "lproj/en.lproj/InfoPlist.strings",
+        "Resources/zh-Hans.lproj/InfoPlist.strings": "lproj/zh-Hans.lproj/InfoPlist.strings",
+        "Resources/ja.lproj/InfoPlist.strings": "lproj/ja.lproj/InfoPlist.strings",
+        "Resources/ko.lproj/InfoPlist.strings": "lproj/ko.lproj/InfoPlist.strings",
+        "Resources/fr.lproj/InfoPlist.strings": "lproj/fr.lproj/InfoPlist.strings",
+        "Resources/es.lproj/InfoPlist.strings": "lproj/es.lproj/InfoPlist.strings"
+      }
     },
     "windows": {
       "nsis": {

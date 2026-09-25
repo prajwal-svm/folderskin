@@ -1,0 +1,9 @@
+{
+  "sizes": {
+    "tip": {
+      "macos": "How it looks in Finder at 64, 32 and 16 points",
+      "windows": "How it looks in Explorer at 64, 32 and 16 points",
+      "linux": "How it looks in Files at 64, 32 and 16 points"
+    }
+  }
+}

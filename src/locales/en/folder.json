@@ -1,0 +1,158 @@
+{
+  "run": {
+    "folders_one": "{{count}} folder",
+    "folders_other": "{{count}} folders",
+    "tooMany": {
+      "folders": "Too many folders (over {{max}})",
+      "subfolders": "Too many subfolders (over {{max}})"
+    },
+    "applyTo_one": "Apply to {{count}} folder",
+    "applyTo_other": "Apply to {{count}} folders",
+    "theSkin": "the skin",
+    "couldntChange_one": "{{count}} couldn't be changed.",
+    "couldntChange_other": "{{count}} couldn't be changed.",
+    "stoppedBeforeAny": "Stopped before any folder was changed",
+    "stoppedAfter_one": "Stopped after {{count}} folder",
+    "stoppedAfter_other": "Stopped after {{count}} folders",
+    "thoseWear_one": "That one wears {{skin}}.",
+    "thoseWear_other": "Those {{count}} wear {{skin}}.",
+    "notReached_one": "{{count}} wasn't reached.",
+    "notReached_other": "{{count}} weren't reached.",
+    "allWear_one": "{{count}} folder now wears {{skin}}",
+    "allWear_other": "{{count}} folders now wear {{skin}}",
+    "someWear_one": "{{count}} of {{total}} folders now wears {{skin}}",
+    "someWear_other": "{{count}} of {{total}} folders now wear {{skin}}",
+    "thoseBack_one": "That one has the default icon back.",
+    "thoseBack_other": "Those {{count}} have the default icon back.",
+    "noIconOfTheirOwn_one": "{{count}} folder had no icon of its own.",
+    "noIconOfTheirOwn_other": "{{count}} folders had no icon of their own.",
+    "noCustomIcon": "No folder here has a custom icon",
+    "allBack_one": "{{count}} folder has the default icon back",
+    "allBack_other": "{{count}} folders have the default icon back",
+    "someBack_one": "{{count}} of {{total}} folders has the default icon back",
+    "someBack_other": "{{count}} of {{total}} folders have the default icon back",
+    "toastAllWear_one": "{{folder}} and {{count}} folder inside it now wear {{skin}}",
+    "toastAllWear_other": "{{folder}} and {{count}} folders inside it now wear {{skin}}",
+    "toast": "{{title}}. {{detail}}",
+    "carryOn": "Carry on",
+    "seeWhich": "See which"
+  },
+  "look": {
+    "label": "which folder",
+    "appLabel": "which folder skins go on",
+    "name": {
+      "mac": "Mac",
+      "windows": "Windows"
+    },
+    "tip": {
+      "mac": "Switch to Mac folder as base",
+      "windows": "Switch to Windows folder as base"
+    },
+    "redrawing": {
+      "mac": "Drawing your skins on the Mac's folder",
+      "windows": "Drawing your skins on Windows' folder"
+    }
+  },
+  "stage": {
+    "label": "folder",
+    "pickHint": "Pick a skin to try it on",
+    "chooseOtherLabel": "choose a different folder than {{name}}",
+    "chooseFromLabel": "choose a folder from {{place}}",
+    "chooseOther": "Choose a different folder",
+    "backTip": "Or press Escape",
+    "back": "Back to the empty folder",
+    "drag": {
+      "imageTitle": "Let go to add this picture",
+      "folderTitle": "Let go to pick this folder",
+      "imageNamed": "{{name}} becomes a skin in Yours.",
+      "image": "It becomes a skin in Yours.",
+      "folderNamed": "{{name}} will show up here, ready for a skin.",
+      "folder": "It will show up here, ready for a skin."
+    },
+    "empty": {
+      "titleWithSkin": "Now drop a folder",
+      "title": "Drop a folder here",
+      "subWithSkin": "{{name}} is ready. Drop any folder here, or click to pick one from {{place}}.",
+      "sub": "Or click to pick one from {{place}}."
+    },
+    "applied": "Applied",
+    "tryingOn": "Trying on {{name}}",
+    "currentIcon": "Current icon",
+    "tryOn": "Try on {{name}}",
+    "removing": "Removing",
+    "removeIcons": "Remove custom icons",
+    "removeIcon": "Remove custom icon",
+    "revertThese_one": "Revert this {{count}}",
+    "revertThese_other": "Revert these {{count}}",
+    "revertAll_one": "Revert {{count}}",
+    "revertAll_other": "Revert all {{count}}",
+    "revert": "Revert",
+    "applying": "Applying",
+    "applySkin": "Apply skin",
+    "reverting": "Reverting",
+    "includeSubfolders": "Include subfolders",
+    "inside_one": "{{count}} folder inside",
+    "inside_other": "{{count}} folders inside",
+    "stopping": "Stopping",
+    "doneOf": "{{done}} of {{total}}",
+    "startingWith": "Starting with {{name}}",
+    "finishingThis": "Finishing this folder",
+    "stop": "Stop",
+    "hideSummaryLabel": "hide this summary",
+    "hideSummary": "Hide",
+    "which_one": "Which one",
+    "which_other": "Which {{count}}",
+    "carryOnWith_one": "Carry on with the other {{count}}",
+    "carryOnWith_other": "Carry on with the other {{count}}",
+    "tryAgain_one": "Try it again",
+    "tryAgain_other": "Try them again",
+    "theFolder": "the folder",
+    "status": {
+      "doneStay": "Folders already done stay that way.",
+      "catchesUp": {
+        "macos": "Finder catches up as it goes.",
+        "windows": "Explorer catches up as it goes.",
+        "linux": "Files catches up as it goes."
+      },
+      "puttingIconsBack": "Putting the default icons back",
+      "skipped": "Hidden folders and app bundles are skipped.",
+      "picturesToo": "Pictures work too. Drop one to turn it into a skin.",
+      "ownIcon": "It has an icon of its own.",
+      "nothingChanges": "Nothing changes on disk until you apply.",
+      "writing": "Writing {{skin}} into {{folder}}",
+      "catchUp": {
+        "macos": "Finder can take a second to catch up.",
+        "windows": "Explorer can take a second to catch up.",
+        "linux": "Files can take a second to catch up."
+      },
+      "puttingIconBack": "Putting the default icon back"
+    },
+    "pickHintChat": "Preview a picture from the chat"
+  },
+  "toast": {
+    "defaultBack": "{{name}} has its default icon back"
+  },
+  "errors": {
+    "switchLook": "Couldn't switch the folder: {{reason}}",
+    "notFolderOrPicture": "That isn't a folder or a picture.",
+    "chooseFirst": "Choose a folder first",
+    "apply": "Couldn't apply the skin: {{reason}}",
+    "noneChanged": "no folder could be changed",
+    "revertTree": "Couldn't put the default icons back: {{reason}}",
+    "revert": "Couldn't put the default icon back: {{reason}}",
+    "reveal": "Couldn't open it: {{reason}}"
+  },
+  "ask": {
+    "applyTitle_one": "Apply {{skin}} to {{count}} folder?",
+    "applyTitle_other": "Apply {{skin}} to {{count}} folders?",
+    "thisSkin": "this skin",
+    "removeTitle_one": "Remove the custom icons from {{count}} folder?",
+    "removeTitle_other": "Remove the custom icons from {{count}} folders?",
+    "applyText_one": "{{folder}} and the {{count}} folder inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon. Revert takes them all off again.",
+    "applyText_other": "{{folder}} and the {{count}} folders inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon. Revert takes them all off again.",
+    "applyTextSized_one": "{{folder}} and the {{count}} folder inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon, about {{size}}, so about {{total}} in all. Revert takes them all off again.",
+    "applyTextSized_other": "{{folder}} and the {{count}} folders inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon, about {{size}}, so about {{total}} in all. Revert takes them all off again.",
+    "removeText": "{{folder}} and every folder inside it go back to the default folder icon, including icons they were given outside FolderSkin. Folders without one are left as they are.",
+    "removeAction": "Remove the icons"
+  }
+}

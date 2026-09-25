@@ -1,0 +1,146 @@
+{
+  "label": "library",
+  "resize": {
+    "sidebar": "sidebar width",
+    "composer": "layers and settings width",
+    "folder": "folder panel width"
+  },
+  "tabs": {
+    "all": "All"
+  },
+  "toast": {
+    "importedFolder": "{{name}} is in Yours, background removed",
+    "importedArtwork": "{{name}} is in Yours, wrapped onto a folder",
+    "deleted": "Deleted {{name}}"
+  },
+  "errors": {
+    "delete": "Couldn't delete {{name}}: {{reason}}",
+    "save": "Couldn't save {{name}}: {{reason}}"
+  },
+  "empty": {
+    "loadFailed": "The skins didn't load",
+    "noMatchFiltered": "Nothing matches \"{{query}}\" with these filters",
+    "noneFiltered": "No skins match these filters",
+    "filteredText": "Take a filter or two off, or clear them all.",
+    "clearFilters": "Clear filters",
+    "clearSearch": "Clear search",
+    "noMatch": "Nothing matches \"{{query}}\"",
+    "noMatchText": "Try another word, or look in All.",
+    "noFaves": "No favourites yet",
+    "noFavesText": "Tap the star on any skin and it will wait for you here.",
+    "noSkins": "No skins yet",
+    "noSkinsText": "Add a free pack from Community, bring a picture of your own, or have AI paint one.",
+    "browsePacks": "Browse packs"
+  },
+  "delete": {
+    "title": "Delete \"{{name}}\"?",
+    "text": "This removes it from your library for good. Folders that already use it keep their icon.",
+    "action": "Delete"
+  },
+  "addPicture": "Add a picture",
+  "toolbar": {
+    "tabsLabel": "filter skins by tag",
+    "search": "Search skins",
+    "searchLabel": "search skins"
+  },
+  "tile": {
+    "madeWithAi": "{{name}} (made with AI)",
+    "yours": "{{name}} (yours)",
+    "faveLabel": "add {{name}} to favourites",
+    "unfaveLabel": "remove {{name}} from favourites",
+    "fave": "Add to favourites",
+    "unfave": "Remove from favourites",
+    "optionsLabel": "options for {{name}}",
+    "optionsYours": "Rename, tags and details",
+    "options": "Tags and details"
+  },
+  "menu": {
+    "label": "{{name}}: name, tags and details",
+    "name": "Name",
+    "tags": "Tags",
+    "addTag": "add a tag",
+    "editDesign": "Edit design",
+    "remix": "Remix in the composer",
+    "share": "Share with community"
+  },
+  "facts": {
+    "madeWith": "Made with",
+    "prompt": "Prompt",
+    "shape": "Shape",
+    "made": "Made",
+    "pack": "Pack",
+    "sharedBy": "Shared by",
+    "licence": "Licence",
+    "added": "Added",
+    "from": "From",
+    "wholeFolder": "Whole folder",
+    "artOnFolder": "Art on FolderSkin's folder",
+    "finishedFolder": "Finished folder",
+    "pictureOnFolder": "Picture on FolderSkin's folder",
+    "designedHere": "Designed by you here",
+    "pictureAdded": "A picture you added",
+    "finishedCutOut": "Finished folder, background removed",
+    "comesWith": "Comes with FolderSkin"
+  },
+  "sort": {
+    "newest": "Newest",
+    "oldest": "Oldest",
+    "az": "A–Z",
+    "za": "Z–A"
+  },
+  "colours": {
+    "red": "Red",
+    "orange": "Orange",
+    "yellow": "Yellow",
+    "green": "Green",
+    "teal": "Teal",
+    "blue": "Blue",
+    "purple": "Purple",
+    "pink": "Pink",
+    "brown": "Brown",
+    "black": "Black",
+    "grey": "Grey",
+    "white": "White"
+  },
+  "filters": {
+    "title": "Filters",
+    "buttonOn": "Filters, {{count}} on",
+    "label": "filter and sort skins",
+    "matching_one": "{{matching}} of {{count}} skin",
+    "matching_other": "{{matching}} of {{count}} skins",
+    "skins_one": "{{count}} skin",
+    "skins_other": "{{count}} skins",
+    "clearAll": "Clear all",
+    "sortBy": "Sort by",
+    "sortByLabel": "sort by",
+    "favouritesOnly": "Favourites only",
+    "readingColours": "still reading colours",
+    "allAlike": "These skins are all alike so far. Add another pack or a picture of your own and there'll be more to filter by.",
+    "swatchLabel": "{{label}}, {{count}}",
+    "swatchTip": "{{label}} · {{count}}",
+    "light": "Light",
+    "dark": "Dark",
+    "sources": {
+      "community": "Community packs",
+      "import": "Your pictures",
+      "ai": "Made with AI",
+      "composer": "Your designs"
+    },
+    "added": {
+      "today": "Today",
+      "week": "Past week",
+      "month": "Past month",
+      "older": "Older"
+    },
+    "facets": {
+      "source": "From",
+      "pack": "Pack",
+      "colour": "Colour",
+      "tone": "Brightness",
+      "added": "Added",
+      "model": "Made with",
+      "author": "Author",
+      "license": "Licence"
+    }
+  }
+}

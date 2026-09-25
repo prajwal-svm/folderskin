@@ -627,6 +627,73 @@ html[data-os="windows"] .cmp-side-head {
   }
 }
 
+/* ---------- the language menu ---------- */
+
+/* The row is a nav row like Dark mode's; open, it's tinted as if pointed at. */
+.nav-lang.is-open {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.nav-lang.is-open .nav-icon {
+  color: var(--accent-ink);
+}
+
+/* Above its row in the open sidebar (LanguageMenu.tsx places it), beside the icon on the rail. */
+.lang-pop {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in var(--t-base) var(--ease-spring) both;
+  transform-origin: left bottom;
+}
+
+/* Each language in its own words. Focus and pointing tint the row; the one on show is ticked. */
+.lang-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: var(--ink-2);
+  font-weight: 650;
+  font-size: 13.5px;
+  cursor: default;
+  transition:
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+}
+
+.lang-option.is-active {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.lang-option[aria-checked="true"] {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.lang-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lang-option svg {
+  flex: none;
+  color: var(--accent-ink);
+}
+
 /* ---------- titles of views inside the library island (community) ---------- */
 
 .view-title {

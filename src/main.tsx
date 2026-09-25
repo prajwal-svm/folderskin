@@ -9,6 +9,7 @@ import { watchAwake } from "./lib/awake";
 import { applyTheme, loadThemePref, resolveTheme } from "./state/theme";
 import { applyPrefs, loadPrefs, usePrefs } from "./state/prefs";
 import { startLook } from "./state/look";
+import { startLanguage } from "./state/language";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
@@ -41,16 +42,20 @@ watchAwake();
 // No right-click menu or browser shortcuts in a release build (lib/lockdown.ts).
 if (import.meta.env.PROD) lockDown();
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    {/* `m` components get only the features loaded here. `domMin` is animation without
-        gestures: the icons are driven by controls, not by props like `whileHover`. `strict`
-        throws if a full `motion` component slips in and drags the whole library along. */}
-    <LazyMotion features={domMin} strict>
-      <Motion>
-        <Root />
-        <TipLayer />
-      </Motion>
-    </LazyMotion>
-  </React.StrictMode>,
+// The words are ready before anything is drawn, so a French launch never flashes English first
+// (state/language.ts).
+void startLanguage().then(() =>
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      {/* `m` components get only the features loaded here. `domMin` is animation without
+          gestures: the icons are driven by controls, not by props like `whileHover`. `strict`
+          throws if a full `motion` component slips in and drags the whole library along. */}
+      <LazyMotion features={domMin} strict>
+        <Motion>
+          <Root />
+          <TipLayer />
+        </Motion>
+      </LazyMotion>
+    </React.StrictMode>,
+  ),
 );

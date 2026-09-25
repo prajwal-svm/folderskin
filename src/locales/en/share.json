@@ -1,0 +1,162 @@
+{
+  "title": "Share a pack",
+  "sub": "Packs are free. Anyone can add one to FolderSkin once a person has reviewed it.",
+  "done": "Done",
+  "saving": "Saving",
+  "saveFolder": "Save a folder",
+  "sending": "Sending",
+  "send": "Send for review",
+  "verifyAndSend": "Verify and send",
+  "sources": {
+    "own": "I made them myself",
+    "ai": "I made them with an AI model",
+    "mixed": "Some of each",
+    "licensed": "Someone else's, under an open licence"
+  },
+  "progress": {
+    "preparing": "Getting the pictures ready",
+    "encoding": "Getting the pictures ready ({{done}} of {{total}})",
+    "checking": "Checking the pack with FolderSkin",
+    "uploading": "Sending pictures ({{done}} of {{total}})",
+    "finishing": "Putting it in the review queue",
+    "retryIn_one": "Trying again in {{count}} second",
+    "retryIn_other": "Trying again in {{count}} seconds",
+    "retry": "Trying again"
+  },
+  "scaled": {
+    "picture": "{{name}} ({{side}} px)",
+    "more_one": "{{count}} more",
+    "more_other": "{{count}} more",
+    "note_one": "{{names}} is smaller than 1024 px: kept lossless, it was over the {{max}} MB a picture can be at full size.",
+    "note_other": "{{names}} are smaller than 1024 px: kept lossless, they were over the {{max}} MB a picture can be at full size."
+  },
+  "status": {
+    "uploading": "Not finished sending",
+    "inReview": "Waiting for review",
+    "approved": "Approved",
+    "rejected": "Turned down",
+    "withdrawn": "Withdrawn",
+    "takenDown": "Taken down",
+    "expired": "Never finished sending"
+  },
+  "problems": {
+    "noSkins": "No skins of your own yet",
+    "tickOne": "Tick at least one skin",
+    "tooMany_one": "{{count}} skin is over the {{max}} a pack holds",
+    "tooMany_other": "{{count}} skins is over the {{max}} a pack holds",
+    "noName": "Give the pack a name",
+    "noTag": "Add at least one tag",
+    "noHandle": "Choose the name your packs show",
+    "checking": "Checking whether it's available",
+    "unavailable": "Not available right now",
+    "noSource": "Say where the pictures came from",
+    "agree": "Agree to the terms"
+  },
+  "dialogs": {
+    "saveWhere": "Choose where to save the pack",
+    "saveKey": "Save your recovery file",
+    "chooseKey": "Choose your recovery file",
+    "keyFile": "Recovery file"
+  },
+  "key": {
+    "saved": "Saved. Keep it private: anyone who has it can share as you.",
+    "saveNote": "<link>Save a recovery file</link> to share under this name from another computer.",
+    "use": "Use a recovery file"
+  },
+  "sent": {
+    "title": "Your pack is waiting for review",
+    "sub": "{{name}} is in FolderSkin's review queue.",
+    "seeSubmissions": "See your submissions",
+    "note": "A person looks at every pack before anyone else can see it. Once it's approved it joins the Community view for everyone, credited to <b>{{handle}}</b>. If it's turned down, Your submissions says why."
+  },
+  "verify": {
+    "title": "Verify this computer",
+    "sub": "So only people, not scripts, can send packs for review.",
+    "back": "Back",
+    "lead": "A page from FolderSkin's sharing service has opened in your browser. Once you're through its quick check, FolderSkin carries on by itself.",
+    "creditedTo": "Your packs will be credited to <b>{{handle}}</b>. FolderSkin asks this once per computer.",
+    "openAgain": "Open the page again",
+    "waiting": "Waiting for the check in your browser",
+    "gettingReady": "Getting the page ready"
+  },
+  "subs": {
+    "title": "Your submissions",
+    "sub": "Packs you've shared, and where each one is.",
+    "back": "Back to sharing",
+    "label": "your submissions",
+    "asking": "Asking FolderSkin's sharing service",
+    "none": "Nothing yet. Packs you share show up here.",
+    "pictures_one": "{{count}} picture",
+    "pictures_other": "{{count}} pictures",
+    "sent": "sent {{date}}",
+    "publishedAs": "published as {{id}}",
+    "joinsSoon": "joins the community packs soon",
+    "rule": "Rule {{term}}",
+    "quoted": "“{{note}}”",
+    "takingOut": "It was in the community packs, so FolderSkin's maintainer has been told to take it out. That can take a few days.",
+    "keep": "Keep it",
+    "withdrawIt": "Withdraw it",
+    "withdraw": {
+      "button": "Withdraw",
+      "queued": "It leaves the review queue.",
+      "published": "It leaves the community for everyone once FolderSkin's maintainer has taken it out, usually within a few days. Copies people already have stay theirs.",
+      "approved": "It won't join the community packs."
+    }
+  },
+  "saved": {
+    "title": "Your pack is ready",
+    "sub": "Saved as the folder {{folder}}.",
+    "note": "It holds the pictures and the pack.json that describes them, and nothing was sent anywhere. Anyone can add it to FolderSkin with Add from a folder in Community.",
+    "howPacksWork": "How packs work"
+  },
+  "form": {
+    "skins": "Skins",
+    "chosenOf": "{{chosen}} of {{total}}",
+    "clear": "Clear",
+    "selectAll": "Select all",
+    "whichLabel": "which skins to show",
+    "allOfYours": "All of yours ({{count}})",
+    "tagged": "Tagged {{tag}} ({{count}})",
+    "nothingYet": "Nothing here yet.",
+    "packName": "Pack name",
+    "packNamePlaceholder": "Neon nights",
+    "tags": "Tags",
+    "tagsLabel": "add a tag for the pack",
+    "tagsNote": "The first one names the pack in everyone's filters.",
+    "profile": "Profile",
+    "profileLabel": "profile",
+    "creditedTo": "credited to {{author}}",
+    "licence": "Licence",
+    "licenceLabel": "licence",
+    "thisPackOnly": "For this pack only: the {{profile}} profile stays {{licence}}.",
+    "author": "Author",
+    "checking": "Checking whether sharing is available",
+    "unavailable": "Sharing isn't available right now.",
+    "verified": "Verified on this computer",
+    "handlePlaceholder": "your-name",
+    "handleLabel": "the name your packs show",
+    "handleNote": "The name your packs show: letters, digits and dashes.",
+    "confirmOnce": "You'll confirm it in your browser once.",
+    "otherCredit": "The {{profile}} profile credits {{author}}. Packs sent from this computer are credited to the name it was verified under.",
+    "pictures": "The pictures",
+    "picturesLabel": "the pictures",
+    "picturesPlaceholder": "Where did they come from?",
+    "credits": "Credits",
+    "creditsPlaceholder": "Base photo by Jane Doe, CC0"
+  },
+  "how": {
+    "label": "how sharing works",
+    "reviewed": "<b>Reviewed first.</b> A person at FolderSkin looks at every pack. Nothing is public until it's approved.",
+    "public": "<b>Public once approved.</b> The pictures, the pack's name and tags, and your name go to everyone under the licence you chose, and a licence can't be taken back from copies people already have.",
+    "noAccount": "<b>No account.</b> The service keeps this computer's key and your name. Your network address is only ever kept scrambled.",
+    "withdraw": "<b>Yours to withdraw.</b> Your submissions shows where each pack is, says why if one is turned down, and takes one back."
+  },
+  "terms": {
+    "yours": "The pictures are yours, or CC0 and you've checked. Not taken from anywhere.",
+    "nothingHarmful": "Nothing sexual, hateful, gory, or about self-harm. Nothing involving a child.",
+    "nobodyElse": "Nobody else's logo, characters or likeness without their say-so.",
+    "maintainer": "A maintainer can decline a pack, or remove it later.",
+    "agree": "I've read the pack terms and this pack follows them.",
+    "read": "Read them"
+  }
+}
