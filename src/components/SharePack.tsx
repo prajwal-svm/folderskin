@@ -4,7 +4,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type SharedPack, type ShareProgress, type ShareStatus, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { cleanName } from "../lib/names";
-import { creditDefaultProfile, LICENSES, licenseLabel, MAX_PACK_SKINS, PACK_TERMS_URL, PACK_TERMS_VERSION, PACKS_GUIDE_URL } from "../lib/packs";
+import { creditDefaultProfile, LICENSES, licenseLabel, MAX_PACK_SKINS, PACK_TERMS_URL, PACKS_GUIDE_URL } from "../lib/packs";
 import { defaultProfile, loadProfiles, type LicenceProfile, type LicenseId } from "../lib/profiles";
 import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, shareProgressLabel, type PictureSource } from "../lib/share";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
@@ -102,7 +102,7 @@ export function SharePack({
     void api
       .shareStatus()
       .then((status) => live && setDirect(status))
-      .catch((e) => live && setDirect({ available: false, reason: errorMessage(e), verified: false, handle: null, has_key: false }));
+      .catch((e) => live && setDirect({ available: false, reason: errorMessage(e), verified: false, handle: null, has_key: false, terms_version: null }));
     return () => {
       live = false;
     };
@@ -113,6 +113,8 @@ export function SharePack({
   const allShown = shown.length > 0 && shown.every((s) => picked.includes(s.id));
   const clean = cleanName(name);
   const verified = direct?.verified === true && Boolean(direct.handle);
+  /** The version of the pack terms it goes out under: the service's, while it can be used. */
+  const terms = direct?.available ? direct.terms_version : null;
   /** Who the pack is credited to: the name this computer was verified under, or the one typed. */
   const author = verified && direct?.handle ? direct.handle : handle;
   // Short enough for the one line beside the buttons: the field itself says the rest.
@@ -132,7 +134,7 @@ export function SharePack({
   /** What stops the pack being sent, in the order it's worth fixing. */
   const sendProblem =
     packProblem ??
-    (!direct ? "Checking whether it's available" : !direct.available ? "Not available right now" : !source ? "Say where the pictures came from" : nameProblem) ??
+    (!direct ? "Checking whether it's available" : terms === null ? "Not available right now" : !source ? "Say where the pictures came from" : nameProblem) ??
     // The thing FolderSkin can't check for them, which is why they are asked rather than told.
     (!mine ? "Agree to the terms" : null);
   /** What stops it being saved as a folder: the pack and a name to credit, nothing about the service. */
@@ -181,13 +183,14 @@ export function SharePack({
     }
   };
 
-  const send = useCallback(async () => {
+  /** Sends the pack, recorded as agreed under version `termsVersion` of the pack terms. */
+  const send = useCallback(async (termsVersion: number) => {
     setBusy(true);
     setError(null);
     setSending({ stage: "preparing" });
     try {
       const out = await api.shareSubmit(
-        { name: clean, license, tags: packTags, skinIds: chosen.map((s) => s.id), notes, source, termsVersion: PACK_TERMS_VERSION },
+        { name: clean, license, tags: packTags, skinIds: chosen.map((s) => s.id), notes, source, termsVersion },
         setSending,
       );
       setSent(out);
@@ -207,7 +210,7 @@ export function SharePack({
     setDirect(status);
     setVerifying(false);
     if (status.handle) saveHandle(status.handle);
-    if (status.verified) void sendRef.current();
+    if (status.verified && status.available && status.terms_version !== null) void sendRef.current(status.terms_version);
   }, []);
 
   const verifyAndSend = () => {
@@ -359,7 +362,7 @@ export function SharePack({
             className="btn btn-primary"
             disabled={Boolean(sendProblem) || busy}
             aria-busy={busy}
-            onClick={() => (verified ? void send() : verifyAndSend())}
+            onClick={() => (verified && terms !== null ? void send(terms) : verifyAndSend())}
           >
             {busy ? <LoaderIcon /> : <EarthIcon size={15} />}
             {busy ? "Sending" : verified ? "Send for review" : "Verify and send"}

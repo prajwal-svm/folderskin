@@ -155,6 +155,10 @@ pub struct ShareStatus {
     pub handle: Option<String>,
     /// Whether this computer has a key yet, which is what a recovery file saves.
     pub has_key: bool,
+    /// The version of the pack terms packs are sent under now, as the service says: what a pack
+    /// records the person agreed to, so it's taken from the service rather than built in, and a
+    /// new version of the terms needs no new FolderSkin. `None` while sharing can't be used.
+    pub terms_version: Option<u32>,
 }
 
 impl ShareStatus {
@@ -165,44 +169,62 @@ impl ShareStatus {
             verified: false,
             handle: None,
             has_key,
+            terms_version: None,
         }
     }
 }
 
 async fn status_of(keys: &Keys) -> Result<ShareStatus, String> {
-    if api_base().is_none() {
+    status_at(keys, api_base().as_deref()).await
+}
+
+/// [`status_of`] with the service at `base`, or with none. What the service tells anyone
+/// (`/v1/status`: whether it takes packs, and the version of the pack terms they're sent under)
+/// is asked every time; who this computer is (`/v1/me`) only once it has a key, since opening
+/// the dialog shouldn't make one. The two are asked together.
+async fn status_at(keys: &Keys, base: Option<&str>) -> Result<ShareStatus, String> {
+    let Some(base) = base else {
         return Ok(ShareStatus::unavailable(NOT_YET, false));
-    }
+    };
     let saved = saved_key(keys)?;
     let has_key = saved.is_some();
-    let Some(key) = saved else {
-        // Asked before there is a key, and without making one: opening the dialog shouldn't.
-        let throwaway = DeviceKey::generate().map_err(|e| e.to_string())?;
-        return Ok(match client(throwaway)?.status().await {
-            Ok(status) if status.accepting => ShareStatus {
-                available: true,
-                reason: None,
-                verified: false,
-                handle: None,
-                has_key,
-            },
-            Ok(status) => ShareStatus::unavailable(&paused(&status.message), has_key),
-            Err(e) => ShareStatus::unavailable(&said(e), has_key),
-        });
+    let key = match saved {
+        Some(key) => key,
+        // Signs nothing: the status is public.
+        None => DeviceKey::generate().map_err(|e| e.to_string())?,
     };
-    Ok(match client(key)?.me().await {
-        Ok(me) if me.tier.as_deref() == Some("banned") => ShareStatus::unavailable(
+    let client = Client::new(base, key).map_err(|e| e.to_string())?;
+    let (status, me) = if has_key {
+        let (status, me) = futures_util::future::join(client.status(), client.me()).await;
+        (status, Some(me))
+    } else {
+        (client.status().await, None)
+    };
+    let status = match status {
+        Ok(status) => status,
+        Err(e) => return Ok(ShareStatus::unavailable(&said(e), has_key)),
+    };
+    let me = match me.transpose() {
+        Ok(me) => me,
+        Err(e) => return Ok(ShareStatus::unavailable(&said(e), has_key)),
+    };
+    if me
+        .as_ref()
+        .is_some_and(|me| me.tier.as_deref() == Some("banned"))
+    {
+        return Ok(ShareStatus::unavailable(
             "This computer can't share packs any more, because a pack from it broke the pack terms.",
             has_key,
-        ),
-        Ok(me) => ShareStatus {
-            available: me.accepting,
-            reason: (!me.accepting).then(|| paused("")),
-            verified: me.verified,
-            handle: me.handle,
-            has_key,
-        },
-        Err(e) => ShareStatus::unavailable(&said(e), has_key),
+        ));
+    }
+    let accepting = status.accepting && me.as_ref().is_none_or(|me| me.accepting);
+    Ok(ShareStatus {
+        available: accepting,
+        reason: (!accepting).then(|| paused(&status.message)),
+        verified: me.as_ref().is_some_and(|me| me.verified),
+        handle: me.and_then(|me| me.handle),
+        has_key,
+        terms_version: accepting.then_some(status.terms_version),
     })
 }
 
@@ -347,7 +369,8 @@ pub struct ShareRequest {
     pub notes: String,
     /// Where the pictures came from: own, ai, mixed or licensed.
     pub source: String,
-    /// The version of the pack terms they agreed to.
+    /// The version of the pack terms they agreed to: the one [`ShareStatus`] said the service
+    /// sends packs under.
     pub terms_version: u32,
 }
 
@@ -966,6 +989,60 @@ mod tests {
             serde_json::to_value(ShareProgress::Waiting { seconds: 4 }).unwrap(),
             serde_json::json!({"stage": "waiting", "seconds": 4})
         );
+    }
+
+    #[test]
+    fn a_pack_is_sent_under_the_terms_the_service_asks_for_now() {
+        use crate::community::tests::serve;
+        use tauri::async_runtime::block_on;
+        let answer = |body: &str| body.as_bytes().to_vec();
+        let (base, _) = serve(vec![
+            (
+                "/v1/status".into(),
+                answer(
+                    r#"{"accepting": true, "message": "", "terms_version": 2, "max_pictures": 50}"#,
+                ),
+                Duration::ZERO,
+            ),
+            (
+                "/v1/me".into(),
+                answer(
+                    r#"{"verified": true, "handle": "sunny-otter", "tier": "active", "accepting": true}"#,
+                ),
+                Duration::ZERO,
+            ),
+        ]);
+        let keys = Keys::default();
+        // Before there's a key, from what the service tells anyone, and no key is made.
+        let fresh = block_on(status_at(&keys, Some(&base))).unwrap();
+        assert!(fresh.available && !fresh.verified && !fresh.has_key);
+        assert_eq!(fresh.terms_version, Some(2));
+        assert!(!keys.has(SLOT));
+        // With one, who the computer is as well.
+        key(&keys).unwrap();
+        let known = block_on(status_at(&keys, Some(&base))).unwrap();
+        assert!(known.available && known.verified && known.has_key);
+        assert_eq!(known.handle.as_deref(), Some("sunny-otter"));
+        assert_eq!(known.terms_version, Some(2));
+
+        // Paused, the service's own words, and no terms to send anything under.
+        let (paused, _) = serve(vec![(
+            "/v1/status".into(),
+            answer(
+                r#"{"accepting": false, "message": "Sharing is paused for today.", "terms_version": 2}"#,
+            ),
+            Duration::ZERO,
+        )]);
+        let status = block_on(status_at(&Keys::default(), Some(&paused))).unwrap();
+        assert!(!status.available);
+        assert_eq!(
+            status.reason.as_deref(),
+            Some("Sharing is paused for today.")
+        );
+        assert_eq!(status.terms_version, None);
+        // No service at all.
+        let none = block_on(status_at(&Keys::default(), None)).unwrap();
+        assert_eq!(none, ShareStatus::unavailable(NOT_YET, false));
     }
 
     #[test]

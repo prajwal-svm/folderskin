@@ -252,15 +252,10 @@
   white-space: nowrap;
 }
 
+/* The name the pack is credited to: a FolderSkin name, with nowhere to go, so it isn't a link. */
 .pack-author {
-  border-radius: 4px;
   font-weight: 700;
-  color: var(--accent-ink);
-}
-
-.pack-author:hover,
-.pack-author:focus-visible {
-  text-decoration: underline;
+  color: var(--ink-2);
 }
 
 /* one row of tags; any that don't fit are on the pack itself */

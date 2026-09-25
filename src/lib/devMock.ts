@@ -1,7 +1,7 @@
 /**
  * Browser-only stand-in for the Tauri commands so `pnpm dev` in a plain browser shows the real
  * layout. The library lives in memory and starts empty, like a first launch; community packs use
- * the real pictures from the packs repository on GitHub (COMMUNITY_RAW) and the intro's colour
+ * real pictures from the packs' published tree on GitHub (COMMUNITY_TREE) and the intro's colour
  * folders.
  * Never used inside the app: `isTauri()` is true there.
  *
@@ -182,36 +182,53 @@ const MOCK_OFFICIAL = new Set(["classic-art", "colours"]);
 let mockLinkTaken = false;
 
 /** Sample packs for the browser preview's Community view. The real list comes from packs.folderskin.app. */
-/** The packs repository's files, where the preview's real pictures come from. Declared before anything that runs
- *  at load: `library` is seeded from picture(), which reads it. */
-const COMMUNITY_RAW = "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
+/** The packs' published tree, where the preview's real pictures come from. Every file there is named after its
+ *  contents (`folderskin_catalog::tree`), so these addresses stay the same when a pack is given a new id. Declared
+ *  before anything that runs at load: `library` is seeded from picture(), which reads it. */
+const COMMUNITY_TREE = "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main/v2";
 const MOCK_PACKS: MockPack[] = [
   { id: "classic-art", name: "Classic Art", author: "prajwal-svm", license: "CC0-1.0", tags: ["classic art"], count: 16 },
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
   { id: "night-prints", name: "Night prints", author: "example", license: "CC-BY-4.0", tags: ["woodblock", "night", "animals"], count: 12 },
   { id: "chrome-dreams", name: "Chrome dreams", author: "example", license: "CC-BY-4.0", tags: ["airbrush", "retro"], count: 6 },
 ];
-/** The real preview strips from community/previews; the made-up packs borrow one. */
-const PREVIEW_OF: Record<string, string> = { "classic-art": "classic-art", colours: "colours", "night-prints": "classic-art", "chrome-dreams": "colours" };
-/** Classic Art's pictures, finished folders already, in the pack's order. */
+/** Real packs' preview strips in the published tree, by the version (the pack's hash) each shows. */
+const STRIPS = {
+  "classic-art": `${COMMUNITY_TREE}/strips/0e1e663c7413f431.webp`,
+  colours: `${COMMUNITY_TREE}/strips/f0d421a416f6e2c9.webp`,
+  "greek-art": `${COMMUNITY_TREE}/strips/3e3b76e9d3fdd926.webp`,
+  "scientists-pop-art": `${COMMUNITY_TREE}/strips/3ea4ee0ba30812e3.webp`,
+  "soft-rainbow": `${COMMUNITY_TREE}/strips/6f600f4adcaa7361.webp`,
+};
+/** The strip each sample pack shows; the made-up packs borrow a real one. */
+const PREVIEW_OF: Record<string, string> = {
+  "classic-art": STRIPS["classic-art"],
+  colours: STRIPS.colours,
+  "night-prints": STRIPS["classic-art"],
+  "chrome-dreams": STRIPS.colours,
+};
+/** Classic Art's pictures, finished folders already, in the pack's order: each picture's SHA-256, which the
+ *  published tree names it after, and its name. */
 const CLASSIC_ART = [
-  ["mona-lisa", "Mona Lisa"],
-  ["view-of-toledo", "View of Toledo"],
-  ["girl-with-a-pearl-earring", "Girl with a Pearl Earring"],
-  ["the-astronomer", "The Astronomer"],
-  ["oath-of-the-horatii", "Oath of the Horatii"],
-  ["napoleon-crossing-the-alps", "Napoleon Crossing the Alps"],
-  ["wanderer-above-the-sea-of-fog", "Wanderer above the Sea of Fog"],
-  ["the-ninth-wave", "The Ninth Wave"],
-  ["boulevard-des-capucines", "Boulevard des Capucines"],
-  ["breezing-up", "Breezing Up"],
-  ["paris-street-rainy-day", "Paris Street; Rainy Day"],
-  ["luncheon-of-the-boating-party", "Luncheon of the Boating Party"],
-  ["the-lady-of-shalott", "The Lady of Shalott"],
-  ["the-starry-night", "The Starry Night"],
-  ["mont-sainte-victoire", "Mont Sainte-Victoire"],
-  ["composition-viii", "Composition VIII"],
+  ["ce0957401fb489f1630a9c56da067b9a486b5ba35520af2dfe8da1bafde29372", "Mona Lisa"],
+  ["0001b73682ac8732a584484d3c31606354b5caf40b112d23875ba26c60083607", "View of Toledo"],
+  ["ff7403922e3728d5fd3edbe81c41957fff23b3106b0d92a3a599a1bc807a0f8d", "Girl with a Pearl Earring"],
+  ["03d663014b32e276e41468e74ef9151d0b6912d2af9c75b9f3fed28b7b8909fa", "The Astronomer"],
+  ["f340cd24ee7e2339845ff6d99286ab5c0d3d72c23055417a072ea3be52451406", "Oath of the Horatii"],
+  ["7e83c5c63ed61cd9030a7b76304c19858861eadf81ae2568b7d169c1178fe5bf", "Napoleon Crossing the Alps"],
+  ["2de9374438a98e1e8097fe3814c1a00bd4c48af262d8b3c8f2a8e08a53f2596b", "Wanderer above the Sea of Fog"],
+  ["33062e637c84b8aeaa8a1fa07ade05eb98b05ff8ede0d461247fd68a9f3de68a", "The Ninth Wave"],
+  ["12c6fa291fafafc3b2bb8397bafc8b1487c66170dd371de35ef26f46ed2f275c", "Boulevard des Capucines"],
+  ["caa313ae21ee258dc43ffdbc4ebf1716097707cb009076a241f6c132f294dcfa", "Breezing Up"],
+  ["d98da4e004e8e63b075244b7b9bd33d0238f014277d091f7d2a9e939cbf804f2", "Paris Street; Rainy Day"],
+  ["e8ac7ae2c4cc4f2eab6c9049cd647f71e8bb32b84355edac11a1dc89e7377d46", "Luncheon of the Boating Party"],
+  ["f34233ab3e192b02e88d22b8a66002587cef3737e2e69d54a08043f234348262", "The Lady of Shalott"],
+  ["d098adcdbeb9acb006691e7dd420c27d57c3789037732393716b6df190ac0764", "The Starry Night"],
+  ["459d9ebbf3902088600e31a18241eb4e441b3eac223502a96917222ae8b59206", "Mont Sainte-Victoire"],
+  ["9777390872e466951c13da162e549b4b87c8432aab48108314bf58f676ac5142", "Composition VIII"],
 ] as const;
+/** Where a picture of Classic Art's is, by its SHA-256. */
+const classicArt = (sha256: string) => `${COMMUNITY_TREE}/pictures/${sha256}.webp`;
 const COLOUR_NAMES = ["Blue", "Orange", "Purple", "Green"];
 
 /** `?yours=8` starts with that many skins of your own, so sharing can be tried without making any. */
@@ -251,20 +268,20 @@ const listed = () => (new URLSearchParams(location.search).has("real") ? MOCK_PA
 
 /** A stand-in skin picture: one of Classic Art's, or one of the intro's colour folders. */
 function picture(i: number): string {
-  return i % 3 === 2 ? COLOUR_FOLDERS[i % COLOUR_FOLDERS.length] : `${COMMUNITY_RAW}/packs/classic-art/${CLASSIC_ART[i % CLASSIC_ART.length][0]}.webp`;
+  return i % 3 === 2 ? COLOUR_FOLDERS[i % COLOUR_FOLDERS.length] : classicArt(CLASSIC_ART[i % CLASSIC_ART.length][0]);
 }
 
 /** What a pack's skins look like here: the real pictures for Classic Art and Colours. */
 function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
   return Array.from({ length: pack.count }, (_, i) => {
-    if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: `${COMMUNITY_RAW}/packs/classic-art/${CLASSIC_ART[i][0]}.webp` };
+    if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: classicArt(CLASSIC_ART[i][0]) };
     if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
     return { name: pack.skins?.[i] ?? `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
   });
 }
 
 /** The real preview strips, which the made-up packs borrow in turn. */
-const REAL_PREVIEWS = ["classic-art", "colours", "greek-art", "scientists-pop-art", "soft-rainbow"].map((id) => `${COMMUNITY_RAW}/previews/${id}.png`);
+const REAL_PREVIEWS = Object.values(STRIPS);
 /** When the sample packs were published, newest first. */
 const SAMPLE_DATES: Record<string, number> = { "classic-art": 1_780_000_000, colours: 1_770_000_000, "night-prints": 1_760_000_000, "chrome-dreams": 1_750_000_000 };
 
@@ -283,7 +300,7 @@ function communityCatalog(): MockCatalog {
     bytes: p.count * 180_000,
     added: SAMPLE_DATES[p.id] ?? 0,
     skins: packPictures(p).map((s) => s.name),
-    preview: `${COMMUNITY_RAW}/previews/${PREVIEW_OF[p.id] ?? "colours"}.png`,
+    preview: PREVIEW_OF[p.id] ?? STRIPS.colours,
   }));
   mockCatalogue = new MockCatalog([...samples, ...madeUpPacks(many, REAL_PREVIEWS)], ["classic-art", "colours"]);
   return mockCatalogue;
@@ -534,6 +551,9 @@ const mockShare: { key: boolean; handle: string | null; wanted: string; waiting:
 };
 const SHARE_NOT_YET = "This build of FolderSkin can't share packs. You can still save the pack as a folder.";
 const SHARE_UNREACHABLE = "FolderSkin's sharing service can't be reached right now. Check your connection and try again.";
+/** The version of the pack terms the made-up service sends packs under. It refuses a pack
+ *  agreed under any other, as the service does, so the tests see the app send the service's. */
+const MOCK_TERMS_VERSION = 2;
 /** What the service says to a computer cooling down after too many refused requests (`?cooling`). */
 const SHARE_COOLING = "You've sent too many requests that were turned down. You can share again in 2 hours.";
 
@@ -592,10 +612,17 @@ function seedShared() {
 function mockShareStatus(): ShareStatus {
   seedShared();
   const params = new URLSearchParams(location.search);
-  const unavailable = (reason: string): ShareStatus => ({ available: false, reason, verified: false, handle: null, has_key: mockShare.key });
+  const unavailable = (reason: string): ShareStatus => ({ available: false, reason, verified: false, handle: null, has_key: mockShare.key, terms_version: null });
   if (params.has("noshare")) return unavailable(SHARE_NOT_YET);
   if (offline()) return unavailable(SHARE_UNREACHABLE);
-  return { available: true, reason: null, verified: mockShare.handle !== null, handle: mockShare.handle, has_key: mockShare.key };
+  return {
+    available: true,
+    reason: null,
+    verified: mockShare.handle !== null,
+    handle: mockShare.handle,
+    has_key: mockShare.key,
+    terms_version: MOCK_TERMS_VERSION,
+  };
 }
 
 /** Set when the folder look changes, so the next list of skins takes as long as a redraw would. */
@@ -1173,6 +1200,7 @@ export const mockApi = {
   },
   shareSubmit: async (pack: PackToShare, onProgress: (p: ShareProgress) => void): Promise<SharedPack> => {
     if (!mockShare.handle) throw "Verify this computer first, so the service knows the pack is yours.";
+    if (pack.termsVersion !== MOCK_TERMS_VERSION) throw "The pack terms have changed. Update FolderSkin, read them and send the pack again.";
     onProgress({ stage: "preparing" });
     await sleep(500);
     onProgress({ stage: "checking" });

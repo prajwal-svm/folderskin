@@ -36,6 +36,13 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Packs you added keep updating when their ids change.** A pack added under the id it had
   before still shows as added and still gets its updates under its new id, and an Install link
   with the old id still finds it. The first launch still starts with Classic Art picked.
+- **The pack terms are at version 2.** They describe sharing through FolderSkin rather than
+  through pull requests on GitHub: a pack is credited to the name your computer was verified
+  under, and the version you agreed to is recorded with the pack when you send it. The rules
+  themselves are the same. FolderSkin sends a pack under whichever version the sharing service
+  asks for, so the terms can change without a new FolderSkin.
+- A pack's author shows as plain text in Community and when you look through a pack, rather than
+  as a link to a GitHub profile: authors are FolderSkin names now.
 
 ### Removed
 

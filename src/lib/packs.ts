@@ -12,11 +12,9 @@ export const SITE_URL = "https://folderskin.app";
 /** The pack contract and how to share one. */
 export const PACKS_GUIDE_URL = `${SITE_URL}/docs/packs/`;
 
-/** What someone agrees to before a pack goes up. */
+/** What someone agrees to before a pack goes up. The version they agree to is the service's
+ *  (`ShareStatus.terms_version`), which it records with the pack. */
 export const PACK_TERMS_URL = `${SITE_URL}/docs/pack-terms/`;
-/** Goes up with the pack, and the service records it, so what was agreed is never a question of
- *  which version happened to be on the website that day. */
-export const PACK_TERMS_VERSION = 1;
 
 /** Most skins in one pack; `folderskin_core::pack::MAX_SKINS` is the same. */
 export const MAX_PACK_SKINS = 50;

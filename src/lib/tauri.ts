@@ -264,6 +264,9 @@ export type ShareStatus = {
   handle: string | null;
   /** Whether this computer has a sharing key yet, which is what a recovery file saves. */
   has_key: boolean;
+  /** The version of the pack terms packs are sent under now, as the service says; null while
+   *  sharing can't be used. It's what a pack records the person agreed to. */
+  terms_version: number | null;
 };
 
 /** A pack on its way to the review queue. The author isn't here: it's the name this computer was verified under. */
@@ -275,6 +278,7 @@ export type PackToShare = {
   notes: string;
   /** Where the pictures came from: own, ai, mixed or licensed. */
   source: string;
+  /** The version of the pack terms they agreed to: {@link ShareStatus}'s `terms_version`. */
   termsVersion: number;
 };
 

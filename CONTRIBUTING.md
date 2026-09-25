@@ -86,12 +86,14 @@ get a request for changes, not a silent merge.
 
 FolderSkin ships no skins of its own; they come from community packs, which live in their own
 repository, [folderskin-community](https://github.com/prajwal-svm/folderskin-community). Packs are
-proposed there by pull request.
+shared from the app: **Community → Share your skins** sends a pack to FolderSkin's review queue,
+and it's published once a maintainer approves it. Maintainers can still add a pack to
+folderskin-community by hand, made with `folderskin-tools packs make`.
 [docs/PACKS.md](docs/PACKS.md) has the pack contract, how to make one with `folderskin-tools packs
 make` and how to check it, and [docs/SKINS.md](docs/SKINS.md) how a picture lands on the folder.
 [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md) is the same
-workflow written for Claude Code. Include a `--preview` sheet in your pull request so reviewers
-can see every skin as its folder without running anything.
+workflow written for Claude Code. A `--preview` sheet shows every skin as its folder without
+running anything.
 
 ## Working on the icon writers
 
