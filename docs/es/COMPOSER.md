@@ -21,7 +21,7 @@ carpeta que elegiste.
 | Una foto con leyenda | **Foto** | Primero pide la imagen. Luego puedes soltar o pegar más |
 | Un sticker, una insignia, cualquier cosa sin forma de carpeta | **Sticker** | *Icono libre* convierte el diseño en el icono entero |
 | Un aspecto que ya tienes, con tu toque personal | Menú ⋯ de un aspecto → **Remezclar en el editor** | El aspecto se convierte en una capa de imagen sobre la que construir |
-| Un cambio en algo que ya diseñaste | Su menú ⋯ → **Editar el diseño** | **Guardar cambios** lo actualiza en su sitio. **Guardar como nuevo** conserva los dos |
+| Un cambio en algo que ya diseñaste | Su menú ⋯ → **Editar el diseño** | **Guardar cambios** lo actualiza en su sitio. **Guardar copia** conserva los dos |
 
 ## Cómo se usa
 
@@ -85,7 +85,7 @@ muestra cómo se lee en el Finder o el Explorador de archivos.
 **Guardar.** El nombre de arriba a la derecha es el nombre del aspecto. Si lo dejas vacío, lo toma de
 las primeras palabras del diseño. **Guardar en Mis aspectos** lo guarda en la biblioteca, y **Guardar
 y aplicar** además lo pone en la carpeta elegida. Una vez guardado, sigue abierto para más cambios:
-**Guardar cambios** actualiza el mismo aspecto en su sitio, y **Guardar como nuevo** añade otro. Un
+**Guardar cambios** actualiza el mismo aspecto en su sitio, y **Guardar copia** añade otro. Un
 diseño sin guardar se conserva mientras miras otras partes de la app, y en este equipo hasta que lo
 guardes o lo reemplaces.
 

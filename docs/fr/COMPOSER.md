@@ -21,7 +21,7 @@ que vous créez est enregistré dans **Mes habillages** comme n'importe quel aut
 | Une photo avec une légende | **Photo** | L'éditeur demande d'abord l'image. Vous pourrez en déposer ou en coller d'autres ensuite |
 | Un autocollant, un badge, tout ce qui n'a pas la forme d'un dossier | **Autocollant** | *Icône libre* fait de la création l'icône entière |
 | Un habillage existant, avec votre touche personnelle | Menu ⋯ d'un habillage → **Remixer dans l'éditeur** | L'habillage devient un calque image sur lequel construire |
-| Une modification de ce que vous avez déjà créé | Son menu ⋯ → **Modifier la création** | **Enregistrer les modifications** le met à jour sur place. **Enregistrer comme nouveau** garde les deux |
+| Une modification de ce que vous avez déjà créé | Son menu ⋯ → **Modifier la création** | **Enregistrer** le met à jour sur place. **Dupliquer** garde les deux |
 
 ## Utilisation
 
@@ -86,9 +86,9 @@ lisible dans le Finder ou l'Explorateur.
 **Enregistrer.** Le nom en haut à droite est celui de l'habillage. S'il reste vide, les premiers
 mots de la création lui servent de nom. **Enregistrer dans Mes habillages** le garde dans la
 bibliothèque, et **Enregistrer et appliquer** le pose en plus sur le dossier choisi. Une fois
-enregistrée, la création reste ouverte pour d'autres modifications : **Enregistrer les
-modifications** met à jour le même habillage à sa place, et **Enregistrer comme nouveau** en ajoute
-un autre. Une création non enregistrée est conservée pendant que vous allez ailleurs dans l'app, et
+enregistrée, la création reste ouverte pour d'autres modifications : **Enregistrer** met à jour le
+même habillage à sa place, et **Dupliquer** en ajoute un autre. Une création non enregistrée est
+conservée pendant que vous allez ailleurs dans l'app, et
 sur cet ordinateur jusqu'à ce qu'elle soit enregistrée ou remplacée.
 
 **Inclure les N sous-dossiers**, sous le dossier concerné, est le même interrupteur que **Inclure les
@@ -160,7 +160,7 @@ L'enregistrement redessine la création une dernière fois à 2048 px, l'encode 
   **Modifier la création** de le rouvrir.
 - **Identifiant :** le SHA-256 du PNG de la création, de son document et de sa forme. La même
   création enregistrée deux fois ne donne qu'un seul habillage.
-- **Enregistrer les modifications :** remplace l'ancien habillage en une seule écriture de l'index
+- **Enregistrer :** remplace l'ancien habillage en une seule écriture de l'index
   et garde sa place dans la bibliothèque. Un favori passe au nouvel identifiant.
 
 Un remix lit l'image propre de l'habillage avec `composer_skin_image` :
