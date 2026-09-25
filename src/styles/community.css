@@ -278,6 +278,10 @@
   background: var(--island);
 }
 
+.pack-tags .tag-chip.is-official {
+  background: var(--accent-soft);
+}
+
 .pack-action {
   display: flex;
   align-items: center;

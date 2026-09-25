@@ -208,6 +208,9 @@ pub struct Source {
     first: AtomicUsize,
     tree: bool,
     pub featured: Vec<String>,
+    /// The packs the maintainer marks as official: `official` in head.json, or the entries of
+    /// index.json that say `"official": true`.
+    pub official: Vec<String>,
     /// Which catalog this is: a tree's generation, or sixteen hex digits of the SHA-256 of the
     /// index.json it was made from.
     pub generation: String,
@@ -233,6 +236,7 @@ impl Source {
             first: AtomicUsize::new(0),
             tree,
             featured: Vec::new(),
+            official: Vec::new(),
             generation,
             last_visit,
             strips: Mutex::default(),
@@ -242,6 +246,11 @@ impl Source {
     /// True for a published tree, false for a list made from index.json.
     pub fn is_tree(&self) -> bool {
         self.tree
+    }
+
+    /// True for a pack the maintainer marks as official.
+    pub fn is_official(&self, id: &str) -> bool {
+        self.official.iter().any(|o| o == id)
     }
 
     /// Where a pack's files are when the list came from index.json: the community folder.
@@ -451,6 +460,7 @@ async fn from_head(
     };
     let mut source = Source::new(catalog, bases, true, head.generation.clone(), last_visit);
     source.featured = head.featured_ids();
+    source.official = head.official_ids();
     Ok(source)
 }
 
@@ -557,18 +567,29 @@ fn forget_other_catalogs(current: &Path) {
     }
 }
 
-/// A catalog made in memory from `index.json`: the packs with their counts, and no skin names.
-/// `last_visit` says why, when it is the last visit's copy.
+/// A catalog made in memory from `index.json`: the packs with their counts and, where the index
+/// says, when each was added and whether it is official; no skin names. `last_visit` says why,
+/// when it is the last visit's copy.
 pub fn from_index(
     bytes: &[u8],
     base: &str,
     last_visit: Option<LastVisit>,
 ) -> Result<Source, String> {
     let index = Index::parse(bytes)?;
-    let records: Vec<PackRecord> = index
+    // Two entries with one id would be a broken index; the first one stands.
+    let mut seen = std::collections::HashSet::new();
+    let entries: Vec<_> = index
         .packs
         .into_iter()
-        .filter(|p| pack::is_pack_id(&p.id))
+        .filter(|p| pack::is_pack_id(&p.id) && seen.insert(p.id.clone()))
+        .collect();
+    let official: Vec<String> = entries
+        .iter()
+        .filter(|p| p.official)
+        .map(|p| p.id.clone())
+        .collect();
+    let records: Vec<PackRecord> = entries
+        .into_iter()
         .map(|p| PackRecord {
             tags: pack::clean_tags(&p.tags, usize::MAX),
             id: p.id,
@@ -577,27 +598,23 @@ pub fn from_index(
             license: p.license,
             hash: p.hash,
             manifest: String::new(),
-            added: 0,
+            added: p.added.unwrap_or(0).max(0),
             count: p.count,
             bytes: 0,
             skin_names: Vec::new(),
         })
         .collect();
-    // Two entries with one id would be a broken index; the first one stands.
-    let mut seen = std::collections::HashSet::new();
-    let records: Vec<PackRecord> = records
-        .into_iter()
-        .filter(|r| seen.insert(r.id.clone()))
-        .collect();
     let catalog = Catalog::from_connection(build::in_memory(&records)?)?;
     let generation = tree::sha256_hex(bytes)[..16].to_string();
-    Ok(Source::new(
+    let mut source = Source::new(
         catalog,
         vec![base.to_string()],
         false,
         generation,
         last_visit,
-    ))
+    );
+    source.official = official;
+    Ok(source)
 }
 
 /// Writes `bytes` to `<dir>/<name>`, for the next offline visit. A failure only means there

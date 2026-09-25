@@ -4,6 +4,7 @@ import { api, errorMessage, type CommunityPack, type PackProgress, type PackSkin
 import { licenseLabel, PACKS_URL } from "../lib/packs";
 import { progressLabel, progressShare } from "../lib/communityStore";
 import { Modal } from "./Modal";
+import { OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { DownloadIcon } from "./icons/download";
 import { ExternalLinkIcon } from "./icons/external-link";
@@ -128,8 +129,9 @@ export function PackViewer({
         </>
       }
     >
-      {pack.tags.length > 0 && (
+      {(pack.official || pack.tags.length > 0) && (
         <div className="pack-tags">
+          {pack.official && <OfficialBadge />}
           {pack.tags.map((t) => (
             <span key={t} className="tag-chip">
               {t}

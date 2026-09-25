@@ -16,7 +16,11 @@
  * `?yours=8` starts with eight skins of your own, for the parts that need a library to work on.
  *
  * `?packs=10000` adds that many made-up packs to Community (mockCommunity.ts), searched the way
- * the app searches its catalog, to see and test the view at the size it is built for.
+ * the app searches its catalog, to see and test the view at the size it is built for. Classic Art
+ * and Colours are marked official, as official.json would.
+ *
+ * `?install=colours` opens the preview the way a folderskin://install link opens the app: on that
+ * pack in Community, adding it. The link is taken once, as the app takes one.
  * Sharing without GitHub works in the preview against a made-up service: `?noshare` shows it as a
  * build without one, `?offline` as one that can't reach it, and `?shared` starts with a few packs
  * already sent, one of them turned down.
@@ -170,7 +174,12 @@ function saveMockChats(store: MockChats) {
 
 /** A pack as the preview lists it, before whether it's added (or changed) is worked out. Made-up
  *  packs also carry their skins' names. */
-type MockPack = Omit<CommunityPack, "added" | "update" | "hash" | "bytes" | "preview"> & { skins?: string[] };
+type MockPack = Omit<CommunityPack, "added" | "update" | "hash" | "bytes" | "preview" | "official"> & { skins?: string[] };
+
+/** The packs the preview marks official, as official.json does in folderskin-community. */
+const MOCK_OFFICIAL = new Set(["classic-art", "colours"]);
+/** Whether `?install=` has been taken already: a link is taken once. */
+let mockLinkTaken = false;
 
 /** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
 /** The packs repository's files, where the preview's real pictures come from. Declared before anything that runs
@@ -295,6 +304,7 @@ function communityPack(p: CatalogPack): CommunityPack {
     preview: p.preview,
     added,
     update: added && mockStale.has(p.id),
+    official: MOCK_OFFICIAL.has(p.id),
   };
 }
 
@@ -758,6 +768,18 @@ export const mockApi = {
     if (offline()) throw OFFLINE;
     const packs = communityCatalog().packs;
     return { updates: packs.filter((p) => packAdded(p.id) && mockStale.has(p.id)).length, packs: packs.length };
+  },
+  communityPack: async (packId: string): Promise<CommunityPack | null> => {
+    await sleep(mockCatalogueLoaded ? 8 : 450);
+    if (offline()) throw OFFLINE;
+    mockCatalogueLoaded = true;
+    const pack = communityCatalog().find(packId);
+    return pack ? communityPack(pack) : null;
+  },
+  takeInstallLink: async (): Promise<string | null> => {
+    if (mockLinkTaken) return null;
+    mockLinkTaken = true;
+    return new URLSearchParams(location.search).get("install");
   },
   communityInstalled: async (): Promise<Record<string, string | null>> => {
     const installed: Record<string, string | null> = {};

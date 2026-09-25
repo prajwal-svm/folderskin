@@ -59,7 +59,10 @@ const UNREACHABLE: &str = "FolderSkin's sharing service can't be reached right n
                            connection, or share through GitHub instead.";
 const VERIFY_FIRST: &str = "Verify this computer first, so the service knows the pack is yours.";
 
-fn api_base() -> Option<String> {
+/// The service's address this build or run names, if any: `FOLDERSKIN_COMMUNITY_API` as
+/// FolderSkin runs, then as it was built, then [`COMMUNITY_API`]. Install counts go to the same
+/// service ([`crate::installs`]).
+pub(crate) fn api_base() -> Option<String> {
     let running = std::env::var("FOLDERSKIN_COMMUNITY_API").ok();
     let built = option_env!("FOLDERSKIN_COMMUNITY_API").map(str::to_string);
     [running, built, Some(COMMUNITY_API.to_string())]

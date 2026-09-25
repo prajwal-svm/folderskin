@@ -8,14 +8,27 @@ const added: ((progress: PackProgress) => void)[] = [];
 let installed: Record<string, string | null> = {};
 /** Answers to `community_installed` the test holds back, when it does. */
 let heldInstalled: ((answer: Record<string, string | null>) => void)[] | null = null;
+/** What `community_pack` answers for a pack id: a pack, null for none, or an Error to fail with. */
+let lookups: Record<string, CommunityPack | null | Error> = {};
+/** The pack ids `community_pack` was asked for. */
+const looked: string[] = [];
+/** The pack ids `community_add` was asked for. */
+const addedIds: string[] = [];
 
 vi.mock("./tauri", () => ({
   api: {
+    communityPack: async (id: string) => {
+      looked.push(id);
+      const found = lookups[id] ?? null;
+      if (found instanceof Error) throw found.message;
+      return found;
+    },
     communitySearch: (query: CommunityQuery) =>
       new Promise<CommunitySearch>((answer, fail) => {
         asked.push({ query, answer, fail });
       }),
-    addPack: async (_id: string, onProgress: (p: PackProgress) => void) => {
+    addPack: async (id: string, onProgress: (p: PackProgress) => void) => {
+      addedIds.push(id);
       added.push(onProgress);
       onProgress({ stage: "download", done: 1, total: 2 });
       return [];
@@ -34,7 +47,7 @@ vi.mock("./tauri", () => ({
 const { CommunityStore, PAGE, countLine, progressLabel, progressShare } = await import("./communityStore");
 
 function pack(id: string): CommunityPack {
-  return { id, name: id, author: "a", license: "CC0-1.0", tags: ["t"], count: 1, bytes: 0, hash: "", preview: "", added: false, update: false };
+  return { id, name: id, author: "a", license: "CC0-1.0", tags: ["t"], count: 1, bytes: 0, hash: "", preview: "", added: false, update: false, official: false };
 }
 
 /** An answer of `total` packs, the ones from `offset` on. */
@@ -50,6 +63,9 @@ beforeEach(() => {
   added.length = 0;
   installed = {};
   heldInstalled = null;
+  lookups = {};
+  looked.length = 0;
+  addedIds.length = 0;
 });
 afterEach(() => vi.useRealTimers());
 
@@ -215,6 +231,73 @@ describe("the Community store", () => {
     expect(heard).toContainEqual(["update", { stage: "save", done: 2, total: 2 }]);
     expect(onRemoved).toHaveBeenCalledWith(["old"]);
     expect(toast.mock.calls[1][0]).toBe("Updated p0");
+  });
+
+  it("opens the pack an install link names and adds it as its Add button does", async () => {
+    const store = new CommunityStore(0);
+    const onAdded = vi.fn();
+    const toast = vi.fn();
+    lookups = { colours: { ...pack("colours"), name: "Colours", official: true } };
+    // Before Community has ever been open: it waits for the view's handlers.
+    store.install("colours");
+    await settle();
+    expect(looked).toEqual([]);
+    const heard: (string | null)[] = [];
+    store.subscribe(() => heard.push(store.get().task));
+    store.bind({ onAdded, onRemoved: vi.fn(), onShowTag: vi.fn(), toast });
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledOnce());
+    expect(store.get().busy).toBeNull();
+    expect(looked).toEqual(["colours"]);
+    expect(addedIds).toEqual(["colours"]);
+    expect(store.get().viewing?.pack.id).toBe("colours");
+    expect(heard).toContain("add");
+    expect(onAdded).toHaveBeenCalledOnce();
+    expect(toast).toHaveBeenCalledWith("Added 0 skins from Colours", expect.objectContaining({ tone: "ok" }));
+
+    // Binding again, as every draw of the view does, doesn't add it twice.
+    store.bind({ onAdded, onRemoved: vi.fn(), onShowTag: vi.fn(), toast });
+    await settle();
+    expect(addedIds).toEqual(["colours"]);
+  });
+
+  it("says a linked pack is there already, and adds nothing", async () => {
+    const store = new CommunityStore(0);
+    const toast = vi.fn();
+    store.bind({ onAdded: vi.fn(), onRemoved: vi.fn(), onShowTag: vi.fn(), toast });
+    lookups = {
+      colours: { ...pack("colours"), name: "Colours", added: true },
+      greek: { ...pack("greek"), name: "Greek Art", added: true, update: true },
+    };
+    store.install("colours");
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(toast).toHaveBeenLastCalledWith("Colours is in your library already", expect.objectContaining({ tone: "ok" }));
+    expect(store.get().viewing?.pack.id).toBe("colours");
+    store.install("greek");
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
+    expect(toast).toHaveBeenLastCalledWith(
+      "Greek Art is in your library already; Update gets its newer version",
+      expect.objectContaining({ tone: "ok" }),
+    );
+    expect(addedIds).toEqual([]);
+  });
+
+  it("says what went wrong with a linked pack, and what to do", async () => {
+    const store = new CommunityStore(0);
+    const toast = vi.fn();
+    store.bind({ onAdded: vi.fn(), onRemoved: vi.fn(), onShowTag: vi.fn(), toast });
+    store.install("gone-pack");
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    const [said, opts] = toast.mock.calls[0];
+    expect(said).toBe("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there; it may have been renamed.");
+    expect(said).not.toMatch(/sorry|apolog/i);
+    expect(opts).toEqual({ tone: "danger" });
+
+    lookups = { colours: new Error("couldn't reach GitHub. Check your connection and try again") };
+    store.install("colours");
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
+    expect(toast).toHaveBeenLastCalledWith("Couldn't add “colours”: couldn't reach GitHub. Check your connection and try again", { tone: "danger" });
+    expect(store.get().viewing).toBeNull();
+    expect(addedIds).toEqual([]);
   });
 
   it("says how far adding has got", () => {

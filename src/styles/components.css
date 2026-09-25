@@ -304,6 +304,14 @@
   color: var(--ink);
 }
 
+/* an official pack's mark (OfficialBadge): a tag in the accent colour, with the checked badge */
+.tag-chip.is-official {
+  gap: 3px;
+  padding: 0 8px 0 6px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
 .tag-chip-x {
   width: 16px;
   height: 16px;
