@@ -54,32 +54,36 @@ pack's preview strip is its first four. `packs make` takes files in the order gi
 pictures inside a folder in name order. To get another order, pass the files one by one, or move
 the entries in `pack.json` afterwards; the files never need renaming for it.
 
-## Step 3 — choose the id, name and tags
+## Step 3 — choose the name and tags
 
-- `--id`: lower-case letters and digits in words joined by single dashes, at most 40 characters,
-  e.g. `night-prints`. It is the pack's folder name and part of every download URL.
-- `--name`: what the app shows, 1 to 40 characters, e.g. `Night prints`.
+- `--name`: what the app shows, 1 to 40 characters, e.g. `Night prints`. Names can repeat: other
+  packs may have the same one.
 - `--tags`: 1 to 5, comma-separated, lower case. The first names the pack in everyone's filters.
 
-Propose the three to the user in one line and carry on unless they object.
+Propose the two to the user in one line and carry on unless they object. The id isn't chosen:
+`packs make` gives a new pack one, its name and six random characters such as
+`night-prints-h4x2qe`. It is the pack's folder name and part of every download URL, and it never
+changes.
 
 ## Step 4 — make the pack
 
 ```sh
-cargo run -p folderskin-tools -- packs make "<folder or files>" --dir ../folderskin-community --id <id> --name "<Name>" \
-  --tags <first>,<more> --author <github-name> --preview /tmp/<id>.png
+cargo run -p folderskin-tools -- packs make "<folder or files>" --dir ../folderskin-community --name "<Name>" \
+  --tags <first>,<more> --author <github-name> --preview /tmp/<name>.png
 ```
 
 - It writes `../folderskin-community/packs/<id>/` (`--dir` names the folderskin-community checkout; it
   defaults to the current folder) with `pack.json` and one
   picture per skin, each shrunk to 1024 px and compressed to at most 400 KB (`--max-kb 400` is
-  the default; the pack limit is 2 MB, but everyone who adds the pack downloads it).
+  the default; the pack limit is 2 MB, but everyone who adds the pack downloads it). The report
+  says the id; use it for every step below.
 - Finished folders are saved as WebP when `cwebp` is installed, and as PNG otherwise, which is
   several times bigger and often over 400 KB. If the report says `cwebp` is missing, install it
   (`brew install webp`, or the `webp` package on Linux) and make the pack again.
 - `--license` defaults to `CC0-1.0`; pass the licence from step 1 if it is another.
-- It never overwrites a pack. To make it again, delete `../folderskin-community/packs/<id>/` first.
-- It runs `packs check` on what it wrote, and removes the folder again if anything fails.
+- Run again without `--id`, it makes a second pack. To make the same pack again, pass its id:
+  `--id <id>` replaces `packs/<id>/` once the new folder passes, and the pack keeps its id.
+- It runs `packs check` on what it wrote, and leaves nothing behind if anything fails.
 
 ## Step 5 — check the split
 
@@ -91,7 +95,7 @@ Every line of the report says `folder` or `artwork`:
 
 This is the split the app makes when someone adds the picture. Renders meant as whole folders
 that came out as `artwork` usually sit on a drifted pink or raspberry instead of `#FF00FF`
-(Grok does this). Delete the pack folder and make it again with `--flat-backdrop`: it measures
+(Grok does this). Make it again with `--id <id> --flat-backdrop`, which keeps its id: it measures
 each picture's own flat background, removes only what reaches the edge (so a red cloak inside the
 folder stays), takes a soft drop shadow with it, and gives the edge the painting's colours rather
 than a pink rim. A picture with no flat background still comes out as `artwork`.
@@ -193,7 +197,7 @@ folderskin-community, where a pull request proposes the pack.
 
 | command | use |
 |---|---|
-| `cargo run -p folderskin-tools -- packs make <pictures…> --dir ../folderskin-community --id … --name … --tags … --author … [--preview PNG] [--flat-backdrop]` | make a pack in folderskin-community's `packs/` from pictures or folders of them |
+| `cargo run -p folderskin-tools -- packs make <pictures…> --dir ../folderskin-community --name … --tags … --author … [--id ID] [--preview PNG] [--flat-backdrop]` | make a pack in folderskin-community's `packs/` from pictures or folders of them; `--id` makes one that is there again |
 | `cargo run -p folderskin-tools -- packs check --dir ../folderskin-community` | check every community pack the way the app and CI do |
 | `cargo run -p folderskin-tools -- packs index --dir ../folderskin-community` | rebuild `index.json` and the preview strips |
 | `cargo run -p folderskin-tools -- render "<picture>" --out /tmp/icon.png --size 512` | draw one picture as the folder the app makes of it, and say which kind it is |

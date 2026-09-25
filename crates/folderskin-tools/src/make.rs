@@ -6,6 +6,9 @@
 //! until it fits the size budget: a folder as WebP when `cwebp` is installed (PNG otherwise, which
 //! keeps the transparency but is several times bigger), artwork as JPEG. The folder that comes out
 //! passes `packs check`, which runs on it before anything is reported.
+//!
+//! A new pack gets an id of its own, its name and six random characters ([`pack::new_id`]), so
+//! two packs can share a name. The id is its folder's name, and it never changes after.
 
 use crate::packs;
 use folderskin_core::pack::{
@@ -16,13 +19,16 @@ use folderskin_core::{matte, raster};
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Everything `make` needs besides the pictures.
 #[derive(Debug, Clone)]
 pub struct MakeOptions {
-    /// The pack's id, which is also its folder's name.
-    pub id: String,
+    /// A pack to make again, which has to be in `packs/` already: its folder is replaced, and it
+    /// keeps its id, so everyone who added it gets the new pictures as an update. `None` makes a
+    /// new pack, with an id of its own.
+    pub id: Option<String>,
     pub name: String,
     /// Tags every skin gets; the first names the pack.
     pub tags: Vec<String>,
@@ -55,27 +61,19 @@ pub struct Made {
 }
 
 /// Makes `<dir>/packs/<id>` from `pictures` (files, or folders whose pictures are taken in name
-/// order) and returns the folder it wrote with what went into it. Nothing is left behind when a
-/// picture can't be used.
+/// order) and returns the folder it wrote with what went into it: a new pack under a new id, or
+/// `opts.id` made again. Nothing is left behind when a picture can't be used, and a pack made
+/// again stays as it was.
 pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Made>), String> {
-    if !pack::is_pack_id(&opts.id) {
-        let suggestion = pack::slug(&opts.id);
-        return Err(if pack::is_pack_id(&suggestion) {
-            format!("\"{}\" can't be a pack id; try {suggestion}", opts.id)
-        } else {
-            format!(
-                "\"{}\" can't be a pack id: use lower-case words joined by dashes",
-                opts.id
-            )
-        });
-    }
-    let folder = opts.dir.join(packs::PACKS_DIR).join(&opts.id);
-    if folder.exists() {
-        return Err(format!(
-            "{} exists already; pick another id or remove it",
-            folder.display()
-        ));
-    }
+    let packs_dir = opts.dir.join(packs::PACKS_DIR);
+    let id = match &opts.id {
+        Some(id) => to_make_again(&packs_dir, id)?,
+        None => pack::new_id(&opts.name, {
+            let taken = taken_ids(&opts.dir)?;
+            move |id| taken.contains(id)
+        })?,
+    };
+    let folder = packs_dir.join(&id);
     let sources = collect(pictures)?;
     if sources.len() > MAX_SKINS {
         return Err(format!(
@@ -126,24 +124,94 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
     }
     let json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())? + "\n";
 
+    // Written and checked beside the packs first, in a folder whose leading dot every check
+    // passes over: a pack that fails leaves nothing behind, and one made again replaces the old
+    // folder only once the new one has passed.
+    let staging = packs_dir.join(format!(".make-{id}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
     let written = (|| -> std::io::Result<()> {
-        std::fs::create_dir_all(&folder)?;
+        std::fs::create_dir_all(&staging)?;
         for (file, bytes) in &files {
-            std::fs::write(folder.join(file), bytes)?;
+            std::fs::write(staging.join(file), bytes)?;
         }
-        std::fs::write(folder.join(MANIFEST_FILE), json)
+        std::fs::write(staging.join(MANIFEST_FILE), json)
     })();
-    let checked = written
+    let placed = written
         .map_err(|e| format!("couldn't write {}: {e}", folder.display()))
         .and_then(|()| {
-            packs::check_pack_within(&folder, &opts.id, opts.max_bytes)
+            packs::check_pack_within(&staging, &id, opts.max_bytes)
                 .map_err(|problems| problems.join("; "))
-        });
-    if let Err(e) = checked {
-        let _ = std::fs::remove_dir_all(&folder);
+        })
+        .and_then(|_| put_in_place(&staging, &folder));
+    if let Err(e) = placed {
+        let _ = std::fs::remove_dir_all(&staging);
         return Err(e);
     }
     Ok((folder, made))
+}
+
+/// `id` when it is a pack in `packs_dir` to make again.
+fn to_make_again(packs_dir: &Path, id: &str) -> Result<String, String> {
+    if !pack::is_pack_id(id) {
+        let suggestion = pack::slug(id);
+        return Err(if pack::is_pack_id(&suggestion) {
+            format!("\"{id}\" can't be a pack id; try {suggestion}")
+        } else {
+            format!("\"{id}\" can't be a pack id: use lower-case words joined by dashes")
+        });
+    }
+    if !packs_dir.join(id).is_dir() {
+        return Err(format!(
+            "there's no pack {id} in {} to make again; leave out --id and the new pack gets an \
+             id of its own",
+            packs_dir.display()
+        ));
+    }
+    Ok(id.to_string())
+}
+
+/// The ids a new pack in `dir` can't have: every folder in `packs/`, in lower case since macOS and
+/// Windows take two names one capital apart for one folder, and every old id in `moved.json`,
+/// which is never given out again.
+fn taken_ids(dir: &Path) -> Result<HashSet<String>, String> {
+    let packs_dir = dir.join(packs::PACKS_DIR);
+    let mut taken = HashSet::new();
+    match std::fs::read_dir(&packs_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry =
+                    entry.map_err(|e| format!("couldn't read {}: {e}", packs_dir.display()))?;
+                taken.insert(entry.file_name().to_string_lossy().to_lowercase());
+            }
+        }
+        // The first pack in a new checkout makes the folder.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("couldn't read {}: {e}", packs_dir.display())),
+    }
+    taken.extend(packs::read_moved(dir)?.moved.into_keys());
+    Ok(taken)
+}
+
+/// Moves the checked pack in `staging` to `folder`. A pack already there is moved aside first
+/// and put back if the new one can't take its place, so a failure never loses it.
+fn put_in_place(staging: &Path, folder: &Path) -> Result<(), String> {
+    let failed = |e: std::io::Error| format!("couldn't write {}: {e}", folder.display());
+    if !folder.exists() {
+        return std::fs::rename(staging, folder).map_err(failed);
+    }
+    let name = folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let old = folder.with_file_name(format!(".make-old-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&old);
+    std::fs::rename(folder, &old).map_err(failed)?;
+    if let Err(e) = std::fs::rename(staging, folder) {
+        let _ = std::fs::rename(&old, folder);
+        return Err(failed(e));
+    }
+    let _ = std::fs::remove_dir_all(&old);
+    Ok(())
 }
 
 /// `cwebp` on the PATH, if it is installed (Homebrew's `webp`, Debian's `webp` package).
@@ -412,9 +480,10 @@ mod tests {
             path
         }
 
-        fn options(&self, id: &str) -> MakeOptions {
+        /// A new pack called "Test pack".
+        fn options(&self) -> MakeOptions {
             MakeOptions {
-                id: id.into(),
+                id: None,
                 name: "Test pack".into(),
                 tags: vec!["3D".into(), "glossy".into()],
                 author: "prajwal-svm".into(),
@@ -456,9 +525,14 @@ mod tests {
         let scratch = Scratch::new("split");
         scratch.picture("glass_folder.png", &on_magenta());
         scratch.picture("sunset-photo.jpg", &photo());
-        let (folder, made) = make(&[scratch.0.join("in")], &scratch.options("glossy")).unwrap();
+        let (folder, made) = make(&[scratch.0.join("in")], &scratch.options()).unwrap();
 
-        assert_eq!(folder, scratch.0.join("packs").join("glossy"));
+        assert_eq!(folder.parent(), Some(scratch.0.join("packs").as_path()));
+        let id = folder.file_name().unwrap().to_string_lossy();
+        assert!(
+            id.starts_with("test-pack-") && pack::is_generated_id(&id),
+            "{id}"
+        );
         let names: Vec<(&str, &str, bool)> = made
             .iter()
             .map(|m| (m.file.as_str(), m.name.as_str(), m.folder))
@@ -490,26 +564,128 @@ mod tests {
         assert!(made.iter().all(|m| m.bytes <= 400 * 1024));
     }
 
+    /// The names in `<scratch>/packs`, dotfolders too, sorted.
+    fn pack_folders(scratch: &Scratch) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(scratch.0.join("packs"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
     #[test]
-    fn refuses_a_bad_id_an_existing_pack_and_a_picture_too_small() {
+    fn packs_with_one_name_get_ids_of_their_own() {
+        let scratch = Scratch::new("same-name");
+        let photo = scratch.picture("a.jpg", &photo());
+        let (first, _) = make(std::slice::from_ref(&photo), &scratch.options()).unwrap();
+        let (second, _) = make(&[photo], &scratch.options()).unwrap();
+        assert_ne!(first, second);
+        let folders = pack_folders(&scratch);
+        assert_eq!(folders.len(), 2, "{folders:?}");
+        for id in &folders {
+            assert!(
+                id.starts_with("test-pack-") && pack::is_generated_id(id),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_new_id_is_never_a_folder_or_an_old_id_in_moved_json() {
+        let scratch = Scratch::new("taken");
+        assert!(taken_ids(&scratch.0).unwrap().is_empty(), "no packs/ yet");
+        std::fs::create_dir_all(scratch.0.join("packs").join("Reds-K7Q2MX")).unwrap();
+        std::fs::write(
+            scratch.0.join(pack::MOVED_FILE),
+            r#"{ "version": 1, "moved": { "blues": "blues-a2b3c4" } }"#,
+        )
+        .unwrap();
+        let taken = taken_ids(&scratch.0).unwrap();
+        assert_eq!(
+            taken,
+            HashSet::from(["reds-k7q2mx".to_string(), "blues".to_string()])
+        );
+        // A moved.json it can't read stops the pack rather than risk an old id.
+        std::fs::write(scratch.0.join(pack::MOVED_FILE), "{").unwrap();
+        let photo = scratch.picture("a.jpg", &photo());
+        let err = make(&[photo], &scratch.options()).unwrap_err();
+        assert!(err.contains("moved.json isn't valid"), "{err}");
+    }
+
+    #[test]
+    fn id_makes_a_pack_that_is_there_again_and_keeps_its_id() {
+        let scratch = Scratch::new("again");
+        let first = scratch.picture("first.jpg", &photo());
+        let (folder, _) = make(&[first], &scratch.options()).unwrap();
+        let id = folder.file_name().unwrap().to_string_lossy().into_owned();
+
+        let second = scratch.picture("second_one.png", &on_magenta());
+        let again = MakeOptions {
+            id: Some(id.clone()),
+            name: "Test pack, redone".into(),
+            ..scratch.options()
+        };
+        let (same, made) = make(&[second], &again).unwrap();
+        assert_eq!(same, folder);
+        assert_eq!(made[0].file, "second-one.png");
+        let mut files: Vec<String> = std::fs::read_dir(&folder)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            ["pack.json", "second-one.png"],
+            "the old pictures go"
+        );
+        let pack = Pack::parse(&std::fs::read(folder.join(MANIFEST_FILE)).unwrap()).unwrap();
+        assert_eq!(pack.name, "Test pack, redone");
+        assert_eq!(
+            pack_folders(&scratch),
+            std::slice::from_ref(&id),
+            "nothing else is left"
+        );
+
+        // A picture that fails leaves the pack as it was.
+        let tiny = scratch.picture(
+            "tiny.png",
+            &RgbaImage::from_pixel(200, 200, Rgba([9, 9, 9, 255])),
+        );
+        let small = make(&[tiny], &again).unwrap_err();
+        assert!(small.contains("at least 256 px"), "{small}");
+        assert!(folder.join("second-one.png").is_file());
+        assert_eq!(pack_folders(&scratch), [id]);
+    }
+
+    #[test]
+    fn refuses_a_bad_id_a_pack_that_isnt_there_and_a_picture_too_small() {
         let scratch = Scratch::new("refuse");
         let photo = scratch.picture("a.jpg", &photo());
-        let bad = make(std::slice::from_ref(&photo), &scratch.options("Not An Id")).unwrap_err();
+        let with = |id: &str| MakeOptions {
+            id: Some(id.into()),
+            ..scratch.options()
+        };
+        let bad = make(std::slice::from_ref(&photo), &with("Not An Id")).unwrap_err();
         assert!(bad.contains("try not-an-id"), "{bad}");
-
-        make(std::slice::from_ref(&photo), &scratch.options("twice")).unwrap();
-        let again = make(&[photo], &scratch.options("twice")).unwrap_err();
-        assert!(again.contains("exists already"), "{again}");
+        let missing = make(std::slice::from_ref(&photo), &with("nope-k7q2mx")).unwrap_err();
+        assert!(
+            missing.contains("there's no pack nope-k7q2mx") && missing.contains("leave out --id"),
+            "{missing}"
+        );
 
         let tiny = scratch.picture(
             "tiny.png",
             &RgbaImage::from_pixel(200, 200, Rgba([9, 9, 9, 255])),
         );
-        let small = make(&[tiny], &scratch.options("tiny")).unwrap_err();
+        let small = make(&[tiny], &scratch.options()).unwrap_err();
         assert!(small.contains("at least 256 px"), "{small}");
         assert!(
-            !scratch.0.join("packs").join("tiny").exists(),
-            "nothing is left behind"
+            !scratch.0.join("packs").exists() || pack_folders(&scratch).is_empty(),
+            "nothing is left behind: {:?}",
+            pack_folders(&scratch)
         );
     }
 
@@ -532,7 +708,7 @@ mod tests {
         scratch.picture("drifted.png", &on_raspberry());
         let pictures = [scratch.0.join("in")];
 
-        let (_, made) = make(&pictures, &scratch.options("as-art")).unwrap();
+        let (_, made) = make(&pictures, &scratch.options()).unwrap();
         assert!(
             !made[0].folder,
             "the app's own split: not magenta, so artwork"
@@ -540,7 +716,7 @@ mod tests {
 
         let opts = MakeOptions {
             flat_backdrop: true,
-            ..scratch.options("as-folder")
+            ..scratch.options()
         };
         let (folder, made) = make(&pictures, &opts).unwrap();
         assert!(made[0].folder);
@@ -569,7 +745,7 @@ mod tests {
         scratch.picture("chrome.png", &on_magenta());
         let opts = MakeOptions {
             cwebp: Some(cwebp),
-            ..scratch.options("chrome")
+            ..scratch.options()
         };
         let (folder, made) = make(&[scratch.0.join("in")], &opts).unwrap();
         assert_eq!(made[0].file, "chrome.webp");

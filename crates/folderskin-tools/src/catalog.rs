@@ -14,13 +14,13 @@
 //! `index.json` and `previews/` are left as `packs index` writes them, for the versions of the
 //! app that read those.
 
-use crate::make;
 use crate::packs::{self, Changes, Report, PACKS_DIR};
+use crate::{git, make};
 use folderskin_catalog::tree::{
     self, CatalogRef, Head, PublishedPack, PublishedSkin, HEAD_FILE, HEAD_VERSION, MANIFEST_VERSION,
 };
 use folderskin_catalog::{build, Catalog, PackRecord};
-use folderskin_core::pack::{self, IndexEntry, Pack, MANIFEST_FILE};
+use folderskin_core::pack::{self, IndexEntry, Moved, Pack, MANIFEST_FILE};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -143,7 +143,8 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         featured,
         official,
         mirrors: opts.mirrors.clone(),
-        moved: Default::default(),
+        // Apps that know it follow a pack added under an old id to the one it has now.
+        moved: report.moved.moved.clone(),
     };
     let json = serde_json::to_string_pretty(&head).map_err(|e| e.to_string())? + "\n";
     write_changed(&out.join(HEAD_FILE), json.as_bytes(), &mut changes)?;
@@ -476,24 +477,39 @@ fn same_folder(a: &Path, b: &Path) -> bool {
 /// pack id. Empty when git isn't installed or `dir` isn't in a repository, and a pack not yet
 /// committed has no date: those sort last under Newest. A shallow clone dates everything to its
 /// one commit, so CI fetches the whole history.
-pub fn git_dates(dir: &Path) -> HashMap<String, i64> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args([
-            "log",
-            "--format=%x00%ct",
-            "--name-only",
-            "--relative",
-            "--diff-filter=A",
-            "--",
-            "packs/*/pack.json",
-        ])
-        .output();
-    let Some(output) = output.ok().filter(|o| o.status.success()) else {
+///
+/// A pack keeps its date when its id changes: it is dated by the earliest of its own id and every
+/// old id `moved` (`moved.json`) sends to it, so `packs rename` never makes a pack new again.
+pub fn git_dates(dir: &Path, moved: &Moved) -> HashMap<String, i64> {
+    // Without rename detection, the commit that moved a folder counts as adding the new one, so
+    // the log reads the same whatever git's `diff.renames` is set to; the old id still dates the
+    // pack from before.
+    let mut command = git::git(dir);
+    command.args([
+        "log",
+        "--no-renames",
+        "--format=%x00%ct",
+        "--name-only",
+        "--relative",
+        "--diff-filter=A",
+        "--",
+        "packs/*/pack.json",
+    ]);
+    let Ok(log) = git::run(command, "read the history") else {
         return HashMap::new();
     };
-    parse_git_dates(&String::from_utf8_lossy(&output.stdout))
+    follow_moves(parse_git_dates(&log), moved)
+}
+
+/// `dates`, with every pack that moved dated by the earliest of its ids.
+fn follow_moves(mut dates: HashMap<String, i64>, moved: &Moved) -> HashMap<String, i64> {
+    for (old, new) in &moved.moved {
+        if let Some(&then) = dates.get(old) {
+            let date = dates.entry(new.clone()).or_insert(then);
+            *date = (*date).min(then);
+        }
+    }
+    dates
 }
 
 /// Reads `git log --format=%x00%ct --name-only` over `packs/*/pack.json`: each commit's time on
@@ -905,5 +921,56 @@ mod tests {
         assert_eq!(dates.get("reds"), Some(&100), "the first time it was added");
         assert_eq!(dates.get("blues"), Some(&200));
         assert_eq!(dates.len(), 2);
+    }
+
+    #[test]
+    fn a_pack_that_moved_keeps_the_date_of_its_first_id() {
+        let dates = HashMap::from([
+            ("reds".to_string(), 100),
+            ("reds-k7q2mx".to_string(), 300),
+            ("rubies".to_string(), 50),
+            ("blues".to_string(), 200),
+            ("greens-a2b3c4".to_string(), 400),
+        ]);
+        let moved = Moved::parse(
+            br#"{ "version": 1, "moved": {
+                "reds": "reds-k7q2mx", "rubies": "reds-k7q2mx",
+                "blues": "blues-q5r6s7", "never-added": "greens-a2b3c4" } }"#,
+        )
+        .unwrap();
+        let dates = follow_moves(dates, &moved);
+        assert_eq!(dates["reds-k7q2mx"], 50, "the earliest of all its ids");
+        // Moved before its new folder was ever committed: dated from its old id alone.
+        assert_eq!(dates["blues-q5r6s7"], 200);
+        // An old id with no date of its own changes nothing.
+        assert_eq!(dates["greens-a2b3c4"], 400);
+    }
+
+    #[test]
+    fn head_json_carries_moved_json() {
+        let c = Community::new("moved");
+        two_packs(&c);
+        let first = c.build().unwrap();
+        assert!(first.head.moved.is_empty());
+        let raw = std::fs::read_to_string(c.out().join(HEAD_FILE)).unwrap();
+        assert!(!raw.contains("moved"), "left out while nothing moved");
+
+        let moved = c.0.join(pack::MOVED_FILE);
+        std::fs::write(&moved, r#"{ "version": 1, "moved": { "rubies": "reds" } }"#).unwrap();
+        let built = c.build().unwrap();
+        assert_eq!(built.head.current_id("rubies"), "reds");
+        assert_eq!(built.head.generation, first.head.generation);
+        assert_eq!(
+            built.changes.written,
+            [c.out().join(HEAD_FILE)],
+            "only head.json: the catalog doesn't say what moved"
+        );
+        let head = Head::parse(&std::fs::read(c.out().join(HEAD_FILE)).unwrap()).unwrap();
+        assert_eq!(head.moved, built.head.moved);
+
+        // A moved.json that breaks its rules writes nothing.
+        std::fs::write(&moved, r#"{ "version": 1, "moved": { "rubies": "gone" } }"#).unwrap();
+        let err = c.build().unwrap_err();
+        assert_eq!(err, "1 problem in moved.json; nothing was written");
     }
 }

@@ -186,7 +186,7 @@ and compresses every picture to fit, and writes `pack.json`:
 
 ```sh
 cargo run -p folderskin-tools -- packs make ~/Pictures/renders --dir ../folderskin-community \
-  --id 3d-folders --name "3D Folders" --tags 3d,glossy --author your-github-name \
+  --name "3D Folders" --tags 3d,glossy --author your-github-name \
   --preview /tmp/3d-folders.png
 cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 ```

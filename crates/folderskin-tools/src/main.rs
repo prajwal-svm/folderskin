@@ -11,7 +11,7 @@ use folderskin_core::raster;
 use folderskin_share::{Client, DeviceKey};
 use folderskin_tools::cli::{Cli, Command, CommunityCommand, PacksCommand, Service};
 use folderskin_tools::skin::Skin;
-use folderskin_tools::{catalog, composer, make, packs, pull};
+use folderskin_tools::{catalog, composer, make, mirror, packs, pull, rename};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -110,8 +110,20 @@ fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         Command::Packs { command } => match command {
-            PacksCommand::Check { dir, max_kb } => packs_check(&dir, max_kb),
+            PacksCommand::Check {
+                dir,
+                max_kb,
+                require_generated_ids,
+            } => packs_check(&dir, max_kb, require_generated_ids),
             PacksCommand::Index { dir } => packs_index(&dir),
+            PacksCommand::Rename { dir, all, id, to } => {
+                let which = match (all, id) {
+                    (_, Some(id)) => rename::Which::One { id, to },
+                    (true, None) => rename::Which::All,
+                    (false, None) => return Err("say which pack, or --all".into()),
+                };
+                packs_rename(&dir, &which)
+            }
             PacksCommand::Catalog { dir, out, mirrors } => {
                 let out = folderskin_tools::cli::catalog_out(&dir, out);
                 packs_catalog(&dir, out, mirrors)
@@ -149,7 +161,8 @@ fn run(cli: Cli) -> Result<(), String> {
 // ---------- the community service ----------
 
 /// The maintainer's side of the community service: each command is one signed request, except
-/// `keygen`, which makes the key they are signed with, and `pull`.
+/// `keygen`, which makes the key they are signed with, and `pull`, `done` and `mirror`, which make
+/// one for each pack or file.
 fn community(command: CommunityCommand) -> Result<(), String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -198,8 +211,7 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             let answer = runtime
                 .block_on(client.takedown(&id, &reasons, &note))
                 .map_err(|e| e.to_string())?;
-            // The folder it was pulled into, which isn't its name at the service when a pack from
-            // GitHub had that name first.
+            // The folder it was pulled into, which is its id.
             if let Some(folder) = answer["folder"].as_str() {
                 println!(
                     "It was pulled into folderskin-community already: remove packs/{folder} there \
@@ -235,13 +247,28 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             );
             Ok(())
         }
-        CommunityCommand::Pull { out, service } => {
+        CommunityCommand::Pull {
+            out,
+            no_done,
+            pulled: list,
+            service,
+        } => {
             let client = service_client(&service)?;
             let mut source = ServiceExports { runtime, client };
-            let report = pull::pull(&mut source, &out)?;
+            let tell = if no_done {
+                pull::Tell::Later
+            } else {
+                pull::Tell::Now
+            };
+            let report = pull::pull(&mut source, &out, tell)?;
             for pulled in &report.pulled {
+                let what = if pulled.was_there {
+                    "found, as an earlier pull left it"
+                } else {
+                    "wrote"
+                };
                 println!(
-                    "wrote {}: \"{}\" by {}, {} skins",
+                    "{what} {}: \"{}\" by {}, {} skins",
                     pulled.folder.display(),
                     pulled.name,
                     pulled.author,
@@ -251,10 +278,23 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             for problem in &report.problems {
                 println!("{problem}");
             }
+            // Written even when some packs failed, so the list always says what is on disk.
+            if let Some(list) = &list {
+                pull::write_list(list, &report.pulled)?;
+            }
             if report.pulled.is_empty() && report.problems.is_empty() {
                 println!("no approved packs are waiting to be pulled");
             } else if !report.pulled.is_empty() {
-                println!("Check them over, then run `folderskin-tools packs index` and commit.");
+                match (&list, tell) {
+                    (Some(list), pull::Tell::Later) => println!(
+                        "Check them, commit and push, then `folderskin-tools community done \
+                         --from {}` tells the service they're published.",
+                        list.display()
+                    ),
+                    _ => println!(
+                        "Check them over, then run `folderskin-tools packs index` and commit."
+                    ),
+                }
             }
             if report.problems.is_empty() {
                 Ok(())
@@ -265,15 +305,88 @@ fn community(command: CommunityCommand) -> Result<(), String> {
                 ))
             }
         }
+        CommunityCommand::Done { from, service } => {
+            let entries = pull::read_list(&from)?;
+            if entries.is_empty() {
+                println!(
+                    "{} lists no packs, so there's nothing to tell",
+                    from.display()
+                );
+                return Ok(());
+            }
+            let client = service_client(&service)?;
+            let mut source = ServiceExports { runtime, client };
+            let problems = pull::done(&mut source, &entries);
+            for entry in &entries {
+                if !problems.iter().any(|p| p.starts_with(&entry.folder)) {
+                    println!("told the service {} is published", entry.folder);
+                }
+            }
+            for problem in &problems {
+                println!("{problem}");
+            }
+            if problems.is_empty() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "the service wasn't told about {} packs; run this again",
+                    problems.len()
+                ))
+            }
+        }
+        CommunityCommand::Mirror {
+            tree,
+            public,
+            service,
+        } => community_mirror(&runtime, &tree, &public, &service),
     }
 }
 
 /// A client signing with the maintainer's key from `service.key`.
 fn service_client(service: &Service) -> Result<Client, String> {
+    Client::new(&service.api, service_key(service)?).map_err(|e| e.to_string())
+}
+
+/// The maintainer's key, from the file `service.key` names.
+fn service_key(service: &Service) -> Result<DeviceKey, String> {
     let text = std::fs::read_to_string(&service.key)
         .map_err(|e| format!("couldn't read {}: {e}", service.key.display()))?;
-    let key = DeviceKey::from_recovery_file(&text).map_err(|e| e.to_string())?;
-    Client::new(&service.api, key).map_err(|e| e.to_string())
+    DeviceKey::from_recovery_file(&text).map_err(|e| e.to_string())
+}
+
+/// Brings the public mirror up to date with the tree in `tree`, and says what it did.
+fn community_mirror(
+    runtime: &tokio::runtime::Runtime,
+    tree: &Path,
+    public: &str,
+    service: &Service,
+) -> Result<(), String> {
+    let mut mirror = mirror::Mirror::new(
+        public,
+        &service.api,
+        service_key(service)?,
+        mirror::Backoff::default(),
+    )?;
+    let summary = runtime.block_on(mirror.run(tree))?;
+    for path in &summary.uploaded {
+        println!("uploaded {path}");
+    }
+    for (path, why) in &summary.failed {
+        println!("couldn't upload {path}: {why}");
+    }
+    println!(
+        "{} files were on the mirror already, {} uploaded",
+        summary.there,
+        summary.uploaded.len()
+    );
+    if summary.head {
+        return Ok(());
+    }
+    Err(format!(
+        "{} files couldn't be uploaded, so head.json wasn't either: the mirror still serves the \
+         last whole tree. Run it again to finish",
+        summary.failed.len()
+    ))
 }
 
 /// Makes the maintainer's signing key, never over an existing file, readable by its owner only.
@@ -494,11 +607,19 @@ fn load_skin(path: &Path, focus: (f32, f32)) -> Result<Skin, String> {
 }
 
 /// Checks every pack in `dir`, printing each problem on its own line.
-fn packs_check(dir: &Path, max_kb: Option<usize>) -> Result<(), String> {
-    let report = match max_kb {
-        Some(kb) => packs::check_within(dir, kb * 1024)?,
-        None => packs::check(dir)?,
+fn packs_check(
+    dir: &Path,
+    max_kb: Option<usize>,
+    require_generated_ids: bool,
+) -> Result<(), String> {
+    let mut opts = packs::CheckOptions {
+        require_generated_ids,
+        ..packs::CheckOptions::default()
     };
+    if let Some(kb) = max_kb {
+        opts.max_bytes = kb * 1024;
+    }
+    let report = packs::check_with(dir, &opts)?;
     for problem in &report.problems {
         println!("{problem}");
     }
@@ -539,6 +660,10 @@ fn packs_make(
         made.len() - folders,
         total.div_ceil(1024)
     );
+    if opts.id.is_none() {
+        let id = folder.file_name().unwrap_or_default().to_string_lossy();
+        println!("Its id is {id}, which stays the same whatever the pack is called later.");
+    }
     if let Some(path) = preview {
         let pack = folderskin_core::pack::Pack::parse(
             &std::fs::read(folder.join(folderskin_core::pack::MANIFEST_FILE))
@@ -561,7 +686,7 @@ fn packs_index(dir: &Path) -> Result<(), String> {
     for problem in &report.problems {
         println!("{problem}");
     }
-    let dates = catalog::git_dates(dir);
+    let dates = catalog::git_dates(dir, &report.moved);
     if dates.is_empty() && !report.packs.is_empty() {
         println!("no git history for these packs, so index.json can't say when each was added");
     }
@@ -581,6 +706,38 @@ fn packs_index(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Gives packs generated ids and says what moved, what was left alone and what it rewrote.
+fn packs_rename(dir: &Path, which: &rename::Which) -> Result<(), String> {
+    let renamed = rename::rename(dir, which)?;
+    for (old, new) in &renamed.moved {
+        println!("moved {old} to {new}");
+    }
+    for (old, now) in &renamed.earlier {
+        println!("{old} moved to {now} already");
+    }
+    if !renamed.kept.is_empty() && *which == rename::Which::All {
+        let n = renamed.kept.len();
+        let packs = if n == 1 { "pack has" } else { "packs have" };
+        println!("left alone: {n} {packs} a generated id already");
+    }
+    for path in &renamed.written {
+        println!("wrote {}", path.display());
+    }
+    if renamed.moved.is_empty() {
+        println!("nothing to rename");
+    } else {
+        println!(
+            "Renamed {} and staged it all: run `folderskin-tools packs check`, then commit.",
+            if renamed.moved.len() == 1 {
+                "1 pack".to_string()
+            } else {
+                format!("{} packs", renamed.moved.len())
+            }
+        );
+    }
+    Ok(())
+}
+
 /// Checks every community pack and, when all pass, brings the published tree up to date. Every
 /// file is named, so the counts are printed rather than a line for each.
 fn packs_catalog(dir: &Path, out: PathBuf, mirrors: Vec<String>) -> Result<(), String> {
@@ -592,7 +749,7 @@ fn packs_catalog(dir: &Path, out: PathBuf, mirrors: Vec<String>) -> Result<(), S
         out,
         mirrors,
         cwebp: make::find_cwebp(),
-        dates: catalog::git_dates(dir),
+        dates: catalog::git_dates(dir, &report.moved),
     };
     if opts.cwebp.is_none() {
         println!("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger");

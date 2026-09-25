@@ -1,17 +1,23 @@
 //! `community pull`: approved packs from the community service, written into community/packs as
 //! ordinary pack folders.
 //!
-//! A pack shared without GitHub arrives here the way any other pack would: a folder of pictures
-//! and a `pack.json`, credited to the handle of the computer that sent it. Every file is checked
-//! against the size and SHA-256 the service recorded when it was uploaded, and the finished folder
-//! against the same rules `packs check` holds every pack to, before it takes its place. Only then
-//! is the service told the pack has been pulled, and under which folder, so a pack that fails
-//! comes back next time. From there it is an ordinary change to review, commit and index.
+//! A pack shared from the app arrives here the way any other pack would: a folder of pictures and
+//! a `pack.json`, credited to the handle of the computer that sent it, under the generated id the
+//! service gave it on approval. Every file is checked against the size and SHA-256 the service
+//! recorded when it was uploaded, and the finished folder against the same rules `packs check`
+//! holds every pack to, before it takes its place. A folder that is there already is never
+//! renumbered or written over.
+//!
+//! Only then is the service told the pack has been pulled (`done`), so a pack that fails comes
+//! back next time. A person pulling by hand tells it at once. The Packs workflow in
+//! folderskin-community tells it later, from the list [`write_list`] saves, once the packs are
+//! pushed: a check or a push that fails leaves them at the service for the next run.
 
 use crate::packs;
 use folderskin_core::pack::{self, Pack, MANIFEST_FILE};
 use folderskin_share::api::Export;
 use folderskin_share::sign::sha256_hex;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Where approved packs come from: the service, or a stand-in in the tests.
@@ -23,18 +29,29 @@ pub trait Exports {
     fn done(&mut self, id: &str, folder: &str) -> Result<(), String>;
 }
 
-/// A pack that was written.
+/// When the service hears that a pack was pulled.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Tell {
+    /// As soon as its folder is written: a person pulling by hand, who commits what they pull.
+    Now,
+    /// Not here: [`done`] tells it, from the list [`write_list`] saves.
+    Later,
+}
+
+/// A pack that was pulled.
 #[derive(Debug)]
 pub struct Pulled {
     /// The submission it came from.
     pub id: String,
-    /// Its folder name in community/packs: the service's name for it, numbered when a pack from
-    /// GitHub had that name already.
+    /// Its folder name in community/packs: the id the service gave it.
     pub pack_id: String,
     pub folder: PathBuf,
     pub name: String,
     pub author: String,
     pub skins: usize,
+    /// The folder held exactly this pack already: an earlier pull wrote it, but the service
+    /// never heard, so it is told now instead of the pack being refused.
+    pub was_there: bool,
 }
 
 /// What a pull did: the packs written, and a sentence for each that wasn't.
@@ -44,23 +61,49 @@ pub struct Report {
     pub problems: Vec<String>,
 }
 
-/// Pulls every approved pack into `packs_dir` (community/packs).
-pub fn pull(source: &mut dyn Exports, packs_dir: &Path) -> Result<Report, String> {
+/// One pack in the list [`write_list`] saves for `community done`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Entry {
+    /// The submission, `sub_…`.
+    pub submission: String,
+    /// The pack's folder in community/packs, which is its id.
+    pub folder: String,
+    /// The pack's name, for the commit that adds it.
+    pub name: String,
+}
+
+/// Pulls every approved pack into `packs_dir` (community/packs), telling the service about each
+/// one as `tell` says.
+pub fn pull(source: &mut dyn Exports, packs_dir: &Path, tell: Tell) -> Result<Report, String> {
     std::fs::create_dir_all(packs_dir)
         .map_err(|e| format!("couldn't make {}: {e}", packs_dir.display()))?;
+    // An id a pack had before is never given out again, so the service's choice is checked
+    // against moved.json beside packs/.
+    let root = packs_dir.parent().unwrap_or(Path::new("."));
+    let moved = packs::read_moved(root)?;
     let mut report = Report::default();
     for export in source.list()? {
+        if let Some(now) = moved.moved.get(&export.pack_id) {
+            report.problems.push(format!(
+                "{}: that id moved to {now}, and an old id is never given out again; nothing \
+                 was written",
+                export.pack_id
+            ));
+            continue;
+        }
         match pull_one(source, &export, packs_dir) {
             Ok(pulled) => {
-                // A pack written but not marked done would be written again next time, under a
-                // new folder name; say so rather than leave it to be found.
-                if let Err(e) = source.done(&export.id, &pulled.pack_id) {
-                    report.problems.push(format!(
-                        "{}: written to {}, but the service wasn't told ({e}); delete the folder \
-                         before pulling again",
-                        export.pack_id,
-                        pulled.folder.display()
-                    ));
+                // A pack written but never marked done comes back next time, and meets its own
+                // folder: say so rather than leave it to be found.
+                if tell == Tell::Now {
+                    if let Err(e) = source.done(&export.id, &pulled.pack_id) {
+                        report.problems.push(format!(
+                            "{}: written to {}, but the service wasn't told ({e}); run `community \
+                             pull` again once the service answers",
+                            export.pack_id,
+                            pulled.folder.display()
+                        ));
+                    }
                 }
                 report.pulled.push(pulled);
             }
@@ -70,7 +113,65 @@ pub fn pull(source: &mut dyn Exports, packs_dir: &Path) -> Result<Report, String
     Ok(report)
 }
 
+/// Saves the packs `pulled` as a JSON list for `community done --from`, as `pull --no-done`
+/// leaves them.
+pub fn write_list(path: &Path, pulled: &[Pulled]) -> Result<(), String> {
+    let entries: Vec<Entry> = pulled
+        .iter()
+        .map(|p| Entry {
+            submission: p.id.clone(),
+            folder: p.pack_id.clone(),
+            name: p.name.trim().to_string(),
+        })
+        .collect();
+    let json = serde_json::to_string_pretty(&entries).map_err(|e| e.to_string())? + "\n";
+    std::fs::write(path, json).map_err(|e| format!("couldn't write {}: {e}", path.display()))
+}
+
+/// Reads the list [`write_list`] saved.
+pub fn read_list(path: &Path) -> Result<Vec<Entry>, String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("couldn't read {}: {e}", path.display()))?;
+    let entries: Vec<Entry> = serde_json::from_slice(&bytes).map_err(|e| {
+        format!(
+            "{} isn't a list of pulled packs, as `community pull --pulled` writes: {e}",
+            path.display()
+        )
+    })?;
+    if let Some(bad) = entries.iter().find(|e| !pack::is_pack_id(&e.folder)) {
+        return Err(format!(
+            "{} names the folder {:?}, which isn't a pack id",
+            path.display(),
+            bad.folder
+        ));
+    }
+    Ok(entries)
+}
+
+/// Tells the service that each pack in `entries` is in the repository now. Returns a sentence for
+/// each it couldn't tell; telling it twice does no harm, so a failed run can be run again whole.
+pub fn done(source: &mut dyn Exports, entries: &[Entry]) -> Vec<String> {
+    entries
+        .iter()
+        .filter_map(|e| {
+            source.done(&e.submission, &e.folder).err().map(|why| {
+                format!(
+                    "{} ({}): the service wasn't told: {why}",
+                    e.folder, e.submission
+                )
+            })
+        })
+        .collect()
+}
+
 fn pull_one(source: &mut dyn Exports, export: &Export, packs_dir: &Path) -> Result<Pulled, String> {
+    let id = &export.pack_id;
+    if !pack::is_generated_id(id) {
+        return Err(format!(
+            "the service gave it the id {id:?}, which isn't a generated one (a name and six \
+             random characters, such as sky-moods-k7q2mx); nothing was written"
+        ));
+    }
     let manifest = source.manifest(&export.id)?;
     let pack = Pack::parse(&manifest).map_err(|problems| problems.join("; "))?;
     if pack.author != export.handle {
@@ -87,7 +188,27 @@ fn pull_one(source: &mut dyn Exports, export: &Export, packs_dir: &Path) -> Resu
         return Err("pack.json doesn't list the files the service holds".into());
     }
 
-    let name = free_folder(packs_dir, &export.pack_id)?;
+    let pulled = |was_there| Pulled {
+        id: export.id.clone(),
+        folder: packs_dir.join(id),
+        pack_id: id.clone(),
+        name: pack.name.clone(),
+        author: pack.author.clone(),
+        skins: pack.skins.len(),
+        was_there,
+    };
+    let folder = packs_dir.join(id);
+    if std::fs::symlink_metadata(&folder).is_ok() {
+        if holds_exactly(&folder, &manifest, export) {
+            return Ok(pulled(true));
+        }
+        return Err(format!(
+            "{} is there already and holds something else, so it isn't written over; nothing \
+             was written",
+            folder.display()
+        ));
+    }
+    let name = id.clone();
     let partial = packs_dir.join(format!(".pull-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&partial);
     let written = (|| -> Result<(), String> {
@@ -105,41 +226,40 @@ fn pull_one(source: &mut dyn Exports, export: &Export, packs_dir: &Path) -> Resu
             std::fs::write(partial.join(&file.file), &bytes).map_err(|e| e.to_string())?;
         }
         packs::check_pack(&partial, &name).map_err(|problems| problems.join("; "))?;
-        let folder = packs_dir.join(&name);
         std::fs::rename(&partial, &folder).map_err(|e| e.to_string())
     })();
     if let Err(e) = written {
         let _ = std::fs::remove_dir_all(&partial);
         return Err(e);
     }
-    Ok(Pulled {
-        id: export.id.clone(),
-        folder: packs_dir.join(&name),
-        pack_id: name,
-        name: pack.name,
-        author: pack.author,
-        skins: pack.skins.len(),
-    })
+    Ok(pulled(false))
 }
 
-/// The pack's folder name, or the first `-2`, `-3`… that no folder has: the service only knows
-/// its own packs, and one from GitHub may already have the name.
-fn free_folder(packs_dir: &Path, wanted: &str) -> Result<String, String> {
-    if !pack::is_pack_id(wanted) {
-        return Err(format!("{wanted:?} isn't a pack folder name"));
-    }
-    (1..100)
-        .map(|n| {
-            if n == 1 {
-                wanted.to_string()
-            } else {
-                let suffix = format!("-{n}");
-                let base = &wanted[..wanted.len().min(40 - suffix.len())];
-                format!("{}{suffix}", base.trim_end_matches('-'))
-            }
+/// Whether `folder` holds exactly the pack `export` describes: `manifest` as its `pack.json`, and
+/// every picture the service recorded, byte for byte, with nothing else.
+fn holds_exactly(folder: &Path, manifest: &[u8], export: &Export) -> bool {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return false;
+    };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|name| !name.starts_with('.'))
+        .collect();
+    names.sort_unstable();
+    let mut expected: Vec<String> = export
+        .files
+        .iter()
+        .map(|f| f.file.clone())
+        .chain([MANIFEST_FILE.to_string()])
+        .collect();
+    expected.sort_unstable();
+    names == expected
+        && std::fs::read(folder.join(MANIFEST_FILE)).is_ok_and(|kept| kept == manifest)
+        && export.files.iter().all(|f| {
+            std::fs::read(folder.join(&f.file))
+                .is_ok_and(|kept| kept.len() == f.bytes && sha256_hex(&kept) == f.sha256)
         })
-        .find(|name| !packs_dir.join(name).exists())
-        .ok_or_else(|| format!("every folder name like {wanted} is taken"))
 }
 
 #[cfg(test)]
@@ -229,53 +349,151 @@ mod tests {
         dir
     }
 
-    #[test]
-    fn an_approved_pack_becomes_a_folder_that_packs_check_accepts() {
-        let dir = community("ok");
-        let mut source = approved("sub_aaaaaaaaaaaaaaaaaaaa", "sky-moods", "sunny-otter");
-        let report = pull(&mut source, &dir.join(packs::PACKS_DIR)).unwrap();
-        assert!(report.problems.is_empty(), "{:?}", report.problems);
-        assert_eq!(report.pulled.len(), 1);
-        assert_eq!(report.pulled[0].author, "sunny-otter");
-        assert_eq!(
-            source.done,
-            [(
-                "sub_aaaaaaaaaaaaaaaaaaaa".to_string(),
-                "sky-moods".to_string()
-            )]
-        );
-
-        let checked = packs::check(&dir).unwrap();
-        assert!(checked.problems.is_empty(), "{:?}", checked.problems);
-        assert_eq!(checked.packs[0].0, "sky-moods");
-        // Nothing half-written is left behind.
-        let names: Vec<String> = std::fs::read_dir(dir.join(packs::PACKS_DIR))
+    /// The names in `<dir>/packs`, dotfolders too.
+    fn folders(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir.join(packs::PACKS_DIR))
             .unwrap()
             .flatten()
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(names, ["sky-moods"]);
+        names.sort();
+        names
+    }
+
+    const SKY: &str = "sky-moods-k7q2mx";
+
+    #[test]
+    fn an_approved_pack_becomes_a_folder_that_packs_check_accepts() {
+        let dir = community("ok");
+        let mut source = approved("sub_aaaaaaaaaaaaaaaaaaaa", SKY, "sunny-otter");
+        let report = pull(&mut source, &dir.join(packs::PACKS_DIR), Tell::Now).unwrap();
+        assert!(report.problems.is_empty(), "{:?}", report.problems);
+        assert_eq!(report.pulled.len(), 1);
+        assert_eq!(report.pulled[0].author, "sunny-otter");
+        assert!(!report.pulled[0].was_there);
+        assert_eq!(
+            source.done,
+            [("sub_aaaaaaaaaaaaaaaaaaaa".to_string(), SKY.to_string())]
+        );
+
+        let checked = packs::check(&dir).unwrap();
+        assert!(checked.problems.is_empty(), "{:?}", checked.problems);
+        assert_eq!(checked.packs[0].0, SKY);
+        // Nothing half-written is left behind.
+        assert_eq!(folders(&dir), [SKY]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn a_name_a_github_pack_already_has_gets_a_number() {
+    fn a_folder_that_is_there_already_is_never_written_over_or_renumbered() {
         let dir = community("taken");
-        std::fs::create_dir_all(dir.join(packs::PACKS_DIR).join("sky-moods")).unwrap();
-        let mut source = approved("sub_bbbbbbbbbbbbbbbbbbbb", "sky-moods", "sunny-otter");
-        let report = pull(&mut source, &dir.join(packs::PACKS_DIR)).unwrap();
-        assert_eq!(
-            report.pulled[0].folder,
-            dir.join(packs::PACKS_DIR).join("sky-moods-2")
+        let taken = dir.join(packs::PACKS_DIR).join(SKY);
+        std::fs::create_dir_all(&taken).unwrap();
+        std::fs::write(taken.join("pack.json"), b"another pack's").unwrap();
+        let mut source = approved("sub_bbbbbbbbbbbbbbbbbbbb", SKY, "sunny-otter");
+        let report = pull(&mut source, &dir.join(packs::PACKS_DIR), Tell::Now).unwrap();
+        assert!(report.pulled.is_empty());
+        assert_eq!(report.problems.len(), 1);
+        assert!(
+            report.problems[0].starts_with(&format!("{SKY}: {}", taken.display()))
+                && report.problems[0].contains("isn't written over"),
+            "{:?}",
+            report.problems
         );
-        // The service is told where it really went, so reports and takedowns name that folder.
+        assert!(source.done.is_empty(), "it comes back next time");
+        assert_eq!(folders(&dir), [SKY]);
+        assert_eq!(
+            std::fs::read(taken.join("pack.json")).unwrap(),
+            b"another pack's"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_service_hears_later_when_asked_and_a_pack_it_never_heard_about_is_told_again() {
+        let dir = community("later");
+        let packs_dir = dir.join(packs::PACKS_DIR);
+        let mut source = approved("sub_eeeeeeeeeeeeeeeeeeee", SKY, "sunny-otter");
+        let report = pull(&mut source, &packs_dir, Tell::Later).unwrap();
+        assert!(report.problems.is_empty(), "{:?}", report.problems);
+        assert!(source.done.is_empty(), "not yet");
+
+        let list = dir.join("pulled.json");
+        write_list(&list, &report.pulled).unwrap();
+        let entries = read_list(&list).unwrap();
+        assert_eq!(
+            entries,
+            [Entry {
+                submission: "sub_eeeeeeeeeeeeeeeeeeee".into(),
+                folder: SKY.into(),
+                name: "Sky moods".into(),
+            }]
+        );
+
+        // The push failed, say, and the next run meets the folder it wrote: the same pack, so it
+        // is reported again rather than refused.
+        let again = pull(&mut source, &packs_dir, Tell::Later).unwrap();
+        assert!(again.problems.is_empty(), "{:?}", again.problems);
+        assert!(again.pulled[0].was_there);
+        assert_eq!(folders(&dir), [SKY]);
+
+        assert!(done(&mut source, &entries).is_empty());
+        assert!(done(&mut source, &entries).is_empty(), "twice does no harm");
         assert_eq!(
             source.done,
-            [(
-                "sub_bbbbbbbbbbbbbbbbbbbb".to_string(),
-                "sky-moods-2".to_string()
-            )]
+            [
+                ("sub_eeeeeeeeeeeeeeeeeeee".to_string(), SKY.to_string()),
+                ("sub_eeeeeeeeeeeeeeeeeeee".to_string(), SKY.to_string())
+            ]
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_list_names_pack_folders_and_nothing_else() {
+        let dir = community("list");
+        let list = dir.join("pulled.json");
+        std::fs::write(
+            &list,
+            r#"[{ "submission": "sub_x", "folder": "../up", "name": "Up" }]"#,
+        )
+        .unwrap();
+        assert!(read_list(&list).unwrap_err().contains("isn't a pack id"));
+        std::fs::write(&list, r#"{ "pulled": [] }"#).unwrap();
+        assert!(read_list(&list)
+            .unwrap_err()
+            .contains("isn't a list of pulled packs"));
+        std::fs::write(&list, "[]").unwrap();
+        assert!(read_list(&list).unwrap().is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn only_a_generated_id_that_no_pack_had_before_is_taken_from_the_service() {
+        let dir = community("ids");
+        let packs_dir = dir.join(packs::PACKS_DIR);
+        let mut source = approved("sub_ffffffffffffffffffff", "sky-moods", "sunny-otter");
+        let report = pull(&mut source, &packs_dir, Tell::Now).unwrap();
+        assert!(
+            report.problems[0].contains("isn't a generated one"),
+            "{:?}",
+            report.problems
+        );
+
+        std::fs::write(
+            dir.join(pack::MOVED_FILE),
+            format!(r#"{{ "version": 1, "moved": {{ "{SKY}": "other-a2b3c4" }} }}"#),
+        )
+        .unwrap();
+        let mut source = approved("sub_gggggggggggggggggggg", SKY, "sunny-otter");
+        let report = pull(&mut source, &packs_dir, Tell::Now).unwrap();
+        assert!(
+            report.problems[0].contains("that id moved to other-a2b3c4"),
+            "{:?}",
+            report.problems
+        );
+        assert!(report.pulled.is_empty() && source.done.is_empty());
+        assert!(folders(&dir).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -283,11 +501,11 @@ mod tests {
     fn a_picture_that_isnt_the_one_uploaded_stops_that_pack() {
         let dir = community("changed");
         let id = "sub_cccccccccccccccccccc";
-        let mut source = approved(id, "sky-moods", "sunny-otter");
+        let mut source = approved(id, SKY, "sunny-otter");
         source
             .files
             .insert((id.into(), "dusk.png".into()), picture(201));
-        let report = pull(&mut source, &dir.join(packs::PACKS_DIR)).unwrap();
+        let report = pull(&mut source, &dir.join(packs::PACKS_DIR), Tell::Now).unwrap();
         assert!(report.pulled.is_empty());
         assert_eq!(report.problems.len(), 1);
         assert!(
@@ -309,9 +527,9 @@ mod tests {
     #[test]
     fn a_pack_credited_to_someone_else_is_refused() {
         let dir = community("credit");
-        let mut source = approved("sub_dddddddddddddddddddd", "sky-moods", "sunny-otter");
+        let mut source = approved("sub_dddddddddddddddddddd", SKY, "sunny-otter");
         source.exports[0].handle = "someone-else".into();
-        let report = pull(&mut source, &dir.join(packs::PACKS_DIR)).unwrap();
+        let report = pull(&mut source, &dir.join(packs::PACKS_DIR), Tell::Now).unwrap();
         assert!(report.pulled.is_empty());
         assert!(
             report.problems[0].contains("credits"),
