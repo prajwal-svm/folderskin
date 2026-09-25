@@ -4,6 +4,8 @@
 
 # FolderSkin
 
+[English](README.md) · [简体中文](README.zh-CN.md) · 日本語 · [한국어](README.ko.md) · [Français](README.fr.md) · [Español](README.es.md)
+
 [![macOS版をダウンロード](https://img.shields.io/badge/Download_for_macOS-111827?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/prajwal-svm/folderskin/releases/latest)
 [![Windows版をダウンロード](https://img.shields.io/badge/Download_for_Windows-3A86FF?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NDggNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMCA5My43bDE4My42LTI1LjN2MTc3LjRIMHptMCAzMjQuNmwxODMuNiAyNS4zVjI2OC40SDB6bTIwMy44IDI4TDQ0OCA0ODBWMjY4LjRIMjAzLjh6bTAtMzgwLjZ2MTgwLjFINDQ4VjMyeiIvPjwvc3ZnPg==)](https://github.com/prajwal-svm/folderskin/releases/latest)
 [![Linux版をダウンロード](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest)
@@ -26,8 +28,6 @@
 無料 · オープンソース · アカウント不要 · トラッキングなし
 
 </div>
-
-[English](README.md) · [简体中文](README.zh-CN.md) · 日本語 · [한국어](README.ko.md) · [Français](README.fr.md) · [Español](README.es.md)
 
 <div align="center">
   <img src="docs/images/app.webp" alt="macOSで動くFolderSkin 0.1.7。ライブラリにScientists Pop Artパックが並び、「ダウンロード」フォルダでアイザック・ニュートンのスキンを試着しているところ" width="100%" />
