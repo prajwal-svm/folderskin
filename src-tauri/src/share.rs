@@ -34,10 +34,11 @@ use std::time::{Duration, Instant};
 use tauri::ipc::Channel;
 use tauri::State;
 
-/// The service's address. Empty until it is deployed, which the share dialog says rather than
-/// failing. `FOLDERSKIN_COMMUNITY_API`, set when FolderSkin runs or when it is built, points at
-/// another, such as `wrangler dev` on this computer.
-const COMMUNITY_API: &str = "";
+/// The service's address, for release builds. `FOLDERSKIN_COMMUNITY_API`, set when FolderSkin
+/// runs or when it is built, points at another, such as `wrangler dev` on this computer; a
+/// development build uses a service only when that names one, so trying things out never sends a
+/// pack to the real one.
+const COMMUNITY_API: &str = "https://community.folderskin.app";
 
 /// Where the computer's key is kept in [`Keys`], beside the AI keys and the GitHub sign-in.
 const SLOT: &str = "community-key";
@@ -59,17 +60,26 @@ const UNREACHABLE: &str = "FolderSkin's sharing service can't be reached right n
                            connection, or share through GitHub instead.";
 const VERIFY_FIRST: &str = "Verify this computer first, so the service knows the pack is yours.";
 
-/// The service's address this build or run names, if any: `FOLDERSKIN_COMMUNITY_API` as
-/// FolderSkin runs, then as it was built, then [`COMMUNITY_API`]. Install counts go to the same
-/// service ([`crate::installs`]).
-pub(crate) fn api_base() -> Option<String> {
+/// The service `FOLDERSKIN_COMMUNITY_API` names as FolderSkin runs, then as it was built: one
+/// chosen on purpose. Install counts ([`crate::installs`]) follow the same choice.
+pub(crate) fn api_override() -> Option<String> {
     let running = std::env::var("FOLDERSKIN_COMMUNITY_API").ok();
     let built = option_env!("FOLDERSKIN_COMMUNITY_API").map(str::to_string);
-    [running, built, Some(COMMUNITY_API.to_string())]
+    [running, built]
         .into_iter()
         .flatten()
         .map(|url| url.trim().to_string())
         .find(|url| !url.is_empty())
+}
+
+/// The service this build or run shares with: [`api_override`], or [`COMMUNITY_API`] in a
+/// release build.
+pub(crate) fn api_base() -> Option<String> {
+    api_override().or_else(|| default_api(cfg!(debug_assertions)))
+}
+
+fn default_api(development: bool) -> Option<String> {
+    (!development && !COMMUNITY_API.is_empty()).then(|| COMMUNITY_API.to_string())
 }
 
 /// The computer's key, if it has one.
@@ -549,6 +559,15 @@ pub async fn share_withdraw(keys: State<'_, Keys>, id: String) -> Result<(), Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_release_build_shares_with_the_real_service_and_a_development_build_only_when_told() {
+        assert_eq!(
+            default_api(false).as_deref(),
+            Some("https://community.folderskin.app")
+        );
+        assert_eq!(default_api(true), None);
+    }
 
     fn picture(w: u32, h: u32, shade: u8) -> Vec<u8> {
         folderskin_core::raster::encode_png(&RgbaImage::from_pixel(

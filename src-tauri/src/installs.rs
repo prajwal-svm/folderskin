@@ -11,10 +11,10 @@
 //! after a few seconds, and whatever becomes of it (offline, the service down, a pack it doesn't
 //! know) is dropped without a word. Nothing waits for it.
 //!
-//! The service is the one sharing uses (`FOLDERSKIN_COMMUNITY_API`, or `COMMUNITY_API` in share.rs),
-//! or community.folderskin.app when neither names one. A development build, and a build reading
-//! the packs from another copy of folderskin-community (`FOLDERSKIN_COMMUNITY_URL`), count nothing
-//! unless a service is named, so trying things out doesn't add to the real numbers.
+//! The service is the one `FOLDERSKIN_COMMUNITY_API` names, or community.folderskin.app for a
+//! release build. A development build, and a build reading the packs from another copy of
+//! folderskin-community (`FOLDERSKIN_COMMUNITY_URL`), count nothing unless a service is named that
+//! way, so trying things out doesn't add to the real numbers.
 
 use folderskin_core::pack;
 use std::sync::OnceLock;
@@ -31,7 +31,7 @@ pub fn report(pack_id: &str) {
     let other_packs =
         std::env::var("FOLDERSKIN_COMMUNITY_URL").is_ok_and(|url| !url.trim().is_empty());
     let service = service(
-        crate::share::api_base(),
+        crate::share::api_override(),
         other_packs,
         cfg!(debug_assertions),
     );
@@ -40,8 +40,8 @@ pub fn report(pack_id: &str) {
     }
 }
 
-/// The service to count at: the one `named` for sharing, or [`COUNTS_API`] for a release build
-/// that reads the real packs; `None` otherwise.
+/// The service to count at: the one `named` on purpose, or [`COUNTS_API`] for a release build that
+/// reads the real packs; `None` otherwise.
 fn service(named: Option<String>, other_packs: bool, development: bool) -> Option<String> {
     named.or_else(|| (!development && !other_packs).then(|| COUNTS_API.to_string()))
 }

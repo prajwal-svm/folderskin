@@ -4,10 +4,14 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.6 — 2026-09-25
 
 ### Added
 
+- **Share packs without GitHub.** The share dialog now sends a pack to FolderSkin's community
+  service unless you choose GitHub: verify your computer once in the browser, and the pack goes to
+  the maintainer for review, with no GitHub account needed. Sharing through GitHub is still one
+  click away in the same dialog.
 - **Install packs from the website.** The Install button on a pack in the gallery on
   [folderskin.app](https://folderskin.app/community/) opens FolderSkin on that pack in Community
   and adds it, with the same progress and message as its Add button. A link to a pack Community
@@ -27,6 +31,8 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 - On Windows and Linux, opening FolderSkin while it's already open brings its window forward
   instead of starting a second copy.
+- The pack guide and the pack terms open on [folderskin.app](https://folderskin.app/docs/),
+  FolderSkin's new website.
 
 ## 0.1.5 — 2026-09-24
 

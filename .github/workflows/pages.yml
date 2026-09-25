@@ -1,0 +1,36 @@
+name: Pages
+
+# prajwal-svm.github.io/folderskin/ was FolderSkin's website before folderskin.app. Links to it
+# still exist, so GitHub Pages now serves only a redirect to the same page on folderskin.app,
+# whose source is in its own repository.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/pages-redirect/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: .github/pages-redirect
+      - id: deployment
+        uses: actions/deploy-pages@v4
