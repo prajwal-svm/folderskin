@@ -94,7 +94,8 @@ impl MenuWords {
     /// The same words with any left empty back in English: a menu item never goes blank.
     fn or_english(self) -> MenuWords {
         let en = MenuWords::default();
-        let pick = |ours: String, theirs: String| if ours.trim().is_empty() { theirs } else { ours };
+        let pick =
+            |ours: String, theirs: String| if ours.trim().is_empty() { theirs } else { ours };
         MenuWords {
             about: pick(self.about, en.about),
             services: pick(self.services, en.services),
@@ -252,9 +253,10 @@ mod tests {
 
     #[test]
     fn words_the_webview_leaves_out_or_empty_stay_in_english() {
-        let words: MenuWords =
-            serde_json::from_str(r#"{"copy": "Copier", "paste": "  ", "selectAll": "Tout sélectionner"}"#)
-                .unwrap();
+        let words: MenuWords = serde_json::from_str(
+            r#"{"copy": "Copier", "paste": "  ", "selectAll": "Tout sélectionner"}"#,
+        )
+        .unwrap();
         let words = words.or_english();
         assert_eq!(words.copy, "Copier");
         assert_eq!(words.select_all, "Tout sélectionner");

@@ -15,7 +15,7 @@ import { docsUrl as docsUrlIn, LOCALES, type Locale } from "./locales";
 import ai from "../locales/en/ai.json";
 import common from "../locales/en/common.json";
 import community from "../locales/en/community.json";
-import errors from "../locales/en/errors.json";
+import native from "../locales/en/native.json";
 import folder from "../locales/en/folder.json";
 import library from "../locales/en/library.json";
 import menu from "../locales/en/menu.json";
@@ -29,7 +29,7 @@ export { DEFAULT_LOCALE, detectLocale, INTL_LOCALES, isLocale, LOCALE_NAMES, LOC
 export type { Vars } from "./core";
 
 /** English, in the app's first chunk: what every other language falls back to. */
-const ENGLISH = { ai, common, community, errors, folder, library, menu, onboarding, settings, share, sidebar, updates };
+const ENGLISH = { ai, common, community, folder, library, menu, native, onboarding, settings, share, sidebar, updates };
 
 /**
  * English namespaces that arrive with the code that uses them, not in the first chunk: the

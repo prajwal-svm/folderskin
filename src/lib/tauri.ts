@@ -499,5 +499,5 @@ export function errorMessage(err: unknown): string {
   if (err instanceof Error) return explain(err.message);
   // A structured error (the AI commands' {code, message}) says itself in its message.
   if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") return explain((err as { message: string }).message);
-  return t("errors.somethingWrong");
+  return t("common.errors.somethingWrong");
 }

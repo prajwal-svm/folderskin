@@ -55,5 +55,9 @@
   "control": {
     "typed": "{{name}}, typed",
     "value": "value"
+  },
+  "errors": {
+    "somethingWrong": "something went wrong",
+    "templateLoad": "couldn't load the folder template"
   }
 }

@@ -121,7 +121,7 @@ pub fn from_provider(e: AiError, label: &str, doing: &str) -> AiFailure {
         | AiError::Unsupported(_)
         | AiError::NotAnImage => AiFailure::failed(text)
             .fix(format!(
-                "Try again in a little while; if it keeps happening, try another model or \
+                "Try again in a little while. If it keeps happening, try another model or \
                  another provider than {label}."
             ))
             .asking(doing, ""),

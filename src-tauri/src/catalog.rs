@@ -657,7 +657,7 @@ async fn download_catalog(
     let Some(gz) = arrived else {
         return Err(match error {
             Some(Fetch::NotFound(_)) | None => {
-                "the newest list of packs isn't there yet; try again in a minute".into()
+                "the newest list of packs isn't there yet. Try again in a minute".into()
             }
             // Its size is known, so one bigger is the wrong file too.
             Some(Fetch::Damaged | Fetch::TooBig(_)) => DAMAGED.into(),
@@ -689,7 +689,7 @@ async fn download_catalog(
     .await
 }
 
-const DAMAGED: &str = "the catalog of community packs arrived damaged; try again";
+const DAMAGED: &str = "the catalog of community packs arrived damaged. Try again";
 
 /// Deletes the catalogs kept beside `current`. One still open elsewhere can't be deleted on
 /// Windows; it goes next time.

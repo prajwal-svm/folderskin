@@ -138,13 +138,13 @@ impl Pack {
             ));
         }
         if self.tags.is_empty() {
-            problems.push("\"tags\" needs at least one tag; the first names the pack".into());
+            problems.push("\"tags\" needs at least one tag. The first names the pack".into());
         }
         check_tags(&self.tags, MAX_PACK_TAGS, "the pack", &mut problems);
 
         if self.skins.is_empty() || self.skins.len() > MAX_SKINS {
             problems.push(format!(
-                "a pack has 1 to {MAX_SKINS} skins; this one has {}",
+                "a pack has 1 to {MAX_SKINS} skins, and this one has {}",
                 self.skins.len()
             ));
         }
@@ -440,7 +440,7 @@ impl Moved {
             // An old id leading to another old id is its own mistake, whatever else is wrong.
             if self.moved.contains_key(new) {
                 problems.push(format!(
-                    "{MOVED_FILE}: {old} moved to {new}, which moved again; point {old} at where {new} went"
+                    "{MOVED_FILE}: {old} moved to {new}, which moved again. Point {old} at where {new} went"
                 ));
             } else if !is_pack_id(new) || !packs.contains(new) {
                 problems.push(format!(
@@ -541,12 +541,12 @@ pub fn check_picture(bytes: &[u8]) -> Result<(u32, u32), String> {
         .map_err(|_| "couldn't be read".to_string())?;
     if w > MAX_PICTURE_SIDE || h > MAX_PICTURE_SIDE {
         return Err(format!(
-            "is {w}×{h} px; the most is {MAX_PICTURE_SIDE}×{MAX_PICTURE_SIDE}"
+            "is {w}×{h} px, and the most is {MAX_PICTURE_SIDE}×{MAX_PICTURE_SIDE}"
         ));
     }
     if w.min(h) < MIN_PICTURE_SIDE {
         return Err(format!(
-            "is {w}×{h} px; each side needs at least {MIN_PICTURE_SIDE} px"
+            "is {w}×{h} px, but each side needs at least {MIN_PICTURE_SIDE} px"
         ));
     }
     Ok((w, h))
@@ -629,7 +629,7 @@ pub fn check_picture_size(w: u32, h: u32) -> Result<(), String> {
     let (w, h) = raster::shrunk_size(w, h, MAX_PICTURE_SIDE);
     if w.min(h) < MIN_PICTURE_SIDE {
         return Err(format!(
-            "is {w}×{h} px; a pack needs at least {MIN_PICTURE_SIDE} px on each side"
+            "is {w}×{h} px, but a pack needs at least {MIN_PICTURE_SIDE} px on each side"
         ));
     }
     Ok(())
@@ -653,7 +653,7 @@ pub fn size_label(bytes: usize) -> String {
 fn within(bytes: &[u8], max: usize) -> Result<(), String> {
     if bytes.len() > max {
         return Err(format!(
-            "is {} KB; the most is {} KB",
+            "is {} KB, and the most is {} KB",
             bytes.len().div_ceil(1024),
             max / 1024
         ));
@@ -722,7 +722,7 @@ fn is_hidden(c: char) -> bool {
 fn check_tags(tags: &[String], max: usize, whose: &str, problems: &mut Vec<String>) {
     if tags.len() > max {
         problems.push(format!(
-            "{whose} has {} tags; the most is {max}",
+            "{whose} has {} tags, and the most is {max}",
             tags.len()
         ));
     }
@@ -1091,7 +1091,7 @@ mod tests {
         assert!(check_picture(b"GIF89a....").is_err());
         assert_eq!(
             check_picture(&vec![0; MAX_READ_PICTURE_BYTES + 1]).unwrap_err(),
-            "is 2049 KB; the most is 2048 KB"
+            "is 2049 KB, and the most is 2048 KB"
         );
         assert_eq!(
             decode_picture(&png(300, 300)).unwrap().dimensions(),
@@ -1186,7 +1186,7 @@ mod tests {
         let big = vec![0; MAX_PICTURE_BYTES + 1];
         assert_eq!(
             check_new_picture(&big).unwrap_err(),
-            "is 1537 KB; the most is 1536 KB"
+            "is 1537 KB, and the most is 1536 KB"
         );
         assert_eq!(
             check_picture(&big).unwrap_err(),
@@ -1230,11 +1230,11 @@ mod tests {
         // Too small for a pack, before anything is encoded, and told from its size alone.
         assert_eq!(
             encode_picture(RgbaImage::new(1000, 200), MAX_PICTURE_BYTES).unwrap_err(),
-            "is 1000×200 px; a pack needs at least 256 px on each side"
+            "is 1000×200 px, but a pack needs at least 256 px on each side"
         );
         assert_eq!(
             check_picture_size(4000, 900).unwrap_err(),
-            "is 1024×230 px; a pack needs at least 256 px on each side",
+            "is 1024×230 px, but a pack needs at least 256 px on each side",
             "measured as it would be made"
         );
         assert_eq!(check_picture_size(4000, 1000), Ok(()));

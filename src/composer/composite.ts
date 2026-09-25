@@ -24,7 +24,7 @@ function load(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(t("errors.templateLoad")));
+    img.onerror = () => reject(new Error(t("common.errors.templateLoad")));
     img.src = src;
   });
 }

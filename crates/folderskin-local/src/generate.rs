@@ -522,8 +522,8 @@ fn generate_blocking(
                     reporter.log(
                         Level::Warn,
                         format!(
-                            "{name}: the model changed the folder's shape (fit {:.3}); left on \
-                             its backdrop",
+                            "{name}: the model changed the folder's shape (fit {:.3}), so it's left \
+                             on its backdrop",
                             cut.fit
                         ),
                     );

@@ -347,7 +347,7 @@ async fn set_up(local: &Local, jobs: &Jobs, send: Sender) -> Result<LocalStatusD
     if !status.ready {
         let why = "Everything downloaded, but it still isn't ready to paint.";
         return Err(AiFailure::failed(why)
-            .fix("Try again; what was downloaded is kept.")
+            .fix("Try again. What was downloaded is kept.")
             .asking(&doing.what, why));
     }
     Ok(status)

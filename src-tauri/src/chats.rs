@@ -107,7 +107,7 @@ pub fn summarise(chat: &Value) -> Result<ChatSummary, String> {
         .ok_or("a chat without its turns")?;
     if turns.len() > MAX_TURNS {
         return Err(format!(
-            "this chat has more than {MAX_TURNS} requests; start a new one"
+            "this chat has more than {MAX_TURNS} requests. Start a new one"
         ));
     }
     let title: String = chat
@@ -169,7 +169,7 @@ pub fn save(dir: &Path, chat: &Value) -> Result<ChatSummary, String> {
     let summary = summarise(chat)?;
     let bytes = serde_json::to_vec(chat).map_err(|e| e.to_string())?;
     if bytes.len() > MAX_CHAT_BYTES {
-        return Err("this chat has grown too big to keep; start a new one".into());
+        return Err("this chat has grown too big to keep. Start a new one".into());
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("couldn't make the chats folder: {e}"))?;
     write_atomic(&dir.join(format!("{}.json", summary.id)), &bytes)
