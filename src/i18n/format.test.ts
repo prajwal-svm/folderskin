@@ -31,7 +31,7 @@ describe("numbers, sizes, lengths of time, dates and lists", () => {
   it("follow the language on show", async () => {
     await i18n.setLocale("fr");
     expect(plain(formatNumber(1234.5))).toBe("1 234,5");
-    expect(plain(formatBytes(3_600_000))).toBe("3,6 MB");
+    expect(plain(formatBytes(3_600_000))).toBe("3,6 Mo");
     expect(plain(formatDuration(46))).toBe("46 secondes");
     expect(formatList(["Voyages", "Travail", "Photos"])).toBe("Voyages, Travail et Photos");
 
