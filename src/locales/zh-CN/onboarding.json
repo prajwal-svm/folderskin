@@ -1,1 +1,40 @@
-{}
+{
+  "welcome": {
+    "go": "开始吧",
+    "fine": "免费 · 开源 · 无需账号"
+  },
+  "install": {
+    "waiting": "等待中",
+    "downloading": "正在下载",
+    "downloadingOf": "正在下载 {{done}}/{{total}}",
+    "saving": "正在添加到皮肤库",
+    "added_other": "已添加 {{count}} 款皮肤",
+    "failed": "无法添加：{{reason}}"
+  },
+  "note": {
+    "inLibrary_other": "皮肤库里已有 {{count}} 款皮肤。",
+    "adding": "正在添加 {{name}}，需要几秒钟。",
+    "failedWhy_other": "{{names}} 无法添加：{{reason}}。",
+    "failed_other": "{{names}} 无法添加。请重试，或者以后在社区里添加。",
+    "anyTime": "你随时可以在社区里添加或移除皮肤包。",
+    "getting": "正在获取皮肤包"
+  },
+  "packs": {
+    "title": "先挑几款皮肤吧",
+    "sub": "皮肤包是大家通过 FolderSkin 免费分享的成套皮肤。",
+    "subPick": "皮肤包是大家通过 FolderSkin 免费分享的成套皮肤。喜欢哪个就选哪个。",
+    "subPicked": "皮肤包是大家通过 FolderSkin 免费分享的成套皮肤。已为你选好 {{name}}，喜欢的话可以再多选几个。",
+    "loadFailedText": "{{reason}}。你可以先跳过，以后再到社区添加皮肤包。",
+    "back": "返回",
+    "allSet": "全部就绪",
+    "continue": "继续",
+    "continueWithout": "不添加，直接继续",
+    "addOne": "添加 {{name}}",
+    "addMany_other": "添加 {{count}} 个皮肤包"
+  },
+  "pack": {
+    "label_other": "{{name}}，{{author}} 分享的 {{count}} 款皮肤",
+    "failed": "无法添加",
+    "already": "已在皮肤库中"
+  }
+}

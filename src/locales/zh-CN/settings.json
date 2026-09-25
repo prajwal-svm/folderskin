@@ -1,1 +1,127 @@
-{}
+{
+  "title": "设置",
+  "navLabel": "设置",
+  "search": "搜索",
+  "searchLabel": "搜索设置",
+  "pagesLabel": "设置页面",
+  "noMatch": "没有与“{{query}}”匹配的设置",
+  "pages": {
+    "general": "通用",
+    "ai": "AI 服务商",
+    "sharing": "分享",
+    "about": "关于"
+  },
+  "find": {
+    "general": "外观 主题 深色 浅色 暗色 亮色 系统 模式 强调色 主题色 颜色 动效 动画 减弱 减少 窗口 侧边栏 窄栏 图标 你的皮肤 文件夹 存储 备份 appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
+    "ai": "图片 生成 密钥 服务商 模型 本地模型 你的电脑 设置 免费 移除 删除 where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
+    "sharing": "分享 作者 署名 许可协议 许可 预设 社区 皮肤包 sharing share author credit credited licence license profile profiles cc0 cc by mit community pack",
+    "about": "关于 皮肤 皮肤包 照片 设计 本地模型 免费 开源 版本 新版本 更新 升级 发布 链接 源代码 问题 反馈 about folderskin what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star"
+  },
+  "general": {
+    "appearance": "外观",
+    "theme": "主题",
+    "themeLabel": "主题",
+    "themeFind": "深色 浅色 暗色 亮色 系统 模式 夜间 dark light system mode",
+    "themes": {
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色"
+    },
+    "accent": "强调色",
+    "accentNote": "用于按钮、选中项，以及拖入文件夹时它周围的光晕。",
+    "accentFind": "颜色 主题色 强调色 color accent",
+    "accentLabel": "强调色",
+    "accents": {
+      "blue": "蓝色",
+      "purple": "紫色",
+      "pink": "粉色",
+      "orange": "橙色",
+      "green": "绿色",
+      "mono": "黑白"
+    },
+    "motion": "动效",
+    "motionNote": "减少皮肤库、对话框和图标中的动态效果。",
+    "motionFind": "动画 动效 减弱 减少 animation reduce reduced",
+    "motionLabel": "动效",
+    "motions": {
+      "system": "跟随系统",
+      "systemTip": "按电脑本身的设置播放动效",
+      "reduced": "减弱",
+      "reducedTip": "内容直接出现和变化，没有移动效果"
+    },
+    "window": "窗口",
+    "sidebar": "侧边栏",
+    "sidebarNote": "“仅图标”会把它收成一条窄栏。按 {{keys}} 可以在两者之间切换。",
+    "sidebarFind": "收起 折叠 窄栏 仅图标 rail collapse fold icons",
+    "sidebarLabel": "侧边栏",
+    "full": "完整",
+    "iconsOnly": "仅图标",
+    "yourSkins": "你的皮肤",
+    "yourSkinsNote": "你添加的所有内容都保存在这里，重新打开应用后依然都在。复制这个文件夹即可备份。",
+    "skins_other": "{{count}} 款皮肤",
+    "skinsFind": "存储 文件夹 备份 皮肤 storage folder backup skins",
+    "keptUntilQuit": "保留到退出应用为止"
+  },
+  "ai": {
+    "title": "图片在哪里生成",
+    "find": "密钥 服务商 模型 key keys api provider providers model",
+    "note": "FolderSkin 没有服务器。使用密钥时，AI 生成会把你的请求从你的电脑直接发给服务商，费用计入你的账户。本地模型设置好之后，生成图片完全免费。",
+    "loading": "正在加载服务商"
+  },
+  "sharing": {
+    "title": "许可协议预设",
+    "note": "你分享的皮肤包会注明是谁做的，以及别人可以怎样使用。为每种分享方式各存一个预设，分享时会从默认预设开始。",
+    "howItWorks": "了解分享流程"
+  },
+  "profile": {
+    "firstName": "个人",
+    "fallbackName": "预设",
+    "default": "默认",
+    "creditedTo": "署名为 {{author}}",
+    "noCredit": "还没有署名",
+    "makeDefaultLabel": "将 {{name}} 设为默认",
+    "makeDefault": "设为默认",
+    "changeLabel": "修改 {{name}}",
+    "change": "修改",
+    "deleteLabel": "删除 {{name}}",
+    "delete": "删除",
+    "deleted": "已删除 {{name}}。",
+    "undo": "撤销",
+    "add": "添加预设",
+    "newLabel": "新预设",
+    "name": "名称",
+    "namePlaceholder": "比如：个人、工作用",
+    "creditedToLabel": "署名",
+    "authorPlaceholder": "your-name",
+    "licence": "许可协议",
+    "licenceLabel": "许可协议",
+    "save": "保存",
+    "addProfile": "添加预设",
+    "problems": {
+      "noName": "请给预设起个名字。",
+      "taken": "已经有一个名为 {{name}} 的预设了。",
+      "author": "署名只能由字母、数字和单个连字符组成。",
+      "full_other": "最多只能有 {{count}} 个预设。删掉一个才能添加这个。"
+    }
+  },
+  "about": {
+    "intro": "你最珍贵的回忆，和那堆旧文件用着同一款平平无奇的文件夹图标。FolderSkin 给每个文件夹换上与内容相称的样子：夏天的照片配一帧黄金时刻的电影剧照，旅行配一张复古旅行海报，视频项目配波普艺术，生日配柔和的马卡龙色。",
+    "points": {
+      "skins": "皮肤可以来自免费的社区皮肤包、你自己的照片，或者由你亲手设计。",
+      "ai": "描述一种风格，AI 就会画出来：用你自己的密钥，或者用本地模型免费生成。",
+      "fileBrowser": {
+        "macos": "皮肤直接显示在 Finder 中，任何文件夹一键就能恢复原来的图标。",
+        "windows": "皮肤直接显示在文件资源管理器中，任何文件夹一键就能恢复原来的图标。",
+        "linux": "皮肤直接显示在“文件”中，任何文件夹一键就能恢复原来的图标。"
+      },
+      "free": "免费开源。无需账号，不追踪。"
+    },
+    "updates": "更新",
+    "newer": "新版本",
+    "newerNote": "新版本来自 FolderSkin 在 GitHub 上的发布，只在你同意时才会安装。",
+    "newerFind": "更新 升级 版本 发布 update updates release version",
+    "links": "链接",
+    "sourceCode": "源代码",
+    "releases": "发布版本"
+  }
+}

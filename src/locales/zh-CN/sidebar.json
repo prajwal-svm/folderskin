@@ -1,1 +1,34 @@
-{}
+{
+  "sections": "栏目",
+  "version": "FolderSkin 版本 {{version}}",
+  "about": "关于 FolderSkin",
+  "addPhoto": "添加你的照片",
+  "groups": {
+    "library": "皮肤库",
+    "create": "创作",
+    "explore": "发现"
+  },
+  "items": {
+    "skins": "全部皮肤",
+    "yours": "我的皮肤",
+    "faves": "收藏",
+    "compose": "自己设计",
+    "generate": "AI 生成",
+    "community": "社区"
+  },
+  "withCount": "{{label}} · {{count}}",
+  "expandTip": "展开侧边栏",
+  "collapseTip": "收起侧边栏",
+  "expandLabel": "展开侧边栏",
+  "collapseLabel": "收起侧边栏",
+  "collapse": "收起侧边栏",
+  "darkMode": "深色模式",
+  "darkModeLabel": "深色模式",
+  "darkOn": "深色模式已开启",
+  "darkOff": "深色模式已关闭",
+  "settings": "设置",
+  "language": {
+    "label": "语言：{{language}}",
+    "menu": "语言"
+  }
+}

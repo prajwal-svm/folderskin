@@ -1,1 +1,135 @@
-{}
+{
+  "run": {
+    "folders_other": "{{count}} 个文件夹",
+    "tooMany": {
+      "folders": "文件夹太多（超过 {{max}} 个）",
+      "subfolders": "子文件夹太多（超过 {{max}} 个）"
+    },
+    "applyTo_other": "应用到 {{count}} 个文件夹",
+    "theSkin": "这款皮肤",
+    "couldntChange_other": "{{count}} 个没能修改。",
+    "stoppedBeforeAny": "还没修改任何文件夹就停止了",
+    "stoppedAfter_other": "处理了 {{count}} 个文件夹后停止",
+    "thoseWear_other": "这 {{count}} 个已换上 {{skin}}。",
+    "notReached_other": "还有 {{count}} 个没有处理到。",
+    "allWear_other": "{{count}} 个文件夹已换上 {{skin}}",
+    "someWear_other": "{{total}} 个文件夹中有 {{count}} 个已换上 {{skin}}",
+    "thoseBack_other": "这 {{count}} 个已恢复默认图标。",
+    "noIconOfTheirOwn_other": "{{count}} 个文件夹原本就没有自定义图标。",
+    "noCustomIcon": "这里没有使用自定义图标的文件夹",
+    "allBack_other": "{{count}} 个文件夹已恢复默认图标",
+    "someBack_other": "{{total}} 个文件夹中有 {{count}} 个已恢复默认图标",
+    "toastAllWear_other": "{{folder}} 及其中的 {{count}} 个文件夹已换上 {{skin}}",
+    "toast": "{{title}}。{{detail}}",
+    "carryOn": "继续",
+    "seeWhich": "查看是哪些"
+  },
+  "look": {
+    "label": "文件夹样式",
+    "appLabel": "皮肤套在哪种文件夹上",
+    "name": {
+      "mac": "Mac",
+      "windows": "Windows"
+    },
+    "tip": {
+      "mac": "改用 Mac 文件夹作为底板",
+      "windows": "改用 Windows 文件夹作为底板"
+    },
+    "redrawing": {
+      "mac": "正在把你的皮肤画到 Mac 文件夹上",
+      "windows": "正在把你的皮肤画到 Windows 文件夹上"
+    }
+  },
+  "stage": {
+    "label": "文件夹",
+    "pickHint": "选一款皮肤试穿",
+    "chooseOtherLabel": "选择 {{name}} 以外的文件夹",
+    "chooseFromLabel": "从{{place}}中选择文件夹",
+    "chooseOther": "选择其他文件夹",
+    "backTip": "或者按 Esc 键",
+    "back": "回到空文件夹",
+    "drag": {
+      "imageTitle": "松开即可添加这张图片",
+      "folderTitle": "松开即可选择这个文件夹",
+      "imageNamed": "{{name}} 会成为一款皮肤，存入我的皮肤。",
+      "image": "它会成为一款皮肤，存入我的皮肤。",
+      "folderNamed": "{{name}} 会出现在这里，等你给它换上皮肤。",
+      "folder": "它会出现在这里，等你给它换上皮肤。"
+    },
+    "empty": {
+      "titleWithSkin": "现在拖入一个文件夹",
+      "title": "把文件夹拖到这里",
+      "subWithSkin": "{{name}} 已准备好。把任意文件夹拖到这里，或者点击从{{place}}中选择一个。",
+      "sub": "或者点击从{{place}}中选择一个。"
+    },
+    "applied": "已应用",
+    "tryingOn": "正在试穿 {{name}}",
+    "currentIcon": "当前图标",
+    "tryOn": "试穿 {{name}}",
+    "removing": "正在移除",
+    "removeIcons": "移除自定义图标",
+    "removeIcon": "移除自定义图标",
+    "revertThese_other": "还原这 {{count}} 个",
+    "revertAll_other": "还原全部 {{count}} 个",
+    "revert": "还原",
+    "applying": "正在应用",
+    "applySkin": "应用皮肤",
+    "reverting": "正在还原",
+    "includeSubfolders": "包括子文件夹",
+    "inside_other": "其中有 {{count}} 个文件夹",
+    "stopping": "正在停止",
+    "doneOf": "{{done}}/{{total}}",
+    "startingWith": "从 {{name}} 开始",
+    "finishingThis": "正在处理完这个文件夹",
+    "stop": "停止",
+    "hideSummaryLabel": "隐藏这份汇总",
+    "hideSummary": "隐藏",
+    "which_other": "查看是哪 {{count}} 个",
+    "carryOnWith_other": "继续处理其余 {{count}} 个",
+    "tryAgain_other": "重试",
+    "theFolder": "这个文件夹",
+    "status": {
+      "doneStay": "已经处理好的文件夹会保持不变。",
+      "catchesUp": {
+        "macos": "Finder 会随之逐步更新。",
+        "windows": "文件资源管理器会随之逐步更新。",
+        "linux": "“文件”会随之逐步更新。"
+      },
+      "puttingIconsBack": "正在恢复默认图标",
+      "skipped": "隐藏文件夹和应用程序包会被跳过。",
+      "picturesToo": "图片也可以。拖入一张，就能把它变成皮肤。",
+      "ownIcon": "它已经有自己的图标了。",
+      "nothingChanges": "在你应用之前，磁盘上不会有任何改动。",
+      "writing": "正在把 {{skin}} 写入 {{folder}}",
+      "catchUp": {
+        "macos": "Finder 可能要过一秒钟才会更新。",
+        "windows": "文件资源管理器可能要过一秒钟才会更新。",
+        "linux": "“文件”可能要过一秒钟才会更新。"
+      },
+      "puttingIconBack": "正在恢复默认图标"
+    },
+    "pickHintChat": "预览聊天里的图片"
+  },
+  "toast": {
+    "defaultBack": "{{name}} 已恢复默认图标"
+  },
+  "errors": {
+    "switchLook": "无法切换文件夹样式：{{reason}}",
+    "notFolderOrPicture": "这既不是文件夹，也不是图片。",
+    "chooseFirst": "请先选择一个文件夹",
+    "apply": "无法应用皮肤：{{reason}}",
+    "noneChanged": "没有任何文件夹能被修改",
+    "revertTree": "无法恢复默认图标：{{reason}}",
+    "revert": "无法恢复默认图标：{{reason}}",
+    "reveal": "无法打开：{{reason}}"
+  },
+  "ask": {
+    "applyTitle_other": "把 {{skin}} 应用到 {{count}} 个文件夹？",
+    "thisSkin": "这款皮肤",
+    "removeTitle_other": "移除 {{count}} 个文件夹的自定义图标？",
+    "applyText_other": "{{folder}} 及其中的 {{count}} 个文件夹都会换上这款皮肤，替换它们现有的图标。每个文件夹都会保存一份自己的图标副本。点“还原”可以把它们全部撤掉。",
+    "applyTextSized_other": "{{folder}} 及其中的 {{count}} 个文件夹都会换上这款皮肤，替换它们现有的图标。每个文件夹都会保存一份自己的图标副本，每份约 {{size}}，总共约 {{total}}。点“还原”可以把它们全部撤掉。",
+    "removeText": "{{folder}} 及其中的每个文件夹都会恢复成默认的文件夹图标，包括在 FolderSkin 之外设置的图标。没有自定义图标的文件夹保持不变。",
+    "removeAction": "移除图标"
+  }
+}
