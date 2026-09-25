@@ -1,7 +1,8 @@
 /**
  * Every limit the service holds people to, in one place. The pack limits are the ones
  * folderskin_core::pack sets (and docs/PACKS.md describes), so a pack that is approved here is a
- * pack `folderskin-tools packs check` accepts.
+ * pack `folderskin-tools packs check` accepts. The burst limit is the one number that lives
+ * elsewhere: it is the BURST binding's, in wrangler.toml (120 requests a minute per network).
  */
 
 /** What a device key may do in a day, and how many of its packs can wait for review at once. */
@@ -28,6 +29,29 @@ export const DEFAULT_GLOBAL_DAILY_PICTURES = 1500;
 /** Submissions waiting for a decision at once unless MAX_WAITING says otherwise. */
 export const DEFAULT_MAX_WAITING = 150;
 
+// ---- backing off and bans (penalties.ts) ----
+/** The wait after a first refused sharing request. Each strike after it doubles the wait. */
+export const COOLDOWN_BASE_SECONDS = 60;
+/** The longest a wait gets, however many strikes there have been. */
+export const COOLDOWN_MAX_SECONDS = 24 * 3600;
+/** Strikes start again from nothing after this long without a new one. */
+export const STRIKES_RESET_SECONDS = 24 * 3600;
+/** How long a mark for a pack the maintainer turned down counts against its key. */
+export const MARK_SECONDS = 30 * 86400;
+/** Marks within MARK_SECONDS that ban a key, for KEY_BAN_SECONDS. */
+export const MARKS_TO_BAN = 3;
+export const KEY_BAN_SECONDS = 30 * 86400;
+/** Keys banned from one network within BANNED_KEYS_SECONDS that ban the network, for NETWORK_BAN_SECONDS. */
+export const BANNED_KEYS_TO_BAN_NETWORK = 2;
+export const BANNED_KEYS_SECONDS = 30 * 86400;
+/** How long a network is banned: after a pack from it is turned down as abuse, or once enough of its keys are. */
+export const NETWORK_BAN_SECONDS = 30 * 86400;
+/**
+ * How long a submission keeps the network it was sent from (as penalties hash it) after its
+ * decision, so that turning it down, or taking it down in that time, can ban the network too.
+ */
+export const SUBMISSION_NETWORK_SECONDS = 30 * 86400;
+
 // ---- the pack contract (folderskin_core::pack) ----
 export const PACK_VERSION = 1;
 export const MAX_SKINS = 50;
@@ -41,6 +65,10 @@ export const MAX_SKIN_TAGS = 3;
 export const MAX_TAG_CHARS = 24;
 export const LICENSES = ["CC0-1.0", "CC-BY-4.0", "MIT"] as const;
 export const PICTURE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
+/** A pack id is at most 40 characters; a generated one is its name's slug cut to 33, a dash and 6 random characters. */
+export const MAX_PACK_ID_CHARS = 40;
+export const ID_BASE_CHARS = 33;
+export const ID_SUFFIX_CHARS = 6;
 
 // ---- what the service adds ----
 /** Where the pictures came from, as the app asks it. */

@@ -14,13 +14,20 @@
 #   wrangler d1 create folderskin-community        # paste the id into database_id below
 #   wrangler r2 bucket create folderskin-community-hold
 #   wrangler r2 bucket create folderskin-community-public
+#   wrangler r2 bucket create folderskin-packs     # then give it packs.folderskin.app as its custom domain
 #   pnpm migrate:remote
 #   wrangler secret put TURNSTILE_SECRET           # from the Turnstile widget for this hostname
 #   wrangler secret put IP_SALT                    # 32+ random bytes, e.g. `openssl rand -base64 32`
 #   wrangler secret put LINK_SECRET                # 32+ random bytes, a different value
 #   wrangler secret put NOTIFY_WEBHOOK_URL         # optional: Discord, Slack, Telegram or ntfy
+#   wrangler secret put GITHUB_DISPATCH_TOKEN      # optional: publishes a pack the moment it's approved (below)
 #   folderskin-tools community keygen --out ~/folderskin-admin.key   # its public key goes in ADMIN_KEYS
 #   pnpm run deploy
+#
+# GITHUB_DISPATCH_TOKEN is a fine-grained GitHub token for prajwal-svm/folderskin-community alone,
+# with the one repository permission Contents: read and write. An approval uses it to start that
+# repository's packs workflow at once (src/publish.ts); without it, the workflow finds approved
+# packs by itself, asking GET /v1/exports/pending every 15 minutes. It is never logged.
 # Then put the service's address in the app (FOLDERSKIN_COMMUNITY_API, or COMMUNITY_API in
 # src-tauri/src/share.rs) so the share dialog offers sharing without GitHub.
 #
@@ -57,6 +64,14 @@ bucket_name = "folderskin-community-hold"
 binding = "PUBLIC"
 bucket_name = "folderskin-community-public"
 
+# The catalog: folderskin-community's v2/ tree, which its packs workflow uploads through
+# PUT /v1/admin/tree/<path>, signed with the workflow's admin key, so no R2 token ever leaves
+# Cloudflare. Everyone reads it at https://packs.folderskin.app, the bucket's custom domain, and
+# nowhere else: its r2.dev address stays off.
+[[r2_buckets]]
+binding = "PACKS"
+bucket_name = "folderskin-packs"
+
 # Optional. Without it every pack simply waits for a person.
 [ai]
 binding = "AI"
@@ -82,8 +97,11 @@ crons = ["17 7 * * *"]
 [vars]
 # The maintainer's signing keys (base64url Ed25519 public keys, comma separated), from
 # `folderskin-tools community keygen`. Empty means nobody can use the admin endpoints; the phone
-# links in notifications still work.
-ADMIN_KEYS = "3EuyfNm69LvmEeAFaMb6aBCF1jA8bWilIEk-FxjIOi0"
+# links in notifications still work. The first is the maintainer's own. The second is
+# folderskin-community's packs workflow's, which pulls approved packs and uploads the catalog: its
+# private half is kept as that repository's FOLDERSKIN_ADMIN_KEY secret, and taking it out of
+# this list revokes the workflow's access alone. Public keys, so they are safe here in [vars].
+ADMIN_KEYS = "3EuyfNm69LvmEeAFaMb6aBCF1jA8bWilIEk-FxjIOi0,v2g_DGV53D-70BOVNzHjXiYKb120ABX5VR0E0GH5KDs"
 PUBLIC_BASE_URL = "https://community.folderskin.app"
 # The "FolderSkin community" Turnstile widget, on folderskin.app and its subdomains.
 TURNSTILE_SITE_KEY = "0x4AAAAAAFCt8h3vCygPWuKI"

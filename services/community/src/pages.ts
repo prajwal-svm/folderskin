@@ -29,6 +29,7 @@ dt { color: var(--muted); }
 dd { margin: 0; overflow-wrap: anywhere; }
 dd.lines { white-space: pre-line; }
 ul.flags { padding-left: 1.2rem; margin: .3rem 0; }
+label.ban { display: inline-flex; gap: .4rem; align-items: center; color: var(--fg); }
 `;
 
 function page(title: string, body: string, head = ""): string {
@@ -57,7 +58,7 @@ export function verifyPage(siteKey: string): string {
   <div id="challenge" data-sitekey="${e(siteKey)}"></div>
   <p id="status" role="status" aria-live="polite"></p>
 </div>
-<p>Nothing about you is kept apart from that name and this computer's public key. Your network address is only ever stored scrambled, and the scrambling changes every day.</p>`,
+<p>Nothing about you is kept apart from that name and this computer's public key. Your network address is only ever stored scrambled, and the scrambling changes every day, apart from what the limits on sharing have to remember for longer, which is deleted once it stops counting.</p>`,
     `<script src="/verify.js"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=folderskinChallenge&render=explicit" async defer></script>`,
   );
@@ -151,29 +152,32 @@ function reasonOptions(selected = ""): string {
     .join("");
 }
 
+/** The box that makes a turn-down abuse. The sexual, minor and hate reasons are abuse whether it is ticked or not. */
+const banBox = `<label class="ban"><input type="checkbox" name="ban" value="1">Abuse: ban the computer, and its network for 30 days</label>`;
+
 /** A pack waiting for a decision, with the three things the link can do to it. */
 export function reviewPage(info: ReviewInfo, token: string): string {
   const waiting = info.status === "pending" || info.status === "flagged";
   const actions = waiting
     ? `<form method="post"><input type="hidden" name="decision" value="approve"><button class="go" type="submit">Approve and publish</button></form>
-<form method="post"><input type="hidden" name="decision" value="reject"><select name="reason" aria-label="Reason">${reasonOptions("quality")}</select><button type="submit">Turn down</button></form>`
+<form method="post"><input type="hidden" name="decision" value="reject"><select name="reason" aria-label="Reason">${reasonOptions("quality")}</select>${banBox}<button type="submit">Turn down</button></form>`
     : `<p>This pack is ${e(info.status)}, so there's nothing to decide.</p>`;
   const live = waiting || info.status === "approved";
   const remove = live
-    ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select><button class="danger" type="submit">Take down</button></form>`
+    ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select>${banBox}<button class="danger" type="submit">Take down</button></form>`
     : "";
   return page(`Review ${info.name} · FolderSkin`, `<h1>Review a pack</h1>${details(info, token)}${actions}${remove}
-<p>Each button works once. This link runs out in a few days.</p>`);
+<p>Each button works once. This link runs out in a few days. Turning a pack down for sexual content, a child or hate always bans as abuse does.</p>`);
 }
 
 /** A pack someone reported, with the button that takes it down. */
 export function takedownPage(info: ReviewInfo, token: string): string {
   const live = ["pending", "flagged", "approved"].includes(info.status);
   const action = live
-    ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select><button class="danger" type="submit">Take it down now</button></form>`
+    ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select>${banBox}<button class="danger" type="submit">Take it down now</button></form>`
     : `<p>This pack is ${e(info.status)} already.</p>`;
   return page(`Take down ${info.name} · FolderSkin`, `<h1>Take down a pack</h1>${details(info, token)}${action}
-<p>Taking it down removes it from FolderSkin's storage at once. If it was already pulled into folderskin-community, remove it there too.</p>`);
+<p>Taking it down removes it from FolderSkin's storage at once. If it was already pulled into folderskin-community, remove it there too. Taking a pack down for sexual content, a child or hate always bans as abuse does.</p>`);
 }
 
 /** The switch that pauses (or resumes) sharing without GitHub. */

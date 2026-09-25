@@ -9,6 +9,7 @@ import { makeLink } from "./links";
 import { alert, type Notice } from "./notify";
 import { envNumber, pauseState } from "./quota";
 import { OPEN_FOR_SECONDS } from "./limits";
+import { clearExpired } from "./penalties";
 import { removeAll } from "./store";
 
 const DAY = 86400;
@@ -46,6 +47,8 @@ export async function tidy(env: Env, at = now()): Promise<void> {
     env.DB.prepare("DELETE FROM reports WHERE created_at < ?1").bind(at - 180 * DAY),
     // The hashed networks behind the install counts are only kept for the day they were counted.
     env.DB.prepare("DELETE FROM installs_seen WHERE day < ?1").bind(dayOf(at)),
+    // Strikes, bans and marks that have run out, and the networks of packs decided a month ago.
+    ...clearExpired(env, at),
   ]);
 }
 
@@ -57,8 +60,11 @@ export async function digest(env: Env, at = now()): Promise<Notice | null> {
   const flagged = await count("SELECT COUNT(*) AS n FROM submissions WHERE status = 'flagged'");
   const reports = await count("SELECT COUNT(*) AS n FROM reports WHERE created_at >= ?1", at - DAY);
   const unpulled = await count("SELECT COUNT(*) AS n FROM submissions WHERE status = 'approved' AND exported_at IS NULL");
+  // Bans, since some happen by themselves (a third pack turned down, a second key banned from a
+  // network), and requests to publish that GitHub turned down, which a token run out would cause.
   const { results: events } = await env.DB.prepare(
-    "SELECT kind, subject, detail FROM events WHERE at >= ?1 AND kind IN ('withdrawn', 'takedown', 'paused') ORDER BY at LIMIT 20",
+    `SELECT kind, subject, detail FROM events
+     WHERE at >= ?1 AND kind IN ('withdrawn', 'takedown', 'paused', 'ban', 'publish_failed') ORDER BY at LIMIT 20`,
   )
     .bind(at - DAY)
     .all<{ kind: string; subject: string; detail: string }>();

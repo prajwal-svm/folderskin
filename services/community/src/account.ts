@@ -28,6 +28,7 @@ import {
   VERIFY_LINK_SECONDS,
 } from "./limits";
 import type { Tier } from "./limits";
+import { requireVerifiable } from "./penalties";
 import { giveBack, pauseState, requireAccepting, takeAll, used, type Take } from "./quota";
 import { handleProblem } from "./text";
 
@@ -86,6 +87,9 @@ export async function verifyKey(request: Request, env: Env): Promise<Response> {
   };
   const existing = await env.DB.prepare("SELECT handle, tier FROM keys WHERE key = ?1").bind(k).first<{ handle: string; tier: Tier }>();
   if (existing?.tier === "banned") throw fail(403, "banned", "This computer can't share packs any more.");
+  // A banned network verifies no new keys, so a ban can't be dodged with a fresh one; nor does a
+  // key banned for a while verify again. Both before Cloudflare is asked.
+  await requireVerifiable(env, request, k, at);
   // Only a verification that goes through counts against the network, so a failed check, a
   // reloaded page or someone else on a shared network trying and failing can't use up the day.
   // A network that has had its fill is turned away before Cloudflare is asked, though.

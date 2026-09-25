@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dayOf, now } from "../src/bytes";
 import { tidy } from "../src/daily";
 import type { Env } from "../src/env";
-import { count, counts, COUNTS_PATH, forgetKept, PUBLISHED_INDEX, WEBSITE_ORIGINS } from "../src/installs";
+import { count, counts, COUNTS_PATH, forgetKept, WEBSITE_ORIGINS } from "../src/installs";
+import { PUBLISHED_INDEX } from "../src/published";
 import { networkHash } from "../src/ip";
 import { BASE, call, errorOf, freshIp, testEnv } from "./helpers";
 
-/** Stubs GitHub's copy of folderskin-community's index.json: these packs, or that error status. */
-function stubIndex(packs: string[] | number) {
+/** Stubs GitHub's copy of folderskin-community's index.json: these packs and renames, or that error status. */
+function stubIndex(packs: string[] | number, moved?: unknown) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url !== PUBLISHED_INDEX) return new Response("unexpected", { status: 599 });
@@ -20,6 +21,7 @@ function stubIndex(packs: string[] | number) {
         // An entry no pack id could be, which is passed over.
         { id: "../../escape", name: "No" },
       ],
+      ...(moved === undefined ? {} : { moved }),
     });
   });
 }
@@ -128,6 +130,40 @@ describe("counting installs", () => {
     const limited = await call(added("salted-pack"), { IP_SALT: undefined, BURST: spent });
     expect([limited.status, (await errorOf(limited)).code]).toEqual([503, "not_configured"]);
     expect(fetches).not.toHaveBeenCalled();
+  });
+
+  it("counts an add under a renamed pack's old id toward its new one, and an add under each as one", async () => {
+    stubIndex(["classic-art-k7q2mx"], { "classic-art": "classic-art-k7q2mx" });
+    const ip = freshIp();
+    // FolderSkin 0.1.4 to 0.1.6 know the pack by the id it had when they added it.
+    expect(await counted(await call(added("classic-art", ip)))).toBe(true);
+    expect(await counted(await call(added("classic-art-k7q2mx", ip)))).toBe(false);
+    expect(await counted(await call(added("classic-art-k7q2mx")))).toBe(true);
+    const counts = await countsNow();
+    expect(counts["classic-art-k7q2mx"]).toBe(2);
+    expect("classic-art" in counts).toBe(false);
+  });
+
+  it("counts an old id only toward a pack that is published, and passes over renames it can't read", async () => {
+    stubIndex(["kept-pack-abcdef"], {
+      "gone-pack": "gone-pack-abcdef",
+      constructor: "kept-pack-abcdef",
+      "Not An Id": "kept-pack-abcdef",
+      "odd-pack": 5,
+      "kept-pack-abcdef": "kept-pack-abcdef",
+    });
+    expect((await errorOf(await call(added("gone-pack")))).code).toBe("unknown_pack");
+    expect((await errorOf(await call(added("odd-pack")))).code).toBe("unknown_pack");
+    // Every rename that is a pack id to a published pack counts, "constructor" included.
+    expect(await counted(await call(added("constructor")))).toBe(true);
+    expect(await counted(await call(added("kept-pack-abcdef")))).toBe(true);
+    expect((await countsNow())["kept-pack-abcdef"]).toBe(2);
+
+    // An index whose renames aren't a map still lists its packs.
+    forgetKept();
+    vi.restoreAllMocks();
+    stubIndex(["listed-pack"], ["not", "a", "map"]);
+    expect(await counted(await call(added("listed-pack")))).toBe(true);
   });
 
   it("is held to the burst limit", async () => {

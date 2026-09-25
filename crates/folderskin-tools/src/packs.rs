@@ -3,17 +3,22 @@
 //! `check` holds every folder in `packs/` to the contract in [`folderskin_core::pack`], and to
 //! what only a folder on disk can get wrong: its name, a picture that is missing or named with
 //! different capitals (GitHub serves names exactly as written, though macOS and Windows open
-//! either), and files the pack does not list. `index` writes what the app downloads:
-//! `index.json` and one preview strip per pack. Both are pure functions of the packs (and, for
-//! the dates in `index.json`, of the git history), so running `index` again changes nothing.
+//! either), and files the pack does not list. It also holds `moved.json`, the ids packs had
+//! before, to its rules. `index` writes what the app downloads: `index.json` and one preview
+//! strip per pack. Both are pure functions of the packs (and, for the dates in `index.json`, of
+//! the git history), so running `index` again changes nothing.
+//!
+//! Names may repeat: a hundred packs can be called "Classic Art". Only the id, the folder's
+//! name, has to be unique, which is why nothing here compares names.
 
 use crate::skin::Skin;
 use folderskin_core::pack::{
-    self, Index, IndexEntry, Pack, INDEX_VERSION, MANIFEST_FILE, MAX_PICTURE_BYTES,
+    self, Index, IndexEntry, Moved, Pack, INDEX_VERSION, MANIFEST_FILE, MAX_PICTURE_BYTES,
+    MOVED_FILE,
 };
 use folderskin_core::{matte, raster};
 use image::RgbaImage;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::FileType;
 use std::path::{Path, PathBuf};
 
@@ -36,10 +41,37 @@ pub const PREVIEW_SIDE: u32 = 128;
 pub struct Report {
     /// The packs with nothing wrong, as (id, pack), sorted by id.
     pub packs: Vec<(String, Pack)>,
-    /// Every problem as `<dir>/packs/<folder>: <problem>`, grouped by folder in name order.
+    /// Every problem as `<dir>/packs/<folder>: <problem>`, grouped by folder in name order, then
+    /// those in `moved.json` as `<dir>/moved.json: <problem>`.
     pub problems: Vec<String>,
     /// How many entries of `packs/` the problems are about.
     pub failed: usize,
+    /// The files beside `packs/` that have problems, such as `moved.json`.
+    pub failed_files: Vec<String>,
+    /// `moved.json`: each id a pack had before, to the one it has now. Empty when there is no such
+    /// file, or when it can't be read, which is one of the problems.
+    pub moved: Moved,
+}
+
+/// How [`check_with`] holds the packs.
+#[derive(Debug, Clone)]
+pub struct CheckOptions {
+    /// The largest a picture may be: the pack limit, or less, such as the 400 KB `packs make`
+    /// keeps to.
+    pub max_bytes: usize,
+    /// Turn down a pack whose id isn't a generated one ([`pack::is_generated_id`]). Off unless
+    /// asked, because the packs from before generated ids have ids made from their names alone,
+    /// until `packs rename` gives them new ones.
+    pub require_generated_ids: bool,
+}
+
+impl Default for CheckOptions {
+    fn default() -> Self {
+        CheckOptions {
+            max_bytes: MAX_PICTURE_BYTES,
+            require_generated_ids: false,
+        }
+    }
 }
 
 impl Report {
@@ -53,16 +85,22 @@ impl Report {
         )
     }
 
-    /// "2 packs, 32 skins, all good", or "3 problems in 2 packs".
+    /// "2 packs, 32 skins, all good", or "3 problems in 2 packs", or "4 problems in 2 packs and
+    /// moved.json".
     pub fn summary(&self) -> String {
         if self.problems.is_empty() {
-            format!("{}, all good", self.totals())
+            return format!("{}, all good", self.totals());
+        }
+        let problems = count(self.problems.len(), "problem");
+        let mut places = Vec::new();
+        if self.failed > 0 {
+            places.push(count(self.failed, "pack"));
+        }
+        places.extend(self.failed_files.iter().cloned());
+        if places.is_empty() {
+            problems
         } else {
-            format!(
-                "{} in {}",
-                count(self.problems.len(), "problem"),
-                count(self.failed, "pack")
-            )
+            format!("{problems} in {}", places.join(" and "))
         }
     }
 }
@@ -80,31 +118,57 @@ impl Changes {
     }
 }
 
-/// Checks every entry of `<dir>/packs`. Fails only when that folder cannot be read at all, so a
-/// mistyped `--dir` is an error rather than "0 packs, all good".
+/// Checks every entry of `<dir>/packs`, and `<dir>/moved.json` when there is one. Fails only when
+/// the packs folder cannot be read at all, so a mistyped `--dir` is an error rather than "0 packs,
+/// all good".
 pub fn check(dir: &Path) -> Result<Report, String> {
-    check_within(dir, MAX_PICTURE_BYTES)
+    check_with(dir, &CheckOptions::default())
 }
 
 /// [`check`] with a tighter limit on each picture's size, such as the 400 KB `packs make` keeps
 /// to.
 pub fn check_within(dir: &Path, max_bytes: usize) -> Result<Report, String> {
+    check_with(
+        dir,
+        &CheckOptions {
+            max_bytes,
+            ..CheckOptions::default()
+        },
+    )
+}
+
+/// [`check`], holding the packs to `opts`.
+pub fn check_with(dir: &Path, opts: &CheckOptions) -> Result<Report, String> {
     let packs_dir = dir.join(PACKS_DIR);
     let entries =
         list(&packs_dir).map_err(|e| format!("couldn't read {}: {e}", packs_dir.display()))?;
+    let twins = case_twins(entries.keys());
     let mut report = Report::default();
-    for (name, kind) in entries {
-        let result = if kind.is_dir() {
-            check_pack_within(&packs_dir.join(&name), &name, max_bytes)
+    for (name, kind) in &entries {
+        let (pack, mut problems) = if kind.is_dir() {
+            match check_pack_within(&packs_dir.join(name), name, opts.max_bytes) {
+                Ok(pack) => (Some(pack), Vec::new()),
+                Err(problems) => (None, problems),
+            }
         } else {
-            Err(vec![
-                "isn't a folder; every pack is a folder of its own".into()
-            ])
+            let problem = "isn't a folder; every pack is a folder of its own";
+            (None, vec![problem.to_string()])
         };
-        match result {
-            Ok(pack) => report.packs.push((name, pack)),
-            Err(problems) => {
-                let label = packs_dir.join(&name);
+        // Linux keeps both; macOS and Windows open either name as the other, so a checkout there
+        // would mix the two packs' files in one folder.
+        for twin in twins.get(name).into_iter().flatten() {
+            problems.push(format!(
+                "differs from {twin} only in capitals, and macOS and Windows take the two for one \
+                 folder"
+            ));
+        }
+        if opts.require_generated_ids && pack::is_pack_id(name) && !pack::is_generated_id(name) {
+            problems.push(not_generated(name));
+        }
+        match pack {
+            Some(pack) if problems.is_empty() => report.packs.push((name.clone(), pack)),
+            _ => {
+                let label = packs_dir.join(name);
                 report.failed += 1;
                 report.problems.extend(
                     problems
@@ -114,7 +178,87 @@ pub fn check_within(dir: &Path, max_bytes: usize) -> Result<Report, String> {
             }
         }
     }
+    check_moved(dir, &entries, &mut report);
     Ok(report)
+}
+
+/// Reads `<dir>/moved.json` into `report.moved` and adds what is wrong with it: every old id is a
+/// pack id that no folder in `packs/` has, so a pack can't take an id another pack moved away
+/// from, and leads straight to a folder that is there. No file is fine: nothing has moved.
+fn check_moved(dir: &Path, entries: &Files, report: &mut Report) {
+    let path = dir.join(MOVED_FILE);
+    let problems = match std::fs::read(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => vec![format!("{MOVED_FILE} couldn't be read: {e}")],
+        Ok(bytes) => match Moved::parse(&bytes) {
+            Err(e) => vec![e],
+            Ok(moved) => {
+                let folders: BTreeSet<String> = entries
+                    .iter()
+                    .filter(|(_, kind)| kind.is_dir())
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                let problems = moved.problems(&folders);
+                report.moved = moved;
+                problems
+            }
+        },
+    };
+    if problems.is_empty() {
+        return;
+    }
+    report
+        .problems
+        .extend(problems.iter().map(|p| at_path(&path, p)));
+    report.failed_files.push(MOVED_FILE.to_string());
+}
+
+/// `<dir>/moved.json`, or an empty one when there is none. One that can't be read is an error
+/// rather than empty, so nothing that relies on it hands out an old id again.
+pub fn read_moved(dir: &Path) -> Result<Moved, String> {
+    let path = dir.join(MOVED_FILE);
+    match std::fs::read(&path) {
+        Ok(bytes) => Moved::parse(&bytes).map_err(|e| at_path(&path, &e)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Moved::default()),
+        Err(e) => Err(format!("couldn't read {}: {e}", path.display())),
+    }
+}
+
+/// A sentence about `moved.json` with the file's whole path in place of its name, which says
+/// which checkout it is in.
+fn at_path(path: &Path, sentence: &str) -> String {
+    let label = path.display();
+    match sentence.strip_prefix(MOVED_FILE) {
+        Some(rest) => format!("{label}{rest}"),
+        None => format!("{label}: {sentence}"),
+    }
+}
+
+/// Each of `names` that differs from another only in capitals, with the others it matches.
+fn case_twins<'a>(names: impl IntoIterator<Item = &'a String>) -> BTreeMap<String, Vec<String>> {
+    let mut by_case: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for name in names {
+        by_case
+            .entry(name.to_lowercase())
+            .or_default()
+            .push(name.clone());
+    }
+    let mut twins = BTreeMap::new();
+    for group in by_case.into_values().filter(|group| group.len() > 1) {
+        for name in &group {
+            let others = group.iter().filter(|n| *n != name).cloned().collect();
+            twins.insert(name.clone(), others);
+        }
+    }
+    twins
+}
+
+/// Why a pack's id has to change once ids are generated, and how to change it.
+fn not_generated(id: &str) -> String {
+    format!(
+        "{id} isn't a generated id, a name and six random characters such as classic-art-k7q2mx; \
+         `folderskin-tools packs rename {id}` gives the pack one"
+    )
 }
 
 /// Checks one pack folder called `name`: the name, `pack.json`, every picture it lists, and
@@ -178,7 +322,8 @@ pub fn check_pack_within(folder: &Path, name: &str, max_bytes: usize) -> Result<
 /// Writes `<dir>/index.json` and `<dir>/previews/<id>.png` for every pack in `report`, and removes
 /// the previews of packs that are gone. Each entry says when its pack was first published, from
 /// `dates` (Unix seconds by id, as `catalog::git_dates` reads them; a pack missing from it isn't
-/// dated), and whether `<dir>/official.json` lists it. Writes nothing when the report has a
+/// dated), and whether `<dir>/official.json` lists it. The index carries `moved.json` as its
+/// `moved`, for the website and the community service. Writes nothing when the report has a
 /// problem or official.json does. A file that already holds the right bytes is left alone, so
 /// [`Changes`] says what really changed.
 pub fn write_index(
@@ -232,7 +377,7 @@ pub fn write_index(
     let index = Index {
         version: INDEX_VERSION,
         packs: entries,
-        moved: Default::default(),
+        moved: report.moved.moved.clone(),
     };
     let json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())? + "\n";
     write_if_changed(&dir.join(INDEX_FILE), json.as_bytes(), &mut changes)?;
@@ -827,5 +972,187 @@ mod tests {
         assert_eq!(sheet.get_pixel(128 + 64, 64).0, [r, g, b, 255]);
         let dark = sheet.get_pixel(128 + 20, 20).0;
         assert!(dark[0] < 40, "{dark:?}");
+    }
+
+    #[test]
+    fn packs_may_share_a_name_since_only_ids_are_unique() {
+        let c = Community::new("same-name");
+        // Community::pack calls every pack "Test".
+        c.pack("reds-k7q2mx", &[("a.png", &artwork([200, 40, 40]))]);
+        c.pack("reds-a2b3c4", &[("a.png", &artwork([200, 40, 40]))]);
+        c.pack("reds", &[("a.png", &artwork([200, 40, 40]))]);
+        let report = check(&c.0).unwrap();
+        assert_eq!(report.problems, Vec::<String>::new());
+        assert_eq!(report.packs.len(), 3);
+        assert!(report.packs.iter().all(|(_, p)| p.name == "Test"));
+    }
+
+    #[test]
+    fn generated_ids_are_required_only_when_asked() {
+        let c = Community::new("generated");
+        c.pack("classic-art", &[("a.png", &artwork([200, 40, 40]))]);
+        c.pack("classic-art-k7q2mx", &[("a.png", &artwork([40, 40, 200]))]);
+        c.pack("Bad_Name", &[("a.png", &artwork([40, 200, 40]))]);
+        let lenient = check(&c.0).unwrap();
+        assert_eq!(lenient.failed, 1, "{:?}", lenient.problems);
+
+        let strict = check_with(
+            &c.0,
+            &CheckOptions {
+                require_generated_ids: true,
+                ..CheckOptions::default()
+            },
+        )
+        .unwrap();
+        let ids: Vec<&str> = strict.packs.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, ["classic-art-k7q2mx"]);
+        let line = format!(
+            "{}: classic-art isn't a generated id",
+            c.path(PACKS_DIR).join("classic-art").display()
+        );
+        assert!(
+            strict.problems.iter().any(|p| p.starts_with(&line)),
+            "{:?}",
+            strict.problems
+        );
+        assert!(strict
+            .problems
+            .iter()
+            .any(|p| p.contains("`folderskin-tools packs rename classic-art`")));
+        // A folder name that isn't an id at all is told to change once, not twice.
+        let bad: Vec<&String> = strict
+            .problems
+            .iter()
+            .filter(|p| p.contains("Bad_Name"))
+            .collect();
+        assert_eq!(bad.len(), 1, "{bad:?}");
+        assert_eq!(strict.summary(), "2 problems in 2 packs");
+    }
+
+    #[test]
+    fn names_one_capital_apart_are_one_folder_on_macos_and_windows() {
+        let names: Vec<String> = ["Reds", "blues", "reds", "REDS"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let twins = case_twins(&names);
+        assert_eq!(twins.len(), 3);
+        assert_eq!(twins["reds"], ["Reds", "REDS"]);
+        assert_eq!(twins["REDS"], ["Reds", "reds"]);
+        assert!(!twins.contains_key("blues"));
+
+        // On a disk that keeps both, as Linux's do, check says so about each of them.
+        let c = Community::new("capitals");
+        c.pack("reds", &[("a.png", &artwork([200, 40, 40]))]);
+        c.pack("Reds", &[("a.png", &artwork([200, 40, 40]))]);
+        if std::fs::read_dir(c.path(PACKS_DIR)).unwrap().count() < 2 {
+            eprintln!("this disk doesn't tell capitals apart; skipping the folder half");
+            return;
+        }
+        let report = check(&c.0).unwrap();
+        for (folder, twin) in [("reds", "Reds"), ("Reds", "reds")] {
+            let line = format!(
+                "{}: differs from {twin} only in capitals",
+                c.path(PACKS_DIR).join(folder).display()
+            );
+            assert!(
+                report.problems.iter().any(|p| p.starts_with(&line)),
+                "{:?}",
+                report.problems
+            );
+        }
+        assert!(report.packs.is_empty());
+    }
+
+    #[test]
+    fn moved_json_is_read_and_held_to_its_rules() {
+        let c = Community::new("moved");
+        c.pack("reds-k7q2mx", &[("a.png", &artwork([200, 40, 40]))]);
+        c.pack("blues", &[("b.png", &artwork([40, 40, 200]))]);
+        let moved = c.path(MOVED_FILE);
+
+        // Without one, nothing has moved.
+        let report = check(&c.0).unwrap();
+        assert!(report.problems.is_empty() && report.moved.moved.is_empty());
+
+        std::fs::write(
+            &moved,
+            r#"{ "version": 1, "moved": { "reds": "reds-k7q2mx" } }"#,
+        )
+        .unwrap();
+        let report = check(&c.0).unwrap();
+        assert_eq!(report.problems, Vec::<String>::new());
+        assert_eq!(report.moved.current("reds"), "reds-k7q2mx");
+
+        // A pack with an id that moved away, an old id that leads nowhere, and one that leads to
+        // another old id.
+        std::fs::write(
+            &moved,
+            r#"{ "version": 1, "moved": { "blues": "reds-k7q2mx", "greens": "gone-a2b3c4",
+                 "old-reds": "reds" , "reds": "reds-k7q2mx" } }"#,
+        )
+        .unwrap();
+        let report = check(&c.0).unwrap();
+        let label = moved.display().to_string();
+        for says in [
+            "blues moved to reds-k7q2mx, but a pack still has the id blues",
+            "greens moved to gone-a2b3c4, and there's no pack gone-a2b3c4",
+            "old-reds moved to reds, which moved again",
+        ] {
+            let line = format!("{label}: {says}");
+            assert!(
+                report.problems.iter().any(|p| p.starts_with(&line)),
+                "no {line:?} in {:?}",
+                report.problems
+            );
+        }
+        assert_eq!(report.failed, 0, "the packs themselves are fine");
+        assert_eq!(report.summary(), "3 problems in moved.json");
+
+        // One it can't read at all is one problem, which names the file.
+        std::fs::write(&moved, r#"{ "version": 2, "moved": {} }"#).unwrap();
+        let report = check(&c.0).unwrap();
+        assert_eq!(report.problems.len(), 1, "{:?}", report.problems);
+        assert!(
+            report.problems[0].starts_with(&format!("{label} is version 2")),
+            "{:?}",
+            report.problems
+        );
+        // Problems in moved.json stop the index as a pack's would.
+        let err = write_index(&c.0, &report, &HashMap::new()).unwrap_err();
+        assert_eq!(err, "1 problem in moved.json; nothing was written");
+
+        // With a broken pack as well, the summary names both.
+        c.put("broken", MANIFEST_FILE, b"{}");
+        assert_eq!(
+            check(&c.0).unwrap().summary(),
+            "2 problems in 1 pack and moved.json"
+        );
+    }
+
+    #[test]
+    fn index_json_carries_moved_json() {
+        let c = Community::new("index-moved");
+        c.pack("reds-k7q2mx", &[("a.png", &artwork([200, 40, 40]))]);
+        let report = check(&c.0).unwrap();
+        write_index(&c.0, &report, &HashMap::new()).unwrap();
+        let json = std::fs::read_to_string(c.path(INDEX_FILE)).unwrap();
+        assert!(!json.contains("moved"), "left out while nothing moved");
+
+        std::fs::write(
+            c.path(MOVED_FILE),
+            r#"{ "version": 1, "moved": { "reds": "reds-k7q2mx", "rubies": "reds-k7q2mx" } }"#,
+        )
+        .unwrap();
+        let report = check(&c.0).unwrap();
+        let changes = write_index(&c.0, &report, &HashMap::new()).unwrap();
+        assert_eq!(changes.written, [c.path(INDEX_FILE)]);
+        let index: Index =
+            serde_json::from_str(&std::fs::read_to_string(c.path(INDEX_FILE)).unwrap()).unwrap();
+        assert_eq!(index.moved.len(), 2);
+        assert_eq!(index.moved["rubies"], "reds-k7q2mx");
+        assert!(write_index(&c.0, &report, &HashMap::new())
+            .unwrap()
+            .is_empty());
     }
 }

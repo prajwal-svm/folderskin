@@ -13,6 +13,11 @@ export type Reason = {
   blocks?: true;
   /** Serious enough that the computer that sent it can't share any more. */
   bans?: true;
+  /**
+   * Abuse: the computer that sent it can't share any more, and nothing can be shared from its
+   * network for 30 days (penalties.ts). The maintainer can call any decision abuse; these always are.
+   */
+  abuse?: true;
 };
 
 export const REASONS: Record<string, Reason> = {
@@ -24,10 +29,10 @@ export const REASONS: Record<string, Reason> = {
   "ai-terms": { term: 3, message: "The pictures copy an existing character or a living artist's style." },
   credit: { term: 4, message: "The name on the pack isn't yours to use." },
   licence: { term: 5, message: "The licence chosen doesn't fit the pictures." },
-  sexual: { term: 6, message: "The pictures include sexual or suggestive content.", blocks: true },
-  minor: { term: 7, message: "The pictures sexualise a child.", blocks: true, bans: true },
+  sexual: { term: 6, message: "The pictures include sexual or suggestive content.", blocks: true, abuse: true },
+  minor: { term: 7, message: "The pictures sexualise a child.", blocks: true, abuse: true },
   "self-harm": { term: 8, message: "The pictures depict or encourage self-harm.", blocks: true },
-  hate: { term: 9, message: "The pictures include hateful content or symbols.", blocks: true },
+  hate: { term: 9, message: "The pictures include hateful content or symbols.", blocks: true, abuse: true },
   gore: { term: 10, message: "The pictures include gore or shocking violence.", blocks: true },
   harassment: { term: 11, message: "The pictures target a real person or show someone without their permission.", blocks: true },
   illegal: { term: 12, message: "The pictures promote something illegal.", blocks: true },

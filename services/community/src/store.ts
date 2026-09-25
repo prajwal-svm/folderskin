@@ -1,7 +1,8 @@
 /**
  * Submissions as they are kept, and the decisions on them. The admin endpoints and the phone
  * links both act through here, so a pack approved from a phone is approved exactly the way one
- * approved from `folderskin-tools community decide` is.
+ * approved from `folderskin-tools community decide` is, and asks folderskin-community to publish it
+ * the same way (publish.ts).
  *
  * Storage layout:
  *
@@ -15,8 +16,11 @@ import type { Env } from "./env";
 import { fail } from "./http";
 import { PACK_VERSION } from "./limits";
 import { alert, record } from "./notify";
+import { turnedDown, type Ban } from "./penalties";
+import { askToPublish } from "./publish";
+import { publishedIndex } from "./published";
 import { REASONS, explain, isReason } from "./terms";
-import { slug, type Flag, type Manifest } from "./text";
+import { newPackId, type Flag, type Manifest } from "./text";
 
 export type Status = "open" | "pending" | "flagged" | "approved" | "rejected" | "withdrawn" | "taken_down" | "expired";
 
@@ -42,6 +46,8 @@ export type Submission = {
   /** The folder in folderskin-community's packs/ it was pulled into, once it has been. */
   folder: string | null;
   ip_hash: string;
+  /** The network it was sent from as penalties hash it, until 30 days after its decision (penalties.ts). */
+  network: string | null;
   created_at: number;
   finalized_at: number | null;
   decided_at: number | null;
@@ -141,34 +147,39 @@ export function packJson(s: Submission, handle: string): string {
 }
 
 /**
- * A folder name for an approved pack: its name as a slug, numbered when another approved pack has
- * it, here or as the folder it was pulled into.
+ * A new id for an approved pack (newPackId: its name's slug and six random characters), drawn
+ * again should it be taken: by another approved pack here, as its id or the folder it was pulled
+ * into, or by a pack or a renamed pack's old id in folderskin-community's published index. Names
+ * may repeat; ids never do.
+ *
+ * When the index can't be read, the id is checked against the database alone rather than holding
+ * the approval up: a clash with a published pack is one chance in a billion for each pack of the
+ * same name, and `community pull` refuses to write over a folder that exists anyway.
  */
 async function freePackId(env: Env, name: string): Promise<string> {
-  const base = slug(name) || "pack";
-  for (let n = 1; n <= 99; n++) {
-    const suffix = n === 1 ? "" : `-${n}`;
-    const id = `${base.slice(0, 40 - suffix.length).replace(/-+$/, "")}${suffix}`;
-    const taken = await env.DB.prepare("SELECT 1 FROM submissions WHERE status = 'approved' AND (pack_id = ?1 OR folder = ?1)")
+  const published = await publishedIndex();
+  return newPackId(name, async (id) => {
+    if (published && (published.ids.has(id) || published.moved.has(id))) return true;
+    const row = await env.DB.prepare("SELECT 1 FROM submissions WHERE status = 'approved' AND (pack_id = ?1 OR folder = ?1)")
       .bind(id)
       .first();
-    if (!taken) return id;
-  }
-  throw fail(409, "name_taken", "Every folder name for that pack is taken. Rename it and approve it again.");
+    return row !== null;
+  });
 }
 
 const notWaiting = () => fail(409, "not_waiting", "That pack isn't waiting for a decision.");
 const notFound = () => fail(404, "not_found", "There's no such pack.");
 
 /**
- * Approves a pack: its pictures and pack.json go to the public bucket under a folder name of its
- * own, and the author's key moves off probation.
+ * Approves a pack: its pictures and pack.json go to the public bucket under a new id of its own,
+ * the author's key moves off probation, and folderskin-community is asked to publish it.
  *
- * The folder name is claimed in the database first (an index keeps two approved packs from
- * sharing one), and only then are files written under it, so two approvals at the same moment can
- * never write into the same folder.
+ * The id is claimed in the database first (an index keeps two approved packs from sharing one),
+ * and only then are files written under it, so two approvals at the same moment can never write
+ * into the same folder. The request to publish goes out once the approval is done, and is never
+ * waited on (publish.ts).
  */
-export async function approve(env: Env, id: string, note: string): Promise<{ pack_id: string }> {
+export async function approve(env: Env, ctx: ExecutionContext, id: string, note: string): Promise<{ pack_id: string }> {
   const s = await loadSubmission(env, id);
   if (!s) throw notFound();
   if (!WAITING.includes(s.status)) throw notWaiting();
@@ -204,13 +215,14 @@ export async function approve(env: Env, id: string, note: string): Promise<{ pac
     .run();
   await removeHeldPictures(env, id);
   await record(env, "approved", id, packId);
+  ctx.waitUntil(askToPublish(env, id, packId));
   return { pack_id: packId };
 }
 
 /**
- * Marks the pack approved under a free folder name, trying the next name if another approval took
- * this one. The handle pack.json credits is kept with it, so the pack is exported under the name it
- * was published with even if the author changes theirs later.
+ * Marks the pack approved under a free id, drawing another if another approval took this one at
+ * the same moment. The handle pack.json credits is kept with it, so the pack is exported under the
+ * name it was published with even if the author changes theirs later.
  */
 async function claimPackId(env: Env, s: Submission, handle: string, note: string): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -228,7 +240,7 @@ async function claimPackId(env: Env, s: Submission, handle: string, note: string
       if (!(e instanceof Error) || !/UNIQUE/i.test(e.message)) throw e;
     }
   }
-  throw fail(409, "name_taken", "Another pack took that folder name at the same moment. Approve it again.");
+  throw fail(409, "name_taken", "Another pack took that id at the same moment. Approve it again.");
 }
 
 /** Checks decision reasons: at least one, every one known. */
@@ -240,8 +252,14 @@ export function readReasons(value: unknown): string[] {
   return [...new Set(codes as string[])];
 }
 
-/** Keeps pictures turned down for what they show from being sent again, and bans the key for the worst. */
-async function consequences(env: Env, s: Submission, reasons: string[]): Promise<void> {
+/**
+ * What turning a pack down costs its author (penalties.ts): pictures turned down for what they
+ * show can't be sent again, the key gets a mark, and the worst ban it. Abuse (the maintainer's
+ * `ban`, or a reason terms.ts calls abuse) bans the key for good and the network the pack came
+ * from for 30 days; a reason that bans, such as deceptive files, bans the key for good. Answers
+ * the bans it made.
+ */
+async function consequences(env: Env, s: Submission, reasons: string[], ban: boolean): Promise<Ban[]> {
   const at = now();
   if (reasons.some((r) => REASONS[r].blocks)) {
     const items = await loadItems(env, s.id);
@@ -256,16 +274,21 @@ async function consequences(env: Env, s: Submission, reasons: string[]): Promise
       ),
     );
   }
-  const bans = reasons.some((r) => REASONS[r].bans);
+  const abuse = ban || reasons.some((r) => REASONS[r].abuse);
+  const forGood = abuse || reasons.some((r) => REASONS[r].bans);
   await env.DB.prepare(
     "UPDATE keys SET rejected = rejected + 1, tier = CASE WHEN ?2 THEN 'banned' ELSE tier END WHERE key = ?1",
   )
-    .bind(s.key, bans ? 1 : 0)
+    .bind(s.key, forGood ? 1 : 0)
     .run();
+  return turnedDown(env, { key: s.key, network: s.network, submission: s.id, abuse, forGood }, at);
 }
 
-/** Turns a waiting pack down, saying why with codes from terms.ts. Its pictures are deleted. */
-export async function reject(env: Env, id: string, reasons: string[], note: string): Promise<void> {
+/**
+ * Turns a waiting pack down, saying why with codes from terms.ts, as abuse when `ban` says so. Its
+ * pictures are deleted. Answers the bans that followed.
+ */
+export async function reject(env: Env, id: string, reasons: string[], note: string, ban = false): Promise<Ban[]> {
   const s = await loadSubmission(env, id);
   if (!s) throw notFound();
   const done = await env.DB.prepare(
@@ -275,22 +298,24 @@ export async function reject(env: Env, id: string, reasons: string[], note: stri
     .bind(id, JSON.stringify(reasons), note, now())
     .run();
   if (done.meta.changes !== 1) throw notWaiting();
-  await consequences(env, s, reasons);
+  const bans = await consequences(env, s, reasons, ban);
   await removeAll(env.HOLD, `hold/${id}/`);
-  await record(env, "rejected", id, reasons.join(","));
+  await record(env, "rejected", id, `${reasons.join(",")}${ban ? " as abuse" : ""}`);
+  return bans;
 }
 
 /**
- * Takes a pack down: out of the public bucket at once, whether it was approved or still waiting.
- * A pack already pulled into the repository has to be removed there too, from the folder the
- * answer names.
+ * Takes a pack down: out of the public bucket at once, whether it was approved or still waiting,
+ * as abuse when `ban` says so. A pack already pulled into the repository has to be removed there
+ * too, from the folder the answer names.
  */
 export async function takedown(
   env: Env,
   id: string,
   reasons: string[],
   note: string,
-): Promise<{ pack_id: string | null; exported: boolean; folder: string | null }> {
+  ban = false,
+): Promise<{ pack_id: string | null; exported: boolean; folder: string | null; bans: Ban[] }> {
   const s = await loadSubmission(env, id);
   if (!s) throw notFound();
   const done = await env.DB.prepare(
@@ -302,10 +327,11 @@ export async function takedown(
   if (done.meta.changes !== 1) throw fail(409, "not_live", "That pack isn't published or waiting, so there's nothing to take down.");
   if (s.pack_id && s.status === "approved") await removeAll(env.PUBLIC, `packs/${s.pack_id}/`);
   await removeAll(env.HOLD, `hold/${id}/`);
-  await consequences(env, s, reasons);
+  const bans = await consequences(env, s, reasons, ban);
   const folder = s.exported_at ? repoFolder(s) : null;
-  await record(env, "takedown", id, `${reasons.join(",")}${folder ? ` (remove packs/${folder} from folderskin-community too)` : ""}`, "high");
-  return { pack_id: s.status === "approved" ? s.pack_id : null, exported: folder !== null, folder };
+  const repo = folder ? ` (remove packs/${folder} from folderskin-community too)` : "";
+  await record(env, "takedown", id, `${reasons.join(",")}${ban ? " as abuse" : ""}${repo}`, "high");
+  return { pack_id: s.status === "approved" ? s.pack_id : null, exported: folder !== null, folder, bans };
 }
 
 /** The folder a pulled pack has in folderskin-community's packs/. */

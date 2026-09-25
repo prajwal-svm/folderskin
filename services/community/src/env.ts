@@ -8,6 +8,11 @@ export interface Env {
   HOLD: R2Bucket;
   /** Public: approved packs, laid out the way folderskin-community's packs/ is. */
   PUBLIC: R2Bucket;
+  /**
+   * The catalog: folderskin-community's v2/ tree, which its workflow uploads through
+   * PUT /v1/admin/tree/<path>. Read by everyone at https://packs.folderskin.app, and nowhere else.
+   */
+  PACKS: R2Bucket;
   /** Workers AI, for a first look at contact sheets. Optional: without it every pack waits for a person. */
   AI?: Vision;
   /** A burst limit in front of everything, before the database is touched. Optional. */
@@ -40,12 +45,18 @@ export interface Env {
 
   // ---- secrets ----
   TURNSTILE_SECRET?: string;
-  /** Keys the daily HMAC of a network prefix. */
+  /** Keys the HMACs of network prefixes: a new key every day for the quotas, and a lasting one for penalties. */
   IP_SALT?: string;
   /** Signs the single-use links in notifications. */
   LINK_SECRET?: string;
   /** Discord, Slack, Telegram or ntfy webhook for anything that can't wait for the digest. */
   NOTIFY_WEBHOOK_URL?: string;
+  /**
+   * A fine-grained GitHub token for folderskin-community alone, with Contents read and write, which
+   * lets an approval start that repository's publish workflow (publish.ts). Optional: without it,
+   * the workflow's daily run publishes approved packs.
+   */
+  GITHUB_DISPATCH_TOKEN?: string;
 }
 
 /** The one call the service makes to Workers AI. The real binding has this shape among others. */

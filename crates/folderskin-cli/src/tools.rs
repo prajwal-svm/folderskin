@@ -11,7 +11,7 @@ use folderskin_core::compositor::{
 };
 use folderskin_core::matte;
 use folderskin_tools::cli::PacksCommand;
-use folderskin_tools::{catalog, make, packs};
+use folderskin_tools::{catalog, make, packs, rename};
 use image::RgbaImage;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -187,12 +187,20 @@ pub fn template(args: &TemplateArgs, out: &Arc<Out>) -> Result<(), CliError> {
 
 pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
     match command {
-        PacksCommand::Check { dir, max_kb } => {
-            let report = match max_kb {
-                Some(kb) => packs::check_within(&dir, kb * 1024),
-                None => packs::check(&dir),
+        PacksCommand::Check {
+            dir,
+            max_kb,
+            require_generated_ids,
+        } => {
+            let mut opts = packs::CheckOptions {
+                require_generated_ids,
+                ..packs::CheckOptions::default()
+            };
+            if let Some(kb) = max_kb {
+                opts.max_bytes = kb * 1024;
             }
-            .map_err(|why| unreadable_packs(&dir, why))?;
+            let report =
+                packs::check_with(&dir, &opts).map_err(|why| unreadable_packs(&dir, why))?;
             if report.problems.is_empty() {
                 out.result(
                     Some(&dir),
@@ -217,7 +225,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 out.warn(problem);
             }
             // Each pack is dated by the commit that added it, as the catalog dates them.
-            let dates = catalog::git_dates(&dir);
+            let dates = catalog::git_dates(&dir, &report.moved);
             if dates.is_empty() && !report.packs.is_empty() {
                 out.warn(
                     "no git history for these packs, so index.json can't say when each was added",
@@ -290,6 +298,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             };
             make_pack(&pictures, &opts, preview.as_deref(), out)
         }
+        PacksCommand::Rename { dir, all, id, to } => rename_packs(&dir, all, id, to, out),
         PacksCommand::Catalog {
             dir,
             out: to,
@@ -303,7 +312,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 out: folderskin_tools::cli::catalog_out(&dir, to),
                 mirrors,
                 cwebp: make::find_cwebp().or_else(folderskin_local::paths::cwebp),
-                dates: catalog::git_dates(&dir),
+                dates: catalog::git_dates(&dir, &report.moved),
             };
             if opts.cwebp.is_none() {
                 out.warn("cwebp isn't installed, so thumbnails are lossless WebP, which is bigger (folderskin ai setup installs it on Windows)");
@@ -348,6 +357,78 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             Ok(())
         }
     }
+}
+
+/// `packs rename`: generated ids for every pack that lacks one (`all`), or for pack `id`.
+fn rename_packs(
+    dir: &Path,
+    all: bool,
+    id: Option<String>,
+    to: Option<String>,
+    out: &Arc<Out>,
+) -> Result<(), CliError> {
+    let which = match (all, id) {
+        (_, Some(id)) => rename::Which::One { id, to },
+        (true, None) => rename::Which::All,
+        (false, None) => {
+            return Err(CliError::usage(
+                "There is nothing to rename.",
+                "Name a pack, or rename every pack with --all.",
+            )
+            .fix("folderskin packs rename --all"))
+        }
+    };
+    let renamed = rename::rename(dir, &which).map_err(|why| {
+        CliError::fixable(
+            "rename_failed",
+            "The packs couldn't be renamed.",
+            sentence_about(&why, &[dir]),
+        )
+        .fix("Fix what it says and run it again: packs that moved already are left alone.")
+    })?;
+    let mut lines: Vec<String> = renamed
+        .moved
+        .iter()
+        .map(|(old, new)| format!("moved {old} to {new}"))
+        .chain(
+            renamed
+                .earlier
+                .iter()
+                .map(|(old, now)| format!("{old} moved to {now} already")),
+        )
+        .chain(
+            renamed
+                .written
+                .iter()
+                .map(|p| format!("wrote {}", p.display())),
+        )
+        .collect();
+    lines.push(if renamed.moved.is_empty() {
+        "nothing to rename".into()
+    } else {
+        format!(
+            "renamed {} and staged it all: check the packs, then commit",
+            crate::ai::count(renamed.moved.len(), "pack")
+        )
+    });
+    let moves = |list: &[(String, String)]| {
+        list.iter()
+            .map(|(from, to)| json!({"from": from, "to": to}))
+            .collect::<Vec<_>>()
+    };
+    out.result(
+        Some(dir),
+        "rename",
+        json!({
+            "moved": moves(&renamed.moved),
+            "earlier": moves(&renamed.earlier),
+            "kept": renamed.kept,
+            "written": renamed.written,
+        }),
+        &lines.join("\n"),
+        false,
+    );
+    Ok(())
 }
 
 fn unreadable_packs(dir: &Path, why: String) -> CliError {
@@ -477,6 +558,12 @@ fn make_pack(
         made.len() - folders,
         total.div_ceil(1024)
     ));
+    if opts.id.is_none() {
+        let id = folder.file_name().unwrap_or_default().to_string_lossy();
+        lines.push(format!(
+            "its id is {id}, which stays the same whatever the pack is called later"
+        ));
+    }
     if let Some(path) = preview {
         let manifest = std::fs::read(folder.join(folderskin_core::pack::MANIFEST_FILE))
             .map_err(|e| CliError::io("read the new pack", &folder, &e))?;

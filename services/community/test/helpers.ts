@@ -215,6 +215,42 @@ export async function submit(who: Device, list: Picture[], manifest: Partial<{ n
   return id;
 }
 
-export async function errorOf(response: Response): Promise<{ code: string; message: string }> {
-  return ((await response.json()) as { error: { code: string; message: string } }).error;
+export async function errorOf(response: Response): Promise<{ code: string; message: string; retry_after?: number }> {
+  return ((await response.json()) as { error: { code: string; message: string; retry_after?: number } }).error;
+}
+
+/**
+ * Makes the next pack ids end in the characters these bytes stand for, one list of six for each
+ * id newPackId draws, in turn. Only draws of six bytes are touched; every other use of the random
+ * source, and every draw after the last list, gets real random bytes.
+ */
+export function drawSuffixes(...draws: number[][]) {
+  const real = crypto.getRandomValues.bind(crypto);
+  const left = [...draws];
+  const draw: typeof crypto.getRandomValues = (array) => {
+    if (array instanceof Uint8Array && array.length === 6 && left.length > 0) {
+      array.set(left.shift()!);
+      return array;
+    }
+    return real(array);
+  };
+  return vi.spyOn(crypto, "getRandomValues").mockImplementation(draw);
+}
+
+/** Records the SQL statements handed to D1, to count what a request costs. */
+export function countingDb(db: D1Database): { db: D1Database; statements: string[] } {
+  const statements: string[] = [];
+  const counted = new Proxy(db, {
+    get(target, property) {
+      if (property === "prepare") {
+        return (sql: string) => {
+          statements.push(sql);
+          return target.prepare(sql);
+        };
+      }
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { db: counted, statements };
 }

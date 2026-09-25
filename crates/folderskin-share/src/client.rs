@@ -460,8 +460,8 @@ impl Client {
         self.request(Method::GET, &path, None, true, MAX_FILE).await
     }
 
-    /// Tells the service a pack is in community/packs now, in `folder`: the name it gave the pack,
-    /// or a numbered one when a pack from GitHub had that name already.
+    /// Tells the service a pack is in community/packs now, in `folder`: the id it gave the pack,
+    /// since `community pull` never writes a pack under another name.
     pub async fn export_done(&self, id: &str, folder: &str) -> Result<(), Error> {
         let path = format!("/v1/admin/exports/{}/done", segment(id)?);
         self.json::<Value>(
