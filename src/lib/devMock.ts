@@ -197,10 +197,10 @@ const MOCK_PACKS: MockPack[] = [
 ];
 /** Real packs' preview strips in the published tree, by the version (the pack's hash) each shows. */
 const STRIPS = {
-  "classic-art": `${COMMUNITY_TREE}/strips/0e1e663c7413f431.webp`,
+  "classic-art": `${COMMUNITY_TREE}/strips/ecfcc6015c286fba.webp`,
   colours: `${COMMUNITY_TREE}/strips/f0d421a416f6e2c9.webp`,
-  "greek-art": `${COMMUNITY_TREE}/strips/3e3b76e9d3fdd926.webp`,
-  "scientists-pop-art": `${COMMUNITY_TREE}/strips/3ea4ee0ba30812e3.webp`,
+  "greek-art": `${COMMUNITY_TREE}/strips/e04c64b06fbf385a.webp`,
+  "scientists-pop-art": `${COMMUNITY_TREE}/strips/0c577ff4cd8f80e6.webp`,
   "soft-rainbow": `${COMMUNITY_TREE}/strips/6f600f4adcaa7361.webp`,
 };
 /** The strip each sample pack shows; the made-up packs borrow a real one. */
@@ -211,24 +211,25 @@ const PREVIEW_OF: Record<string, string> = {
   "chrome-dreams": STRIPS.colours,
 };
 /** Classic Art's pictures, finished folders already, in the pack's order: each picture's SHA-256, which the
- *  published tree names it after, and its name. */
+ *  published tree names it after, and its name. When the pack's pictures change, the old ones leave the tree,
+ *  so take the new SHA-256s (and the pack's hash, for STRIPS) from its manifest there, v2/packs/<id>/<hash>.json. */
 const CLASSIC_ART = [
-  ["ce0957401fb489f1630a9c56da067b9a486b5ba35520af2dfe8da1bafde29372", "Mona Lisa"],
-  ["0001b73682ac8732a584484d3c31606354b5caf40b112d23875ba26c60083607", "View of Toledo"],
-  ["ff7403922e3728d5fd3edbe81c41957fff23b3106b0d92a3a599a1bc807a0f8d", "Girl with a Pearl Earring"],
-  ["03d663014b32e276e41468e74ef9151d0b6912d2af9c75b9f3fed28b7b8909fa", "The Astronomer"],
-  ["f340cd24ee7e2339845ff6d99286ab5c0d3d72c23055417a072ea3be52451406", "Oath of the Horatii"],
-  ["7e83c5c63ed61cd9030a7b76304c19858861eadf81ae2568b7d169c1178fe5bf", "Napoleon Crossing the Alps"],
-  ["2de9374438a98e1e8097fe3814c1a00bd4c48af262d8b3c8f2a8e08a53f2596b", "Wanderer above the Sea of Fog"],
-  ["33062e637c84b8aeaa8a1fa07ade05eb98b05ff8ede0d461247fd68a9f3de68a", "The Ninth Wave"],
-  ["12c6fa291fafafc3b2bb8397bafc8b1487c66170dd371de35ef26f46ed2f275c", "Boulevard des Capucines"],
-  ["caa313ae21ee258dc43ffdbc4ebf1716097707cb009076a241f6c132f294dcfa", "Breezing Up"],
-  ["d98da4e004e8e63b075244b7b9bd33d0238f014277d091f7d2a9e939cbf804f2", "Paris Street; Rainy Day"],
-  ["e8ac7ae2c4cc4f2eab6c9049cd647f71e8bb32b84355edac11a1dc89e7377d46", "Luncheon of the Boating Party"],
-  ["f34233ab3e192b02e88d22b8a66002587cef3737e2e69d54a08043f234348262", "The Lady of Shalott"],
-  ["d098adcdbeb9acb006691e7dd420c27d57c3789037732393716b6df190ac0764", "The Starry Night"],
-  ["459d9ebbf3902088600e31a18241eb4e441b3eac223502a96917222ae8b59206", "Mont Sainte-Victoire"],
-  ["9777390872e466951c13da162e549b4b87c8432aab48108314bf58f676ac5142", "Composition VIII"],
+  ["4357c4c3c68d4dca8cf1a1aec58a35d85bbf9322b52211e1700b8bc534fe835f", "Mona Lisa"],
+  ["ebf2414e6b02a8f49471ca7399c5c8b62449c6673d0025c6842d03ad9a44644f", "View of Toledo"],
+  ["25fd5db6138b79269dce6192e8bb3cbd404a0b851641fbf3b4011258105e9bdc", "Girl with a Pearl Earring"],
+  ["c54b8535c063a0612c6dad248728c5bbb7fb372f3d76acb89a4777f95696e20f", "The Astronomer"],
+  ["526ab5a526828e63a0fe358467bf768b5f23fe54219c29297b8e1b3cc41dc7e6", "Oath of the Horatii"],
+  ["4571a171c82726a47c7babd152ca83f60e66d8a8964fb039d0d07771671fb722", "Napoleon Crossing the Alps"],
+  ["533ba527c7f69745c461b388c7eb88ba07adf035fda6ef01bcfbd3daced5f085", "Wanderer above the Sea of Fog"],
+  ["d12b2b381d40788fc8c13f48418d2e0a2eb846c292a16261d71f760fe8bdaf36", "The Ninth Wave"],
+  ["0e0f4ce33e12291d4f80d6e93f8525434ab7f99949dddca8210c7f17074b25d1", "Boulevard des Capucines"],
+  ["870385b3a9e1634ddbe8ad735c3d39053857774d82b52ce59bb8e8266a25d2a2", "Breezing Up"],
+  ["ff2895b12dd7f08812e234bc105ee46e2722cf700f73e4f8f483f800429daebc", "Paris Street; Rainy Day"],
+  ["e62e43b6abe4af04ac70db2bec33155e4f35a2e9b30fd3e68ec0c0539cdbeaa5", "Luncheon of the Boating Party"],
+  ["b5000578e8e8b4c667be71de93a8fc913e3cccd45733febba9140cb018dcfd0d", "The Lady of Shalott"],
+  ["4280a6043347491d24019dcaf9497a12d37b55c0b348268d8342b68f1df53044", "The Starry Night"],
+  ["14b5a83486c65b6189cb709234294656cf3965bb2e6e821c34237282fc15cb40", "Mont Sainte-Victoire"],
+  ["b4704a8e30578b1558f61c00e306cb8dd0fb87517800b8a575ba184a535a40f8", "Composition VIII"],
 ] as const;
 /** Where a picture of Classic Art's is, by its SHA-256. */
 const classicArt = (sha256: string) => `${COMMUNITY_TREE}/pictures/${sha256}.webp`;
