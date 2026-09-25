@@ -73,8 +73,12 @@ export const ID_SUFFIX_CHARS = 6;
 // ---- what the service adds ----
 /** Where the pictures came from, as the app asks it. */
 export const SOURCES = ["own", "ai", "mixed", "licensed"] as const;
-/** The version of docs/PACK-TERMS.md the app shows. A submission agreeing to another is turned away. */
-export const TERMS_VERSION = 1;
+/**
+ * The version of docs/PACK-TERMS.md the app shows. A submission agreeing to another is turned away.
+ * Version 2 is the terms for sharing through this service alone, with no GitHub; its rules keep
+ * version 1's numbers, which terms.ts's reasons point at.
+ */
+export const TERMS_VERSION = 2;
 export const MAX_NOTES_CHARS = 400;
 /** A contact sheet: the pack's pictures small, side by side, for triage and for review on a phone. */
 export const PICTURES_PER_SHEET = 16;

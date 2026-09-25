@@ -15,13 +15,14 @@
  */
 import * as account from "./account";
 import * as admin from "./admin";
+import { now } from "./bytes";
 import { daily } from "./daily";
 import type { Env } from "./env";
 import { errorResponse, fail, html, HttpError } from "./http";
 import * as installs from "./installs";
 import { networkHash } from "./ip";
 import { verifyPage, VERIFY_SCRIPT } from "./pages";
-import { burstStrike } from "./penalties";
+import { burstStrike, coolingDown } from "./penalties";
 import { actOnLink, linkSheet, showLink } from "./phone";
 import * as publish from "./publish";
 import { report } from "./reports";
@@ -73,6 +74,9 @@ const ROUTES: Route[] = [
   ["POST", /^\/l\/([A-Za-z0-9._-]{1,300})$/, (req, env, ctx, [token]) => actOnLink(req, env, ctx, token)],
 ];
 
+/** How long the burst limit counts over: the BURST binding's period in wrangler.toml. */
+const BURST_SECONDS = 60;
+
 /** Whether a request sends a pack, and so is held back while its key or network is cooling down (penalties.ts). */
 const sharing = (method: string, pathname: string) => (method === "POST" || method === "PUT") && pathname.startsWith("/v1/submissions");
 
@@ -91,13 +95,18 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   // A burst limit per network before anything else, the database included. Its key needs IP_SALT;
   // the install counts need nothing but D1, so they go without the limit until IP_SALT is set,
   // rather than answer "not set up" to the website. A sharing request it turns away is a strike on
-  // the network, which only writes when the network isn't cooling down already.
+  // the network, which only writes when the network isn't cooling down already; when that leaves
+  // the network waiting longer than the burst does, the answer says so, rather than send the app
+  // back in a minute to be turned away again.
   const open = pathname === installs.COUNTS_PATH && !env.IP_SALT;
   if (env.BURST && pathname !== "/" && !open) {
     const { success } = await env.BURST.limit({ key: await networkHash(env, request) });
     if (!success) {
-      if (sharing(request.method, pathname)) await burstStrike(env, request);
-      throw fail(429, "slow_down", "Too many requests from your network. Wait a minute and try again.", { "Retry-After": "60" });
+      if (sharing(request.method, pathname)) {
+        const wait = (await burstStrike(env, request)) - now();
+        if (wait > BURST_SECONDS) throw coolingDown(wait);
+      }
+      throw fail(429, "slow_down", "Too many requests from your network. Wait a minute and try again.", { "Retry-After": String(BURST_SECONDS) });
     }
   }
   let allowed = false;

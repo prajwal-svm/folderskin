@@ -146,10 +146,17 @@ ${pulled}<dt>Flags</dt><dd>${flags}</dd>
 </dl></div>${sheets}`;
 }
 
-function reasonOptions(selected = ""): string {
-  return Object.entries(REASONS)
+/**
+ * The reasons to choose from, `selected` chosen already. Without one the list starts at "Choose a
+ * reason" and can't be sent until one is: taking a pack down for some reasons bans its author,
+ * which one tap on a form that picked for them mustn't do.
+ */
+function reasonSelect(selected?: string): string {
+  const prompt = selected === undefined ? `<option value="" selected disabled>Choose a reason</option>` : "";
+  const options = Object.entries(REASONS)
     .map(([code, r]) => `<option value="${e(code)}"${code === selected ? " selected" : ""}>${e(code)}: rule ${r.term}</option>`)
     .join("");
+  return `<select name="reason" aria-label="Reason"${selected === undefined ? " required" : ""}>${prompt}${options}</select>`;
 }
 
 /** The box that makes a turn-down abuse. The sexual, minor and hate reasons are abuse whether it is ticked or not. */
@@ -160,11 +167,11 @@ export function reviewPage(info: ReviewInfo, token: string): string {
   const waiting = info.status === "pending" || info.status === "flagged";
   const actions = waiting
     ? `<form method="post"><input type="hidden" name="decision" value="approve"><button class="go" type="submit">Approve and publish</button></form>
-<form method="post"><input type="hidden" name="decision" value="reject"><select name="reason" aria-label="Reason">${reasonOptions("quality")}</select>${banBox}<button type="submit">Turn down</button></form>`
+<form method="post"><input type="hidden" name="decision" value="reject">${reasonSelect("quality")}${banBox}<button type="submit">Turn down</button></form>`
     : `<p>This pack is ${e(info.status)}, so there's nothing to decide.</p>`;
   const live = waiting || info.status === "approved";
   const remove = live
-    ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select>${banBox}<button class="danger" type="submit">Take down</button></form>`
+    ? `<form method="post"><input type="hidden" name="decision" value="takedown">${reasonSelect()}${banBox}<button class="danger" type="submit">Take down</button></form>`
     : "";
   return page(`Review ${info.name} · FolderSkin`, `<h1>Review a pack</h1>${details(info, token)}${actions}${remove}
 <p>Each button works once. This link runs out in a few days. Turning a pack down for sexual content, a child or hate always bans as abuse does.</p>`);
@@ -174,7 +181,7 @@ export function reviewPage(info: ReviewInfo, token: string): string {
 export function takedownPage(info: ReviewInfo, token: string): string {
   const live = ["pending", "flagged", "approved"].includes(info.status);
   const action = live
-    ? `<form method="post"><input type="hidden" name="decision" value="takedown"><select name="reason" aria-label="Reason">${reasonOptions("sexual")}</select>${banBox}<button class="danger" type="submit">Take it down now</button></form>`
+    ? `<form method="post"><input type="hidden" name="decision" value="takedown">${reasonSelect()}${banBox}<button class="danger" type="submit">Take it down now</button></form>`
     : `<p>This pack is ${e(info.status)} already.</p>`;
   return page(`Take down ${info.name} · FolderSkin`, `<h1>Take down a pack</h1>${details(info, token)}${action}
 <p>Taking it down removes it from FolderSkin's storage at once. If it was already pulled into folderskin-community, remove it there too. Taking a pack down for sexual content, a child or hate always bans as abuse does.</p>`);

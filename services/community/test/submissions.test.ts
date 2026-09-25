@@ -109,6 +109,14 @@ describe("sending a pack", () => {
 
     const oldTerms = { ...body, terms_version: 0 };
     expect((await errorOf(await call(await signed(who, "POST", "/v1/submissions", oldTerms)))).code).toBe("terms");
+    // Version 1 were the terms for sharing through GitHub as well; the app shows whichever
+    // version /v1/status names, and agrees to that one.
+    expect(await (await call(new Request("https://community.test/v1/status"))).json()).toMatchObject({ terms_version: 2 });
+    const firstTerms = { ...body, terms_version: 1 };
+    expect(await errorOf(await call(await signed(who, "POST", "/v1/submissions", firstTerms)))).toEqual({
+      code: "terms",
+      message: "The pack terms have changed. Update FolderSkin, read them and send the pack again.",
+    });
 
     const license = { ...body, license: "All rights reserved" };
     expect((await errorOf(await call(await signed(who, "POST", "/v1/submissions", license)))).code).toBe("bad_license");

@@ -182,6 +182,24 @@ describe("backing off", () => {
     expect(await penalty(`key:${who.key}`)).toMatchObject({ strikes: 1 });
   });
 
+  it("says how long to wait when the burst leaves a network cooling down for longer than a minute", async () => {
+    const who = await author("bursty-again");
+    const spent = { BURST: { limit: async () => ({ success: false }) } as unknown as RateLimit };
+    const net = `net:${await networkOf(who.ip)}`;
+    const burst = async (seconds: number) => call(await signed(who, "POST", "/v1/submissions", await describePack(pictures(1, 107)), later(seconds)), spent);
+    // Struck once already today, and that wait is over: this burst is the second strike, 120 s.
+    await env.DB.prepare("INSERT INTO penalties (subject, strikes, struck_at, cool_until) VALUES (?1, 1, ?2 - 100, ?2 - 40)").bind(net, now()).run();
+    const second = await burst(0);
+    expect(second.status).toBe(429);
+    expect(second.headers.get("Retry-After")).toBe("120");
+    expect(await errorOf(second)).toMatchObject({ code: "cooling_down", retry_after: 120 });
+    // Already cooling down for an hour: the answer says so, and nothing more is written.
+    await env.DB.prepare("UPDATE penalties SET cool_until = ?2 + 3600 WHERE subject = ?1").bind(net, now()).run();
+    const hourLong = await burst(1);
+    expect((await errorOf(hourLong)).message).toBe("That's too many tries in a row. You can share again in an hour.");
+    expect(await penalty(net)).toMatchObject({ strikes: 2 });
+  });
+
   it("isn't set off by a full queue or a pause, which are the service's doing", async () => {
     const who = await author("patient-one");
     const full = await call(await signed(who, "POST", "/v1/submissions", await describePack(pictures(1, 106))), { GLOBAL_DAILY_PICTURES: "0" });
@@ -315,6 +333,24 @@ describe("turning packs down", () => {
     );
     const down = await admin("POST", `/v1/admin/submissions/${id}/takedown`, { reasons: ["brand"], ban: true });
     expect(((await down.json()) as { bans: { reason: string }[] }).bans.map((b) => b.reason)).toEqual(["abuse", "abuse"]);
+  });
+
+  it("makes the maintainer choose why before a phone link takes a pack down", async () => {
+    const who = await author("chosen-reason");
+    const id = await submit(who, pictures(1, 152), { name: "Chosen reason" });
+    const path = new URL((await makeLink(testEnv(), "takedown", id))!).pathname;
+    const page = await (await call(new Request(`${BASE}${path}`))).text();
+    // No reason is picked for them, since some of them ban the author.
+    expect(page).toContain('<select name="reason" aria-label="Reason" required><option value="" selected disabled>Choose a reason</option>');
+    const form = new FormData();
+    form.set("decision", "takedown");
+    form.set("reason", "");
+    expect((await call(new Request(`${BASE}${path}`, { method: "POST", body: form }))).status).toBe(400);
+    // The link still works once a reason is chosen.
+    form.set("reason", "brand");
+    const done = await call(new Request(`${BASE}${path}`, { method: "POST", body: form }));
+    expect(await done.text()).toContain("gone from FolderSkin");
+    expect(await (await call(await signed(who, "GET", "/v1/me"))).json()).toMatchObject({ tier: "probation" });
   });
 
   it("turns a pack down as abuse from the phone page's box", async () => {

@@ -34,3 +34,7 @@ CREATE TABLE marks (
 -- The network a submission was sent from, hashed as penalties hash it, so turning the pack down
 -- as abuse can ban the network behind it. Cleared 30 days after the decision.
 ALTER TABLE submissions ADD COLUMN network TEXT;
+
+-- Approved packs not pulled into folderskin-community yet, which GET /v1/exports/pending counts
+-- for anyone who asks: from this index alone, rather than by reading every pack ever approved.
+CREATE INDEX exports_pending ON submissions (status, exported_at);
