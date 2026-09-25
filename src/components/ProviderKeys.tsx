@@ -14,6 +14,7 @@ import { LoaderIcon } from "./icons/loader";
 import { branded } from "./Brand";
 import { t as tNow, useT } from "../i18n";
 import { explain } from "../lib/sentences";
+import { providerName } from "../lib/providerNames";
 
 /**
  * The AI providers, the key for the chosen one, and optionally its model. Shared by the
@@ -115,7 +116,7 @@ export function ProviderKeys({
           >
             <span className="provider-name">
               {p.kind === "local" ? <CpuIcon size={18} /> : <ProviderLogo id={p.id} size={18} />}
-              {p.label}
+              {providerName(p.label)}
             </span>
             {p.kind === "local" && settingUp ? (
               // Downloading, whichever provider is shown below.
