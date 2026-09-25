@@ -47,7 +47,7 @@ succeeds and changes nothing.
 
 ### macOS
 
-The icon is stored by the system, not by us — macOS writes an invisible `Icon\r` file
+The icon is stored by the system, not by us: macOS writes an invisible `Icon\r` file
 inside the folder. Finder is slow to notice a new one when it replaces another: it keeps drawing
 the old icon, on the Desktop and in its windows, until the folder is opened. So the icon is
 cleared first and then set, which Finder does redraw straight away (Apple's workaround,
@@ -66,9 +66,9 @@ every change of a folder's icon takes one lock for the whole process, and each r
 autorelease pool so a long run over subfolders doesn't hold on to every folder's icon data.
 
 The window is transparent over the system's sidebar material (`NSVisualEffectView`), which is
-what makes the sidebar translucent; the light/dark switch sets the window's appearance so the
+what makes the sidebar translucent. The light/dark switch sets the window's appearance so the
 material follows it. Transparent windows need Tauri's `macOSPrivateApi`, which rules out the
-Mac App Store; FolderSkin ships as a DMG. Windows and Linux keep an opaque window.
+Mac App Store, so FolderSkin ships as a DMG. Windows and Linux keep an opaque window.
 
 ### Windows
 
@@ -76,8 +76,8 @@ Explorer only reads `desktop.ini` for folders that carry the read-only attribute
 attribute is the mechanism, not a mistake: the folder's contents stay writable and revert
 clears it again.
 
-The icon file is named after its own contents — `folderskin-` plus the first 64 bits of the
-`.ico`'s SHA-256 — rather than a fixed `folderskin.ico`. Explorer caches an icon against the
+The icon file is named after its own contents (`folderskin-` plus the first 64 bits of the
+`.ico`'s SHA-256) rather than a fixed `folderskin.ico`. Explorer caches an icon against the
 path it came from, so writing a second skin over one fixed name left a window that was already
 open showing the first skin until it was refreshed. A different picture is now a different path,
 which nothing has cached, and the same skin applied twice resolves to the same name, so
@@ -95,17 +95,17 @@ a skin to a folder sitting in an Explorer window that was already open and watch
 icon changed without a refresh:
 
 1. **The icon file must be at a new path** (the content hash above). With a fixed
-   `folderskin.ico`, the folder kept the icon it already had — on the first apply after a revert
+   `folderskin.ico`, the folder kept the icon it already had. On the first apply after a revert
    it did not even pick the icon up. Explorer caches an icon against the path it came from.
 2. **`SHChangeNotify` must name the folder's parent.** *The view that draws a folder's icon is
-   the view listing it* — the Desktop, for a folder on the Desktop — not a window showing what is
+   the view listing it* (the Desktop, for a folder on the Desktop), not a window showing what is
    inside it. Notifying only the folder, as the app did, left that view holding the icon it had
    already drawn, so the app wrote everything correctly, `SHGetFileInfo` resolved the new icon,
    and the folder on screen did not change. `SHCNE_UPDATEDIR` therefore goes to the parent as
    well, and the folder itself also gets `SHCNE_ATTRIBUTES` (applying sets its read-only bit) and
    `SHCNE_UPDATEITEM`.
 
-With one of the two missing the icon does not change; with both it changes as the apply finishes.
+With one of the two missing the icon does not change. With both it changes as the apply finishes.
 A machine-wide cache rebuild (`ie4uinit.exe -show`) is never needed for a folder we just wrote.
 
 `desktop.ini` and the icon file are hidden + system, so they do not show up unless
@@ -131,7 +131,7 @@ There is no single standard, so FolderSkin writes both mechanisms:
 |---|---|
 | Dolphin, Konqueror (KDE) | `.directory` |
 | Nautilus (GNOME), Nemo (Cinnamon), Caja (MATE) | GIO metadata, set through `gio` |
-| Thunar (XFCE) | its own per-folder metadata; not covered — set the icon from its properties dialog |
+| Thunar (XFCE) | its own per-folder metadata, which isn't covered: set the icon from its properties dialog |
 | PCManFM (LXDE/LXQt) | `.directory` in most builds |
 
 `gio` ships with GLib and is present on nearly every desktop install. When it is missing,
@@ -152,21 +152,21 @@ than ten folders gives the total. On Windows and Linux a copy is the icon file p
 for the text file.
 
 The run leaves alone, along with everything inside them: symlinks and junctions, folders whose
-names start with a dot, folders the OS hides (Finder's hidden flag; Windows' hidden or system
+names start with a dot, folders the OS hides (Finder's hidden flag, or Windows' hidden or system
 attribute), packages such as apps, photo and music libraries, Xcode projects and Keynote or
 Pages documents, and the system locations listed under Known limits. At most 5,000 folders go in
 one run. On a Mac a folder takes about a tenth of a second to skin and a thousandth to revert.
 
 Reverting a run takes off exactly the folders it changed. Reverting the whole tree instead
-(**Remove custom icons**, with the switch on) takes the custom icon off every folder that has one:
-on macOS that is any custom icon, whoever set it, as with a single folder; on Windows and Linux
+(**Remove custom icons**, with the switch on) takes the custom icon off every folder that has one.
+On macOS that is any custom icon, whoever set it, as with a single folder. On Windows and Linux
 it is only FolderSkin's own files, as always. Cloud-synced trees sync every folder's copy.
 
 ## Known limits
 
 - **Explorer's icon cache.** A skinned folder repaints as the apply finishes (above). A view
-  that is not listening — a third-party file manager, or a window opened from a shell
-  extension that does not subscribe to change notifications — can still need `F5`.
+  that is not listening (a third-party file manager, or a window opened from a shell
+  extension that does not subscribe to change notifications) can still need `F5`.
 - **Cloud-synced folders.** iCloud Drive, OneDrive, Dropbox and Google Drive see
   `desktop.ini`, `folderskin-<hash>.ico`, `.directory`, `.folderskin.png` and `Icon\r` as ordinary
   files and will sync them to your other machines, where a different OS ignores them. They
@@ -177,7 +177,7 @@ it is only FolderSkin's own files, as always. Cloud-synced trees sync every fold
   disk. FolderSkin still writes the files, so the icon appears if you later switch to a
   manager that honours them.
 - **Network and read-only volumes.** SMB, NFS and read-only mounts often refuse the
-  attribute or the hidden flag; the failure surfaces in the drop zone with the reason from
+  attribute or the hidden flag. The failure surfaces in the drop zone with the reason from
   the OS.
 - **Folders inside an app bundle or a system directory.** Refused before anything is written:
   `/System`, `/Library`, `/usr`, `/bin`, `/sbin`, `/etc`, `/var`, anything inside a `.app`

@@ -1,7 +1,7 @@
 # Community skins and packs
 
 Anyone can share skins with everyone who uses FolderSkin, for free. A shared set of skins is a
-**pack**; one skin on its own is a pack of one. Packs live in their own repository,
+**pack**, and one skin on its own is a pack of one. Packs live in their own repository,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community), under `packs/`, and
 adding one needs no account. FolderSkin ships no skins of its own: packs, your own pictures and AI
 results are where every skin comes from.
@@ -30,8 +30,8 @@ library. Its skins appear in the pack's own order.
 
 You share from the app, and FolderSkin sends the pack to its community service at
 `community.folderskin.app`, where the maintainer reviews it. You need no GitHub account.
-FolderSkin 0.1.6 and earlier could also open a pull request on GitHub for you; 0.1.7 drops that
-option.
+FolderSkin 0.1.6 and earlier could also open a pull request on GitHub for you, but 0.1.7 drops
+that option.
 
 1. Tag the skins you want to share (⋯ → Tags). To share one skin, use ⋯ → **Share with
    community**. To share several, use **Community → Share your skins** and pick a tag.
@@ -46,7 +46,7 @@ Every picture is shared losslessly, so a pack looks exactly as you made it, a fi
 transparent edge included. FolderSkin makes each one a lossless WebP before it's sent, which takes
 a few seconds a picture, and counts them as they're ready. A picture too detailed to fit in 1.5 MB
 at 1024 px is made 896 px, then 768 px, still lossless, and FolderSkin says which. A pack's
-pictures come to 64 MB at most; a bigger one is turned down with a suggestion to split it into
+pictures come to 64 MB at most. A bigger one is turned down with a suggestion to split it into
 two packs.
 
 A person looks at every pack before anyone else can see it. Once it's approved, it's published
@@ -143,7 +143,7 @@ Approving a pack publishes it. Nobody copies files by hand.
 So a pack is published within about 15 minutes of approval, or within a few minutes when the
 service starts the workflow itself. A run that fails publishes nothing, and GitHub emails the
 maintainer that the workflow failed. GitHub can start a scheduled run late when it is busy, and it
-turns the schedule off in a repository with no activity for 60 days; the dispatch depends on
+turns the schedule off in a repository with no activity for 60 days. The dispatch depends on
 neither.
 
 The workflow needs the maintainer's signing key, the whole file `community keygen` wrote, as the
@@ -153,7 +153,7 @@ turn down a pack without a generated id.
 
 Pulling by hand still works. `community pull` writes the packs and tells the service at once,
 since whoever runs it commits what it wrote. `--no-done --pulled pulled.json` holds that back
-until `community done --from pulled.json`, which is how the workflow runs it; telling the service
+until `community done --from pulled.json`, which is how the workflow runs it. Telling the service
 twice does no harm.
 
 ### The mirror
@@ -176,7 +176,7 @@ catalog it doesn't hold. A request that may pass on its own (no answer, a 5xx or
 five times in all, the wait doubling from a second, and a `Retry-After` is honoured up to 30
 seconds. The workflow runs it before it commits, so GitHub's `head.json` only moves once the
 mirror has everything it names. The repository variable `COMMUNITY_MIRROR_URL` turns the mirror
-on; `head.json` lists it only while it's on.
+on, and `head.json` lists it only while it's on.
 
 ## The contract
 
@@ -255,7 +255,7 @@ Each picture is one of two kinds, told apart the same way as a picture dropped o
 Every picture is lossless, so a pack looks exactly as it was made: no blocks in a gradient, no
 ringing around lettering, and a finished folder's edge as clean as it was drawn. A lossless WebP
 is about a third smaller than the same PNG, which is why the app and `packs make` write WebP. A
-detailed 1024 px picture comes to between 0.6 and 1.5 MB, most of them about 800 KB; one that
+detailed 1024 px picture comes to between 0.6 and 1.5 MB, most of them about 800 KB. One that
 doesn't fit in 1.5 MB is made 896 px, then 768 px, still lossless, rather than blurred to fit.
 
 ### One shape for a pack's folders
@@ -303,7 +303,7 @@ what it redrew, and names every outlier with how far off it is. A pack that does
 outliers should take its shape anyway, as the Mona Lisa does in Classic Art. `--drop-outliers`
 is for the maintainer: nothing else ever removes a skin. `packs check --require-one-shape` turns
 down a pack whose folders are more than 1% apart ([Checking a pack
-yourself](#checking-a-pack-yourself)); folders redrawn at one shape never are.
+yourself](#checking-a-pack-yourself)). Folders redrawn at one shape never are.
 
 ### Licences
 
@@ -333,10 +333,10 @@ has, or an old id in `moved.json`.
 
 Each picture gets the split the app makes when you add one. A finished folder, painted on
 magenta the way the chat prompt in [PROMPTS.md](PROMPTS.md) asks, or on real transparency, is cut
-out and becomes the icon itself; anything else is artwork for FolderSkin's folder. Every picture
+out and becomes the icon itself. Anything else is artwork for FolderSkin's folder. Every picture
 is shrunk to 1024 px and saved as a lossless WebP, with the encoder the app shares packs with
 built in, so there is nothing to install. One still over 1.5 MB is made 896 px, then 768 px, and
-the report says so; `--max-kb` holds the pictures to less than 1.5 MB. Pictures that come to more
+the report says so. `--max-kb` holds the pictures to less than 1.5 MB. Pictures that come to more
 than 64 MB together are turned down, with a suggestion to split them into two packs. libwebp's
 most thorough setting takes several seconds a picture, so they're made on every core at once.
 [SKINS.md](SKINS.md#pictures-for-a-pack) says more about the formats. The report says which way
@@ -346,7 +346,7 @@ over.
 
 Two finished folders or more are given one shape ([One shape for a pack's
 folders](#one-shape-for-a-packs-folders)), and the report says which were redrawn. A folder more
-than 8% off the others' shape is left out, and the report says how far off it is;
+than 8% off the others' shape is left out, and the report says how far off it is.
 `--keep-outliers` keeps it as it is instead. A pack made with no outlier kept passes
 `packs check --require-one-shape`.
 
@@ -362,7 +362,7 @@ inside the folder stays), takes a soft drop shadow with it, and gives the edge t
 colours rather than a pink rim. On a plain grey or black background it keeps to that
 background's own noise and never grows upward, so a dark coat or an ink line meeting the folder's
 edge isn't mistaken for background. Look at the `--preview` sheet afterwards (it's drawn on light
-grey, so a hole shows); a picture with no flat background still comes out as artwork.
+grey, so a hole shows). A picture with no flat background still comes out as artwork.
 
 To see one picture as the app will show it, `render` draws it as its folder:
 
@@ -389,7 +389,7 @@ again. `--max-kb` holds the pictures to less.
 It also checks the ids between them: two folders whose names differ only in capitals are one
 folder on macOS and Windows, and a pack can't take an old id from `moved.json`, which has to
 follow its own rules ([moved.json](#movedjson)). Names are never compared, since they can repeat.
-`--require-generated-ids` turns down any pack whose id isn't a generated one; it's off unless
+`--require-generated-ids` turns down any pack whose id isn't a generated one. It's off unless
 asked, and folderskin-community's workflow asks when its variable `REQUIRE_GENERATED_IDS` is
 `true`.
 
@@ -404,7 +404,7 @@ It's off unless asked, and meant for folderskin-community's workflow.
 Community has a **List** and a **Gallery** view, and **View** on any pack opens it: every skin
 drawn as the folder it makes, with its name, before anything is added. **Refresh** reads the list
 again. A pack you added that has changed since shows **Update**, which swaps its skins for the
-new version; folders keep their icons, and a favourite of a picture both versions share stays a
+new version. Folders keep their icons, and a favourite of a picture both versions share stays a
 favourite.
 
 - `index.json` in folderskin-community lists every pack: its id, name, author, licence, tags, number of skins
@@ -414,7 +414,7 @@ favourite.
   `pack.json`, under its first id) and, for a pack `official.json` lists, `"official": true`.
   `"moved"` beside the packs is [moved.json](#movedjson). `folderskin-tools packs index` writes it, together with
   `previews/<id>.png`, a strip of the pack's first four skins drawn as folders. Both are
-  generated on folderskin-community's `main`; never edit them by hand.
+  generated on folderskin-community's `main`, so never edit them by hand.
 - `v2/`, which `packs catalog` writes, is the same packs as a catalog the app searches on your
   computer. Its `head.json` names the current catalog, lists the `featured` and `official`
   packs, carries `moved`, and lists the mirrors that serve the same tree, such as
@@ -423,7 +423,7 @@ favourite.
   From 0.1.7 it reads `head.json` itself from `https://packs.folderskin.app` first.
 - The app downloads a pack's pictures only when you add it, four at a time, and shows how many
   have arrived. It checks every one against the limits above and saves nothing unless all of
-  them pass; then it saves them together, so a pack is never half added.
+  them pass. Then it saves them together, so a pack is never half added.
 - `FOLDERSKIN_COMMUNITY_URL` points the app at another copy of folderskin-community. For example,
   serve a checkout with `python3 -m http.server` from its root and set it to
   `http://localhost:8000` to try a pack end to end.
@@ -444,7 +444,7 @@ them. Each is a JSON list of pack ids, such as `["classic-art-k7q2mx", "colours-
 
 Both are optional. Every id has to be a pack in `packs/`, and one listed twice counts once.
 `packs index` and `packs catalog` stop and write nothing when either names a pack that isn't
-there, so a pack that is renamed or removed can't leave a gap; the pull request check runs
+there, so a pack that is renamed or removed can't leave a gap. The pull request check runs
 `packs catalog`, which catches it before a merge. `packs rename` rewrites both lists itself. The
 Packs workflow in folderskin-community rebuilds the index when a file in its `paths` changes, so
 both lists belong there beside `packs/**`, and so does `moved.json`.
@@ -461,8 +461,8 @@ is opened and said to be there. From 0.1.7, a link with an old id opens the pack
 FolderSkin takes a link only when it is exactly that: the scheme `folderskin`, `install` as the
 host (`folderskin://install?…`) or the whole path (`folderskin:install?…`), no user, password or
 port, and exactly one `pack`, which has to be a pack id (lower-case letters and digits in words
-joined by single dashes, at most 40 characters). Any other parameter is passed over; anything else
-is ignored.
+joined by single dashes, at most 40 characters). Any other parameter is passed over, and anything
+else is ignored.
 
 The installers register the scheme: the macOS app's `Info.plist`, the Windows installers, and
 the desktop entry of the Linux `.deb` and `.rpm`. An AppImage registers it as it starts, since

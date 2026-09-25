@@ -66,7 +66,7 @@ The job is skipped until the project exists. To set it up once:
 1. Sign in at [sonarcloud.io](https://sonarcloud.io) with GitHub and add an organisation for the
    `prajwal-svm` account. The `oleafly` organisation is tied to the Oleafly GitHub organisation,
    so it can't import a repository from a personal account.
-2. **Analyze new project** → `folderskin`. Keep the key `prajwal-svm_folderskin`; the README
+2. **Analyze new project** → `folderskin`. Keep the key `prajwal-svm_folderskin`. The README
    badges use it.
 3. In the project's **Administration → Analysis Method**, turn **Automatic Analysis** off. CI
    runs the analysis, with the coverage reports, and the two can't both be on.
@@ -100,6 +100,6 @@ percentage. Sonar still analyses them.
 Public repositories run Actions for free. A private one spends the account's monthly minutes,
 and macOS minutes count ten times and Windows twice, so one full CI run can use a few hundred.
 So while the repository is private, a pull request runs only the Linux jobs (frontend, Rust,
-cargo-deny, Sonar) and skips the macOS and Windows checks and the bundles; pushes to `main` run
+cargo-deny, Sonar) and skips the macOS and Windows checks and the bundles. Pushes to `main` run
 everything. Once the repository is public, pull requests get the full set again without any
 change. Docs-only pushes skip CI for the same reason.

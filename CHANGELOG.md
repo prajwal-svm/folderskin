@@ -4,7 +4,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.7 — 2026-09-25
+## 0.1.7 - 2026-09-25
 
 ### Added
 
@@ -20,7 +20,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **FolderSkin is now GPL-3.0.** From this release on, the code is licensed under the GNU General
   Public License v3.0 (`GPL-3.0-only`). Anyone can still use, study, change and share it, and a
   changed version someone shares has to come with its source, under the same licence. Releases up
-  to 0.1.6 came out under MIT and keep it. The FolderSkin name and logo aren't covered by either;
+  to 0.1.6 came out under MIT and keep it. The FolderSkin name and logo aren't covered by either.
   [TRADEMARKS.md](TRADEMARKS.md) says how to use them. Skins keep their own licences.
 - **Packs are shared through FolderSkin.** The share dialog sends every pack to FolderSkin's review
   queue: verify your computer once in the browser, with no account anywhere, and a person looks at
@@ -47,7 +47,7 @@ All notable changes to FolderSkin are recorded here. The format follows
   a lossless WebP, so the pack looks exactly as you made it: no blur in a gradient or around
   lettering, and a finished folder's transparent edge exactly as drawn. The limits are 1024 px
   and 1.5 MB a picture, and 64 MB a pack. A picture too detailed to fit is made 896 px, then
-  768 px, still lossless, and the dialog says which; a pack over 64 MB is turned down with a
+  768 px, still lossless, and the dialog says which. A pack over 64 MB is turned down with a
   suggestion to split it in two. Making the pictures ready takes under a second each, and the
   dialog counts them as it goes.
 - **Your library takes less space.** A picture you add, paint or design is now saved as a
@@ -66,7 +66,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 - Setting up the local AI model no longer downloads `cwebp` on Windows, or asks for it on macOS and
   Linux: packs were its only use, and they no longer need it.
 
-## 0.1.6 — 2026-09-25
+## 0.1.6 - 2026-09-25
 
 ### Added
 
@@ -96,7 +96,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 - The pack guide and the pack terms open on [folderskin.app](https://folderskin.app/docs/),
   FolderSkin's new website.
 
-## 0.1.5 — 2026-09-24
+## 0.1.5 - 2026-09-24
 
 ### Fixed
 
@@ -118,7 +118,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Carrying on with a stopped setup counts to the end.** Pressed straight after a stop, it could
   count against the old total and finish with the bar at 82%. It now waits to know what's left.
 
-## 0.1.4 — 2026-09-24
+## 0.1.4 - 2026-09-24
 
 ### Added
 
@@ -135,8 +135,8 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **The Mac's folder or Windows'.** The folder panel switches every skin between the two folder
   looks, and the composer designs for whichever is chosen.
 - **The composer grew up.** New designs start from a dialog, with the Mac's and Windows' own
-  folders to start empty on; there's an icon library whose icons can be tried on the canvas in
-  place; layers have names of their own; and a fill can cover the whole folder or just its front.
+  folders to start empty on. There's an icon library whose icons can be tried on the canvas in
+  place, layers have names of their own, and a fill can cover the whole folder or just its front.
 - **Settings has pages down the side**, a search that finds any setting, an accent colour, a
   setting for less motion, and licence profiles for the packs you share.
 - **The `folderskin` command line.** Paint, theme a whole folder tree from its folder names, clean
@@ -152,7 +152,7 @@ All notable changes to FolderSkin are recorded here. The format follows
   Science & Space, and Money & Work.
 - **Sharing a pack goes through GitHub.** Publishing forks folderskin-community, a small
   repository of packs rather than all of FolderSkin, and opens the pull request there. Sharing
-  without GitHub is built but not on yet; the share dialog doesn't offer it until its service is.
+  without GitHub is built but not on yet. The share dialog doesn't offer it until its service is.
 - The sidebar folds to a rail, and the edges between the panels can be dragged.
 - Tooltips, dropdowns and dialogs are the app's own everywhere: one dialog at a time, the focus
   kept inside it, Tab stopping once at a group, and Escape closing an open list first.
@@ -166,25 +166,25 @@ All notable changes to FolderSkin are recorded here. The format follows
 - Chats that were waiting to be saved are saved when the window closes, and a new chat no longer
   starts with the last one's reference pictures.
 
-## 0.1.3 — 2026-09-20
+## 0.1.3 - 2026-09-20
 
 ### Fixed
 
 - **The library was empty until you clicked the window.** 0.1.2 paused every animation while the
   window was behind another, to stop a decorative border repainting for nobody. Skins arrive with
   an animation that starts them invisible, and pausing caught those too: a gallery first drawn
-  while the window was not in front stayed blank — the counts said 59 and the shelf showed
-  nothing — until the window was clicked. It hit hardest right after an update, which restarts
-  the app behind whatever you were doing. Animations that never end still pause; the ones things
-  arrive with always finish.
+  while the window was not in front stayed blank (the counts said 59 and the shelf showed
+  nothing) until the window was clicked. It hit hardest right after an update, which restarts
+  the app behind whatever you were doing. Animations that never end still pause, but the ones
+  things arrive with always finish.
 
-## 0.1.2 — 2026-09-20
+## 0.1.2 - 2026-09-20
 
 ### Added
 
 - **Share a pack straight to GitHub.** Sharing used to end with a folder on your desktop and a
   set of instructions for doing the GitHub part yourself. FolderSkin now signs you in with
-  GitHub's device code — a short code, typed into a page, approved once — forks the repository
+  GitHub's device code (a short code, typed into a page, approved once), forks the repository
   if you can't push to it, and opens the pull request for you. Saving a folder is still there
   for anyone who would rather do it by hand. The sign-in also lives in Settings → Sharing.
 - **[docs/PACK-TERMS.md](docs/PACK-TERMS.md)**: what a pack may and may not contain, in eighteen
@@ -213,11 +213,11 @@ All notable changes to FolderSkin are recorded here. The format follows
   everything correctly but the folder on screen kept its old icon until the view was refreshed
   by hand. Two causes, both needed fixing:
   - `SHChangeNotify` only ever named the folder. The view that draws a folder's icon is the one
-    listing it — the Desktop, for a folder on the Desktop — so the parent is now told too.
+    listing it (the Desktop, for a folder on the Desktop), so the parent is now told too.
   - The icon file had a fixed name, and Explorer caches an icon against the path it came from.
     It is now named after its contents (`folderskin-<hash>.ico`), so a different skin is a
     different path. Applying the same skin twice still resolves to the same name and rewrites
-    one identical file; the icon file an earlier apply left is removed, and revert still
+    one identical file. The icon file an earlier apply left is removed, and revert still
     recognises the `folderskin.ico` that earlier versions wrote.
 - **Windows: a folder keeps the attributes it came with.** Telling Explorer to read a folder's
   `desktop.ini` means marking the folder read-only and system, and revert took both off again
@@ -227,12 +227,12 @@ All notable changes to FolderSkin are recorded here. The format follows
   a change in before it is asked to redraw was spent on the thread the app was waiting for, so
   every apply and revert took 600 ms longer than the work did. It happens out of the way now.
 - **Windows: reading a folder's icon could write past a buffer.** Asking GDI for the mask of an
-  icon with no alpha channel — every 24-bit icon, which is what `imageres.dll` and anything old
-  holds — had it write a two-entry colour table into room for one.
+  icon with no alpha channel (every 24-bit icon, which is what `imageres.dll` and anything old
+  holds) had it write a two-entry colour table into room for one.
 - **Windows: the installer wears FolderSkin's icon**, not the NSIS default.
 - **The app no longer quits when something goes wrong.** Release builds aborted the process on
   any panic, so a fault while applying a skin closed the window with nothing said. Commands
-  unwind instead, and a panic comes back as a message; it is also written to `panic.log` in the
+  unwind instead, and a panic comes back as a message. It is also written to `panic.log` in the
   app's log folder, which a release build had no console to print to.
 - **An invisible border was being animated.** The drop-target glow spins a conic gradient on
   every island, and it ran the whole time the app was open on elements nothing could see: about
@@ -240,7 +240,7 @@ All notable changes to FolderSkin are recorded here. The format follows
   something is dragged over the window now, animation pauses while the window is hidden or
   behind another, and gallery tiles decode only once they are in sight.
 
-## 0.1.1 — 2026-09-19
+## 0.1.1 - 2026-09-19
 
 ### Added
 
@@ -267,7 +267,7 @@ All notable changes to FolderSkin are recorded here. The format follows
   more than ten folders ask first, with roughly the space the icons take (each folder keeps its
   own copy). A run shows how far it has got, can be stopped, and ends with what happened: how many
   folders changed, which couldn't be and why, with **Carry on** after a stop and **Try again** for
-  failures. **Revert** takes off exactly what the run put on; with the switch on and no run to
+  failures. **Revert** takes off exactly what the run put on. With the switch on and no run to
   undo, **Remove custom icons** clears the whole tree after asking. Hidden folders, app bundles and
   other packages, symlinks and system locations are left alone, and a tree of more than 5,000
   folders is refused. The composer's **Save & apply** follows the same switch.
@@ -276,11 +276,11 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 - The composer's **Layers** and the settings below them are each opened and closed from their
   heading, and the bar between them is dragged (or nudged with the arrow keys) to share out the
-  height; how they were left is remembered. A layer can be deleted from its own row, and
+  height. How they were left is remembered. A layer can be deleted from its own row, and
   **Delete all** clears the design, with **Undo** in the toast. A heading's buttons, like a row's,
   show when it is pointed at, and stay reachable from the keyboard.
-- The sidebar's **Create** group holds **Design your own** and **Generate with AI**; **Community**
-  is under **Explore**.
+- The sidebar's **Create** group holds **Design your own** and **Generate with AI**, and
+  **Community** is under **Explore**.
 - A pack can be shared from designs made in the composer too.
 - A skin's ⋯ menu shows its name as a labelled field with a pencil, so it's clear it can be
   renamed there. A double click on a name in the gallery opens it ready to type over, as F2 does.
@@ -310,7 +310,7 @@ All notable changes to FolderSkin are recorded here. The format follows
   there was no sign of where the keyboard was.
 - A button's icon no longer shrinks to a sliver beside a long label.
 
-## 0.1.0 — 2026-09-19
+## 0.1.0 - 2026-09-19
 
 The first release.
 
@@ -326,7 +326,7 @@ The first release.
   community's packs are offered with Classic Art picked for you, going soft and fading out under
   frosted glass as they scroll down to the buttons. Each pack shows its progress, nothing can be
   skipped or undone while one is being added, and a pack that fails can be tried again or left for
-  later from Community. It shows once; a click or a key skips the animation, and reduced motion
+  later from Community. It shows once. A click or a key skips the animation, and reduced motion
   shows its last frame straight away.
 - FolderSkin ships no skins of its own: the library holds community packs, your own pictures
   and AI results, and an empty library points to all three.
@@ -356,7 +356,7 @@ The first release.
 - Community packs: free skins shared on GitHub under `community/packs/`, added from the
   Community view and filtered by tag. Share one skin or a pack of up to 50 from the app, which
   saves a folder ready for a pull request. The contract, its limits and the licences (CC0, CC BY
-  4.0, MIT) are in [docs/PACKS.md](docs/PACKS.md); `folderskin-tools packs check` runs the same
+  4.0, MIT) are in [docs/PACKS.md](docs/PACKS.md). `folderskin-tools packs check` runs the same
   checks in CI, and a workflow publishes the list and previews.
 - Settings: theme, AI keys, sharing defaults and where skins are saved, in one dialog. About
   opens from the version badge beside the logo, with GitHub in its corner (View Source), Report
@@ -367,7 +367,7 @@ The first release.
   the folder tries skins on before anything is written, and every step (drag, drop, preview,
   apply, revert) has its own feedback. A different folder shows up as it is first, wearing its
   own icon, and then tries the chosen skin on.
-- The AI assistant is a composer that moves out of the way once used; results develop in
+- The AI assistant is a composer that moves out of the way once used. Results develop in
   place and can be tried on straight away, and provider settings live in a dialog.
 - A translucent sidebar on macOS: the window sits on the system sidebar material, which
   follows the light/dark switch.
@@ -395,7 +395,7 @@ The first release.
   Parthenon to Poseidon in the Clouds.
 - Community opens on a gallery of cards with four of each pack's folders, with a list a click
   away, and a pack you've added wears a green tick by its name. **View** opens a pack to look
-  through all of its skins before adding it; one looked through in the last week opens straight
+  through all of its skins before adding it. One looked through in the last week opens straight
   away from a copy kept on this computer, drawn again whenever the pack changes. **Refresh**
   reads the list from GitHub again, and a pack that changed since you added it offers
   **Update**.
@@ -411,7 +411,7 @@ The first release.
   x86_64 and ARM64, built as a draft release from a tag and published by hand once tried. See
   [docs/RELEASING.md](docs/RELEASING.md).
 - FolderSkin updates itself. A few seconds after it opens it looks for a newer release on
-  GitHub; if there is one it shows what changed and, on **Update and restart**, downloads it,
+  GitHub. If there is one it shows what changed and, on **Update and restart**, downloads it,
   checks its signature against the key built into the app, installs it and restarts. About and
   Settings → About check on request, and the version badge wears a dot while an update waits.
 - A release build behaves like an app, not a web page: no right-click menu, no web inspector,
@@ -419,9 +419,9 @@ The first release.
 
 ### Notes
 
-- No accounts, no paywall, no telemetry. The only network access is the optional AI
-  assistant, which calls the provider you pick directly; Community and the first-launch
-  welcome, which read the shared packs from GitHub; and the update check, which reads the
+- No accounts, no paywall, no telemetry. The network is used only by the optional AI
+  assistant, which calls the provider you pick directly, by Community and the first-launch
+  welcome, which read the shared packs from GitHub, and by the update check, which reads the
   newest release's `latest.json` from GitHub when the app opens.
 - The macOS app is 8.8 MB installed. The DMG and the Windows and Linux packages have not been
   measured yet.

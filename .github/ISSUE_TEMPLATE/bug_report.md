@@ -32,8 +32,8 @@ labels: bug
 
 ## Before you file
 
-- [ ] On Windows, I pressed `F5` in the folder window — Explorer's icon cache sometimes
-      needs it.
+- [ ] On Windows, I pressed `F5` in the folder window (Explorer's icon cache sometimes
+      needs it).
 - [ ] I read the caveats in [docs/PLATFORMS.md](../../docs/PLATFORMS.md) for my platform.
 - [ ] This is not a security issue (those go through
       [SECURITY.md](../../SECURITY.md) instead).

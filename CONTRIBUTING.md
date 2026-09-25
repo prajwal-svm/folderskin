@@ -8,7 +8,7 @@ packs.
 
 You need [Rust](https://rustup.rs) stable (edition 2021), Node 20 or newer, and pnpm 11 or
 newer. Platform prerequisites are listed in the README's [building from
-source](README.md#building-from-source) section; on Debian or Ubuntu that is:
+source](README.md#build-from-source) section. On Debian or Ubuntu, this installs them:
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
@@ -49,8 +49,8 @@ cargo check --target x86_64-pc-windows-msvc -p folderskin-core
 ## Where things live
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map. In short: the folder template, the
-compositor and the per-OS writers are in `crates/folderskin-core`; the app's commands are in
-`src-tauri/src/commands.rs`; the webview is in `src/`; the maintainer CLI is
+compositor and the per-OS writers are in `crates/folderskin-core`. The app's commands are in
+`src-tauri/src/commands.rs`, the webview is in `src/` and the maintainer CLI is
 `crates/folderskin-tools`.
 
 ## House rules
@@ -59,9 +59,9 @@ These are the constraints that keep the app what it is. A pull request that brea
 get a request for changes, not a silent merge.
 
 1. **One rendering path.** Every pixel comes from `folderskin_core::compositor`. Do not draw
-   folder geometry in CSS, SVG or canvas, even for a thumbnail — the webview displays PNGs the
+   folder geometry in CSS, SVG or canvas, even for a thumbnail. The webview displays PNGs the
    Rust side rendered. The composer's canvas draws only the user's own art and stacks it between
-   the template layers Rust renders (`compositor::template_layers`); the icon it saves is the
+   the template layers Rust renders (`compositor::template_layers`). The icon it saves is the
    compositor's.
 2. **No CSS outlines.** No `outline`, no focus ring, no selection outline anywhere in the UI.
    Show focus and selection with a background tint or a border colour change.
@@ -77,14 +77,14 @@ get a request for changes, not a silent merge.
    pull request explaining why, and `image` stays on `default-features = false`.
 7. **Only clean assets.** Art in the repository must be original or CC0, with `author` and
    `license` filled in. Never commit anything extracted from another product.
-8. **Tests come with behaviour.** Pure functions — geometry, cover-fit, `desktop.ini` and
-   `.directory` generation and parsing, the pack checks, the drop-zone reducer — are all unit
+8. **Tests come with behaviour.** Pure functions (geometry, cover-fit, `desktop.ini` and
+   `.directory` generation and parsing, the pack checks, the drop-zone reducer) are all unit
    tested, and new behaviour in them should arrive with its test. Write the test first if you
    can.
 
 ## Sharing skins
 
-FolderSkin ships no skins of its own; they come from community packs, which live in their own
+FolderSkin ships no skins of its own. They come from community packs, which live in their own
 repository, [folderskin-community](https://github.com/prajwal-svm/folderskin-community). Packs are
 shared from the app: **Community → Share your skins** sends a pack to FolderSkin's review queue,
 and it's published once a maintainer approves it. Maintainers can still add a pack to

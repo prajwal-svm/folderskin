@@ -35,7 +35,7 @@ The keys are sealed with AES-256-GCM before they are written. The encryption key
 hardware id, so `keys.json` on its own gives nothing away and the two files copied to another
 computer don't open there: enter the keys again on the new one. Both files are created with
 owner-only permissions (0600) and written atomically. What no file can do is keep out a program
-already running as you, which could read both; only the system keychain could, with the
+already running as you, which could read both. Only the system keychain could, with the
 password prompts below.
 
 Why not the system keychain: macOS ties a saved keychain item to the exact signature of the app
@@ -45,8 +45,8 @@ from an app you just downloaded looks like exactly the thing it isn't, so Folder
 use the keychain at all.
 
 The key is read at the moment of a request, never included in an error message, and never
-returned to the app's window. **Remove key** in the provider dialog deletes it from the file;
-deleting `keys.json` removes them all.
+returned to the app's window. **Remove key** in the provider dialog deletes it from the file,
+and deleting `keys.json` removes them all.
 
 ## The two shapes
 
@@ -102,14 +102,14 @@ parts that do the work are structural rather than stylistic:
 - **All of them** end with a hard output contract naming the pixel size, the isolation of the
   subject, and either the key colour or the transparent background.
 
-You can edit these templates; they are ordinary Rust string constants with tests that assert
+You can edit these templates. They are ordinary Rust string constants with tests that assert
 the load-bearing phrases are present.
 
 ## Cost
 
 Every request is billed to your own account by your provider. The Generate view shows the
 model's rough price before you press the button. FolderSkin makes exactly one request per
-press; it never retries on its own.
+press and never retries on its own.
 
 ## Building and cross-compiling
 
@@ -125,8 +125,8 @@ fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks with
 |---|---|
 | "add your … API key first" | No key saved for that provider |
 | "that key was rejected by …" | The provider returned 401 or 403 |
-| "… is rate limiting you right now" | 429; wait and try again |
-| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background; try again or switch to Artwork |
+| "… is rate limiting you right now" | 429, so wait and try again |
+| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Artwork |
 | "the provider returned something that is not an image" | A malformed or non-image response |
 
 ## Folders made in a chat assistant
