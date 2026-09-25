@@ -1,16 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openApp, openView } from "./app";
 
-/** Opens Community → Share your skins, and picks sharing without GitHub. */
+/** Opens Community → Share your skins, which shares without GitHub unless GitHub is picked. */
 async function shareWithoutGithub(page: Page, query = "") {
   await openApp(page, { query });
   await openView(page, /community/i);
   await page.getByRole("button", { name: "Share your skins" }).click();
   const dialog = page.getByRole("dialog", { name: "Share a pack" });
   await expect(dialog).toBeVisible();
-  // GitHub stays the first choice, as it was.
-  await expect(dialog.getByRole("radio", { name: "GitHub", exact: true })).toHaveAttribute("aria-checked", "true");
-  await dialog.getByRole("radio", { name: "Without GitHub" }).click();
+  // With a sharing service in the build, it is the first choice, and GitHub the alternative.
+  await expect(dialog.getByRole("radio", { name: "Without GitHub" })).toHaveAttribute("aria-checked", "true");
   return dialog;
 }
 

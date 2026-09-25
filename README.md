@@ -21,6 +21,8 @@ paint it.
 
 <p>
   <a href="https://github.com/prajwal-svm/folderskin/releases/latest"><strong>Download free</strong></a>
+  · <a href="https://folderskin.app/">folderskin.app</a>
+  · <a href="https://folderskin.app/community/">Community packs</a>
   · <a href="docs/PACKS.md">Share a skin pack</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="https://github.com/prajwal-svm/folderskin">⭐ Star on GitHub</a>

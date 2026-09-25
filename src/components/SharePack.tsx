@@ -127,8 +127,11 @@ export function SharePack({
   const [published, setPublished] = useState<Published | null>(null);
 
   const [route, setRoute] = useState<Route>("github");
-  /** Whether this build has a sharing service at all. Until it does, a pack goes to GitHub: a
-   *  fork of folderskin-community and a pull request there, with no other way on offer. */
+  /** Set once they pick a route themselves, so the default never overrides their choice. */
+  const routePicked = useRef(false);
+  /** Whether this build has a sharing service at all. With one, a pack goes there unless they
+   *  choose GitHub; without one, it goes to GitHub (a fork of folderskin-community and a pull
+   *  request there), with no other way on offer. */
   const [directOffered, setDirectOffered] = useState(false);
   /** What the sharing service says about this computer; asked for once the route is picked. */
   const [direct, setDirect] = useState<ShareStatus | null>(null);
@@ -165,15 +168,19 @@ export function SharePack({
     let live = true;
     void api
       .shareOffered()
-      .then((offered) => live && setDirectOffered(offered))
+      .then((offered) => {
+        if (!live) return;
+        setDirectOffered(offered);
+        if (offered && !routePicked.current) setRoute("direct");
+      })
       .catch(() => live && setDirectOffered(false));
     return () => {
       live = false;
     };
   }, []);
 
-  // Asked only once someone picks the route: most people share through GitHub, and opening the
-  // dialog shouldn't reach out to a service they aren't using.
+  // Asked only once the route is "direct" (the default when the build has a service): opening
+  // the dialog shouldn't reach out to a service they aren't using.
   useEffect(() => {
     if (route !== "direct" || direct) return;
     let live = true;
@@ -655,8 +662,8 @@ export function SharePack({
                 <div className="seg seg-sm share-route" role="radiogroup" aria-label="how to share">
                   {(
                     [
-                      ["github", "GitHub"],
                       ["direct", "Without GitHub"],
+                      ["github", "GitHub"],
                     ] as const
                   ).map(([id, label]) => (
                     <button
@@ -667,6 +674,7 @@ export function SharePack({
                       className={route === id ? "seg-btn is-active" : "seg-btn"}
                       disabled={busy}
                       onClick={() => {
+                        routePicked.current = true;
                         setRoute(id);
                         setError(null);
                       }}

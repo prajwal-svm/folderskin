@@ -1,7 +1,7 @@
 {
   "name": "folderskin",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
@@ -12,12 +12,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
-    "typecheck": "tsc --noEmit",
-    "site:dev": "vite --config website/vite.config.mjs",
-    "site:build": "vite build --config website/vite.config.mjs",
-    "site:preview": "vite preview --config website/vite.config.mjs",
-    "site:test": "node --test website/src/*.test.js",
-    "site:refresh": "node website/scripts/snapshot.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
