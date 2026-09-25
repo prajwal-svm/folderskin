@@ -27,6 +27,8 @@ import { DownloadIcon } from "./icons/download";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
 import { clip } from "../lib/names";
+import { useT } from "../i18n";
+import { formatList } from "../i18n/format";
 
 /** The middle folder of the intro, the one that lands on the logo. */
 const HERO = Math.floor(INTRO_SLOTS / 2);
@@ -121,6 +123,7 @@ export function Onboarding({ leaving, onDone, onGone }: { leaving: boolean; onDo
  * A click or a key skips to the end. Without `replay`, or with reduced motion, only the end shows.
  */
 function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
+  const t = useT();
   const [animate] = useState(() => replay && !reducesMotion());
   const [phase, setPhase] = useState<Phase>(animate ? "row" : "welcome");
   const [ready, setReady] = useState(!animate);
@@ -183,8 +186,8 @@ function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
   // has come back up and can't press it too.
   useEffect(() => {
     if (phase !== "welcome") return;
-    const t = window.setTimeout(() => next.current?.focus({ preventScroll: true }), instant ? 300 : 700);
-    return () => clearTimeout(t);
+    const timer = window.setTimeout(() => next.current?.focus({ preventScroll: true }), instant ? 300 : 700);
+    return () => clearTimeout(timer);
   }, [phase, instant]);
 
   const landed = phase === "logo" || phase === "welcome";
@@ -220,12 +223,12 @@ function Welcome({ replay, onNext }: { replay: boolean; onNext: () => void }) {
         <h1 id="welcome-title" className="welcome-title">
           Folder<span className="brand-accent">Skin</span>
         </h1>
-        <p className="welcome-tagline">Give any folder a skin.</p>
+        <p className="welcome-tagline">{t("common.about.tagline")}</p>
         <button ref={next} type="button" className="btn btn-primary btn-lg welcome-next" onClick={onNext}>
-          Let's go
+          {t("onboarding.welcome.go")}
           <ArrowRightIcon size={17} />
         </button>
-        <p className="welcome-fine">Free · Open source · No account</p>
+        <p className="welcome-fine">{t("onboarding.welcome.fine")}</p>
       </div>
     </section>
   );
@@ -331,6 +334,7 @@ function usePackSetup() {
 }
 
 function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () => void; onFinish: () => void }) {
+  const t = useT();
   const { packs, loadError, picked, suggested, states, current, load, toggle, install } = setup;
   const [allSet, setAllSet] = useState(false);
   const primary = useRef<HTMLButtonElement>(null);
@@ -369,8 +373,8 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
   // "All set" shows for a moment, then the app opens.
   useEffect(() => {
     if (!allSet) return;
-    const t = window.setTimeout(onFinish, DONE_PAUSE);
-    return () => clearTimeout(t);
+    const timer = window.setTimeout(onFinish, DONE_PAUSE);
+    return () => clearTimeout(timer);
   }, [allSet, onFinish]);
 
   /** Adds packs; when that leaves nothing failed and nothing else picked, the app opens. */
@@ -393,27 +397,33 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
   });
   // One reason for every failure (usually no connection) is worth saying; several are in their tooltips.
   const reason = failures.length && failures.every((f) => f.error === failures[0].error) ? failures[0].error : null;
+  const failedNames = formatList(failures.map((f) => clip(f.name)));
   const note = allSet
-    ? `${addedSkins} ${addedSkins === 1 ? "skin is" : "skins are"} in your library.`
+    ? t("onboarding.note.inLibrary", { count: addedSkins })
     : running && currentPack
-      ? `Adding ${clip(currentPack.name)}. This takes a few seconds.`
+      ? t("onboarding.note.adding", { name: clip(currentPack.name) })
       : failures.length
-        ? `${failures.map((f) => clip(f.name)).join(" and ")} couldn't be added${reason ? `: ${reason}.` : `. Try again, or add ${failures.length === 1 ? "it" : "them"} later from Community.`}`
+        ? reason
+          ? t("onboarding.note.failedWhy", { count: failures.length, names: failedNames, reason })
+          : t("onboarding.note.failed", { count: failures.length, names: failedNames })
         : packs
-          ? "You can add or remove packs any time from Community."
+          ? t("onboarding.note.anyTime")
           : loadError
             ? ""
-            : "Getting the packs";
+            : t("onboarding.note.getting");
 
   return (
     <section className="packstep" aria-labelledby="packs-title" ref={section}>
       <header className="packstep-head">
         <h1 id="packs-title" className="packstep-title">
-          Start with a few skins
+          {t("onboarding.packs.title")}
         </h1>
         <p className="packstep-sub">
-          Packs are free sets of skins people share through FolderSkin.{" "}
-          {suggested ? `${clip(suggested.name)} is picked for you; add more if you like.` : packs ? "Pick any you like." : ""}
+          {suggested
+            ? t("onboarding.packs.subPicked", { name: clip(suggested.name) })
+            : packs
+              ? t("onboarding.packs.subPick")
+              : t("onboarding.packs.sub")}
         </p>
       </header>
 
@@ -423,14 +433,11 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
             <span className="empty-glyph">
               <DownloadIcon size={20} />
             </span>
-            <p className="empty-title">The packs didn't load</p>
-            <p className="empty-text">
-              {loadError.charAt(0).toUpperCase() + loadError.slice(1)}. You can carry on without them and add packs later from
-              Community.
-            </p>
+            <p className="empty-title">{t("community.loadFailed")}</p>
+            <p className="empty-text">{t("onboarding.packs.loadFailedText", { reason: loadError.charAt(0).toUpperCase() + loadError.slice(1) })}</p>
             <button type="button" className="btn btn-secondary" onClick={load}>
               <RefreshCwIcon size={15} />
-              Try again
+              {t("community.tryAgain")}
             </button>
           </div>
         ) : (
@@ -474,7 +481,7 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
       <footer className="packstep-foot" ref={foot}>
         <button type="button" className="btn btn-ghost" disabled={running || allSet} onClick={onBack}>
           <ArrowLeftIcon size={15} />
-          Back
+          {t("onboarding.packs.back")}
         </button>
         <p className="packstep-note" role="status" aria-live="polite">
           {note}
@@ -489,18 +496,18 @@ function PackStep({ setup, onBack, onFinish }: { setup: PackSetup; onBack: () =>
         >
           {allSet ? (
             <>
-              <OkBadge size={18} playOnMount /> All set
+              <OkBadge size={18} playOnMount /> {t("onboarding.packs.allSet")}
             </>
           ) : running ? (
             <>
-              <LoaderIcon /> Adding
+              <LoaderIcon /> {t("community.progress.adding")}
             </>
           ) : loadError ? (
-            "Continue without packs"
+            t("onboarding.packs.continueWithout")
           ) : packs ? (
             continueLabel(next, anyAdded)
           ) : (
-            "Continue"
+            t("onboarding.packs.continue")
           )}
         </button>
       </footer>
@@ -529,6 +536,7 @@ function PackCard({
   onToggle: () => void;
   onRetry: () => void;
 }) {
+  const t = useT();
   const done = pack.added || state?.kind === "done";
   const checked = done || picked;
   const busy = state && (state.kind === "queued" || state.kind === "download" || state.kind === "save");
@@ -540,7 +548,7 @@ function PackCard({
         type="button"
         role="checkbox"
         aria-checked={checked}
-        aria-label={`${pack.name}, ${pack.count} skins by ${pack.author}`}
+        aria-label={t("onboarding.pack.label", { name: pack.name, count: pack.count, author: pack.author })}
         className="onboard-pack-hit"
         disabled={locked || done}
         onClick={onToggle}
@@ -553,7 +561,7 @@ function PackCard({
           {pack.name}
         </span>
         <span className="onboard-pack-by">
-          {pack.count} {pack.count === 1 ? "skin" : "skins"} · @{pack.author} · {licenseLabel(pack.license)}
+          {t("community.pack.skins", { count: pack.count })} · @{pack.author} · {licenseLabel(pack.license)}
         </span>
       </button>
       <div className={state?.kind === "failed" ? "onboard-pack-status is-error" : done ? "onboard-pack-status is-ok" : "onboard-pack-status"}>
@@ -566,16 +574,16 @@ function PackCard({
           </>
         ) : state?.kind === "failed" ? (
           <span className="onboard-pack-failed">
-            <span data-tip={state.error}>Couldn't add it</span>
+            <span data-tip={state.error}>{t("onboarding.pack.failed")}</span>
             <button type="button" className="link-btn onboard-retry" disabled={running} onClick={onRetry}>
               <RefreshCwIcon size={13} />
-              Try again
+              {t("community.tryAgain")}
             </button>
           </span>
         ) : done ? (
           <span className="onboard-pack-ok">
             <OkBadge size={14} playOnMount={state?.kind === "done"} />
-            {state?.kind === "done" ? installLine(state) : "Already in your library"}
+            {state?.kind === "done" ? installLine(state) : t("onboarding.pack.already")}
           </span>
         ) : null}
       </div>

@@ -1,1 +1,29 @@
-{}
+{
+  "title": "Update available",
+  "sub": "FolderSkin {{version}} is out. You have {{current}}.",
+  "close": "Close",
+  "later": "Later",
+  "tryAgain": "Try again",
+  "updateAndRestart": "Update and restart",
+  "failed": "The update didn't finish, so nothing changed. Try again, or download it from the <link>Releases page</link>.",
+  "installed": "FolderSkin {{version}} is installed. Quit FolderSkin and open it again to use it.",
+  "downloading": "Downloading",
+  "downloadingShare": "Downloading {{share}}",
+  "installing": "Installing",
+  "restarting": "Restarting",
+  "progressLabel": "update",
+  "noNotes": "No notes came with this version.",
+  "button": {
+    "checking": "Checking for updates",
+    "available": "Update to {{version}}",
+    "current": "You're up to date",
+    "failed": "Couldn't check. Try again",
+    "check": "Check for updates",
+    "checkAgain": "Check again"
+  },
+  "about": {
+    "sourceLabel": "View Source",
+    "source": "View source",
+    "note": "Give any folder a skin: a photo, a painting, a design of your own, or a style you describe."
+  }
+}

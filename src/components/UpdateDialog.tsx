@@ -12,7 +12,10 @@ import { CheckIcon } from "./icons/check";
 import { DownloadIcon } from "./icons/download";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
-import { Brand } from "./Brand";
+import { branded } from "./Brand";
+import { useT } from "../i18n";
+import { formatNumber } from "../i18n/format";
+import { Rich } from "../i18n/Rich";
 
 type Phase =
   | { kind: "ready" }
@@ -28,6 +31,7 @@ type Phase =
  * installs it and restarts. Once it starts it can't be closed or left halfway.
  */
 export function UpdateDialog({ update, onClose }: { update: AvailableUpdate; onClose: () => void }) {
+  const t = useT();
   const [phase, setPhase] = useState<Phase>({ kind: "ready" });
   const busy = phase.kind === "downloading" || phase.kind === "installing" || phase.kind === "restarting";
 
@@ -53,24 +57,24 @@ export function UpdateDialog({ update, onClose }: { update: AvailableUpdate; onC
     <Progress phase={phase} />
   ) : phase.kind === "installed" ? (
     <button type="button" className="btn btn-primary" onClick={onClose}>
-      Close
+      {t("updates.close")}
     </button>
   ) : (
     <>
       <button type="button" className="btn btn-secondary" onClick={onClose}>
-        Later
+        {t("updates.later")}
       </button>
       <button type="button" className="btn btn-primary" onClick={() => void run()}>
         {phase.kind === "failed" ? <RefreshCwIcon size={16} /> : <DownloadIcon size={16} />}
-        {phase.kind === "failed" ? "Try again" : "Update and restart"}
+        {phase.kind === "failed" ? t("updates.tryAgain") : t("updates.updateAndRestart")}
       </button>
     </>
   );
 
   return (
     <Modal
-      title="Update available"
-      sub={`FolderSkin ${update.version} is out. You have ${__APP_VERSION__}.`}
+      title={t("updates.title")}
+      sub={t("updates.sub", { version: update.version, current: __APP_VERSION__ })}
       onClose={onClose}
       closable={!busy}
       footer={footer}
@@ -79,20 +83,23 @@ export function UpdateDialog({ update, onClose }: { update: AvailableUpdate; onC
         <p className="update-problem" role="alert">
           <BadgeAlertIcon size={16} />
           <span>
-            The update didn't finish, so nothing changed. Try again, or download it from the{" "}
-            <button type="button" className="link-btn update-inline-link" onClick={() => void openUrl(`${REPO_URL}/releases/latest`).catch(() => {})}>
-              Releases page <ExternalLinkIcon size={12} />
-            </button>
-            .
+            <Rich
+              k="updates.failed"
+              tags={{
+                link: (s) => (
+                  <button type="button" className="link-btn update-inline-link" onClick={() => void openUrl(`${REPO_URL}/releases/latest`).catch(() => {})}>
+                    {s} <ExternalLinkIcon size={12} />
+                  </button>
+                ),
+              }}
+            />
           </span>
         </p>
       )}
       {phase.kind === "installed" && (
         <p className="update-problem is-done" role="status">
           <CheckIcon size={16} />
-          <span>
-            <Brand /> {update.version} is installed. Quit <Brand /> and open it again to use it.
-          </span>
+          <span>{branded(t("updates.installed", { version: update.version }))}</span>
         </p>
       )}
       <ReleaseNotes markdown={update.notes} />
@@ -101,15 +108,16 @@ export function UpdateDialog({ update, onClose }: { update: AvailableUpdate; onC
 }
 
 function Progress({ phase }: { phase: Phase }) {
+  const t = useT();
   const fraction = phase.kind === "downloading" ? phase.fraction : 1;
   const label =
     phase.kind === "downloading"
       ? fraction === null
-        ? "Downloading"
-        : `Downloading ${Math.round(fraction * 100)}%`
+        ? t("updates.downloading")
+        : t("updates.downloadingShare", { share: formatNumber(fraction, { style: "percent", maximumFractionDigits: 0 }) })
       : phase.kind === "installing"
-        ? "Installing"
-        : "Restarting";
+        ? t("updates.installing")
+        : t("updates.restarting");
   return (
     <div className="update-progress" role="status">
       <span className="update-progress-label">
@@ -119,7 +127,7 @@ function Progress({ phase }: { phase: Phase }) {
       <span
         className={fraction === null ? "update-bar is-unknown" : "update-bar"}
         role="progressbar"
-        aria-label="update"
+        aria-label={t("updates.progressLabel")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={fraction === null ? undefined : Math.round(fraction * 100)}
@@ -132,8 +140,9 @@ function Progress({ phase }: { phase: Phase }) {
 
 /** The version's notes from CHANGELOG.md, drawn from the little Markdown they use. */
 function ReleaseNotes({ markdown }: { markdown: string }) {
+  const t = useT();
   const blocks = useMemo(() => parseNotes(markdown), [markdown]);
-  if (blocks.length === 0) return <p className="field-note">No notes came with this version.</p>;
+  if (blocks.length === 0) return <p className="field-note">{t("updates.noNotes")}</p>;
   return (
     <div className="update-notes">
       {blocks.map((b, i) =>
@@ -174,6 +183,7 @@ function Inline({ text }: { text: string }) {
  * to check again), a new version (click to see it), or a check that failed (click to try again).
  */
 export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus; onCheck: () => void; onShow: () => void }) {
+  const t = useT();
   const s = status.state;
   const icon =
     s === "checking" ? (
@@ -189,14 +199,14 @@ export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus
     );
   const label =
     s === "checking"
-      ? "Checking for updates"
+      ? t("updates.button.checking")
       : s === "available"
-        ? `Update to ${status.update.version}`
+        ? t("updates.button.available", { version: status.update.version })
         : s === "current"
-          ? "You're up to date"
+          ? t("updates.button.current")
           : s === "failed"
-            ? "Couldn't check. Try again"
-            : "Check for updates";
+            ? t("updates.button.failed")
+            : t("updates.button.check");
   // Not `disabled` while checking: a disabled button drops focus, and About closes when focus
   // leaves it, under the pointer.
   return (
@@ -205,7 +215,7 @@ export function UpdateButton({ status, onCheck, onShow }: { status: UpdateStatus
         type="button"
         className={`about-link update-btn is-${s}`}
         aria-disabled={s === "checking" || undefined}
-        data-tip={s === "current" ? "Check again" : undefined}
+        data-tip={s === "current" ? t("updates.button.checkAgain") : undefined}
         onClick={s === "checking" ? undefined : s === "available" ? onShow : onCheck}
       >
         {icon}
