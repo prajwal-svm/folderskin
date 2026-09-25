@@ -1,20 +1,19 @@
-/** "Finder", "Explorer" or "Files": what people call the file browser on their OS. */
-export function fileBrowser(os: string): string {
-  if (os === "macos") return "Finder";
-  if (os === "windows") return "Explorer";
-  return "Files";
+import { t } from "../i18n";
+
+/** The three systems FolderSkin runs on, as the catalogs name them. */
+export type Os = "macos" | "windows" | "linux";
+
+/** The system `platform_info` named, as one of the three: anything that isn't macOS or Windows is Linux. */
+export function osOf(os: string): Os {
+  return os === "macos" || os === "windows" ? os : "linux";
 }
 
-/** "or click to browse your Mac" — the noun changes per OS. */
+/**
+ * "your Mac", "your PC" or "your computer": where a folder is picked from, as a phrase sentences
+ * put a `{{place}}` in ("Or click to pick one from your Mac.").
+ */
 export function browseLabel(os: string): string {
-  switch (os) {
-    case "macos":
-      return "your Mac";
-    case "windows":
-      return "your PC";
-    default:
-      return "your computer";
-  }
+  return t(`common.place.${osOf(os)}`);
 }
 
 /**

@@ -4,7 +4,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type CommunityPack, type CommunitySort, type PackProgress, type Skin, type SkinHit } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
-import { licenseLabel, PACKS_GUIDE_URL } from "../lib/packs";
+import { licenseLabel } from "../lib/packs";
+import { docsUrl, t as tNow, useT } from "../i18n";
+import { formatNumber } from "../i18n/format";
+import { Rich } from "../i18n/Rich";
 import { tagLabel } from "../lib/tags";
 import { community, countLine, progressLabel, progressShare, useCommunity, type PackTask, type PackView } from "../lib/communityStore";
 import type { ToastTone } from "../hooks/useToasts";
@@ -41,7 +44,6 @@ const galleryRow = (width: number) => Math.min(width - 24, 300) + 200;
 /** A row's height: the strip beside the words, or, in a narrow window, above them. */
 const listRow = (width: number) => (width < 560 ? 240 : 116);
 
-const numbers = new Intl.NumberFormat("en-GB");
 
 /**
  * Skin packs other people shared, searched as you type: by name, author, tag or the name of any
@@ -64,6 +66,7 @@ export function CommunityView({
   onShowTag: (tag: string) => void;
   toast: Toast;
 }) {
+  const t = useT();
   const s = useCommunity();
   // The newest of the app's callbacks, for a pack that finishes adding after the view has gone.
   useLayoutEffect(() => community.bind({ onAdded, onRemoved, onShowTag, toast }));
@@ -90,12 +93,12 @@ export function CommunityView({
     const facets = shown?.facets ?? [];
     const top = facets.slice(0, TOP_TAGS);
     if (s.tag && !top.some((f) => f.tag === s.tag)) top.push({ tag: s.tag, count: facets.find((f) => f.tag === s.tag)?.count ?? 0 });
-    return [{ id: "", label: "All", count: shown?.all ?? 0 }, ...top.map((f) => ({ id: f.tag, label: tagLabel(f.tag), count: f.count }))];
-  }, [shown, s.tag]);
+    return [{ id: "", label: t("library.tabs.all"), count: shown?.all ?? 0 }, ...top.map((f) => ({ id: f.tag, label: tagLabel(f.tag), count: f.count }))];
+  }, [shown, s.tag, t]);
 
   const addFromFolder = async () => {
     const path = isTauri()
-      ? await open({ directory: true, multiple: false, title: "Choose a pack folder" }).catch(() => null)
+      ? await open({ directory: true, multiple: false, title: tNow("community.dialog.choosePackFolder") }).catch(() => null)
       : "/Users/you/Desktop/my-pack";
     if (typeof path !== "string") return;
     try {
@@ -103,12 +106,12 @@ export function CommunityView({
       community.mark(skins[0]?.pack ?? undefined, true);
       onAdded(skins);
       const first = skins[0]?.tags[0];
-      toast(`Added ${skins.length} skins from that folder`, {
+      toast(tNow("community.toast.addedFromFolder", { count: skins.length }), {
         tone: "ok",
-        action: first ? { label: "Show", run: () => onShowTag(first) } : undefined,
+        action: first ? { label: tNow("community.toast.show"), run: () => onShowTag(first) } : undefined,
       });
     } catch (e) {
-      toast(`Couldn't add that pack: ${errorMessage(e)}`, { tone: "danger" });
+      toast(tNow("community.toast.addFolderFailed", { reason: errorMessage(e) }), { tone: "danger" });
     }
   };
 
@@ -141,17 +144,17 @@ export function CommunityView({
     <section className="community">
       <header className="community-head">
         <div className="community-intro">
-          <h2 className="view-title">Community</h2>
-          <p className="view-sub">Free skins and packs people share. Add one and its skins join your library.</p>
+          <h2 className="view-title">{t("community.title")}</h2>
+          <p className="view-sub">{t("community.sub")}</p>
         </div>
         <div className="community-actions">
           <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => void addFromFolder()}>
             <FolderOpenIcon size={15} />
-            Add from a folder
+            <span className="btn-label">{t("community.addFromFolder")}</span>
           </button>
           <button type="button" className="btn btn-primary" onMouseDown={(e) => e.preventDefault()} onClick={onShare}>
             <SparklesIcon size={15} />
-            Share your skins
+            <span className="btn-label">{t("community.shareYours")}</span>
           </button>
         </div>
       </header>
@@ -162,16 +165,17 @@ export function CommunityView({
         onChange={(tag) => community.setTag(tag)}
         query={s.query}
         onQuery={(q) => community.setQuery(q)}
-        label="filter packs by tag"
-        placeholder="Search packs"
+        label={t("community.tabsLabel")}
+        placeholder={t("community.search")}
+        searchLabel={t("community.searchLabel")}
         extra={
           <>
             <CommunityOptions sort={s.sort} typed={s.query.trim() !== ""} facets={shown?.facets ?? []} tag={s.tag} />
             <button
               type="button"
               className="icon-btn"
-              data-tip="Look for new and updated packs"
-              aria-label="refresh packs"
+              data-tip={t("community.refreshTip")}
+              aria-label={t("community.refreshLabel")}
               aria-busy={s.refreshing}
               disabled={s.refreshing}
               onMouseDown={(e) => e.preventDefault()}
@@ -179,11 +183,11 @@ export function CommunityView({
             >
               {s.refreshing ? <LoaderIcon size={16} /> : <RefreshCwIcon size={16} />}
             </button>
-            <div className="view-switch" role="radiogroup" aria-label="show packs as">
+            <div className="view-switch" role="radiogroup" aria-label={t("community.viewLabel")}>
               {(
                 [
-                  ["gallery", "Gallery", LayoutGridIcon],
-                  ["list", "List", ListIcon],
+                  ["gallery", t("community.views.gallery"), LayoutGridIcon],
+                  ["list", t("community.views.list"), ListIcon],
                 ] as const
               ).map(([id, label, Icon]) => (
                 <button
@@ -206,12 +210,12 @@ export function CommunityView({
       />
 
       {shown && shown.q && shown.skins.length > 0 && (
-        <section className="skin-hits" aria-label="skins whose names match">
-          <p className="skin-hits-title">Skins</p>
+        <section className="skin-hits" aria-label={t("community.hits.label")}>
+          <p className="skin-hits-title">{t("community.hits.title")}</p>
           <ul className="skin-hits-list">
             {shown.skins.map((hit) => (
               <li key={`${hit.pack}:${hit.index}`}>
-                <button type="button" className="skin-hit" data-tip={`${hit.name}, in ${hit.pack_name}`} data-tip-overflow onClick={() => openHit(hit)}>
+                <button type="button" className="skin-hit" data-tip={t("community.hits.tip", { name: hit.name, pack: hit.pack_name })} data-tip-overflow onClick={() => openHit(hit)}>
                   {hit.thumbnail ? <img src={hit.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="skin-hit-blank" />}
                   <span className="skin-hit-name">{hit.name}</span>
                   <span className="skin-hit-pack">{hit.pack_name}</span>
@@ -228,12 +232,12 @@ export function CommunityView({
           {s.searching && shown && <LoaderIcon size={13} />}
           {shown?.lastVisit && !s.error && (
             <button type="button" className="link-btn" disabled={s.refreshing} onClick={() => void community.refresh()}>
-              Try again
+              {t("community.tryAgain")}
             </button>
           )}
         </span>
-        <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
-          Every pack is checked before it's listed
+        <button type="button" className="link-btn" onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}>
+          {t("community.checked")}
           <ExternalLinkIcon size={13} />
         </button>
       </p>
@@ -244,15 +248,15 @@ export function CommunityView({
             <span className="empty-glyph">
               <DownloadIcon size={20} />
             </span>
-            <p className="empty-title">The packs didn't load</p>
-            <p className="empty-text">{s.error.charAt(0).toUpperCase() + s.error.slice(1)}. You can still add a pack from a folder.</p>
+            <p className="empty-title">{t("community.loadFailed")}</p>
+            <p className="empty-text">{t("community.loadFailedText", { reason: s.error.charAt(0).toUpperCase() + s.error.slice(1) })}</p>
             <button type="button" className="btn btn-secondary" onClick={() => void community.search()}>
-              Try again
+              {t("community.tryAgain")}
             </button>
           </div>
         ) : (
           <p className="community-note">
-            <LoaderIcon /> Loading packs
+            <LoaderIcon /> {t("community.loading")}
           </p>
         )
       ) : (
@@ -267,11 +271,11 @@ export function CommunityView({
           getKey={(pack, i) => pack?.id ?? `place-${i}`}
           renderItem={renderPack}
           role="region"
-          aria-label="community packs"
+          aria-label={t("community.gridLabel")}
           empty={
             <div className="empty">
-              <p className="empty-title">{shown.all || shown.q || shown.tag ? "No pack matches" : "No packs yet"}</p>
-              <p className="empty-text">{shown.all || shown.q || shown.tag ? "Try another word or tag." : "Be the first: share yours."}</p>
+              <p className="empty-title">{shown.all || shown.q || shown.tag ? t("community.empty.noMatch") : t("community.empty.none")}</p>
+              <p className="empty-text">{shown.all || shown.q || shown.tag ? t("community.empty.noMatchText") : t("community.empty.noneText")}</p>
             </div>
           }
         />
@@ -295,9 +299,9 @@ export function CommunityView({
 
       {removing && (
         <Confirm
-          title={`Remove "${clip(removing.name)}"?`}
-          text={`Its skins leave your library. Folders that already use them keep their icon.`}
-          action="Remove"
+          title={t("community.remove.title", { name: clip(removing.name) })}
+          text={t("community.remove.text")}
+          action={t("community.remove.action")}
           onCancel={() => setRemoving(null)}
           onConfirm={() => {
             setRemoving(null);
@@ -330,6 +334,7 @@ const PackCard = memo(function PackCard({
   tag: string;
   onRemove: (pack: CommunityPack) => void;
 }) {
+  const t = useT();
   const gallery = view === "gallery";
   const busy = task !== null;
   return (
@@ -337,8 +342,8 @@ const PackCard = memo(function PackCard({
       <button
         type="button"
         className="pack-preview-btn"
-        aria-label={`view ${pack.name}`}
-        data-tip={`View ${pack.name}`}
+        aria-label={t("community.pack.viewLabel", { name: pack.name })}
+        data-tip={t("community.pack.viewTip", { name: pack.name })}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => community.open(pack)}
       >
@@ -347,12 +352,11 @@ const PackCard = memo(function PackCard({
       <div className="pack-meta">
         <div className="pack-title">
           <p className="pack-name">{pack.name}</p>
-          {pack.added && <OkBadge size={20} label="Added to your library" />}
+          {pack.added && <OkBadge size={20} label={t("community.pack.added")} />}
         </div>
         <p className="pack-by">
-          by{" "}
-          <span className="pack-author">@{pack.author}</span>{" "}
-          · {pack.count} {pack.count === 1 ? "skin" : "skins"} · {licenseLabel(pack.license)}
+          <Rich k="community.pack.by" vars={{ author: pack.author }} tags={{ a: (s) => <span className="pack-author">{s}</span> }} /> ·{" "}
+          {t("community.pack.skins", { count: pack.count })} · {licenseLabel(pack.license)}
         </p>
         <div className="pack-tags">
           {pack.official && <OfficialBadge />}
@@ -376,7 +380,7 @@ const PackCard = memo(function PackCard({
           <>
             <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => community.open(pack)}>
               <EyeIcon size={15} />
-              View
+              {t("community.pack.view")}
             </button>
             {pack.added ? (
               <>
@@ -384,13 +388,13 @@ const PackCard = memo(function PackCard({
                   <button
                     type="button"
                     className="btn btn-primary"
-                    data-tip="A newer version of this pack is out"
+                    data-tip={t("community.pack.updateTip")}
                     disabled={busy || blocked}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void community.update(pack)}
                   >
                     <RefreshCwIcon size={15} />
-                    Update
+                    {t("community.pack.update")}
                   </button>
                 )}
                 {!gallery ? (
@@ -402,10 +406,10 @@ const PackCard = memo(function PackCard({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemove(pack)}
                   >
-                    {busy ? "Removing" : "Remove"}
+                    {busy ? t("community.pack.removing") : t("community.remove.action")}
                   </button>
                 ) : busy ? (
-                  <span className="icon-btn pack-remove" role="status" aria-label={`removing ${pack.name}`}>
+                  <span className="icon-btn pack-remove" role="status" aria-label={t("community.pack.removingLabel", { name: pack.name })}>
                     <LoaderIcon size={16} />
                   </span>
                 ) : (
@@ -413,8 +417,8 @@ const PackCard = memo(function PackCard({
                   <button
                     type="button"
                     className="icon-btn pack-remove"
-                    data-tip="Remove this pack"
-                    aria-label={`remove ${pack.name}`}
+                    data-tip={t("community.pack.removeTip")}
+                    aria-label={t("community.pack.removeLabel", { name: pack.name })}
                     disabled={blocked}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemove(pack)}
@@ -426,7 +430,7 @@ const PackCard = memo(function PackCard({
             ) : (
               <button type="button" className="btn btn-primary" disabled={blocked} onMouseDown={(e) => e.preventDefault()} onClick={() => void community.add(pack)}>
                 <DownloadIcon size={15} />
-                Add
+                {t("community.pack.add")}
               </button>
             )}
           </>
@@ -438,14 +442,15 @@ const PackCard = memo(function PackCard({
 
 /** How far adding or updating a pack has got, in place of its buttons. */
 function PackWorking({ name, task, progress }: { name: string; task: "add" | "update"; progress: PackProgress | null }) {
+  const t = useT();
   const share = progressShare(progress);
-  const verb = task === "add" ? "Adding" : "Updating";
+  const verb = task === "add" ? t("community.progress.adding") : t("community.progress.updating");
   const label = progressLabel(progress, verb);
   return (
     <div
       className="pack-progress"
       role="progressbar"
-      aria-label={`${verb} ${name}`}
+      aria-label={task === "add" ? t("community.progress.addingLabel", { name }) : t("community.progress.updatingLabel", { name })}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(share * 100)}
@@ -479,10 +484,10 @@ function PackPlaceholder({ index, view }: { index: number; view: PackView }) {
 }
 
 const SORTS: { id: CommunitySort; label: (typed: boolean) => string }[] = [
-  { id: "best", label: (typed) => (typed ? "Best match" : "Featured") },
-  { id: "newest", label: () => "Newest" },
-  { id: "name", label: () => "Name" },
-  { id: "skins", label: () => "Most skins" },
+  { id: "best", label: (typed) => (typed ? tNow("community.sort.bestMatch") : tNow("community.sort.featured")) },
+  { id: "newest", label: () => tNow("community.sort.newest") },
+  { id: "name", label: () => tNow("community.sort.name") },
+  { id: "skins", label: () => tNow("community.sort.mostSkins") },
 ];
 
 const WIDTH = 320;
@@ -490,6 +495,7 @@ const MARGIN = 12;
 
 /** The button beside the search that opens the order of the list and every tag. */
 function CommunityOptions({ sort, typed, facets, tag }: { sort: CommunitySort; typed: boolean; facets: { tag: string; count: number }[]; tag: string }) {
+  const t = useT();
   const [openNow, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setOpen(false), []);
@@ -502,8 +508,8 @@ function CommunityOptions({ sort, typed, facets, tag }: { sort: CommunitySort; t
         className={sort !== "best" || hiddenTag ? "filter-btn is-on" : "filter-btn"}
         aria-haspopup="dialog"
         aria-expanded={openNow}
-        aria-label="Sort and more tags"
-        data-tip="Sort and more tags"
+        aria-label={t("community.options.button")}
+        data-tip={t("community.options.button")}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
       >
@@ -529,6 +535,7 @@ function OptionsPopover({
   tag: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
 
@@ -576,25 +583,25 @@ function OptionsPopover({
       ref={panel}
       className="filter-pop"
       role="dialog"
-      aria-label="sort and tags"
+      aria-label={t("community.options.label")}
       tabIndex={-1}
       style={pos ? { left: pos.left, top: pos.top, width: WIDTH, maxHeight: pos.maxHeight } : { visibility: "hidden" }}
     >
       <div className="filter-head">
         <div>
-          <p className="filter-title">Sort and tags</p>
-          <p className="filter-sub">{facets.length === 1 ? "1 tag" : `${numbers.format(facets.length)} tags`} in these packs</p>
+          <p className="filter-title">{t("community.options.title")}</p>
+          <p className="filter-sub">{t("community.options.tagCount", { count: facets.length })}</p>
         </div>
         {tag && (
           <button type="button" className="filter-clear" onClick={() => community.setTag("")}>
-            All tags
+            {t("community.options.allTags")}
           </button>
         )}
       </div>
 
       <section className="filter-sec">
-        <p className="filter-label">Sort by</p>
-        <div className="seg seg-sm filter-sort community-sort" role="radiogroup" aria-label="sort by">
+        <p className="filter-label">{t("library.filters.sortBy")}</p>
+        <div className="seg seg-sm filter-sort community-sort" role="radiogroup" aria-label={t("library.filters.sortByLabel")}>
           {SORTS.map((s) => (
             <button
               key={s.id}
@@ -612,7 +619,7 @@ function OptionsPopover({
 
       {facets.length > 0 && (
         <section className="filter-sec">
-          <p className="filter-label">Tags</p>
+          <p className="filter-label">{t("community.options.tags")}</p>
           <div className="filter-chips">
             {facets.map((f) => {
               const on = f.tag === tag;
@@ -625,7 +632,7 @@ function OptionsPopover({
                   onClick={() => community.setTag(on ? "" : f.tag)}
                 >
                   <span className="fchip-label">{tagLabel(f.tag)}</span>
-                  <span className="count">{numbers.format(f.count)}</span>
+                  <span className="count">{formatNumber(f.count)}</span>
                 </button>
               );
             })}

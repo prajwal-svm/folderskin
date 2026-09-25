@@ -21,20 +21,20 @@ export type Tone = "light" | "dark";
 
 export type Palette = { colours: Colour[]; tone: Tone };
 
-/** The colours the filter offers, in the order it shows them, with the swatch it draws. */
-export const COLOURS: { id: Colour; label: string; swatch: string }[] = [
-  { id: "red", label: "Red", swatch: "#e5484d" },
-  { id: "orange", label: "Orange", swatch: "#f76b15" },
-  { id: "yellow", label: "Yellow", swatch: "#f5c518" },
-  { id: "green", label: "Green", swatch: "#30a46c" },
-  { id: "teal", label: "Teal", swatch: "#12a594" },
-  { id: "blue", label: "Blue", swatch: "#3a86ff" },
-  { id: "purple", label: "Purple", swatch: "#8e4ec6" },
-  { id: "pink", label: "Pink", swatch: "#e93d82" },
-  { id: "brown", label: "Brown", swatch: "#8d5a2b" },
-  { id: "black", label: "Black", swatch: "#1d1d1f" },
-  { id: "grey", label: "Grey", swatch: "#8b8d98" },
-  { id: "white", label: "White", swatch: "#f4f4f5" },
+/** The colours the filter offers, in the order it shows them, with the swatch it draws. Each is named by `library.colours.<id>`. */
+export const COLOURS: { id: Colour; swatch: string }[] = [
+  { id: "red", swatch: "#e5484d" },
+  { id: "orange", swatch: "#f76b15" },
+  { id: "yellow", swatch: "#f5c518" },
+  { id: "green", swatch: "#30a46c" },
+  { id: "teal", swatch: "#12a594" },
+  { id: "blue", swatch: "#3a86ff" },
+  { id: "purple", swatch: "#8e4ec6" },
+  { id: "pink", swatch: "#e93d82" },
+  { id: "brown", swatch: "#8d5a2b" },
+  { id: "black", swatch: "#1d1d1f" },
+  { id: "grey", swatch: "#8b8d98" },
+  { id: "white", swatch: "#f4f4f5" },
 ];
 
 /** A colour counts when at least this share of the folder is that colour. */

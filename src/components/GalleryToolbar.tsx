@@ -1,5 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SearchIcon } from "./icons/search";
+import { useT } from "../i18n";
+import { formatNumber } from "../i18n/format";
 
 export type TabCount = { id: string; label: string; count: number };
 
@@ -13,8 +15,9 @@ export function GalleryToolbar({
   onChange,
   query,
   onQuery,
-  label = "filter skins by tag",
-  placeholder = "Search skins",
+  label,
+  placeholder,
+  searchLabel,
   extra,
 }: {
   tabs: TabCount[];
@@ -24,9 +27,12 @@ export function GalleryToolbar({
   onQuery: (q: string) => void;
   label?: string;
   placeholder?: string;
+  /** The search field's name for screen readers. */
+  searchLabel?: string;
   /** More controls after the search, such as how to show what's listed. */
   extra?: ReactNode;
 }) {
+  const t = useT();
   const seg = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
@@ -76,7 +82,7 @@ export function GalleryToolbar({
 
   return (
     <div className={extra ? "toolbar has-extra" : "toolbar"} data-tauri-drag-region>
-      <div className="seg" role="tablist" aria-label={label} ref={seg} data-cut={cut ?? undefined} onScroll={measureCut}>
+      <div className="seg" role="tablist" aria-label={label ?? t("library.toolbar.tabsLabel")} ref={seg} data-cut={cut ?? undefined} onScroll={measureCut}>
         {pill && (
           <span
             className="seg-pill"
@@ -88,19 +94,19 @@ export function GalleryToolbar({
             }}
           />
         )}
-        {tabs.map((t) => (
+        {tabs.map((tab) => (
           <button
-            key={t.id}
-            data-tab={t.id}
+            key={tab.id}
+            data-tab={tab.id}
             type="button"
             role="tab"
-            aria-selected={t.id === active}
-            className={t.id === active ? "seg-btn is-active" : "seg-btn"}
+            aria-selected={tab.id === active}
+            className={tab.id === active ? "seg-btn is-active" : "seg-btn"}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onChange(t.id)}
+            onClick={() => onChange(tab.id)}
           >
-            {t.label}
-            <span className="count">{t.count}</span>
+            {tab.label}
+            <span className="count">{formatNumber(tab.count)}</span>
           </button>
         ))}
       </div>
@@ -110,8 +116,8 @@ export function GalleryToolbar({
           ref={search}
           type="search"
           value={query}
-          placeholder={placeholder}
-          aria-label={placeholder.toLowerCase()}
+          placeholder={placeholder ?? t("library.toolbar.search")}
+          aria-label={searchLabel ?? t("library.toolbar.searchLabel")}
           spellCheck={false}
           onChange={(e) => onQuery(e.target.value)}
           onKeyDown={(e) => {

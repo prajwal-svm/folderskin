@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { branded } from "./Brand";
+import { t } from "../i18n";
 
 /**
  * The dialogs open now, oldest first. Only the newest answers Escape and keeps the focus, so a
@@ -143,7 +144,7 @@ export function Modal({
 
 function closeButton(onClose: () => void, className: string) {
   return (
-    <button type="button" className={`icon-btn ${className}`} aria-label="close" onClick={onClose}>
+    <button type="button" className={`icon-btn ${className}`} aria-label={t("common.close")} onClick={onClose}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
         <path d="M18 6 6 18M6 6l12 12" />
       </svg>

@@ -3,12 +3,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
+import { explain } from "./lib/errors";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
-import { browseLabel, fileBrowser } from "./lib/platform";
+import { browseLabel } from "./lib/platform";
+import { t as tNow, useT } from "./i18n";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
-import { applyLabel, CONFIRM_ABOVE, folders, formatBytes, mergeRuns, runToast, type TreeProgress, type TreeRun } from "./lib/tree";
+import { applyLabel, CONFIRM_ABOVE, formatBytes, mergeRuns, runToast, type TreeProgress, type TreeRun } from "./lib/tree";
 import { throttle } from "./lib/throttle";
 import { community } from "./lib/communityStore";
 import { watchInstallLinks } from "./lib/installLinks";
@@ -150,6 +152,7 @@ function newestFirst(list: Skin[]): Skin[] {
 }
 
 export default function App() {
+  const t = useT();
   const [state, dispatch] = useReducer(reduce, initialState);
   const [skins, setSkins] = useState<Skin[]>([]);
   const [defaultThumb, setDefaultThumb] = useState<string | null>(null);
@@ -236,7 +239,7 @@ export default function App() {
           setSkins(newestFirst(list.skins));
           setDefaultThumb(list.default_thumbnail);
         })
-        .catch((e) => toast(`Couldn't switch the folder: ${errorMessage(e)}`, { tone: "danger" }))
+        .catch((e) => toast(tNow("folder.errors.switchLook", { reason: errorMessage(e) }), { tone: "danger" }))
         .finally(() => {
           if (run === lookRun.current) setRedrawing(null);
         });
@@ -303,8 +306,8 @@ export default function App() {
   const filtered = useMemo(() => applyFilters(inView, filters, filterCtx), [inView, filters, filterCtx]);
   const filtering = activeCount(filters) > 0;
   const tabs = useMemo<TabCount[]>(
-    () => [{ id: "", label: "All", count: filtered.length }, ...tagCounts(filtered).map((t) => ({ id: t.tag, label: tagLabel(t.tag), count: t.count }))],
-    [filtered],
+    () => [{ id: "", label: t("library.tabs.all"), count: filtered.length }, ...tagCounts(filtered).map((c) => ({ id: c.tag, label: tagLabel(c.tag), count: c.count }))],
+    [filtered, t],
   );
   // A tag nothing in view carries any more (edited away, deleted, filtered out) falls back to All.
   const activeTag = tabs.some((t) => t.id === tag) ? tag : "";
@@ -370,12 +373,12 @@ export default function App() {
           dispatch({ type: "skinSelected", skinId: skin.id });
           toast(
             skin.kind === "folder"
-              ? `${clip(skin.name)} is in Yours, background removed`
-              : `${clip(skin.name)} is in Yours, wrapped onto a folder`,
+              ? tNow("library.toast.importedFolder", { name: clip(skin.name) })
+              : tNow("library.toast.importedArtwork", { name: clip(skin.name) }),
             { tone: "ok" },
           );
         } else {
-          dispatch({ type: "invalidDrop", message: "That isn't a folder or a picture." });
+          dispatch({ type: "invalidDrop", message: tNow("folder.errors.notFolderOrPicture") });
         }
       } catch (e) {
         dispatch({ type: "invalidDrop", message: errorMessage(e) });
@@ -435,7 +438,7 @@ export default function App() {
 
   const browseFolder = useCallback(async () => {
     if (import.meta.env.DEV && !isTauri()) return takePath(mockPickFolder());
-    const picked = await open({ directory: true, multiple: false, title: "Choose a folder" }).catch(() => null);
+    const picked = await open({ directory: true, multiple: false, title: tNow("common.dialog.chooseFolder") }).catch(() => null);
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
 
@@ -443,8 +446,8 @@ export default function App() {
     if (!isTauri()) return takePath("/Users/you/Pictures/Lighthouse at dusk.jpg");
     const picked = await open({
       multiple: false,
-      title: "Choose a picture",
-      filters: [{ name: "Pictures", extensions: IMAGE_EXTENSIONS }],
+      title: tNow("common.dialog.choosePicture"),
+      filters: [{ name: tNow("common.dialog.pictures"), extensions: IMAGE_EXTENSIONS }],
     }).catch(() => null);
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
@@ -482,7 +485,7 @@ export default function App() {
   const applyTree = useCallback(
     async (skinId: string, only?: string[], prev?: TreeRun): Promise<TreeRun | { error: string }> => {
       const folder = latestState.current.folder;
-      if (!folder) return { error: "Choose a folder first" };
+      if (!folder) return { error: tNow("folder.errors.chooseFirst") };
       setStopping(false);
       dispatch({ type: "applyStarted" });
       const progress = throttle<TreeProgress>((p) => dispatch({ type: "treeProgress", progress: p }));
@@ -490,7 +493,7 @@ export default function App() {
         const result = await api.applySkinTree(folder.path, skinId, only ?? null, progress.push);
         const run: TreeRun = prev ? mergeRuns(prev, { ...result, kind: "apply" }) : { ...result, kind: "apply" };
         if (run.changed.length === 0 && !run.stopped) {
-          const error = `Couldn't apply the skin: ${run.failed[0]?.reason ?? "no folder could be changed"}`;
+          const error = tNow("folder.errors.apply", { reason: run.failed[0] ? explain(run.failed[0].reason) : tNow("folder.errors.noneChanged") });
           dispatch({ type: "applyFailed", message: error });
           return { error };
         }
@@ -498,7 +501,7 @@ export default function App() {
         refreshFolderIcon(folder.path);
         return run;
       } catch (e) {
-        const error = `Couldn't apply the skin: ${errorMessage(e)}`;
+        const error = tNow("folder.errors.apply", { reason: errorMessage(e) });
         dispatch({ type: "applyFailed", message: error });
         return { error };
       } finally {
@@ -524,7 +527,7 @@ export default function App() {
         refreshFolderIcon(folder.path);
         return run;
       } catch (e) {
-        dispatch({ type: "revertFailed", message: `Couldn't put the default icons back: ${errorMessage(e)}` });
+        dispatch({ type: "revertFailed", message: tNow("folder.errors.revertTree", { reason: errorMessage(e) }) });
         return null;
       } finally {
         progress.cancel();
@@ -550,7 +553,7 @@ export default function App() {
       dispatch({ type: "applySucceeded" });
       refreshFolderIcon(folder.path);
     } catch (e) {
-      dispatch({ type: "applyFailed", message: `Couldn't apply the skin: ${errorMessage(e)}` });
+      dispatch({ type: "applyFailed", message: tNow("folder.errors.apply", { reason: errorMessage(e) }) });
     }
   }, [askTree, applyTree, refreshFolderIcon]);
 
@@ -570,9 +573,9 @@ export default function App() {
       message: runToast(run, folderName, skinName),
       tone: carry || run.failed.length > 0 ? "info" : "ok",
       action: carry
-        ? { label: "Carry on", run: () => carryOnNow.current() }
+        ? { label: tNow("folder.run.carryOn"), run: () => carryOnNow.current() }
         : run.failed.length > 0
-          ? { label: "See which", run: () => setView("yours") }
+          ? { label: tNow("folder.run.seeWhich"), run: () => setView("yours") }
           : undefined,
     };
   }, []);
@@ -593,7 +596,7 @@ export default function App() {
       toast(next.error, { tone: "danger" });
       return;
     }
-    const said = treeOutcome(next, folder.name, latestSkins.current.find((s) => s.id === skinId)?.name ?? "the skin");
+    const said = treeOutcome(next, folder.name, latestSkins.current.find((s) => s.id === skinId)?.name ?? tNow("folder.run.theSkin"));
     toast(said.message ?? "", { tone: said.tone, action: said.action });
   }, [applyTree, revertTree, treeOutcome, toast]);
   carryOnNow.current = () => void carryOn();
@@ -632,7 +635,7 @@ export default function App() {
         refreshFolderIcon(folder.path);
         return { ok: true };
       } catch (e) {
-        const message = `Couldn't apply the skin: ${errorMessage(e)}`;
+        const message = tNow("folder.errors.apply", { reason: errorMessage(e) });
         dispatch({ type: "applyFailed", message });
         return { ok: false, message, tone: "danger" };
       }
@@ -692,15 +695,15 @@ export default function App() {
       await api.revertSkin(folder.path);
       dispatch({ type: "revertSucceeded" });
       refreshFolderIcon(folder.path);
-      toast(`${clip(folder.name)} has its default icon back`, { tone: "ok" });
+      toast(tNow("folder.toast.defaultBack", { name: clip(folder.name) }), { tone: "ok" });
     } catch (e) {
-      dispatch({ type: "revertFailed", message: `Couldn't put the default icon back: ${errorMessage(e)}` });
+      dispatch({ type: "revertFailed", message: tNow("folder.errors.revert", { reason: errorMessage(e) }) });
     }
   }, [askTree, revertTree, refreshFolderIcon, toast]);
 
   const reveal = useCallback(() => {
     if (!state.folder) return;
-    revealItemInDir(state.folder.path).catch((e) => toast(`Couldn't open it: ${errorMessage(e)}`, { tone: "danger" }));
+    revealItemInDir(state.folder.path).catch((e) => toast(tNow("folder.errors.reveal", { reason: errorMessage(e) }), { tone: "danger" }));
   }, [state.folder, toast]);
 
   const onToggleFavorite = useCallback((id: string) => {
@@ -728,11 +731,11 @@ export default function App() {
             saveFavorites(next);
             return next;
           });
-          toast(`Deleted ${clip(skin.name)}`, { tone: "ok" });
+          toast(tNow("library.toast.deleted", { name: clip(skin.name) }), { tone: "ok" });
         })
         .catch((e) => {
           setSkins((prev) => newestFirst([skin, ...prev.filter((s) => s.id !== skin.id)]));
-          toast(`Couldn't delete ${clip(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
+          toast(tNow("library.errors.delete", { name: clip(skin.name), reason: errorMessage(e) }), { tone: "danger" });
         });
     },
     [state.skinId, toast],
@@ -750,7 +753,7 @@ export default function App() {
         .then(show)
         .catch((e) => {
           show({ name: skin.name, tags: skin.tags });
-          toast(`Couldn't save ${clip(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
+          toast(tNow("library.errors.save", { name: clip(skin.name), reason: errorMessage(e) }), { tone: "danger" });
         });
     },
     [toast],
@@ -796,22 +799,22 @@ export default function App() {
   const stageIcon = folderIcon && folderIcon.path === state.folder?.path ? (folderIcon.url ?? defaultThumb) : undefined;
   const q = query.trim();
   const empty: Empty | null = loadError
-    ? { icon: <FolderOpenIcon size={22} />, title: "The skins didn't load", text: loadError }
+    ? { icon: <FolderOpenIcon size={22} />, title: t("library.empty.loadFailed"), text: loadError }
     : visible.length > 0
       ? null
       : filtering
         ? {
             icon: <ListFilterIcon size={20} />,
-            title: q ? `Nothing matches "${q}" with these filters` : "No skins match these filters",
-            text: "Take a filter or two off, or clear them all.",
+            title: q ? t("library.empty.noMatchFiltered", { query: q }) : t("library.empty.noneFiltered"),
+            text: t("library.empty.filteredText"),
             action: (
               <div className="empty-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setFilters(NO_FILTERS)}>
-                  Clear filters
+                  {t("library.empty.clearFilters")}
                 </button>
                 {q && (
                   <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
-                    Clear search
+                    {t("library.empty.clearSearch")}
                   </button>
                 )}
               </div>
@@ -820,28 +823,28 @@ export default function App() {
         : q
           ? {
               icon: <SearchIcon size={20} />,
-              title: `Nothing matches "${q}"`,
-              text: "Try another word, or look in All.",
+              title: t("library.empty.noMatch", { query: q }),
+              text: t("library.empty.noMatchText"),
               action: (
                 <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
-                  Clear search
+                  {t("library.empty.clearSearch")}
                 </button>
               ),
             }
           : view === "faves"
-            ? { icon: <StarIcon size={20} />, title: "No favourites yet", text: "Tap the star on any skin and it will wait for you here." }
+            ? { icon: <StarIcon size={20} />, title: t("library.empty.noFaves"), text: t("library.empty.noFavesText") }
             : view === "skins" && skins.length === 0
               ? {
                   icon: <FolderOpenIcon size={22} />,
-                  title: "No skins yet",
-                  text: "Add a free pack from Community, bring a picture of your own, or have AI paint one.",
+                  title: t("library.empty.noSkins"),
+                  text: t("library.empty.noSkinsText"),
                   action: (
                     <div className="empty-actions">
                       <button type="button" className="btn btn-primary" onClick={() => setView("community")}>
-                        Browse packs
+                        {t("library.empty.browsePacks")}
                       </button>
                       <button type="button" className="btn btn-secondary" onClick={pickPhoto}>
-                        Add your photo
+                        {t("sidebar.addPhoto")}
                       </button>
                     </div>
                   ),
@@ -893,7 +896,7 @@ export default function App() {
       style={{ "--left-w": `${cols.left}px`, "--right-w": `${cols.right}px`, "--right-full": `${full.right}px` } as CSSProperties}
     >
       <IslandResizer
-        label="sidebar width"
+        label={t("library.resize.sidebar")}
         className="is-left"
         width={cols.left}
         min={layout.rail ? RAIL : LEFT.min}
@@ -905,7 +908,7 @@ export default function App() {
       />
       {rightShown && (
       <IslandResizer
-        label={composing ? "layers and settings width" : "folder panel width"}
+        label={composing ? t("library.resize.composer") : t("library.resize.folder")}
         className="is-right"
         width={cols.right}
         min={RIGHT.min}
@@ -956,7 +959,7 @@ export default function App() {
       {!composing && (
       <section
         className={state.drag?.kind === "image" ? "island island-main is-drop-target" : "island island-main"}
-        aria-label="library"
+        aria-label={t("library.label")}
       >
         <span className="drop-glow" aria-hidden="true" />
         {library && (
@@ -1004,7 +1007,7 @@ export default function App() {
             {redrawing && (
               <div className="gallery-redraw" role="status">
                 <LoaderIcon size={15} />
-                <span>Drawing your skins on {redrawing === "windows" ? "Windows'" : "the Mac's"} folder</span>
+                <span>{t(`folder.look.redrawing.${redrawing}`)}</span>
               </div>
             )}
           </>
@@ -1100,7 +1103,7 @@ export default function App() {
         onCarryOn={carryOn}
         onTryAgain={tryAgain}
         onDismissRun={() => dispatch({ type: "runDismissed" })}
-        pickHint={aiView ? "Preview a picture from the chat" : undefined}
+        pickHint={aiView ? t("folder.stage.pickHintChat") : undefined}
         onLook={chooseFolderLook}
         onPutDown={putDown}
       />
@@ -1109,10 +1112,10 @@ export default function App() {
 
       {confirmingDelete && (
         <Confirm
-          title={`Delete "${clip(confirmingDelete.name)}"?`}
-          text="This removes it from your library for good. Folders that already use it keep their icon."
+          title={t("library.delete.title", { name: clip(confirmingDelete.name) })}
+          text={t("library.delete.text")}
           image={confirmingDelete.thumbnail}
-          action="Delete"
+          action={t("library.delete.action")}
           onCancel={cancelDelete}
           onConfirm={() => deleteSkin(confirmingDelete)}
         />
@@ -1148,24 +1151,29 @@ export default function App() {
         <Confirm
           title={
             treeAsk.kind === "apply"
-              ? `Apply ${treeAsk.skin ? clip(treeAsk.skin.name) : "this skin"} to ${folders(treeAsk.inside + 1)}?`
-              : `Remove the custom icons from ${folders(treeAsk.inside + 1)}?`
+              ? t("folder.ask.applyTitle", { skin: treeAsk.skin ? clip(treeAsk.skin.name) : t("folder.ask.thisSkin"), count: treeAsk.inside + 1 })
+              : t("folder.ask.removeTitle", { count: treeAsk.inside + 1 })
           }
           text={
             treeAsk.kind === "apply"
-              ? `${clip(treeAsk.folderName)} and the ${folders(treeAsk.inside)} inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon${
-                  treeAsk.bytes ? `, about ${formatBytes(treeAsk.bytes)}, so about ${formatBytes(treeAsk.bytes * (treeAsk.inside + 1))} in all` : ""
-                }. Revert takes them all off again.`
-              : `${clip(treeAsk.folderName)} and every folder inside it go back to the default folder icon, including icons they were given outside FolderSkin. Folders without one are left as they are.`
+              ? treeAsk.bytes
+                ? t("folder.ask.applyTextSized", {
+                    folder: clip(treeAsk.folderName),
+                    count: treeAsk.inside,
+                    size: formatBytes(treeAsk.bytes),
+                    total: formatBytes(treeAsk.bytes * (treeAsk.inside + 1)),
+                  })
+                : t("folder.ask.applyText", { folder: clip(treeAsk.folderName), count: treeAsk.inside })
+              : t("folder.ask.removeText", { folder: clip(treeAsk.folderName) })
           }
           image={treeAsk.kind === "apply" ? treeAsk.skin?.thumbnail : undefined}
-          action={treeAsk.kind === "apply" ? applyLabel(treeAsk.inside) : "Remove the icons"}
+          action={treeAsk.kind === "apply" ? applyLabel(treeAsk.inside) : t("folder.ask.removeAction")}
           tone={treeAsk.kind === "apply" ? "primary" : "danger"}
           onCancel={() => answerTree(false)}
           onConfirm={() => answerTree(true)}
         />
       )}
-      {sharing && <SharePack yours={yours} only={sharing.only} fileBrowser={fileBrowser(platform.os)} onClose={closeSharing} />}
+      {sharing && <SharePack yours={yours} only={sharing.only} os={platform.os} onClose={closeSharing} />}
       {settingsTab && (
         <Settings
           tab={settingsTab}
@@ -1174,7 +1182,7 @@ export default function App() {
           onThemePref={setThemePref}
           rail={layout.rail}
           onRail={(on) => on !== layout.rail && toggleRail()}
-          fileBrowser={fileBrowser(platform.os)}
+          os={platform.os}
           savedCount={skins.filter((s) => s.custom).length}
           onKeysChanged={() => setKeysVersion((v) => v + 1)}
           onClose={closeSettings}

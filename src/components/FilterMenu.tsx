@@ -17,6 +17,8 @@ import type { Skin } from "../lib/tauri";
 import { CheckIcon } from "./icons/check";
 import { ListFilterIcon } from "./icons/list-filter";
 import { StarIcon } from "./icons/star";
+import { useT } from "../i18n";
+import { formatNumber } from "../i18n/format";
 
 const WIDTH = 320;
 const MARGIN = 12;
@@ -49,6 +51,7 @@ export function FilterMenu({
   /** Colours are still being read from some of the pictures. */
   reading: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const count = activeCount(filters);
@@ -62,13 +65,13 @@ export function FilterMenu({
         className={count ? "filter-btn is-on" : "filter-btn"}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={count ? `Filters, ${count} on` : "Filters"}
-        data-tip="Filters"
+        aria-label={count ? t("library.filters.buttonOn", { count }) : t("library.filters.title")}
+        data-tip={t("library.filters.title")}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
       >
         <ListFilterIcon size={16} />
-        {count > 0 && <span className="filter-btn-count">{count}</span>}
+        {count > 0 && <span className="filter-btn-count">{formatNumber(count)}</span>}
       </button>
       {open && button.current && (
         <FilterPopover
@@ -111,9 +114,11 @@ function FilterPopover({
   reading: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
-  const shown = useMemo(() => facets(skins, filters, ctx), [skins, filters, ctx]);
+  // Its names are in the language on show, so it's worked out again when that changes.
+  const shown = useMemo(() => facets(skins, filters, ctx), [skins, filters, ctx, t]);
   const matching = useMemo(() => applyFilters(skins, filters, ctx).length, [skins, filters, ctx]);
   const count = activeCount(filters);
 
@@ -164,25 +169,25 @@ function FilterPopover({
       ref={panel}
       className="filter-pop"
       role="dialog"
-      aria-label="filter and sort skins"
+      aria-label={t("library.filters.label")}
       tabIndex={-1}
       style={pos ? { left: pos.left, top: pos.top, width: WIDTH, maxHeight: pos.maxHeight } : { visibility: "hidden" }}
     >
       <div className="filter-head">
         <div>
-          <p className="filter-title">Filters</p>
-          <p className="filter-sub">{count ? `${matching} of ${skins.length} skins` : `${skins.length} skins`}</p>
+          <p className="filter-title">{t("library.filters.title")}</p>
+          <p className="filter-sub">{count ? t("library.filters.matching", { count: skins.length, matching }) : t("library.filters.skins", { count: skins.length })}</p>
         </div>
         {count > 0 && (
           <button type="button" className="filter-clear" onClick={() => onFilters(NO_FILTERS)}>
-            Clear all
+            {t("library.filters.clearAll")}
           </button>
         )}
       </div>
 
       <section className="filter-sec">
-        <p className="filter-label">Sort by</p>
-        <div className="seg seg-sm filter-sort" role="radiogroup" aria-label="sort by">
+        <p className="filter-label">{t("library.filters.sortBy")}</p>
+        <div className="seg seg-sm filter-sort" role="radiogroup" aria-label={t("library.filters.sortByLabel")}>
           {SORTS.map((s) => (
             <button
               key={s.id}
@@ -192,7 +197,7 @@ function FilterPopover({
               className={sort === s.id ? "seg-btn is-active" : "seg-btn"}
               onClick={() => onSort(s.id)}
             >
-              {s.label}
+              {t(`library.sort.${s.id}`)}
             </button>
           ))}
         </div>
@@ -207,7 +212,7 @@ function FilterPopover({
           onClick={() => onFilters({ ...filters, favourites: !filters.favourites })}
         >
           <StarIcon size={15} />
-          <span>Favourites only</span>
+          <span>{t("library.filters.favouritesOnly")}</span>
           <span className={filters.favourites ? "switch is-on" : "switch"} aria-hidden="true">
             <span className="knob" />
           </span>
@@ -218,7 +223,7 @@ function FilterPopover({
         <section className="filter-sec" key={facet.id}>
           <p className="filter-label">
             {facet.label}
-            {facet.id === "colour" && reading && <span className="filter-note"> · still reading colours</span>}
+            {facet.id === "colour" && reading && <span className="filter-note"> · {t("library.filters.readingColours")}</span>}
           </p>
           {facet.id === "colour" ? (
             <div className="filter-swatches">
@@ -240,7 +245,7 @@ function FilterPopover({
                     onClick={() => choose(facet, o.value)}
                   >
                     <span className="fchip-label">{o.label}</span>
-                    <span className="count">{o.count}</span>
+                    <span className="count">{formatNumber(o.count)}</span>
                   </button>
                 );
               })}
@@ -250,7 +255,7 @@ function FilterPopover({
       ))}
 
       {shown.length === 0 && !reading && (
-        <p className="filter-empty">These skins are all alike so far. Add another pack or a picture of your own and there'll be more to filter by.</p>
+        <p className="filter-empty">{t("library.filters.allAlike")}</p>
       )}
     </div>,
     document.body,
@@ -260,13 +265,14 @@ function FilterPopover({
 const isOn = (filters: Filters, facet: FacetId, value: string) => filters.chosen[facet]?.includes(value) ?? false;
 
 function Swatch({ option, on, onClick }: { option: { value: string; label: string; count: number; swatch?: string }; on: boolean; onClick: () => void }) {
+  const t = useT();
   const light = option.value === "white" || option.value === "yellow";
   return (
     <button
       type="button"
       aria-pressed={on}
-      aria-label={`${option.label}, ${option.count}`}
-      data-tip={`${option.label} · ${option.count}`}
+      aria-label={t("library.filters.swatchLabel", { label: option.label, count: option.count })}
+      data-tip={t("library.filters.swatchTip", { label: option.label, count: option.count })}
       className={[on ? "swatch is-on" : "swatch", light ? "is-light" : ""].filter(Boolean).join(" ")}
       style={{ "--swatch": option.swatch } as CSSProperties}
       disabled={!on && option.count === 0}

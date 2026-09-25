@@ -4,6 +4,7 @@
  * profile is the default, the one sharing starts from. Kept on this computer.
  */
 import { isGithubUser, LICENSES } from "./licences";
+import { t } from "../i18n";
 
 export type LicenseId = (typeof LICENSES)[number]["id"];
 
@@ -36,7 +37,7 @@ function firstProfiles(old: unknown): Profiles {
   const o = typeof old === "object" && old !== null ? (old as Record<string, unknown>) : {};
   const profile: LicenceProfile = {
     id: "personal",
-    name: "Personal",
+    name: t("settings.profile.firstName"),
     author: typeof o.author === "string" && isGithubUser(o.author) ? o.author : "",
     license: isLicense(o.license) ? o.license : LICENSES[0].id,
   };
@@ -59,7 +60,7 @@ export function readProfiles(raw: unknown, old?: unknown): Profiles {
     const r = p as Record<string, unknown>;
     if (typeof r.id !== "string" || !r.id || seen.has(r.id)) continue;
     seen.add(r.id);
-    const name = unusedName(cleanProfileName(typeof r.name === "string" ? r.name : "") || "Profile", names);
+    const name = unusedName(cleanProfileName(typeof r.name === "string" ? r.name : "") || t("settings.profile.fallbackName"), names);
     names.add(name.toLowerCase());
     list.push({
       id: r.id,
@@ -121,10 +122,10 @@ export type ProfileProblem = { field: "name" | "author" | "list"; text: string }
  */
 export function profileProblem(p: Pick<LicenceProfile, "name" | "author">, others: LicenceProfile[]): ProfileProblem | null {
   const name = cleanProfileName(p.name);
-  if (!name) return { field: "name", text: "Give the profile a name." };
-  if (others.some((o) => o.name.toLowerCase() === name.toLowerCase())) return { field: "name", text: `There's a profile called ${name} already.` };
-  if (p.author && !isGithubUser(p.author)) return { field: "author", text: "Credit goes to a name made of letters, numbers and single dashes." };
-  if (others.length >= MAX_PROFILES) return { field: "list", text: `There can be ${MAX_PROFILES} profiles at most. Delete one to add this one.` };
+  if (!name) return { field: "name", text: t("settings.profile.problems.noName") };
+  if (others.some((o) => o.name.toLowerCase() === name.toLowerCase())) return { field: "name", text: t("settings.profile.problems.taken", { name }) };
+  if (p.author && !isGithubUser(p.author)) return { field: "author", text: t("settings.profile.problems.author") };
+  if (others.length >= MAX_PROFILES) return { field: "list", text: t("settings.profile.problems.full", { count: MAX_PROFILES }) };
   return null;
 }
 

@@ -3,7 +3,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
-import { fileBrowser, keys, localOs } from "../../lib/platform";
+import { keys, localOs } from "../../lib/platform";
+import "../../i18n/composer";
+import { t as tNow } from "../../i18n";
 import { cleanName, clip as clipName, MAX_NAME_CHARS } from "../../lib/names";
 import type { DragInfo, Folder } from "../../state/dropzone";
 import { applyLabel, folders as folderCount, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
@@ -107,7 +109,6 @@ const DRAFT_KEY = "folderskin.composer.draft.v1";
 const VIEW_KEY = "folderskin.composer.view";
 /** Undo's and redo's shortcuts, for their tooltips. */
 const MOD_KEYS = { undo: keys("Z"), redo: localOs() === "macos" ? keys("Z", { shift: true }) : keys("Y") };
-const fileBrowserName = () => fileBrowser(localOs());
 
 /** How new icons look, as last chosen in the icon library. */
 const LOOK_KEY = "folderskin.composer.iconLook";
@@ -1276,7 +1277,7 @@ export function Composer({
               />
             ))}
           </div>
-          <div className="cmp-sizes" aria-label="the icon at its real sizes" data-tip={`How it looks in ${fileBrowserName()} at 64, 32 and 16 points`} ref={sizesRef} hidden={!barRoom.sizes}>
+          <div className="cmp-sizes" aria-label="the icon at its real sizes" data-tip={tNow(`composer.sizes.tip.${localOs()}`)} ref={sizesRef} hidden={!barRoom.sizes}>
             {previews.map((src, i) => {
               const pt = PREVIEW_SIZES[i] / 2;
               return <img key={i} src={src} alt="" width={pt} height={pt} draggable={false} className="cmp-size" />;

@@ -4,7 +4,11 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type ExportedPack, type SharedPack, type ShareProgress, type ShareStatus, type Skin } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { cleanName } from "../lib/names";
-import { creditDefaultProfile, LICENSES, licenseLabel, MAX_PACK_SKINS, PACK_TERMS_URL, PACKS_GUIDE_URL } from "../lib/packs";
+import { creditDefaultProfile, LICENSES, licenseLabel, MAX_PACK_SKINS } from "../lib/packs";
+import { licenceOption } from "../lib/licences";
+import { osOf } from "../lib/platform";
+import { docsUrl, t as tNow, useT } from "../i18n";
+import { Rich } from "../i18n/Rich";
 import { defaultProfile, loadProfiles, type LicenceProfile, type LicenseId } from "../lib/profiles";
 import { handleFrom, isHandle, loadHandle, PICTURE_SOURCES, saveHandle, scaledNote, shareProgressLabel, type PictureSource } from "../lib/share";
 import { MAX_PACK_TAGS, tagCounts, tagLabel } from "../lib/tags";
@@ -18,13 +22,13 @@ import { EarthIcon } from "./icons/earth";
 import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
 import { LoaderIcon } from "./icons/loader";
-import { Brand, branded } from "./Brand";
+import { branded } from "./Brand";
 
-const LICENCE_OPTIONS = LICENSES.map((l) => ({ value: l.id as LicenseId, label: `${l.label}: ${l.note}` }));
+const licenceOptions = () => LICENSES.map((l) => ({ value: l.id as LicenseId, label: licenceOption(l) }));
 
 /** A profile as the choice of them names it: "Personal · credited to jane · CC0". */
 function profileLabel(p: LicenceProfile): string {
-  return [p.name, p.author && `credited to ${p.author}`, licenseLabel(p.license)].filter(Boolean).join(" · ");
+  return [p.name, p.author && tNow("share.form.creditedTo", { author: p.author }), licenseLabel(p.license)].filter(Boolean).join(" · ");
 }
 
 /** Where the dialog starts: the skin they asked to share, all of theirs, or a tag small enough. */
@@ -55,15 +59,17 @@ function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; cou
 export function SharePack({
   yours,
   only,
-  fileBrowser,
+  os,
   onClose,
 }: {
   yours: Skin[];
   /** Start with just this skin ticked. They can still tick more. */
   only?: Skin;
-  fileBrowser: string;
+  /** The system, whose file browser the saved pack is shown in. */
+  os: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const tags = useMemo(() => tagCounts(yours), [yours]);
   const [start] = useState(() => opening(yours, only, tags));
 
@@ -126,23 +132,23 @@ export function SharePack({
   // Short enough for the one line beside the buttons: the field itself says the rest.
   const packProblem =
     yours.length === 0
-      ? "No skins of your own yet"
+      ? t("share.problems.noSkins")
       : chosen.length === 0
-        ? "Tick at least one skin"
+        ? t("share.problems.tickOne")
         : chosen.length > MAX_PACK_SKINS
-          ? `${chosen.length} skins is over the ${MAX_PACK_SKINS} a pack holds`
+          ? t("share.problems.tooMany", { count: chosen.length, max: MAX_PACK_SKINS })
           : !clean
-            ? "Give the pack a name"
+            ? t("share.problems.noName")
             : packTags.length === 0
-              ? "Add at least one tag"
+              ? t("share.problems.noTag")
               : null;
-  const nameProblem = !isHandle(author) ? "Choose the name your packs show" : null;
+  const nameProblem = !isHandle(author) ? t("share.problems.noHandle") : null;
   /** What stops the pack being sent, in the order it's worth fixing. */
   const sendProblem =
     packProblem ??
-    (!direct ? "Checking whether it's available" : terms === null ? "Not available right now" : !source ? "Say where the pictures came from" : nameProblem) ??
+    (!direct ? t("share.problems.checking") : terms === null ? t("share.problems.unavailable") : !source ? t("share.problems.noSource") : nameProblem) ??
     // The thing FolderSkin can't check for them, which is why they are asked rather than told.
-    (!mine ? "Agree to the terms" : null);
+    (!mine ? t("share.problems.agree") : null);
   /** What stops it being saved as a folder: the pack and a name to credit, nothing about the service. */
   const saveProblem = packProblem ?? nameProblem;
   // While the service can't be used, the author field says why, and this line says what saving
@@ -173,7 +179,7 @@ export function SharePack({
   /** Writes the pack as a folder, for anyone who wants it as files. */
   const save = async () => {
     const folder = isTauri()
-      ? await open({ directory: true, multiple: false, title: "Choose where to save the pack" }).catch(() => null)
+      ? await open({ directory: true, multiple: false, title: tNow("share.dialogs.saveWhere") }).catch(() => null)
       : "/Users/you/Desktop";
     if (typeof folder !== "string") return;
     setBusy(true);
@@ -234,12 +240,12 @@ export function SharePack({
   /** Saves this computer's key, so the same name can share from another computer or after a reinstall. */
   const saveKey = async () => {
     const path = isTauri()
-      ? await saveDialog({ title: "Save your recovery file", defaultPath: "folderskin-sharing-key.json", filters: [{ name: "Recovery file", extensions: ["json"] }] }).catch(() => null)
+      ? await saveDialog({ title: tNow("share.dialogs.saveKey"), defaultPath: "folderskin-sharing-key.json", filters: [{ name: tNow("share.dialogs.keyFile"), extensions: ["json"] }] }).catch(() => null)
       : "/Users/you/Documents/folderskin-sharing-key.json";
     if (typeof path !== "string") return;
     try {
       await api.shareSaveKey(path);
-      setKeyNote({ text: "Saved. Keep it private: anyone who has it can share as you." });
+      setKeyNote({ text: tNow("share.key.saved") });
     } catch (e) {
       setKeyNote({ text: errorMessage(e), error: true });
     }
@@ -248,7 +254,7 @@ export function SharePack({
   /** Takes the key from a recovery file saved on another computer. */
   const loadKey = async () => {
     const path = isTauri()
-      ? await open({ multiple: false, title: "Choose your recovery file", filters: [{ name: "Recovery file", extensions: ["json"] }] }).catch(() => null)
+      ? await open({ multiple: false, title: tNow("share.dialogs.chooseKey"), filters: [{ name: tNow("share.dialogs.keyFile"), extensions: ["json"] }] }).catch(() => null)
       : "/Users/you/Documents/folderskin-sharing-key.json";
     if (typeof path !== "string") return;
     try {
@@ -265,13 +271,13 @@ export function SharePack({
     return (
       <Modal
         narrow
-        title="Your pack is waiting for review"
-        sub={`${sent.name} is in FolderSkin's review queue.`}
+        title={t("share.sent.title")}
+        sub={t("share.sent.sub", { name: sent.name })}
         onClose={onClose}
         footer={
           <>
             <button type="button" className="btn btn-ghost" onClick={onClose}>
-              Done
+              {t("share.done")}
             </button>
             <button
               type="button"
@@ -281,14 +287,13 @@ export function SharePack({
                 setShowMine(true);
               }}
             >
-              See your submissions
+              {t("share.sent.seeSubmissions")}
             </button>
           </>
         }
       >
         <p className="field-note">
-          A person looks at every pack before anyone else can see it. Once it's approved it joins the Community view for everyone, credited to{" "}
-          <strong>{direct?.handle ?? handle}</strong>. If it's turned down, Your submissions says why.
+          <Rich k="share.sent.note" vars={{ handle: direct?.handle ?? handle }} tags={{ b: (s) => <strong>{s}</strong> }} />
         </p>
         {scaled && <p className="field-note">{scaled}</p>}
       </Modal>
@@ -298,7 +303,7 @@ export function SharePack({
   // ---- verifying this computer ----
   if (verifying) {
     return (
-      <Modal narrow title="Verify this computer" sub="So only people, not scripts, can send packs for review." onClose={onClose}>
+      <Modal narrow title={t("share.verify.title")} sub={t("share.verify.sub")} onClose={onClose}>
         <ShareVerify handle={handle} onVerified={onVerified} onCancel={() => setVerifying(false)} />
       </Modal>
     );
@@ -309,12 +314,12 @@ export function SharePack({
     return (
       <Modal
         className="modal-share-subs"
-        title="Your submissions"
-        sub="Packs you've shared, and where each one is."
+        title={t("share.subs.title")}
+        sub={t("share.subs.sub")}
         onClose={onClose}
         footer={
           <button type="button" className="btn btn-ghost" onClick={() => setShowMine(false)}>
-            Back to sharing
+            {t("share.subs.back")}
           </button>
         }
       >
@@ -330,26 +335,25 @@ export function SharePack({
     return (
       <Modal
         narrow
-        title="Your pack is ready"
-        sub={`Saved as the folder ${folder}.`}
+        title={t("share.saved.title")}
+        sub={t("share.saved.sub", { folder })}
         onClose={onClose}
         footer={
           <>
             <button type="button" className="btn btn-ghost" onClick={() => void revealItemInDir(saved.folder).catch(() => {})}>
               <FolderOpenIcon size={15} />
-              Show in {fileBrowser}
+              {t(`common.showIn.${osOf(os)}`)}
             </button>
             <button type="button" className="btn btn-primary" onClick={onClose}>
-              Done
+              {t("share.done")}
             </button>
           </>
         }
       >
         <p className="field-note">
-          It holds the pictures and the pack.json that describes them, and nothing was sent anywhere. Anyone can add it to <Brand /> with
-          Add from a folder in Community.{" "}
-          <button type="button" className="link-btn" onClick={() => void openUrl(PACKS_GUIDE_URL).catch(() => {})}>
-            How packs work <ExternalLinkIcon size={12} />
+          {branded(t("share.saved.note"))}{" "}
+          <button type="button" className="link-btn" onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}>
+            {t("share.saved.howPacksWork")} <ExternalLinkIcon size={12} />
           </button>
         </p>
         {scaled && <p className="field-note">{scaled}</p>}
@@ -360,8 +364,8 @@ export function SharePack({
   return (
     <Modal
       className="modal-share"
-      title="Share a pack"
-      sub="Packs are free. Anyone can add one to FolderSkin once a person has reviewed it."
+      title={t("share.title")}
+      sub={t("share.sub")}
       onClose={onClose}
       footer={
         <>
@@ -381,7 +385,7 @@ export function SharePack({
           )}
           <button type="button" className="btn btn-ghost" disabled={Boolean(saveProblem) || busy} aria-busy={saving} onClick={() => void save()}>
             {saving && <LoaderIcon />}
-            {saving ? "Saving" : "Save a folder"}
+            {saving ? t("share.saving") : t("share.saveFolder")}
           </button>
           <button
             type="button"
@@ -391,7 +395,7 @@ export function SharePack({
             onClick={() => (verified && terms !== null ? void send(terms) : verifyAndSend())}
           >
             {busy && !saving ? <LoaderIcon /> : <EarthIcon size={15} />}
-            {busy && !saving ? "Sending" : verified ? "Send for review" : "Verify and send"}
+            {busy && !saving ? t("share.sending") : verified ? t("share.send") : t("share.verifyAndSend")}
           </button>
         </>
       }
@@ -400,23 +404,21 @@ export function SharePack({
         <div className="share-col">
           <div className="field share-pick-field">
             <div className="share-pick-head">
-              <span className="field-label">Skins</span>
-              <span className="share-count">
-                {chosen.length} of {yours.length}
-              </span>
+              <span className="field-label">{t("share.form.skins")}</span>
+              <span className="share-count">{t("share.form.chosenOf", { chosen: chosen.length, total: yours.length })}</span>
               {shown.length > 1 && (
                 <button type="button" className="link-btn" onClick={takeAll}>
-                  {allShown ? "Clear" : "Select all"}
+                  {allShown ? t("share.form.clear") : t("share.form.selectAll")}
                 </button>
               )}
             </div>
             {tags.length > 0 && yours.length > 1 && (
               <Select
-                label="which skins to show"
+                label={t("share.form.whichLabel")}
                 className="is-field"
                 value={filter}
                 onChange={narrow}
-                options={[{ value: "", label: `All of yours (${yours.length})` }, ...tags.map((t) => ({ value: t.tag, label: `Tagged ${t.tag} (${t.count})` }))]}
+                options={[{ value: "", label: t("share.form.allOfYours", { count: yours.length }) }, ...tags.map((c) => ({ value: c.tag, label: t("share.form.tagged", { tag: c.tag, count: c.count }) }))]}
               />
             )}
             <div className="share-pick-box">
@@ -443,7 +445,7 @@ export function SharePack({
                     </button>
                   );
                 })}
-                {shown.length === 0 && <p className="field-note">Nothing here yet.</p>}
+                {shown.length === 0 && <p className="field-note">{t("share.form.nothingYet")}</p>}
               </div>
             </div>
           </div>
@@ -451,18 +453,18 @@ export function SharePack({
 
         <div className="share-col">
           <label className="field">
-            <span className="field-label">Pack name</span>
-            <input className="input" data-modal-focus value={name} maxLength={40} placeholder="Neon nights" spellCheck={false} autoComplete="off" onChange={(e) => setName(e.target.value)} />
+            <span className="field-label">{t("share.form.packName")}</span>
+            <input className="input" data-modal-focus value={name} maxLength={40} placeholder={t("share.form.packNamePlaceholder")} spellCheck={false} autoComplete="off" onChange={(e) => setName(e.target.value)} />
           </label>
           <div className="field">
-            <span className="field-label">Tags</span>
-            <TagInput value={packTags} onChange={setPackTags} suggestions={tags.map((t) => t.tag)} max={MAX_PACK_TAGS} label="add a tag for the pack" />
-            <span className="field-note">The first one names the pack in everyone's filters.</span>
+            <span className="field-label">{t("share.form.tags")}</span>
+            <TagInput value={packTags} onChange={setPackTags} suggestions={tags.map((c) => c.tag)} max={MAX_PACK_TAGS} label={t("share.form.tagsLabel")} />
+            <span className="field-note">{t("share.form.tagsNote")}</span>
           </div>
           <div className="field">
-            <span className="field-label">Profile</span>
+            <span className="field-label">{t("share.form.profile")}</span>
             <Select
-              label="profile"
+              label={t("share.form.profileLabel")}
               className="is-field"
               value={profile.id}
               onChange={pickProfile}
@@ -470,26 +472,24 @@ export function SharePack({
             />
           </div>
           <div className="field">
-            <span className="field-label">Licence</span>
-            <Select label="licence" className="is-field" value={license} onChange={setLicense} options={LICENCE_OPTIONS} />
+            <span className="field-label">{t("share.form.licence")}</span>
+            <Select label={t("share.form.licenceLabel")} className="is-field" value={license} onChange={setLicense} options={licenceOptions()} />
             {license !== profile.license && (
-              <span className="field-note">
-                For this pack only: the {profile.name} profile stays {licenseLabel(profile.license)}.
-              </span>
+              <span className="field-note">{t("share.form.thisPackOnly", { profile: profile.name, licence: licenseLabel(profile.license) })}</span>
             )}
           </div>
           <div className="field">
-            <span className="field-label">Author</span>
+            <span className="field-label">{t("share.form.author")}</span>
             {!direct ? (
               <p className="share-waiting">
                 <LoaderIcon />
-                Checking whether sharing is available
+                {t("share.form.checking")}
               </p>
             ) : (
               <>
                 {!direct.available && (
                   <p className="field-note share-unavailable" role="status">
-                    {direct.reason ?? "Sharing isn't available right now."}
+                    {direct.reason ?? t("share.form.unavailable")}
                   </p>
                 )}
                 {verified && direct.handle ? (
@@ -502,17 +502,23 @@ export function SharePack({
                         <strong data-tip={direct.handle} data-tip-overflow>
                           {direct.handle}
                         </strong>
-                        <span>Verified on this computer</span>
+                        <span>{t("share.form.verified")}</span>
                       </span>
                       <button type="button" className="link-btn" onClick={() => setShowMine(true)}>
-                        Your submissions
+                        {t("share.subs.title")}
                       </button>
                     </div>
                     <span className="field-note">
-                      <button type="button" className="link-btn" onClick={() => void saveKey()}>
-                        Save a recovery file
-                      </button>{" "}
-                      to share under this name from another computer.
+                      <Rich
+                        k="share.key.saveNote"
+                        tags={{
+                          link: (s) => (
+                            <button type="button" className="link-btn" onClick={() => void saveKey()}>
+                              {s}
+                            </button>
+                          ),
+                        }}
+                      />
                     </span>
                   </>
                 ) : (
@@ -521,19 +527,18 @@ export function SharePack({
                       className="input"
                       value={handle}
                       maxLength={39}
-                      placeholder="your-name"
+                      placeholder={t("share.form.handlePlaceholder")}
                       spellCheck={false}
                       autoComplete="off"
-                      aria-label="the name your packs show"
+                      aria-label={t("share.form.handleLabel")}
                       onChange={(e) => setHandle(handleFrom(e.target.value))}
                       onBlur={() => setHandle((h) => h.replace(/-+$/, ""))}
                     />
                     <span className="field-note">
-                      The name your packs show: letters, digits and dashes.
-                      {direct.available && " You'll confirm it in your browser once."}{" "}
+                      {direct.available ? t("common.twoSentences", { first: t("share.form.handleNote"), second: t("share.form.confirmOnce") }) : t("share.form.handleNote")}{" "}
                       {direct.available && !direct.has_key && (
                         <button type="button" className="link-btn" onClick={() => void loadKey()}>
-                          Use a recovery file
+                          {t("share.key.use")}
                         </button>
                       )}
                     </span>
@@ -542,33 +547,31 @@ export function SharePack({
               </>
             )}
             {otherCredit && (
-              <span className="field-note">
-                The {profile.name} profile credits {profile.author}. Packs sent from this computer are credited to the name it was verified under.
-              </span>
+              <span className="field-note">{t("share.form.otherCredit", { profile: profile.name, author: profile.author })}</span>
             )}
             {keyNote && <span className={keyNote.error ? "field-note is-error" : "field-note"}>{keyNote.text}</span>}
           </div>
           {direct?.available && (
             <div className="field">
-              <span className="field-label">The pictures</span>
+              <span className="field-label">{t("share.form.pictures")}</span>
               <Select<PictureSource | "">
-                label="the pictures"
+                label={t("share.form.picturesLabel")}
                 className="is-field"
                 value={source}
                 onChange={setSource}
-                placeholder="Where did they come from?"
-                options={PICTURE_SOURCES.map((s) => ({ value: s.id, label: s.label }))}
+                placeholder={t("share.form.picturesPlaceholder")}
+                options={PICTURE_SOURCES.map((s) => ({ value: s.id, label: t(`share.sources.${s.id}`) }))}
               />
             </div>
           )}
           <label className="field">
-            <span className="field-label">Credits</span>
+            <span className="field-label">{t("share.form.credits")}</span>
             <textarea
               className="input share-notes"
               rows={2}
               maxLength={400}
               value={notes}
-              placeholder="Base photo by Jane Doe, CC0"
+              placeholder={t("share.form.creditsPlaceholder")}
               onChange={(e) => setNotes(e.target.value)}
             />
           </label>
@@ -576,38 +579,28 @@ export function SharePack({
       </div>
 
       {direct?.available && (
-        <ul className="share-direct" aria-label="how sharing works">
-          <li>
-            <strong>Reviewed first.</strong> A person at <Brand /> looks at every pack. Nothing is public until it&apos;s approved.
-          </li>
-          <li>
-            <strong>Public once approved.</strong> The pictures, the pack's name and tags, and your name go to everyone under the licence
-            you chose, and a licence can't be taken back from copies people already have.
-          </li>
-          <li>
-            <strong>No account.</strong> The service keeps this computer's key and your name. Your network address is only ever kept
-            scrambled.
-          </li>
-          <li>
-            <strong>Yours to withdraw.</strong> Your submissions shows where each pack is, says why if one is turned down, and takes one
-            back.
-          </li>
+        <ul className="share-direct" aria-label={t("share.how.label")}>
+          {(["reviewed", "public", "noAccount", "withdraw"] as const).map((point) => (
+            <li key={point}>
+              <Rich k={`share.how.${point}`} tags={{ b: (s) => <strong>{s}</strong> }} text={branded} />
+            </li>
+          ))}
         </ul>
       )}
 
       <div className="share-terms">
         <ul className="share-terms-list">
-          <li>The pictures are yours, or CC0 and you've checked. Not taken from anywhere.</li>
-          <li>Nothing sexual, hateful, gory, or about self-harm. Nothing involving a child.</li>
-          <li>Nobody else's logo, characters or likeness without their say-so.</li>
-          <li>A maintainer can decline a pack, or remove it later.</li>
+          <li>{t("share.terms.yours")}</li>
+          <li>{t("share.terms.nothingHarmful")}</li>
+          <li>{t("share.terms.nobodyElse")}</li>
+          <li>{t("share.terms.maintainer")}</li>
         </ul>
         <label className="share-confirm">
           <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
           <span>
-            I've read the pack terms and this pack follows them.{" "}
-            <button type="button" className="link-btn" onClick={() => void openUrl(PACK_TERMS_URL).catch(() => {})}>
-              Read them <ExternalLinkIcon size={12} />
+            {t("share.terms.agree")}{" "}
+            <button type="button" className="link-btn" onClick={() => void openUrl(docsUrl("pack-terms")).catch(() => {})}>
+              {t("share.terms.read")} <ExternalLinkIcon size={12} />
             </button>
           </span>
         </label>

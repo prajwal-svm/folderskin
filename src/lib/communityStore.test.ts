@@ -275,7 +275,7 @@ describe("the Community store", () => {
     store.install("greek");
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
     expect(toast).toHaveBeenLastCalledWith(
-      "Greek Art is in your library already; Update gets its newer version",
+      "Greek Art is in your library already, and Update gets its newer version",
       expect.objectContaining({ tone: "ok" }),
     );
     expect(addedIds).toEqual([]);
@@ -288,7 +288,7 @@ describe("the Community store", () => {
     store.install("gone-pack");
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const [said, opts] = toast.mock.calls[0];
-    expect(said).toBe("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there; it may have been renamed.");
+    expect(said).toBe("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there, as it may have been renamed.");
     expect(said).not.toMatch(/sorry|apolog/i);
     expect(opts).toEqual({ tone: "danger" });
 

@@ -1,9 +1,10 @@
 import { licenseLabel } from "./packs";
 import type { Skin } from "./tauri";
+import { getLocale, INTL_LOCALES, t } from "../i18n";
 
-/** A date and time the way the viewer's own system writes them, such as "18 Sep 2026, 15:02". */
+/** A date and time the way the language on show writes them, such as "18 Sept 2026, 15:02". */
 export function formatWhen(ms: number, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(ms);
+  return new Intl.DateTimeFormat(locale ?? INTL_LOCALES[getLocale()], { dateStyle: "medium", timeStyle: "short" }).format(ms);
 }
 
 /**
@@ -14,26 +15,26 @@ export function skinFacts(skin: Skin, locale?: string): [string, string][] {
   const facts: [string, string][] = [];
   const added = skin.created_at ? formatWhen(skin.created_at, locale) : null;
   if (skin.source === "ai") {
-    if (skin.made_with) facts.push(["Made with", skin.made_with]);
-    if (skin.idea) facts.push(["Prompt", skin.idea]);
-    facts.push(["Shape", skin.kind === "folder" ? "Whole folder" : "Art on FolderSkin's folder"]);
-    if (added) facts.push(["Made", added]);
+    if (skin.made_with) facts.push([t("library.facts.madeWith"), skin.made_with]);
+    if (skin.idea) facts.push([t("library.facts.prompt"), skin.idea]);
+    facts.push([t("library.facts.shape"), skin.kind === "folder" ? t("library.facts.wholeFolder") : t("library.facts.artOnFolder")]);
+    if (added) facts.push([t("library.facts.made"), added]);
   } else if (skin.source === "community") {
-    if (skin.pack_name) facts.push(["Pack", skin.pack_name]);
-    if (skin.author) facts.push(["Shared by", `@${skin.author}`]);
-    if (skin.license) facts.push(["Licence", licenseLabel(skin.license)]);
-    facts.push(["Shape", skin.kind === "folder" ? "Finished folder" : "Picture on FolderSkin's folder"]);
-    if (added) facts.push(["Added", added]);
+    if (skin.pack_name) facts.push([t("library.facts.pack"), skin.pack_name]);
+    if (skin.author) facts.push([t("library.facts.sharedBy"), `@${skin.author}`]);
+    if (skin.license) facts.push([t("library.facts.licence"), licenseLabel(skin.license)]);
+    facts.push([t("library.facts.shape"), skin.kind === "folder" ? t("library.facts.finishedFolder") : t("library.facts.pictureOnFolder")]);
+    if (added) facts.push([t("library.facts.added"), added]);
   } else if (skin.source === "composer") {
-    facts.push(["From", "Designed by you here"]);
-    facts.push(["Shape", "Finished folder"]);
-    if (added) facts.push(["Made", added]);
+    facts.push([t("library.facts.from"), t("library.facts.designedHere")]);
+    facts.push([t("library.facts.shape"), t("library.facts.finishedFolder")]);
+    if (added) facts.push([t("library.facts.made"), added]);
   } else if (skin.source === "import") {
-    facts.push(["From", "A picture you added"]);
-    facts.push(["Shape", skin.kind === "folder" ? "Finished folder, background removed" : "Picture on FolderSkin's folder"]);
-    if (added) facts.push(["Added", added]);
+    facts.push([t("library.facts.from"), t("library.facts.pictureAdded")]);
+    facts.push([t("library.facts.shape"), skin.kind === "folder" ? t("library.facts.finishedCutOut") : t("library.facts.pictureOnFolder")]);
+    if (added) facts.push([t("library.facts.added"), added]);
   } else {
-    facts.push(["From", "Comes with FolderSkin"]);
+    facts.push([t("library.facts.from"), t("library.facts.comesWith")]);
   }
   return facts;
 }

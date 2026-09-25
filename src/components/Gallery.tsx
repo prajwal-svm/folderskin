@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Skin } from "../lib/tauri";
 import { FolderThumb } from "./FolderThumb";
+import { useT } from "../i18n";
 
 export type Empty = { icon: ReactNode; title: string; text: string; action?: ReactNode };
 
@@ -35,6 +36,7 @@ export function Gallery({
   /** The skin whose menu is open. */
   menuFor: string | null;
 }) {
+  const t = useT();
   if (empty && !onAdd) {
     return (
       <div className="empty" key={animationKey}>
@@ -54,7 +56,7 @@ export function Gallery({
               <span className="tile-add-plus" aria-hidden="true">
                 +
               </span>
-              <span className="tile-add-label">Add a picture</span>
+              <span className="tile-add-label">{t("library.addPicture")}</span>
             </span>
             <span className="tile-name">
               <span className="tile-name-text">PNG, JPEG, WebP, HEIC</span>

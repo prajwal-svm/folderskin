@@ -3,6 +3,7 @@ import type { Skin } from "../lib/tauri";
 import { isYours } from "../lib/tags";
 import { reducesMotion } from "../state/prefs";
 import { StarIcon } from "./icons/star";
+import { useT } from "../i18n";
 
 /** Degrees the folder turns when the pointer is at the tile's edge. */
 const TURN_Y = 12;
@@ -47,6 +48,7 @@ export function FolderThumb({
   /** Its menu is open, so the ⋯ button stays in view. */
   menuOpen?: boolean;
 }) {
+  const t = useT();
   const art = useRef<HTMLSpanElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   // x and y run from -1 (left, top) to 1 (right, bottom); t* are where the pointer wants them.
@@ -123,7 +125,7 @@ export function FolderThumb({
         type="button"
         className="tile-hit"
         aria-pressed={selected}
-        aria-label={skin.source === "ai" ? `${skin.name} (made with AI)` : skin.custom ? `${skin.name} (yours)` : skin.name}
+        aria-label={skin.source === "ai" ? t("library.tile.madeWithAi", { name: skin.name }) : skin.custom ? t("library.tile.yours", { name: skin.name }) : skin.name}
         aria-keyshortcuts={onMenu ? "F2" : undefined}
         onMouseDown={(e) => e.preventDefault()}
         onPointerMove={track}
@@ -147,9 +149,9 @@ export function FolderThumb({
       <button
         type="button"
         className="tile-star"
-        aria-label={favorite ? `remove ${skin.name} from favourites` : `add ${skin.name} to favourites`}
+        aria-label={favorite ? t("library.tile.unfaveLabel", { name: skin.name }) : t("library.tile.faveLabel", { name: skin.name })}
         aria-pressed={favorite}
-        data-tip={favorite ? "Remove from favourites" : "Add to favourites"}
+        data-tip={favorite ? t("library.tile.unfave") : t("library.tile.fave")}
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           e.stopPropagation();
@@ -163,10 +165,10 @@ export function FolderThumb({
           type="button"
           ref={more}
           className="tile-more"
-          aria-label={`options for ${skin.name}`}
+          aria-label={t("library.tile.optionsLabel", { name: skin.name })}
           aria-haspopup="dialog"
           aria-expanded={menuOpen}
-          data-tip={isYours(skin) ? "Rename, tags and details" : "Tags and details"}
+          data-tip={isYours(skin) ? t("library.tile.optionsYours") : t("library.tile.options")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();

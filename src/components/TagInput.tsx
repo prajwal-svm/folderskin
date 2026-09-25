@@ -1,5 +1,6 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { cleanTags, MAX_TAG_CHARS, MAX_TAGS } from "../lib/tags";
+import { useT } from "../i18n";
 
 /**
  * Tags as chips with a field for more. Return or a comma adds what was typed, Backspace in the
@@ -20,6 +21,7 @@ export function TagInput({
   max?: number;
   label: string;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const full = value.length >= max;
@@ -48,7 +50,7 @@ export function TagInput({
             <button
               type="button"
               className="tag-chip-x"
-              aria-label={`remove the tag ${tag}`}
+              aria-label={t("common.tags.remove", { tag })}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onChange(value.filter((t) => t !== tag))}
             >
@@ -64,7 +66,7 @@ export function TagInput({
             className="tag-input-field"
             value={draft}
             aria-label={label}
-            placeholder={value.length ? "Add another" : "Add a tag"}
+            placeholder={value.length ? t("common.tags.addAnother") : t("common.tags.add")}
             maxLength={MAX_TAG_CHARS + 8}
             spellCheck={false}
             autoComplete="off"
@@ -75,7 +77,7 @@ export function TagInput({
         )}
       </div>
       {full ? (
-        <p className="field-note">{max} tags is the most.</p>
+        <p className="field-note">{t("common.tags.most", { count: max })}</p>
       ) : (
         offered.length > 0 && (
           <div className="tag-suggest">
