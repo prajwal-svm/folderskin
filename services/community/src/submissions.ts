@@ -12,11 +12,15 @@
  *
  * Every picture is checked by its bytes before it is stored: the hash the pack declared, the format
  * its name promises, its dimensions from its header and no animation. Nothing is decoded here.
+ *
+ * The four requests that send a pack are sharing requests: while the key or its network is banned
+ * or cooling down they are turned away, and a quota spent or the waiting cap is a strike on both
+ * (penalties.ts). Listing and withdrawing one's own packs never are.
  */
-import { anyone, requireAccount, verifySigned, type Account } from "./auth";
+import { anyone, verifySigned, type Account } from "./auth";
 import { dayOf, now, randomId, sha256Hex } from "./bytes";
 import type { Env } from "./env";
-import { fail, json, parseJson } from "./http";
+import { fail, HttpError, json, parseJson } from "./http";
 import { CONTENT_TYPES, formatOf, inspect, PictureError } from "./images";
 import { networkHash } from "./ip";
 import {
@@ -36,6 +40,7 @@ import {
 } from "./limits";
 import { makeLink } from "./links";
 import { alert, record } from "./notify";
+import { refused, requireSharer } from "./penalties";
 import { giveBack, globalDailyPictures, maxWaiting, queueFull, requireAccepting, takeAll } from "./quota";
 import { authorView, loadItems, loadSubmission, removeAll, SHA256, withdraw, type Submission } from "./store";
 import { hasHidden, isLicense, readManifest, textFlags, type Flag } from "./text";
@@ -69,7 +74,7 @@ function readItems(value: unknown, files: string[]): DeclaredItem[] {
 
 /** Opens a submission, once the pack, the quotas and the review queue all allow it. */
 export async function create(request: Request, env: Env): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireAccount(env, key));
+  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireSharer(env, request, key));
   const account = signed.signer;
   await requireAccepting(env);
   const body = parseJson(signed.body);
@@ -134,8 +139,9 @@ export async function create(request: Request, env: Env): Promise<Response> {
   if ((waiting?.n ?? 0) >= limits.waiting) {
     const packs = limits.waiting === 1 ? "a pack" : `${limits.waiting} packs`;
     const once = limits.waiting === 1 ? "it's" : "one has";
-    throw fail(429, "waiting", `You have ${packs} waiting for review already. Once ${once} been looked at, you can send another.`);
+    throw await refused(env, account, fail(429, "waiting", `You have ${packs} waiting for review already. Once ${once} been looked at, you can send another.`));
   }
+  // A full queue is the service's state rather than anything this computer did, so it's no strike.
   const queue = await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions WHERE status IN ('pending', 'flagged')").first<{ n: number }>();
   if ((queue?.n ?? 0) >= maxWaiting(env)) throw queueFull();
 
@@ -143,37 +149,58 @@ export async function create(request: Request, env: Env): Promise<Response> {
   const network = await networkHash(env, request, at);
   const pictures = items.length;
   const overToday = (what: string) => fail(429, "quota", `You've shared as ${what} as you can today. Please try again tomorrow.`);
-  await takeAll(
-    env,
-    [
-      { scope: "key:submissions", id: account.key, amount: 1, limit: limits.submissions, error: overToday("many packs") },
-      { scope: "key:pictures", id: account.key, amount: pictures, limit: limits.pictures, error: overToday("many pictures") },
-      {
-        scope: "net:submissions",
-        id: network,
-        amount: 1,
-        limit: PER_NETWORK.submissions,
-        error: fail(429, "quota", "Your network has sent as many packs as it can today. Please try again tomorrow."),
-      },
-      {
-        scope: "net:pictures",
-        id: network,
-        amount: pictures,
-        limit: PER_NETWORK.pictures,
-        error: fail(429, "quota", "Your network has sent as many pictures as it can today. Please try again tomorrow."),
-      },
-      { scope: "global", id: "pictures", amount: pictures, limit: globalDailyPictures(env), error: queueFull() },
-    ],
-    at,
-  );
+  try {
+    await takeAll(
+      env,
+      [
+        { scope: "key:submissions", id: account.key, amount: 1, limit: limits.submissions, error: overToday("many packs") },
+        { scope: "key:pictures", id: account.key, amount: pictures, limit: limits.pictures, error: overToday("many pictures") },
+        {
+          scope: "net:submissions",
+          id: network,
+          amount: 1,
+          limit: PER_NETWORK.submissions,
+          error: fail(429, "quota", "Your network has sent as many packs as it can today. Please try again tomorrow."),
+        },
+        {
+          scope: "net:pictures",
+          id: network,
+          amount: pictures,
+          limit: PER_NETWORK.pictures,
+          error: fail(429, "quota", "Your network has sent as many pictures as it can today. Please try again tomorrow."),
+        },
+        { scope: "global", id: "pictures", amount: pictures, limit: globalDailyPictures(env), error: queueFull() },
+      ],
+      at,
+    );
+  } catch (e) {
+    // A quota of this key's or its network's spent is a strike; the service's own daily cap isn't.
+    if (e instanceof HttpError && e.code === "quota") throw await refused(env, account, e, at);
+    throw e;
+  }
 
   const id = randomId("sub_", 12);
   const sheets = Math.ceil(pictures / PICTURES_PER_SHEET);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO submissions (id, key, status, name, license, source, terms_version, manifest, notes, items, sheets, ip_hash, fingerprint, created_at)
-       VALUES (?1, ?2, 'open', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
-    ).bind(id, account.key, manifest.name, body.license, body.source, TERMS_VERSION, JSON.stringify(manifest), notes, pictures, sheets, network, fingerprint, at),
+      `INSERT INTO submissions (id, key, status, name, license, source, terms_version, manifest, notes, items, sheets, ip_hash, network, fingerprint, created_at)
+       VALUES (?1, ?2, 'open', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
+    ).bind(
+      id,
+      account.key,
+      manifest.name,
+      body.license,
+      body.source,
+      TERMS_VERSION,
+      JSON.stringify(manifest),
+      notes,
+      pictures,
+      sheets,
+      network,
+      account.network,
+      fingerprint,
+      at,
+    ),
     ...items.map((i) =>
       env.DB.prepare("INSERT INTO items (submission, sha256, file, bytes, width, height) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(
         id,
@@ -226,7 +253,7 @@ async function ownOpen(env: Env, id: string, account: Account): Promise<Submissi
 
 /** Stores one picture of an open submission, once it is exactly the picture the pack declared. */
 export async function putItem(request: Request, env: Env, id: string, sha: string): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_PICTURE_BYTES, (key) => requireAccount(env, key));
+  const signed = await verifySigned(request, env, MAX_PICTURE_BYTES, (key) => requireSharer(env, request, key));
   await ownOpen(env, id, signed.signer);
   const item = await env.DB.prepare("SELECT file, bytes, width, height, received FROM items WHERE submission = ?1 AND sha256 = ?2")
     .bind(id, sha)
@@ -260,7 +287,7 @@ export async function putItem(request: Request, env: Env, id: string, sha: strin
 
 /** Stores contact sheet `n`: the pictures small, side by side, for the triage and for a review on a phone. */
 export async function putSheet(request: Request, env: Env, id: string, n: number): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_SHEET_BYTES, (key) => requireAccount(env, key));
+  const signed = await verifySigned(request, env, MAX_SHEET_BYTES, (key) => requireSharer(env, request, key));
   const s = await ownOpen(env, id, signed.signer);
   if (!Number.isInteger(n) || n < 0 || n >= s.sheets) throw fail(404, "not_found", "This pack doesn't have that many sheets.");
   let sheet;
@@ -289,7 +316,7 @@ export async function putSheet(request: Request, env: Env, id: string, n: number
  * once if anything urgent turned up.
  */
 export async function finalize(request: Request, env: Env, ctx: ExecutionContext, id: string): Promise<Response> {
-  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireAccount(env, key));
+  const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireSharer(env, request, key));
   const account = signed.signer;
   const s = await ownOpen(env, id, account);
   const missing = (await loadItems(env, id)).filter((i) => !i.received);

@@ -4,6 +4,9 @@
  * stored is an HMAC of that prefix under a key made fresh each day from IP_SALT. The same network
  * counts as one within a day; across days, and to anyone reading the database, the rows can't be
  * tied together or back to an address.
+ *
+ * Penalties are the one exception (penaltyNetwork): a network banned for 30 days has to be the
+ * same network all month, so their key doesn't change. They are kept only while they count.
  */
 import { dayOf, hex, hmac, now } from "./bytes";
 import type { Env } from "./env";
@@ -30,8 +33,22 @@ export function networkOf(ip: string): string {
  * matched with theirs even on the same day.
  */
 export async function networkHash(env: Env, request: Request, at = now(), purpose = "network"): Promise<string> {
+  return hashNetwork(env, request, `${purpose}|${dayOf(at)}`);
+}
+
+/**
+ * The hashed network of `request` as penalties know it (penalties.ts): the same prefix, under a key
+ * made from IP_SALT for penalties alone that stays the same from one day to the next, since a ban
+ * outlasts a day. A penalty's row is deleted once nothing in it counts any more, and a submission
+ * keeps its network until 30 days after its decision.
+ */
+export async function penaltyNetwork(env: Env, request: Request): Promise<string> {
+  return hashNetwork(env, request, "penalties");
+}
+
+async function hashNetwork(env: Env, request: Request, purpose: string): Promise<string> {
   if (!env.IP_SALT) throw fail(503, "not_configured", "FolderSkin's sharing service isn't set up yet. Please try again later.");
   const network = networkOf(request.headers.get("CF-Connecting-IP") ?? "");
-  const daily = await hmac(env.IP_SALT, `${purpose}|${dayOf(at)}`);
-  return hex(await hmac(daily, network)).slice(0, 32);
+  const key = await hmac(env.IP_SALT, purpose);
+  return hex(await hmac(key, network)).slice(0, 32);
 }
