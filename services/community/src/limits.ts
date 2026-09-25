@@ -57,8 +57,11 @@ export const PACK_VERSION = 1;
 export const MAX_SKINS = 50;
 /** The most bytes a picture can have, 1.5 MB. */
 export const MAX_PICTURE_BYTES = 1_572_864;
-/** The most a pack's pictures can come to together, 40 MB. */
-export const MAX_PACK_BYTES = 40 * 1024 * 1024;
+/**
+ * The most a pack's pictures can come to together, 64 MB: a full pack of 50 detailed pictures,
+ * saved losslessly, is about 1.2 MB a picture.
+ */
+export const MAX_PACK_BYTES = 64 * 1024 * 1024;
 export const MIN_PICTURE_SIDE = 256;
 export const MAX_PICTURE_SIDE = 1024;
 export const MAX_PACK_NAME_CHARS = 40;
