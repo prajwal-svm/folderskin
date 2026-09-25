@@ -48,9 +48,9 @@ function opening(yours: Skin[], only: Skin | undefined, tags: { tag: string; cou
  * single choice: sharing one skin and sharing twenty are the same dialog. Saving the pack as a
  * folder is here too, for anyone who wants it as files, and works whether or not the service does.
  *
- * Either way every picture becomes a lossless WebP first, a few seconds each, so the line under the
- * form counts them as they're ready; one too detailed for 1.5 MB at 1024 px is made smaller, and the
- * dialog that follows says which.
+ * Either way every picture becomes a lossless WebP first, a few seconds each, so the line beside the
+ * buttons counts them as they're ready; one too detailed for 1.5 MB at 1024 px is made smaller, and
+ * the dialog that follows says which.
  */
 export function SharePack({
   yours,
@@ -365,10 +365,19 @@ export function SharePack({
       onClose={onClose}
       footer={
         <>
-          {reason && !busy && (
-            <span className="modal-reason" data-tip={reason} data-tip-overflow>
-              {reason}
+          {/* While it's saved or sent, the line beside the buttons says how far it has got, where it
+              shows however far the form is scrolled: the pictures alone take a few seconds each. */}
+          {sending ? (
+            <span className="modal-reason" role="status">
+              {branded(shareProgressLabel(sending))}
             </span>
+          ) : (
+            reason &&
+            !busy && (
+              <span className="modal-reason" data-tip={reason} data-tip-overflow>
+                {reason}
+              </span>
+            )
           )}
           <button type="button" className="btn btn-ghost" disabled={Boolean(saveProblem) || busy} aria-busy={saving} onClick={() => void save()}>
             {saving && <LoaderIcon />}
@@ -604,12 +613,6 @@ export function SharePack({
         </label>
       </div>
 
-      {sending && (
-        <p className="share-waiting" role="status">
-          <LoaderIcon />
-          {branded(shareProgressLabel(sending))}
-        </p>
-      )}
       {error && !busy && <p className="field-note is-error">{error}</p>}
     </Modal>
   );
