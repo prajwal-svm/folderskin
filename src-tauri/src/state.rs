@@ -4,7 +4,7 @@
 
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinSource, Store, THUMB_SIZE};
 use folderskin_core::compositor::Style;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
@@ -357,6 +357,25 @@ impl AppState {
         Ok(ids)
     }
 
+    /// Moves the community skins of every pack `moved` names, saved or kept for this session,
+    /// from the pack's old id to the one it has now ([`Store::move_packs`]), and says how many
+    /// moved. The skins themselves, their ids and the version each pack was added at stay as
+    /// they were, so the pack is the same pack under its new id: added, and with any update it
+    /// had.
+    pub fn follow_moved(&self, moved: &BTreeMap<String, String>) -> Result<usize, String> {
+        let mut count = 0;
+        for unsaved in lock(&self.0.unsaved).values_mut() {
+            if let Some(now) = store::moved_to(&unsaved.entry, moved) {
+                unsaved.entry.pack = Some(now);
+                count += 1;
+            }
+        }
+        match self.store() {
+            Some(store) => Ok(count + store.move_packs(moved)?),
+            None => Ok(count),
+        }
+    }
+
     /// The community packs with at least one skin saved, each with the pack hash recorded when
     /// it was added (`None` for one added before FolderSkin kept one).
     pub fn installed_packs(&self) -> HashMap<String, Option<String>> {
@@ -574,6 +593,38 @@ mod tests {
         assert_eq!(ready.into_inner(), 2);
         assert_eq!(state.saved_skins().len(), 2);
         assert!(state.resolve(&ids[1]).is_ok());
+    }
+
+    #[test]
+    fn a_pack_that_moved_is_listed_by_its_new_id_saved_or_kept_for_the_session() {
+        let dir =
+            std::env::temp_dir().join(format!("folderskin-state-moved-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let state = AppState::default();
+        state.open_store(dir.clone());
+        let (saved, kept) = (skin_id(b"moved saved"), skin_id(b"moved kept"));
+        state
+            .save_many(vec![(pack_skin(&saved), folder(3))], &|| {})
+            .unwrap();
+        // One that couldn't be written, kept for the session.
+        state.keep_unsaved(pack_skin(&kept), folder(4));
+        assert_eq!(
+            state.installed_packs().keys().collect::<Vec<_>>(),
+            ["test-pack"]
+        );
+
+        let moved = BTreeMap::from([("test-pack".to_string(), "test-pack-k7q2mx".to_string())]);
+        assert_eq!(state.follow_moved(&moved).unwrap(), 2);
+        assert_eq!(
+            state.installed_packs().keys().collect::<Vec<_>>(),
+            ["test-pack-k7q2mx"]
+        );
+        assert_eq!(state.follow_moved(&moved).unwrap(), 0, "moved once");
+        assert!(state
+            .saved_skins()
+            .iter()
+            .all(|(entry, _)| entry.pack.as_deref() == Some("test-pack-k7q2mx")));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn design_skin(id: &str, name: &str) -> NewSkin {

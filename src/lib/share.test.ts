@@ -24,6 +24,12 @@ describe("the dialog's words", () => {
     expect(shareProgressLabel({ stage: "finishing" })).toBe("Putting it in the review queue");
   });
 
+  it("say when a request is tried again, and how soon", () => {
+    expect(shareProgressLabel({ stage: "waiting", seconds: 60 })).toBe("Trying again in 60 seconds");
+    expect(shareProgressLabel({ stage: "waiting", seconds: 1 })).toBe("Trying again");
+    expect(shareProgressLabel({ stage: "waiting", seconds: 0 })).toBe("Trying again");
+  });
+
   it("say where each submission is, and which can still be taken back", () => {
     expect(statusLabel("in_review")).toEqual({ label: "Waiting for review", tone: "accent" });
     expect(statusLabel("rejected").tone).toBe("danger");

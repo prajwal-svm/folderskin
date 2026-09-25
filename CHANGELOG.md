@@ -6,6 +6,15 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Sending a pack tries again by itself.** When the connection drops or FolderSkin's sharing
+  service is busy while a pack is on its way, the share dialog waits a moment and sends again, up
+  to five times, waiting a little longer each time and never less than the service asks. When the
+  service says to leave it for longer, because too many requests from your computer were turned
+  down or sharing is paused, the dialog shows what the service said and doesn't try again on its
+  own.
+
 ### Changed
 
 - **FolderSkin is now GPL-3.0.** From this release on, the code is licensed under the GNU General
@@ -13,6 +22,26 @@ All notable changes to FolderSkin are recorded here. The format follows
   changed version someone shares has to come with its source, under the same licence. Releases up
   to 0.1.6 came out under MIT and keep it. The FolderSkin name and logo aren't covered by either;
   [TRADEMARKS.md](TRADEMARKS.md) says how to use them. Skins keep their own licences.
+- **Packs are shared through FolderSkin.** The share dialog sends every pack to FolderSkin's review
+  queue: verify your computer once in the browser, with no account anywhere, and a person looks at
+  the pack before it joins Community. With one way in, every pack gets the same checks and the
+  same review, whether or not you have a GitHub account. **Save a folder** is still there for
+  anyone who wants the pack as files.
+- **Packs can share a name.** Every pack now has an id of its own, made from its name and six
+  random characters, such as `classic-art-k7q2mx`, so two packs can both be called Classic Art.
+  A pack saved as a folder gets one too.
+- **Packs download faster.** The list of packs and their pictures now come from
+  packs.folderskin.app, served from close to where you are, with the packs repository on GitHub
+  as the fallback. Every file is still checked before it's used, wherever it came from.
+- **Packs you added keep updating when their ids change.** A pack added under the id it had
+  before still shows as added and still gets its updates under its new id, and an Install link
+  with the old id still finds it. The first launch still starts with Classic Art picked.
+
+### Removed
+
+- **Sharing through GitHub.** The share dialog no longer signs in to GitHub, forks
+  folderskin-community or opens a pull request, and Settings → Sharing no longer has a GitHub
+  section. A GitHub sign-in an earlier version kept is forgotten.
 
 ## 0.1.6 — 2026-09-25
 

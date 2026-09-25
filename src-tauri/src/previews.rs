@@ -12,7 +12,7 @@
 //! `http://fscommunity.localhost/<path>` on Windows, which is why [`url`] builds both and the
 //! Content-Security-Policy in tauri.conf.json allows both.
 
-use crate::catalog::{Community, Source};
+use crate::catalog::{Community, Origin, Source};
 use crate::community::Fetch;
 use folderskin_catalog::tree::{self, PublishedPack};
 use folderskin_catalog::PackRow;
@@ -129,7 +129,7 @@ pub fn handle<R: Runtime>(
         let community = app.state::<Community>();
         community.init_cache(&app);
         let answer = match Asked::parse(&path) {
-            Some(asked) => serve(&community, &crate::community::base_url(), asked).await,
+            Some(asked) => serve(&community, &crate::community::origin(), asked).await,
             None => Err(StatusCode::BAD_REQUEST),
         };
         let response = match answer {
@@ -163,14 +163,18 @@ pub struct Picture {
 }
 
 /// The picture `asked` names, from the disk cache or downloaded into it.
-pub async fn serve(community: &Community, base: &str, asked: Asked) -> Result<Picture, StatusCode> {
+pub async fn serve(
+    community: &Community,
+    origin: &Origin,
+    asked: Asked,
+) -> Result<Picture, StatusCode> {
     let files = community.files();
     let key = asked.key();
     if let Some(bytes) = cached(files, key.as_deref()).await {
         return picture(bytes, true);
     }
     let source = community
-        .current(base)
+        .current(origin)
         .await
         .map_err(|_| StatusCode::BAD_GATEWAY)?;
     if !source.is_tree() {

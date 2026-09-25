@@ -8,7 +8,6 @@ pub mod community;
 pub mod composer;
 pub mod deep_link;
 pub mod folder_icon;
-pub mod github;
 pub mod icons;
 pub mod installs;
 pub mod look;
@@ -88,7 +87,6 @@ pub fn run() {
         // The AI runs that can be stopped, and this computer as the local models see it.
         .manage(ai::jobs::Jobs::default())
         .manage(ai::local::Local::default())
-        .manage(github::Pending::default())
         .manage(chats::Chats::default())
         .manage(catalog::Community::default())
         // Community strips and thumbnails, fetched as the cards that show them scroll in.
@@ -111,12 +109,6 @@ pub fn run() {
             community::community_remove,
             community::import_pack,
             community::export_pack,
-            github::github_connect,
-            github::github_wait,
-            github::github_cancel,
-            github::github_account,
-            github::github_sign_out,
-            github::publish_pack,
             composer::composer_template,
             composer::composer_save,
             composer::composer_preview,
@@ -158,7 +150,6 @@ pub fn run() {
             community::community_installed,
             community::community_pack,
             deep_link::install_link_take,
-            share::share_offered,
             share::share_status,
             share::share_verify,
             share::share_wait,
@@ -189,7 +180,11 @@ pub fn run() {
             }
             // API keys live here, encrypted, not in the keychain (see keys.rs).
             match app.path().app_config_dir() {
-                Ok(dir) => app.state::<keys::Keys>().open(&dir),
+                Ok(dir) => {
+                    let keys = app.state::<keys::Keys>();
+                    keys.open(&dir);
+                    share::forget_github_sign_in(&keys);
+                }
                 Err(e) => {
                     eprintln!("folderskin: no app config folder ({e}); keys last until you quit")
                 }

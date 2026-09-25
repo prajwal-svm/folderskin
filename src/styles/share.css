@@ -1,24 +1,4 @@
-/* ---------- sharing a pack without GitHub (SharePack, ShareVerify, MySubmissions) ---------- */
-
-/* "Author" with the choice of how to share beside it: the choice is who the pack is credited to,
-   so it sits on the field it changes rather than above the whole form. */
-.share-author-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-}
-
-.share-route .seg-btn.is-active {
-  background: var(--island);
-  box-shadow: 0 0 0 1px var(--island-line);
-}
-
-.share-route .seg-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
+/* ---------- sharing a pack (SharePack, ShareVerify, MySubmissions) ---------- */
 
 /* Why it can't be used right now, where the name would go. */
 .share-unavailable {

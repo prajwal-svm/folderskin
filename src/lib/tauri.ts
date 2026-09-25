@@ -28,7 +28,7 @@ export type Skin = {
   made_with?: string | null;
   /** AI results: the description it was made from. */
   idea?: string | null;
-  /** Community skins: the pack's name, its author's GitHub name and its licence. */
+  /** Community skins: the pack's name, who it's credited to and its licence. */
   pack_name?: string | null;
   author?: string | null;
   license?: string | null;
@@ -38,7 +38,7 @@ export type Skin = {
 export type CommunityPack = {
   id: string;
   name: string;
-  /** The author's GitHub user name. */
+  /** The name the pack is credited to. */
   author: string;
   license: string;
   tags: string[];
@@ -94,26 +94,13 @@ export type CommunitySearch = {
   generation: string;
 };
 
-/** Who is signed in to GitHub. */
-export type GithubAccount = { login: string; name: string | null; avatar_url: string };
-
-/** What someone types into github.com/login/device to let FolderSkin act for them. */
-export type DeviceCode = { user_code: string; verification_uri: string; expires_in: number };
-
-/** How far publishing has got. */
-export type PublishProgress =
-  | { stage: "checking" }
-  | { stage: "forking" }
-  | { stage: "branching" }
-  | { stage: "uploading"; done: number; total: number }
-  | { stage: "opening" };
-
-/** The pull request that was opened. */
-export type Published = { url: string; number: number; forked: boolean };
-
-/** A pack on its way to GitHub. The author isn't here: whoever is signed in is who it is
- *  credited to, which GitHub tells us and nobody can mistype. */
-export type PackToPublish = { name: string; license: string; tags: string[]; skinIds: string[]; notes: string; termsVersion: number };
+/** What the first launch offers: its packs, and where any old id moved among them. */
+export type FirstPacks = {
+  packs: CommunityPack[];
+  /** Each old id that now leads to one of `packs`, to the id it leads to: packs can move to a new
+   *  id, and the onboarding picks one by the id it had first. */
+  moved: Record<string, string>;
+};
 
 /** How far adding a pack has got: pictures downloaded, then pictures saved. */
 export type PackProgress = { stage: "download" | "save"; done: number; total: number };
@@ -126,7 +113,7 @@ export type PackUpdate = {
   skins: Skin[];
 };
 
-/** What "Save as a pack" writes: some of the user's own skins, as a folder ready for GitHub. */
+/** What "Save a folder" writes: some of the user's own skins, as a pack folder anyone can add from. */
 export type ExportPackRequest = {
   folder: string;
   name: string;
@@ -266,7 +253,7 @@ export type ComposerSaved = { skin: Skin; replaced: string | null };
 export type IconPackProgress = { done: number; total: number };
 export type InstalledIconPack = { id: string; sha256: string; bytes: number };
 
-/** Whether sharing without GitHub can be used here, and who this computer is to the service. */
+/** Whether sharing can be used here, and who this computer is to the service. */
 export type ShareStatus = {
   /** False when this build has no service, it can't be reached, it's paused, or this computer can't share. */
   available: boolean;
@@ -279,7 +266,7 @@ export type ShareStatus = {
   has_key: boolean;
 };
 
-/** A pack on its way to the review queue. Like {@link PackToPublish}, the author isn't here: it's the verified handle. */
+/** A pack on its way to the review queue. The author isn't here: it's the name this computer was verified under. */
 export type PackToShare = {
   name: string;
   license: string;
@@ -291,12 +278,14 @@ export type PackToShare = {
   termsVersion: number;
 };
 
-/** How far sending a pack for review has got. */
+/** How far sending a pack for review has got. `waiting` is a pause before a request that failed in
+ *  a way that may pass is tried again; the stage it was part of comes again after it. */
 export type ShareProgress =
   | { stage: "preparing" }
   | { stage: "checking" }
   | { stage: "uploading"; done: number; total: number }
-  | { stage: "finishing" };
+  | { stage: "finishing" }
+  | { stage: "waiting"; seconds: number };
 
 /** A pack in the review queue. */
 export type SharedPack = { submission_id: string; name: string; pictures: number };
@@ -327,17 +316,6 @@ const tauriApi = {
   folderLook: () => invoke<FolderStyle>("folder_look"),
   setFolderLook: (look: FolderStyle) => invoke<void>("set_folder_look", { look }),
 
-  // ---- publishing a pack to GitHub ----
-  /** Who is signed in, or null. A sign-in GitHub no longer accepts counts as none. */
-  githubAccount: () => invoke<GithubAccount | null>("github_account"),
-  /** Asks for a code to show. `githubWait` then resolves when it has been approved. */
-  githubConnect: () => invoke<DeviceCode>("github_connect"),
-  githubWait: () => invoke<GithubAccount>("github_wait"),
-  githubCancel: () => invoke<void>("github_cancel"),
-  githubSignOut: () => invoke<void>("github_sign_out"),
-  /** Opens a pull request that adds the pack to the community repository. */
-  publishPack: (pack: PackToPublish, onProgress: (p: PublishProgress) => void) =>
-    invoke<Published>("publish_pack", { pack, onProgress: new Channel<PublishProgress>(onProgress) }),
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
   importImage: (path: string) => invoke<Skin>("import_image", { path }),
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),
@@ -367,9 +345,9 @@ const tauriApi = {
   editSkin: (skinId: string, name: string, tags: string[]) =>
     invoke<{ name: string; tags: string[] }>("edit_skin", { skinId, name, tags }),
 
-  // ---- community packs (from the repository on GitHub) ----
+  // ---- community packs (from packs.folderskin.app, or the repository on GitHub) ----
   /** The packs the first launch offers: the featured ones, or the first few. `fresh` skips every cache. */
-  communityPacks: (fresh = false) => invoke<CommunityPack[]>("community_packs", { fresh }),
+  communityPacks: (fresh = false) => invoke<FirstPacks>("community_packs", { fresh }),
   /** One page of the packs matching a search, searched on this computer once the catalog is in. */
   communitySearch: (query: CommunityQuery) => invoke<CommunitySearch>("community_search", { ...query }),
   /** Asks for the packs again past every cache; resolves to how many of the library's packs have an update. */
@@ -377,8 +355,9 @@ const tauriApi = {
   /** The packs in the library now, by id, with the version each was added at (null when it
    *  was added before FolderSkin kept one). Nothing is downloaded. */
   communityInstalled: () => invoke<Record<string, string | null>>("community_installed"),
-  /** One pack by its id, as the list shows it; null when no pack has that id. A pack the list
-   *  doesn't have is looked for again past every cache, in case it was published since. */
+  /** One pack by its id, or an id it had before it moved, as the list shows it; null when no pack
+   *  has or had that id. A pack the list doesn't have is looked for again past every cache, in
+   *  case it was published since. */
   communityPack: (packId: string) => invoke<CommunityPack | null>("community_pack", { packId }),
   /** The pack a folderskin://install link asked for, once; null when none is waiting. */
   takeInstallLink: () => invoke<string | null>("install_link_take"),
@@ -396,7 +375,7 @@ const tauriApi = {
   removePack: (packId: string) => invoke<string[]>("community_remove", { packId }),
   /** Adds a pack from a folder on this computer. */
   importPack: (path: string) => invoke<Skin[]>("import_pack", { path }),
-  /** Writes skins as a pack folder inside `folder`; resolves to the folder it made. */
+  /** Writes skins as a pack folder inside `folder`, named after a new id; resolves to the folder it made. */
   exportPack: (req: ExportPackRequest) => invoke<string>("export_pack", { ...req }),
   // ---- first launch ----
   /** True until the first-launch onboarding has been finished on this computer. */
@@ -461,10 +440,9 @@ const tauriApi = {
   /** The document of a saved design, to edit it again; null for a skin that wasn't made in the composer. */
   composerDesign: (skinId: string) => invoke<unknown>("composer_design", { skinId }),
 
-  // ---- sharing a pack without GitHub (src-tauri/src/share.rs) ----
-  /** Whether this build has a sharing service at all; asks nothing over the network. */
-  shareOffered: () => invoke<boolean>("share_offered"),
-  /** Whether it can be used here, and who this computer is to the service. */
+  // ---- sharing a pack (src-tauri/src/share.rs) ----
+  /** Whether it can be used here, and who this computer is to the service. A build with no
+   *  service says so without asking anything over the network. */
   shareStatus: () => invoke<ShareStatus>("share_status"),
   /** The signed page that verifies this computer under `handle`, to open in the browser. */
   shareVerify: (handle: string) => invoke<string>("share_verify", { handle }),
@@ -475,7 +453,8 @@ const tauriApi = {
   shareSaveKey: (path: string) => invoke<void>("share_save_key", { path }),
   /** Takes the key in a recovery file as this computer's. */
   shareLoadKey: (path: string) => invoke<ShareStatus>("share_load_key", { path }),
-  /** Sends a pack to the review queue. */
+  /** Sends a pack to the review queue, trying a request again after a pause while it fails in a
+   *  way that may pass; a cooldown or a ban ends it with the service's own sentence. */
   shareSubmit: (pack: PackToShare, onProgress: (p: ShareProgress) => void) =>
     invoke<SharedPack>("share_submit", { pack, onProgress: new Channel<ShareProgress>(onProgress) }),
   /** This computer's packs, newest first. */

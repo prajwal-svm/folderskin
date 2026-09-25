@@ -32,7 +32,7 @@ use folderskin_core::pack;
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -105,8 +105,8 @@ pub struct SavedSkin {
     /// Community skins only: the id of the pack it came from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack: Option<String>,
-    /// Community skins only: the pack's name, its author's GitHub name and its licence, kept so
-    /// the skin can always be credited.
+    /// Community skins only: the pack's name, its author and its licence, kept so the skin can
+    /// always be credited.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -817,6 +817,32 @@ impl Store {
         Ok(index[pos].clone())
     }
 
+    /// Moves the community skins of every pack `moved` names from its old id to the id it has
+    /// now, all in one write of the index, and says how many moved. Nothing is written when none
+    /// did, and a failed write leaves every one as it was.
+    pub fn move_packs(&self, moved: &BTreeMap<String, String>) -> Result<usize, String> {
+        let mut index = self.lock();
+        let moving: Vec<(usize, String)> = index
+            .iter()
+            .enumerate()
+            .filter_map(|(i, entry)| moved_to(entry, moved).map(|now| (i, now)))
+            .collect();
+        if moving.is_empty() {
+            return Ok(0);
+        }
+        let was: Vec<Option<String>> = moving
+            .iter()
+            .map(|(i, now)| index[*i].pack.replace(now.clone()))
+            .collect();
+        if let Err(e) = self.write_index(&index) {
+            for ((i, _), pack) in moving.iter().zip(was) {
+                index[*i].pack = pack;
+            }
+            return Err(format!("couldn't save the packs' new ids: {e}"));
+        }
+        Ok(moving.len())
+    }
+
     /// Deletes a skin's picture, its design and every thumbnail it has had. Leftovers are only
     /// logged: the index no longer names them, so they cannot come back.
     fn remove_files(&self, stem: &str) {
@@ -850,6 +876,13 @@ impl Store {
         std::fs::create_dir_all(&self.dir)?;
         write_atomic(&self.dir.join(INDEX_FILE), &text)
     }
+}
+
+/// The id `entry`'s pack has now, when it is a community skin whose pack `moved` says moved.
+pub fn moved_to(entry: &SavedSkin, moved: &BTreeMap<String, String>) -> Option<String> {
+    let pack = entry.pack.as_deref()?;
+    let now = moved.get(pack)?;
+    (entry.source == SkinSource::Community && now != pack).then(|| now.clone())
 }
 
 /// Reads the index in `dir`, and says whether it was read whole. Entries that are damaged,
@@ -1158,6 +1191,49 @@ mod tests {
             (decoded.width(), decoded.height()),
             (THUMB_SIZE, THUMB_SIZE)
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn community_skins_follow_their_pack_to_its_new_id_once_and_for_good() {
+        let dir = temp_dir("moved");
+        let store = Store::open(dir.clone());
+        let skin = |bytes: &[u8], pack: &str, source: SkinSource| {
+            let mut new = new_skin(&skin_id(bytes), "Skin", source);
+            new.pack = Some(pack.into());
+            new.pack_hash = Some("0123456789abcdef".into());
+            store.add(new, &folder()).unwrap().0
+        };
+        let a = skin(b"a", "classic-art", SkinSource::Community);
+        let b = skin(b"b", "classic-art", SkinSource::Community);
+        let c = skin(b"c", "colours", SkinSource::Community);
+        // Only a community skin belongs to a community pack, whatever else carries the id.
+        let d = skin(b"d", "classic-art", SkinSource::Import);
+
+        let moved = BTreeMap::from([
+            ("classic-art".to_string(), "classic-art-k7q2mx".to_string()),
+            ("greek-art".to_string(), "greek-art-a2b3c4".to_string()),
+        ]);
+        assert_eq!(store.move_packs(&moved).unwrap(), 2);
+
+        let reopened = Store::open(dir.clone());
+        let pack = |entry: &SavedSkin| reopened.get(&entry.id).unwrap().pack.unwrap();
+        assert_eq!(pack(&a), "classic-art-k7q2mx");
+        assert_eq!(pack(&b), "classic-art-k7q2mx");
+        assert_eq!(pack(&c), "colours");
+        assert_eq!(pack(&d), "classic-art");
+        // The same skins, added at the same version, under the new id.
+        let moved_a = reopened.get(&a.id).unwrap();
+        assert_eq!(moved_a.pack_hash.as_deref(), Some("0123456789abcdef"));
+        assert_eq!(
+            (moved_a.created_at, moved_a.name.as_str()),
+            (a.created_at, "Skin")
+        );
+
+        // With nothing left under an old id, nothing moves and nothing is written.
+        std::fs::remove_file(dir.join(INDEX_FILE)).unwrap();
+        assert_eq!(store.move_packs(&moved).unwrap(), 0);
+        assert!(!dir.join(INDEX_FILE).exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

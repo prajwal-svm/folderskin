@@ -1,5 +1,5 @@
 /**
- * Sharing a pack without GitHub: the words and rules the share dialog uses for it. The Rust side is
+ * Sharing a pack: the words and rules the share dialog uses for it. The Rust side is
  * src-tauri/src/share.rs, and the service it talks to is services/community.
  */
 import type { MySubmission, ShareProgress } from "./tauri";
@@ -44,6 +44,8 @@ export function shareProgressLabel(p: ShareProgress): string {
       return `Sending pictures (${Math.min(p.done + 1, p.total)} of ${p.total})`;
     case "finishing":
       return "Putting it in the review queue";
+    case "waiting":
+      return p.seconds > 1 ? `Trying again in ${p.seconds} seconds` : "Trying again";
   }
 }
 

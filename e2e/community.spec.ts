@@ -200,7 +200,7 @@ test("without a connection it says so, and can try again", async ({ page }) => {
   await openApp(page, { query: "offline" });
   await openView(page, /community/i);
   await expect(page.getByText("The packs didn't load")).toBeVisible();
-  await expect(page.getByText(/couldn't reach GitHub/i)).toBeVisible();
+  await expect(page.getByText(/couldn't reach packs\.folderskin\.app/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
 

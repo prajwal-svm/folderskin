@@ -152,13 +152,8 @@ test.describe("tooltips", () => {
 
     await page.getByRole("button", { name: "Share your skins" }).click();
     const share = page.getByRole("dialog", { name: "Share a pack" });
-    await share.getByRole("radio", { name: "GitHub", exact: true }).click();
-    await share.getByRole("button", { name: "Connect to GitHub" }).click();
-    await expect(share.getByText("octocat")).toBeVisible({ timeout: 10_000 });
-    expect(await titled(), "native tooltips in the share dialog").toEqual([]);
-    await share.getByRole("radio", { name: "Without GitHub" }).click();
     await expect(share.getByText("Verified on this computer")).toBeVisible();
-    expect(await titled(), "native tooltips sharing without GitHub").toEqual([]);
+    expect(await titled(), "native tooltips in the share dialog").toEqual([]);
     await share.getByRole("button", { name: "Your submissions" }).click();
     await expect(page.getByRole("dialog", { name: "Your submissions" }).getByRole("listitem").first()).toBeVisible();
     expect(await titled(), "native tooltips in Your submissions").toEqual([]);

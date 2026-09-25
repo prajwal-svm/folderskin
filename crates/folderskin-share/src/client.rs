@@ -31,6 +31,9 @@ pub enum Error {
         status: u16,
         code: String,
         message: String,
+        /// How long the service asked to be left before the next try: its `Retry-After`, or the
+        /// `retry_after` its answer carries, whichever is longer. `None` when it said neither.
+        retry_after: Option<Duration>,
     },
     /// It answered something this version can't read.
     Unreadable,
@@ -43,6 +46,22 @@ impl Error {
     pub fn code(&self) -> Option<&str> {
         match self {
             Error::Service { code, .. } => Some(code),
+            _ => None,
+        }
+    }
+
+    /// The HTTP status the service answered with, when it answered.
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            Error::Service { status, .. } => Some(*status),
+            _ => None,
+        }
+    }
+
+    /// How long the service asked to be left before the next try, when it said.
+    pub fn retry_after(&self) -> Option<Duration> {
+        match self {
+            Error::Service { retry_after, .. } => *retry_after,
             _ => None,
         }
     }
@@ -197,6 +216,7 @@ impl Client {
                 status: 400,
                 code: "bad_handle".into(),
                 message: "A name is 3 to 39 letters, digits and single dashes, not starting or ending with a dash.".into(),
+                retry_after: None,
             });
         }
         let mut nonce = [0u8; 16];
@@ -249,6 +269,11 @@ impl Client {
                 .get(sign::SERVER_TIME_HEADER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse::<i64>().ok());
+            let retry_after = response
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .and_then(seconds_header);
             let mut answer = Vec::new();
             while let Some(chunk) = response.chunk().await.map_err(|_| Error::Offline)? {
                 answer.extend_from_slice(&chunk);
@@ -259,7 +284,7 @@ impl Client {
             if status.is_success() {
                 return Ok(answer);
             }
-            let error = service_error(status.as_u16(), &answer);
+            let error = service_error(status.as_u16(), &answer, retry_after);
             // Set the clock by the service's and sign once more.
             if error.code() == Some("clock") && signed && !retried_clock {
                 if let Some(theirs) = server_time {
@@ -456,22 +481,42 @@ impl Client {
     }
 }
 
-/// The error in a failed answer: the service's own sentence when it sent one.
-fn service_error(status: u16, body: &[u8]) -> Error {
+/// The error in a failed answer: the service's own sentence when it sent one. `header` is how
+/// long its `Retry-After` asked to be left; the answer may say so too, and the longer wins.
+fn service_error(status: u16, body: &[u8], header: Option<Duration>) -> Error {
     match serde_json::from_slice::<api::ErrorBody>(body) {
-        Ok(body) => Error::Service {
-            status,
-            code: body.error.code,
-            message: body.error.message,
-        },
+        Ok(body) => {
+            let said = [body.error.retry_after, body.retry_after]
+                .into_iter()
+                .flatten()
+                .filter_map(seconds);
+            Error::Service {
+                status,
+                code: body.error.code,
+                message: body.error.message,
+                retry_after: header.into_iter().chain(said).max(),
+            }
+        }
         Err(_) => Error::Service {
             status,
             code: "http".into(),
             message: format!(
                 "FolderSkin's sharing service answered {status}. Please try again in a while."
             ),
+            retry_after: header,
         },
     }
+}
+
+/// A `Retry-After` of whole seconds. The service never sends the other kind, a date, so one is
+/// passed over rather than read.
+fn seconds_header(value: &str) -> Option<Duration> {
+    value.trim().parse::<u64>().ok().map(Duration::from_secs)
+}
+
+/// A number of seconds from an answer, rounded up; `None` for one that isn't a time to wait.
+fn seconds(value: f64) -> Option<Duration> {
+    (value.is_finite() && value >= 0.0).then(|| Duration::from_secs(value.ceil() as u64))
 }
 
 fn base64_url(bytes: &[u8]) -> String {
@@ -662,6 +707,61 @@ mod tests {
             error.to_string(),
             "FolderSkin's sharing service answered 502. Please try again in a while."
         );
+    }
+
+    #[test]
+    fn how_long_to_wait_comes_from_the_header_or_the_answer_and_the_longer_wins() {
+        let (base, _seen) = serve(vec![
+            (
+                429,
+                vec![("Retry-After", "60".into())],
+                r#"{"error": {"code": "slow_down", "message": "Too many requests from your network. Wait a minute and try again."}}"#.into(),
+            ),
+            (
+                429,
+                vec![("Retry-After", "7200".into())],
+                r#"{"error": {"code": "cooling_down", "message": "You can share again in 2 hours.", "retry_after": 7190}}"#.into(),
+            ),
+            (
+                403,
+                vec![],
+                r#"{"error": {"code": "banned", "message": "This computer can't share packs for 30 days."}, "retry_after": 2591999.5}"#.into(),
+            ),
+            (503, vec![("Retry-After", "3600".into())], "<html>busy</html>".into()),
+            (
+                500,
+                vec![("Retry-After", "Wed, 21 Oct 2026 07:28:00 GMT".into())],
+                r#"{"error": {"code": "internal", "message": "Something went wrong."}}"#.into(),
+            ),
+        ]);
+        let client = Client::new(&base, DeviceKey::generate().unwrap()).unwrap();
+        let next = || run(client.submissions()).unwrap_err();
+
+        let slow = next();
+        assert_eq!((slow.status(), slow.code()), (Some(429), Some("slow_down")));
+        assert_eq!(slow.retry_after(), Some(Duration::from_secs(60)));
+
+        let cooling = next();
+        assert_eq!(cooling.code(), Some("cooling_down"));
+        assert_eq!(cooling.to_string(), "You can share again in 2 hours.");
+        assert_eq!(cooling.retry_after(), Some(Duration::from_secs(7200)));
+
+        // Beside the error rather than in it, and not a whole number: rounded up.
+        let banned = next();
+        assert_eq!(
+            (banned.status(), banned.code()),
+            (Some(403), Some("banned"))
+        );
+        assert_eq!(banned.retry_after(), Some(Duration::from_secs(2_592_000)));
+
+        let busy = next();
+        assert_eq!((busy.status(), busy.code()), (Some(503), Some("http")));
+        assert_eq!(busy.retry_after(), Some(Duration::from_secs(3600)));
+
+        // A date isn't read as a time to wait.
+        assert_eq!(next().retry_after(), None);
+        assert_eq!(Error::Offline.retry_after(), None);
+        assert_eq!(Error::Offline.status(), None);
     }
 
     #[test]

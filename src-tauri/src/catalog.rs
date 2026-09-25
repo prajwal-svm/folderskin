@@ -1,17 +1,21 @@
 //! The community catalog as the app holds it: which one is current, where its files come from,
 //! and searching it.
 //!
-//! The first search fetches `v2/head.json` from the community folder. It names the current
-//! catalog, which is downloaded once, checked against its SHA-256 and kept in the app's cache
-//! folder under its generation; every search after that is answered on this computer, in a few
-//! milliseconds, with no request at all. Until a tree is published (there is no head.json), the
-//! catalog is made in memory from `index.json`, as the app read it before, so nothing regresses.
-//! When the packs published now can't be had (no connection, the host answering with an error,
-//! a catalog that doesn't arrive), the catalog from the last visit stands in and says why, and
-//! the first request a minute later asks again.
+//! The first search fetches `v2/head.json`: from packs.folderskin.app, where the published tree
+//! is copied as it is published, and from the packs repository on GitHub when that doesn't answer
+//! with one ([`Origin`]). It names the current catalog, which is downloaded once, checked against
+//! its SHA-256 and kept in the app's cache folder under its generation; every search after that
+//! is answered on this computer, in a few milliseconds, with no request at all. Until a tree is
+//! published (the repository has no head.json), the catalog is made in memory from `index.json`,
+//! as the app read it before, so nothing regresses. When the packs published now can't be had
+//! (no connection, the host answering with an error, a catalog that doesn't arrive), the catalog
+//! from the last visit stands in and says why, and the first request a minute later asks again.
 //!
 //! head.json, or index.json standing in for it, is the one file fetched past the caches, and
 //! only for Refresh: everything else is named after its contents.
+//!
+//! head.json also says which packs moved to a new id (`moved`): [`Source::current_id`] follows an
+//! old id to the pack, and the library's records follow once too (community.rs).
 
 use crate::community::{fetch, host, uncached, Fetch};
 use crate::previews::{DiskCache, CACHE_BYTES};
@@ -19,9 +23,9 @@ use folderskin_catalog::tree::{self, Head};
 use folderskin_catalog::{build, Catalog, PackRecord, PackRow, Query, Results};
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::pack::{self, Index};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime};
@@ -35,6 +39,35 @@ pub const MAX_INDEX_BYTES: usize = 4 * 1024 * 1024;
 pub const RETRY_LAST_VISIT: Duration = Duration::from_secs(60);
 /// The most the strips of a list made from index.json may take in memory.
 const SESSION_STRIP_BYTES: usize = 32 * 1024 * 1024;
+
+/// Where the community packs are published, in the order head.json is asked for: copies of the
+/// published tree first, then the packs repository, which alone has index.json and the pack
+/// folders a list made from it names.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Origin {
+    /// Folders that serve a copy of the repository's `v2/`, such as packs.folderskin.app.
+    pub trees: Vec<String>,
+    /// The packs repository on GitHub, or the copy of it `FOLDERSKIN_COMMUNITY_URL` names.
+    pub repo: String,
+}
+
+impl Origin {
+    /// The packs in the repository at `repo` alone, such as a copy served on this computer.
+    pub fn repo(repo: &str) -> Origin {
+        Origin {
+            trees: Vec::new(),
+            repo: repo.trim_end_matches('/').to_string(),
+        }
+    }
+
+    /// Every folder asked for head.json, in order: the copies of the tree, then the repository.
+    fn heads(&self) -> impl Iterator<Item = &str> {
+        self.trees
+            .iter()
+            .map(|tree| tree.trim_end_matches('/'))
+            .chain(std::iter::once(self.repo.as_str()))
+    }
+}
 
 /// The community packs as this session knows them. Managed by Tauri, one per app.
 pub struct Community {
@@ -117,13 +150,13 @@ impl Community {
         &self.downloads
     }
 
-    /// The catalog in use, loading it from the community folder at `base` the first time. While
-    /// the last visit's catalog stands in, the first call after [`RETRY_LAST_VISIT`] asks again
-    /// for the one published now.
-    pub async fn current(&self, base: &str) -> Result<Arc<Source>, String> {
+    /// The catalog in use, loading it from `origin` the first time. While the last visit's
+    /// catalog stands in, the first call after [`RETRY_LAST_VISIT`] asks again for the one
+    /// published now.
+    pub async fn current(&self, origin: &Origin) -> Result<Arc<Source>, String> {
         if let Some(in_use) = self.in_use() {
             if in_use.source.last_visit.is_some() && in_use.since.elapsed() >= self.retry_after {
-                return Ok(self.try_again(base, in_use.source).await);
+                return Ok(self.try_again(origin, in_use.source).await);
             }
             return Ok(in_use.source);
         }
@@ -132,20 +165,20 @@ impl Community {
         if let Some(in_use) = self.in_use() {
             return Ok(in_use.source);
         }
-        Ok(self.put(load(base, self.cache(), false).await?))
+        Ok(self.put(load(origin, self.cache(), false).await?))
     }
 
-    /// Asks the community folder at `base` again, past every cache, for Refresh. When that fails
-    /// the catalog in use stays. Searches carry on with it meanwhile.
-    pub async fn refresh(&self, base: &str) -> Result<Arc<Source>, String> {
+    /// Asks `origin` again, past every cache, for Refresh. When that fails the catalog in use
+    /// stays. Searches carry on with it meanwhile.
+    pub async fn refresh(&self, origin: &Origin) -> Result<Arc<Source>, String> {
         let _loading = self.loading.lock().await;
-        Ok(self.put(load(base, self.cache(), true).await?))
+        Ok(self.put(load(origin, self.cache(), true).await?))
     }
 
     /// Asks again for the packs published now while `old`, the last visit's, stands in. One call
     /// asks; the ones that come meanwhile carry on with `old`. Whatever the answer, nobody asks
     /// again until [`RETRY_LAST_VISIT`] has passed once more.
-    async fn try_again(&self, base: &str, old: Arc<Source>) -> Arc<Source> {
+    async fn try_again(&self, origin: &Origin, old: Arc<Source>) -> Arc<Source> {
         let Ok(_loading) = self.loading.try_lock() else {
             return old;
         };
@@ -155,7 +188,7 @@ impl Community {
             Some(now) => return now.source.clone(),
             None => {}
         }
-        match load_current(base, self.cache(), false).await {
+        match load_current(origin, self.cache(), false).await {
             Ok(source) => self.put(source),
             Err(_) => old,
         }
@@ -163,6 +196,11 @@ impl Community {
 
     fn in_use(&self) -> Option<InUse> {
         lock(&self.in_use).clone()
+    }
+
+    /// The catalog in use, if one has been loaded this session; nothing is asked for.
+    pub fn in_use_now(&self) -> Option<Arc<Source>> {
+        self.in_use().map(|in_use| in_use.source)
     }
 
     fn put(&self, source: Source) -> Arc<Source> {
@@ -211,6 +249,12 @@ pub struct Source {
     /// The packs the maintainer marks as official: `official` in head.json, or the entries of
     /// index.json that say `"official": true`.
     pub official: Vec<String>,
+    /// Packs whose ids changed, each old id to the one it has now: head.json's `moved`, less any
+    /// entry [`Head::current_id`] wouldn't follow. Empty for a list made from index.json.
+    moved: BTreeMap<String, String>,
+    /// Set once the library's records have followed `moved` (community.rs), so the catalog's
+    /// moves are followed once rather than at every search.
+    followed: AtomicBool,
     /// Which catalog this is: a tree's generation, or sixteen hex digits of the SHA-256 of the
     /// index.json it was made from.
     pub generation: String,
@@ -237,6 +281,8 @@ impl Source {
             tree,
             featured: Vec::new(),
             official: Vec::new(),
+            moved: BTreeMap::new(),
+            followed: AtomicBool::new(false),
             generation,
             last_visit,
             strips: Mutex::default(),
@@ -251,6 +297,29 @@ impl Source {
     /// True for a pack the maintainer marks as official.
     pub fn is_official(&self, id: &str) -> bool {
         self.official.iter().any(|o| o == id)
+    }
+
+    /// The id pack `id` has now: the one head.json says it moved to, or `id` itself. Every
+    /// lookup by an id from outside the catalog (an install link, the library, the webview) goes
+    /// through this, so a pack added or linked to under its old id is still found.
+    pub fn current_id<'a>(&'a self, id: &'a str) -> &'a str {
+        self.moved.get(id).map_or(id, String::as_str)
+    }
+
+    /// Packs whose ids changed, each old id to the one it has now.
+    pub fn moved(&self) -> &BTreeMap<String, String> {
+        &self.moved
+    }
+
+    /// The moves the library's records haven't followed yet: `None` once they have, or when
+    /// nothing moved.
+    pub fn moves_to_follow(&self) -> Option<&BTreeMap<String, String>> {
+        (!self.moved.is_empty() && !self.followed.load(Ordering::Acquire)).then_some(&self.moved)
+    }
+
+    /// Notes that the library's records follow this catalog's moves.
+    pub fn followed_moves(&self) {
+        self.followed.store(true, Ordering::Release);
     }
 
     /// Where a pack's files are when the list came from index.json: the community folder.
@@ -337,42 +406,85 @@ impl Failed {
     }
 }
 
-/// Loads the current catalog from the community folder at `base`: the published tree when there
-/// is one, index.json when there isn't, and the last visit's copy when neither can be had (only
-/// when not `fresh`: Refresh says it failed rather than pass old packs off as new).
-pub async fn load(base: &str, cache: Option<&Path>, fresh: bool) -> Result<Source, String> {
-    match load_current(base, cache, fresh).await {
+/// Loads the current catalog from `origin`: the published tree when there is one, index.json
+/// when there isn't, and the last visit's copy when neither can be had (only when not `fresh`:
+/// Refresh says it failed rather than pass old packs off as new).
+pub async fn load(origin: &Origin, cache: Option<&Path>, fresh: bool) -> Result<Source, String> {
+    match load_current(origin, cache, fresh).await {
         Ok(source) => Ok(source),
         Err(Failed {
             error,
             last_visit: Some(why),
         }) if !fresh => match cache {
-            Some(dir) => last_visit(base, dir, why).await.ok_or(error),
+            Some(dir) => last_visit(origin, dir, why).await.ok_or(error),
             None => Err(error),
         },
         Err(failed) => Err(failed.error),
     }
 }
 
-/// [`load`] without the last visit's copy to fall back on.
-pub async fn load_current(base: &str, cache: Option<&Path>, fresh: bool) -> Result<Source, Failed> {
-    let head_url = format!("{base}/v{}/{}", tree::HEAD_VERSION, tree::HEAD_FILE);
-    let bytes = match fetch(&uncached(&head_url, fresh), tree::MAX_HEAD_BYTES).await {
-        Ok(bytes) => bytes,
-        Err(Fetch::NotFound(_)) => return load_index(base, cache, fresh).await,
-        Err(e) => return Err(Failed::new(e.to_string(), Some(why(base, &e)))),
-    };
+/// [`load`] without the last visit's copy to fall back on. head.json is asked for from each of
+/// `origin`'s folders in turn, and the first that answers with one whose catalog arrives is the
+/// one used: packs.folderskin.app when it's up, the repository when it isn't. When the repository
+/// has no head.json either, its index.json stands in, as it did before there was a tree.
+pub async fn load_current(
+    origin: &Origin,
+    cache: Option<&Path>,
+    fresh: bool,
+) -> Result<Source, Failed> {
+    let mut failed: Option<Failed> = None;
+    for folder in origin.heads() {
+        let head_url = format!("{folder}/v{}/{}", tree::HEAD_VERSION, tree::HEAD_FILE);
+        let answer = match fetch(&uncached(&head_url, fresh), tree::MAX_HEAD_BYTES).await {
+            Ok(bytes) => read_head(origin, folder, &bytes, cache).await,
+            Err(Fetch::NotFound(_)) if folder == origin.repo => {
+                return load_index(&origin.repo, cache, fresh).await
+            }
+            Err(e) => Err(Failed::new(e.to_string(), Some(why(folder, &e)))),
+        };
+        match answer {
+            Ok(source) => return Ok(source),
+            Err(this) => failed = Some(telling(failed, this)),
+        }
+    }
+    Err(failed.expect("the repository is always asked"))
+}
+
+/// The catalog the head.json `bytes` from `folder` names, kept for the next offline visit once
+/// it has arrived.
+async fn read_head(
+    origin: &Origin,
+    folder: &str,
+    bytes: &[u8],
+    cache: Option<&Path>,
+) -> Result<Source, Failed> {
     // A page that isn't head.json at all is a host not answering properly, such as a network's
     // sign-in page.
-    let head =
-        Head::parse(&bytes).map_err(|e| Failed::new(e, Some(LastVisit::Unanswered(host(base)))))?;
-    let source = from_head(&head, tree_bases(base, &head), cache, None)
+    let head = Head::parse(bytes)
+        .map_err(|e| Failed::new(e, Some(LastVisit::Unanswered(host(folder)))))?;
+    let source = from_head(&head, tree_bases(origin, Some(folder), &head), cache, None)
         .await
         .map_err(|e| Failed::new(e, Some(LastVisit::Behind)))?;
     if let Some(dir) = cache {
-        keep(dir, tree::HEAD_FILE, &bytes);
+        keep(dir, tree::HEAD_FILE, bytes);
     }
     Ok(source)
+}
+
+/// Of two ways the packs published now didn't load, the one that says more: a head.json whose
+/// catalog didn't arrive, then a host that answered with something else, then no answer at all.
+/// Between two alike, the first, which was asked first.
+fn telling(first: Option<Failed>, then: Failed) -> Failed {
+    let rank = |f: &Failed| match f.last_visit {
+        Some(LastVisit::Behind) => 3,
+        Some(LastVisit::Unanswered(_)) => 2,
+        Some(LastVisit::Offline) => 1,
+        None => 0,
+    };
+    match first {
+        Some(first) if rank(&first) >= rank(&then) => first,
+        _ => then,
+    }
 }
 
 /// The list made from index.json, when no tree is published.
@@ -406,28 +518,38 @@ fn why(base: &str, e: &Fetch) -> LastVisit {
 }
 
 /// The catalog the last visit used, from the cache folder, saying `why` it stands in.
-async fn last_visit(base: &str, dir: &Path, why: LastVisit) -> Option<Source> {
+async fn last_visit(origin: &Origin, dir: &Path, why: LastVisit) -> Option<Source> {
     if let Some(head) = std::fs::read(dir.join(tree::HEAD_FILE))
         .ok()
         .and_then(|bytes| Head::parse(&bytes).ok())
     {
-        let kept = from_head(&head, tree_bases(base, &head), Some(dir), Some(why.clone()));
+        let bases = tree_bases(origin, None, &head);
+        let kept = from_head(&head, bases, Some(dir), Some(why.clone()));
         if let Ok(source) = kept.await {
             return Some(source);
         }
     }
     let index = std::fs::read(dir.join("index.json")).ok()?;
-    from_index(&index, base, Some(why)).ok()
+    from_index(&index, &origin.repo, Some(why)).ok()
 }
 
-/// Where a tree's files are fetched from: its mirrors first, then the folder head.json is in.
-fn tree_bases(base: &str, head: &Head) -> Vec<String> {
-    let mut bases: Vec<String> = head
+/// Where a tree's files are fetched from, each folder once: its mirrors first, then the folder
+/// head.json came from, then the rest of `origin`'s. Every file is checked against what the
+/// catalog says it is, so the repository on GitHub backs up every other folder for all of them.
+fn tree_bases(origin: &Origin, from: Option<&str>, head: &Head) -> Vec<String> {
+    let tree = |folder: &str| format!("{folder}/v{}", tree::HEAD_VERSION);
+    let mut bases: Vec<String> = Vec::new();
+    let folders = head
         .mirrors
         .iter()
         .map(|m| m.trim_end_matches('/').to_string())
-        .collect();
-    bases.push(format!("{base}/v{}", tree::HEAD_VERSION));
+        .chain(from.map(tree))
+        .chain(origin.heads().map(tree));
+    for folder in folders {
+        if !bases.contains(&folder) {
+            bases.push(folder);
+        }
+    }
     bases
 }
 
@@ -461,7 +583,27 @@ async fn from_head(
     let mut source = Source::new(catalog, bases, true, head.generation.clone(), last_visit);
     source.featured = head.featured_ids();
     source.official = head.official_ids();
+    source.moved = moves(head);
+    if !source.moved.is_empty() {
+        // An id a pack still has is that pack's. A move from it is a mistake in moved.json, and
+        // following it would open or add another pack in its place.
+        let old: Vec<String> = source.moved.keys().cloned().collect();
+        for row in source.packs(&old)? {
+            source.moved.remove(&row.id);
+        }
+    }
     Ok(source)
+}
+
+/// The moves `head` lists that [`Head::current_id`] follows: from a pack id to another.
+fn moves(head: &Head) -> BTreeMap<String, String> {
+    head.moved
+        .keys()
+        .filter_map(|old| {
+            let now = head.current_id(old);
+            (now != old).then(|| (old.clone(), now.to_string()))
+        })
+        .collect()
 }
 
 /// The catalog kept at `path`, when it is still the file `generation` names: one damaged on disk
@@ -639,8 +781,213 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::community::tests::{colour_packs, png, serve_logged, tree_files, Served};
+    use crate::community::tests::{
+        changed_head, colour_packs, png, serve, serve_logged, temp_dir, tree_files, Served,
+    };
     use tauri::async_runtime::block_on;
+
+    /// Nothing listens here.
+    const NOWHERE: &str = "http://127.0.0.1:9";
+
+    /// The packs at `repo`, with `tree` asked for head.json first, as packs.folderskin.app is.
+    fn origin(tree: &str, repo: &str) -> Origin {
+        Origin {
+            trees: vec![tree.to_string()],
+            repo: repo.to_string(),
+        }
+    }
+
+    /// The paths asked of a server whose log is `asked`.
+    fn paths(asked: &Mutex<Vec<String>>) -> Vec<String> {
+        lock(asked).clone()
+    }
+
+    #[test]
+    fn head_json_comes_from_packs_folderskin_app_first_and_its_files_too() {
+        let (files, head, _) = tree_files(&colour_packs());
+        let (packs, _, packs_asked) = serve_logged(files.clone());
+        let (github, _, github_asked) = serve_logged(files);
+        let source = block_on(load(&origin(&packs, &github), None, false)).unwrap();
+        assert_eq!(source.generation, head.generation);
+        assert_eq!(source.counts().0, 2);
+        assert_eq!(paths(&packs_asked)[0], "/v2/head.json");
+        assert!(
+            paths(&github_asked).is_empty(),
+            "GitHub isn't asked while packs.folderskin.app answers: {:?}",
+            paths(&github_asked)
+        );
+        // Its files come from the folder head.json came from, and GitHub's copy is there behind it.
+        assert_eq!(
+            source.bases,
+            [format!("{packs}/v2"), format!("{github}/v2")]
+        );
+
+        // Refresh asks it first too, past the caches.
+        lock(&packs_asked).clear();
+        drop(block_on(load(&origin(&packs, &github), None, true)).unwrap());
+        assert!(paths(&packs_asked)[0].starts_with("/v2/head.json?t="));
+        assert!(paths(&github_asked).is_empty());
+    }
+
+    #[test]
+    fn github_answers_when_packs_folderskin_app_doesnt() {
+        let (files, head, _) = tree_files(&colour_packs());
+        let (github, _, github_asked) = serve_logged(files.clone());
+        let without_head: Served = files
+            .iter()
+            .filter(|(path, ..)| path != "/v2/head.json")
+            .cloned()
+            .collect();
+        let (empty, _) = serve(without_head);
+        let (portal, _) = serve(vec![(
+            "/v2/head.json".into(),
+            b"<html>Sign in to the network</html>".to_vec(),
+            Duration::ZERO,
+        )]);
+        // Down, not set up yet, or answering with something that isn't head.json.
+        for tree in [NOWHERE, empty.as_str(), portal.as_str()] {
+            lock(&github_asked).clear();
+            let source = block_on(load(&origin(tree, &github), None, false)).unwrap();
+            assert_eq!(source.generation, head.generation, "{tree}");
+            assert!(source.last_visit.is_none());
+            assert_eq!(paths(&github_asked)[0], "/v2/head.json", "{tree}");
+        }
+
+        // A newer head.json whose catalog isn't anywhere yet (a copy that got ahead of GitHub):
+        // the older one on GitHub, whose catalog is there, rather than no packs.
+        let (ahead, _, _) = tree_files(&colour_packs()[..1]);
+        let ahead: Served = ahead
+            .into_iter()
+            .filter(|(path, ..)| !path.ends_with(".sqlite.gz"))
+            .collect();
+        let (ahead, _) = serve(ahead);
+        let source = block_on(load(&origin(&ahead, &github), None, false)).unwrap();
+        assert_eq!(source.generation, head.generation);
+        assert_eq!(source.counts().0, 2);
+    }
+
+    #[test]
+    fn every_file_is_still_checked_whichever_folder_serves_it() {
+        let (files, head, _) = tree_files(&colour_packs());
+        let (other, _, _) = tree_files(&colour_packs()[..1]);
+        let other_catalog = other
+            .into_iter()
+            .find(|(path, ..)| path.ends_with(".sqlite.gz"))
+            .unwrap()
+            .1;
+        // packs.folderskin.app with this head.json, but another catalog under its name.
+        let wrong: Served = files
+            .iter()
+            .map(|(path, body, delay)| {
+                let body = if path.ends_with(".sqlite.gz") {
+                    other_catalog.clone()
+                } else {
+                    body.clone()
+                };
+                (path.clone(), body, *delay)
+            })
+            .collect();
+        let (packs, _) = serve(wrong.clone());
+        let (github, _, github_asked) = serve_logged(files);
+        let source = block_on(load(&origin(&packs, &github), None, false)).unwrap();
+        assert_eq!(source.generation, head.generation);
+        assert_eq!(source.counts().0, 2, "the right catalog, from GitHub");
+        assert!(paths(&github_asked)
+            .iter()
+            .any(|p| p.ends_with(".sqlite.gz")));
+
+        // Wrong everywhere is refused.
+        let (github, _) = serve(wrong);
+        let err = block_on(load(&origin(&packs, &github), None, false))
+            .err()
+            .unwrap();
+        assert!(err.contains("arrived damaged"), "{err}");
+    }
+
+    #[test]
+    fn without_either_it_says_why_and_the_last_visit_stands_in() {
+        let (files, _, _) = tree_files(&colour_packs());
+        let (github, _) = serve(files);
+        let dir = temp_dir("two-origins");
+        drop(block_on(load(&origin(&github, &github), Some(&dir), false)).unwrap());
+
+        // Offline: the first folder asked is the one named.
+        let err = block_on(load(&origin(NOWHERE, NOWHERE), None, false))
+            .err()
+            .unwrap();
+        assert!(err.starts_with("couldn't reach 127.0.0.1."), "{err}");
+        let kept = block_on(load(&origin(NOWHERE, NOWHERE), Some(&dir), false)).unwrap();
+        assert_eq!(kept.last_visit, Some(LastVisit::Offline));
+        drop(kept);
+
+        // One answering at all says more than one that didn't.
+        let (portal, _) = serve(vec![(
+            "/v2/head.json".into(),
+            b"<html>Sign in to the network</html>".to_vec(),
+            Duration::ZERO,
+        )]);
+        let kept = block_on(load(&origin(NOWHERE, &portal), Some(&dir), false)).unwrap();
+        assert_eq!(
+            kept.last_visit,
+            Some(LastVisit::Unanswered("127.0.0.1".into()))
+        );
+    }
+
+    #[test]
+    fn until_a_tree_is_published_index_json_comes_from_the_repository() {
+        let index = r#"{ "version": 1, "packs": [
+  { "id": "colours", "name": "Colours", "author": "prajwal-svm", "license": "CC0-1.0",
+    "tags": ["colour"], "count": 8 } ],
+  "moved": { "colors": "colours" } }"#;
+        let (github, _, asked) = serve_logged(vec![(
+            "/index.json".into(),
+            index.as_bytes().to_vec(),
+            Duration::ZERO,
+        )]);
+        let (packs, _, packs_asked) = serve_logged(Vec::new());
+        let source = block_on(load(&origin(&packs, &github), None, false)).unwrap();
+        assert!(!source.is_tree());
+        assert_eq!(source.index_base(), Some(github.as_str()));
+        assert_eq!(
+            paths(&packs_asked),
+            ["/v2/head.json"],
+            "never its index.json"
+        );
+        assert_eq!(paths(&asked), ["/v2/head.json", "/index.json"]);
+        // Moves are head.json's to say.
+        assert!(source.moved().is_empty());
+        assert_eq!(source.current_id("colors"), "colors");
+    }
+
+    #[test]
+    fn a_head_that_moved_packs_leads_their_old_ids_to_the_new_ones() {
+        let (files, _, _) = tree_files(&colour_packs());
+        let files = changed_head(files, |head| {
+            head.moved = BTreeMap::from([
+                ("rubies".into(), "reds".into()),
+                ("sky-blues".into(), "blues".into()),
+                // Not two pack ids: passed over, as Head::current_id passes it over.
+                ("Greens".into(), "reds".into()),
+                ("violets".into(), "../up".into()),
+                // A pack still has this id, so it's that pack's, whatever moved.json says.
+                ("blues".into(), "reds".into()),
+            ]);
+        });
+        let (github, _) = serve(files);
+        let source = block_on(load(&Origin::repo(&github), None, false)).unwrap();
+        assert_eq!(source.current_id("rubies"), "reds");
+        assert_eq!(source.current_id("sky-blues"), "blues");
+        assert_eq!(source.current_id("reds"), "reds");
+        assert_eq!(source.current_id("blues"), "blues");
+        assert_eq!(source.current_id("Greens"), "Greens");
+        assert_eq!(source.current_id("violets"), "violets");
+        assert_eq!(source.moved().len(), 2);
+
+        // The library follows them once.
+        assert_eq!(source.moves_to_follow().map(BTreeMap::len), Some(2));
+        source.followed_moves();
+        assert!(source.moves_to_follow().is_none());
+    }
 
     #[test]
     fn a_folder_with_the_wrong_bytes_is_passed_over_for_the_next() {

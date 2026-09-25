@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   continueLabel,
-  defaultPicks,
+  defaultPick,
   frameAt,
   fromProgress,
   INTRO_FRAME_COUNT,
@@ -71,16 +71,25 @@ describe("the intro's frames", () => {
   });
 });
 
-describe("defaultPicks", () => {
+describe("defaultPick", () => {
   it("picks Classic Art wherever it's listed", () => {
-    expect(defaultPicks([colours, classic])).toEqual(["classic-art"]);
+    expect(defaultPick([colours, classic])).toBe(classic);
+  });
+
+  it("follows Classic Art to the id it moved to", () => {
+    const moved = { ...classic, id: "classic-art-k7q2mx" };
+    const renamed = { "classic-art": "classic-art-k7q2mx", colours: "colours-a2b3c4" };
+    expect(defaultPick([colours, moved], renamed)).toBe(moved);
+    // Without the move said, the new id is just another pack: the first not added is picked.
+    expect(defaultPick([colours, moved])).toBe(colours);
+    expect(defaultPick([{ ...moved, added: true }, night], renamed)).toBe(night);
   });
 
   it("falls back to the first pack not added yet, or nothing", () => {
-    expect(defaultPicks([colours, night])).toEqual(["colours"]);
-    expect(defaultPicks([{ ...classic, added: true }, colours])).toEqual(["colours"]);
-    expect(defaultPicks([{ ...classic, added: true }])).toEqual([]);
-    expect(defaultPicks([])).toEqual([]);
+    expect(defaultPick([colours, night])).toBe(colours);
+    expect(defaultPick([{ ...classic, added: true }, colours])).toBe(colours);
+    expect(defaultPick([{ ...classic, added: true }])).toBeUndefined();
+    expect(defaultPick([])).toBeUndefined();
   });
 });
 

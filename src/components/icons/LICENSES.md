@@ -3,7 +3,7 @@
 The animated icons in this folder are adapted from
 [lucide-animated](https://lucide-animated.com) (source: https://github.com/pqoqubbw/icons):
 `arrow-down`, `badge-alert`, `check`, `delete`, `download`, `earth`, `external-link`, `eye`,
-`folder-open`, `github`, `layout-grid`, `monitor-check`, `moon`, `refresh-cw`, `rotate-ccw`, `search`,
+`folder-open`, `layout-grid`, `monitor-check`, `moon`, `refresh-cw`, `rotate-ccw`, `search`,
 `sliders-horizontal`, `sparkles` and `sun`. The changes are described at the top of `trigger.ts`.
 
 The AI providers' logos in `../ProviderLogo.tsx` come from

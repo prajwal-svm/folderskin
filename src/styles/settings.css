@@ -291,11 +291,6 @@
   color: var(--ink-2);
 }
 
-.set-row .gh-avatar {
-  width: 36px;
-  height: 36px;
-}
-
 /* The plain folder as FolderSkin draws it, where the skins are kept. */
 .set-row-folder {
   flex: none;
@@ -328,20 +323,6 @@
   gap: 6px;
   padding: 0 13px;
   font-size: 12.5px;
-}
-
-/* Connecting to GitHub in the GitHub section: as wide as it needs, lined up with the page. */
-.settings-main .gh-connect {
-  max-width: 420px;
-}
-
-.settings-main .gh-connect > .btn-ghost,
-.settings-main .gh-cancel {
-  align-self: flex-start;
-}
-
-.settings-main .gh-cancel {
-  margin-left: -6px;
 }
 
 /* Its text lines up with the page's; the padding is only for the wash behind it on hover. */
@@ -559,20 +540,6 @@
   flex-direction: column;
   gap: 14px;
   padding: 16px;
-}
-
-.set-author {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.set-author .input {
-  flex: 1;
-}
-
-.set-author .btn {
-  flex: none;
 }
 
 .set-form-actions {

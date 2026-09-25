@@ -7,8 +7,8 @@
  *
  * The onboarding shows until it's finished once in this browser; add `?onboarding` to the address
  * to see it again. "Chrome dreams" fails the first time it's added, to show what a failure does,
- * and `?offline` makes everything from GitHub fail, as it does without a connection. `?real` leaves
- * out the made-up packs, for screenshots.
+ * and `?offline` makes everything from packs.folderskin.app and GitHub fail, as it does without a
+ * connection. `?real` leaves out the made-up packs, for screenshots.
  *
  * `?update` finds a made-up next version a few seconds after the app opens, as a release build
  * does; `?update=fail` stops its download halfway and `?update=offline` can't check at all.
@@ -21,9 +21,11 @@
  *
  * `?install=colours` opens the preview the way a folderskin://install link opens the app: on that
  * pack in Community, adding it. The link is taken once, as the app takes one.
- * Sharing without GitHub works in the preview against a made-up service: `?noshare` shows it as a
- * build without one, `?offline` as one that can't reach it, and `?shared` starts with a few packs
- * already sent, one of them turned down.
+ * Sharing works in the preview against a made-up service: `?noshare` shows it as a build without
+ * one, `?offline` as one that can't reach it, and `?shared` starts with a few packs already sent,
+ * one of them turned down. `?slowdown` has the service turn down the first picture as part of a
+ * burst, so the dialog waits and tries again, and `?cooling` has it refuse the pack because the
+ * computer is cooling down, which is never tried again.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
@@ -37,20 +39,18 @@ import type {
   CommunityPack,
   CommunityQuery,
   CommunitySearch,
+  FirstPacks,
   ComposerImage,
   ComposerSaved,
   ComposerSaveHeader,
   ComposerTemplate,
   ExportPackRequest,
   FolderIcon,
-  GithubAccount,
   IconPackProgress,
   InstalledIconPack,
   MySubmission,
   PackProgress,
-  PackToPublish,
   PackToShare,
-  PublishProgress,
   SharedPack,
   ShareProgress,
   ShareStatus,
@@ -181,7 +181,7 @@ const MOCK_OFFICIAL = new Set(["classic-art", "colours"]);
 /** Whether `?install=` has been taken already: a link is taken once. */
 let mockLinkTaken = false;
 
-/** Sample packs for the browser preview's Community view. The real list comes from GitHub. */
+/** Sample packs for the browser preview's Community view. The real list comes from packs.folderskin.app. */
 /** The packs repository's files, where the preview's real pictures come from. Declared before anything that runs
  *  at load: `library` is seeded from picture(), which reads it. */
 const COMMUNITY_RAW = "https://raw.githubusercontent.com/prajwal-svm/folderskin-community/main";
@@ -242,7 +242,7 @@ const mockFailedOnce = new Set<string>();
 const mockViewed = new Set<string>();
 
 const ONBOARDED_KEY = "folderskin.mock.onboarded";
-const OFFLINE = "couldn't reach GitHub. Check your connection and try again";
+const OFFLINE = "couldn't reach packs.folderskin.app. Check your connection and try again";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const offline = () => new URLSearchParams(location.search).has("offline");
 /** The packs that really are on GitHub; the others only show what a longer list looks like. */
@@ -524,9 +524,6 @@ function mockPhoto(): ComposerImage {
   return { url: c.toDataURL("image/jpeg", 0.9), width: 1600, height: 1000, name: "Lake at sunset", alpha: false };
 }
 
-/** Who the mock is pretending is signed in. */
-const mockGithub: { account: GithubAccount | null } = { account: null };
-
 /** The made-up community service: this computer's key and handle, and the packs it has sent. */
 const mockShare: { key: boolean; handle: string | null; wanted: string; waiting: boolean; submissions: MySubmission[] } = {
   key: false,
@@ -535,9 +532,25 @@ const mockShare: { key: boolean; handle: string | null; wanted: string; waiting:
   waiting: false,
   submissions: [],
 };
-const SHARE_NOT_YET =
-  "Sharing without GitHub isn't available yet. It will be in a later version of FolderSkin; until then, share through GitHub or save a folder.";
-const SHARE_UNREACHABLE = "FolderSkin's sharing service can't be reached right now. Check your connection, or share through GitHub instead.";
+const SHARE_NOT_YET = "This build of FolderSkin can't share packs. You can still save the pack as a folder.";
+const SHARE_UNREACHABLE = "FolderSkin's sharing service can't be reached right now. Check your connection and try again.";
+/** What the service says to a computer cooling down after too many refused requests (`?cooling`). */
+const SHARE_COOLING = "You've sent too many requests that were turned down. You can share again in 2 hours.";
+
+/** A new id for a pack called `name`, the way `pack::new_id` draws one: the name as a slug, then
+ *  six random characters. */
+function mockNewId(name: string): string {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 33)
+      .replace(/-+$/, "") || "pack";
+  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+  const suffix = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  return `${base}-${suffix}`;
+}
 
 /** `?shared` starts as a computer that has shared before: verified, one pack approved and one turned down. */
 function seedShared() {
@@ -634,37 +647,6 @@ export const mockApi = {
       default_thumbnail: COLOUR_FOLDERS[0],
     };
   },
-  githubAccount: async () => mockGithub.account,
-  githubConnect: async () => {
-    mockGithub.account = null;
-    return { user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900 };
-  },
-  githubWait: async () => {
-    // Approved a moment after the code is asked for, or with `?holdgithub` once the page calls
-    // `mockApprove()`, so a test can look at the code while it waits, however busy the machine.
-    if (!(await held("holdgithub", "mockApprove"))) await sleep(2500);
-    mockGithub.account = { login: "octocat", name: "The Octocat", avatar_url: "" };
-    return mockGithub.account;
-  },
-  githubCancel: async () => {},
-  githubSignOut: async () => {
-    mockGithub.account = null;
-  },
-  publishPack: async (pack: PackToPublish, onProgress: (p: PublishProgress) => void) => {
-    const steps: PublishProgress[] = [{ stage: "checking" }, { stage: "forking" }, { stage: "branching" }];
-    for (const step of steps) {
-      onProgress(step);
-      await new Promise((r) => setTimeout(r, 600));
-    }
-    const total = pack.skinIds.length + 1;
-    for (let done = 0; done <= total; done++) {
-      onProgress({ stage: "uploading", done, total });
-      await new Promise((r) => setTimeout(r, 120));
-    }
-    onProgress({ stage: "opening" });
-    await new Promise((r) => setTimeout(r, 600));
-    return { url: "https://github.com/prajwal-svm/folderskin/pull/42", number: 42, forked: true };
-  },
   inspectPath: async (path: string): Promise<PathInfo> => ({
     kind: isImagePath(path) ? "image" : "folder",
     name: path.split(/[\\/]/).pop() || path,
@@ -735,11 +717,12 @@ export const mockApi = {
     library = library.filter((s) => s.id !== skinId);
   },
   editSkin: async (_skinId: string, name: string, tags: string[]) => ({ name: cleanName(name), tags: cleanTags(tags) }),
-  communityPacks: async (_fresh = false): Promise<CommunityPack[]> => {
+  communityPacks: async (_fresh = false): Promise<FirstPacks> => {
     await sleep(500);
     if (offline()) throw OFFLINE;
     const catalog = communityCatalog();
-    return listed().map((p) => communityPack(catalog.find(p.id)!));
+    // The sample packs haven't moved: they keep the ids they were first published under.
+    return { packs: listed().map((p) => communityPack(catalog.find(p.id)!)), moved: {} };
   },
   communitySearch: async (query: CommunityQuery): Promise<CommunitySearch> => {
     // Counted where the end-to-end tests can read it, to see that coming back to Community
@@ -867,7 +850,7 @@ export const mockApi = {
   },
   exportPack: async (req: ExportPackRequest): Promise<string> => {
     await new Promise((r) => setTimeout(r, 600));
-    return `${req.folder}/${req.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+    return `${req.folder}/${mockNewId(req.name)}`;
   },
   setWindowTheme: async () => {},
   aiCatalogue: async (): Promise<AiCatalogue> => {
@@ -1151,8 +1134,6 @@ export const mockApi = {
   iconPackRemove: async (id: string): Promise<void> => {
     mockIconPacks.delete(id);
   },
-  // `?noshare` is a build without a service, like a release before the service is deployed.
-  shareOffered: async (): Promise<boolean> => !new URLSearchParams(location.search).has("noshare"),
   shareStatus: async (): Promise<ShareStatus> => {
     await sleep(300);
     return mockShareStatus();
@@ -1196,10 +1177,18 @@ export const mockApi = {
     await sleep(500);
     onProgress({ stage: "checking" });
     await sleep(400);
+    const params = new URLSearchParams(location.search);
+    if (params.has("cooling")) throw SHARE_COOLING;
     const total = pack.skinIds.length;
     for (let done = 0; done <= total; done++) {
       onProgress({ stage: "uploading", done, total });
       await sleep(90);
+      // The service's limit on bursts turns the first picture down; the app waits and sends it again.
+      if (done === 0 && params.has("slowdown")) {
+        onProgress({ stage: "waiting", seconds: 2 });
+        await sleep(2000);
+        onProgress({ stage: "uploading", done, total });
+      }
     }
     onProgress({ stage: "finishing" });
     await sleep(500);

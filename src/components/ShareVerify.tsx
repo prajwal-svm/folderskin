@@ -6,7 +6,7 @@ import { LoaderIcon } from "./icons/loader";
 import { Brand } from "./Brand";
 
 /**
- * Verifying this computer for sharing without GitHub. The check that keeps automated uploads out
+ * Verifying this computer for sharing packs. The check that keeps automated uploads out
  * (Cloudflare Turnstile) can't run inside the app, so FolderSkin signs a link with this computer's
  * key and opens it in the browser, then waits for the service to say the check was passed. It says
  * that it is waiting, and the page can be opened again if the browser was closed on it.
@@ -42,7 +42,7 @@ export function ShareVerify({ handle, onVerified, onCancel }: { handle: string; 
 
   if (error) {
     return (
-      <div className="gh-connect">
+      <div className="share-verify">
         <p className="field-note is-error">{error}</p>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
           Back
@@ -52,22 +52,22 @@ export function ShareVerify({ handle, onVerified, onCancel }: { handle: string; 
   }
 
   return (
-    <div className="gh-connect">
+    <div className="share-verify">
       <p className="share-verify-lead">
         A page from <Brand />&apos;s sharing service has opened in your browser. Once you&apos;re through its quick check, <Brand /> carries on by itself.
       </p>
       <p className="field-note">
         Your packs will be credited to <strong>{handle}</strong>. <Brand /> asks this once per computer.
       </p>
-      <button type="button" className="btn btn-primary gh-open" disabled={!url} onClick={() => url && void openUrl(url).catch(() => {})}>
+      <button type="button" className="btn btn-primary share-verify-open" disabled={!url} onClick={() => url && void openUrl(url).catch(() => {})}>
         <ExternalLinkIcon />
         Open the page again
       </button>
-      <p className="gh-waiting" role="status">
+      <p className="share-waiting" role="status">
         <LoaderIcon />
         {url ? "Waiting for the check in your browser" : "Getting the page ready"}
       </p>
-      <button type="button" className="link-btn gh-cancel" onClick={onCancel}>
+      <button type="button" className="link-btn share-verify-cancel" onClick={onCancel}>
         Cancel
       </button>
     </div>

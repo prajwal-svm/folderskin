@@ -114,14 +114,15 @@ and where your skins are saved. Hover the version badge beside the logo for Abou
 
 ## Community skins
 
-FolderSkin ships no skins of its own. People share skins and packs of skins on GitHub, free for
-everyone; the first launch offers them, and **Community** has them any time. Adding a pack puts
+FolderSkin ships no skins of its own. People share skins and packs of skins through FolderSkin,
+free for everyone; the first launch offers them, and **Community** has them any time. Adding a pack puts
 its skins in your library with their tags, and the **Install** button on a pack in the gallery on
 [folderskin.app](https://folderskin.app/community/) opens FolderSkin and adds it for you. Packs
 marked **Official** are ones the maintainer vouches for. **Classic Art** is a good first pack: sixteen
 public-domain paintings, from the Mona Lisa to The Starry Night, each painted onto a folder. To share yours, open a skin's ⋯ menu and
-choose **Share with community**, or use **Community → Share your skins** for several. FolderSkin
-saves a pack folder that passes the checks, and you drop it on GitHub as a pull request.
+choose **Share with community**, or use **Community → Share your skins** for several. You verify
+your computer once in the browser, with no account, and a person reviews the pack before it joins
+Community for everyone. **Save a folder** in the same dialog writes the pack as files instead.
 [docs/PACKS.md](docs/PACKS.md) has the contract and its limits: 1 to 50 skins a pack, pictures up
 to 1024 px and 2 MB, licensed CC0, CC BY 4.0 or MIT.
 

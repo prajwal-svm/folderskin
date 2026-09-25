@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { letGo, openApp } from "./app";
+import { openApp } from "./app";
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Settings" });
 
@@ -267,7 +267,7 @@ test.describe("settings", () => {
     await form.getByLabel("Name").fill("For work");
     await form.getByLabel("Credited to").fill("acme studio");
     await form.getByRole("button", { name: "Add profile" }).click();
-    await expect(form.getByRole("alert")).toHaveText(/GitHub user name/);
+    await expect(form.getByRole("alert")).toHaveText(/letters, numbers and single dashes/);
     await expect(form.getByLabel("Credited to")).toHaveAttribute("aria-invalid", "true");
     await expect(form.getByLabel("Credited to")).toBeFocused();
     await expect(form.getByLabel("Name")).not.toHaveAttribute("aria-invalid");
@@ -452,39 +452,15 @@ test.describe("settings", () => {
     await expect(dialog(page).locator(".set-profile").first()).toContainText("Personal (edited)");
   });
 
-  test("GitHub connects in its own section, keeps the focus, and credits the default profile", async ({ page }) => {
-    // The code is approved once the test has looked at it waiting.
-    await openApp(page, { query: "holdgithub" });
+  test("sharing is licence profiles, with nothing to sign in to", async ({ page }) => {
+    await openApp(page);
     await openSettings(page);
     await dialog(page).getByRole("tab", { name: "Sharing" }).click();
-    await dialog(page).getByRole("button", { name: "Connect", exact: true }).focus();
-    await page.keyboard.press("Enter");
-    await expect(dialog(page).getByRole("button", { name: "Open GitHub" })).toBeFocused();
-    // The profiles stay below while it waits.
     await expect(dialog(page).getByRole("heading", { name: "Licence profiles" })).toBeVisible();
-    await letGo(page, "mockApprove");
-    const disconnect = dialog(page).getByRole("button", { name: "Disconnect" });
-    await expect(disconnect).toBeFocused();
-    const rows = dialog(page).locator(".set-profile");
-    await expect(rows.first()).toContainText("Credited to octocat");
-
-    // A new default with no one to credit takes the name when Sharing finds the account again.
+    await expect(dialog(page).getByRole("heading", { name: "GitHub" })).toHaveCount(0);
+    await expect(dialog(page).getByRole("button", { name: /connect/i })).toHaveCount(0);
     await dialog(page).getByRole("button", { name: "Add a profile" }).click();
-    const form = dialog(page).getByRole("form", { name: "new profile" });
-    await form.getByLabel("Name").fill("Work");
-    await form.getByLabel("Credited to").fill("");
-    await form.getByRole("button", { name: "Add profile" }).click();
-    await rows.nth(1).hover();
-    await rows.nth(1).getByRole("button", { name: "make Work the default" }).click();
-    await expect(rows.nth(1)).toContainText("No one to credit yet");
-    await page.keyboard.press("Escape");
-    await openSettings(page);
-    await dialog(page).getByRole("tab", { name: "Sharing" }).click();
-    await expect(rows.nth(1)).toContainText("Credited to octocat");
-
-    await disconnect.focus();
-    await page.keyboard.press("Enter");
-    await expect(dialog(page).getByRole("button", { name: "Connect", exact: true })).toBeFocused();
+    await expect(dialog(page).getByRole("form", { name: "new profile" }).getByLabel("Credited to")).toHaveAttribute("placeholder", "your-name");
   });
 
   test("every accent keeps the words on its buttons readable", async ({ page }) => {

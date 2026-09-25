@@ -143,14 +143,19 @@ pub(crate) struct Exports {
     pub packs: Vec<Export>,
 }
 
-/// The service's errors: a code, and a sentence meant to be shown as it is.
+/// The service's errors: a code, and a sentence meant to be shown as it is. A refusal that ends
+/// can say when, in seconds, beside the code or beside the error.
 #[derive(Deserialize, Debug)]
 pub(crate) struct ErrorBody {
     pub error: ErrorDetail,
+    #[serde(default)]
+    pub retry_after: Option<f64>,
 }
 
 #[derive(Deserialize, Debug)]
 pub(crate) struct ErrorDetail {
     pub code: String,
     pub message: String,
+    #[serde(default)]
+    pub retry_after: Option<f64>,
 }

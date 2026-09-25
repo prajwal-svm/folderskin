@@ -20,7 +20,8 @@ folderskin/
 ├── src-tauri/               the app crate: commands, state, window config
 │   ├── build.rs             Tauri's build step; nothing else is embedded
 │   ├── src/commands.rs      the library, import, apply and delete commands
-│   ├── src/community.rs     community packs: list, preview, add, update, remove, share
+│   ├── src/community.rs     community packs: list, preview, add, update, remove, save as a folder
+│   ├── src/share.rs         sharing a pack through the community service, and trying again
 │   ├── src/deep_link.rs     folderskin://install links from the website's Install buttons
 │   ├── src/installs.rs      telling the community service a pack was added, for its count
 │   ├── src/onboarding.rs    whether the first-launch onboarding has been finished
@@ -106,16 +107,16 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
 | `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line, at most 60 characters; the tags cleaned, at most 8), or an error string for the plain default folder's id |
 | `skins_folder` | – | the folder the saved skins live in |
-| `community_packs` | `fresh` | the packs in folderskin-community's `index.json` on GitHub, each with its `hash`, `added`, `update` and `official` |
-| `community_pack` | `packId` | that pack as the list shows it, or `null`; one the list doesn't have is looked for again past the caches first |
+| `community_packs` | `fresh` | `{packs, moved}`: the featured packs, or the first few, each with its `hash`, `added`, `update` and `official`; and each old id that moved to one of them |
+| `community_pack` | `packId` | that pack, or the one an old id moved to, as the list shows it, or `null`; one the list doesn't have is looked for again past the caches first |
 | `install_link_take` | – | the pack the newest `folderskin://install` link asked for, once; `null` when none is waiting |
 | `community_preview` | `packId`, `fresh` | the pack's preview strip as a PNG data URL |
 | `community_pack_skins` | `packId`, `hash` | every skin of the pack drawn as its folder, to look through; kept drawn for a week, so looking again at that `hash` downloads nothing |
 | `community_add` | `packId`, `onProgress` | the pack's skins in the pack's order, saved all together or not at all; progress on the channel (below) |
-| `community_update` | `packId` | `{removed, skins}`: the added pack swapped for the version on GitHub now |
+| `community_update` | `packId` | `{removed, skins}`: the added pack swapped for the version published now |
 | `community_remove` | `packId` | the ids of the skins it deleted |
-| `import_pack` | `path` | a pack folder on disk, added the same way as one from GitHub |
-| `export_pack` | `folder`, `name`, `author`, `license`, `tags`, `skinIds` | the pack folder it wrote, already passing the checks |
+| `import_pack` | `path` | a pack folder on disk, added the same way as one from Community |
+| `export_pack` | `folder`, `name`, `author`, `license`, `tags`, `skinIds` | the pack folder it wrote, named after a new id (`pack::new_id`), already passing the checks |
 | `onboarding_needed` | – | `true` until the first-launch onboarding has been finished on this computer |
 | `finish_onboarding` | – | `{}`; the onboarding never shows again |
 | `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
@@ -282,9 +283,12 @@ FolderSkin ships no skins: `src-tauri/build.rs` is only Tauri's own build step, 
 comes from the user's store. The folder template and the plain default folder are code in
 `folderskin-core`, not pictures.
 
-`community.rs` reads the packs straight from their repository on GitHub,
-[folderskin-community](https://github.com/prajwal-svm/folderskin-community) (`FOLDERSKIN_COMMUNITY_URL`
-points it at another copy). Adding one downloads its `pack.json`, then its pictures four at a
+`community.rs` reads the packs from packs.folderskin.app, where the published tree of their
+repository, [folderskin-community](https://github.com/prajwal-svm/folderskin-community), is copied
+as it's published, and from the repository on GitHub when that doesn't answer with a head.json
+(`catalog::Origin`; `FOLDERSKIN_COMMUNITY_URL` points it at another copy of the repository alone).
+Every file is checked against what head.json and the catalog say it is, wherever it came from.
+Adding one downloads its `pack.json`, then its pictures four at a
 time (`futures_util`'s `buffered`, which keeps them in the pack's order), each held to the
 limits in `folderskin_core::pack` and hashed with the manifest in the pack's order
 (`pack::pack_hash`), which is how an update is noticed later. The pictures are then decoded and
@@ -296,6 +300,13 @@ pack folder from disk.
 A pack is official when folderskin-community's `official.json` lists it: `head.json` carries the
 list and `index.json` marks each such entry, and every pack the commands hand the webview says
 `official`, which Community and the pack viewer show as a badge ([PACKS.md](PACKS.md#featured-and-official-packs)).
+
+A pack's id can change: `moved.json` beside `packs/` maps each old id to the new one, and
+`head.json` carries it as `moved`. Every id that comes from outside the catalog (an install link,
+the webview, the library) is looked up through `Source::current_id`, and the first command to use
+a catalog with moves moves the library's records of packs added under an old id to the new one
+(`community::follow_moves`, `Store::move_packs`), so those packs stay added and keep getting
+their updates.
 
 ### Install links and counts
 
@@ -312,7 +323,7 @@ first-launch welcome, isn't lost. The Community store's `install` then opens the
 `community_pack` and adds it through the same `add` its Add button uses.
 
 Once `community_add` has saved a pack, `installs::report` sends
-`POST <service>/v1/packs/<id>/installs` on a task of its own, with a five-second timeout, and
+`POST <service>/v1/packs/<id>/installs`, with the id the pack has now, on a task of its own, with a five-second timeout, and
 drops whatever comes back. The service is the one sharing uses (`FOLDERSKIN_COMMUNITY_API`, or
 `COMMUNITY_API` in `share.rs`), or `https://community.folderskin.app`; development builds and
 builds reading another copy of the packs send nothing unless a service is named.
