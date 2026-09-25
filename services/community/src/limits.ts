@@ -55,7 +55,10 @@ export const SUBMISSION_NETWORK_SECONDS = 30 * 86400;
 // ---- the pack contract (folderskin_core::pack) ----
 export const PACK_VERSION = 1;
 export const MAX_SKINS = 50;
-export const MAX_PICTURE_BYTES = 2 * 1024 * 1024;
+/** The most bytes a picture can have, 1.5 MB. */
+export const MAX_PICTURE_BYTES = 1_572_864;
+/** The most a pack's pictures can come to together, 40 MB. */
+export const MAX_PACK_BYTES = 40 * 1024 * 1024;
 export const MIN_PICTURE_SIDE = 256;
 export const MAX_PICTURE_SIDE = 1024;
 export const MAX_PACK_NAME_CHARS = 40;
@@ -64,6 +67,11 @@ export const MAX_PACK_TAGS = 5;
 export const MAX_SKIN_TAGS = 3;
 export const MAX_TAG_CHARS = 24;
 export const LICENSES = ["CC0-1.0", "CC-BY-4.0", "MIT"] as const;
+/**
+ * The file names a pack's pictures can have. A pack shared here now has to be lossless, so PNG or
+ * lossless WebP (images.ts checks the bytes); `.jpg` and `.jpeg` stay valid names for the packs
+ * already published with them.
+ */
 export const PICTURE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
 /** A pack id is at most 40 characters; a generated one is its name's slug cut to 33, a dash and 6 random characters. */
 export const MAX_PACK_ID_CHARS = 40;
@@ -73,8 +81,12 @@ export const ID_SUFFIX_CHARS = 6;
 // ---- what the service adds ----
 /** Where the pictures came from, as the app asks it. */
 export const SOURCES = ["own", "ai", "mixed", "licensed"] as const;
-/** The version of docs/PACK-TERMS.md the app shows. A submission agreeing to another is turned away. */
-export const TERMS_VERSION = 1;
+/**
+ * The version of docs/PACK-TERMS.md the app shows. A submission agreeing to another is turned away.
+ * Version 2 is the terms for sharing through this service alone, with no GitHub; its rules keep
+ * version 1's numbers, which terms.ts's reasons point at.
+ */
+export const TERMS_VERSION = 2;
 export const MAX_NOTES_CHARS = 400;
 /** A contact sheet: the pack's pictures small, side by side, for triage and for review on a phone. */
 export const PICTURES_PER_SHEET = 16;

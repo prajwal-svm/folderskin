@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { sha256Hex } from "../src/bytes";
 import worker from "../src/index";
 import { makeLink } from "../src/links";
-import { DISPATCH_URL, isTreePath } from "../src/publish";
+import { DISPATCH_URL, forgetPending, isTreePath, pending } from "../src/publish";
 import { forgetPublished, PUBLISHED_INDEX } from "../src/published";
 import { BASE, call, device, drawSuffixes, errorOf, pictures, signed, submit, testEnv, verify, type Device } from "./helpers";
 
@@ -148,19 +148,27 @@ describe("approving a pack", () => {
 });
 
 describe("the pending count", () => {
+  beforeEach(() => forgetPending());
   const pendingNow = async (overrides = {}) => call(new Request(`${BASE}/v1/exports/pending`, { headers: { "CF-Connecting-IP": "192.0.2.1" } }), overrides);
+  const pendingAt = async (at: number) => ((await (await pending(testEnv(), at)).json()) as { pending: number }).pending;
 
   it("says how many approved packs wait to be pulled, and nothing about them", async () => {
-    const before = ((await (await pendingNow()).json()) as { pending: number }).pending;
+    const response = await pendingNow();
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    const { pending: before } = (await response.json()) as { pending: number };
+    expect(Object.keys(await (await pendingNow()).json())).toEqual(["pending"]);
+
     const who = await author("pending-author");
     const id = await submit(who, pictures(1, 90), { name: "Waiting to go" });
     stubGitHub({});
     await decide(id, { decision: "approve" });
-    const response = await pendingNow();
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
-    expect(await response.json()).toEqual({ pending: before + 1 });
+    const at = Math.floor(Date.now() / 1000);
+    forgetPending();
+    expect(await pendingAt(at)).toBe(before + 1);
     await call(await signed(maintainer, "POST", `/v1/admin/exports/${id}/done`, {}), asAdmin());
-    expect(await (await pendingNow()).json()).toEqual({ pending: before });
+    // Each isolate reads the database for it once a minute at most, however often it is asked.
+    expect(await pendingAt(at + 30)).toBe(before + 1);
+    expect(await pendingAt(at + 60)).toBe(before);
   });
 
   it("is held to the burst limit", async () => {
