@@ -110,7 +110,7 @@
     "fix": {
       "network": "Vérifiez la connexion Internet (et tout proxy ou pare-feu), puis réessayez.",
       "otherModel": "Choisissez un autre modèle dans les réglages du fournisseur.",
-      "later": "Réessayez dans un moment. Si cela continue, essayez un autre modèle ou un autre fournisseur que {{provider}}.",
+      "later": "Réessayez dans un moment. Si cela continue, essayez un autre modèle ou changez de fournisseur (actuellement {{provider}}).",
       "closeApps": "Fermez les apps qui utilisent la carte graphique, comme les jeux ou les logiciels de montage vidéo, puis réessayez.",
       "restart": "Si cela continue, redémarrez l'ordinateur : quelque chose occupe peut-être encore la mémoire de la carte graphique.",
       "tryAgain": "Réessayez.",
@@ -139,11 +139,11 @@
       "finish": "Finitions",
       "waiting": "En attente de la fin de l'image précédente",
       "slow": "Peinture lente : trop peu de mémoire est libre pour garder le modèle, il est donc lu depuis le disque",
-      "downloading": "Téléchargement de {{file}}",
-      "resuming": "Reprise de {{file}}",
-      "checking": "Vérification de {{file}}",
-      "unpacking": "Décompression de {{what}}",
-      "installing": "Installation de {{what}}"
+      "downloading": "Téléchargement : {{file}}",
+      "resuming": "Reprise : {{file}}",
+      "checking": "Vérification : {{file}}",
+      "unpacking": "Décompression : {{what}}",
+      "installing": "Installation : {{what}}"
     },
     "hint": {
       "price": "~{{price}} / image",

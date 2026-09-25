@@ -50,7 +50,7 @@
     "updateTip": "Une nouvelle version de ce pack est disponible",
     "update": "Mettre à jour",
     "removing": "Retrait en cours",
-    "removingLabel": "retrait de {{name}}",
+    "removingLabel": "retrait du pack {{name}}",
     "removeTip": "Retirer ce pack",
     "removeLabel": "retirer {{name}}",
     "add": "Ajouter"
@@ -69,8 +69,8 @@
   "progress": {
     "adding": "Ajout",
     "updating": "Mise à jour",
-    "addingLabel": "Ajout de {{name}}",
-    "updatingLabel": "Mise à jour de {{name}}",
+    "addingLabel": "Ajout du pack {{name}}",
+    "updatingLabel": "Mise à jour du pack {{name}}",
     "downloading": "Téléchargement : {{done}} sur {{total}}",
     "saving": "Enregistrement : {{done}} sur {{total}}"
   },

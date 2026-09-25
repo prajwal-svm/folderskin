@@ -50,7 +50,7 @@
     "unfaveLabel": "retirer {{name}} des favoris",
     "fave": "Ajouter aux favoris",
     "unfave": "Retirer des favoris",
-    "optionsLabel": "options de {{name}}",
+    "optionsLabel": "options pour {{name}}",
     "optionsYours": "Nom, tags et détails",
     "options": "Tags et détails"
   },

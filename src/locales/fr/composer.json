@@ -393,10 +393,10 @@
     "searchLogos_other": "Chercher parmi {{count}} logos",
     "search": "Chercher des icônes",
     "searchLabel": "chercher des icônes",
-    "opening": "Ouverture de {{name}}",
+    "opening": "Ouverture du pack {{name}}",
     "openingIcons": "Ouverture des icônes",
-    "gridLabel": "icônes de {{name}}",
-    "noMatch": "Aucune icône de {{name}} ne correspond à « {{query}} ». Essayez un autre mot en anglais, ou un autre pack.",
+    "gridLabel": "icônes du pack {{name}}",
+    "noMatch": "Aucune icône du pack {{name}} ne correspond à « {{query}} ». Essayez un autre mot en anglais, ou un autre pack.",
     "swapHint": "Cliquez sur une icône pour la mettre à sa place.",
     "doneTip": "Arrêter l'échange, pour ajouter des icônes",
     "trying": "Sur votre dossier, à l'essai. Ajoutez-la pour la garder.",
@@ -478,7 +478,7 @@
     "remixing": "Remixer {{name}} remplace la création en cours, et ses modifications ne sont pas enregistrées."
   },
   "save": {
-    "changesSaved": "Modifications de {{name}} enregistrées",
+    "changesSaved": "Modifications enregistrées : {{name}}",
     "inYours": "{{name}} est dans Mes habillages",
     "savedThen": "Enregistré. {{message}}",
     "savedAndWears": "Enregistré, et {{folder}} porte désormais {{skin}}",

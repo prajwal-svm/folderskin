@@ -17,7 +17,7 @@
     "inLibrary_one": "Vous avez {{count}} habillage dans votre bibliothèque.",
     "inLibrary_many": "Vous avez {{count}} d'habillages dans votre bibliothèque.",
     "inLibrary_other": "Vous avez {{count}} habillages dans votre bibliothèque.",
-    "adding": "Ajout de {{name}}. Cela prend quelques secondes.",
+    "adding": "Ajout du pack {{name}}. Cela prend quelques secondes.",
     "failedWhy_one": "Impossible d'ajouter {{names}} : {{reason}}.",
     "failedWhy_many": "Impossible d'ajouter {{names}} : {{reason}}.",
     "failedWhy_other": "Impossible d'ajouter {{names}} : {{reason}}.",
