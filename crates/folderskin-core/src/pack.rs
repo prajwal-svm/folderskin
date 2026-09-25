@@ -162,6 +162,10 @@ impl Pack {
 
 /// `community/index.json`: the packs the app lists, written by `folderskin-tools packs index`.
 /// Each pack's preview strip sits beside it at `previews/<id>.png`.
+///
+/// Unlike `pack.json`, fields this version doesn't know are ignored here, which is what lets an
+/// index gain fields without breaking the apps already installed: add new ones as optional, and
+/// never rename or remove one.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Index {
     pub version: u32,
@@ -183,6 +187,17 @@ pub struct IndexEntry {
     /// added has changed since. Empty in an index written before there was one.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hash: String,
+    /// When the pack was first published, in Unix seconds: the time of the commit that added its
+    /// `pack.json`. Left out when nobody knows, and in an index written before there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added: Option<i64>,
+    /// True for a pack the maintainer lists in `official.json`; left out for every other pack.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub official: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Index {
@@ -200,7 +215,9 @@ impl Index {
 }
 
 impl IndexEntry {
-    /// The entry for `pack`, in folder `id`, whose contents hash to `hash` ([`pack_hash`]).
+    /// The entry for `pack`, in folder `id`, whose contents hash to `hash` ([`pack_hash`]). It
+    /// says nothing of when the pack was added or whether it is official: only the repository
+    /// around the pack knows that.
     pub fn new(id: &str, pack: &Pack, hash: String) -> IndexEntry {
         let every: Vec<String> = pack.skins.iter().flat_map(|s| pack.tags_for(s)).collect();
         IndexEntry {
@@ -211,6 +228,8 @@ impl IndexEntry {
             tags: clean_tags(&every, usize::MAX),
             count: pack.skins.len(),
             hash,
+            added: None,
+            official: false,
         }
     }
 }
@@ -504,12 +523,38 @@ mod tests {
         let old = r#"{ "version": 1, "packs": [ { "id": "colours", "name": "Colours",
   "author": "prajwal-svm", "license": "CC0-1.0", "tags": ["colour"], "count": 8 } ] }"#;
         let index = Index::parse(old.as_bytes()).unwrap();
-        assert_eq!(index.packs[0].hash, "");
-        let json = serde_json::to_string(&index.packs[0]).unwrap();
-        assert!(
-            !json.contains("hash"),
-            "an empty hash isn't written: {json}"
+        let entry = &index.packs[0];
+        assert_eq!(
+            (entry.hash.as_str(), entry.added, entry.official),
+            ("", None, false)
         );
+        let json = serde_json::to_string(entry).unwrap();
+        for unsaid in ["hash", "added", "official"] {
+            assert!(
+                !json.contains(unsaid),
+                "no {unsaid} is written when there is none: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_index_says_when_a_pack_was_added_and_whether_it_is_official() {
+        let index = r#"{ "version": 1, "packs": [ { "id": "classic-art", "name": "Classic Art",
+  "author": "prajwal-svm", "license": "CC0-1.0", "tags": ["classic art"], "count": 16,
+  "hash": "4edf8c11d48ab779", "added": 1790000000, "official": true } ] }"#;
+        let entry = &Index::parse(index.as_bytes()).unwrap().packs[0];
+        assert_eq!((entry.added, entry.official), (Some(1_790_000_000), true));
+        let json = serde_json::to_string(entry).unwrap();
+        assert!(
+            json.ends_with(r#""hash":"4edf8c11d48ab779","added":1790000000,"official":true}"#),
+            "{json}"
+        );
+        // Fields this version doesn't know are passed over, as 0.1.4 and 0.1.5 pass over these.
+        let later = index.replace(
+            r#""official": true"#,
+            r#""official": true, "downloads": 12"#,
+        );
+        assert_eq!(&Index::parse(later.as_bytes()).unwrap().packs[0], entry);
     }
 
     #[test]

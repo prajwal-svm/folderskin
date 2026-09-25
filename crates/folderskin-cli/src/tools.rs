@@ -216,7 +216,14 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             for problem in &report.problems {
                 out.warn(problem);
             }
-            let changes = packs::write_index(&dir, &report).map_err(|why| {
+            // Each pack is dated by the commit that added it, as the catalog dates them.
+            let dates = catalog::git_dates(&dir);
+            if dates.is_empty() && !report.packs.is_empty() {
+                out.warn(
+                    "no git history for these packs, so index.json can't say when each was added",
+                );
+            }
+            let changes = packs::write_index(&dir, &report, &dates).map_err(|why| {
                 CliError::fixable(
                     "index_failed",
                     "The index couldn't be written.",

@@ -561,7 +561,11 @@ fn packs_index(dir: &Path) -> Result<(), String> {
     for problem in &report.problems {
         println!("{problem}");
     }
-    let changes = packs::write_index(dir, &report)?;
+    let dates = catalog::git_dates(dir);
+    if dates.is_empty() && !report.packs.is_empty() {
+        println!("no git history for these packs, so index.json can't say when each was added");
+    }
+    let changes = packs::write_index(dir, &report, &dates)?;
     for path in &changes.removed {
         println!("removed {}", path.display());
     }
