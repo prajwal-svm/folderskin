@@ -26,7 +26,7 @@ Scene: DESCRIBE THE SCENE
 Style: DESCRIBE THE STYLE
 
 Paint the scene across the whole folder. The sky or background continues up into the back
-panel and the tab; the main subject sits in the middle of the front panel, fully inside it.
+panel and the tab. The main subject sits in the middle of the front panel, fully inside it.
 Keep the paper sheet as a clean cream strip. Rich colour, strong light, fine texture, like a
 collectible poster.
 

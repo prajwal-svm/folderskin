@@ -108,7 +108,7 @@ export function chatPrompt(scene: string, styleId: string | null): string {
 
 ${lines.join("\n")}
 
-Paint the scene across the whole folder. The sky or background continues up into the back panel and the tab; the main subject sits in the middle of the front panel, fully inside it. Keep the paper sheet as a clean cream strip. Rich colour, strong light, fine texture, like a collectible poster.
+Paint the scene across the whole folder. The sky or background continues up into the back panel and the tab. The main subject sits in the middle of the front panel, fully inside it. Keep the paper sheet as a clean cream strip. Rich colour, strong light, fine texture, like a collectible poster.
 
 Paint everything outside the folder pure flat magenta #FF00FF: no shadow, no glow, no gradient, no border, no other objects. Do not use magenta or hot pink inside the folder. Square image.`;
 }
