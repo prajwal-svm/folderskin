@@ -312,3 +312,33 @@ describe("a new pack's id", () => {
     expect((await approveWith("Orchard", 85, undefined, a)).pack_id).toBe("orchard-aaaaaa");
   });
 });
+
+describe("a key in PUBLISH_KEYS", () => {
+  it("publishes, and gets nothing but 'nothing here' from the rest of the admin side", async () => {
+    const workflow = await device();
+    const keys = { ADMIN_KEYS: maintainer.key, PUBLISH_KEYS: workflow.key };
+    const body = new TextEncoder().encode("{}");
+    const path = "v2/packs/published-by-the-workflow-abcdef/0f.json";
+    const request = await signed(workflow, "PUT", `/v1/admin/tree/${path}`, body);
+    const headers = new Headers(request.headers);
+    headers.set("X-Content-SHA256", await sha256Hex(body));
+    headers.set("Content-Length", String(body.length));
+    const stored = await call(new Request(request.url, { method: "PUT", headers, body }), keys);
+    expect(stored.status).toBe(200);
+    expect(await env.PACKS.head(path)).not.toBeNull();
+    expect((await call(await signed(workflow, "GET", "/v1/admin/exports"), keys)).status).toBe(200);
+
+    for (const [method, route, payload] of [
+      ["GET", "/v1/admin/queue", undefined],
+      ["GET", "/v1/admin/reports", undefined],
+      ["POST", "/v1/admin/pause", { paused: true, message: "" }],
+      ["POST", `/v1/admin/keys/${workflow.key}/tier`, { tier: "trusted" }],
+    ] as const) {
+      const answer = await call(await signed(workflow, method, route, payload), keys);
+      expect([route, answer.status]).toEqual([route, 404]);
+    }
+    // Taken out of PUBLISH_KEYS, the same key can't publish either.
+    const again = await signed(workflow, "GET", "/v1/admin/exports");
+    expect((await call(again, { ADMIN_KEYS: maintainer.key })).status).toBe(404);
+  });
+});

@@ -157,15 +157,30 @@ export function allowedAccount(account: Account | null): Account {
   return account;
 }
 
-/** Whether `key` is one of the maintainer's, from ADMIN_KEYS. */
-export function isAdmin(env: Env, key: string): boolean {
-  return (env.ADMIN_KEYS ?? "")
+/** Whether `key` is in `list`, a comma-separated list of public keys from wrangler.toml. */
+function listed(list: string | undefined, key: string): boolean {
+  return (list ?? "")
     .split(",")
     .map((k) => k.trim())
     .some((k) => k.length > 0 && k === key);
 }
 
+/** Whether `key` is one of the maintainer's, from ADMIN_KEYS. */
+export function isAdmin(env: Env, key: string): boolean {
+  return listed(env.ADMIN_KEYS, key);
+}
+
 export function requireAdmin(env: Env, key: string): void {
   // The same answer as a route that doesn't exist: the admin surface isn't advertised.
   if (!isAdmin(env, key)) throw fail(404, "not_found", "There's nothing here.");
+}
+
+/**
+ * For the publishing routes alone: a key in PUBLISH_KEYS, or one of the maintainer's. A publishing
+ * key reads the approved packs, says where it put them and uploads the catalog, and gets the same
+ * "nothing here" as a stranger from everything else, so the workflow that holds one can't approve,
+ * ban, pause or read reports.
+ */
+export function requirePublisher(env: Env, key: string): void {
+  if (!isAdmin(env, key) && !listed(env.PUBLISH_KEYS, key)) throw fail(404, "not_found", "There's nothing here.");
 }
