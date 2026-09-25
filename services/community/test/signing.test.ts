@@ -164,11 +164,18 @@ describe("verifying a computer", () => {
     });
   });
 
-  it("gives a taken name a number rather than turning the person away", async () => {
+  it("lets two computers go by the same name, since their keys tell them apart", async () => {
     const first = await device();
     const second = await device();
     expect(await verify(first, "moss-garden")).toBe("moss-garden");
-    expect(await verify(second, "Moss-Garden")).toBe("Moss-Garden-2");
+    expect(await verify(second, "Moss-Garden")).toBe("Moss-Garden");
+    const third = await device();
+    await verify(third, "fern-hollow");
+    const renamed = await call(await signed(third, "POST", "/v1/me", { handle: "moss-garden" }));
+    expect(await renamed.json()).toEqual({ handle: "moss-garden" });
+    for (const [who, name] of [[first, "moss-garden"], [second, "Moss-Garden"], [third, "moss-garden"]] as const) {
+      expect(await (await call(await signed(who, "GET", "/v1/me"))).json()).toMatchObject({ verified: true, handle: name });
+    }
   });
 
   it("turns away names nobody may use", async () => {

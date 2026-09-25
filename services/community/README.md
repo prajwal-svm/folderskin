@@ -41,6 +41,13 @@ if another approved pack has it, as its id or the folder it was pulled into, or 
 folderskin-community's published `index.json` lists it as a pack or as a renamed pack's old id.
 An id never changes once a pack has it.
 
+## Names
+
+The name a computer's packs are credited to can repeat as well: any number of computers can go by
+one name, and the service tells them apart by their keys, which nobody sees. A name is shaped like
+a GitHub user name, 3 to 39 characters, and a few words that would pass for FolderSkin itself are
+kept (`handleProblem` in `src/text.ts`).
+
 ## Publishing
 
 The moment a pack is approved, from the admin API or a phone link, the service sends
