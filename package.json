@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:locales": "node scripts/check-locales.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

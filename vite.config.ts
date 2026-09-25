@@ -33,7 +33,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // The check script for the translations (scripts/check-locales.mjs) is tested alongside.
+    include: ["src/**/*.test.ts", "scripts/**/*.test.mjs"],
     // `pnpm test:coverage` writes the report SonarQube Cloud reads (sonar-project.properties).
     // Files no test runs are listed too, as uncovered.
     coverage: {
