@@ -5,10 +5,11 @@ import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { keys, localOs } from "../../lib/platform";
 import "../../i18n/composer";
-import { t as tNow } from "../../i18n";
+import { t as tNow, useT } from "../../i18n";
+import { formatNumber } from "../../i18n/format";
 import { cleanName, clip as clipName, MAX_NAME_CHARS } from "../../lib/names";
 import type { DragInfo, Folder } from "../../state/dropzone";
-import { applyLabel, folders as folderCount, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
+import { applyLabel, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
 import type { ToastTone } from "../../hooks/useToasts";
 import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
 import { canvasPng } from "../../composer/body";
@@ -192,10 +193,10 @@ function colorsOf(doc: Doc): string[] {
 function readPicture(file: Blob): Promise<ComposerImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("couldn't read that picture"));
+    reader.onerror = () => reject(new Error(tNow("composer.errors.readPicture")));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("couldn't read that picture"));
+      img.onerror = () => reject(new Error(tNow("composer.errors.readPicture")));
       img.onload = () => {
         const k = Math.min(1, 2048 / Math.max(img.naturalWidth, img.naturalHeight));
         const w = Math.max(1, Math.round(img.naturalWidth * k));
@@ -210,7 +211,7 @@ function readPicture(file: Blob): Promise<ComposerImage> {
         const data = pg.getImageData(0, 0, 48, 48).data;
         let alpha = false;
         for (let i = 3; i < data.length; i += 4) if (data[i] < 250) alpha = true;
-        resolve({ url: alpha ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.9), width: w, height: h, name: "Pasted picture", alpha });
+        resolve({ url: alpha ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.9), width: w, height: h, name: tNow("composer.pastedPicture"), alpha });
       };
       img.src = reader.result as string;
     };
@@ -251,6 +252,7 @@ function Tool({ tool }: { tool: ToolDef }) {
 
 /** The ⋯ at the end of a toolbar too narrow for every tool: the rest, in a menu. A tool with a panel opens it in the same place. */
 function MoreTools({ tools }: { tools: ToolDef[] }) {
+  const t = useT();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [inner, setInner] = useState<ToolDef | null>(null);
   const close = () => {
@@ -264,36 +266,36 @@ function MoreTools({ tools }: { tools: ToolDef[] }) {
         className={anchor ? "cmp-tool is-open" : "cmp-tool"}
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
-        aria-label="more tools"
-        data-tip={tools.map((t) => t.label).join(", ")}
+        aria-label={t("composer.tools.moreLabel")}
+        data-tip={tools.map((tool) => tool.label).join(", ")}
         data-tip-side="bottom"
         onClick={(e) => (anchor ? close() : setAnchor(e.currentTarget))}
       >
         <EllipsisIcon size={16} />
-        <span className="cmp-tool-label">More</span>
+        <span className="cmp-tool-label">{t("composer.tools.more")}</span>
       </button>
       {anchor && (
-        <Popover anchor={anchor} onClose={close} width={inner ? (inner.width ?? 300) : 200} label={inner ? inner.label : "More tools"} align="end">
+        <Popover anchor={anchor} onClose={close} width={inner ? (inner.width ?? 300) : 200} label={inner ? inner.label : t("composer.tools.moreTools")} align="end">
           {inner?.popover ? (
             inner.popover(close)
           ) : (
             <div className="cmp-menu" role="menu">
-              {tools.map((t) => (
+              {tools.map((tool) => (
                 <button
-                  key={t.label}
+                  key={tool.label}
                   type="button"
                   role="menuitem"
                   className="menu-item"
                   onClick={() => {
-                    if (t.popover) setInner(t);
+                    if (tool.popover) setInner(tool);
                     else {
                       close();
-                      t.onClick?.();
+                      tool.onClick?.();
                     }
                   }}
                 >
-                  {t.icon}
-                  {t.label}
+                  {tool.icon}
+                  {tool.label}
                 </button>
               ))}
             </div>
@@ -396,33 +398,32 @@ function useBarRoom(bar: RefObject<HTMLDivElement | null>, backdrops: RefObject<
 
 /** How to get around the canvas, behind the info button rather than taking room in the panel. */
 function TipsButton() {
+  const t = useT();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
     <>
       <button
         type="button"
         className={anchor ? "cmp-icon-btn is-on" : "cmp-icon-btn"}
-        aria-label="tips and shortcuts"
+        aria-label={t("composer.tips.label")}
         aria-haspopup="dialog"
         aria-expanded={anchor !== null}
-        data-tip="Tips and shortcuts"
+        data-tip={t("composer.tips.title")}
         data-tip-side="bottom"
         onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
       >
         <InfoCircleIcon size={16} />
       </button>
       {anchor && (
-        <Popover anchor={anchor} onClose={() => setAnchor(null)} width={300} label="Tips and shortcuts" align="end">
-          <p className="cmp-pop-title">Tips and shortcuts</p>
+        <Popover anchor={anchor} onClose={() => setAnchor(null)} width={300} label={t("composer.tips.title")} align="end">
+          <p className="cmp-pop-title">{t("composer.tips.title")}</p>
           <ul className="cmp-tips">
-            <li>Click the folder to change its colour.</li>
-            <li>Double-click words to edit them, an emoji to swap it, or an icon to pick another.</li>
-            <li>Drag a corner to resize, the round knob to turn. Hold ⇧ for even steps.</li>
-            <li>Hold {localOs() === "macos" ? "⌘" : "Ctrl"} while dragging to stop things snapping into place.</li>
-            <li>Drop or paste a picture straight onto the folder.</li>
-            <li>
-              {keys("Z")} undoes, {keys("D")} duplicates, Delete removes the selected layer.
-            </li>
+            <li>{t("composer.tips.colour")}</li>
+            <li>{t("composer.tips.doubleClick")}</li>
+            <li>{t("composer.tips.resize")}</li>
+            <li>{t("composer.tips.snap", { key: localOs() === "macos" ? "⌘" : "Ctrl" })}</li>
+            <li>{t("composer.tips.drop")}</li>
+            <li>{t("composer.tips.keys", { undo: keys("Z"), duplicate: keys("D") })}</li>
           </ul>
         </Popover>
       )}
@@ -430,12 +431,8 @@ function TipsButton() {
   );
 }
 
-const BACKDROPS: { id: Backdrop; label: string }[] = [
-  { id: "window", label: "Window" },
-  { id: "light", label: "Light desktop" },
-  { id: "dark", label: "Dark desktop" },
-  { id: "colour", label: "Colourful wallpaper" },
-];
+/** What the folder can be seen against; each is named by `composer.backdrops.<id>`. */
+const BACKDROPS: Backdrop[] = ["window", "light", "dark", "colour"];
 
 /**
  * The composer: design a skin on a canvas and save it to the library, or straight onto the
@@ -501,6 +498,7 @@ export function Composer({
   request: ComposerRequest | null;
   toast: (text: string, opts?: { tone?: ToastTone; action?: { label: string; run: () => void } }) => void;
 }) {
+  const t = useT();
   const assets = useMemo(() => new Assets(), []);
   const [version, setVersion] = useState(0);
   useEffect(() => assets.onChange(() => setVersion((v) => v + 1)), [assets]);
@@ -538,7 +536,7 @@ export function Composer({
         .catch((e) => {
           asked.current.delete(style);
           setTemplates((all) => ({ ...all, [style]: null }));
-          toast(`The folder preview didn't load: ${errorMessage(e)}`, { tone: "danger" });
+          toast(tNow("composer.errors.preview", { reason: errorMessage(e) }), { tone: "danger" });
         });
     },
     [toast],
@@ -658,14 +656,14 @@ export function Composer({
     }
   }, []);
 
-  /** Asks before throwing away changes that aren't saved. */
+  /** Asks before throwing away changes that aren't saved; `text` says what would replace them. */
   const guard = useCallback(
-    (what: string, run: () => void | Promise<void>) => {
+    (text: string, run: () => void | Promise<void>) => {
       if (!dirty) return run();
       setConfirm({
-        title: "Start again?",
-        text: `${what} replaces the design you're working on, and its changes aren't saved.`,
-        action: "Replace it",
+        title: tNow("composer.guard.title"),
+        text,
+        action: tNow("composer.guard.action"),
         run,
       });
     },
@@ -675,11 +673,11 @@ export function Composer({
   const choosePicture = useCallback(async (): Promise<ComposerImage | null> => {
     try {
       if (!isTauri()) return await api.composerImage("mock");
-      const picked = await open({ multiple: false, title: "Choose a picture", filters: [{ name: "Pictures", extensions: IMAGE_EXTENSIONS }] }).catch(() => null);
+      const picked = await open({ multiple: false, title: tNow("common.dialog.choosePicture"), filters: [{ name: tNow("common.dialog.pictures"), extensions: IMAGE_EXTENSIONS }] }).catch(() => null);
       if (typeof picked !== "string") return null;
       return await api.composerImage(picked);
     } catch (e) {
-      toast(`Couldn't add that picture: ${errorMessage(e)}`, { tone: "danger" });
+      toast(tNow("composer.errors.addPicture", { reason: errorMessage(e) }), { tone: "danger" });
       return null;
     }
   }, [toast]);
@@ -734,13 +732,16 @@ export function Composer({
         } else {
           next = { ...emptyDoc("folder", latestDoc.current.style), layers: [makeImage(img.url, img.width, img.height, imageBox(img.width, img.height, parts, true))] };
         }
-        reset(next, { editing: null, name: `${skin.name} remix`, named: true });
+        reset(next, { editing: null, name: tNow("composer.remixName", { name: skin.name }), named: true });
       } catch (e) {
-        toast(`Couldn't open ${clipName(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
+        toast(tNow("composer.errors.open", { name: clipName(skin.name), reason: errorMessage(e) }), { tone: "danger" });
       }
     };
     if (editing?.skinId === skin.id && request.kind === "edit") return;
-    guard(request.kind === "edit" ? `Editing ${clipName(skin.name)}` : `Remixing ${clipName(skin.name)}`, () => void load());
+    guard(
+      request.kind === "edit" ? tNow("composer.guard.editing", { name: clipName(skin.name) }) : tNow("composer.guard.remixing", { name: clipName(skin.name) }),
+      () => void load(),
+    );
   }, [request, editing, guard, parts, reset, toast]);
 
   // ---- adding ----
@@ -760,7 +761,7 @@ export function Composer({
   );
 
   const addText = () => {
-    const text = makeText("Your words", front.x, front.y, ink);
+    const text = makeText(tNow("composer.yourWords"), front.x, front.y, ink);
     // Beside what's there already, as an icon goes, not over a label's own words: a size smaller
     // where the front is too narrow for them at their own (Windows' is).
     const { w, h } = boxOf(text, assets);
@@ -808,7 +809,7 @@ export function Composer({
       if (into) replacePicture(into, img);
       else addPicture({ ...img, alpha: skin.kind === "folder" || img.alpha });
     } catch (e) {
-      toast(`Couldn't use ${clipName(skin.name)}: ${errorMessage(e)}`, { tone: "danger" });
+      toast(tNow("composer.errors.use", { name: clipName(skin.name), reason: errorMessage(e) }), { tone: "danger" });
     }
   };
   /** Shows the icon library, for icon layer `id` when there is one: the library then works on it. */
@@ -896,7 +897,7 @@ export function Composer({
         api
           .composerImage(path)
           .then(addPicture)
-          .catch((e) => toast(`Couldn't add that picture: ${errorMessage(e)}`, { tone: "danger" }));
+          .catch((e) => toast(tNow("composer.errors.addPicture", { reason: errorMessage(e) }), { tone: "danger" }));
       },
     }),
     [addPicture, toast],
@@ -1020,7 +1021,7 @@ export function Composer({
         e.preventDefault();
         readPicture(file)
           .then(addPicture)
-          .catch((err) => toast(`Couldn't paste that picture: ${errorMessage(err)}`, { tone: "danger" }));
+          .catch((err) => toast(tNow("composer.errors.paste", { reason: errorMessage(err) }), { tone: "danger" }));
         return;
       }
       if (clip.current) {
@@ -1061,7 +1062,7 @@ export function Composer({
 
   // ---- saving ----
   const suggested = suggestName(doc);
-  const finalName = cleanName(name) || suggested || "My design";
+  const finalName = cleanName(name) || suggested || t("composer.myDesign");
 
   const save = useCallback(
     async (mode: "save" | "copy" | "apply") => {
@@ -1072,7 +1073,8 @@ export function Composer({
         setSaving("apply");
         const r = await onApply(saved);
         setSaving(null);
-        if (folder && (r.ok || r.message)) toast(r.message ?? `${clipName(folder.name)} now wears ${clipName(saved.name)}`, { tone: r.tone ?? "ok", action: r.action });
+        if (folder && (r.ok || r.message))
+          toast(r.message ?? tNow("ai.studio.nowWears", { folder: clipName(folder.name), skin: clipName(saved.name) }), { tone: r.tone ?? "ok", action: r.action });
         return;
       }
       setSaving(mode);
@@ -1090,19 +1092,22 @@ export function Composer({
         setName(res.skin.name);
         setNameTouched(true);
         setBaseline(d);
-        const kept = res.replaced ? `Saved the changes to ${clipName(res.skin.name)}` : `${clipName(res.skin.name)} is in Yours`;
+        const kept = res.replaced ? tNow("composer.save.changesSaved", { name: clipName(res.skin.name) }) : tNow("composer.save.inYours", { name: clipName(res.skin.name) });
         const r = mode === "apply" ? await onApply(res.skin) : null;
         if (r?.ok && folder) {
-          toast(r.message ? `Saved. ${r.message}` : `Saved, and ${clipName(folder.name)} now wears ${clipName(res.skin.name)}`, { tone: r.tone ?? "ok", action: r.action });
+          toast(
+            r.message ? tNow("composer.save.savedThen", { message: r.message }) : tNow("composer.save.savedAndWears", { folder: clipName(folder.name), skin: clipName(res.skin.name) }),
+            { tone: r.tone ?? "ok", action: r.action },
+          );
         } else if (r?.message) {
-          // Saved all the same; say so before what stopped the apply.
-          toast(`Saved, but ${r.message.charAt(0).toLowerCase()}${r.message.slice(1)}`, { tone: "danger" });
+          // Saved all the same: say so before what stopped the apply.
+          toast(tNow("composer.save.savedBut", { problem: r.message.charAt(0).toLocaleLowerCase() + r.message.slice(1) }), { tone: "danger" });
         } else {
           // A plain save, or a Save & apply whose apply was cancelled.
           toast(kept, { tone: "ok" });
         }
       } catch (e) {
-        toast(`Couldn't save the design: ${errorMessage(e)}`, { tone: "danger" });
+        toast(tNow("composer.errors.save", { reason: errorMessage(e) }), { tone: "danger" });
       } finally {
         setSaving(null);
       }
@@ -1125,13 +1130,13 @@ export function Composer({
   // off, it's a free icon, the whole picture.
   const viewOf: View = { shape: doc.shape, skeleton: doc.shape === "folder", guide: "rgba(58,134,255,0.95)" };
   const tools: ToolDef[] = [
-    { label: "Text", hint: "Add words", icon: <TypeIcon size={16} />, onClick: addText },
-    { label: "Icon", hint: "Add an icon from the icon library", icon: <StickerIcon size={16} />, onClick: () => openIcons(null) },
-    { label: "Emoji", hint: "Add an emoji", icon: <SmileIcon size={16} />, width: 320, popover: (close) => <EmojiPicker onPick={(c) => (addEmoji(c), close())} /> },
-    { label: "Shape", hint: "Add a shape", icon: <ShapesIcon size={16} />, popover: (close) => <ShapeGrid onPick={(s) => (addShape(s), close())} /> },
+    { label: t("composer.tools.text"), hint: t("composer.tools.textHint"), icon: <TypeIcon size={16} />, onClick: addText },
+    { label: t("composer.tools.icon"), hint: t("composer.tools.iconHint"), icon: <StickerIcon size={16} />, onClick: () => openIcons(null) },
+    { label: t("composer.tools.emoji"), hint: t("composer.tools.emojiHint"), icon: <SmileIcon size={16} />, width: 320, popover: (close) => <EmojiPicker onPick={(c) => (addEmoji(c), close())} /> },
+    { label: t("composer.tools.shape"), hint: t("composer.tools.shapeHint"), icon: <ShapesIcon size={16} />, popover: (close) => <ShapeGrid onPick={(s) => (addShape(s), close())} /> },
     {
-      label: "Picture",
-      hint: "Add a picture",
+      label: t("composer.tools.picture"),
+      hint: t("composer.tools.pictureHint"),
       icon: <ImageIcon size={16} />,
       popover: (close) => (
         <PictureMenu
@@ -1147,8 +1152,8 @@ export function Composer({
         />
       ),
     },
-    { label: "Pattern", hint: "Add a pattern", icon: <WavesIcon size={16} />, popover: (close) => <PatternGrid onPick={(p) => (addPattern(p), close())} /> },
-    { label: "Colour", hint: "Colour the folder", icon: <PaintBucketIcon size={16} />, onClick: addBackground },
+    { label: t("composer.tools.pattern"), hint: t("composer.tools.patternHint"), icon: <WavesIcon size={16} />, popover: (close) => <PatternGrid onPick={(p) => (addPattern(p), close())} /> },
+    { label: t("composer.tools.colour"), hint: t("composer.tools.colourHint"), icon: <PaintBucketIcon size={16} />, onClick: addBackground },
   ];
   const index = selected ? indexOf(doc, selected.id) : -1;
   const used = useMemo(() => colorsOf(doc), [doc]);
@@ -1157,24 +1162,31 @@ export function Composer({
   const inside = folder && includeSubfolders && subfolders ? subfolders.count : 0;
   const primary = folder
     ? {
-        label: editing && !dirty ? (inside ? applyLabel(inside) : `Apply to ${clipName(folder.name, 20)}`) : inside ? `Save & apply to ${folderCount(inside + 1)}` : "Save & apply",
+        label:
+          editing && !dirty
+            ? inside
+              ? applyLabel(inside)
+              : t("ai.turn.applyTo", { name: clipName(folder.name, 20) })
+            : inside
+              ? t("composer.save.saveApplyTo", { count: inside + 1 })
+              : t("composer.save.saveApply"),
         mode: "apply" as const,
       }
     : editing
-      ? { label: dirty ? "Save changes" : "Saved", mode: "save" as const }
-      : { label: "Save to Yours", mode: "save" as const };
+      ? { label: dirty ? t("composer.save.saveChanges") : t("composer.save.saved"), mode: "save" as const }
+      : { label: t("composer.save.saveToYours"), mode: "save" as const };
   const secondary = editing
     ? dirty
-      ? { label: "Save as new", mode: "copy" as const }
+      ? { label: t("composer.save.saveAsNew"), mode: "copy" as const }
       : null
     : folder
-      ? { label: "Save", mode: "save" as const }
+      ? { label: t("settings.profile.save"), mode: "save" as const }
       : null;
   const primaryDisabled = busy || (!folder && editing !== null && !dirty);
 
   return (
     <>
-      <section className={drag?.kind === "image" ? "island island-main cmp-main is-drop-target" : "island island-main cmp-main"} aria-label="composer" hidden={!active}>
+      <section className={drag?.kind === "image" ? "island island-main cmp-main is-drop-target" : "island island-main cmp-main"} aria-label={t("composer.label")} hidden={!active}>
         <span className="drop-glow" aria-hidden="true" />
         <div className="cmp-toolbar">
           <Tools tools={tools} />
@@ -1183,8 +1195,8 @@ export function Composer({
             <button
               type="button"
               className="cmp-icon-btn"
-              aria-label="Undo"
-              data-tip="Undo"
+              aria-label={t("composer.undo")}
+              data-tip={t("composer.undo")}
               data-tip-kbd={MOD_KEYS.undo}
               data-tip-side="bottom"
               disabled={!canUndo(history)}
@@ -1195,8 +1207,8 @@ export function Composer({
             <button
               type="button"
               className="cmp-icon-btn"
-              aria-label="Redo"
-              data-tip="Redo"
+              aria-label={t("composer.redo")}
+              data-tip={t("composer.redo")}
               data-tip-kbd={MOD_KEYS.redo}
               data-tip-side="bottom"
               disabled={!canRedo(history)}
@@ -1204,9 +1216,9 @@ export function Composer({
             >
               <RedoIcon size={16} />
             </button>
-            <button type="button" className="cmp-tool is-quiet" data-tip="Start a new design: empty, or from a template" data-tip-side="bottom" onClick={() => setStarting(true)}>
+            <button type="button" className="cmp-tool is-quiet" data-tip={t("composer.newTip")} data-tip-side="bottom" onClick={() => setStarting(true)}>
               <LayoutTemplateIcon size={16} />
-              <span className="cmp-tool-label">New</span>
+              <span className="cmp-tool-label">{t("composer.newButton")}</span>
             </button>
           </div>
         </div>
@@ -1227,7 +1239,7 @@ export function Composer({
             view={viewOf}
             backdrop={backdrop}
             version={version}
-            hint={doc.layers.length === 0 ? "An empty design is a see-through folder. Add a colour, words or a picture from the bar above." : null}
+            hint={doc.layers.length === 0 ? t("composer.emptyHint") : null}
             onOpen={(layer) => {
               setSelectedId(layer.id);
               window.setTimeout(() => {
@@ -1246,38 +1258,34 @@ export function Composer({
             type="button"
             role="switch"
             aria-checked={doc.shape === "folder"}
-            aria-label="folder skeleton"
+            aria-label={t("composer.skeleton.label")}
             className="cmp-skeleton"
-            data-tip={
-              doc.shape === "folder"
-                ? "On: your design is cut to the folder, with its tab and edges. Off: it's the whole icon, any shape you like."
-                : "Off: your design is the whole icon, any shape you like. On: it's cut to the folder, with its tab and edges."
-            }
+            data-tip={doc.shape === "folder" ? t("composer.skeleton.onTip") : t("composer.skeleton.offTip")}
             onClick={() => commit({ ...latestDoc.current, shape: doc.shape === "folder" ? "free" : "folder" })}
           >
             <span className={doc.shape === "folder" ? "switch is-on" : "switch"} aria-hidden="true">
               <span className="knob" />
             </span>
-            Folder skeleton
+            <span className="cmp-skeleton-label">{t("composer.skeleton.name")}</span>
           </button>
           {doc.shape === "folder" && (
             <LookSwitch value={doc.style} onChange={restyle} />
           )}
-          <div className="cmp-backdrops" role="radiogroup" aria-label="what's behind the folder" ref={backdropsRef} hidden={!barRoom.backdrops}>
+          <div className="cmp-backdrops" role="radiogroup" aria-label={t("composer.backdrops.label")} ref={backdropsRef} hidden={!barRoom.backdrops}>
             {BACKDROPS.map((b) => (
               <button
-                key={b.id}
+                key={b}
                 type="button"
                 role="radio"
-                aria-checked={backdrop === b.id}
-                aria-label={b.label}
-                data-tip={b.label}
-                className={backdrop === b.id ? `cmp-backdrop is-${b.id} is-on` : `cmp-backdrop is-${b.id}`}
-                onClick={() => setView((v) => ({ ...v, backdrop: b.id }))}
+                aria-checked={backdrop === b}
+                aria-label={t(`composer.backdrops.${b}`)}
+                data-tip={t(`composer.backdrops.${b}`)}
+                className={backdrop === b ? `cmp-backdrop is-${b} is-on` : `cmp-backdrop is-${b}`}
+                onClick={() => setView((v) => ({ ...v, backdrop: b }))}
               />
             ))}
           </div>
-          <div className="cmp-sizes" aria-label="the icon at its real sizes" data-tip={tNow(`composer.sizes.tip.${localOs()}`)} ref={sizesRef} hidden={!barRoom.sizes}>
+          <div className="cmp-sizes" aria-label={t("composer.sizes.label")} data-tip={t(`composer.sizes.tip.${localOs()}`)} ref={sizesRef} hidden={!barRoom.sizes}>
             {previews.map((src, i) => {
               const pt = PREVIEW_SIZES[i] / 2;
               return <img key={i} src={src} alt="" width={pt} height={pt} draggable={false} className="cmp-size" />;
@@ -1286,30 +1294,30 @@ export function Composer({
         </div>
       </section>
 
-      <aside className={drag?.kind === "folder" ? "island cmp-side is-drop-target" : "island cmp-side"} aria-label="layers and settings" hidden={!active}>
+      <aside className={drag?.kind === "folder" ? "island cmp-side is-drop-target" : "island cmp-side"} aria-label={t("composer.sideLabel")} hidden={!active}>
         <span className="drop-glow" aria-hidden="true" />
         <div className="cmp-side-head">
           <input
             className="cmp-name"
             value={name}
             maxLength={MAX_NAME_CHARS}
-            placeholder={suggested ?? "Name your skin"}
-            aria-label="skin name"
+            placeholder={suggested ?? t("composer.namePlaceholder")}
+            aria-label={t("composer.nameLabel")}
             spellCheck={false}
             onChange={(e) => {
               setName(e.target.value);
               setNameTouched(true);
             }}
           />
-          {editing && <p className="cmp-side-sub">{dirty ? "Changed since it was saved" : "Saved in Yours"}</p>}
+          {editing && <p className="cmp-side-sub">{dirty ? t("composer.changed") : t("composer.savedInYours")}</p>}
           <div className="cmp-side-tabs">
             <Segmented<"layers" | "icons">
-              label="side panel"
+              label={t("composer.sideTabs.label")}
               value={side}
               onChange={setSide}
               options={[
-                { value: "layers", label: `Layers · ${doc.layers.length}` },
-                { value: "icons", label: "Icons" },
+                { value: "layers", label: t("composer.sideTabs.layersCount", { count: formatNumber(doc.layers.length) }) },
+                { value: "icons", label: t("composer.sideTabs.icons") },
               ]}
             />
           </div>
@@ -1333,8 +1341,8 @@ export function Composer({
         {side === "layers" && (
           <>
             <Panel
-              title="Layers"
-              badge={<span className="count">{doc.layers.length}</span>}
+              title={t("composer.panels.layers")}
+              badge={<span className="count">{formatNumber(doc.layers.length)}</span>}
               open={panels.layers}
               onToggle={() => setPanels((p) => ({ ...p, layers: !p.layers }))}
               className={bothOpen ? "is-layers is-sized" : "is-layers"}
@@ -1361,20 +1369,20 @@ export function Composer({
               />
             )}
             <Panel
-              title="Attributes"
+              title={t("composer.panels.attributes")}
               actions={
                 selected ? (
                   <>
-                    <IconButton label="Bring forward" onClick={() => commit(bringForward(doc, selected.id))} disabled={index >= doc.layers.length - 1}>
+                    <IconButton label={t("composer.layer.forward")} onClick={() => commit(bringForward(doc, selected.id))} disabled={index >= doc.layers.length - 1}>
                       <ChevronUpIcon size={15} />
                     </IconButton>
-                    <IconButton label="Send backward" onClick={() => commit(sendBackward(doc, selected.id))} disabled={index <= 0}>
+                    <IconButton label={t("composer.layer.backward")} onClick={() => commit(sendBackward(doc, selected.id))} disabled={index <= 0}>
                       <ChevronDownIcon size={15} />
                     </IconButton>
-                    <IconButton label="Duplicate" onClick={duplicate}>
+                    <IconButton label={t("composer.layer.duplicate")} onClick={duplicate}>
                       <CopyIcon size={14} />
                     </IconButton>
-                    <IconButton label="Delete" onClick={remove} className="is-danger">
+                    <IconButton label={t("library.delete.action")} onClick={remove} className="is-danger">
                       <TrashIcon size={14} />
                     </IconButton>
                   </>
@@ -1403,11 +1411,11 @@ export function Composer({
           </>
         )}
         <div className="cmp-save">
-          <button type="button" className={folder ? "cmp-target" : "cmp-target is-empty"} onClick={onChooseFolder} disabled={busy} data-tip={folder ? "Choose another folder to apply it to" : "Choose the folder to apply it to"}>
+          <button type="button" className={folder ? "cmp-target" : "cmp-target is-empty"} onClick={onChooseFolder} disabled={busy} data-tip={folder ? t("composer.target.anotherTip") : t("composer.target.chooseTip")}>
             {folder && folderIcon ? <img src={folderIcon} alt="" draggable={false} /> : <FolderIcon size={18} />}
             <span className="cmp-target-text">
-              <span className="cmp-target-label">{folder ? "Apply to" : "No folder chosen"}</span>
-              <span className="cmp-target-name">{folder ? folder.name : "Choose a folder"}</span>
+              <span className="cmp-target-label">{folder ? t("composer.target.applyTo") : t("composer.target.none")}</span>
+              <span className="cmp-target-name">{folder ? folder.name : t("common.dialog.chooseFolder")}</span>
             </span>
           </button>
           {folder && subfolders && subfolders.count > 0 && (
@@ -1420,7 +1428,7 @@ export function Composer({
               onClick={() => onIncludeSubfolders(!includeSubfolders)}
             >
               <span className="cmp-subfolders-text">
-                {subfolders.more ? tooMany("subfolders") : `Include ${folderCount(subfolders.count)} inside`}
+                {subfolders.more ? tooMany("subfolders") : t("composer.includeInside", { count: subfolders.count })}
               </span>
               <span className={includeSubfolders ? "switch is-on" : "switch"} aria-hidden="true">
                 <span className="knob" />
@@ -1431,11 +1439,11 @@ export function Composer({
             <div className="cmp-save-row" role="status" aria-live="polite">
               <button type="button" className="btn btn-secondary" disabled={stopping} onClick={onStop}>
                 {stopping ? <LoaderIcon size={15} /> : null}
-                {stopping ? "Stopping" : "Stop"}
+                {stopping ? t("folder.stage.stopping") : t("folder.stage.stop")}
               </button>
               <button type="button" className="btn btn-primary cmp-progress-btn" disabled aria-busy="true" style={{ "--done": `${progress.total ? (progress.done / progress.total) * 100 : 0}%` } as CSSProperties}>
                 <LoaderIcon size={15} />
-                Applying {progress.done.toLocaleString("en-US")} of {progress.total.toLocaleString("en-US")}
+                {t("composer.applying", { done: progress.done, total: progress.total })}
               </button>
             </div>
           ) : (
@@ -1456,7 +1464,7 @@ export function Composer({
       </aside>
 
       {replaceAnchor && selected?.kind === "image" && (
-        <Popover anchor={replaceAnchor} onClose={() => setReplaceAnchor(null)} width={300} label="Replace the picture" align="end">
+        <Popover anchor={replaceAnchor} onClose={() => setReplaceAnchor(null)} width={300} label={t("composer.replacePicture")} align="end">
           <PictureMenu
             skins={skins}
             onFile={() => {

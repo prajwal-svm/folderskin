@@ -2,7 +2,9 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Assets, ctx2d } from "../../composer/assets";
 import { makePattern, makeShape, PATTERNS, SHAPES, type PatternKind, type ShapeKind } from "../../composer/doc";
 import { EMOJI, searchEmoji } from "../../composer/emoji";
-import { CUSTOM, FONTS } from "../../composer/fonts";
+import { CUSTOM, FONTS, fontLabel } from "../../composer/fonts";
+import "../../i18n/composer";
+import { t, useLocale, type MessageKey } from "../../i18n";
 import { drawPattern } from "../../composer/patterns";
 import { evenOdd, traceShape } from "../../composer/shapes";
 import { graphemes } from "../../composer/text";
@@ -16,6 +18,7 @@ function firstEmoji(s: string): string | null {
 
 /** Emoji by group or by search, plus a field any emoji can be typed or pasted into. */
 export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
+  useLocale();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState(EMOJI[0].id);
   const found = useMemo(() => searchEmoji(query), [query]);
@@ -25,26 +28,26 @@ export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
     <div className="cmp-emoji">
       <input
         className="cmp-search"
-        placeholder="Search, or paste any emoji"
+        placeholder={t("composer.emoji.search")}
         value={query}
         autoFocus
         spellCheck={false}
-        aria-label="search emoji"
+        aria-label={t("composer.emoji.searchLabel")}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && list[0]) onPick(list[0]);
         }}
       />
       {!query.trim() && (
-        <div className="cmp-emoji-tabs" role="tablist" aria-label="emoji groups">
+        <div className="cmp-emoji-tabs" role="tablist" aria-label={t("composer.emoji.groupsLabel")}>
           {EMOJI.map((g) => (
             <button
               key={g.id}
               type="button"
               role="tab"
               aria-selected={g.id === group}
-              data-tip={g.label}
-              aria-label={g.label}
+              data-tip={t(`composer.emojiGroups.${g.id}` as MessageKey)}
+              aria-label={t(`composer.emojiGroups.${g.id}` as MessageKey)}
               className={g.id === group ? "cmp-emoji-tab is-on" : "cmp-emoji-tab"}
               onClick={() => setGroup(g.id)}
             >
@@ -59,7 +62,7 @@ export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
             {c}
           </button>
         ))}
-        {list.length === 0 && <p className="cmp-empty-note">No emoji for "{query.trim()}". Paste one from your keyboard's emoji picker.</p>}
+        {list.length === 0 && <p className="cmp-empty-note">{t("composer.emoji.none", { query: query.trim() })}</p>}
       </div>
     </div>
   );
@@ -67,13 +70,14 @@ export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
 
 /** The fonts, each shown in itself, and a field for any other font on this computer. */
 export function FontPicker({ value, onPick }: { value: string; onPick: (id: string) => void }) {
+  useLocale();
   const [other, setOther] = useState(value.startsWith(CUSTOM) ? value.slice(CUSTOM.length) : "");
   return (
     <div className="cmp-fonts">
       {FONTS.map((f) => (
         <button key={f.id} type="button" className={f.id === value ? "cmp-font is-on" : "cmp-font"} onClick={() => onPick(f.id)}>
           <span className="cmp-font-sample" style={{ fontFamily: f.stack }}>
-            {f.label}
+            {fontLabel(f.id)}
           </span>
           {f.id === value && <CheckIcon size={14} />}
         </button>
@@ -87,15 +91,15 @@ export function FontPicker({ value, onPick }: { value: string; onPick: (id: stri
       >
         <input
           className="cmp-search"
-          placeholder="Another font you have, by name"
+          placeholder={t("composer.fontOther.placeholder")}
           value={other}
           spellCheck={false}
-          aria-label="another font"
+          aria-label={t("composer.fontOther.label")}
           onChange={(e) => setOther(e.target.value)}
           style={other.trim() ? { fontFamily: `"${other.trim().replace(/"/g, "")}", system-ui` } : undefined}
         />
         <button type="submit" className="btn btn-secondary cmp-font-use" disabled={!other.trim()}>
-          Use
+          {t("composer.fontOther.use")}
         </button>
       </form>
     </div>
@@ -128,9 +132,9 @@ export function ShapeGrid({ value, onPick, color = "currentColor" }: { value?: S
   return (
     <div className="cmp-grid">
       {SHAPES.map((s) => (
-        <button key={s.id} type="button" className={s.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} data-tip={s.label} onClick={() => onPick(s.id)}>
+        <button key={s.id} type="button" className={s.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} data-tip={t(`composer.shapes.${s.id}`)} onClick={() => onPick(s.id)}>
           <Mini
-            label={s.label}
+            label={t(`composer.shapes.${s.id}`)}
             size={36}
             draw={(ctx, px) => {
               const layer = makeShape(s.id, 0, 0, ink);
@@ -143,7 +147,7 @@ export function ShapeGrid({ value, onPick, color = "currentColor" }: { value?: S
               ctx.fill(evenOdd(layer) ? "evenodd" : "nonzero");
             }}
           />
-          <span className="cmp-grid-label">{s.label}</span>
+          <span className="cmp-grid-label">{t(`composer.shapes.${s.id}`)}</span>
         </button>
       ))}
     </div>
@@ -155,9 +159,9 @@ export function PatternGrid({ value, onPick }: { value?: PatternKind; onPick: (p
   return (
     <div className="cmp-grid">
       {PATTERNS.map((p) => (
-        <button key={p.id} type="button" className={p.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} data-tip={p.label} onClick={() => onPick(p.id)}>
+        <button key={p.id} type="button" className={p.id === value ? "cmp-grid-btn is-on" : "cmp-grid-btn"} data-tip={t(`composer.patterns.${p.id}`)} onClick={() => onPick(p.id)}>
           <Mini
-            label={p.label}
+            label={t(`composer.patterns.${p.id}`)}
             size={44}
             draw={(ctx, px) => {
               const layer = { ...makePattern(p.id, "#3a86ff", "#3a86ff26"), seed: 7 };
@@ -176,7 +180,7 @@ export function PatternGrid({ value, onPick }: { value?: PatternKind; onPick: (p
               drawPattern(ctx, layer, (seed, c) => shared.grain(seed, c));
             }}
           />
-          <span className="cmp-grid-label">{p.label}</span>
+          <span className="cmp-grid-label">{t(`composer.patterns.${p.id}`)}</span>
         </button>
       ))}
     </div>

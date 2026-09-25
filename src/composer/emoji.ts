@@ -4,12 +4,11 @@
  * the picker's field (or a text layer), since the system's emoji font draws them all.
  */
 
-export type EmojiGroup = { id: string; label: string; icon: string; items: [char: string, words: string][] };
+export type EmojiGroup = { id: string; icon: string; items: [char: string, words: string][] };
 
 export const EMOJI: EmojiGroup[] = [
   {
     id: "faces",
-    label: "Faces and hands",
     icon: "😀",
     items: [
       ["😀", "grin happy smile"], ["😄", "smile happy joy"], ["😂", "laugh tears funny lol"], ["😊", "blush smile happy"],
@@ -30,7 +29,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "symbols",
-    label: "Hearts and symbols",
     icon: "❤️",
     items: [
       ["❤️", "heart love red"], ["🧡", "heart orange"], ["💛", "heart yellow"], ["💚", "heart green"], ["💙", "heart blue"],
@@ -51,7 +49,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "nature",
-    label: "Animals and nature",
     icon: "🐶",
     items: [
       ["🐶", "dog puppy pet"], ["🐱", "cat kitten pet"], ["🐭", "mouse"], ["🐹", "hamster pet"], ["🐰", "rabbit bunny easter"],
@@ -72,7 +69,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "food",
-    label: "Food and drink",
     icon: "🍓",
     items: [
       ["🍎", "apple red fruit"], ["🍐", "pear fruit"], ["🍊", "orange tangerine fruit"], ["🍋", "lemon fruit"], ["🍌", "banana fruit"],
@@ -90,7 +86,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "travel",
-    label: "Travel and places",
     icon: "✈️",
     items: [
       ["✈️", "plane flight travel trip"], ["🚀", "rocket launch space"], ["🛸", "ufo flying saucer"], ["🚗", "car drive"], ["🚕", "taxi"],
@@ -106,7 +101,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "activities",
-    label: "Activities",
     icon: "🎨",
     items: [
       ["⚽", "soccer football"], ["🏀", "basketball"], ["🏈", "american football"], ["⚾", "baseball"], ["🎾", "tennis"],
@@ -125,7 +119,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "objects",
-    label: "Objects and work",
     icon: "💼",
     items: [
       ["📁", "folder file"], ["📂", "open folder file"], ["🗂️", "dividers index"], ["📄", "document page"], ["📃", "page curl"],
@@ -150,7 +143,6 @@ export const EMOJI: EmojiGroup[] = [
   },
   {
     id: "flags",
-    label: "Flags",
     icon: "🏳️‍🌈",
     items: [
       ["🏁", "chequered flag finish race"], ["🏳️", "white flag"], ["🏴", "black flag"], ["🏳️‍🌈", "rainbow flag pride"], ["🏴‍☠️", "pirate flag"],

@@ -1,3 +1,5 @@
+import "../../i18n/composer";
+import { t } from "../../i18n";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { cssColor, hsvToRgb, parseColor, rgbToHsv, SWATCHES, toHex, type HSV } from "../../composer/color";
 import { Popover } from "./Popover";
@@ -78,13 +80,13 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
 
   const pure = toHex(hsvToRgb({ h: hsv.h, s: 1, v: 1 }));
   const opaque = toHex({ ...c, a: 1 });
-  const swatch = (color: string, label: string) => (
+  const swatch = (color: string, kind: "use" | "recent") => (
     <button
-      key={`${label}${color}`}
+      key={`${kind}${color}`}
       type="button"
       className="cmp-swatch"
       style={{ "--c": cssColor(color) } as CSSProperties}
-      aria-label={`${label} ${color}`}
+      aria-label={kind === "recent" ? t("composer.colour.useRecent", { color }) : t("composer.colour.use", { color })}
       data-tip={color}
       onClick={() => {
         const p = parseColor(color);
@@ -107,7 +109,7 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
         style={{ "--hue": pure } as CSSProperties}
         onPointerDown={(e) => track(e, (x, y) => emit({ h: hsv.h, s: x, v: 1 - y }), () => rememberColor(last.current))}
         role="slider"
-        aria-label="saturation and brightness"
+        aria-label={t("composer.colour.area")}
         aria-valuenow={Math.round(hsv.s * 100)}
       >
         <span className="cmp-sv-knob" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: opaque }} />
@@ -116,7 +118,7 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
         className="cmp-strip cmp-hue"
         onPointerDown={(e) => track(e, (x) => emit({ ...hsv, h: x * 360 }), () => rememberColor(last.current))}
         role="slider"
-        aria-label="hue"
+        aria-label={t("composer.colour.hue")}
         aria-valuenow={Math.round(hsv.h)}
       >
         <span className="cmp-strip-knob" style={{ left: `${(hsv.h / 360) * 100}%`, background: pure }} />
@@ -127,7 +129,7 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
           style={{ "--c": opaque } as CSSProperties}
           onPointerDown={(e) => track(e, (x) => emit(hsv, Math.round(x * 100) / 100), () => rememberColor(last.current))}
           role="slider"
-          aria-label="opacity"
+          aria-label={t("composer.colour.opacity")}
           aria-valuenow={Math.round(c.a * 100)}
         >
           <span className="cmp-strip-knob" style={{ left: `${c.a * 100}%`, background: cssColor(value) }} />
@@ -139,7 +141,7 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
           className="cmp-hex"
           value={hex}
           spellCheck={false}
-          aria-label="colour code"
+          aria-label={t("composer.colour.code")}
           onChange={(e) => {
             setHex(e.target.value);
             const p = parseColor(e.target.value);
@@ -166,8 +168,8 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
           <button
             type="button"
             className="cmp-swatch is-clear"
-            aria-label="no colour"
-            data-tip="See-through"
+            aria-label={t("composer.colour.none")}
+            data-tip={t("composer.colour.seeThrough")}
             onClick={() => {
               const out = toHex({ ...c, a: 0 });
               last.current = out;
@@ -179,14 +181,14 @@ export function ColorPicker({ value, onChange, alpha = true, used = [] }: { valu
       </div>
       {used.length > 0 && (
         <>
-          <p className="cmp-picker-title">In this design</p>
+          <p className="cmp-picker-title">{t("composer.colour.inDesign")}</p>
           <div className="cmp-swatches">{used.slice(0, 18).map((s) => swatch(s, "use"))}</div>
         </>
       )}
       {recent.length > 0 && (
         <>
-          <p className="cmp-picker-title">Recent</p>
-          <div className="cmp-swatches">{recent.map((s) => swatch(s, "use recent"))}</div>
+          <p className="cmp-picker-title">{t("composer.colour.recent")}</p>
+          <div className="cmp-swatches">{recent.map((s) => swatch(s, "recent"))}</div>
         </>
       )}
     </div>
@@ -217,10 +219,10 @@ export function ColorField({
       <button
         type="button"
         className={compact ? "cmp-well is-compact" : "cmp-well"}
-        aria-label={`${label}: ${shown}`}
+        aria-label={t("composer.colour.well", { label, value: shown })}
         aria-haspopup="dialog"
         aria-expanded={anchor !== null}
-        data-tip={compact ? `${label}: ${shown}` : undefined}
+        data-tip={compact ? t("composer.colour.well", { label, value: shown }) : undefined}
         onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
       >
         <span className={c && c.a === 0 ? "cmp-well-chip is-clear" : "cmp-well-chip"} style={{ "--c": cssColor(value) } as CSSProperties} />

@@ -7,15 +7,16 @@
 import { useSyncExternalStore } from "react";
 import { isLocale, type Locale } from "../i18n/locales";
 
-/** The accents Settings offers, each drawn by its --swatch-<id> in tokens.css. */
+/** The accents Settings offers, each drawn by its --swatch-<id> in tokens.css and named by
+ *  `settings.general.accents.<id>`. */
 export const ACCENTS = [
-  { id: "blue", label: "Blue" },
-  { id: "purple", label: "Purple" },
-  { id: "pink", label: "Pink" },
-  { id: "orange", label: "Orange" },
-  { id: "green", label: "Green" },
+  { id: "blue" },
+  { id: "purple" },
+  { id: "pink" },
+  { id: "orange" },
+  { id: "green" },
   /** Black on a light window, white on a dark one. */
-  { id: "mono", label: "Black and white" },
+  { id: "mono" },
 ] as const;
 
 export type Accent = (typeof ACCENTS)[number]["id"];
