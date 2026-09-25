@@ -6,6 +6,28 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Install packs from the website.** The Install button on a pack in the gallery on
+  [folderskin.app](https://folderskin.app/community/) opens FolderSkin on that pack in Community
+  and adds it, with the same progress and message as its Add button. A link to a pack Community
+  doesn't have says so and suggests searching for it. The links are `folderskin://install?pack=<id>`,
+  and FolderSkin ignores any other kind.
+- **Official packs.** Packs the maintainer vouches for wear an Official badge in Community and
+  when you look through them.
+- **How often each pack is added.** Adding a pack from Community tells FolderSkin's community
+  service the pack's id, and nothing else, so the gallery on folderskin.app can show how many
+  times each pack has been added. The service counts an add once a day per network, and deletes
+  the hash of the network it counted from when the day is over.
+- For pack maintainers: `official.json` beside `packs/` in folderskin-community lists the official
+  packs, and `index.json` now says when each pack was added and whether it is official, for the
+  website. `head.json` lists the official packs too.
+
+### Changed
+
+- On Windows and Linux, opening FolderSkin while it's already open brings its window forward
+  instead of starting a second copy.
+
 ## 0.1.5 — 2026-09-24
 
 ### Fixed

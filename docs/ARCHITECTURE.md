@@ -21,6 +21,8 @@ folderskin/
 │   ├── build.rs             Tauri's build step; nothing else is embedded
 │   ├── src/commands.rs      the library, import, apply and delete commands
 │   ├── src/community.rs     community packs: list, preview, add, update, remove, share
+│   ├── src/deep_link.rs     folderskin://install links from the website's Install buttons
+│   ├── src/installs.rs      telling the community service a pack was added, for its count
 │   ├── src/onboarding.rs    whether the first-launch onboarding has been finished
 │   ├── src/pack_views.rs    packs looked through, kept drawn for a week
 │   ├── src/ai.rs            the AI assistant's commands
@@ -84,7 +86,7 @@ tests run without a webview.
 ## Frontend to backend
 
 The commands live in `src-tauri/src/commands.rs` (the library), `community.rs` (packs),
-`onboarding.rs` (first launch), `ai.rs` (the AI assistant), `composer.rs` (the composer; its
+`deep_link.rs` (install links), `onboarding.rs` (first launch), `ai.rs` (the AI assistant), `composer.rs` (the composer; its
 six commands are listed in [COMPOSER.md](COMPOSER.md#commands)) and `tree.rs` (a folder and its
 subfolders). Anything slow runs on a blocking
 thread. `src/lib/tauri.ts` is the only place the frontend names them.
@@ -104,7 +106,9 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
 | `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line, at most 60 characters; the tags cleaned, at most 8), or an error string for the plain default folder's id |
 | `skins_folder` | – | the folder the saved skins live in |
-| `community_packs` | `fresh` | the packs in folderskin-community's `index.json` on GitHub, each with its `hash`, `added` and `update` |
+| `community_packs` | `fresh` | the packs in folderskin-community's `index.json` on GitHub, each with its `hash`, `added`, `update` and `official` |
+| `community_pack` | `packId` | that pack as the list shows it, or `null`; one the list doesn't have is looked for again past the caches first |
+| `install_link_take` | – | the pack the newest `folderskin://install` link asked for, once; `null` when none is waiting |
 | `community_preview` | `packId`, `fresh` | the pack's preview strip as a PNG data URL |
 | `community_pack_skins` | `packId`, `hash` | every skin of the pack drawn as its folder, to look through; kept drawn for a week, so looking again at that `hash` downloads nothing |
 | `community_add` | `packId`, `onProgress` | the pack's skins in the pack's order, saved all together or not at all; progress on the channel (below) |
@@ -178,7 +182,8 @@ old version once its new one is kept.
 
 What persists: the saved skins, that thumbnail, the packs looked through, the onboarding marker
 (below), the AI keys ([AI.md](AI.md)) and the favourites list in the webview's `localStorage`.
-There is no database, and no network access outside the AI assistant, the community packs and
+There is no database, and no network access outside the AI assistant, the community packs, the
+install count sent when a pack from Community is added ([below](#install-links-and-counts)) and
 the update check.
 
 ## Saved skins
@@ -288,6 +293,30 @@ has passed are they saved together (`AppState::save_many`). `community_pack_skin
 `community_update` download the same way without reporting progress, and `import_pack` reads a
 pack folder from disk.
 
+A pack is official when folderskin-community's `official.json` lists it: `head.json` carries the
+list and `index.json` marks each such entry, and every pack the commands hand the webview says
+`official`, which Community and the pack viewer show as a badge ([PACKS.md](PACKS.md#featured-and-official-packs)).
+
+### Install links and counts
+
+`folderskin://install?pack=<id>` is the scheme the Install buttons on folderskin.app open
+(`src-tauri/src/deep_link.rs`, with the steps in [PACKS.md](PACKS.md#the-install-link)).
+`tauri-plugin-deep-link` delivers the link: on macOS as an event to the running app, on Windows
+and Linux as the argument of a second process, which `tauri-plugin-single-instance` (registered
+first, on those two only) hands to the running one before it quits. `deep_link::install_pack` is
+the one function that reads a link, and anything that isn't an install link naming a pack id is
+dropped. A good one brings the window forward and waits in `InstallLinks` until the webview takes
+it with `install_link_take`; `install-link` tells the webview one is waiting. The webview asks as
+it starts too (`src/lib/installLinks.ts`), so a link that came before it, or during the
+first-launch welcome, isn't lost. The Community store's `install` then opens the pack from
+`community_pack` and adds it through the same `add` its Add button uses.
+
+Once `community_add` has saved a pack, `installs::report` sends
+`POST <service>/v1/packs/<id>/installs` on a task of its own, with a five-second timeout, and
+drops whatever comes back. The service is the one sharing uses (`FOLDERSKIN_COMMUNITY_API`, or
+`COMMUNITY_API` in `share.rs`), or `https://community.folderskin.app`; development builds and
+builds reading another copy of the packs send nothing unless a service is named.
+
 ## Applying an icon
 
 `apply_skin` resolves the artwork, renders the icon set, validates the folder path, then calls
@@ -386,15 +415,17 @@ never a frame.
 | `compositor` | determinism (same input, identical bytes) and silhouette checks against the measured constants at sample rows and columns |
 | `ico` | round-trip of the multi-size container |
 | `apply` | `desktop.ini` and `.directory` generation and revert parsing as pure functions; path validation |
-| `pack` | the pack contract: fields, limits, tags, ids, file names, picture checks and the pack hash |
+| `pack` | the pack contract: fields, limits, tags, ids, file names, picture checks and the pack hash; an index's optional fields, and fields it doesn't know passed over |
 | `matte` | keying, despill and trim; telling a finished folder (transparent, keyed, keyed then JPEG-compressed, trimmed tight) from an ordinary photo, a pink sunset and a product shot on magenta paper |
 | `compositor` (composer) | the template's layers stacked around a design equal the saved icon; a design lands where it was drawn; a see-through design leaves only the paper and the rims |
 | `composer` | the raw body's framing, the picture checks, previews, saving a design and saving over one, a damaged document |
 | `store` | round trip across a restart, one entry per picture, delete, a corrupt or missing index, damaged entries, thumbnail repair, the size bound, id checks; a batch saved in its own order, whole or not at all (a write that fails part way, an index that can't be written), saved and repeated pictures; what a crash left removed on open, and nothing else |
-| `community` | a pack saved in its own order with its progress, a picture listed twice, a pack that can't be saved adding nothing, updates, and the download: four at a time, in order, with its progress, against a local server |
+| `community` | a pack saved in its own order with its progress, a picture listed twice, a pack that can't be saved adding nothing, updates, and the download: four at a time, in order, with its progress, against a local server; official packs from `index.json` and `head.json`, and a link's pack looked for again past the caches |
+| `deep_link` | which links are install links and which are ignored; a good one waiting for the webview, which is told, and taken once |
+| `installs` | the count's address and when one is sent at all; the request itself, a bare POST, against a local server |
 | `onboarding` | when it shows, what forces it, and the marker |
-| `folderskin-tools` | the pack checks and the index, making a pack (the split, `--flat-backdrop`, WebP), the picture split `render` and `apply` use |
-| frontend | the drop-zone reducer, favourites, platform copy; the composer's document, undo, geometry, text layout, shapes, colours, picture adjustments and templates (vitest) |
+| `folderskin-tools` | the pack checks and the index (with `official.json` and each pack's date), making a pack (the split, `--flat-backdrop`, WebP), the picture split `render` and `apply` use |
+| frontend | the drop-zone reducer, favourites, platform copy; the composer's document, undo, geometry, text layout, shapes, colours, picture adjustments and templates; the Community store, install links included (vitest) |
 
 The Windows writer is compile-checked from macOS with `cargo check --target
 x86_64-pc-windows-msvc -p folderskin-core`. CI runs the whole set on ubuntu-22.04,

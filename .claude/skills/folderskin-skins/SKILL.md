@@ -159,7 +159,10 @@ cargo run -p folderskin-tools -- packs index --dir ../folderskin-community
 ```
 
 It checks every pack first and writes nothing when one has a problem. It is deterministic, so a
-second run changes nothing.
+second run changes nothing. Each entry is dated by the commit that added the pack (so a pack
+that isn't committed yet has no date), and marked official when `official.json` beside `packs/`
+lists it. `official.json` and `featured.json` are the maintainer's own lists; don't add a pack to
+either unless the user asks.
 
 ## Step 10 — report
 

@@ -57,15 +57,17 @@ Free · Open source · No account · No tracking
 
 ## What stays on your computer
 
-Everything except the few things that need the internet. There's no account, no paywall and no
-telemetry, and the macOS app is about 8.9 MB installed.
+Everything except the few things that need the internet. There's no account, no paywall and
+nothing that tracks you: the one thing FolderSkin reports is that a community pack was added, by
+the pack's id alone, so folderskin.app can show how often each is added. The macOS app is about
+8.9 MB installed.
 
 | Stays on your computer | Goes online |
 | --- | --- |
 | Your folders and the icons FolderSkin writes | An AI request, when you make one: sent to the provider you picked, with your key |
 | Every picture you add and every skin you make | Community and the first launch, which read the shared packs from GitHub |
 | Your AI keys, encrypted | The update check: when it opens, FolderSkin reads the newest release's version file from GitHub |
-| Favourites, tags and settings | |
+| Favourites, tags and settings | Adding a pack from Community: its id, and nothing else, goes to FolderSkin's community service, which counts adds once a day per network and keeps no address ([details](docs/PACKS.md#install-counts)) |
 
 ## How to use it
 
@@ -112,7 +114,9 @@ and where your skins are saved. Hover the version badge beside the logo for Abou
 
 FolderSkin ships no skins of its own. People share skins and packs of skins on GitHub, free for
 everyone; the first launch offers them, and **Community** has them any time. Adding a pack puts
-its skins in your library with their tags. **Classic Art** is a good first pack: sixteen
+its skins in your library with their tags, and the **Install** button on a pack in the gallery on
+[folderskin.app](https://folderskin.app/community/) opens FolderSkin and adds it for you. Packs
+marked **Official** are ones the maintainer vouches for. **Classic Art** is a good first pack: sixteen
 public-domain paintings, from the Mona Lisa to The Starry Night, each painted onto a folder. To share yours, open a skin's ⋯ menu and
 choose **Share with community**, or use **Community → Share your skins** for several. FolderSkin
 saves a pack folder that passes the checks, and you drop it on GitHub as a pull request.
