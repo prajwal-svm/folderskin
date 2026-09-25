@@ -11,7 +11,8 @@
  *   DELETE /v1/packs/<id>                        the author withdraws one
  *
  * Every picture is checked by its bytes before it is stored: the hash the pack declared, the format
- * its name promises, its dimensions from its header and no animation. Nothing is decoded here.
+ * its name promises, its dimensions from its header, no animation, and no loss: a pack shared here
+ * is PNG or lossless WebP, at most 1.5 MB a picture and 40 MB in all. Nothing is decoded here.
  *
  * The four requests that send a pack are sharing requests: while the key or its network is banned
  * or cooling down they are turned away, and a quota spent or the waiting cap is a strike on both
@@ -26,6 +27,7 @@ import { networkHash } from "./ip";
 import {
   MAX_JSON_BYTES,
   MAX_NOTES_CHARS,
+  MAX_PACK_BYTES,
   MAX_PICTURE_BYTES,
   MAX_PICTURE_SIDE,
   MAX_SHEET_BYTES,
@@ -47,6 +49,22 @@ import { hasHidden, isLicense, readManifest, textFlags, type Flag } from "./text
 import { triage } from "./triage";
 
 type DeclaredItem = { file: string; sha256: string; bytes: number; width: number; height: number };
+
+/**
+ * The answer to a picture that loses quality: a JPEG, or a lossy WebP. FolderSkin 0.1.7 and later
+ * send every picture as lossless WebP, so only an older one sends these, and updating is the fix.
+ */
+const lossyPicture = () => fail(400, "lossy_picture", "FolderSkin shares pictures without losing any quality. Update FolderSkin to share this pack.");
+
+/** Turns away a pack whose pictures come to more than MAX_PACK_BYTES together. */
+function packTotal(items: { bytes: number }[]): void {
+  const total = items.reduce((sum, item) => sum + item.bytes, 0);
+  if (total > MAX_PACK_BYTES) {
+    // Rounded up, so a pack only just over never reads as the limit itself.
+    const mb = (bytes: number) => Math.ceil((bytes / 1024 / 1024) * 10) / 10;
+    throw fail(400, "pack_too_large", `The pack's pictures come to ${mb(total)} MB, and a pack can be ${mb(MAX_PACK_BYTES)} MB at most. Take some out and try again.`);
+  }
+}
 
 function readItems(value: unknown, files: string[]): DeclaredItem[] {
   const list = Array.isArray(value) ? value : [];
@@ -106,8 +124,11 @@ export async function create(request: Request, env: Env): Promise<Response> {
     manifest.skins.map((s) => s.file),
   );
   for (const item of items) {
-    if (formatOf(item.file) === null) throw fail(400, "bad_pack", `${item.file} isn't a PNG, JPEG or WebP file name.`);
+    const format = formatOf(item.file);
+    if (format === null) throw fail(400, "bad_pack", `${item.file} isn't a PNG, JPEG or WebP file name.`);
+    if (format === "jpeg") throw lossyPicture();
   }
+  packTotal(items);
 
   // Pictures turned down before for what they show don't come back under another name.
   const blocked = await env.DB.prepare(
@@ -273,6 +294,7 @@ export async function putItem(request: Request, env: Env, id: string, sha: strin
   if (picture.format !== formatOf(item.file)) {
     throw fail(400, "bad_picture", `${item.file} isn't the kind of picture its name says it is.`);
   }
+  if (!picture.lossless) throw lossyPicture();
   if (picture.width !== item.width || picture.height !== item.height) {
     throw fail(400, "bad_picture", `${item.file} is ${picture.width}×${picture.height} px, not the size the pack described.`);
   }
@@ -319,11 +341,14 @@ export async function finalize(request: Request, env: Env, ctx: ExecutionContext
   const signed = await verifySigned(request, env, MAX_JSON_BYTES, (key) => requireSharer(env, request, key));
   const account = signed.signer;
   const s = await ownOpen(env, id, account);
-  const missing = (await loadItems(env, id)).filter((i) => !i.received);
+  const items = await loadItems(env, id);
+  const missing = items.filter((i) => !i.received);
   if (missing.length > 0) {
     const what = missing.length === 1 ? `${missing[0].file} hasn't` : `${missing.length} pictures haven't`;
     throw fail(409, "missing", `${what} arrived yet. Send ${missing.length === 1 ? "it" : "them"} and try again.`);
   }
+  // Checked when the pack was opened too; again here, as what arrived is what goes to review.
+  packTotal(items);
 
   const manifest = JSON.parse(s.manifest) as { name: string; tags: string[]; skins: { name: string; tags: string[] }[] };
   const flags: Flag[] = textFlags(

@@ -14,7 +14,8 @@
  * picks the pack up instead; either way the attempt is written to `events`. Only this one fixed
  * address is ever fetched, and the token is never logged.
  */
-import { requireAdmin, verifySignedDigest } from "./auth";
+import { requirePublisher, verifySignedDigest } from "./auth";
+import { now } from "./bytes";
 import type { Env } from "./env";
 import { fail, json } from "./http";
 import { record } from "./notify";
@@ -60,14 +61,28 @@ export async function askToPublish(env: Env, submission: string, pack: string): 
   else await record(env, "publish_failed", submission, `GitHub answered ${status}, so the scheduled run publishes ${pack}`);
 }
 
+/** How long this isolate answers with the pending count it read last. */
+const PENDING_KEPT_SECONDS = 60;
+let pendingKept: { n: number; at: number } | null = null;
+
+/** Forgets the pending count this isolate read, so each test starts from nothing. */
+export function forgetPending(): void {
+  pendingKept = null;
+}
+
 /**
  * GET /v1/exports/pending: how many approved packs haven't been pulled into folderskin-community
- * yet, and nothing about them. Public, so the workflow can ask without a key; the burst limit
- * covers it as it covers everything, and a minute's caching spares the database.
+ * yet, and nothing about them. Public, so the workflow can ask without a key, and cheap to ask
+ * however often: the burst limit covers it as it covers everything, the count comes from an index
+ * of its own (migrations/0004), and each isolate reads it at most once a minute. A Worker's own
+ * answers aren't cached on Cloudflare's side, so that is what keeps a flood off the database.
  */
-export async function pending(env: Env): Promise<Response> {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions WHERE status = 'approved' AND exported_at IS NULL").first<{ n: number }>();
-  return json({ pending: row?.n ?? 0 }, 200, { "Cache-Control": "public, max-age=60" });
+export async function pending(env: Env, at = now()): Promise<Response> {
+  if (!pendingKept || at - pendingKept.at >= PENDING_KEPT_SECONDS) {
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions WHERE status = 'approved' AND exported_at IS NULL").first<{ n: number }>();
+    pendingKept = { n: row?.n ?? 0, at };
+  }
+  return json({ pending: pendingKept.n }, 200, { "Cache-Control": `public, max-age=${PENDING_KEPT_SECONDS}` });
 }
 
 // ---- the catalog tree ----
@@ -119,13 +134,13 @@ export const contentTypeOf = (path: string) => {
 
 /**
  * PUT /v1/admin/tree/<path>: one file of the catalog, from folderskin-community's workflow,
- * signed by a key in ADMIN_KEYS. The body goes from the request to R2 as it arrives, never read
+ * signed by a key in PUBLISH_KEYS or ADMIN_KEYS. The body goes from the request to R2 as it arrives, never read
  * here, and R2 checks it against the SHA-256 the signature covers (verifySignedDigest), so the
  * Worker spends no time hashing a file of up to 64 MB.
  */
 export async function putTree(request: Request, env: Env, path: string): Promise<Response> {
-  // Who is asking first, so the path rules aren't told to anyone but the maintainer's keys.
-  const { digest } = await verifySignedDigest(request, env, (key) => requireAdmin(env, key));
+  // Who is asking first, so the path rules aren't told to anyone but the keys that may publish.
+  const { digest } = await verifySignedDigest(request, env, (key) => requirePublisher(env, key));
   if (!isTreePath(path)) {
     throw fail(400, "bad_path", "A catalog path is v2/ and then letters, digits, dots, dashes, underscores and slashes, at most 200 characters.");
   }

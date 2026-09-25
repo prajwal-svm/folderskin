@@ -21,8 +21,11 @@
  *
  * `"ban": true` turns a pack down as abuse: its computer can't share any more, and its network
  * can't for 30 days (penalties.ts).
+ *
+ * The four export routes and PUT /v1/admin/tree also take a key in PUBLISH_KEYS, which opens
+ * nothing else: folderskin-community's workflow publishes with one.
  */
-import { isKey, requireAdmin, verifySigned } from "./auth";
+import { isKey, requireAdmin, requirePublisher, verifySigned } from "./auth";
 import { now } from "./bytes";
 import type { Env } from "./env";
 import { fail, json, parseJson } from "./http";
@@ -45,6 +48,11 @@ import { hasText, isPackId, isPictureFileName } from "./text";
 
 async function admin(request: Request, env: Env, maxBody = 0) {
   return verifySigned(request, env, maxBody, (key) => requireAdmin(env, key));
+}
+
+/** For the export routes, which a publishing key may call too. */
+async function publisher(request: Request, env: Env, maxBody = 0) {
+  return verifySigned(request, env, maxBody, (key) => requirePublisher(env, key));
 }
 
 async function needSubmission(env: Env, id: string): Promise<Submission> {
@@ -232,7 +240,7 @@ export async function pause(request: Request, env: Env): Promise<Response> {
 // ---- export into the repository ----
 
 export async function exportList(request: Request, env: Env): Promise<Response> {
-  await admin(request, env);
+  await publisher(request, env);
   // The handle pack.json was written with at approval, not the author's name now: `pull` checks
   // that the two agree.
   const { results } = await env.DB.prepare(
@@ -256,13 +264,13 @@ async function approvedPack(env: Env, id: string): Promise<Submission & { pack_i
 }
 
 export async function exportManifest(request: Request, env: Env, id: string): Promise<Response> {
-  await admin(request, env);
+  await publisher(request, env);
   const s = await approvedPack(env, id);
   return stream(env.PUBLIC, `packs/${s.pack_id}/pack.json`);
 }
 
 export async function exportFile(request: Request, env: Env, id: string, file: string): Promise<Response> {
-  await admin(request, env);
+  await publisher(request, env);
   if (!isPictureFileName(file)) throw fail(404, "not_found", "There's nothing here.");
   const s = await approvedPack(env, id);
   const known = (await loadItems(env, id)).some((i) => i.file === file);
@@ -277,7 +285,7 @@ export async function exportFile(request: Request, env: Env, id: string, file: s
  * folder it is really in.
  */
 export async function exportDone(request: Request, env: Env, id: string): Promise<Response> {
-  const signed = await admin(request, env, MAX_JSON_BYTES);
+  const signed = await publisher(request, env, MAX_JSON_BYTES);
   const { folder } = parseJson(signed.body);
   const s = await approvedPack(env, id);
   // An older folderskin-tools says nothing, and only ever wrote the pack under its own name.

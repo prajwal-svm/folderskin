@@ -21,7 +21,7 @@ It does three things:
 | `GET`, `POST /v1/me` | who a computer is to the service (signed) |
 | `/v1/submissions/…`, `DELETE /v1/packs/<submission>` | sending a pack for review, and taking it back (signed) |
 | `POST /v1/reports` | reporting a pack, no account needed |
-| `/v1/admin/…` | the maintainer's side, signed with a key in `ADMIN_KEYS` (`src/admin.ts` lists it) |
+| `/v1/admin/…` | the maintainer's side, signed with a key in `ADMIN_KEYS` (`src/admin.ts` lists it). The export routes and `PUT /v1/admin/tree` also take a key in `PUBLISH_KEYS`, which opens nothing else |
 | `POST /v1/admin/keys/<key>/unban`, `POST /v1/admin/networks/<network>/unban` | lifting a ban |
 | `PUT /v1/admin/tree/<path>` | one file of the catalog, from folderskin-community's workflow |
 | `GET /v1/exports/pending` | how many approved packs wait to be published |
@@ -57,11 +57,13 @@ for prajwal-svm/folderskin-community alone, with Contents read and write. Withou
 GitHub turns the request down or can't be reached, nothing is lost: the workflow asks
 `GET /v1/exports/pending` every 15 minutes, which answers `{"pending": 2}` (how many approved packs
 haven't been pulled yet, and nothing about them) with `Cache-Control: public, max-age=60`, and does
-the work when it isn't 0. Every attempt is written to `events`, and one GitHub turned down shows in
-the daily digest, since a token that has run out would cause it.
+the work when it isn't 0. The count comes from an index of its own, and each Worker isolate reads
+it at most once a minute, so asking often costs next to nothing. Every attempt is written to
+`events`, and one GitHub turned down shows in the daily digest, since a token that has run out
+would cause it.
 
 The workflow uploads the catalog it builds with `PUT /v1/admin/tree/<path>`, one file at a time,
-signed with its own key in `ADMIN_KEYS`, into the `PACKS` bucket (`folderskin-packs`), which
+signed with its own key in `PUBLISH_KEYS`, into the `PACKS` bucket (`folderskin-packs`), which
 everyone reads at `https://packs.folderskin.app`. So no R2 token ever leaves Cloudflare.
 
 - `<path>` is `v2/` and a path of letters, digits, `.`, `_`, `-` and `/`, at most 200 characters,
@@ -82,10 +84,17 @@ the workflow should upload only the files that are new, and wait out a `429 slow
 ## Limits
 
 Every number is in `src/limits.ts`, except the burst limit, which is the `BURST` binding's in
-`wrangler.toml`.
+`wrangler.toml`. The pictures' limits are `folderskin_core::pack`'s.
+
+**Lossless pictures.** A pack shared here keeps every pixel: its pictures are PNG, or WebP whose
+picture is in a `VP8L` chunk, as a simple `RIFF…WEBPVP8L` file or an extended (`VP8X`) one, never
+animated. Only headers are read, as for every other check: a `.jpg` or `.jpeg` in a pack is
+turned away when it opens, and a WebP whose picture is lossy (`VP8 `) when it arrives. Packs
+already published keep whatever pictures they have.
 
 | | |
 |---|---|
+| A pack's pictures | PNG or lossless WebP, 256 to 1024 px a side, 1.5 MB each; at most 50 pictures and 40 MB in all |
 | A computer on probation (new) | 2 packs and 100 pictures a day, 1 pack waiting at a time |
 | An active computer (a pack of theirs approved) | 3 packs and 150 pictures a day, 3 waiting |
 | A trusted computer (set by the maintainer) | 10 packs and 500 pictures a day, 10 waiting |
@@ -106,6 +115,9 @@ and is a strike itself. Listing and withdrawing one's own packs, and everything 
 A full review queue and a pause are the service's own doing, so they are no strike. The burst
 limit is checked before a request's signature, so it strikes the network alone, and only when the
 network isn't cooling down already: a flood mustn't turn into a database write for each request.
+Its answer is `slow_down` with `Retry-After: 60`, unless the network now has longer to wait: then
+it is `cooling_down`, with the real wait, so the app doesn't come back in a minute only to be
+turned away again.
 
 **Bans.** Each pack the maintainer turns down or takes down is a mark on its key. Turning one down
 as abuse (the maintainer's `"ban": true`, or the phone page's box, or a reason of `sexual`, `minor`
@@ -118,6 +130,9 @@ them (lifting a key's ban for good puts it back on probation).
 
 | status | code | when |
 |---|---|---|
+| 400 | `lossy_picture` | a picture is a JPEG or a lossy WebP; FolderSkin 0.1.7 sends every one as lossless WebP |
+| 400 | `too_large` | a picture is over 1.5 MB |
+| 400 | `pack_too_large` | the pack's pictures come to over 40 MB, checked when it opens and again when it is sent for review |
 | 429 | `quota` | a daily quota of the computer's or its network's is spent |
 | 429 | `waiting` | the computer has as many packs waiting as its tier allows |
 | 429 | `slow_down` | the network's burst limit is spent (`Retry-After: 60`) |
@@ -217,8 +232,15 @@ pnpm migrate:remote
 pnpm run deploy
 ```
 
-`migrations/0002_installs.sql` adds the two install tables, and `migrations/0003_penalties.sql`
-the `penalties` and `marks` tables and each submission's `network`; until they are applied,
-counting, sharing and decisions fail. The `PACKS` binding needs the `folderskin-packs` bucket,
-with `packs.folderskin.app` as its custom domain. Secrets are set with `wrangler secret put` and
-never go in the repository; `wrangler.toml` lists them, `GITHUB_DISPATCH_TOKEN` among them.
+`migrations/0002_installs.sql` adds the two install tables, `migrations/0003_penalties.sql` the
+`penalties` and `marks` tables and each submission's `network`, and `migrations/0004_pending_index.sql`
+the index the pending count reads; until they are applied, counting, sharing and decisions fail,
+and the pending count reads every approved pack. The `PACKS` binding needs the
+`folderskin-packs` bucket, with `packs.folderskin.app` as its custom domain. Secrets are set with
+`wrangler secret put` and never go in the repository; `wrangler.toml` lists them,
+`GITHUB_DISPATCH_TOKEN` among them.
+
+The service asks for version 2 of the pack terms (`TERMS_VERSION`, the terms for sharing through
+this service alone), and turns away a pack sent under any other. The app agrees to whichever
+version `/v1/status` names, so deploy it together with the version 2 text of
+`docs/PACK-TERMS.md`, or people agree to a version they weren't shown.

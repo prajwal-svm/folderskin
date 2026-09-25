@@ -9,6 +9,7 @@ import { vi } from "vitest";
 import { b64url, sha256Hex } from "../src/bytes";
 import type { Env } from "../src/env";
 import worker from "../src/index";
+import { TERMS_VERSION } from "../src/limits";
 
 export const BASE = "https://community.test";
 
@@ -157,20 +158,40 @@ export function jpeg(width: number, height: number): Uint8Array {
   ]);
 }
 
-export function webpExtended(width: number, height: number, { animated = false } = {}): Uint8Array {
-  const w = width - 1;
-  const h = height - 1;
-  const vp8x = [...ascii("VP8X"), ...u32le(10), animated ? 0x02 : 0, 0, 0, 0, w & 255, (w >> 8) & 255, (w >> 16) & 255, h & 255, (h >> 8) & 255, (h >> 16) & 255];
-  const anim = animated ? [...ascii("ANIM"), ...u32le(6), 0, 0, 0, 0, 0, 0] : [];
-  const body = [...ascii("WEBP"), ...vp8x, ...anim];
-  return new Uint8Array([...ascii("RIFF"), ...u32le(body.length), ...body]);
+/** A RIFF chunk as WebP has them: its type, its length (little-endian), its data and a byte to make it even. */
+function riff(type: string, data: number[]): number[] {
+  return [...ascii(type), ...u32le(data.length), ...data, ...(data.length & 1 ? [0] : [])];
 }
 
+const webpFile = (chunks: number[]) => new Uint8Array([...ascii("RIFF"), ...u32le(4 + chunks.length), ...ascii("WEBP"), ...chunks]);
+
+/** A lossless picture's data: the signature byte, then width - 1 and height - 1 in 14 bits each. */
+const vp8l = (width: number, height: number) => [0x2f, ...u32le((width - 1) | ((height - 1) << 14)), 0, 0, 0];
+
+/** A lossy frame's data: a frame tag, the start code, then the width and height in 14 bits each. */
+const vp8 = (width: number, height: number) => [0x10, 0x02, 0x00, 0x9d, 0x01, 0x2a, width & 255, (width >> 8) & 0x3f, height & 255, (height >> 8) & 0x3f, 0, 0];
+
+/**
+ * An extended WebP (VP8X): the canvas size, then the picture as `image` has it: lossless (a VP8L
+ * chunk), lossy with an alpha channel (ALPH and "VP8 " chunks) or missing.
+ */
+export function webpExtended(width: number, height: number, { animated = false, image = "VP8L" as "VP8L" | "VP8 " | "none" } = {}): Uint8Array {
+  const w = width - 1;
+  const h = height - 1;
+  const vp8x = riff("VP8X", [animated ? 0x02 : 0, 0, 0, 0, w & 255, (w >> 8) & 255, (w >> 16) & 255, h & 255, (h >> 8) & 255, (h >> 16) & 255]);
+  const anim = animated ? riff("ANIM", [0, 0, 0, 0, 0, 0]) : [];
+  const picture = image === "VP8L" ? riff("VP8L", vp8l(width, height)) : image === "VP8 " ? [...riff("ALPH", [0, 1, 2]), ...riff("VP8 ", vp8(width, height))] : [];
+  return webpFile([...vp8x, ...anim, ...picture]);
+}
+
+/** A simple lossless WebP: one VP8L chunk. */
 export function webpLossless(width: number, height: number): Uint8Array {
-  const bits = (width - 1) | ((height - 1) << 14);
-  const data = [0x2f, ...u32le(bits), 0, 0, 0];
-  const body = [...ascii("WEBP"), ...ascii("VP8L"), ...u32le(data.length), ...data];
-  return new Uint8Array([...ascii("RIFF"), ...u32le(body.length), ...body]);
+  return webpFile(riff("VP8L", vp8l(width, height)));
+}
+
+/** A simple lossy WebP: one "VP8 " chunk. */
+export function webpLossy(width: number, height: number): Uint8Array {
+  return webpFile(riff("VP8 ", vp8(width, height)));
 }
 
 // ---- a whole submission ----
@@ -191,7 +212,7 @@ export async function describe(list: Picture[], manifest: Partial<{ name: string
     license: "CC0-1.0",
     source: "own",
     notes: "Drawn by me.",
-    terms_version: 1,
+    terms_version: TERMS_VERSION,
     items: await Promise.all(list.map(async (p) => ({ file: p.file, sha256: await sha256Hex(p.bytes), bytes: p.bytes.length, width: 512, height: 512 }))),
   };
 }

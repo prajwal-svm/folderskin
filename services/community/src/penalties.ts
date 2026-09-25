@@ -86,16 +86,22 @@ export async function refused(env: Env, sharer: Sharer, error: HttpError, at = n
 }
 
 /**
- * Strikes the network of a sharing request the burst limit turned away. Not its key: the limit is
- * checked before the request's signature, so the key it names can't be trusted yet. Nor a network
- * that is cooling down already, since in a flood that would be a database write for every one of
- * the requests the limit is there to keep off the database. Never throws.
+ * Strikes the network of a sharing request the burst limit turned away, and answers until when the
+ * network is cooling down (0 when that can't be told), so the answer can say how long to wait. Not
+ * its key: the limit is checked before the request's signature, so the key it names can't be
+ * trusted yet. Nor a network that is cooling down already, which is only read: in a flood, a write
+ * for each request would be the very load the limit is there to keep off the database. Never
+ * throws.
  */
-export async function burstStrike(env: Env, request: Request, at = now()): Promise<void> {
+export async function burstStrike(env: Env, request: Request, at = now()): Promise<number> {
   try {
-    await strike(env, [netSubject(await penaltyNetwork(env, request))], at, true);
+    const subject = netSubject(await penaltyNetwork(env, request));
+    const row = await env.DB.prepare("SELECT cool_until FROM penalties WHERE subject = ?1").bind(subject).first<{ cool_until: number }>();
+    if (row && row.cool_until > at) return row.cool_until;
+    return await strike(env, [subject], at, true);
   } catch {
     console.error("folderskin-community: couldn't strike a network for its burst");
+    return 0;
   }
 }
 
@@ -157,7 +163,8 @@ export function inWords(seconds: number): string {
   return `${Math.ceil(seconds / 86400)} days`;
 }
 
-function coolingDown(seconds: number): HttpError {
+/** The answer while cooling down: how long, as Retry-After, as `retry_after` and in words. */
+export function coolingDown(seconds: number): HttpError {
   const wait = Math.max(1, Math.ceil(seconds));
   return fail(429, "cooling_down", `That's too many tries in a row. You can share again in ${inWords(wait)}.`, { "Retry-After": String(wait) }, wait);
 }
