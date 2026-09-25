@@ -1,1 +1,145 @@
-{}
+{
+  "title": "Comunidad",
+  "sub": "Aspectos y paquetes gratuitos que comparte la gente. Añade uno y sus aspectos pasan a tu biblioteca.",
+  "addFromFolder": "Añadir desde una carpeta",
+  "shareYours": "Compartir tus aspectos",
+  "tabsLabel": "filtrar paquetes por etiqueta",
+  "search": "Buscar paquetes",
+  "searchLabel": "buscar paquetes",
+  "refreshTip": "Buscar paquetes nuevos y actualizados",
+  "refreshLabel": "recargar paquetes",
+  "viewLabel": "mostrar paquetes como",
+  "views": {
+    "gallery": "Galería",
+    "list": "Lista"
+  },
+  "hits": {
+    "label": "aspectos cuyo nombre coincide",
+    "title": "Aspectos",
+    "tip": "{{name}}, en {{pack}}"
+  },
+  "tryAgain": "Reintentar",
+  "checked": "Cada paquete se revisa antes de aparecer aquí",
+  "loadFailed": "Los paquetes no se cargaron",
+  "loadFailedText": "{{reason}}. Aun así, puedes añadir un paquete desde una carpeta.",
+  "loading": "Cargando paquetes",
+  "gridLabel": "paquetes de la comunidad",
+  "empty": {
+    "noMatch": "Ningún paquete coincide",
+    "none": "Aún no hay paquetes",
+    "noMatchText": "Prueba con otra palabra o etiqueta.",
+    "noneText": "Empieza tú: comparte los tuyos."
+  },
+  "remove": {
+    "title": "¿Quitar “{{name}}”?",
+    "text": "Sus aspectos salen de tu biblioteca. Las carpetas que ya los usan conservan su icono.",
+    "action": "Quitar"
+  },
+  "dialog": {
+    "choosePackFolder": "Elige la carpeta de un paquete"
+  },
+  "pack": {
+    "viewLabel": "ver {{name}}",
+    "viewTip": "Ver {{name}}",
+    "added": "Añadido a tu biblioteca",
+    "by": "de <a>@{{author}}</a>",
+    "skins_one": "{{count}} aspecto",
+    "skins_many": "{{count}} de aspectos",
+    "skins_other": "{{count}} aspectos",
+    "view": "Ver",
+    "updateTip": "Hay una versión nueva de este paquete",
+    "update": "Actualizar",
+    "removing": "Quitando",
+    "removingLabel": "quitando {{name}}",
+    "removeTip": "Quitar este paquete",
+    "removeLabel": "quitar {{name}}",
+    "add": "Añadir"
+  },
+  "viewer": {
+    "add_one": "Añadir {{count}} aspecto",
+    "add_many": "Añadir {{count}} de aspectos",
+    "add_other": "Añadir {{count}} aspectos",
+    "added": "Añadido",
+    "github": "Abrir en GitHub",
+    "openFailed": "No se pudo abrir este paquete: {{reason}}.",
+    "getting_one": "Obteniendo {{count}} aspecto para mostrarlo",
+    "getting_many": "Obteniendo {{count}} de aspectos para mostrarlos",
+    "getting_other": "Obteniendo {{count}} aspectos para mostrarlos"
+  },
+  "progress": {
+    "adding": "Añadiendo",
+    "updating": "Actualizando",
+    "addingLabel": "Añadiendo {{name}}",
+    "updatingLabel": "Actualizando {{name}}",
+    "downloading": "Descargando {{done}} de {{total}}",
+    "saving": "Guardando {{done}} de {{total}}"
+  },
+  "sort": {
+    "bestMatch": "Relevancia",
+    "featured": "Destacados",
+    "newest": "Más recientes",
+    "name": "Nombre",
+    "mostSkins": "Más aspectos"
+  },
+  "options": {
+    "button": "Orden y más etiquetas",
+    "label": "orden y etiquetas",
+    "title": "Orden y etiquetas",
+    "tagCount_one": "{{count}} etiqueta en estos paquetes",
+    "tagCount_many": "{{count}} de etiquetas en estos paquetes",
+    "tagCount_other": "{{count}} etiquetas en estos paquetes",
+    "allTags": "Todas las etiquetas",
+    "tags": "Etiquetas"
+  },
+  "count": {
+    "searchFailed": "No se pudo buscar: {{reason}}",
+    "packs_one": "{{count}} paquete",
+    "packs_many": "{{count}} de paquetes",
+    "packs_other": "{{count}} paquetes",
+    "matching_one": "{{count}} paquete coincide con “{{query}}”",
+    "matching_many": "{{count}} de paquetes coinciden con “{{query}}”",
+    "matching_other": "{{count}} paquetes coinciden con “{{query}}”",
+    "tagged_one": "{{count}} paquete con la etiqueta {{tag}}",
+    "tagged_many": "{{count}} de paquetes con la etiqueta {{tag}}",
+    "tagged_other": "{{count}} paquetes con la etiqueta {{tag}}",
+    "matchingTagged_one": "{{count}} paquete con la etiqueta {{tag}} coincide con “{{query}}”",
+    "matchingTagged_many": "{{count}} de paquetes con la etiqueta {{tag}} coinciden con “{{query}}”",
+    "matchingTagged_other": "{{count}} paquetes con la etiqueta {{tag}} coinciden con “{{query}}”",
+    "withLastVisit": "{{line}}. {{why}}",
+    "lastVisit": {
+      "offline": "No tienes conexión, así que estos son los paquetes de tu última visita",
+      "unanswered": "{{host}} no responde, así que estos son los paquetes de tu última visita",
+      "behind": "No llegó la lista más reciente de paquetes, así que estos son los de tu última visita",
+      "other": "{{why}}, así que estos son los paquetes de tu última visita"
+    }
+  },
+  "toast": {
+    "addLinkFailed": "No se pudo añadir “{{id}}”: {{reason}}",
+    "noSuchPack": "No se pudo añadir “{{id}}”: no hay ningún paquete con ese nombre en Comunidad. Búscalo allí, porque puede que le hayan cambiado el nombre.",
+    "already": "{{name}} ya está en tu biblioteca",
+    "alreadyNewer": "{{name}} ya está en tu biblioteca, y Actualizar trae su versión nueva",
+    "stillBusy": {
+      "add": "Todavía se está añadiendo {{name}}. Vuelve a intentarlo cuando termine.",
+      "update": "Todavía se está actualizando {{name}}. Vuelve a intentarlo cuando termine.",
+      "remove": "Todavía se está quitando {{name}}. Vuelve a intentarlo cuando termine."
+    },
+    "added_one": "Se añadió {{count}} aspecto de {{name}}",
+    "added_many": "Se añadieron {{count}} de aspectos de {{name}}",
+    "added_other": "Se añadieron {{count}} aspectos de {{name}}",
+    "addFailed": "No se pudo añadir {{name}}: {{reason}}",
+    "updated": "Se actualizó {{name}}",
+    "updateFailed": "No se pudo actualizar {{name}}: {{reason}}",
+    "removed": "Se quitó {{name}}",
+    "removeFailed": "No se pudo quitar {{name}}: {{reason}}",
+    "updates_one": "{{count}} de tus paquetes tiene una actualización",
+    "updates_many": "{{count}} de tus paquetes tienen una actualización",
+    "updates_other": "{{count}} de tus paquetes tienen una actualización",
+    "upToDate": "Comunidad está al día",
+    "refreshFailed": "No se pudo recargar: {{reason}}",
+    "show": "Mostrar",
+    "addedFromFolder_one": "Se añadió {{count}} aspecto de esa carpeta",
+    "addedFromFolder_many": "Se añadieron {{count}} de aspectos de esa carpeta",
+    "addedFromFolder_other": "Se añadieron {{count}} aspectos de esa carpeta",
+    "addFolderFailed": "No se pudo añadir ese paquete: {{reason}}"
+  }
+}

@@ -1,1 +1,34 @@
-{}
+{
+  "sections": "secciones",
+  "version": "Versión {{version}} de FolderSkin",
+  "about": "acerca de FolderSkin",
+  "addPhoto": "Añadir tu foto",
+  "groups": {
+    "library": "Biblioteca",
+    "create": "Crear",
+    "explore": "Explorar"
+  },
+  "items": {
+    "skins": "Todos los aspectos",
+    "yours": "Mis aspectos",
+    "faves": "Favoritos",
+    "compose": "Diseña el tuyo",
+    "generate": "Generar con IA",
+    "community": "Comunidad"
+  },
+  "withCount": "{{label}} · {{count}}",
+  "expandTip": "Expandir la barra lateral",
+  "collapseTip": "Contraer la barra lateral",
+  "expandLabel": "expandir la barra lateral",
+  "collapseLabel": "contraer la barra lateral",
+  "collapse": "Contraer barra lateral",
+  "darkMode": "Modo oscuro",
+  "darkModeLabel": "modo oscuro",
+  "darkOn": "Modo oscuro activado",
+  "darkOff": "Modo oscuro desactivado",
+  "settings": "Ajustes",
+  "language": {
+    "label": "Idioma: {{language}}",
+    "menu": "Idioma"
+  }
+}

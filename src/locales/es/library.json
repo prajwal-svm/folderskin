@@ -1,1 +1,148 @@
-{}
+{
+  "label": "biblioteca",
+  "resize": {
+    "sidebar": "ancho de la barra lateral",
+    "composer": "ancho de las capas y los ajustes",
+    "folder": "ancho del panel de la carpeta"
+  },
+  "tabs": {
+    "all": "Todos"
+  },
+  "toast": {
+    "importedFolder": "{{name}} está en Mis aspectos, sin el fondo",
+    "importedArtwork": "{{name}} está en Mis aspectos, colocado sobre una carpeta",
+    "deleted": "Se eliminó {{name}}"
+  },
+  "errors": {
+    "delete": "No se pudo eliminar {{name}}: {{reason}}",
+    "save": "No se pudo guardar {{name}}: {{reason}}"
+  },
+  "empty": {
+    "loadFailed": "Los aspectos no se cargaron",
+    "noMatchFiltered": "Nada coincide con “{{query}}” con estos filtros",
+    "noneFiltered": "Ningún aspecto coincide con estos filtros",
+    "filteredText": "Quita uno o dos filtros, o quítalos todos.",
+    "clearFilters": "Quitar filtros",
+    "clearSearch": "Borrar la búsqueda",
+    "noMatch": "Nada coincide con “{{query}}”",
+    "noMatchText": "Prueba con otra palabra o busca en Todos.",
+    "noFaves": "Aún no hay favoritos",
+    "noFavesText": "Haz clic en la estrella de cualquier aspecto y te esperará aquí.",
+    "noSkins": "Aún no hay aspectos",
+    "noSkinsText": "Añade un paquete gratuito desde Comunidad, trae una imagen tuya o deja que la IA pinte uno.",
+    "browsePacks": "Explorar paquetes"
+  },
+  "delete": {
+    "title": "¿Eliminar “{{name}}”?",
+    "text": "Se quitará de tu biblioteca para siempre. Las carpetas que ya lo usan conservan su icono.",
+    "action": "Eliminar"
+  },
+  "addPicture": "Añadir una imagen",
+  "toolbar": {
+    "tabsLabel": "filtrar aspectos por etiqueta",
+    "search": "Buscar aspectos",
+    "searchLabel": "buscar aspectos"
+  },
+  "tile": {
+    "madeWithAi": "{{name}} (hecho con IA)",
+    "yours": "{{name}} (tuyo)",
+    "faveLabel": "añadir {{name}} a favoritos",
+    "unfaveLabel": "quitar {{name}} de favoritos",
+    "fave": "Añadir a favoritos",
+    "unfave": "Quitar de favoritos",
+    "optionsLabel": "opciones de {{name}}",
+    "optionsYours": "Nombre, etiquetas y detalles",
+    "options": "Etiquetas y detalles"
+  },
+  "menu": {
+    "label": "{{name}}: nombre, etiquetas y detalles",
+    "name": "Nombre",
+    "tags": "Etiquetas",
+    "addTag": "añadir una etiqueta",
+    "editDesign": "Editar el diseño",
+    "remix": "Remezclar en el editor",
+    "share": "Compartir con la comunidad"
+  },
+  "facts": {
+    "madeWith": "Hecho con",
+    "prompt": "Prompt",
+    "shape": "Forma",
+    "made": "Creado",
+    "pack": "Paquete",
+    "sharedBy": "Compartido por",
+    "licence": "Licencia",
+    "added": "Añadido",
+    "from": "Origen",
+    "wholeFolder": "Carpeta entera",
+    "artOnFolder": "Ilustración sobre la carpeta de FolderSkin",
+    "finishedFolder": "Carpeta terminada",
+    "pictureOnFolder": "Imagen sobre la carpeta de FolderSkin",
+    "designedHere": "Diseñado por ti aquí",
+    "pictureAdded": "Una imagen que añadiste",
+    "finishedCutOut": "Carpeta terminada, sin el fondo",
+    "comesWith": "Viene con FolderSkin"
+  },
+  "sort": {
+    "newest": "Más recientes",
+    "oldest": "Más antiguos",
+    "az": "A–Z",
+    "za": "Z–A"
+  },
+  "colours": {
+    "red": "Rojo",
+    "orange": "Naranja",
+    "yellow": "Amarillo",
+    "green": "Verde",
+    "teal": "Turquesa",
+    "blue": "Azul",
+    "purple": "Morado",
+    "pink": "Rosa",
+    "brown": "Marrón",
+    "black": "Negro",
+    "grey": "Gris",
+    "white": "Blanco"
+  },
+  "filters": {
+    "title": "Filtros",
+    "buttonOn": "Filtros activos: {{count}}",
+    "label": "filtrar y ordenar aspectos",
+    "matching_one": "{{matching}} de {{count}} aspecto",
+    "matching_many": "{{matching}} de {{count}} de aspectos",
+    "matching_other": "{{matching}} de {{count}} aspectos",
+    "skins_one": "{{count}} aspecto",
+    "skins_many": "{{count}} de aspectos",
+    "skins_other": "{{count}} aspectos",
+    "clearAll": "Quitar todos",
+    "sortBy": "Ordenar por",
+    "sortByLabel": "ordenar por",
+    "favouritesOnly": "Solo favoritos",
+    "readingColours": "aún se están leyendo los colores",
+    "allAlike": "Por ahora, todos estos aspectos se parecen. Añade otro paquete o una imagen tuya y habrá más por lo que filtrar.",
+    "swatchLabel": "{{label}}, {{count}}",
+    "swatchTip": "{{label}} · {{count}}",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "sources": {
+      "community": "Paquetes de la comunidad",
+      "import": "Tus imágenes",
+      "ai": "Hechos con IA",
+      "composer": "Tus diseños"
+    },
+    "added": {
+      "today": "Hoy",
+      "week": "Última semana",
+      "month": "Último mes",
+      "older": "Más antiguos"
+    },
+    "facets": {
+      "source": "Origen",
+      "pack": "Paquete",
+      "colour": "Color",
+      "tone": "Brillo",
+      "added": "Añadido",
+      "model": "Hecho con",
+      "author": "Autor",
+      "license": "Licencia"
+    }
+  }
+}

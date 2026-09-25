@@ -1,1 +1,29 @@
-{}
+{
+  "title": "Actualización disponible",
+  "sub": "Ya está disponible FolderSkin {{version}}. Tú tienes la {{current}}.",
+  "close": "Cerrar",
+  "later": "Más tarde",
+  "tryAgain": "Reintentar",
+  "updateAndRestart": "Actualizar y reiniciar",
+  "failed": "La actualización no terminó, así que no cambió nada. Vuelve a intentarlo o descárgala desde la <link>página de versiones</link>.",
+  "installed": "FolderSkin {{version}} ya está instalado. Sal de FolderSkin y vuelve a abrirlo para usarlo.",
+  "downloading": "Descargando",
+  "downloadingShare": "Descargando {{share}}",
+  "installing": "Instalando",
+  "restarting": "Reiniciando",
+  "progressLabel": "actualización",
+  "noNotes": "Esta versión no trae notas.",
+  "button": {
+    "checking": "Buscando actualizaciones",
+    "available": "Actualizar a la {{version}}",
+    "current": "Tienes la última versión",
+    "failed": "No se pudo comprobar. Reintentar",
+    "check": "Buscar actualizaciones",
+    "checkAgain": "Volver a buscar"
+  },
+  "about": {
+    "sourceLabel": "Ver el código fuente",
+    "source": "Ver el código fuente",
+    "note": "Dale un aspecto a cualquier carpeta: una foto, una pintura, un diseño tuyo o un estilo que describas."
+  }
+}
