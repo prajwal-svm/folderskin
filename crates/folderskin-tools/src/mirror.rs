@@ -115,12 +115,16 @@ impl Mirror {
         }
         let mut summary = Summary::default();
         for path in files.iter().filter(|f| *f != HEAD_PATH) {
-            let bytes =
-                std::fs::read(tree.join(path)).map_err(|e| format!("couldn't read {path}: {e}"))?;
-            if self.serves(path, bytes.len() as u64).await {
+            // The length is enough to ask about; the bytes are read only to upload.
+            let len = std::fs::metadata(tree.join(path))
+                .map_err(|e| format!("couldn't read {path}: {e}"))?
+                .len();
+            if self.serves(path, len).await {
                 summary.there += 1;
                 continue;
             }
+            let bytes =
+                std::fs::read(tree.join(path)).map_err(|e| format!("couldn't read {path}: {e}"))?;
             match self.upload(path, bytes).await {
                 Ok(()) => summary.uploaded.push(path.clone()),
                 Err(why) => summary.failed.push((path.clone(), why)),

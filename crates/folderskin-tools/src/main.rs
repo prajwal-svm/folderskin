@@ -318,7 +318,9 @@ fn community(command: CommunityCommand) -> Result<(), String> {
             let mut source = ServiceExports { runtime, client };
             let problems = pull::done(&mut source, &entries);
             for entry in &entries {
-                if !problems.iter().any(|p| p.starts_with(&entry.folder)) {
+                // Each problem starts "<folder> (<submission>)".
+                let about = format!("{} ({})", entry.folder, entry.submission);
+                if !problems.iter().any(|p| p.starts_with(&about)) {
                     println!("told the service {} is published", entry.folder);
                 }
             }
