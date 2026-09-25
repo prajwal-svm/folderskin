@@ -97,11 +97,13 @@ crons = ["17 7 * * *"]
 [vars]
 # The maintainer's signing keys (base64url Ed25519 public keys, comma separated), from
 # `folderskin-tools community keygen`. Empty means nobody can use the admin endpoints; the phone
-# links in notifications still work. The first is the maintainer's own. The second is
-# folderskin-community's packs workflow's, which pulls approved packs and uploads the catalog: its
-# private half is kept as that repository's FOLDERSKIN_ADMIN_KEY secret, and taking it out of
-# this list revokes the workflow's access alone. Public keys, so they are safe here in [vars].
-ADMIN_KEYS = "3EuyfNm69LvmEeAFaMb6aBCF1jA8bWilIEk-FxjIOi0,v2g_DGV53D-70BOVNzHjXiYKb120ABX5VR0E0GH5KDs"
+# links in notifications still work. Only the maintainer's own key is here.
+ADMIN_KEYS = "3EuyfNm69LvmEeAFaMb6aBCF1jA8bWilIEk-FxjIOi0"
+# Keys that may publish and nothing else: read the approved packs, say where each went, and upload
+# the catalog. This one is folderskin-community's packs workflow's; its private half is that
+# repository's FOLDERSKIN_ADMIN_KEY secret, so a leak of it can't approve, ban, pause or read
+# reports, and taking it out of this list revokes the workflow's access alone.
+PUBLISH_KEYS = "v2g_DGV53D-70BOVNzHjXiYKb120ABX5VR0E0GH5KDs"
 PUBLIC_BASE_URL = "https://community.folderskin.app"
 # The "FolderSkin community" Turnstile widget, on folderskin.app and its subdomains.
 TURNSTILE_SITE_KEY = "0x4AAAAAAFCt8h3vCygPWuKI"

@@ -14,7 +14,7 @@
  * picks the pack up instead; either way the attempt is written to `events`. Only this one fixed
  * address is ever fetched, and the token is never logged.
  */
-import { requireAdmin, verifySignedDigest } from "./auth";
+import { requirePublisher, verifySignedDigest } from "./auth";
 import { now } from "./bytes";
 import type { Env } from "./env";
 import { fail, json } from "./http";
@@ -134,13 +134,13 @@ export const contentTypeOf = (path: string) => {
 
 /**
  * PUT /v1/admin/tree/<path>: one file of the catalog, from folderskin-community's workflow,
- * signed by a key in ADMIN_KEYS. The body goes from the request to R2 as it arrives, never read
+ * signed by a key in PUBLISH_KEYS or ADMIN_KEYS. The body goes from the request to R2 as it arrives, never read
  * here, and R2 checks it against the SHA-256 the signature covers (verifySignedDigest), so the
  * Worker spends no time hashing a file of up to 64 MB.
  */
 export async function putTree(request: Request, env: Env, path: string): Promise<Response> {
-  // Who is asking first, so the path rules aren't told to anyone but the maintainer's keys.
-  const { digest } = await verifySignedDigest(request, env, (key) => requireAdmin(env, key));
+  // Who is asking first, so the path rules aren't told to anyone but the keys that may publish.
+  const { digest } = await verifySignedDigest(request, env, (key) => requirePublisher(env, key));
   if (!isTreePath(path)) {
     throw fail(400, "bad_path", "A catalog path is v2/ and then letters, digits, dots, dashes, underscores and slashes, at most 200 characters.");
   }

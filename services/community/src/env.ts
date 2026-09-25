@@ -22,6 +22,11 @@ export interface Env {
 
   /** Public keys (base64url, comma separated) whose signatures open the admin endpoints. */
   ADMIN_KEYS?: string;
+  /**
+   * Public keys that may publish and nothing else: read the approved packs, say where each was
+   * put, and upload the catalog. folderskin-community's workflow signs with one of these.
+   */
+  PUBLISH_KEYS?: string;
   /** Where this service is reached, for the links it puts in notifications. */
   PUBLIC_BASE_URL?: string;
   TURNSTILE_SITE_KEY?: string;

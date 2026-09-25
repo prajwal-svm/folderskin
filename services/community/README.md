@@ -21,7 +21,7 @@ It does three things:
 | `GET`, `POST /v1/me` | who a computer is to the service (signed) |
 | `/v1/submissions/…`, `DELETE /v1/packs/<submission>` | sending a pack for review, and taking it back (signed) |
 | `POST /v1/reports` | reporting a pack, no account needed |
-| `/v1/admin/…` | the maintainer's side, signed with a key in `ADMIN_KEYS` (`src/admin.ts` lists it) |
+| `/v1/admin/…` | the maintainer's side, signed with a key in `ADMIN_KEYS` (`src/admin.ts` lists it). The export routes and `PUT /v1/admin/tree` also take a key in `PUBLISH_KEYS`, which opens nothing else |
 | `POST /v1/admin/keys/<key>/unban`, `POST /v1/admin/networks/<network>/unban` | lifting a ban |
 | `PUT /v1/admin/tree/<path>` | one file of the catalog, from folderskin-community's workflow |
 | `GET /v1/exports/pending` | how many approved packs wait to be published |
@@ -63,7 +63,7 @@ it at most once a minute, so asking often costs next to nothing. Every attempt i
 would cause it.
 
 The workflow uploads the catalog it builds with `PUT /v1/admin/tree/<path>`, one file at a time,
-signed with its own key in `ADMIN_KEYS`, into the `PACKS` bucket (`folderskin-packs`), which
+signed with its own key in `PUBLISH_KEYS`, into the `PACKS` bucket (`folderskin-packs`), which
 everyone reads at `https://packs.folderskin.app`. So no R2 token ever leaves Cloudflare.
 
 - `<path>` is `v2/` and a path of letters, digits, `.`, `_`, `-` and `/`, at most 200 characters,
