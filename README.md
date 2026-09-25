@@ -63,8 +63,8 @@ English · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한�
 
 Everything except the few things that need the internet. There's no account, no paywall and
 nothing that tracks you: the one thing FolderSkin reports is that a community pack was added, by
-the pack's id alone, so folderskin.app can show how often each is added. The macOS app is about
-8.9 MB installed.
+the pack's id alone, so folderskin.app can show how often each is added. On a Mac the download is
+under 20 MB.
 
 | Stays on your computer | Goes online |
 | --- | --- |
