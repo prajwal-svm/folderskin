@@ -92,7 +92,7 @@
       "doneStay": "已经处理好的文件夹会保持不变。",
       "catchesUp": {
         "macos": "Finder 会随之逐步更新。",
-        "windows": "Explorer 会随之逐步更新。",
+        "windows": "文件资源管理器会随之逐步更新。",
         "linux": "“文件”会随之逐步更新。"
       },
       "puttingIconsBack": "正在恢复默认图标",
@@ -103,7 +103,7 @@
       "writing": "正在把 {{skin}} 写入 {{folder}}",
       "catchUp": {
         "macos": "Finder 可能要过一秒钟才会更新。",
-        "windows": "Explorer 可能要过一秒钟才会更新。",
+        "windows": "文件资源管理器可能要过一秒钟才会更新。",
         "linux": "“文件”可能要过一秒钟才会更新。"
       },
       "puttingIconBack": "正在恢复默认图标"

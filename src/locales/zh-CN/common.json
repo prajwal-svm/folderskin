@@ -30,7 +30,7 @@
   },
   "showIn": {
     "macos": "在 Finder 中显示",
-    "windows": "在 Explorer 中显示",
+    "windows": "在文件资源管理器中显示",
     "linux": "在“文件”中显示"
   },
   "dialog": {
@@ -48,7 +48,7 @@
     "option": "{{label}}：{{note}}",
     "cc0": "任何人都可以用于任何用途。",
     "ccBy": "任何人都可以使用，但要注明你是作者。",
-    "mit": "和 FolderSkin 相同的许可协议。你的名字会一直保留在上面。"
+    "mit": "任何人都可以使用，但要保留许可声明。"
   },
   "control": {
     "typed": "{{name}}，手动输入",
