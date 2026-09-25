@@ -1,1 +1,34 @@
-{}
+{
+  "sections": "섹션",
+  "version": "FolderSkin 버전 {{version}}",
+  "about": "FolderSkin 정보",
+  "addPhoto": "사진 추가",
+  "groups": {
+    "library": "라이브러리",
+    "create": "만들기",
+    "explore": "둘러보기"
+  },
+  "items": {
+    "skins": "모든 스킨",
+    "yours": "내 스킨",
+    "faves": "즐겨찾기",
+    "compose": "직접 디자인",
+    "generate": "AI로 생성",
+    "community": "커뮤니티"
+  },
+  "withCount": "{{label}} · {{count}}",
+  "expandTip": "사이드바 펼치기",
+  "collapseTip": "사이드바 접기",
+  "expandLabel": "사이드바 펼치기",
+  "collapseLabel": "사이드바 접기",
+  "collapse": "사이드바 접기",
+  "darkMode": "다크 모드",
+  "darkModeLabel": "다크 모드",
+  "darkOn": "다크 모드가 켜져 있어요",
+  "darkOff": "다크 모드가 꺼져 있어요",
+  "settings": "설정",
+  "language": {
+    "label": "언어: {{language}}",
+    "menu": "언어"
+  }
+}

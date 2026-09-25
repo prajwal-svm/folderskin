@@ -1,1 +1,135 @@
-{}
+{
+  "run": {
+    "folders_other": "폴더 {{count}}개",
+    "tooMany": {
+      "folders": "폴더가 너무 많아요({{max}}개 초과)",
+      "subfolders": "하위 폴더가 너무 많아요({{max}}개 초과)"
+    },
+    "applyTo_other": "폴더 {{count}}개에 적용",
+    "theSkin": "이 스킨",
+    "couldntChange_other": "{{count}}개는 바꾸지 못했어요.",
+    "stoppedBeforeAny": "폴더를 바꾸기 전에 멈췄어요",
+    "stoppedAfter_other": "폴더 {{count}}개를 처리하고 멈췄어요",
+    "thoseWear_other": "그 {{count}}개는 {{skin}} 차림이에요.",
+    "notReached_other": "{{count}}개는 처리하지 못했어요.",
+    "allWear_other": "이제 폴더 {{count}}개가 {{skin}} 차림이에요",
+    "someWear_other": "폴더 {{total}}개 중 {{count}}개가 이제 {{skin}} 차림이에요",
+    "thoseBack_other": "그 {{count}}개는 기본 아이콘으로 돌아갔어요.",
+    "noIconOfTheirOwn_other": "폴더 {{count}}개에는 원래 따로 아이콘이 없었어요.",
+    "noCustomIcon": "여기에는 사용자 지정 아이콘이 있는 폴더가 없어요",
+    "allBack_other": "폴더 {{count}}개가 기본 아이콘으로 돌아갔어요",
+    "someBack_other": "폴더 {{total}}개 중 {{count}}개가 기본 아이콘으로 돌아갔어요",
+    "toastAllWear_other": "{{folder}} 폴더와 안에 있는 폴더 {{count}}개가 이제 {{skin}} 차림이에요",
+    "toast": "{{title}}. {{detail}}",
+    "carryOn": "계속하기",
+    "seeWhich": "자세히 보기"
+  },
+  "look": {
+    "label": "폴더 종류",
+    "appLabel": "스킨을 입힐 폴더 종류",
+    "name": {
+      "mac": "Mac",
+      "windows": "Windows"
+    },
+    "tip": {
+      "mac": "Mac 폴더를 바탕으로 바꾸기",
+      "windows": "Windows 폴더를 바탕으로 바꾸기"
+    },
+    "redrawing": {
+      "mac": "스킨을 Mac 폴더에 다시 그리는 중",
+      "windows": "스킨을 Windows 폴더에 다시 그리는 중"
+    }
+  },
+  "stage": {
+    "label": "폴더",
+    "pickHint": "스킨을 골라 미리 입혀 보세요",
+    "chooseOtherLabel": "{{name}} 말고 다른 폴더 선택",
+    "chooseFromLabel": "{{place}}에서 폴더 선택",
+    "chooseOther": "다른 폴더 선택",
+    "backTip": "Esc 키를 눌러도 돼요",
+    "back": "빈 폴더로 돌아가기",
+    "drag": {
+      "imageTitle": "놓으면 이 이미지를 추가해요",
+      "folderTitle": "놓으면 이 폴더를 골라요",
+      "imageNamed": "{{name}} 이미지가 스킨이 되어 내 스킨에 들어가요.",
+      "image": "스킨이 되어 내 스킨에 들어가요.",
+      "folderNamed": "{{name}} 폴더가 여기에 나타나고, 스킨을 입힐 준비가 돼요.",
+      "folder": "여기에 나타나고, 스킨을 입힐 준비가 돼요."
+    },
+    "empty": {
+      "titleWithSkin": "이제 폴더를 끌어다 놓으세요",
+      "title": "여기에 폴더를 끌어다 놓으세요",
+      "subWithSkin": "{{name}} 스킨이 준비됐어요. 여기에 아무 폴더나 끌어다 놓거나, 클릭해서 {{place}}에서 고르세요.",
+      "sub": "또는 클릭해서 {{place}}에서 고르세요."
+    },
+    "applied": "적용됨",
+    "tryingOn": "{{name}} 입혀 보는 중",
+    "currentIcon": "현재 아이콘",
+    "tryOn": "{{name}} 미리 입혀 보기",
+    "removing": "제거하는 중",
+    "removeIcons": "사용자 지정 아이콘 제거",
+    "removeIcon": "사용자 지정 아이콘 제거",
+    "revertThese_other": "이 {{count}}개 되돌리기",
+    "revertAll_other": "{{count}}개 모두 되돌리기",
+    "revert": "되돌리기",
+    "applying": "적용하는 중",
+    "applySkin": "스킨 적용",
+    "reverting": "되돌리는 중",
+    "includeSubfolders": "하위 폴더 포함",
+    "inside_other": "안에 폴더 {{count}}개",
+    "stopping": "멈추는 중",
+    "doneOf": "{{done}}/{{total}}",
+    "startingWith": "{{name}} 폴더부터 시작하는 중",
+    "finishingThis": "이 폴더를 마무리하는 중",
+    "stop": "중지",
+    "hideSummaryLabel": "이 요약 숨기기",
+    "hideSummary": "숨기기",
+    "which_other": "해당하는 {{count}}개",
+    "carryOnWith_other": "나머지 {{count}}개 계속하기",
+    "tryAgain_other": "다시 시도",
+    "theFolder": "폴더",
+    "status": {
+      "doneStay": "이미 처리한 폴더는 그대로 유지돼요.",
+      "catchesUp": {
+        "macos": "Finder도 진행에 맞춰 바뀌어요.",
+        "windows": "파일 탐색기도 진행에 맞춰 바뀌어요.",
+        "linux": "'파일'도 진행에 맞춰 바뀌어요."
+      },
+      "puttingIconsBack": "기본 아이콘으로 되돌리는 중",
+      "skipped": "숨김 폴더와 앱 번들은 건너뛰어요.",
+      "picturesToo": "이미지도 돼요. 끌어다 놓으면 스킨이 돼요.",
+      "ownIcon": "원래 따로 아이콘이 있는 폴더예요.",
+      "nothingChanges": "적용하기 전까지는 디스크에서 아무것도 바뀌지 않아요.",
+      "writing": "{{folder}} 폴더에 쓰는 중: {{skin}}",
+      "catchUp": {
+        "macos": "Finder에 반영되기까지 잠깐 걸릴 수 있어요.",
+        "windows": "파일 탐색기에 반영되기까지 잠깐 걸릴 수 있어요.",
+        "linux": "'파일'에 반영되기까지 잠깐 걸릴 수 있어요."
+      },
+      "puttingIconBack": "기본 아이콘으로 되돌리는 중"
+    },
+    "pickHintChat": "채팅의 이미지 미리 보기"
+  },
+  "toast": {
+    "defaultBack": "{{name}} 폴더가 기본 아이콘으로 돌아갔어요"
+  },
+  "errors": {
+    "switchLook": "폴더를 바꾸지 못했어요: {{reason}}",
+    "notFolderOrPicture": "폴더나 이미지가 아니에요.",
+    "chooseFirst": "먼저 폴더를 고르세요",
+    "apply": "스킨을 적용하지 못했어요: {{reason}}",
+    "noneChanged": "바꿀 수 있는 폴더가 없었어요",
+    "revertTree": "기본 아이콘으로 되돌리지 못했어요: {{reason}}",
+    "revert": "기본 아이콘으로 되돌리지 못했어요: {{reason}}",
+    "reveal": "열지 못했어요: {{reason}}"
+  },
+  "ask": {
+    "applyTitle_other": "{{skin}}, 폴더 {{count}}개에 적용할까요?",
+    "thisSkin": "이 스킨",
+    "removeTitle_other": "폴더 {{count}}개에서 사용자 지정 아이콘을 제거할까요?",
+    "applyText_other": "{{folder}} 폴더와 그 안의 폴더 {{count}}개에 이 스킨을 입히고, 지금 있는 아이콘을 바꿔요. 아이콘 사본은 폴더마다 따로 저장돼요. '되돌리기'를 누르면 모두 다시 벗겨 내요.",
+    "applyTextSized_other": "{{folder}} 폴더와 그 안의 폴더 {{count}}개에 이 스킨을 입히고, 지금 있는 아이콘을 바꿔요. 아이콘 사본은 폴더마다 약 {{size}}씩 따로 저장되어, 모두 합쳐 약 {{total}} 정도예요. '되돌리기'를 누르면 모두 다시 벗겨 내요.",
+    "removeText": "{{folder}} 폴더와 그 안의 모든 폴더를 기본 폴더 아이콘으로 되돌려요. FolderSkin 밖에서 붙인 아이콘도 포함돼요. 아이콘이 없는 폴더는 그대로 둬요.",
+    "removeAction": "아이콘 제거"
+  }
+}

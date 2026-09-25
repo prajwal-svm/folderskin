@@ -1,1 +1,29 @@
-{}
+{
+  "title": "업데이트가 있어요",
+  "sub": "FolderSkin {{version}} 버전이 나왔어요. 지금 쓰고 있는 버전은 {{current}} 버전이에요.",
+  "close": "닫기",
+  "later": "나중에",
+  "tryAgain": "다시 시도",
+  "updateAndRestart": "업데이트 후 다시 시작",
+  "failed": "업데이트를 마치지 못해서 아무것도 바뀌지 않았어요. 다시 시도하거나 <link>릴리스 페이지</link>에서 내려받으세요.",
+  "installed": "FolderSkin {{version}} 버전을 설치했어요. FolderSkin을 종료하고 다시 열면 새 버전을 쓸 수 있어요.",
+  "downloading": "다운로드 중",
+  "downloadingShare": "다운로드 중 ({{share}})",
+  "installing": "설치하는 중",
+  "restarting": "다시 시작하는 중",
+  "progressLabel": "업데이트",
+  "noNotes": "이 버전에는 릴리스 노트가 없어요.",
+  "button": {
+    "checking": "업데이트 확인 중",
+    "available": "{{version}} 버전으로 업데이트",
+    "current": "최신 버전이에요",
+    "failed": "확인하지 못했어요. 다시 시도",
+    "check": "업데이트 확인",
+    "checkAgain": "다시 확인"
+  },
+  "about": {
+    "sourceLabel": "소스 보기",
+    "source": "소스 보기",
+    "note": "어떤 폴더에든 스킨을 입혀 보세요. 사진, 그림, 직접 만든 디자인, 원하는 스타일 무엇이든요."
+  }
+}

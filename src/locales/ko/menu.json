@@ -1,1 +1,23 @@
-{}
+{
+  "about": "FolderSkin에 관하여",
+  "services": "서비스",
+  "hide": "FolderSkin 가리기",
+  "hideOthers": "기타 가리기",
+  "showAll": "모두 보기",
+  "quit": "FolderSkin 종료",
+  "file": "파일",
+  "closeWindow": "윈도우 닫기",
+  "edit": "편집",
+  "undo": "실행 취소",
+  "redo": "실행 복귀",
+  "cut": "오려두기",
+  "copy": "복사하기",
+  "paste": "붙여넣기",
+  "selectAll": "전체 선택",
+  "view": "보기",
+  "fullScreen": "전체 화면 시작",
+  "window": "윈도우",
+  "minimize": "최소화",
+  "zoom": "확대/축소",
+  "help": "도움말"
+}

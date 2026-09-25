@@ -1,1 +1,144 @@
-{}
+{
+  "label": "라이브러리",
+  "resize": {
+    "sidebar": "사이드바 너비",
+    "composer": "레이어와 설정 너비",
+    "folder": "폴더 패널 너비"
+  },
+  "tabs": {
+    "all": "전체"
+  },
+  "toast": {
+    "importedFolder": "{{name}} 스킨을 내 스킨에 추가했어요(배경 제거)",
+    "importedArtwork": "{{name}} 스킨을 내 스킨에 추가했어요(폴더에 씌움)",
+    "deleted": "{{name}} 스킨을 삭제했어요"
+  },
+  "errors": {
+    "delete": "{{name}} 스킨을 삭제하지 못했어요: {{reason}}",
+    "save": "{{name}} 스킨을 저장하지 못했어요: {{reason}}"
+  },
+  "empty": {
+    "loadFailed": "스킨을 불러오지 못했어요",
+    "noMatchFiltered": "이 필터로는 '{{query}}'에 맞는 스킨이 없어요",
+    "noneFiltered": "이 필터에 맞는 스킨이 없어요",
+    "filteredText": "필터를 한두 개 빼거나 모두 지워 보세요.",
+    "clearFilters": "필터 지우기",
+    "clearSearch": "검색 지우기",
+    "noMatch": "'{{query}}'에 맞는 스킨이 없어요",
+    "noMatchText": "다른 단어로 찾거나 '전체'에서 찾아보세요.",
+    "noFaves": "아직 즐겨찾기가 없어요",
+    "noFavesText": "스킨의 별을 누르면 여기서 기다리고 있을 거예요.",
+    "noSkins": "아직 스킨이 없어요",
+    "noSkinsText": "커뮤니티에서 무료 팩을 추가하거나, 내 이미지를 가져오거나, AI에게 그려 달라고 해 보세요.",
+    "browsePacks": "팩 둘러보기"
+  },
+  "delete": {
+    "title": "'{{name}}' 스킨을 삭제할까요?",
+    "text": "라이브러리에서 완전히 지워져요. 이미 이 스킨을 쓰는 폴더의 아이콘은 그대로 남아요.",
+    "action": "삭제"
+  },
+  "addPicture": "이미지 추가",
+  "toolbar": {
+    "tabsLabel": "태그로 스킨 거르기",
+    "search": "스킨 검색",
+    "searchLabel": "스킨 검색"
+  },
+  "tile": {
+    "madeWithAi": "{{name}} (AI로 만듦)",
+    "yours": "{{name}} (내 스킨)",
+    "faveLabel": "{{name}} 즐겨찾기에 추가",
+    "unfaveLabel": "{{name}} 즐겨찾기에서 빼기",
+    "fave": "즐겨찾기에 추가",
+    "unfave": "즐겨찾기에서 빼기",
+    "optionsLabel": "{{name}} 옵션",
+    "optionsYours": "이름 바꾸기, 태그, 세부 정보",
+    "options": "태그와 세부 정보"
+  },
+  "menu": {
+    "label": "{{name}}: 이름, 태그, 세부 정보",
+    "name": "이름",
+    "tags": "태그",
+    "addTag": "태그 추가",
+    "editDesign": "디자인 편집",
+    "remix": "디자이너에서 리믹스",
+    "share": "커뮤니티에 공유"
+  },
+  "facts": {
+    "madeWith": "사용 모델",
+    "prompt": "프롬프트",
+    "shape": "모양",
+    "made": "만든 날",
+    "pack": "팩",
+    "sharedBy": "공유한 사람",
+    "licence": "라이선스",
+    "added": "추가한 날",
+    "from": "출처",
+    "wholeFolder": "폴더 전체",
+    "artOnFolder": "FolderSkin 폴더에 씌운 그림",
+    "finishedFolder": "완성된 폴더",
+    "pictureOnFolder": "FolderSkin 폴더에 씌운 이미지",
+    "designedHere": "FolderSkin에서 직접 디자인함",
+    "pictureAdded": "내가 추가한 이미지",
+    "finishedCutOut": "완성된 폴더(배경 제거)",
+    "comesWith": "FolderSkin 기본 제공"
+  },
+  "sort": {
+    "newest": "최신순",
+    "oldest": "오래된순",
+    "az": "A–Z",
+    "za": "Z–A"
+  },
+  "colours": {
+    "red": "빨강",
+    "orange": "주황",
+    "yellow": "노랑",
+    "green": "초록",
+    "teal": "청록",
+    "blue": "파랑",
+    "purple": "보라",
+    "pink": "분홍",
+    "brown": "갈색",
+    "black": "검정",
+    "grey": "회색",
+    "white": "흰색"
+  },
+  "filters": {
+    "title": "필터",
+    "buttonOn": "필터 {{count}}개 적용",
+    "label": "스킨 거르기와 정렬",
+    "matching_other": "스킨 {{count}}개 중 {{matching}}개",
+    "skins_other": "스킨 {{count}}개",
+    "clearAll": "모두 지우기",
+    "sortBy": "정렬 기준",
+    "sortByLabel": "정렬 기준",
+    "favouritesOnly": "즐겨찾기만",
+    "readingColours": "색상을 읽는 중",
+    "allAlike": "아직은 스킨이 모두 비슷해요. 팩이나 내 이미지를 더 추가하면 거를 수 있는 항목이 늘어나요.",
+    "swatchLabel": "{{label}}, {{count}}",
+    "swatchTip": "{{label}} · {{count}}",
+    "light": "밝음",
+    "dark": "어두움",
+    "sources": {
+      "community": "커뮤니티 팩",
+      "import": "내 이미지",
+      "ai": "AI로 만듦",
+      "composer": "내 디자인"
+    },
+    "added": {
+      "today": "오늘",
+      "week": "지난 1주",
+      "month": "지난 1개월",
+      "older": "그 이전"
+    },
+    "facets": {
+      "source": "출처",
+      "pack": "팩",
+      "colour": "색상",
+      "tone": "밝기",
+      "added": "추가한 날",
+      "model": "사용 모델",
+      "author": "제작자",
+      "license": "라이선스"
+    }
+  }
+}
