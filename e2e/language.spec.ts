@@ -1,8 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openApp } from "./app";
 
-const sidebar = (page: Page) => page.getByRole("navigation", { name: "sections" });
-const row = (page: Page) => sidebar(page).getByRole("button", { name: /^Language: / });
+// The sidebar and the row by their classes, not their names: a name is in the language on show
+// ("secciones", "Langue : Français").
+const sidebar = (page: Page) => page.locator("nav.sidebar");
+const row = (page: Page) => sidebar(page).locator("button.nav-lang");
 const menu = (page: Page) => page.getByRole("menu", { name: "Language" });
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("folderskin.prefs") ?? "{}").language ?? null);
 
@@ -101,7 +103,31 @@ test.describe("the language menu", () => {
     await menu(page).getByRole("menuitemradio", { name: "Español" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
     await row(page).hover();
-    await expect(page.getByRole("tooltip")).toHaveText("Language: Español");
+    await expect(page.getByRole("tooltip")).toHaveText("Idioma: Español");
+  });
+
+  test("keeps the focus on the row when a language is picked the moment the pointer reaches it", async ({ page }) => {
+    await openApp(page);
+    await row(page).click();
+    await expect(menu(page)).toBeVisible();
+    // The click lands as soon as the pointer's move onto 日本語 is drawn, before anything React
+    // runs after drawing. The focus once went back into the closing menu then, and was lost.
+    const focused = await page.evaluate(
+      () =>
+        new Promise<string>((resolve) => {
+          const item = document.querySelector<HTMLElement>('.lang-pop [data-index="2"]')!;
+          const watch = new MutationObserver(() => {
+            if (!item.classList.contains("is-active")) return;
+            watch.disconnect();
+            item.click();
+            setTimeout(() => resolve(document.activeElement?.className ?? ""), 300);
+          });
+          watch.observe(item, { attributes: true, attributeFilter: ["class"] });
+          item.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
+        }),
+    );
+    await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+    expect(focused).toContain("nav-lang");
   });
 
   test("closes when something else is pressed, and changes nothing", async ({ page }) => {

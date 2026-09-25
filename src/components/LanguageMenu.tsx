@@ -62,8 +62,11 @@ export function LanguageMenu({ rail }: { rail: boolean }) {
     return () => window.removeEventListener("resize", put);
   }, [open, rail]);
 
-  // The language with the keyboard has the focus, once the menu is where it goes.
-  useEffect(() => {
+  // The language with the keyboard has the focus, once the menu is where it goes. A layout effect,
+  // so it runs as the menu is drawn: a passive one can still be waiting when a pick lands (the
+  // pointer onto a language, then a quick click), then take the focus back into the menu just
+  // before it closes, and leave it on nothing.
+  useLayoutEffect(() => {
     if (!open || !place) return;
     menu.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.focus({ preventScroll: true });
   }, [open, place, active]);
