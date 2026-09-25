@@ -161,6 +161,7 @@
     "none": "不指定文件夹"
   },
   "local": {
+    "name": "本地模型",
     "looking": "正在检查你的设备",
     "aboutLabel": "关于本地模型",
     "machine": "设备",
