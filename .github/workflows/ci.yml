@@ -207,8 +207,8 @@ jobs:
         run: cargo test --workspace --no-fail-fast
 
   cargo-deny:
-    # RustSec advisories, plus a gate that keeps every dependency under a licence an MIT app can
-    # ship. The policy is in deny.toml.
+    # RustSec advisories, plus a gate that keeps every third-party crate under a permissive licence
+    # (or MPL-2.0). The policy is in deny.toml.
     name: Rust (cargo-deny)
     runs-on: ubuntu-22.04
     timeout-minutes: 15

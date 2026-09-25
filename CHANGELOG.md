@@ -4,6 +4,16 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- **FolderSkin is now GPL-3.0.** From this release on, the code is licensed under the GNU General
+  Public License v3.0 (`GPL-3.0-only`). Anyone can still use, study, change and share it, and a
+  changed version someone shares has to come with its source, under the same licence. Releases up
+  to 0.1.6 came out under MIT and keep it. The FolderSkin name and logo aren't covered by either;
+  [TRADEMARKS.md](TRADEMARKS.md) says how to use them. Skins keep their own licences.
+
 ## 0.1.6 — 2026-09-25
 
 ### Added

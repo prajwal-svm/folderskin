@@ -22,8 +22,10 @@ ignore = [
 ]
 
 [licenses]
-# Licences an MIT-licensed app can ship: permissive ones, plus MPL-2.0, whose copyleft stays
-# inside the files of the crate that uses it.
+# Licences a third-party crate can have: permissive ones, plus MPL-2.0, whose copyleft stays
+# inside the files of the crate that uses it. All of them can ship in FolderSkin, which is GPL-3.0,
+# and none of them is the GPL, so the only GPL code in the app is FolderSkin's own and the choice
+# of licence for the app stays with its authors.
 allow = [
   "MIT",
   "Apache-2.0",
@@ -39,6 +41,18 @@ allow = [
   "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
+# FolderSkin's own crates, which take the workspace's GPL-3.0.
+exceptions = [
+  { allow = ["GPL-3.0-only"], crate = "folderskin" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-ai" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-catalog" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-cli" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-core" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-keys" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-local" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-share" },
+  { allow = ["GPL-3.0-only"], crate = "folderskin-tools" },
+]
 
 [bans]
 multiple-versions = "allow"

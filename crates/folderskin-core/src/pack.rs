@@ -33,8 +33,8 @@ pub const MAX_SKIN_TAGS: usize = 3;
 /// Tags any one skin can carry, however it got them.
 pub const MAX_TAGS: usize = 8;
 pub const MAX_TAG_CHARS: usize = 24;
-/// Licences a pack can use: Creative Commons, or MIT like FolderSkin itself. All of them let
-/// anyone share the pictures; CC BY and MIT keep the author's name with them.
+/// Licences a pack can use: Creative Commons, or MIT. All of them let anyone share the pictures;
+/// CC BY and MIT keep the author's name with them.
 pub const LICENSES: &[&str] = &["CC0-1.0", "CC-BY-4.0", "MIT"];
 /// File name extensions a pack's pictures can have.
 pub const PICTURE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];

@@ -125,12 +125,12 @@ Each picture is one of two kinds, told apart the same way as a picture dropped o
 
 ### Licences
 
-FolderSkin is MIT licensed, and shared skins use Creative Commons or MIT:
+Shared skins use Creative Commons or MIT:
 
 - `CC0-1.0`: anyone can use them for anything. This is the default, since most skins are made
   with AI and CC0 claims the least over them.
 - `CC-BY-4.0`: anyone can use them, and credits you.
-- `MIT`: the same licence as FolderSkin's code; your name stays with them.
+- `MIT`: anyone can use them, and your name stays with them.
 
 Share only pictures you made or are allowed to share.
 

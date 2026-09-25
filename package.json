@@ -2,6 +2,7 @@
   "name": "folderskin",
   "private": true,
   "version": "0.1.6",
+  "license": "GPL-3.0-only",
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
