@@ -53,6 +53,8 @@ export type CommunityPack = {
   added: boolean;
   /** True when it was added and a different version of it is published now. */
   update: boolean;
+  /** True for a pack the maintainer marks as official (`official.json` in folderskin-community). */
+  official: boolean;
 };
 
 /** One skin of a pack being looked through before it's added. */
@@ -375,6 +377,11 @@ const tauriApi = {
   /** The packs in the library now, by id, with the version each was added at (null when it
    *  was added before FolderSkin kept one). Nothing is downloaded. */
   communityInstalled: () => invoke<Record<string, string | null>>("community_installed"),
+  /** One pack by its id, as the list shows it; null when no pack has that id. A pack the list
+   *  doesn't have is looked for again past every cache, in case it was published since. */
+  communityPack: (packId: string) => invoke<CommunityPack | null>("community_pack", { packId }),
+  /** The pack a folderskin://install link asked for, once; null when none is waiting. */
+  takeInstallLink: () => invoke<string | null>("install_link_take"),
   /** Downloads a pack and saves all of its skins or none; resolves to them. `onProgress` hears how far it has got. */
   addPack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
     invoke<Skin[]>("community_add", { packId, onProgress: new Channel<PackProgress>(onProgress) }),

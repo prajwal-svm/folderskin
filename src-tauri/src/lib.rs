@@ -6,9 +6,11 @@ pub mod chats;
 pub mod commands;
 pub mod community;
 pub mod composer;
+pub mod deep_link;
 pub mod folder_icon;
 pub mod github;
 pub mod icons;
+pub mod installs;
 pub mod look;
 pub mod onboarding;
 pub mod pack_views;
@@ -63,7 +65,18 @@ fn log_panics_to(dir: std::path::PathBuf) {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // First, so a second FolderSkin ends before anything else starts. On Windows and Linux a
+    // folderskin:// link starts one: this hands the link to the one already running (its
+    // `deep-link` feature does that) and brings that one's window forward, as it does for any
+    // second launch. macOS never starts a second copy of the app for either.
+    #[cfg(any(windows, target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        deep_link::bring_forward(app)
+    }));
+    builder
+        // folderskin://install links (deep_link.rs).
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         // Updates: the newest GitHub release's latest.json, signed with the key whose public half
@@ -81,6 +94,7 @@ pub fn run() {
         // Community strips and thumbnails, fetched as the cards that show them scroll in.
         .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
         .manage(share::Waiting::default())
+        .manage(deep_link::InstallLinks::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -142,6 +156,8 @@ pub fn run() {
             community::community_search,
             community::community_refresh,
             community::community_installed,
+            community::community_pack,
+            deep_link::install_link_take,
             share::share_offered,
             share::share_status,
             share::share_verify,
@@ -179,7 +195,11 @@ pub fn run() {
                 }
             }
             folder_icon::set_dock_icon(include_bytes!("../icons/icon.png"));
-            window::create_main(app)
+            window::create_main(app)?;
+            // Once the window is there to bring forward: a link FolderSkin was started with waits
+            // for the webview until it asks.
+            deep_link::watch(app);
+            Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building FolderSkin")

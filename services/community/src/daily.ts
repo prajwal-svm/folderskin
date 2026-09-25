@@ -44,6 +44,8 @@ export async function tidy(env: Env, at = now()): Promise<void> {
     env.DB.prepare("DELETE FROM counters WHERE day < ?1").bind(dayOf(at - 8 * DAY)),
     env.DB.prepare("DELETE FROM events WHERE at < ?1").bind(at - 90 * DAY),
     env.DB.prepare("DELETE FROM reports WHERE created_at < ?1").bind(at - 180 * DAY),
+    // The hashed networks behind the install counts are only kept for the day they were counted.
+    env.DB.prepare("DELETE FROM installs_seen WHERE day < ?1").bind(dayOf(at)),
   ]);
 }
 

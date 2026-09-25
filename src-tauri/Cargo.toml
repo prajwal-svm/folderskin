@@ -22,6 +22,9 @@ tauri-plugin-process = "2"
 # `rustls-tls` feature would add ring, a second crypto library, and `zip` only reads the zipped
 # installers of Tauri 1-style updates. macOS always has the tar and gzip its .app.tar.gz needs.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["system-proxy"] }
+# folderskin://install links, from the Install buttons on folderskin.app (deep_link.rs). The scheme
+# is in tauri.conf.json, which the bundles register with the system.
+tauri-plugin-deep-link = "2"
 folderskin-core.workspace = true
 folderskin-ai = { path = "../crates/folderskin-ai" }
 # "This computer": open-weight models set up and run here, shared with the command line.
@@ -51,6 +54,12 @@ folderskin-catalog = { path = "../crates/folderskin-catalog" }
 # WebView2 entry point the loader can't resolve there and the binary won't start at all.
 [target.'cfg(not(windows))'.dev-dependencies]
 tauri = { version = "2", features = ["macos-private-api", "test"] }
+
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+# On Windows and Linux a folderskin:// link starts a second FolderSkin with the link as its
+# argument: this hands the link to the one already running and ends the new one. macOS sends links
+# to the running app itself, so it goes without.
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(windows)'.dependencies]
 # The icon a folder already wears, drawn from the file its desktop.ini names (folder_icon.rs).

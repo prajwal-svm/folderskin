@@ -57,15 +57,19 @@ pub struct PackDto {
     pub added: bool,
     /// True when it was added and a different version of it is published now.
     pub update: bool,
+    /// True for a pack the maintainer marks as official (`official.json` in folderskin-community).
+    pub official: bool,
 }
 
 impl PackDto {
-    /// A catalog row, marked with whether it's in the library and whether that copy is old.
-    fn new(row: PackRow, installed: &HashMap<String, Option<String>>) -> PackDto {
+    /// A catalog row, marked with whether it's in the library, whether that copy is old, and
+    /// whether `source` names it official.
+    fn new(row: PackRow, installed: &HashMap<String, Option<String>>, source: &Source) -> PackDto {
         let have = installed.get(&row.id);
         PackDto {
             added: have.is_some(),
             update: has_update(have, &row.hash),
+            official: source.is_official(&row.id),
             preview: previews::strip_url(&row.id, &row.hash),
             id: row.id,
             name: row.name,
@@ -212,11 +216,58 @@ pub async fn community_packs(
         };
         Ok(rows
             .into_iter()
-            .map(|row| PackDto::new(row, &installed))
+            .map(|row| PackDto::new(row, &installed, &source))
             .collect())
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Pack `pack_id` as the Community list shows it, for a `folderskin://install` link; `None` when
+/// no pack has that id. A pack the list this session loaded doesn't have is looked for again
+/// past every cache, as Refresh does, since the link may be for one published since; when that
+/// can't be done (offline, say), the error says why.
+#[tauri::command]
+pub async fn community_pack(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    community: State<'_, Community>,
+    pack_id: String,
+) -> Result<Option<PackDto>, String> {
+    community.init_cache(&app);
+    let installed = state.installed_packs();
+    look_up(&community, &base_url(), &pack_id, &installed).await
+}
+
+/// [`community_pack`] with the packs at `base`.
+async fn look_up(
+    community: &Community,
+    base: &str,
+    pack_id: &str,
+    installed: &HashMap<String, Option<String>>,
+) -> Result<Option<PackDto>, String> {
+    if !pack::is_pack_id(pack_id) {
+        return Ok(None);
+    }
+    let source = community.current(base).await?;
+    if let Some(found) = find_pack(&source, pack_id, installed)? {
+        return Ok(Some(found));
+    }
+    let source = community.refresh(base).await?;
+    find_pack(&source, pack_id, installed)
+}
+
+/// Pack `id` in `source`, marked against the library, or `None` when it isn't listed.
+fn find_pack(
+    source: &Source,
+    id: &str,
+    installed: &HashMap<String, Option<String>>,
+) -> Result<Option<PackDto>, String> {
+    Ok(source
+        .packs(&[id.to_string()])?
+        .into_iter()
+        .next()
+        .map(|row| PackDto::new(row, installed, source)))
 }
 
 /// One page of the packs matching `q` (every word the start of a word in a pack's name,
@@ -274,7 +325,7 @@ fn search(
     let hit_packs = source
         .packs(&hit_ids)?
         .into_iter()
-        .map(|row| PackDto::new(row, installed))
+        .map(|row| PackDto::new(row, installed, source))
         .collect();
     Ok(SearchDto {
         hit_packs,
@@ -283,7 +334,7 @@ fn search(
         packs: results
             .packs
             .into_iter()
-            .map(|row| PackDto::new(row, installed))
+            .map(|row| PackDto::new(row, installed, source))
             .collect(),
         skins: results
             .skins
@@ -366,6 +417,9 @@ fn has_update(have: Option<&Option<String>>, listed: &str) -> bool {
 /// `on_progress` hears how far it has got: `download` with nothing arrived, then as each picture
 /// arrives; then `save` with nothing saved, as each is ready to write, and with all of them once
 /// they are saved.
+///
+/// Once it is added, the community service is told the pack's id, so folderskin.app can count
+/// it ([`crate::installs`]). That goes on by itself: the command doesn't wait for it.
 #[tauri::command]
 pub async fn community_add(
     app: AppHandle,
@@ -382,11 +436,14 @@ pub async fn community_add(
     let source = community.current(&base_url()).await?;
     let (pack, hash, pictures) = download_pack(&source, &pack_id, &progress).await?;
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        save_pack(&state, &pack_id, &pack, &pictures, Some(hash), &progress)
+    let id = pack_id.clone();
+    let skins = tauri::async_runtime::spawn_blocking(move || {
+        save_pack(&state, &id, &pack, &pictures, Some(hash), &progress)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??;
+    crate::installs::report(&pack_id);
+    Ok(skins)
 }
 
 /// Every skin of pack `pack_id`, drawn as the folder it makes, to look through before adding it.
@@ -1746,6 +1803,7 @@ pub(crate) mod tests {
                 bytes: gz.len() as u64,
             },
             featured: Vec::new(),
+            official: Vec::new(),
             mirrors: Vec::new(),
         };
         serve(format!("/v2/{}", tree::catalog_path(&generation)), gz);
@@ -2123,6 +2181,84 @@ pub(crate) mod tests {
         );
         assert!(!refreshing.is_finished(), "Refresh was still downloading");
         refreshing.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn index_json_marks_official_packs_and_dates_the_packs() {
+        let index = r#"{ "version": 1, "packs": [
+  { "id": "colours", "name": "Colours", "author": "prajwal-svm", "license": "CC0-1.0",
+    "tags": ["colour"], "count": 8, "added": 1780000000, "official": true },
+  { "id": "greek-art", "name": "Greek Art", "author": "someone", "license": "CC0-1.0",
+    "tags": ["classic art"], "count": 16, "added": 1790000000 } ] }"#;
+        let (base, _) = serve(vec![(
+            "/index.json".into(),
+            index.as_bytes().to_vec(),
+            Duration::ZERO,
+        )]);
+        let source = block_on(catalog::load(&base, None, false)).unwrap();
+        let all = search(&source, &HashMap::new(), &query("")).unwrap();
+        let marks: Vec<(&str, bool)> = all
+            .packs
+            .iter()
+            .map(|p| (p.id.as_str(), p.official))
+            .collect();
+        assert_eq!(
+            marks,
+            [("greek-art", false), ("colours", true)],
+            "the newest first, by the dates index.json gives"
+        );
+    }
+
+    #[test]
+    fn a_link_finds_its_pack_and_looks_again_for_one_published_since() {
+        // Reds and Blues now. Asked again past the caches, the host has Greens too, and marks
+        // Blues official.
+        let (mut files, _, _) = tree_files(&colour_packs());
+        let mut later = colour_packs();
+        later.push((
+            "greens",
+            "Greens",
+            &["fresh"],
+            vec![("lime.png", "Lime", png(256, 256, [60, 200, 60, 255]))],
+        ));
+        let (newer, _, _) = tree_files(&later);
+        for (path, body, delay) in newer {
+            if path == "/v2/head.json" {
+                let mut head = Head::parse(&body).unwrap();
+                head.official = vec!["blues".into()];
+                let body = serde_json::to_vec(&head).unwrap();
+                files.push(("/v2/head.json?".into(), body, delay));
+            } else if !files.iter().any(|(p, ..)| *p == path) {
+                files.push((path, body, delay));
+            }
+        }
+        let (base, _, asked) = serve_logged(files);
+        let community = Community::with_cache(None);
+        let installed = HashMap::from([("reds".to_string(), None)]);
+        let look = |id: &str| block_on(look_up(&community, &base, id, &installed)).unwrap();
+
+        let reds = look("reds").unwrap();
+        assert!(reds.added && !reds.official);
+        assert!(
+            lock(&asked).iter().all(|p| !p.contains('?')),
+            "found in the list already: {:?}",
+            lock(&asked)
+        );
+
+        let greens = look("greens").unwrap();
+        assert_eq!((greens.name.as_str(), greens.added), ("Greens", false));
+        assert!(
+            lock(&asked)
+                .iter()
+                .any(|p| p.starts_with("/v2/head.json?t=")),
+            "asked again past the caches: {:?}",
+            lock(&asked)
+        );
+        assert!(look("blues").unwrap().official);
+        assert!(look("nope").is_none());
+        let before = lock(&asked).len();
+        assert!(look("../escape").is_none());
+        assert_eq!(lock(&asked).len(), before, "not a pack id: nothing asked");
     }
 
     #[test]

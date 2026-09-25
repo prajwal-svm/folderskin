@@ -111,6 +111,8 @@ export class CommunityStore {
   private working: CommunityPack | null = null;
   /** Goes up with every pack marked, so an older answer about the library isn't laid over it. */
   private marked = 0;
+  /** The pack a folderskin://install link asked for, until there are handlers to add it with. */
+  private linked: string | null = null;
 
   constructor(private readonly delay = SEARCH_DELAY_MS) {}
 
@@ -128,6 +130,44 @@ export class CommunityStore {
 
   bind(handlers: CommunityHandlers) {
     this.handlers = handlers;
+    if (this.linked) void this.installLinked();
+  }
+
+  /**
+   * A folderskin://install link, from an Install button on folderskin.app: the pack it names,
+   * opened and added the way its Add button adds it, with the same progress and toasts. A pack in
+   * the library already is opened and said to be there. The first time, it waits for the view's
+   * handlers: a link can come before Community has ever been open.
+   */
+  install(packId: string) {
+    this.linked = packId;
+    if (this.handlers) void this.installLinked();
+  }
+
+  private async installLinked() {
+    const id = this.linked;
+    this.linked = null;
+    if (!id) return;
+    let pack: CommunityPack | null;
+    try {
+      pack = await api.communityPack(id);
+    } catch (e) {
+      this.handlers?.toast(`Couldn't add “${id}”: ${errorMessage(e)}`, { tone: "danger" });
+      return;
+    }
+    if (!pack) {
+      this.handlers?.toast(`Couldn't add “${id}”: there's no pack by that name in Community. Search for it there; it may have been renamed.`, {
+        tone: "danger",
+      });
+      return;
+    }
+    this.open(pack);
+    if (pack.added) {
+      const newer = pack.update ? "; Update gets its newer version" : "";
+      this.handlers?.toast(`${clip(pack.name)} is in your library already${newer}`, { tone: "ok", action: this.show(pack) });
+      return;
+    }
+    await this.add(pack);
   }
 
   /** Searches the first time the view opens; after that the answer is already here, and only

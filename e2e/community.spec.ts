@@ -217,3 +217,38 @@ test("tags that don't fit beside the search fade out rather than stopping mid-wo
   await expect.poll(overflows).toBe(false);
   await expect(strip).not.toHaveAttribute("data-cut", /.*/);
 });
+
+test("an official pack wears its badge, on its card and in its viewer", async ({ page }) => {
+  await openCommunity(page, 0);
+  const card = (name: string) => cards(page).filter({ has: page.locator(".pack-name", { hasText: new RegExp(`^${name}$`) }) });
+  await expect(card("Classic Art").locator(".tag-chip.is-official")).toHaveText("Official");
+  await expect(card("Night prints").locator(".tag-chip.is-official")).toHaveCount(0);
+  await card("Classic Art").getByRole("button", { name: "view Classic Art" }).click();
+  await expect(page.getByRole("dialog").locator(".tag-chip.is-official")).toHaveText("Official");
+});
+
+test("a folderskin://install link opens Community on its pack and adds it, as Add does", async ({ page }) => {
+  // `?install=` stands in for the link (devMock.ts); the pack waits, downloaded, to be let through.
+  await openApp(page, { query: "packs=0&install=colours&holdpacks" });
+  const viewer = page.getByRole("dialog");
+  await expect(viewer.getByRole("heading", { name: "Colours" })).toBeVisible();
+  // Behind the viewer, which makes the rest of the window inert, so found by what it is.
+  await expect(page.locator(".community .view-title")).toHaveText("Community");
+  const adding = viewer.locator(".pack-adding");
+  await expect(adding).toHaveAttribute("aria-busy", "true");
+  await expect(adding).toHaveText(/^(Adding|(Downloading|Saving) \d+ of 8)$/);
+  const card = cards(page).filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) });
+  await expect(card.locator('.pack-progress[aria-label="Adding Colours"]')).toBeVisible();
+  await letGo(page, "mockPackGo");
+  await expect(page.getByText(/Added 8 skins from Colours/)).toBeVisible({ timeout: 10_000 });
+  await expect(viewer.getByText("Added", { exact: true })).toBeVisible();
+});
+
+test("an install link for a pack Community doesn't have says so, and what to do", async ({ page }) => {
+  await openApp(page, { query: "packs=0&install=gone-pack" });
+  await expect(
+    page.getByText("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there; it may have been renamed."),
+  ).toBeVisible();
+  await expect(page.locator(".community .view-title")).toHaveText("Community");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});

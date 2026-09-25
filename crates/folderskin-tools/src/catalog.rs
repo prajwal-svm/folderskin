@@ -75,7 +75,8 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
             "{bad} can't be a mirror: it has to be an https:// address with no ? or #"
         ));
     }
-    let featured = read_featured(dir, report)?;
+    let featured = packs::read_pack_list(dir, report, FEATURED_FILE)?;
+    let official = packs::read_pack_list(dir, report, packs::OFFICIAL_FILE)?;
     // Before anything is written: the generation the old head.json names.
     let previous = previous_files(out);
 
@@ -140,6 +141,7 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
             bytes: gz.len() as u64,
         },
         featured,
+        official,
         mirrors: opts.mirrors.clone(),
     };
     let json = serde_json::to_string_pretty(&head).map_err(|e| e.to_string())? + "\n";
@@ -318,36 +320,6 @@ fn encode_webp(img: &RgbaImage, cwebp: Option<&Path>) -> Result<Vec<u8>, String>
             ExtendedColorType::Rgba8,
         )
         .map_err(|e| format!("couldn't be saved as WebP: {e}"))?;
-    Ok(out)
-}
-
-/// The featured packs from `<dir>/featured.json`, or none when there is no such file. Every id
-/// in it has to be a pack that passed, so a pack that is renamed or removed can't leave a gap.
-fn read_featured(dir: &Path, report: &Report) -> Result<Vec<String>, String> {
-    let path = dir.join(FEATURED_FILE);
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(format!("couldn't read {}: {e}", path.display())),
-    };
-    let ids: Vec<String> = serde_json::from_slice(&bytes).map_err(|_| {
-        format!(
-            "{} has to be a list of pack ids, such as [\"classic-art\", \"colours\"]",
-            path.display()
-        )
-    })?;
-    let mut out: Vec<String> = Vec::new();
-    for id in ids {
-        if !report.packs.iter().any(|(p, _)| *p == id) {
-            return Err(format!(
-                "{} names {id:?}, which isn't a pack",
-                path.display()
-            ));
-        }
-        if !out.contains(&id) {
-            out.push(id);
-        }
-    }
     Ok(out)
 }
 
@@ -839,6 +811,45 @@ mod tests {
             .contains("\"gone\", which isn't a pack"));
         std::fs::write(c.0.join(FEATURED_FILE), r#"{"reds": 1}"#).unwrap();
         assert!(c.build().unwrap_err().contains("a list of pack ids"));
+    }
+
+    #[test]
+    fn official_packs_go_in_head_json_and_have_to_be_packs() {
+        let c = Community::new("official");
+        two_packs(&c);
+        let official = c.0.join(packs::OFFICIAL_FILE);
+        assert!(
+            c.build().unwrap().head.official.is_empty(),
+            "no official.json"
+        );
+
+        std::fs::write(&official, r#"["blues", "reds", "blues"]"#).unwrap();
+        let built = c.build().unwrap();
+        assert_eq!(
+            built.head.official,
+            ["blues", "reds"],
+            "in order, once each"
+        );
+        let head = Head::parse(&std::fs::read(c.out().join(HEAD_FILE)).unwrap()).unwrap();
+        assert_eq!(head.official_ids(), ["blues", "reds"]);
+        assert_eq!(
+            built.changes.written,
+            [c.out().join(HEAD_FILE)],
+            "only head.json changes: the catalog doesn't say which packs are official"
+        );
+
+        // A bad official.json writes nothing, not even into an empty folder.
+        let fresh = Community::new("official-bad");
+        two_packs(&fresh);
+        for (content, says) in [
+            (r#"["reds", "gone"]"#, "names \"gone\", which isn't a pack"),
+            (r#"["reds", 1]"#, "has to be a list of pack ids"),
+        ] {
+            std::fs::write(fresh.0.join(packs::OFFICIAL_FILE), content).unwrap();
+            let err = fresh.build().unwrap_err();
+            assert!(err.contains(says), "{err}");
+            assert!(!fresh.out().exists());
+        }
     }
 
     #[test]

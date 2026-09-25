@@ -10,6 +10,8 @@ import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
 import { applyLabel, CONFIRM_ABOVE, folders, formatBytes, mergeRuns, runToast, type TreeProgress, type TreeRun } from "./lib/tree";
 import { throttle } from "./lib/throttle";
+import { community } from "./lib/communityStore";
+import { watchInstallLinks } from "./lib/installLinks";
 import { initialState, reduce } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { flushChats } from "./state/chatStore";
@@ -324,6 +326,20 @@ export default function App() {
     setQuery("");
     setFilters(NO_FILTERS);
   }, []);
+
+  // A folderskin://install link, from an Install button on folderskin.app: Community, open on that
+  // pack and adding it as its Add button does (lib/installLinks.ts, lib/communityStore.ts). The app
+  // has brought the window forward already.
+  useEffect(
+    () =>
+      watchInstallLinks((packId) => {
+        setView("community");
+        setTag("");
+        setFilters(NO_FILTERS);
+        community.install(packId);
+      }),
+    [],
+  );
 
   const refreshFolderIcon = useCallback((path: string) => {
     api

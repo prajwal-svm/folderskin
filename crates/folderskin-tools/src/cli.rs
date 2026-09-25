@@ -228,9 +228,11 @@ pub enum PacksCommand {
         #[arg(long)]
         flat_backdrop: bool,
     },
-    /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic)
+    /// Check every pack, then write <dir>/index.json and <dir>/previews/<id>.png (deterministic).
+    /// Each pack is dated by the commit that added it, and marked official when official.json
+    /// lists it
     Index {
-        /// The folderskin-community checkout, holding packs/
+        /// The folderskin-community checkout, holding packs/ and, if there is one, official.json
         #[arg(long, default_value = ".")]
         dir: PathBuf,
     },
@@ -238,7 +240,8 @@ pub enum PacksCommand {
     /// preview strips, pictures and manifests named after their contents, and head.json last
     /// (deterministic; only what changed is written)
     Catalog {
-        /// The folderskin-community checkout, holding packs/ and, if there is one, featured.json
+        /// The folderskin-community checkout, holding packs/ and, if there are, featured.json and
+        /// official.json
         #[arg(long, default_value = ".")]
         dir: PathBuf,
         /// Where the tree goes (default: v2 in that folder, beside packs/)

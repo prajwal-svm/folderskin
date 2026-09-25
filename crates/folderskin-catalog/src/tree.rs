@@ -35,6 +35,9 @@ pub const MAX_PREVIEW_BYTES: usize = 1024 * 1024;
 pub const MAX_MANIFEST_BYTES: usize = 2 * pack::MAX_MANIFEST_BYTES;
 
 /// `head.json`: which catalog is current, and where else the tree is served.
+///
+/// Fields this version doesn't know are ignored, so a head can gain fields without breaking the
+/// apps already installed: add new ones with `#[serde(default)]`, and never rename or remove one.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Head {
     pub version: u32,
@@ -47,6 +50,10 @@ pub struct Head {
     /// Packs chosen to show first, in order.
     #[serde(default)]
     pub featured: Vec<String>,
+    /// Packs the maintainer vouches for as official (`official.json` beside `packs/`), which the
+    /// app marks as such. Empty in a head written before there were any.
+    #[serde(default)]
+    pub official: Vec<String>,
     /// Other places serving this same tree, tried in order before the one `head.json` came from.
     #[serde(default)]
     pub mirrors: Vec<String>,
@@ -91,14 +98,24 @@ impl Head {
 
     /// The featured ids that are pack ids, in order, without repeats.
     pub fn featured_ids(&self) -> Vec<String> {
-        let mut out: Vec<String> = Vec::new();
-        for id in &self.featured {
-            if pack::is_pack_id(id) && !out.contains(id) {
-                out.push(id.clone());
-            }
-        }
-        out
+        pack_ids(&self.featured)
     }
+
+    /// The official ids that are pack ids, in order, without repeats.
+    pub fn official_ids(&self) -> Vec<String> {
+        pack_ids(&self.official)
+    }
+}
+
+/// The ids in `ids` that are pack ids, in order, without repeats.
+fn pack_ids(ids: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for id in ids {
+        if pack::is_pack_id(id) && !out.contains(id) {
+            out.push(id.clone());
+        }
+    }
+    out
 }
 
 /// A catalog's address: `catalog/<16 hex>.sqlite.gz` beside `head.json`, or a full `https://`
@@ -294,15 +311,29 @@ mod tests {
         format!(
             r#"{{ "version": 2, "generation": "0123456789abcdef", "packs": 1, "skins": 2,
   "catalog": {{ "url": "{url}", "sha256": "{}", "bytes": 10 }},
-  "featured": ["colours", "../nope", "colours"], "mirrors": [] }}"#,
+  "featured": ["colours", "../nope", "colours"],
+  "official": ["classic-art", "Not An Id", "classic-art"], "mirrors": [] }}"#,
             "a".repeat(64)
         )
     }
 
     #[test]
-    fn a_head_is_read_and_its_featured_packs_cleaned() {
+    fn a_head_is_read_and_its_featured_and_official_packs_cleaned() {
         let h = Head::parse(head("catalog/0123456789abcdef.sqlite.gz").as_bytes()).unwrap();
         assert_eq!(h.featured_ids(), ["colours"]);
+        assert_eq!(h.official_ids(), ["classic-art"]);
+        // A head from before there were official packs, and one with a field from after this
+        // version, both read.
+        let older = head("catalog/0123456789abcdef.sqlite.gz").replace(
+            r#""official": ["classic-art", "Not An Id", "classic-art"],"#,
+            "",
+        );
+        assert!(Head::parse(older.as_bytes()).unwrap().official.is_empty());
+        let later = head("catalog/0123456789abcdef.sqlite.gz").replace(
+            r#""mirrors": []"#,
+            r#""mirrors": [], "installs": {"colours": 3}"#,
+        );
+        assert_eq!(Head::parse(later.as_bytes()).unwrap(), h);
         assert!(Head::parse(head("https://example.com/c.sqlite.gz").as_bytes()).is_ok());
         for bad in [
             "../catalog.sqlite.gz",

@@ -19,8 +19,11 @@ Only the latest release gets fixes. There are no long-term support branches.
 
 ## Scope
 
-FolderSkin runs entirely on your machine. It makes no network requests and collects no
-telemetry, so the interesting surface is local: the paths it accepts, the files it writes
-inside a folder you chose (see [docs/PLATFORMS.md](docs/PLATFORMS.md)), and the images it
-decodes. Reports about path handling, writes outside the selected folder, or crashes while
-decoding a picture are all in scope.
+FolderSkin runs on your machine. It goes online only for what the README lists under "What stays
+on your computer" (community packs, the update check, an AI request you make, and the id of a
+community pack you add, which is counted), so most of the interesting surface is local: the
+paths it accepts, the files it writes inside a folder you chose (see
+[docs/PLATFORMS.md](docs/PLATFORMS.md)), the images it decodes, and the `folderskin://install`
+links it opens, which can only name a community pack. Reports about path handling, writes outside
+the selected folder, crashes while decoding a picture, or a link that makes FolderSkin do more
+than add a community pack are all in scope.

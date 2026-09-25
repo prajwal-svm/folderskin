@@ -1,11 +1,11 @@
-//! The community skin packs under `community/`: `packs check` and `packs index`.
+//! The community skin packs in a folderskin-community checkout: `packs check` and `packs index`.
 //!
-//! `check` holds every folder in `community/packs/` to the contract in
-//! [`folderskin_core::pack`], and to what only a folder on disk can get wrong: its name, a
-//! picture that is missing or named with different capitals (GitHub serves names exactly as
-//! written, though macOS and Windows open either), and files the pack does not list. `index`
-//! writes what the app downloads: `index.json` and one preview strip per pack. Both are pure
-//! functions of the packs, so running `index` again on the same packs changes nothing.
+//! `check` holds every folder in `packs/` to the contract in [`folderskin_core::pack`], and to
+//! what only a folder on disk can get wrong: its name, a picture that is missing or named with
+//! different capitals (GitHub serves names exactly as written, though macOS and Windows open
+//! either), and files the pack does not list. `index` writes what the app downloads:
+//! `index.json` and one preview strip per pack. Both are pure functions of the packs (and, for
+//! the dates in `index.json`, of the git history), so running `index` again changes nothing.
 
 use crate::skin::Skin;
 use folderskin_core::pack::{
@@ -13,7 +13,7 @@ use folderskin_core::pack::{
 };
 use folderskin_core::{matte, raster};
 use image::RgbaImage;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::FileType;
 use std::path::{Path, PathBuf};
 
@@ -23,6 +23,9 @@ pub const PACKS_DIR: &str = "packs";
 pub const PREVIEWS_DIR: &str = "previews";
 /// The list of packs the app reads.
 pub const INDEX_FILE: &str = "index.json";
+/// The packs the maintainer vouches for, which the app and the website mark as official: a JSON
+/// list of ids beside `packs/`. Optional.
+pub const OFFICIAL_FILE: &str = "official.json";
 /// How many skins a preview strip shows.
 pub const PREVIEW_SKINS: usize = 4;
 /// The side of each folder in a preview strip.
@@ -173,12 +176,20 @@ pub fn check_pack_within(folder: &Path, name: &str, max_bytes: usize) -> Result<
 }
 
 /// Writes `<dir>/index.json` and `<dir>/previews/<id>.png` for every pack in `report`, and removes
-/// the previews of packs that are gone. Writes nothing when the report has a problem. A file
-/// that already holds the right bytes is left alone, so [`Changes`] says what really changed.
-pub fn write_index(dir: &Path, report: &Report) -> Result<Changes, String> {
+/// the previews of packs that are gone. Each entry says when its pack was first published, from
+/// `dates` (Unix seconds by id, as `catalog::git_dates` reads them; a pack missing from it isn't
+/// dated), and whether `<dir>/official.json` lists it. Writes nothing when the report has a
+/// problem or official.json does. A file that already holds the right bytes is left alone, so
+/// [`Changes`] says what really changed.
+pub fn write_index(
+    dir: &Path,
+    report: &Report,
+    dates: &HashMap<String, i64>,
+) -> Result<Changes, String> {
     if !report.problems.is_empty() {
         return Err(format!("{}; nothing was written", report.summary()));
     }
+    let official = read_pack_list(dir, report, OFFICIAL_FILE)?;
     let mut packs: Vec<&(String, Pack)> = report.packs.iter().collect();
     packs.sort_by(|a, b| a.0.cmp(&b.0));
     let mut changes = Changes::default();
@@ -212,7 +223,10 @@ pub fn write_index(dir: &Path, report: &Report) -> Result<Changes, String> {
         .map(|(id, pack)| {
             let hash =
                 hash_pack(&dir.join(PACKS_DIR).join(id), pack).map_err(|e| format!("{id}: {e}"))?;
-            Ok(IndexEntry::new(id, pack, hash))
+            let mut entry = IndexEntry::new(id, pack, hash);
+            entry.added = dates.get(id).copied().filter(|&at| at > 0);
+            entry.official = official.contains(id);
+            Ok(entry)
         })
         .collect::<Result<Vec<_>, String>>()?;
     let index = Index {
@@ -222,6 +236,37 @@ pub fn write_index(dir: &Path, report: &Report) -> Result<Changes, String> {
     let json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())? + "\n";
     write_if_changed(&dir.join(INDEX_FILE), json.as_bytes(), &mut changes)?;
     Ok(changes)
+}
+
+/// The pack ids listed in `<dir>/<file>`, such as `featured.json` or `official.json`, in order and
+/// without repeats; none when there is no such file. Every id in it has to be a pack in `report`,
+/// so a pack that is renamed or removed can't leave a gap.
+pub fn read_pack_list(dir: &Path, report: &Report, file: &str) -> Result<Vec<String>, String> {
+    let path = dir.join(file);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("couldn't read {}: {e}", path.display())),
+    };
+    let ids: Vec<String> = serde_json::from_slice(&bytes).map_err(|_| {
+        format!(
+            "{} has to be a list of pack ids, such as [\"classic-art\", \"colours\"]",
+            path.display()
+        )
+    })?;
+    let mut out: Vec<String> = Vec::new();
+    for id in ids {
+        if !report.packs.iter().any(|(p, _)| *p == id) {
+            return Err(format!(
+                "{} names {id:?}, which isn't a pack",
+                path.display()
+            ));
+        }
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    Ok(out)
 }
 
 /// [`pack::pack_hash`] of the pack in `folder`, from the files as they are on disk: the bytes
@@ -612,7 +657,7 @@ mod tests {
         std::fs::write(c.path("previews/notes.txt"), b"not a preview").unwrap();
 
         let report = check(&c.0).unwrap();
-        let changes = write_index(&c.0, &report).unwrap();
+        let changes = write_index(&c.0, &report, &HashMap::new()).unwrap();
         assert_eq!(changes.removed, [c.path("previews/gone.png")]);
         assert_eq!(
             changes.written,
@@ -646,8 +691,71 @@ mod tests {
         );
         assert_eq!(strip("zebra").dimensions(), (PREVIEW_SIDE, PREVIEW_SIDE));
 
-        let again = write_index(&c.0, &report).unwrap();
+        let again = write_index(&c.0, &report, &HashMap::new()).unwrap();
         assert!(again.is_empty(), "a second run rewrote {again:?}");
+    }
+
+    #[test]
+    fn index_says_when_each_pack_was_added_and_which_are_official() {
+        let c = Community::new("official");
+        c.pack("reds", &[("a.png", &artwork([200, 40, 40]))]);
+        c.pack("blues", &[("b.png", &artwork([40, 40, 200]))]);
+        c.pack("greens", &[("g.png", &artwork([40, 200, 40]))]);
+        // Listed twice, which counts once.
+        std::fs::write(c.path(OFFICIAL_FILE), r#"["reds", "blues", "reds"]"#).unwrap();
+        let dates = HashMap::from([
+            ("reds".to_string(), 1_790_000_000),
+            ("blues".to_string(), 0),
+        ]);
+
+        let report = check(&c.0).unwrap();
+        write_index(&c.0, &report, &dates).unwrap();
+        let json = std::fs::read_to_string(c.path(INDEX_FILE)).unwrap();
+        let index: Index = serde_json::from_str(&json).unwrap();
+        let said: Vec<(&str, Option<i64>, bool)> = index
+            .packs
+            .iter()
+            .map(|p| (p.id.as_str(), p.added, p.official))
+            .collect();
+        assert_eq!(
+            said,
+            [
+                ("blues", None, true),
+                ("greens", None, false),
+                ("reds", Some(1_790_000_000), true)
+            ],
+            "a time of 0 is no date"
+        );
+        assert_eq!(json.matches("\"official\": true").count(), 2, "{json}");
+        assert!(!json.contains("\"official\": false"), "{json}");
+        assert_eq!(json.matches("\"added\"").count(), 1, "{json}");
+        assert!(write_index(&c.0, &report, &dates).unwrap().is_empty());
+
+        // Without official.json no pack is official.
+        std::fs::remove_file(c.path(OFFICIAL_FILE)).unwrap();
+        write_index(&c.0, &report, &dates).unwrap();
+        let json = std::fs::read_to_string(c.path(INDEX_FILE)).unwrap();
+        assert!(!json.contains("official"), "{json}");
+    }
+
+    #[test]
+    fn a_bad_official_json_writes_nothing() {
+        let c = Community::new("bad-official");
+        c.pack("reds", &[("a.png", &artwork([200, 40, 40]))]);
+        let report = check(&c.0).unwrap();
+        for (content, says) in [
+            (r#"["reds", "gone"]"#, "names \"gone\", which isn't a pack"),
+            (r#"{"reds": true}"#, "has to be a list of pack ids"),
+            ("reds", "has to be a list of pack ids"),
+        ] {
+            std::fs::write(c.path(OFFICIAL_FILE), content).unwrap();
+            let err = write_index(&c.0, &report, &HashMap::new()).unwrap_err();
+            assert!(
+                err.starts_with(&c.path(OFFICIAL_FILE).display().to_string()) && err.contains(says),
+                "{err}"
+            );
+            assert!(!c.path(INDEX_FILE).exists() && !c.path(PREVIEWS_DIR).exists());
+        }
     }
 
     #[test]
@@ -656,7 +764,7 @@ mod tests {
         c.pack("good", &[("a.png", &artwork([1, 2, 3]))]);
         c.put("bad", MANIFEST_FILE, b"{}");
         let report = check(&c.0).unwrap();
-        let err = write_index(&c.0, &report).unwrap_err();
+        let err = write_index(&c.0, &report, &HashMap::new()).unwrap_err();
         assert_eq!(err, "1 problem in 1 pack; nothing was written");
         assert!(!c.path(INDEX_FILE).exists() && !c.path(PREVIEWS_DIR).exists());
     }
