@@ -1,1 +1,127 @@
-{}
+{
+  "title": "설정",
+  "navLabel": "설정",
+  "search": "검색",
+  "searchLabel": "설정 검색",
+  "pagesLabel": "설정 페이지",
+  "noMatch": "'{{query}}'에 맞는 설정이 없어요",
+  "pages": {
+    "general": "일반",
+    "ai": "AI 제공업체",
+    "sharing": "공유",
+    "about": "정보"
+  },
+  "find": {
+    "general": "모양 테마 다크 라이트 시스템 모드 강조 색상 색 움직임 애니메이션 줄이기 창 사이드바 아이콘 내 스킨 스킨 폴더 저장 위치 백업 appearance theme dark light system mode accent colour color motion animation reduce reduced window sidebar rail icons your skins folder storage backup",
+    "ai": "AI 이미지 만드는 곳 키 제공업체 API 모델 로컬 모델 내 컴퓨터 설정 생성 무료 삭제 제거 ai where pictures are made key keys provider providers api openai xai grok recraft google gemini black forest labs flux stability ideogram fal replicate local model your machine set up generate free remove delete",
+    "sharing": "공유 제작자 표시 라이선스 프로필 커뮤니티 팩 sharing share author credit credited licence license profile profiles cc0 cc by mit community pack",
+    "about": "정보 FolderSkin 스킨 팩 사진 디자인 AI 로컬 모델 무료 오픈 소스 버전 새 버전 업데이트 릴리스 링크 소스 코드 문제 스타 about folderskin what skins packs photos design ai local model free open source version newer versions update updates release releases links source code issues star"
+  },
+  "general": {
+    "appearance": "모양",
+    "theme": "테마",
+    "themeLabel": "테마",
+    "themeFind": "다크 라이트 시스템 모드 모양 dark light system mode",
+    "themes": {
+      "system": "자동",
+      "light": "라이트",
+      "dark": "다크"
+    },
+    "accent": "강조 색상",
+    "accentNote": "버튼, 선택 영역, 끌어다 놓은 폴더 주변의 빛에 쓰여요.",
+    "accentFind": "색상 강조 color accent",
+    "accentLabel": "강조 색상",
+    "accents": {
+      "blue": "파란색",
+      "purple": "보라색",
+      "pink": "분홍색",
+      "orange": "주황색",
+      "green": "초록색",
+      "mono": "흑백"
+    },
+    "motion": "움직임",
+    "motionNote": "라이브러리, 대화상자, 아이콘의 움직임을 줄여요.",
+    "motionFind": "애니메이션 움직임 동작 줄이기 animation reduce reduced",
+    "motionLabel": "움직임",
+    "motions": {
+      "system": "시스템",
+      "systemTip": "컴퓨터 설정이 허용하는 만큼 움직여요",
+      "reduced": "줄임",
+      "reducedTip": "움직이지 않고 바로 나타나고 바뀌어요"
+    },
+    "window": "창",
+    "sidebar": "사이드바",
+    "sidebarNote": "'아이콘만'을 고르면 좁은 띠로 접혀요. {{keys}} 키로 둘 사이를 오갈 수 있어요.",
+    "sidebarFind": "레일 접기 아이콘 rail collapse fold icons",
+    "sidebarLabel": "사이드바",
+    "full": "전체",
+    "iconsOnly": "아이콘만",
+    "yourSkins": "스킨 저장 위치",
+    "yourSkinsNote": "추가한 것은 모두 여기에 저장되어, 다시 실행해도 그대로 있어요. 백업하려면 이 폴더를 복사하세요.",
+    "skins_other": "스킨 {{count}}개",
+    "skinsFind": "저장 위치 폴더 백업 스킨 storage folder backup skins",
+    "keptUntilQuit": "종료할 때까지 보관돼요"
+  },
+  "ai": {
+    "title": "이미지를 만드는 곳",
+    "find": "키 API 제공업체 모델 key keys api provider providers model",
+    "note": "FolderSkin에는 서버가 없어요. 키를 쓰면 'AI로 생성'이 내 컴퓨터에서 제공업체로 요청을 바로 보내고, 비용은 내 계정으로 청구돼요. 로컬 모델은 한 번 설정하면 무료로 만들어 줘요.",
+    "loading": "제공업체를 불러오는 중"
+  },
+  "sharing": {
+    "title": "라이선스 프로필",
+    "note": "공유하는 팩에는 누가 만들었는지, 다른 사람이 어떻게 쓸 수 있는지가 담겨요. 공유하는 방식마다 프로필을 하나씩 만들어 두세요. 공유는 기본 프로필로 시작해요.",
+    "howItWorks": "공유 방식 알아보기"
+  },
+  "profile": {
+    "firstName": "개인",
+    "fallbackName": "프로필",
+    "default": "기본",
+    "creditedTo": "제작자 표시: {{author}}",
+    "noCredit": "아직 제작자로 표시할 이름이 없어요",
+    "makeDefaultLabel": "{{name}} 프로필을 기본으로 설정",
+    "makeDefault": "기본으로 설정",
+    "changeLabel": "{{name}} 프로필 변경",
+    "change": "변경",
+    "deleteLabel": "{{name}} 프로필 삭제",
+    "delete": "삭제",
+    "deleted": "{{name}} 프로필을 삭제했어요.",
+    "undo": "실행 취소",
+    "add": "프로필 추가",
+    "newLabel": "새 프로필",
+    "name": "이름",
+    "namePlaceholder": "개인, 업무용 등",
+    "creditedToLabel": "제작자 표시",
+    "authorPlaceholder": "your-name",
+    "licence": "라이선스",
+    "licenceLabel": "라이선스",
+    "save": "저장",
+    "addProfile": "프로필 추가",
+    "problems": {
+      "noName": "프로필 이름을 정해 주세요.",
+      "taken": "이름이 {{name}}인 프로필이 이미 있어요.",
+      "author": "제작자 이름에는 영문자, 숫자, 하이픈 하나씩만 쓸 수 있어요.",
+      "full_other": "프로필은 최대 {{count}}개까지예요. 이 프로필을 추가하려면 하나를 지우세요."
+    }
+  },
+  "about": {
+    "intro": "가장 소중한 추억도 오래된 서류와 똑같이 밋밋한 폴더에 들어 있어요. FolderSkin은 모든 폴더에 안에 든 것과 어울리는 모습을 입혀 줘요. 여름 사진에는 골든 아워의 영화 스틸을, 여행에는 빈티지 여행 포스터를, 영상 프로젝트에는 팝 아트를, 생일에는 부드러운 파스텔을요.",
+    "points": {
+      "skins": "무료 커뮤니티 팩, 내 사진, 직접 만든 디자인으로 스킨을 입혀요.",
+      "ai": "스타일을 설명하면 AI가 그려 줘요. 내 키를 쓰거나, 로컬 모델로 무료로 그릴 수 있어요.",
+      "fileBrowser": {
+        "macos": "스킨은 Finder에 바로 나타나고, 어떤 폴더든 클릭 한 번으로 원래 아이콘으로 되돌릴 수 있어요.",
+        "windows": "스킨은 파일 탐색기에 바로 나타나고, 어떤 폴더든 클릭 한 번으로 원래 아이콘으로 되돌릴 수 있어요.",
+        "linux": "스킨은 '파일'에 바로 나타나고, 어떤 폴더든 클릭 한 번으로 원래 아이콘으로 되돌릴 수 있어요."
+      },
+      "free": "무료 오픈 소스예요. 계정도, 추적도 없어요."
+    },
+    "updates": "업데이트",
+    "newer": "새 버전",
+    "newerNote": "GitHub에 있는 FolderSkin 릴리스에서 받아 오고, 내가 원할 때 설치해요.",
+    "newerFind": "업데이트 릴리스 버전 update updates release version",
+    "links": "링크",
+    "sourceCode": "소스 코드",
+    "releases": "릴리스"
+  }
+}

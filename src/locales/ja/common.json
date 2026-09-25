@@ -1,1 +1,61 @@
-{}
+{
+  "cancel": "キャンセル",
+  "close": "閉じる",
+  "twoSentences": "{{first}}{{second}}",
+  "official": "公式",
+  "tags": {
+    "remove": "タグ「{{tag}}」を削除",
+    "add": "タグを追加",
+    "addAnother": "さらに追加",
+    "most_other": "タグは{{count}}個までです。"
+  },
+  "window": {
+    "label": "ウィンドウ",
+    "minimise": "最小化",
+    "maximise": "最大化",
+    "restore": "元のサイズに戻す",
+    "close": "閉じる"
+  },
+  "size": {
+    "bytes_other": "{{count}}バイト",
+    "kb": "{{value}}KB",
+    "mb": "{{value}}MB",
+    "gb": "{{value}}GB",
+    "tb": "{{value}}TB"
+  },
+  "place": {
+    "macos": "このMac",
+    "windows": "このPC",
+    "linux": "このコンピュータ"
+  },
+  "showIn": {
+    "macos": "Finderで表示",
+    "windows": "エクスプローラーで表示",
+    "linux": "「ファイル」で表示"
+  },
+  "dialog": {
+    "chooseFolder": "フォルダを選択",
+    "choosePicture": "画像を選択",
+    "pictures": "画像"
+  },
+  "about": {
+    "licence": "無料のオープンソース · GPL-3.0",
+    "tagline": "どんなフォルダにもスキンを。",
+    "reportIssues": "問題を報告",
+    "star": "スターを付ける"
+  },
+  "licences": {
+    "option": "{{label}}：{{note}}",
+    "cc0": "誰でも、どんな目的にも使えます。",
+    "ccBy": "誰でも使え、使う人はあなたの名前をクレジットします。",
+    "mit": "ライセンスの表記を一緒に残せば、誰でも使えます。"
+  },
+  "control": {
+    "typed": "{{name}}（数値を入力）",
+    "value": "値"
+  },
+  "errors": {
+    "somethingWrong": "問題が発生しました",
+    "templateLoad": "フォルダのテンプレートを読み込めませんでした"
+  }
+}

@@ -1,1 +1,123 @@
-{}
+{
+  "title": "コミュニティ",
+  "sub": "みんなが共有している無料のスキンとパックです。追加すると、そのスキンがライブラリに入ります。",
+  "addFromFolder": "フォルダから追加",
+  "shareYours": "スキンを共有",
+  "tabsLabel": "タグでパックを絞り込む",
+  "search": "パックを検索",
+  "searchLabel": "パックを検索",
+  "refreshTip": "新しいパックや更新されたパックを探す",
+  "refreshLabel": "パックを再読み込み",
+  "viewLabel": "パックの表示方法",
+  "views": {
+    "gallery": "ギャラリー",
+    "list": "リスト"
+  },
+  "hits": {
+    "label": "名前が一致するスキン",
+    "title": "スキン",
+    "tip": "{{name}}（{{pack}}）"
+  },
+  "tryAgain": "もう一度試す",
+  "checked": "どのパックも掲載前にチェックされています",
+  "loadFailed": "パックを読み込めませんでした",
+  "loadFailedText": "{{reason}}。フォルダからパックを追加することはできます。",
+  "loading": "パックを読み込み中",
+  "gridLabel": "コミュニティパック",
+  "empty": {
+    "noMatch": "一致するパックはありません",
+    "none": "パックはまだありません",
+    "noMatchText": "別の言葉やタグで試してください。",
+    "noneText": "最初の1人になりましょう。あなたのスキンを共有してください。"
+  },
+  "remove": {
+    "title": "「{{name}}」を削除しますか？",
+    "text": "このパックのスキンがライブラリから外れます。すでに使っているフォルダのアイコンはそのまま残ります。",
+    "action": "削除"
+  },
+  "dialog": {
+    "choosePackFolder": "パックのフォルダを選択"
+  },
+  "pack": {
+    "viewLabel": "{{name}}を表示",
+    "viewTip": "{{name}}を表示",
+    "added": "ライブラリに追加済み",
+    "by": "作者：<a>@{{author}}</a>",
+    "skins_other": "{{count}}個のスキン",
+    "view": "表示",
+    "updateTip": "このパックの新しいバージョンがあります",
+    "update": "アップデート",
+    "removing": "削除中",
+    "removingLabel": "{{name}}を削除中",
+    "removeTip": "このパックを削除",
+    "removeLabel": "{{name}}を削除",
+    "add": "追加"
+  },
+  "viewer": {
+    "add_other": "{{count}}個のスキンを追加",
+    "added": "追加済み",
+    "github": "GitHubで開く",
+    "openFailed": "このパックを開けませんでした：{{reason}}。",
+    "getting_other": "表示するために{{count}}個のスキンを取得中"
+  },
+  "progress": {
+    "adding": "追加中",
+    "updating": "アップデート中",
+    "addingLabel": "{{name}}を追加中",
+    "updatingLabel": "{{name}}をアップデート中",
+    "downloading": "ダウンロード中（{{done}}/{{total}}）",
+    "saving": "保存中（{{done}}/{{total}}）"
+  },
+  "sort": {
+    "bestMatch": "関連度順",
+    "featured": "注目",
+    "newest": "新しい順",
+    "name": "名前順",
+    "mostSkins": "スキン数順"
+  },
+  "options": {
+    "button": "並べ替えとその他のタグ",
+    "label": "並べ替えとタグ",
+    "title": "並べ替えとタグ",
+    "tagCount_other": "これらのパックのタグ：{{count}}個",
+    "allTags": "すべてのタグ",
+    "tags": "タグ"
+  },
+  "count": {
+    "searchFailed": "検索できませんでした：{{reason}}",
+    "packs_other": "{{count}}個のパック",
+    "matching_other": "「{{query}}」に一致するパック：{{count}}個",
+    "tagged_other": "タグ「{{tag}}」のパック：{{count}}個",
+    "matchingTagged_other": "「{{query}}」に一致し、タグ「{{tag}}」が付いたパック：{{count}}個",
+    "withLastVisit": "{{line}}。{{why}}",
+    "lastVisit": {
+      "offline": "オフラインのため、前回表示したパックを表示しています",
+      "unanswered": "{{host}}から応答がないため、前回表示したパックを表示しています",
+      "behind": "最新のパック一覧が届かなかったため、前回表示したパックを表示しています",
+      "other": "{{why}}。前回表示したパックを表示しています"
+    }
+  },
+  "toast": {
+    "addLinkFailed": "「{{id}}」を追加できませんでした：{{reason}}",
+    "noSuchPack": "「{{id}}」を追加できませんでした：コミュニティにその名前のパックはありません。名前が変わった可能性があるので、コミュニティで検索してみてください。",
+    "already": "{{name}}はすでにライブラリにあります",
+    "alreadyNewer": "{{name}}はすでにライブラリにあります。新しいバージョンは「アップデート」で入手できます",
+    "stillBusy": {
+      "add": "{{name}}をまだ追加中です。終わってからもう一度試してください。",
+      "update": "{{name}}をまだアップデート中です。終わってからもう一度試してください。",
+      "remove": "{{name}}をまだ削除中です。終わってからもう一度試してください。"
+    },
+    "added_other": "{{name}}から{{count}}個のスキンを追加しました",
+    "addFailed": "{{name}}を追加できませんでした：{{reason}}",
+    "updated": "{{name}}をアップデートしました",
+    "updateFailed": "{{name}}をアップデートできませんでした：{{reason}}",
+    "removed": "{{name}}を削除しました",
+    "removeFailed": "{{name}}を削除できませんでした：{{reason}}",
+    "updates_other": "{{count}}個のパックにアップデートがあります",
+    "upToDate": "コミュニティは最新の状態です",
+    "refreshFailed": "再読み込みできませんでした：{{reason}}",
+    "show": "表示",
+    "addedFromFolder_other": "そのフォルダから{{count}}個のスキンを追加しました",
+    "addFolderFailed": "そのパックを追加できませんでした：{{reason}}"
+  }
+}

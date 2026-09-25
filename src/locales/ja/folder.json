@@ -1,1 +1,135 @@
-{}
+{
+  "run": {
+    "folders_other": "{{count}}個のフォルダ",
+    "tooMany": {
+      "folders": "フォルダが多すぎます（{{max}}個を超えています）",
+      "subfolders": "サブフォルダが多すぎます（{{max}}個を超えています）"
+    },
+    "applyTo_other": "{{count}}個のフォルダに適用",
+    "theSkin": "このスキン",
+    "couldntChange_other": "{{count}}個は変更できませんでした。",
+    "stoppedBeforeAny": "フォルダを変更する前に停止しました",
+    "stoppedAfter_other": "{{count}}個のフォルダを処理したところで停止しました",
+    "thoseWear_other": "その{{count}}個には{{skin}}が付いています。",
+    "notReached_other": "{{count}}個は処理されませんでした。",
+    "allWear_other": "{{count}}個のフォルダに{{skin}}を適用しました",
+    "someWear_other": "{{total}}個中{{count}}個のフォルダに{{skin}}を適用しました",
+    "thoseBack_other": "その{{count}}個は標準のアイコンに戻りました。",
+    "noIconOfTheirOwn_other": "{{count}}個のフォルダには独自のアイコンがありませんでした。",
+    "noCustomIcon": "ここにはカスタムアイコンの付いたフォルダはありません",
+    "allBack_other": "{{count}}個のフォルダが標準のアイコンに戻りました",
+    "someBack_other": "{{total}}個中{{count}}個のフォルダが標準のアイコンに戻りました",
+    "toastAllWear_other": "{{folder}}と中の{{count}}個のフォルダに{{skin}}を適用しました",
+    "toast": "{{title}}。{{detail}}",
+    "carryOn": "続ける",
+    "seeWhich": "内訳を見る"
+  },
+  "look": {
+    "label": "フォルダの種類",
+    "appLabel": "スキンを載せるフォルダの種類",
+    "name": {
+      "mac": "Mac",
+      "windows": "Windows"
+    },
+    "tip": {
+      "mac": "Macのフォルダを土台にする",
+      "windows": "Windowsのフォルダを土台にする"
+    },
+    "redrawing": {
+      "mac": "スキンをMacのフォルダに描き直しています",
+      "windows": "スキンをWindowsのフォルダに描き直しています"
+    }
+  },
+  "stage": {
+    "label": "フォルダ",
+    "pickHint": "スキンを選んで試着しましょう",
+    "chooseOtherLabel": "{{name}}以外のフォルダを選ぶ",
+    "chooseFromLabel": "{{place}}からフォルダを選ぶ",
+    "chooseOther": "別のフォルダを選ぶ",
+    "backTip": "Escキーでも戻れます",
+    "back": "空のフォルダに戻る",
+    "drag": {
+      "imageTitle": "放すとこの画像を追加します",
+      "folderTitle": "放すとこのフォルダを選びます",
+      "imageNamed": "{{name}}がマイスキンのスキンになります。",
+      "image": "マイスキンのスキンになります。",
+      "folderNamed": "{{name}}がここに表示され、スキンを付けられるようになります。",
+      "folder": "ここに表示され、スキンを付けられるようになります。"
+    },
+    "empty": {
+      "titleWithSkin": "次はフォルダをドロップ",
+      "title": "ここにフォルダをドロップ",
+      "subWithSkin": "{{name}}の準備ができました。フォルダをここにドロップするか、クリックして{{place}}から選んでください。",
+      "sub": "またはクリックして、{{place}}から選びます。"
+    },
+    "applied": "適用済み",
+    "tryingOn": "{{name}}を試着中",
+    "currentIcon": "現在のアイコン",
+    "tryOn": "{{name}}を試着",
+    "removing": "削除中",
+    "removeIcons": "カスタムアイコンを削除",
+    "removeIcon": "カスタムアイコンを削除",
+    "revertThese_other": "この{{count}}個を元に戻す",
+    "revertAll_other": "{{count}}個すべて元に戻す",
+    "revert": "元に戻す",
+    "applying": "適用中",
+    "applySkin": "スキンを適用",
+    "reverting": "元に戻しています",
+    "includeSubfolders": "サブフォルダも含める",
+    "inside_other": "中に{{count}}個のフォルダ",
+    "stopping": "停止中",
+    "doneOf": "{{done}}/{{total}}",
+    "startingWith": "{{name}}から始めています",
+    "finishingThis": "このフォルダを仕上げています",
+    "stop": "停止",
+    "hideSummaryLabel": "このまとめを隠す",
+    "hideSummary": "隠す",
+    "which_other": "該当する{{count}}個",
+    "carryOnWith_other": "残りの{{count}}個を続ける",
+    "tryAgain_other": "もう一度試す",
+    "theFolder": "フォルダ",
+    "status": {
+      "doneStay": "処理済みのフォルダはそのままです。",
+      "catchesUp": {
+        "macos": "Finderの表示も順に更新されます。",
+        "windows": "エクスプローラーの表示も順に更新されます。",
+        "linux": "「ファイル」の表示も順に更新されます。"
+      },
+      "puttingIconsBack": "標準のアイコンに戻しています",
+      "skipped": "隠しフォルダとアプリのバンドルはスキップします。",
+      "picturesToo": "画像も使えます。ドロップするとスキンになります。",
+      "ownIcon": "独自のアイコンが付いています。",
+      "nothingChanges": "適用するまで、ディスク上では何も変わりません。",
+      "writing": "{{skin}}を{{folder}}に書き込んでいます",
+      "catchUp": {
+        "macos": "Finderに反映されるまで、少し時間がかかることがあります。",
+        "windows": "エクスプローラーに反映されるまで、少し時間がかかることがあります。",
+        "linux": "「ファイル」に反映されるまで、少し時間がかかることがあります。"
+      },
+      "puttingIconBack": "標準のアイコンに戻しています"
+    },
+    "pickHintChat": "チャットの画像をプレビュー"
+  },
+  "toast": {
+    "defaultBack": "{{name}}が標準のアイコンに戻りました"
+  },
+  "errors": {
+    "switchLook": "フォルダを切り替えられませんでした：{{reason}}",
+    "notFolderOrPicture": "フォルダでも画像でもありません。",
+    "chooseFirst": "先にフォルダを選んでください",
+    "apply": "スキンを適用できませんでした：{{reason}}",
+    "noneChanged": "変更できたフォルダはありません",
+    "revertTree": "標準のアイコンに戻せませんでした：{{reason}}",
+    "revert": "標準のアイコンに戻せませんでした：{{reason}}",
+    "reveal": "開けませんでした：{{reason}}"
+  },
+  "ask": {
+    "applyTitle_other": "{{skin}}を{{count}}個のフォルダに適用しますか？",
+    "thisSkin": "このスキン",
+    "removeTitle_other": "{{count}}個のフォルダからカスタムアイコンを削除しますか？",
+    "applyText_other": "{{folder}}と、その中の{{count}}個のフォルダにこのスキンを付け、今あるアイコンを置き換えます。アイコンのコピーはフォルダごとに保存されます。「元に戻す」を押せば、すべて外せます。",
+    "applyTextSized_other": "{{folder}}と、その中の{{count}}個のフォルダにこのスキンを付け、今あるアイコンを置き換えます。アイコンのコピーはフォルダごとに約{{size}}ずつ保存されるので、合計で約{{total}}になります。「元に戻す」を押せば、すべて外せます。",
+    "removeText": "{{folder}}とその中のすべてのフォルダを、標準のフォルダアイコンに戻します。FolderSkin以外で付けたアイコンも対象です。アイコンの付いていないフォルダはそのままです。",
+    "removeAction": "アイコンを削除"
+  }
+}

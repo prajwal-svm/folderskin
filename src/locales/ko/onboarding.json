@@ -1,1 +1,40 @@
-{}
+{
+  "welcome": {
+    "go": "시작하기",
+    "fine": "무료 · 오픈 소스 · 계정 불필요"
+  },
+  "install": {
+    "waiting": "대기 중",
+    "downloading": "다운로드 중",
+    "downloadingOf": "다운로드 중 ({{done}}/{{total}})",
+    "saving": "라이브러리에 추가하는 중",
+    "added_other": "스킨 {{count}}개를 추가했어요",
+    "failed": "추가하지 못했어요: {{reason}}"
+  },
+  "note": {
+    "inLibrary_other": "라이브러리에 스킨이 {{count}}개 있어요.",
+    "adding": "{{name}} 팩을 추가하고 있어요. 몇 초 걸려요.",
+    "failedWhy_other": "{{names}} 팩을 추가하지 못했어요: {{reason}}.",
+    "failed_other": "{{names}} 팩을 추가하지 못했어요. 다시 시도하거나 나중에 커뮤니티에서 추가하세요.",
+    "anyTime": "팩은 언제든 커뮤니티에서 추가하거나 제거할 수 있어요.",
+    "getting": "팩을 가져오는 중"
+  },
+  "packs": {
+    "title": "스킨 몇 개로 시작해 보세요",
+    "sub": "팩은 사람들이 FolderSkin으로 공유하는 무료 스킨 모음이에요.",
+    "subPick": "팩은 사람들이 FolderSkin으로 공유하는 무료 스킨 모음이에요. 마음에 드는 걸 골라 보세요.",
+    "subPicked": "팩은 사람들이 FolderSkin으로 공유하는 무료 스킨 모음이에요. {{name}} 팩은 미리 골라 뒀어요. 원하면 더 추가하세요.",
+    "loadFailedText": "{{reason}}. 팩 없이 계속하고, 나중에 커뮤니티에서 추가해도 돼요.",
+    "back": "뒤로",
+    "allSet": "준비 완료",
+    "continue": "계속",
+    "continueWithout": "팩 없이 계속",
+    "addOne": "{{name}} 추가",
+    "addMany_other": "팩 {{count}}개 추가"
+  },
+  "pack": {
+    "label_other": "{{name}}, {{author}} 님의 스킨 {{count}}개",
+    "failed": "추가하지 못했어요",
+    "already": "이미 라이브러리에 있어요"
+  }
+}

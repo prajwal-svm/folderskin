@@ -1,1 +1,61 @@
-{}
+{
+  "cancel": "취소",
+  "close": "닫기",
+  "twoSentences": "{{first}} {{second}}",
+  "official": "공식",
+  "tags": {
+    "remove": "{{tag}} 태그 삭제",
+    "add": "태그 추가",
+    "addAnother": "하나 더 추가",
+    "most_other": "태그는 {{count}}개까지예요."
+  },
+  "window": {
+    "label": "창",
+    "minimise": "최소화",
+    "maximise": "최대화",
+    "restore": "이전 크기로 복원",
+    "close": "닫기"
+  },
+  "size": {
+    "bytes_other": "{{count}}바이트",
+    "kb": "{{value}}KB",
+    "mb": "{{value}}MB",
+    "gb": "{{value}}GB",
+    "tb": "{{value}}TB"
+  },
+  "place": {
+    "macos": "내 Mac",
+    "windows": "내 PC",
+    "linux": "내 컴퓨터"
+  },
+  "showIn": {
+    "macos": "Finder에서 보기",
+    "windows": "파일 탐색기에서 보기",
+    "linux": "'파일'에서 보기"
+  },
+  "dialog": {
+    "chooseFolder": "폴더 선택",
+    "choosePicture": "이미지 선택",
+    "pictures": "이미지"
+  },
+  "about": {
+    "licence": "무료 오픈 소스 · GPL-3.0",
+    "tagline": "어떤 폴더에든 스킨을 입혀 보세요.",
+    "reportIssues": "문제 신고",
+    "star": "스타 주기"
+  },
+  "licences": {
+    "option": "{{label}}: {{note}}",
+    "cc0": "누구나 어떤 목적으로든 쓸 수 있어요.",
+    "ccBy": "누구나 쓸 수 있고, 쓰는 사람은 나를 만든 사람으로 표시해요.",
+    "mit": "라이선스 고지를 함께 남기면 누구나 쓸 수 있어요."
+  },
+  "control": {
+    "typed": "{{name}}, 직접 입력",
+    "value": "값"
+  },
+  "errors": {
+    "somethingWrong": "문제가 생겼어요",
+    "templateLoad": "폴더 템플릿을 불러오지 못했어요"
+  }
+}

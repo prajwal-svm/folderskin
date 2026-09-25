@@ -1,1 +1,123 @@
-{}
+{
+  "title": "커뮤니티",
+  "sub": "사람들이 공유한 무료 스킨과 팩이에요. 팩을 추가하면 그 스킨이 라이브러리에 들어가요.",
+  "addFromFolder": "폴더에서 추가",
+  "shareYours": "스킨 공유",
+  "tabsLabel": "태그로 팩 거르기",
+  "search": "팩 검색",
+  "searchLabel": "팩 검색",
+  "refreshTip": "새 팩과 업데이트된 팩 찾기",
+  "refreshLabel": "팩 새로 고침",
+  "viewLabel": "팩 보기 방식",
+  "views": {
+    "gallery": "갤러리",
+    "list": "목록"
+  },
+  "hits": {
+    "label": "이름이 일치하는 스킨",
+    "title": "스킨",
+    "tip": "{{name}}, {{pack}} 팩"
+  },
+  "tryAgain": "다시 시도",
+  "checked": "모든 팩은 목록에 오르기 전에 검사를 거쳐요",
+  "loadFailed": "팩을 불러오지 못했어요",
+  "loadFailedText": "{{reason}}. 폴더에서 팩을 추가할 수는 있어요.",
+  "loading": "팩을 불러오는 중",
+  "gridLabel": "커뮤니티 팩",
+  "empty": {
+    "noMatch": "맞는 팩이 없어요",
+    "none": "아직 팩이 없어요",
+    "noMatchText": "다른 단어나 태그로 찾아보세요.",
+    "noneText": "첫 번째가 되어 보세요. 내 스킨을 공유해 보세요."
+  },
+  "remove": {
+    "title": "'{{name}}' 팩을 제거할까요?",
+    "text": "이 팩의 스킨이 라이브러리에서 빠져요. 이미 그 스킨을 쓰는 폴더의 아이콘은 그대로 남아요.",
+    "action": "제거"
+  },
+  "dialog": {
+    "choosePackFolder": "팩 폴더 선택"
+  },
+  "pack": {
+    "viewLabel": "{{name}} 보기",
+    "viewTip": "{{name}} 보기",
+    "added": "라이브러리에 추가됨",
+    "by": "<a>@{{author}}</a> 님",
+    "skins_other": "스킨 {{count}}개",
+    "view": "보기",
+    "updateTip": "이 팩의 새 버전이 나왔어요",
+    "update": "업데이트",
+    "removing": "제거하는 중",
+    "removingLabel": "{{name}} 제거하는 중",
+    "removeTip": "이 팩 제거",
+    "removeLabel": "{{name}} 제거",
+    "add": "추가"
+  },
+  "viewer": {
+    "add_other": "스킨 {{count}}개 추가",
+    "added": "추가됨",
+    "github": "GitHub에서 열기",
+    "openFailed": "이 팩을 열지 못했어요: {{reason}}.",
+    "getting_other": "보여 드리려고 스킨 {{count}}개를 가져오는 중"
+  },
+  "progress": {
+    "adding": "추가하는 중",
+    "updating": "업데이트하는 중",
+    "addingLabel": "{{name}} 추가하는 중",
+    "updatingLabel": "{{name}} 업데이트하는 중",
+    "downloading": "다운로드 중 ({{done}}/{{total}})",
+    "saving": "저장하는 중 ({{done}}/{{total}})"
+  },
+  "sort": {
+    "bestMatch": "관련도순",
+    "featured": "추천",
+    "newest": "최신순",
+    "name": "이름순",
+    "mostSkins": "스킨 많은 순"
+  },
+  "options": {
+    "button": "정렬과 태그 더 보기",
+    "label": "정렬과 태그",
+    "title": "정렬과 태그",
+    "tagCount_other": "이 팩들의 태그 {{count}}개",
+    "allTags": "모든 태그",
+    "tags": "태그"
+  },
+  "count": {
+    "searchFailed": "검색하지 못했어요: {{reason}}",
+    "packs_other": "팩 {{count}}개",
+    "matching_other": "'{{query}}'에 맞는 팩 {{count}}개",
+    "tagged_other": "{{tag}} 태그가 붙은 팩 {{count}}개",
+    "matchingTagged_other": "'{{query}}'에 맞고 {{tag}} 태그가 붙은 팩 {{count}}개",
+    "withLastVisit": "{{line}}. {{why}}",
+    "lastVisit": {
+      "offline": "오프라인이라서 지난번에 본 팩을 보여 드려요",
+      "unanswered": "{{host}}에서 응답이 없어서 지난번에 본 팩을 보여 드려요",
+      "behind": "최신 팩 목록이 오지 않아서 지난번에 본 팩을 보여 드려요",
+      "other": "{{why}}. 지난번에 본 팩을 보여 드려요"
+    }
+  },
+  "toast": {
+    "addLinkFailed": "'{{id}}' 팩을 추가하지 못했어요: {{reason}}",
+    "noSuchPack": "'{{id}}' 팩을 추가하지 못했어요: 커뮤니티에 그런 이름의 팩이 없어요. 이름이 바뀌었을 수 있으니 커뮤니티에서 검색해 보세요.",
+    "already": "{{name}} 팩은 이미 라이브러리에 있어요",
+    "alreadyNewer": "{{name}} 팩은 이미 라이브러리에 있어요. '업데이트'를 누르면 새 버전을 받아요",
+    "stillBusy": {
+      "add": "{{name}} 팩을 아직 추가하는 중이에요. 끝나면 다시 시도하세요.",
+      "update": "{{name}} 팩을 아직 업데이트하는 중이에요. 끝나면 다시 시도하세요.",
+      "remove": "{{name}} 팩을 아직 제거하는 중이에요. 끝나면 다시 시도하세요."
+    },
+    "added_other": "{{name}} 팩에서 스킨 {{count}}개를 추가했어요",
+    "addFailed": "{{name}} 팩을 추가하지 못했어요: {{reason}}",
+    "updated": "{{name}} 팩을 업데이트했어요",
+    "updateFailed": "{{name}} 팩을 업데이트하지 못했어요: {{reason}}",
+    "removed": "{{name}} 팩을 제거했어요",
+    "removeFailed": "{{name}} 팩을 제거하지 못했어요: {{reason}}",
+    "updates_other": "내 팩 {{count}}개에 업데이트가 있어요",
+    "upToDate": "커뮤니티가 최신 상태예요",
+    "refreshFailed": "새로 고치지 못했어요: {{reason}}",
+    "show": "보기",
+    "addedFromFolder_other": "그 폴더에서 스킨 {{count}}개를 추가했어요",
+    "addFolderFailed": "그 팩을 추가하지 못했어요: {{reason}}"
+  }
+}

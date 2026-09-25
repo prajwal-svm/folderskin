@@ -1,1 +1,34 @@
-{}
+{
+  "sections": "セクション",
+  "version": "FolderSkin バージョン{{version}}",
+  "about": "FolderSkinについて",
+  "addPhoto": "写真を追加",
+  "groups": {
+    "library": "ライブラリ",
+    "create": "作成",
+    "explore": "見つける"
+  },
+  "items": {
+    "skins": "すべてのスキン",
+    "yours": "マイスキン",
+    "faves": "お気に入り",
+    "compose": "自分でデザイン",
+    "generate": "AIで生成",
+    "community": "コミュニティ"
+  },
+  "withCount": "{{label}} · {{count}}",
+  "expandTip": "サイドバーを広げる",
+  "collapseTip": "サイドバーを折りたたむ",
+  "expandLabel": "サイドバーを広げる",
+  "collapseLabel": "サイドバーを折りたたむ",
+  "collapse": "サイドバーを折りたたむ",
+  "darkMode": "ダークモード",
+  "darkModeLabel": "ダークモード",
+  "darkOn": "ダークモードはオンです",
+  "darkOff": "ダークモードはオフです",
+  "settings": "設定",
+  "language": {
+    "label": "言語：{{language}}",
+    "menu": "言語"
+  }
+}
