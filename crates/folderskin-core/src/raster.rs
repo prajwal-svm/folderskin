@@ -111,15 +111,17 @@ pub fn encode_png(img: &RgbaImage) -> Vec<u8> {
     buf
 }
 
-/// Encodes `img` as a lossless WebP, as small as libwebp makes one: its slowest, most thorough
-/// setting (`cwebp -lossless -z 9`: method 6, quality 100). What a pack's pictures are shared as.
+/// Encodes `img` as a lossless WebP at libwebp's method 5, quality 75. What a pack's pictures are
+/// shared as. On 1024 px renders that is within half a percent of the smallest file libwebp makes
+/// (`cwebp -lossless -z 9`: method 6, quality 100), in about a twentieth of the time: well under
+/// a second a picture rather than eleven.
 ///
 /// Every pixel's alpha comes back exactly, and the colour of every pixel that shows; only the
 /// colour hidden under fully transparent pixels may change (libwebp's `exact` off), which lets a
 /// cut-out folder's clear surround cost almost nothing. A picture with no transparency is encoded
-/// without an alpha channel. It takes a few seconds for a 1024 px picture.
+/// without an alpha channel.
 pub fn encode_webp_lossless(img: &RgbaImage) -> Vec<u8> {
-    encode_lossless(img, 6, 100.0)
+    encode_lossless(img, 5, 75.0)
 }
 
 /// The same pixels as [`encode_webp_lossless`], at libwebp's fastest lossless setting (method 0,

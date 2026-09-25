@@ -130,7 +130,7 @@ test("every picture is made ready first, and one made smaller to fit is named", 
   const dialog = await openShare(page, "shared&scaled");
   await fillPack(dialog);
   await dialog.getByRole("button", { name: "Send for review" }).click();
-  // Lossless pictures take a few seconds each, so they're counted as they're ready.
+  // Lossless pictures take a moment each, so they're counted as they're ready.
   await expect(dialog.getByRole("status").filter({ hasText: /^Getting the pictures ready \(\d of 8\)$/ })).toBeVisible();
   const sent = page.getByRole("dialog", { name: "Your pack is waiting for review" });
   await expect(sent).toBeVisible({ timeout: 15_000 });

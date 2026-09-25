@@ -4,7 +4,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.7 — 2026-09-25
 
 ### Added
 
@@ -48,7 +48,7 @@ All notable changes to FolderSkin are recorded here. The format follows
   lettering, and a finished folder's transparent edge exactly as drawn. The limits are 1024 px
   and 1.5 MB a picture, and 64 MB a pack. A picture too detailed to fit is made 896 px, then
   768 px, still lossless, and the dialog says which; a pack over 64 MB is turned down with a
-  suggestion to split it in two. Making the pictures ready takes a few seconds each, and the
+  suggestion to split it in two. Making the pictures ready takes under a second each, and the
   dialog counts them as it goes.
 - **Your library takes less space.** A picture you add, paint or design is now saved as a
   lossless WebP rather than a PNG: every pixel the same, in about two thirds of the space.
