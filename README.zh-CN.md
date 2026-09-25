@@ -14,6 +14,11 @@
 
 **给任何文件夹换上皮肤。**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/folder-cycle-dark.gif" />
+  <img src="docs/images/folder-cycle.gif" alt="同一个文件夹依次试穿十二款皮肤：纸艺富士山、《星月夜》、波普艺术、水彩、旅行海报等" width="360" />
+</picture>
+
 你最珍贵的回忆，和那堆旧文件用着同一款平平无奇的文件夹图标。FolderSkin 给每个文件夹换上与内容相称的皮肤：夏天的照片配一帧黄金时刻的电影剧照，旅行配一张复古旅行海报，视频项目配波普艺术，生日配柔和的马卡龙色。把文件夹拖进窗口，试穿几款皮肤，再把最喜欢的那款应用上去。皮肤可以从免费的社区皮肤包里挑，也可以用你自己的照片，或者从一种颜色、一个词、一个 emoji 出发自己设计，还可以随便描述一种风格，交给 AI 来画。
 
 <p>
@@ -61,9 +66,11 @@
 | 留在你的电脑上 | 需要联网 |
 | --- | --- |
 | 你的文件夹，以及 FolderSkin 写入的图标 | AI 请求（只在你发起时）：用你的密钥发给你选的服务商 |
-| 你添加的每张图片、做的每款皮肤 | **社区**和首次启动：从 GitHub 读取大家分享的皮肤包 |
+| 你添加的每张图片、做的每款皮肤 | **社区**和首次启动：从 packs.folderskin.app 读取大家分享的皮肤包，连不上时改从 GitHub 读取 |
 | 你的 AI 密钥（已加密） | 检查更新：每次启动时，FolderSkin 会从 GitHub 读取最新发布版本的版本文件 |
 | 收藏、标签和设置 | 从**社区**添加皮肤包：只把它的 ID 发给 FolderSkin 的社区服务，别的什么都不发。该服务对同一网络每天只计一次，也不保存任何地址（[详情](docs/zh-CN/PACKS.md#安装次数统计)） |
+
+FolderSkin 会发送哪些内容、发往哪里，以及社区服务会保存什么，[隐私政策](https://folderskin.app/zh-cn/privacy/)里都写得清清楚楚。
 
 ## 使用方法
 
@@ -89,6 +96,17 @@
 侧边栏底部的**设置**里有主题、你的 AI 密钥、分享时自动填写的信息，以及皮肤的保存位置。把鼠标悬停在标志旁边的版本号上，可以查看“关于”信息。
 
 ## 社区皮肤
+
+<table>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/zh-cn/community/?pack=classic-art-5rxas2"><img src="docs/images/packs/classic-art.webp" alt="Classic Art 的四款皮肤：《蒙娜丽莎》《戴珍珠耳环的少女》《第九个浪头》和《雾海上的旅人》" width="340" /><br /><b>Classic Art</b></a></td>
+    <td align="center"><a href="https://folderskin.app/zh-cn/community/?pack=scientists-pop-art-nb3dfx"><img src="docs/images/packs/scientists-pop-art.webp" alt="Scientists - Pop Art 的四款皮肤：玛丽·居里、艾达·洛夫莱斯、尼古拉·特斯拉和斯里尼瓦瑟·拉马努金的漫画风肖像" width="340" /><br /><b>Scientists - Pop Art</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/zh-cn/community/?pack=watercolour-world-rt2klu"><img src="docs/images/packs/watercolour-world.webp" alt="Watercolour World 的四款皮肤：水彩画的京都、威尼斯、马丘比丘和马拉喀什" width="340" /><br /><b>Watercolour World</b></a></td>
+    <td align="center"><a href="https://folderskin.app/zh-cn/community/?pack=countries-in-paper-lhadao"><img src="docs/images/packs/countries-in-paper.webp" alt="Countries in Paper 的四款皮肤：纸艺风格的印度、墨西哥、肯尼亚和冰岛" width="340" /><br /><b>Countries in Paper</b></a></td>
+  </tr>
+</table>
 
 FolderSkin 本身不带任何皮肤。大家通过 FolderSkin 分享单款皮肤和整套皮肤包，所有人都能免费使用：首次启动时会推荐它们，平时也随时可以在**社区**里找到。添加皮肤包后，其中的皮肤会连同标签一起进入你的皮肤库。在 [folderskin.app](https://folderskin.app/zh-cn/community/) 的皮肤包画廊里，点任意皮肤包的**安装**按钮，就会打开 FolderSkin 并自动帮你添加。标有**官方**的皮肤包由维护者亲自把关。**Classic Art** 很适合作为第一个皮肤包：十六幅已进入公有领域的名画，从《蒙娜丽莎》到《星月夜》，每一幅都画在了文件夹上。想分享你的皮肤，就打开它的 ⋯ 菜单，选择**分享到社区**。想一次分享多款，就用**社区 → 分享你的皮肤**。你只需在浏览器里验证一次这台电脑，无需账号。皮肤包会先由真人审核，通过后才会出现在所有人的**社区**里。同一个对话框里的**保存为文件夹**则会把皮肤包存成文件。图片以无损方式分享，所以皮肤包看起来和你做的一模一样。[docs/zh-CN/PACKS.md](docs/zh-CN/PACKS.md) 里有格式规范和各项限制：每个皮肤包 1 到 50 款皮肤，每张图片最大 1024 px、1.5 MB，每个皮肤包最多 64 MB，许可协议可选 CC0、CC BY 4.0 或 MIT。
 
@@ -171,6 +189,22 @@ Rust 核心（`crates/folderskin-core`）以矢量路径保存文件夹模板，
 macOS 版经过了 Apple 的签名和公证，打开时和其他应用没有区别。Windows 安装程序暂未签名，所以 SmartScreen 会先弹出提示：点“更多信息”，再点“仍要运行”。Linux 安装包需要 glibc 2.35 或更高版本（Ubuntu 22.04、Debian 12、Fedora 36 及以上）。
 
 安装之后，FolderSkin 会自动保持最新：有新版本时，它会告诉你有哪些变化，点**更新并重启**即可安装。每个更新都经过签名，应用在安装任何东西之前都会先校验签名。
+
+### 命令行
+
+`folderskin` 能在终端里做到应用能做的事，批量处理或处理整个磁盘时尤其方便：给文件夹换上图片再换回原样，用本地模型或你自己的密钥画文件夹图，还能制作皮肤包。在 Mac 或 Linux 上：
+
+```sh
+curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+在 Windows 上，打开 PowerShell 运行：
+
+```powershell
+irm https://folderskin.app/install-cli.ps1 | iex
+```
+
+两种方式都会用 SHA-256 校验下载的文件，而且不需要管理员权限。[crates/folderskin-cli/README.md](crates/folderskin-cli/README.md)（英文）里有上手示例和全部命令。
 
 ## 从源码构建
 

@@ -14,6 +14,11 @@ English · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한�
 
 **Give any folder a skin.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/folder-cycle-dark.gif" />
+  <img src="docs/images/folder-cycle.gif" alt="One folder trying on twelve skins in turn: a paper cut Mount Fuji, The Starry Night, pop art, watercolour, a travel poster and more" width="360" />
+</picture>
+
 Your best memories wear the same plain folder as your old paperwork. FolderSkin gives every folder a
 skin that feels like what's inside it: a golden-hour film still for summer photos, a vintage travel
 poster for a trip, pop art for a video project, soft pastels for a birthday. Drop a folder on the
@@ -69,9 +74,12 @@ under 20 MB.
 | Stays on your computer | Goes online |
 | --- | --- |
 | Your folders and the icons FolderSkin writes | An AI request, when you make one: sent to the provider you picked, with your key |
-| Every picture you add and every skin you make | Community and the first launch, which read the shared packs from GitHub |
+| Every picture you add and every skin you make | Community and the first launch, which read the shared packs from packs.folderskin.app, or from GitHub when that doesn't answer |
 | Your AI keys, encrypted | The update check: when it opens, FolderSkin reads the newest release's version file from GitHub |
 | Favourites, tags and settings | Adding a pack from Community: its id, and nothing else, goes to FolderSkin's community service, which counts adds once a day per network and keeps no address ([details](docs/PACKS.md#install-counts)) |
+
+The [privacy policy](https://folderskin.app/privacy/) lists everything FolderSkin sends, where it
+goes, and what the community service keeps.
 
 ## How to use it
 
@@ -115,6 +123,17 @@ it. AI results are tagged with their style, such as `airbrush`, as they arrive.
 and where your skins are saved. Hover the version badge beside the logo for About.
 
 ## Community skins
+
+<table>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/community/?pack=classic-art-5rxas2"><img src="docs/images/packs/classic-art.webp" alt="Classic Art on four folders: the Mona Lisa, Girl with a Pearl Earring, The Ninth Wave and Wanderer above the Sea of Fog" width="340" /><br /><b>Classic Art</b></a></td>
+    <td align="center"><a href="https://folderskin.app/community/?pack=scientists-pop-art-nb3dfx"><img src="docs/images/packs/scientists-pop-art.webp" alt="Scientists - Pop Art on four folders: Marie Curie, Ada Lovelace, Nikola Tesla and Srinivasa Ramanujan as comic-style portraits" width="340" /><br /><b>Scientists - Pop Art</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/community/?pack=watercolour-world-rt2klu"><img src="docs/images/packs/watercolour-world.webp" alt="Watercolour World on four folders: Kyoto, Venice, Machu Picchu and Marrakech in watercolour" width="340" /><br /><b>Watercolour World</b></a></td>
+    <td align="center"><a href="https://folderskin.app/community/?pack=countries-in-paper-lhadao"><img src="docs/images/packs/countries-in-paper.webp" alt="Countries in Paper on four folders: India, Mexico, Kenya and Iceland in paper craft" width="340" /><br /><b>Countries in Paper</b></a></td>
+  </tr>
+</table>
 
 FolderSkin ships no skins of its own. People share skins and packs of skins through FolderSkin,
 free for everyone. The first launch offers them, and **Community** has them any time. Adding a pack puts
@@ -245,6 +264,25 @@ packages need glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later)
 Once it's installed, FolderSkin keeps itself up to date: when a new version is out it shows what
 changed, and **Update and restart** installs it. Each update is signed, and the app checks the
 signature before installing anything.
+
+### The command line
+
+`folderskin` does what the app does from a terminal, and it's handy for batches and whole drives:
+it puts pictures on folders and takes them off, paints folder art with the Local Model or your own
+key, and makes packs. On a Mac or Linux:
+
+```sh
+curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://folderskin.app/install-cli.ps1 | iex
+```
+
+Either one checks the download against its SHA-256 and needs no admin rights.
+[crates/folderskin-cli/README.md](crates/folderskin-cli/README.md) has things to try first and every command.
 
 ## Build from source
 

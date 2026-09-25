@@ -14,6 +14,11 @@
 
 **어떤 폴더에든 스킨을 입혀 보세요.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/folder-cycle-dark.gif" />
+  <img src="docs/images/folder-cycle.gif" alt="폴더 하나가 스킨 12가지를 차례로 입어 보는 모습. 종이 공예 후지산, 별이 빛나는 밤, 팝아트, 수채화, 여행 포스터 등" width="360" />
+</picture>
+
 가장 소중한 추억도 오래된 서류와 똑같이 밋밋한 폴더에 들어 있어요. FolderSkin은 모든 폴더에 안에 든 것과 어울리는 스킨을 입혀 줘요. 여름 사진에는 골든 아워의 영화 스틸을, 여행에는 빈티지 여행 포스터를, 영상 프로젝트에는 팝 아트를, 생일에는 부드러운 파스텔을요. 폴더를 창에 끌어다 놓고, 스킨을 미리 입혀 보고, 마음에 드는 걸 적용하면 끝이에요. 무료 커뮤니티 팩에서 고르거나, 내 사진을 쓰거나, 색이나 단어, 이모지로 직접 디자인할 수 있고, 원하는 스타일을 설명해서 AI에게 그려 달라고 할 수도 있어요.
 
 <p>
@@ -61,9 +66,11 @@
 | 내 컴퓨터에 남는 것 | 온라인으로 나가는 것 |
 | --- | --- |
 | 폴더, 그리고 FolderSkin이 쓰는 아이콘 | AI 요청(요청할 때만). 내가 고른 제공업체에 내 키로 보내요 |
-| 추가한 모든 이미지와 만든 모든 스킨 | 커뮤니티와 첫 실행. GitHub에서 공유된 팩을 읽어요 |
+| 추가한 모든 이미지와 만든 모든 스킨 | 커뮤니티와 첫 실행. packs.folderskin.app에서 공유된 팩을 읽고, 연결되지 않으면 GitHub에서 읽어요 |
 | 암호화된 AI 키 | 업데이트 확인. 앱이 열릴 때 FolderSkin이 GitHub에서 최신 릴리스의 버전 파일을 읽어요 |
 | 즐겨찾기, 태그, 설정 | 커뮤니티에서 팩 추가. 팩 ID만 FolderSkin의 커뮤니티 서비스로 가고, 서비스는 네트워크마다 하루 한 번만 추가를 세며 주소는 보관하지 않아요([자세히](docs/ko/PACKS.md#설치-수)) |
+
+FolderSkin이 무엇을 어디로 보내는지, 커뮤니티 서비스가 무엇을 보관하는지는 [개인정보 처리방침](https://folderskin.app/ko/privacy/)에 모두 나와 있어요.
 
 ## 사용 방법
 
@@ -89,6 +96,17 @@ FolderSkin을 처음 열면 짧은 환영 화면이 나온 뒤 커뮤니티 스�
 사이드바 아래쪽의 **설정**에서는 테마, AI 키, 공유할 때 자동으로 채워지는 정보, 스킨을 저장하는 위치를 정할 수 있어요. 로고 옆의 버전 배지에 마우스를 올리면 앱 정보가 나와요.
 
 ## 커뮤니티 스킨
+
+<table>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/ko/community/?pack=classic-art-5rxas2"><img src="docs/images/packs/classic-art.webp" alt="Classic Art 스킨 네 개. 모나리자, 진주 귀걸이를 한 소녀, 아홉 번째 파도, 안개 바다 위의 방랑자" width="340" /><br /><b>Classic Art</b></a></td>
+    <td align="center"><a href="https://folderskin.app/ko/community/?pack=scientists-pop-art-nb3dfx"><img src="docs/images/packs/scientists-pop-art.webp" alt="Scientists - Pop Art 스킨 네 개. 마리 퀴리, 에이다 러브레이스, 니콜라 테슬라, 스리니바사 라마누잔의 만화풍 초상화" width="340" /><br /><b>Scientists - Pop Art</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/ko/community/?pack=watercolour-world-rt2klu"><img src="docs/images/packs/watercolour-world.webp" alt="Watercolour World 스킨 네 개. 수채화로 그린 교토, 베네치아, 마추픽추, 마라케시" width="340" /><br /><b>Watercolour World</b></a></td>
+    <td align="center"><a href="https://folderskin.app/ko/community/?pack=countries-in-paper-lhadao"><img src="docs/images/packs/countries-in-paper.webp" alt="Countries in Paper 스킨 네 개. 종이 공예로 만든 인도, 멕시코, 케냐, 아이슬란드" width="340" /><br /><b>Countries in Paper</b></a></td>
+  </tr>
+</table>
 
 FolderSkin에는 기본으로 들어 있는 스킨이 없어요. 스킨과 스킨 팩은 사람들이 FolderSkin을 통해 공유하고, 누구나 무료로 쓸 수 있어요. 첫 실행 때 보여 주고, **커뮤니티**에서 언제든 받을 수 있어요. 팩을 추가하면 스킨이 태그와 함께 라이브러리에 들어가고, [folderskin.app](https://folderskin.app/ko/community/) 갤러리에서 팩의 **설치** 버튼을 누르면 FolderSkin이 열리면서 팩을 추가해 줘요. **공식** 표시가 붙은 팩은 메인테이너가 보증하는 팩이에요. 첫 팩으로는 **Classic Art**를 추천해요. 모나리자부터 별이 빛나는 밤까지, 퍼블릭 도메인 명화 16점을 하나하나 폴더에 그려 넣은 팩이에요. 내 스킨을 공유하려면 스킨의 ⋯ 메뉴에서 **커뮤니티에 공유**를 고르고, 여러 개라면 **커뮤니티 → 스킨 공유**를 쓰세요. 계정 없이 브라우저에서 컴퓨터를 한 번만 인증하면 되고, 팩은 사람이 검토한 다음 커뮤니티에 올라가 모두가 볼 수 있어요. 같은 대화상자의 **폴더로 저장**을 쓰면 팩을 보내는 대신 파일로 저장해요. 이미지는 무손실로 공유되기 때문에 팩은 만든 그대로 보여요. 규격과 제한은 [docs/ko/PACKS.md](docs/ko/PACKS.md)에 있어요. 팩 하나에 스킨은 1개부터 50개까지, 이미지는 한 장에 1024px, 1.5MB까지, 팩 전체는 64MB까지이고, 라이선스는 CC0, CC BY 4.0, MIT 중 하나예요.
 
@@ -171,6 +189,22 @@ Rust 코어(`crates/folderskin-core`)는 폴더 템플릿을 벡터 경로로 �
 macOS 앱은 Apple의 서명과 공증을 받았기 때문에 다른 앱처럼 그냥 열려요. Windows 설치 프로그램은 아직 서명되지 않아서 SmartScreen이 먼저 확인해요. "추가 정보"를 누른 다음 "실행"을 누르세요. Linux 패키지에는 glibc 2.35 이상이 필요해요(Ubuntu 22.04, Debian 12, Fedora 36 이상).
 
 설치한 뒤에는 FolderSkin이 알아서 최신 상태를 유지해요. 새 버전이 나오면 바뀐 내용을 보여 주고, **업데이트 후 다시 시작**을 누르면 설치돼요. 모든 업데이트에는 서명이 있고, 앱은 무엇이든 설치하기 전에 서명을 확인해요.
+
+### 명령줄
+
+`folderskin`을 쓰면 앱에서 하는 일을 터미널에서 할 수 있어요. 한꺼번에 처리하거나 드라이브 전체를 바꿀 때 편해요. 폴더에 그림을 입히거나 되돌리고, 로컬 모델이나 내 키로 폴더 그림을 그리고, 팩을 만들 수 있어요. Mac이나 Linux에서는 다음을 실행하세요.
+
+```sh
+curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+Windows에서는 PowerShell에서 다음을 실행하세요.
+
+```powershell
+irm https://folderskin.app/install-cli.ps1 | iex
+```
+
+두 방법 모두 내려받은 파일을 SHA-256으로 확인하고, 관리자 권한이 필요 없어요. 먼저 해 볼 만한 명령과 전체 명령은 [crates/folderskin-cli/README.md](crates/folderskin-cli/README.md)(영어)에 있어요.
 
 ## 소스에서 빌드하기
 

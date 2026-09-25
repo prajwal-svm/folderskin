@@ -14,6 +14,11 @@
 
 **Dale un aspecto a cualquier carpeta.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/folder-cycle-dark.gif" />
+  <img src="docs/images/folder-cycle.gif" alt="Una misma carpeta se prueba doce aspectos, uno tras otro: un monte Fuji de papel recortado, La noche estrellada, pop art, acuarela, un cartel de viaje y más" width="360" />
+</picture>
+
 Tus mejores recuerdos viven en la misma carpeta sin gracia que tus viejos papeles. FolderSkin le da a
 cada carpeta un aspecto que va con lo que guarda: un fotograma de cine a la hora dorada para las
 fotos del verano, un póster de viaje vintage para una escapada, pop art para un proyecto de video,
@@ -70,9 +75,12 @@ Mac, la descarga ocupa menos de 20 MB.
 | Se queda en tu equipo | Sale a internet |
 | --- | --- |
 | Tus carpetas y los iconos que FolderSkin escribe en ellas | Una solicitud de IA, cuando haces una: va al proveedor que elegiste, con tu clave |
-| Cada imagen que añades y cada aspecto que creas | Comunidad y el primer inicio, que leen los paquetes compartidos desde GitHub |
+| Cada imagen que añades y cada aspecto que creas | Comunidad y el primer inicio, que leen los paquetes compartidos desde packs.folderskin.app, o desde GitHub cuando no responde |
 | Tus claves de API, cifradas | La búsqueda de actualizaciones: al abrirse, FolderSkin lee en GitHub el archivo que indica la última versión |
 | Favoritos, etiquetas y ajustes | Añadir un paquete desde Comunidad: su identificador, y nada más, va al servicio de la comunidad de FolderSkin, que cuenta los paquetes añadidos una sola vez al día por red y no guarda ninguna dirección ([detalles](docs/es/PACKS.md#recuento-de-instalaciones)) |
+
+La [política de privacidad](https://folderskin.app/es/privacy/) detalla todo lo que FolderSkin envía,
+adónde va y qué guarda el servicio de la comunidad.
 
 ## Cómo se usa
 
@@ -121,6 +129,17 @@ completan al compartir y dónde se guardan tus aspectos. Pasa el puntero sobre l
 versión, junto al logotipo, para ver “Acerca de”.
 
 ## Aspectos de la comunidad
+
+<table>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/es/community/?pack=classic-art-5rxas2"><img src="docs/images/packs/classic-art.webp" alt="Classic Art en cuatro carpetas: la Mona Lisa, La joven de la perla, La novena ola y El caminante sobre el mar de nubes" width="340" /><br /><b>Classic Art</b></a></td>
+    <td align="center"><a href="https://folderskin.app/es/community/?pack=scientists-pop-art-nb3dfx"><img src="docs/images/packs/scientists-pop-art.webp" alt="Scientists - Pop Art en cuatro carpetas: Marie Curie, Ada Lovelace, Nikola Tesla y Srinivasa Ramanujan en retratos de cómic" width="340" /><br /><b>Scientists - Pop Art</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/es/community/?pack=watercolour-world-rt2klu"><img src="docs/images/packs/watercolour-world.webp" alt="Watercolour World en cuatro carpetas: Kioto, Venecia, Machu Picchu y Marrakech en acuarela" width="340" /><br /><b>Watercolour World</b></a></td>
+    <td align="center"><a href="https://folderskin.app/es/community/?pack=countries-in-paper-lhadao"><img src="docs/images/packs/countries-in-paper.webp" alt="Countries in Paper en cuatro carpetas: India, México, Kenia e Islandia en papel recortado" width="340" /><br /><b>Countries in Paper</b></a></td>
+  </tr>
+</table>
 
 FolderSkin no trae aspectos propios. La gente comparte aspectos y paquetes de aspectos a través de
 FolderSkin, gratis para todos. El primer inicio te los ofrece, y en **Comunidad** los tienes
@@ -260,6 +279,25 @@ posterior (Ubuntu 22.04, Debian 12, Fedora 36 y posteriores).
 Una vez instalado, FolderSkin se mantiene al día solo: cuando sale una versión nueva, te muestra qué
 cambió, y **Actualizar y reiniciar** la instala. Cada actualización está firmada, y la app comprueba
 la firma antes de instalar nada.
+
+### La línea de comandos
+
+`folderskin` hace desde una terminal lo mismo que la app, y viene bien para lotes y discos enteros:
+pone imágenes en carpetas y las quita, pinta aspectos con el Modelo local o con tu propia clave, y
+crea paquetes. En Mac o Linux:
+
+```sh
+curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+En Windows, en PowerShell:
+
+```powershell
+irm https://folderskin.app/install-cli.ps1 | iex
+```
+
+Las dos opciones comprueban la descarga con su SHA-256 y no necesitan permisos de administrador. En
+[crates/folderskin-cli/README.md](crates/folderskin-cli/README.md) (en inglés) tienes ejemplos para empezar y todos los comandos.
 
 ## Compilar desde el código fuente
 

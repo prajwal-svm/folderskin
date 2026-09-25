@@ -14,6 +14,11 @@
 
 **Habillez n'importe quel dossier.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/folder-cycle-dark.gif" />
+  <img src="docs/images/folder-cycle.gif" alt="Un même dossier essaie douze habillages l'un après l'autre : un mont Fuji en papier découpé, La Nuit étoilée, du pop art, de l'aquarelle, une affiche de voyage et d'autres encore" width="360" />
+</picture>
+
 Vos plus beaux souvenirs dorment dans le même dossier terne que vos vieilles paperasses. FolderSkin
 donne à chaque dossier un habillage à l'image de ce qu'il contient : un plan de cinéma à l'heure dorée pour
 les photos de l'été, une affiche de voyage vintage pour un séjour, du pop art pour un projet vidéo,
@@ -70,9 +75,12 @@ Sur Mac, le téléchargement fait moins de 20 Mo.
 | Reste sur votre ordinateur | Passe par Internet |
 | --- | --- |
 | Vos dossiers et les icônes que FolderSkin y écrit | Une requête à une IA, quand vous en faites une : elle part chez le fournisseur que vous avez choisi, avec votre clé |
-| Chaque image que vous ajoutez et chaque habillage que vous créez | La Communauté et le premier lancement, qui lisent les packs partagés sur GitHub |
+| Chaque image que vous ajoutez et chaque habillage que vous créez | La Communauté et le premier lancement, qui lisent les packs partagés sur packs.folderskin.app, ou sur GitHub quand il ne répond pas |
 | Vos clés d'API, chiffrées | La recherche de mises à jour : à l'ouverture, FolderSkin lit sur GitHub le fichier qui indique la dernière version |
 | Favoris, tags et réglages | L'ajout d'un pack depuis la Communauté : son identifiant, et rien d'autre, part vers le service communautaire de FolderSkin, qui compte les ajouts une fois par jour et par réseau et ne conserve aucune adresse ([détails](docs/fr/PACKS.md#nombre-dinstallations)) |
+
+La [politique de confidentialité](https://folderskin.app/fr/privacy/) détaille tout ce que FolderSkin
+envoie, à qui, et ce que conserve le service communautaire.
 
 ## Mode d'emploi
 
@@ -122,6 +130,17 @@ le partage préremplit et l'endroit où vos habillages sont enregistrés. Survol
 côté du logo, pour afficher « À propos ».
 
 ## Habillages de la communauté
+
+<table>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/fr/community/?pack=classic-art-5rxas2"><img src="docs/images/packs/classic-art.webp" alt="Classic Art sur quatre dossiers : la Joconde, La Jeune Fille à la perle, La Neuvième Vague et Le Voyageur contemplant une mer de nuages" width="340" /><br /><b>Classic Art</b></a></td>
+    <td align="center"><a href="https://folderskin.app/fr/community/?pack=scientists-pop-art-nb3dfx"><img src="docs/images/packs/scientists-pop-art.webp" alt="Scientists - Pop Art sur quatre dossiers : Marie Curie, Ada Lovelace, Nikola Tesla et Srinivasa Ramanujan en portraits façon bande dessinée" width="340" /><br /><b>Scientists - Pop Art</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/fr/community/?pack=watercolour-world-rt2klu"><img src="docs/images/packs/watercolour-world.webp" alt="Watercolour World sur quatre dossiers : Kyoto, Venise, le Machu Picchu et Marrakech à l'aquarelle" width="340" /><br /><b>Watercolour World</b></a></td>
+    <td align="center"><a href="https://folderskin.app/fr/community/?pack=countries-in-paper-lhadao"><img src="docs/images/packs/countries-in-paper.webp" alt="Countries in Paper sur quatre dossiers : l'Inde, le Mexique, le Kenya et l'Islande en papier découpé" width="340" /><br /><b>Countries in Paper</b></a></td>
+  </tr>
+</table>
 
 FolderSkin n'est livré avec aucun habillage. Ce sont les utilisateurs qui partagent des habillages et
 des packs d'habillages via FolderSkin, gratuitement pour tout le monde. Le premier lancement vous les
@@ -264,6 +283,26 @@ demandent glibc 2.35 ou plus récent (Ubuntu 22.04, Debian 12, Fedora 36 et vers
 Une fois installé, FolderSkin se tient à jour tout seul : quand une nouvelle version sort, il
 affiche les nouveautés, et **Mettre à jour et redémarrer** l'installe. Chaque mise à jour est
 signée, et l'app vérifie la signature avant d'installer quoi que ce soit.
+
+### La ligne de commande
+
+`folderskin` fait depuis un terminal ce que fait l'app, et c'est pratique pour traiter des lots ou un
+disque entier : poser des images sur des dossiers et les retirer, peindre des habillages avec le
+Modèle local ou votre propre clé, et créer des packs. Sur Mac ou Linux :
+
+```sh
+curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+Sous Windows, dans PowerShell :
+
+```powershell
+irm https://folderskin.app/install-cli.ps1 | iex
+```
+
+Dans les deux cas, le téléchargement est vérifié avec son SHA-256, et aucun droit d'administrateur
+n'est nécessaire. [crates/folderskin-cli/README.md](crates/folderskin-cli/README.md) (en anglais) donne
+des exemples pour commencer et la liste de toutes les commandes.
 
 ## Compiler depuis les sources
 

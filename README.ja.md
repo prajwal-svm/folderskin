@@ -14,6 +14,11 @@
 
 **どんなフォルダにもスキンを。**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/folder-cycle-dark.gif" />
+  <img src="docs/images/folder-cycle.gif" alt="ひとつのフォルダが、12種類のスキンを次々と試着していくようす。切り絵の富士山、星月夜、ポップアート、水彩、旅行ポスターなど" width="360" />
+</picture>
+
 最高の思い出も、昔の書類と同じ味気ないフォルダの中。FolderSkinなら、どのフォルダにも中身にぴったりのスキンを着せられます。夏の写真にはゴールデンアワーの映画のワンシーン、旅行にはヴィンテージの旅行ポスター、動画プロジェクトにはポップアート、誕生日にはやさしいパステルカラー。フォルダをウィンドウにドロップしてスキンを試着し、気に入ったものを適用するだけです。無料のコミュニティパックから選ぶのも、自分の写真を使うのも、色や言葉、絵文字から自分でデザインするのも自由です。好きなスタイルを言葉で伝えて、AIに描いてもらうこともできます。
 
 <p>
@@ -61,9 +66,11 @@
 | コンピュータに残るもの | オンラインに送られるもの |
 | --- | --- |
 | フォルダと、FolderSkinが書き込むアイコン | AIへのリクエスト（実行したときだけ）。選んだプロバイダに、あなたのキーで送られます |
-| 追加したすべての画像と、作ったすべてのスキン | コミュニティと初回起動。共有されたパックをGitHubから読み込みます |
+| 追加したすべての画像と、作ったすべてのスキン | コミュニティと初回起動。共有されたパックをpacks.folderskin.appから読み込みます（つながらないときはGitHubから） |
 | AIのキー（暗号化して保存） | アップデートの確認。起動時に、最新リリースのバージョンファイルをGitHubから読み込みます |
 | お気に入り、タグ、設定 | コミュニティからのパックの追加。そのIDだけがFolderSkinのコミュニティサービスに送られます。サービスは追加をネットワークごとに1日1回だけ数え、アドレスは保存しません（[詳細](docs/ja/PACKS.md#インストール数)） |
+
+FolderSkinが何をどこへ送るのか、コミュニティサービスが何を保存するのかは、すべて[プライバシーポリシー](https://folderskin.app/ja/privacy/)に書いてあります。
 
 ## 使い方
 
@@ -89,6 +96,17 @@
 サイドバーの下にある**設定**では、テーマ、AIのキー、共有時に自動で入力される内容、スキンの保存場所を管理できます。ロゴの横のバージョンバッジにポインタを合わせると、アプリの情報が表示されます。
 
 ## コミュニティのスキン
+
+<table>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/ja/community/?pack=classic-art-5rxas2"><img src="docs/images/packs/classic-art.webp" alt="Classic Artのスキン4つ。モナ・リザ、真珠の耳飾りの少女、第九の怒濤、雲海の上の旅人" width="340" /><br /><b>Classic Art</b></a></td>
+    <td align="center"><a href="https://folderskin.app/ja/community/?pack=scientists-pop-art-nb3dfx"><img src="docs/images/packs/scientists-pop-art.webp" alt="Scientists - Pop Artのスキン4つ。マリ・キュリー、エイダ・ラブレス、ニコラ・テスラ、シュリニヴァーサ・ラマヌジャンのコミック風の肖像" width="340" /><br /><b>Scientists - Pop Art</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://folderskin.app/ja/community/?pack=watercolour-world-rt2klu"><img src="docs/images/packs/watercolour-world.webp" alt="Watercolour Worldのスキン4つ。水彩で描いた京都、ヴェネツィア、マチュ・ピチュ、マラケシュ" width="340" /><br /><b>Watercolour World</b></a></td>
+    <td align="center"><a href="https://folderskin.app/ja/community/?pack=countries-in-paper-lhadao"><img src="docs/images/packs/countries-in-paper.webp" alt="Countries in Paperのスキン4つ。切り絵で表したインド、メキシコ、ケニア、アイスランド" width="340" /><br /><b>Countries in Paper</b></a></td>
+  </tr>
+</table>
 
 FolderSkinには、最初から入っているスキンはありません。スキンやスキンのパックは、みんながFolderSkinを通じて共有していて、誰でも無料で使えます。初回起動時に紹介されるほか、**コミュニティ**からいつでも入手できます。パックを追加すると、そのスキンがタグ付きでライブラリに入ります。[folderskin.app](https://folderskin.app/ja/community/)のギャラリーでパックの**インストール**ボタンを押すと、FolderSkinが開いてパックを追加してくれます。**公式**の印が付いたパックは、メンテナのお墨付きです。最初のパックには**Classic Art**がおすすめです。モナ・リザから星月夜まで、パブリックドメインの名画16点を、それぞれフォルダに描き込んだパックです。自分のスキンを共有するには、スキンの⋯メニューから**コミュニティで共有**を選ぶか、複数ならまとめて**コミュニティ → スキンを共有**を使います。ブラウザでコンピュータの確認を一度行うだけで、アカウントは要りません。パックは人が審査したうえで、コミュニティで全員に公開されます。同じダイアログの**フォルダとして保存**を使うと、送信する代わりにパックをファイルとして書き出せます。画像はロスレスで共有されるので、パックは作ったとおりの見た目で届きます。仕様と制限は[docs/ja/PACKS.md](docs/ja/PACKS.md)にあります。1パックあたりスキン1〜50個、画像は1024px・1.5MBまで、パック全体で64MBまで、ライセンスはCC0、CC BY 4.0、MITのいずれかです。
 
@@ -171,6 +189,22 @@ Rustのコア（`crates/folderskin-core`）は、フォルダのテンプレー�
 macOS版はAppleによる署名と公証を受けているので、ほかのアプリと同じように開けます。Windows版のインストーラはまだ署名されていないため、最初にSmartScreenの確認が表示されます。「詳細情報」を選んでから「実行」を押してください。Linux版のパッケージにはglibc 2.35以降が必要です（Ubuntu 22.04、Debian 12、Fedora 36以降）。
 
 インストールしたあとは、FolderSkinが自分で最新の状態を保ちます。新しいバージョンが出ると変更点が表示され、**アップデートして再起動**でインストールできます。アップデートにはすべて署名があり、アプリは何かをインストールする前に必ず署名を確認します。
+
+### コマンドライン
+
+`folderskin`を使うと、アプリでできることをターミナルから行えます。まとめて処理したいときや、ドライブ全体を一度に変えたいときに便利です。フォルダに画像を付けたり外したり、ローカルモデルや自分のキーでフォルダの絵を描いたり、パックを作ったりできます。MacとLinuxでは、次を実行します。
+
+```sh
+curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+Windowsでは、PowerShellで次を実行します。
+
+```powershell
+irm https://folderskin.app/install-cli.ps1 | iex
+```
+
+どちらもダウンロードしたファイルをSHA-256で確認し、管理者権限はいりません。まず試したいコマンドの例とすべてのコマンドは、[crates/folderskin-cli/README.md](crates/folderskin-cli/README.md)（英語）にあります。
 
 ## ソースからビルド
 
