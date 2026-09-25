@@ -18,7 +18,7 @@ folderskin/
 │   ├── composer/            the composer's design document, undo, drawing and maths (unit-tested)
 │   └── components/          TabBar, Gallery, FolderThumb, DropZone, Wordmark, AboutMenu, composer/
 ├── src-tauri/               the app crate: commands, state, window config
-│   ├── build.rs             Tauri's build step; nothing else is embedded
+│   ├── build.rs             Tauri's build step. Nothing else is embedded
 │   ├── src/commands.rs      the library, import, apply and delete commands
 │   ├── src/community.rs     community packs: list, preview, add, update, remove, save as a folder
 │   ├── src/share.rs         sharing a pack through the community service, and trying again
