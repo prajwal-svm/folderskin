@@ -231,8 +231,8 @@ No other fields are allowed, so a typo such as `"tag"` fails the check instead o
 | `pack.json` | at most 64 KB |
 
 Why 50 and 64 MB: a pack is a themed set, and everyone who adds it downloads all of it. Fifty
-skins stay quick to review, and 64 MB holds all fifty at about 1.2 MB a picture, which is what a
-detailed lossless picture at 1024 px comes to, or forty-two at the largest.
+skins stay quick to review, and 64 MB holds all fifty at 1.3 MB a picture, or forty-two at the
+largest.
 
 Packs published before FolderSkin 0.1.7 were held to 2 MB a picture in PNG, JPEG or any WebP,
 and the app still reads them. Made again with `packs make`, they follow the rules above.
@@ -253,8 +253,8 @@ Each picture is one of two kinds, told apart the same way as a picture dropped o
 Every picture is lossless, so a pack looks exactly as it was made: no blocks in a gradient, no
 ringing around lettering, and a finished folder's edge as clean as it was drawn. A lossless WebP
 is about a third smaller than the same PNG, which is why the app and `packs make` write WebP. A
-detailed 1024 px picture comes to about 800 KB; one that doesn't fit in 1.5 MB is made 896 px,
-then 768 px, still lossless, rather than blurred to fit.
+detailed 1024 px picture comes to between 0.6 and 1.5 MB, most of them about 800 KB; one that
+doesn't fit in 1.5 MB is made 896 px, then 768 px, still lossless, rather than blurred to fit.
 
 ### Licences
 
