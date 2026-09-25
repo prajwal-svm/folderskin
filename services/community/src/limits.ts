@@ -55,7 +55,10 @@ export const SUBMISSION_NETWORK_SECONDS = 30 * 86400;
 // ---- the pack contract (folderskin_core::pack) ----
 export const PACK_VERSION = 1;
 export const MAX_SKINS = 50;
-export const MAX_PICTURE_BYTES = 2 * 1024 * 1024;
+/** The most bytes a picture can have, 1.5 MB. */
+export const MAX_PICTURE_BYTES = 1_572_864;
+/** The most a pack's pictures can come to together, 40 MB. */
+export const MAX_PACK_BYTES = 40 * 1024 * 1024;
 export const MIN_PICTURE_SIDE = 256;
 export const MAX_PICTURE_SIDE = 1024;
 export const MAX_PACK_NAME_CHARS = 40;
@@ -64,6 +67,11 @@ export const MAX_PACK_TAGS = 5;
 export const MAX_SKIN_TAGS = 3;
 export const MAX_TAG_CHARS = 24;
 export const LICENSES = ["CC0-1.0", "CC-BY-4.0", "MIT"] as const;
+/**
+ * The file names a pack's pictures can have. A pack shared here now has to be lossless, so PNG or
+ * lossless WebP (images.ts checks the bytes); `.jpg` and `.jpeg` stay valid names for the packs
+ * already published with them.
+ */
 export const PICTURE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
 /** A pack id is at most 40 characters; a generated one is its name's slug cut to 33, a dash and 6 random characters. */
 export const MAX_PACK_ID_CHARS = 40;

@@ -1,7 +1,22 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256Hex } from "../src/bytes";
-import { call, describe as describePack, device, errorOf, jpeg, pictures, png, signed, submit, verify, webpExtended, type Device } from "./helpers";
+import {
+  call,
+  describe as describePack,
+  device,
+  errorOf,
+  jpeg,
+  pictures,
+  png,
+  signed,
+  submit,
+  verify,
+  webpExtended,
+  webpLossless,
+  webpLossy,
+  type Device,
+} from "./helpers";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -120,6 +135,60 @@ describe("sending a pack", () => {
 
     const license = { ...body, license: "All rights reserved" };
     expect((await errorOf(await call(await signed(who, "POST", "/v1/submissions", license)))).code).toBe("bad_license");
+  });
+
+  it("takes only lossless pictures: PNG, and WebP whose picture is VP8L", async () => {
+    const lossy = { code: "lossy_picture", message: "FolderSkin shares pictures without losing any quality. Update FolderSkin to share this pack." };
+    const who = await author("lossless-only");
+    // A JPEG never is, so a pack naming one is turned away before anything is sent.
+    const withJpeg = await describePack([...pictures(1, 70), { file: "photo.jpg", bytes: jpeg(512, 512) }]);
+    expect(await errorOf(await call(await signed(who, "POST", "/v1/submissions", withJpeg)))).toEqual(lossy);
+
+    // A WebP could be either, which only its bytes tell.
+    const list = [
+      { file: "simple.webp", bytes: webpLossless(512, 512) },
+      { file: "extended.webp", bytes: webpExtended(512, 512) },
+      { file: "lossy.webp", bytes: webpLossy(512, 512) },
+      { file: "lossy-alpha.webp", bytes: webpExtended(512, 512, { image: "VP8 " }) },
+    ];
+    const opened = await call(await signed(who, "POST", "/v1/submissions", await describePack(list)));
+    expect(opened.status).toBe(201);
+    const { submission_id: id } = (await opened.json()) as { submission_id: string };
+    const put = async (p: (typeof list)[number]) => call(await signed(who, "PUT", `/v1/submissions/${id}/items/${await sha256Hex(p.bytes)}`, p.bytes));
+    expect((await put(list[0])).status).toBe(200);
+    expect((await put(list[1])).status).toBe(200);
+    expect(await errorOf(await put(list[2]))).toEqual(lossy);
+    expect(await errorOf(await put(list[3]))).toEqual(lossy);
+  });
+
+  it("takes pictures of up to 1.5 MB, and packs of up to 40 MB", async () => {
+    const who = await author("heavy-lifter");
+    const sized = async (count: number, bytes: number, salt: number) => {
+      const body = await describePack(pictures(count, salt));
+      return { ...body, items: body.items.map((item) => ({ ...item, bytes })) };
+    };
+    const tooBig = await call(await signed(who, "POST", "/v1/submissions", await sized(1, 1_572_865, 71)));
+    expect(await errorOf(tooBig)).toEqual({ code: "too_large", message: "skin-1.png is over the 1.5 MB a picture can be." });
+    // 27 pictures of 1.5 MB are 40.5 MB, over; 26 are 39 MB, and go through.
+    const heavy = await call(await signed(who, "POST", "/v1/submissions", await sized(27, 1_572_864, 72)));
+    expect(await errorOf(heavy)).toEqual({
+      code: "pack_too_large",
+      message: "The pack's pictures come to 40.5 MB, and a pack can be 40 MB at most. Take some out and try again.",
+    });
+    const fits = await call(await signed(who, "POST", "/v1/submissions", await sized(26, 1_572_864, 73)));
+    expect(fits.status).toBe(201);
+  });
+
+  it("checks the pack's size again when it is sent for review", async () => {
+    const who = await author("second-look");
+    const list = pictures(1, 74);
+    const created = await call(await signed(who, "POST", "/v1/submissions", await describePack(list)));
+    const { submission_id: id, need } = (await created.json()) as { submission_id: string; need: string[] };
+    expect((await call(await signed(who, "PUT", `/v1/submissions/${id}/items/${need[0]}`, list[0].bytes))).status).toBe(200);
+    // As a pack opened before the limit came down would stand.
+    await env.DB.prepare("UPDATE items SET bytes = ?2 WHERE submission = ?1").bind(id, 40 * 1024 * 1024 + 1).run();
+    const done = await call(await signed(who, "POST", `/v1/submissions/${id}/finalize`, {}));
+    expect((await errorOf(done)).code).toBe("pack_too_large");
   });
 
   it("keeps someone else's submission out of reach", async () => {
