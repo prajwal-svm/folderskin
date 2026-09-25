@@ -18,7 +18,7 @@ folderskin/
 │   ├── composer/            the composer's design document, undo, drawing and maths (unit-tested)
 │   └── components/          TabBar, Gallery, FolderThumb, DropZone, Wordmark, AboutMenu, composer/
 ├── src-tauri/               the app crate: commands, state, window config
-│   ├── build.rs             Tauri's build step; nothing else is embedded
+│   ├── build.rs             Tauri's build step. Nothing else is embedded
 │   ├── src/commands.rs      the library, import, apply and delete commands
 │   ├── src/community.rs     community packs: list, preview, add, update, remove, save as a folder
 │   ├── src/share.rs         sharing a pack through the community service, and trying again
@@ -40,11 +40,11 @@ folderskin/
 
 ## One rendering path
 
-Every pixel the user ever sees — a gallery thumbnail, the drop-zone preview, the icon
-written to disk — comes out of `folderskin_core::compositor::render_icon_set`. The webview
-never draws folder geometry; it displays PNGs the Rust side rendered and handed over as data
-URLs. A thumbnail is therefore a correct preview of the icon by construction, on every
-operating system, and there is no second implementation to keep in sync.
+Every pixel the user ever sees comes out of `folderskin_core::compositor::render_icon_set`: a
+gallery thumbnail, the drop-zone preview, the icon written to disk. The webview never draws
+folder geometry. It displays PNGs the Rust side rendered and handed over as data URLs. A
+thumbnail is therefore a correct preview of the icon by construction, on every operating system,
+and there is no second implementation to keep in sync.
 
 The compositor:
 
@@ -78,7 +78,7 @@ the saved icon, so the canvas shows what gets written.
 |---|---|
 | `folderskin-core` | `geometry` (the template as vector paths), `fit` (cover-fit maths), `raster` (premultiplied downsampling, PNG encoding, and WebP through libwebp), `compositor` (the render, for artwork, a finished folder or a design drawn in place, and the template split into the composer's layers), `ico` (Windows `.ico` writer with PNG entries), `matte` (keying and telling a finished folder from artwork), `pack` (the community pack contract and its checks), `apply` (per-OS icon writers) |
 | `folderskin-ai` | the AI providers: the catalogue, each provider's request body and response reader, and the prompt templates |
-| `folderskin-tools` | the maintainer CLI. Makes a community pack from pictures, checks the packs and writes their index, renders any picture as the folder the app makes of it, writes the safe-area guide, and applies or reverts an icon without the GUI — which is how the Windows and Linux writers get exercised |
+| `folderskin-tools` | the maintainer CLI. Makes a community pack from pictures, checks the packs and writes their index, renders any picture as the folder the app makes of it, writes the safe-area guide, and applies or reverts an icon without the GUI, which is how the Windows and Linux writers get exercised |
 | `folderskin` (`src-tauri`) | the Tauri app: window, commands, caches. Holds no drawing code |
 
 `folderskin-core` has no Tauri dependency, so the CLI and the app share it and the core's
@@ -87,38 +87,38 @@ tests run without a webview.
 ## Frontend to backend
 
 The commands live in `src-tauri/src/commands.rs` (the library), `community.rs` (packs),
-`deep_link.rs` (install links), `onboarding.rs` (first launch), `ai.rs` (the AI assistant), `composer.rs` (the composer; its
+`deep_link.rs` (install links), `onboarding.rs` (first launch), `ai.rs` (the AI assistant), `composer.rs` (the composer, whose
 six commands are listed in [COMPOSER.md](COMPOSER.md#commands)) and `tree.rs` (a folder and its
 subfolders). Anything slow runs on a blocking
 thread. `src/lib/tauri.ts` is the only place the frontend names them.
 
 | command | input | output |
 |---|---|---|
-| `list_skins` | – | the user's skins, newest first, each with a PNG data-URL thumbnail; plus the plain default folder |
+| `list_skins` | – | the user's skins, newest first, each with a PNG data-URL thumbnail, and beside them the plain default folder |
 | `inspect_path` | `path` | `{kind: "folder" \| "image" \| "other", name, path}` |
 | `import_image` | `path` | the picture saved as a skin, id `user:<hash>` (the saved one if it was imported before) |
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
-| `subfolder_count` | `folder` | `{count, more}`: the folders inside it a run would change, not counting itself; `more` when there are over 5,000 |
+| `subfolder_count` | `folder` | `{count, more}`: the folders inside it a run would change, not counting itself, and `more` when there are over 5,000 |
 | `tree_bytes` | `skinId` | the bytes of disk one folder's copy of the skin's icon takes |
-| `apply_skin_tree` | `folder`, `skinId`, `only`, `onProgress` | `{total, changed, failed, skipped, remaining, stopped}` for the folder and every folder inside it, or for `only` those; progress on the channel |
-| `revert_skin_tree` | `folder`, `only`, `onProgress` | the same; without `only`, every folder in the tree that has a custom icon, the others `skipped` |
-| `stop_tree_run` | – | `{}`; the run stops before its next folder |
+| `apply_skin_tree` | `folder`, `skinId`, `only`, `onProgress` | `{total, changed, failed, skipped, remaining, stopped}` for the folder and every folder inside it, or for `only` those, with progress on the channel |
+| `revert_skin_tree` | `folder`, `only`, `onProgress` | the same. Without `only`, every folder in the tree that has a custom icon, the others `skipped` |
+| `stop_tree_run` | – | `{}`, and the run stops before its next folder |
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
-| `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line, at most 60 characters; the tags cleaned, at most 8), or an error string for the plain default folder's id |
+| `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line and at most 60 characters, the tags cleaned and at most 8), or an error string for the plain default folder's id |
 | `skins_folder` | – | the folder the saved skins live in |
-| `community_packs` | `fresh` | `{packs, moved}`: the featured packs, or the first few, each with its `hash`, `added`, `update` and `official`; and each old id that moved to one of them |
-| `community_pack` | `packId` | that pack, or the one an old id moved to, as the list shows it, or `null`; one the list doesn't have is looked for again past the caches first |
-| `install_link_take` | – | the pack the newest `folderskin://install` link asked for, once; `null` when none is waiting |
+| `community_packs` | `fresh` | `{packs, moved}`: the featured packs, or the first few (each with its `hash`, `added`, `update` and `official`), and each old id that moved to one of them |
+| `community_pack` | `packId` | that pack, or the one an old id moved to, as the list shows it, or `null`. One the list doesn't have is looked for again past the caches first |
+| `install_link_take` | – | the pack the newest `folderskin://install` link asked for, once, or `null` when none is waiting |
 | `community_preview` | `packId`, `fresh` | the pack's preview strip as a PNG data URL |
-| `community_pack_skins` | `packId`, `hash` | every skin of the pack drawn as its folder, to look through; kept drawn for a week, so looking again at that `hash` downloads nothing |
-| `community_add` | `packId`, `onProgress` | the pack's skins in the pack's order, saved all together or not at all; progress on the channel (below) |
+| `community_pack_skins` | `packId`, `hash` | every skin of the pack drawn as its folder, to look through, and kept drawn for a week, so looking again at that `hash` downloads nothing |
+| `community_add` | `packId`, `onProgress` | the pack's skins in the pack's order, saved all together or not at all, with progress on the channel (below) |
 | `community_update` | `packId` | `{removed, skins}`: the added pack swapped for the version published now |
 | `community_remove` | `packId` | the ids of the skins it deleted |
 | `import_pack` | `path` | a pack folder on disk, added the same way as one from Community |
 | `export_pack` | `folder`, `name`, `author`, `license`, `tags`, `skinIds` | the pack folder it wrote, named after a new id (`pack::new_id`), already passing the checks |
 | `onboarding_needed` | – | `true` until the first-launch onboarding has been finished on this computer |
-| `finish_onboarding` | – | `{}`; the onboarding never shows again |
+| `finish_onboarding` | – | `{}`, and the onboarding never shows again |
 | `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
 | `platform_info` | – | `{os, browse_label, note}` |
 
@@ -137,7 +137,7 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 
 FolderSkin ships no skins of its own, so every skin in the list is a saved one (or one kept for
 this session when it could not be written). The pack contract is `folderskin_core::pack`, shared
-by the app and `folderskin-tools packs check`; see [PACKS.md](PACKS.md).
+by the app and `folderskin-tools packs check`. See [PACKS.md](PACKS.md).
 
 `community_add` takes a `Channel<PackProgress>` from `@tauri-apps/api/core` as `onProgress` and
 sends `{stage: "download" | "save", done, total}` on it, `total` being the pack's number of
@@ -164,15 +164,15 @@ drop in a webview cannot expose a filesystem path. Browsing uses the dialog plug
 
 `AppState` (in `src-tauri/src/state.rs`) is an `Arc` over:
 
-- `store: OnceLock<Store>` — the saved skins on disk (below), opened in `setup` before the
+- `store: OnceLock<Store>`: the saved skins on disk (below), opened in `setup` before the
   window exists.
-- `recent` — the twelve most recently used saved skins, decoded, least recently used out first.
+- `recent`: the twelve most recently used saved skins, decoded, least recently used out first.
   It is only a cache: `apply_skin` reads a saved skin back from the store on a miss, so
-  evicting one loses nothing. A single import or AI result goes in as it is saved; a pack does
-  not (`AppState::save_many`), since sixteen new skins would push out every other one.
-- `unsaved` — skins that could not be written (no app data folder, or a failed write of an AI
+  evicting one loses nothing. A single import or AI result goes in as it is saved, but a pack
+  does not (`AppState::save_many`), since sixteen new skins would push out every other one.
+- `unsaved`: skins that could not be written (no app data folder, or a failed write of an AI
   result, which is never thrown away). They last until the app quits.
-- `default_thumb: OnceLock<String>` — the plain default folder's thumbnail as a data URL, drawn
+- `default_thumb: OnceLock<String>`: the plain default folder's thumbnail as a data URL, drawn
   once. It is also cached as `thumbs/default.thumb-v2.png` in the app cache directory, so later
   launches skip the render.
 
@@ -208,7 +208,7 @@ skins/
 
 A new picture is saved as a lossless WebP at libwebp's quickest setting, which takes about the
 time a PNG did and is about a third smaller. Pictures saved by 0.1.6 and before are PNGs
-(`<stem>.png`); they are read as they are and never written again, and go with their skin when
+(`<stem>.png`). They are read as they are and never written again, and go with their skin when
 it's deleted.
 
 Each index entry records the id, name, tags, kind (`artwork` or `folder`), source (`import`,
@@ -229,7 +229,7 @@ the old files.
 Pictures and thumbnails are written before the index entry that names them, and every file is
 written atomically (temp file, then rename), so a crash leaves at worst an unreferenced picture.
 An index that cannot be read is renamed `skins-unreadable-<ms>.json` and the store starts
-empty; a damaged entry, or one whose picture has gone, is dropped with a log line. The
+empty. A damaged entry, or one whose picture has gone, is dropped with a log line. The
 thumbnail file name carries `THUMB_CACHE_VERSION`, so bumping it redraws saved thumbnails too.
 
 A pack is saved in one go by `Store::add_many`: every new picture and thumbnail is encoded first,
@@ -243,8 +243,8 @@ order.
 `Store::open` then clears away what a crash left: pictures (`<stem>.webp`, or `<stem>.png`) and thumbnails
 (`<stem>.thumb*.png`) of skins the index doesn't name, and `write_atomic` temp files
 (`.<name>.folderskin-<pid>-<seq>.tmp`), each logged. It only does so when the index was read
-whole (no entry dropped as damaged or with a bad id; a missing picture or a repeated entry is
-fine) or there is no index at all, and no `skins-unreadable-*.json` was ever set aside there,
+whole (no entry dropped as damaged or with a bad id, though a missing picture or a repeated entry
+is fine) or there is no index at all, and no `skins-unreadable-*.json` was ever set aside there,
 since otherwise a file the index doesn't name may belong to a skin it lost. It never touches a
 file of any other name, and leaves anything changed in the last ten minutes, which another
 FolderSkin could still be saving.
@@ -261,7 +261,7 @@ beside the `skins` folder, in the app data directory:
 `onboarding_needed` is `true` while that file is missing, `false` when the app has no data
 folder (nothing could remember it being finished), and always `true` when the environment has
 `FOLDERSKIN_ONBOARDING=1`, for trying the onboarding out. Only whether the file exists decides
-anything; what it records is there for a later version.
+anything. What it records is there for a later version.
 
 ### Artwork or a finished folder
 
@@ -275,7 +275,7 @@ the core):
   (60% of the outermost ring within 0.12 of #FF00FF), or all four corners and a fifth of the
   band are on the key. The keyer's own tolerance, 0.18, is too loose to decide this: a product
   shot on magenta paper or a vivid sunset sky sits around 0.14 to 0.17 and must stay a picture.
-  The backdrop is keyed out, despilled and trimmed like an AI render; if less than 2% of the
+  The backdrop is keyed out, despilled and trimmed like an AI render. If less than 2% of the
   picture is left, it was not a folder and becomes artwork.
 - **artwork** otherwise, with the focus in the middle.
 
@@ -291,7 +291,7 @@ comes from the user's store. The folder template and the plain default folder ar
 `community.rs` reads the packs from packs.folderskin.app, where the published tree of their
 repository, [folderskin-community](https://github.com/prajwal-svm/folderskin-community), is copied
 as it's published, and from the repository on GitHub when that doesn't answer with a head.json
-(`catalog::Origin`; `FOLDERSKIN_COMMUNITY_URL` points it at another copy of the repository alone).
+(`catalog::Origin`). `FOLDERSKIN_COMMUNITY_URL` points it at another copy of the repository alone.
 Every file is checked against what head.json and the catalog say it is, wherever it came from.
 Adding one downloads its `pack.json`, then its pictures four at a
 time (`futures_util`'s `buffered`, which keeps them in the pack's order), each held to the
@@ -322,7 +322,7 @@ and Linux as the argument of a second process, which `tauri-plugin-single-instan
 first, on those two only) hands to the running one before it quits. `deep_link::install_pack` is
 the one function that reads a link, and anything that isn't an install link naming a pack id is
 dropped. A good one brings the window forward and waits in `InstallLinks` until the webview takes
-it with `install_link_take`; `install-link` tells the webview one is waiting. The webview asks as
+it with `install_link_take`. `install-link` tells the webview one is waiting. The webview asks as
 it starts too (`src/lib/installLinks.ts`), so a link that came before it, or during the
 first-launch welcome, isn't lost. The Community store's `install` then opens the pack from
 `community_pack` and adds it through the same `add` its Add button uses.
@@ -330,7 +330,7 @@ first-launch welcome, isn't lost. The Community store's `install` then opens the
 Once `community_add` has saved a pack, `installs::report` sends
 `POST <service>/v1/packs/<id>/installs`, with the id the pack has now, on a task of its own, with a five-second timeout, and
 drops whatever comes back. The service is the one sharing uses (`FOLDERSKIN_COMMUNITY_API`, or
-`COMMUNITY_API` in `share.rs`), or `https://community.folderskin.app`; development builds and
+`COMMUNITY_API` in `share.rs`), or `https://community.folderskin.app`. Development builds and
 builds reading another copy of the packs send nothing unless a service is named.
 
 ## Applying an icon
@@ -366,7 +366,7 @@ the walk in `folderskin_core::apply::tree`).
 - **The run.** One blocking thread goes through the folders in order. The channel hears
   `{done: 0, total, name}` with the folder's own name once the folders are known, before the
   icon is rendered, then `{done, total, name}` after each folder. A stop flag, cleared as each
-  run starts, is checked before every folder, so Stop lets the folder in hand finish; there is
+  run starts, is checked before every folder, so Stop lets the folder in hand finish. There is
   one flag, so there is one run at a time. Every folder ends up in exactly one of `changed`,
   `failed` (with a sentence: no permission, gone, read-only disk, full disk, or the OS's own
   words), `skipped` or `remaining`. `only` names exactly the folders to do, in order, each the
@@ -377,11 +377,11 @@ the walk in `folderskin_core::apply::tree`).
 
 ## Frontend state
 
-The drop zone is a reducer in `src/state/dropzone.ts` with six phases — `idle`, `folder`,
-`ready`, `applying`, `applied`, `reverting` — and it is unit-tested in isolation from React.
+The drop zone is a reducer in `src/state/dropzone.ts` with six phases (`idle`, `folder`,
+`ready`, `applying`, `applied`, `reverting`), and it is unit-tested in isolation from React.
 An error is a field on the state, not a phase, so a failed apply returns to `ready` with the
 message shown beneath the button.
-Components read the state and render; they do not decide transitions. Dropping a picture
+Components read the state and render, but do not decide transitions. Dropping a picture
 selects a custom skin without changing which folder is chosen, which is why picking a folder
 and picking a skin are separate axes in the machine. A folder that replaces another is
 `arriving`: it shows its own icon (fetched for that folder alone, so a late answer for the one
@@ -412,13 +412,13 @@ read a few at a time in the background and remembered by skin id.
 The composer keeps its design in a reducer too (`src/composer/history.ts`): every change is a new
 document, a drag is one step once the pointer lets go, and a run of changes to the same setting
 merges into one, so undo goes back by what a person would call a step. Once opened it stays
-mounted, hidden while another view is shown, so a design survives a visit to the library; the
+mounted, hidden while another view is shown, so a design survives a visit to the library. The
 design is also kept in the webview's storage until it is saved or replaced. The folder panel
 steps aside while it is open, and **Save & apply** goes through the same reducer actions as the
 panel's own Apply.
 
 Per the project style rule there are no CSS outlines, focus rings or selection outlines
-anywhere; focus and selection are shown with a background tint or a border colour change. The
+anywhere. Focus and selection are shown with a background tint or a border colour change. The
 composer's selected layer follows it too: a tint over the layer with knobs to size and turn it,
 never a frame.
 
@@ -430,18 +430,18 @@ never a frame.
 | `fit` | cover-fit always covers, focus extremes keep the expected corner |
 | `compositor` | determinism (same input, identical bytes) and silhouette checks against the measured constants at sample rows and columns |
 | `ico` | round-trip of the multi-size container |
-| `apply` | `desktop.ini` and `.directory` generation and revert parsing as pure functions; path validation |
-| `pack` | the pack contract: fields, limits, tags, ids, file names, picture checks and the pack hash; an index's optional fields, and fields it doesn't know passed over |
-| `matte` | keying, despill and trim; telling a finished folder (transparent, keyed, keyed then JPEG-compressed, trimmed tight) from an ordinary photo, a pink sunset and a product shot on magenta paper |
-| `compositor` (composer) | the template's layers stacked around a design equal the saved icon; a design lands where it was drawn; a see-through design leaves only the paper and the rims |
+| `apply` | `desktop.ini` and `.directory` generation and revert parsing as pure functions, and path validation |
+| `pack` | the pack contract: fields, limits, tags, ids, file names, picture checks and the pack hash. An index's optional fields, and fields it doesn't know passed over |
+| `matte` | keying, despill and trim, and telling a finished folder (transparent, keyed, keyed then JPEG-compressed, trimmed tight) from an ordinary photo, a pink sunset and a product shot on magenta paper |
+| `compositor` (composer) | the template's layers stacked around a design equal the saved icon, a design lands where it was drawn, and a see-through design leaves only the paper and the rims |
 | `composer` | the raw body's framing, the picture checks, previews, saving a design and saving over one, a damaged document |
-| `store` | round trip across a restart, one entry per picture, delete, a corrupt or missing index, damaged entries, thumbnail repair, the size bound, id checks; a batch saved in its own order, whole or not at all (a write that fails part way, an index that can't be written), saved and repeated pictures; what a crash left removed on open, and nothing else |
-| `community` | a pack saved in its own order with its progress, a picture listed twice, a pack that can't be saved adding nothing, updates, and the download: four at a time, in order, with its progress, against a local server; official packs from `index.json` and `head.json`, and a link's pack looked for again past the caches |
-| `deep_link` | which links are install links and which are ignored; a good one waiting for the webview, which is told, and taken once |
-| `installs` | the count's address and when one is sent at all; the request itself, a bare POST, against a local server |
+| `store` | round trip across a restart, one entry per picture, delete, a corrupt or missing index, damaged entries, thumbnail repair, the size bound, id checks. A batch saved in its own order, whole or not at all (a write that fails part way, an index that can't be written), saved and repeated pictures. What a crash left removed on open, and nothing else |
+| `community` | a pack saved in its own order with its progress, a picture listed twice, a pack that can't be saved adding nothing, updates, and the download: four at a time, in order, with its progress, against a local server. Official packs from `index.json` and `head.json`, and a link's pack looked for again past the caches |
+| `deep_link` | which links are install links and which are ignored. A good one waiting for the webview, which is told, and taken once |
+| `installs` | the count's address and when one is sent at all, and the request itself (a bare POST) against a local server |
 | `onboarding` | when it shows, what forces it, and the marker |
 | `folderskin-tools` | the pack checks and the index (with `official.json` and each pack's date), making a pack (the split, `--flat-backdrop`, lossless WebP), the picture split `render` and `apply` use |
-| frontend | the drop-zone reducer, favourites, platform copy; the composer's document, undo, geometry, text layout, shapes, colours, picture adjustments and templates; the Community store, install links included (vitest) |
+| frontend | the drop-zone reducer, favourites and platform copy. The composer's document, undo, geometry, text layout, shapes, colours, picture adjustments and templates. The Community store, install links included (vitest) |
 
 The Windows writer is compile-checked from macOS with `cargo check --target
 x86_64-pc-windows-msvc -p folderskin-core`. CI runs the whole set on ubuntu-22.04,
@@ -488,18 +488,18 @@ Under 15 MB installed. The macOS app bundle (Apple Silicon) is the stripped rele
 1.4 MB app icon and a 1 KB `Info.plist`. The binary carries the Rust code and the frontend,
 which Tauri embeds, including a 165 KB variable font (Manrope) and the first-launch welcome's
 740 KB of pictures (26 folders, each drawn at the size it's shown at, and the logo). Once FolderSkin stopped shipping skins the binary measured 7.0 MB and the
-bundle 8.5 MB; with 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. The updater
+bundle 8.5 MB. With 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. The updater
 added 0.25 MB, to a 7.3 MB binary and an 8.8 MB bundle. The composer added 0.16 MB to the
 binary and Include subfolders 0.05 MB, to a 7.6 MB binary and an 8.9 MB bundle. The composer's
 script is a chunk of its own (114 KB, 41 KB gzipped) that the webview loads the first time it's
 opened, and the AI view's is too (19 KB). libwebp, built in for the lossless WebP that pack
 pictures and the library's pictures are saved as, added 0.18 MB of code to the binary. That keeps the first screen's script under
-500 KB (488 KB, 161 KB gzipped), the line Vite warns at; keep it there. `image` is built with `default-features = false` and
+500 KB (488 KB, 161 KB gzipped), the line Vite warns at. Keep it there. `image` is built with `default-features = false` and
 only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one
 codegen unit. Any dependency that would move this budget needs a reason in the pull request.
 
 Vite copies everything in `public/` into every build, and Tauri embeds the build in the binary,
 so dev-only files stay out of `public/`. The browser mock (`src/lib/devMock.ts`) is only used
 under `import.meta.env.DEV`, so a build leaves it out, and it shows real pack pictures fetched
-from folderskin-community on GitHub rather than files in this repository; skin previews
+from folderskin-community on GitHub rather than files in this repository. Skin previews
 that once sat in `public/` added 2.3 MB to the binary without showing up as files in the bundle.

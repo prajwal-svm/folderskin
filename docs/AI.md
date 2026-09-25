@@ -35,7 +35,7 @@ The keys are sealed with AES-256-GCM before they are written. The encryption key
 hardware id, so `keys.json` on its own gives nothing away and the two files copied to another
 computer don't open there: enter the keys again on the new one. Both files are created with
 owner-only permissions (0600) and written atomically. What no file can do is keep out a program
-already running as you, which could read both; only the system keychain could, with the
+already running as you, which could read both. Only the system keychain could, with the
 password prompts below.
 
 Why not the system keychain: macOS ties a saved keychain item to the exact signature of the app
@@ -45,14 +45,14 @@ from an app you just downloaded looks like exactly the thing it isn't, so Folder
 use the keychain at all.
 
 The key is read at the moment of a request, never included in an error message, and never
-returned to the app's window. **Remove key** in the provider dialog deletes it from the file;
-deleting `keys.json` removes them all.
+returned to the app's window. **Remove key** in the provider dialog deletes it from the file,
+and deleting `keys.json` removes them all.
 
 ## The two shapes
 
 This is the choice that matters most, and it is not about quality.
 
-**Artwork** asks the model for a flat 1024 × 958 picture and FolderSkin wraps it onto its own
+**Just the art** asks the model for a flat 1024 × 958 picture and FolderSkin wraps it onto its own
 folder template, exactly like a photo you add. The geometry is ours, so every skin lines up with
 every other, at every icon size. Any provider can do this, including the ones with no
 transparency support. This is the default and the right answer most of the time.
@@ -91,7 +91,7 @@ case of a genuinely pink subject on a magenta backdrop.
 `crates/folderskin-ai/src/prompts.rs` composes the prompt from your words plus a contract. The
 parts that do the work are structural rather than stylistic:
 
-- **Artwork prompts** forbid drawing a folder, an icon, a device or a mockup, and reserve the
+- **Just-the-art prompts** forbid drawing a folder, an icon, a device or a mockup, and reserve the
   top eighth and a 6% border as dead space, because the template crops or curves those away.
 - **Whole-folder prompts** pin the construction: exactly three parts, one tab, one visible paper
   edge, one front panel, and an explicit instruction not to add layers. Without that sentence
@@ -102,14 +102,14 @@ parts that do the work are structural rather than stylistic:
 - **All of them** end with a hard output contract naming the pixel size, the isolation of the
   subject, and either the key colour or the transparent background.
 
-You can edit these templates; they are ordinary Rust string constants with tests that assert
+You can edit these templates. They are ordinary Rust string constants with tests that assert
 the load-bearing phrases are present.
 
 ## Cost
 
 Every request is billed to your own account by your provider. The Generate view shows the
 model's rough price before you press the button. FolderSkin makes exactly one request per
-press; it never retries on its own.
+press and never retries on its own.
 
 ## Building and cross-compiling
 
@@ -125,14 +125,14 @@ fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks with
 |---|---|
 | "add your … API key first" | No key saved for that provider |
 | "that key was rejected by …" | The provider returned 401 or 403 |
-| "… is rate limiting you right now" | 429; wait and try again |
-| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background; try again or switch to Artwork |
+| "… is rate limiting you right now" | 429, so wait and try again |
+| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Just the art |
 | "the provider returned something that is not an image" | A malformed or non-image response |
 
 ## Folders made in a chat assistant
 
 You can also paint a whole folder in ChatGPT, Grok or any other chat assistant and bring it in
-with **Your photo**. Ask for the folder on a solid #FF00FF background, or on a transparent one.
+with **Add your photo**. Ask for the folder on a solid #FF00FF background, or on a transparent one.
 FolderSkin recognises either and uses the picture as the icon as it is, cut out and trimmed,
 instead of wrapping it in its own folder a second time. Any other picture is treated as
 artwork for the template. [ARCHITECTURE.md](ARCHITECTURE.md#artwork-or-a-finished-folder) has

@@ -32,6 +32,8 @@ Free · Open source · No account · No tracking
 
 </div>
 
+English · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Español](README.es.md)
+
 <div align="center">
   <img src="docs/images/app.webp" alt="FolderSkin 0.1.7 on macOS: the Scientists Pop Art pack in the library, and Isaac Newton tried on the Downloads folder" width="100%" />
 </div>
@@ -61,8 +63,8 @@ Free · Open source · No account · No tracking
 
 Everything except the few things that need the internet. There's no account, no paywall and
 nothing that tracks you: the one thing FolderSkin reports is that a community pack was added, by
-the pack's id alone, so folderskin.app can show how often each is added. The macOS app is about
-8.9 MB installed.
+the pack's id alone, so folderskin.app can show how often each is added. On a Mac the download is
+under 20 MB.
 
 | Stays on your computer | Goes online |
 | --- | --- |
@@ -85,7 +87,7 @@ again.
 </details>
 
 1. Drag a folder onto the folder panel on the right, or click the empty folder to pick one.
-2. Click a skin in the library to try it on; the folder panel shows the result straight away.
+2. Click a skin in the library to try it on. The folder panel shows the result straight away.
    The sidebar picks **All skins**, **Yours** or **Favourites**, the tags along the top narrow
    that down, and ⌘F / Ctrl+F searches.
 3. Press **Apply skin**. The folder is marked **Applied**, and **Show in Finder** opens it.
@@ -101,8 +103,8 @@ or try those again. **Revert all** takes off exactly what the run put on.
 
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
 **Yours** and stays there until you delete it, which asks first. A finished folder on a flat
-magenta background, like the ones the chat prompt below produces, is cut out and used as it is;
-any other picture is wrapped onto FolderSkin's folder.
+magenta background, like the ones the chat prompt below produces, is cut out and used as it is.
+Any other picture is wrapped onto FolderSkin's folder.
 
 Every skin you add has a ⋯ menu: rename it (a double click on its name, or F2, jumps straight
 there), give it tags (they become filters along the top),
@@ -115,7 +117,7 @@ and where your skins are saved. Hover the version badge beside the logo for Abou
 ## Community skins
 
 FolderSkin ships no skins of its own. People share skins and packs of skins through FolderSkin,
-free for everyone; the first launch offers them, and **Community** has them any time. Adding a pack puts
+free for everyone. The first launch offers them, and **Community** has them any time. Adding a pack puts
 its skins in your library with their tags, and the **Install** button on a pack in the gallery on
 [folderskin.app](https://folderskin.app/community/) opens FolderSkin and adds it for you. Packs
 marked **Official** are ones the maintainer vouches for. **Classic Art** is a good first pack: sixteen
@@ -176,7 +178,7 @@ paste a key. Each provider's name links to the page where you make one.
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/providers/ideogram-dark.svg"><img src="docs/images/providers/ideogram.svg" width="20" height="20" alt=""></picture> | [Ideogram](https://ideogram.ai/manage-api) | Ideogram v3 | ~$0.03–0.09 |
 
 No key? [docs/PROMPTS.md](docs/PROMPTS.md) has a template and a prompt for Grok's or
-ChatGPT's own chat; the app shows the same prompt, filled in, under **No API key?**.
+ChatGPT's own chat. The app shows the same prompt, filled in, under **No API key?**.
 
 [docs/AI.md](docs/AI.md) covers the providers, where the key is stored, how transparency is
 handled for models that cannot return an alpha channel, and what each error message means.
@@ -185,7 +187,7 @@ handled for models that cannot return an alpha channel, and what each error mess
 
 A themed set, such as 3D folders rendered with an image model, becomes a community pack in one
 command. Packs live in their own repository,
-[folderskin-community](https://github.com/prajwal-svm/folderskin-community); check it out beside this one. `folderskin-tools packs make` cuts finished folders out of their magenta background
+[folderskin-community](https://github.com/prajwal-svm/folderskin-community). Check it out beside this one. `folderskin-tools packs make` cuts finished folders out of their magenta background
 (`--flat-backdrop` for any other flat background, such as a pink drift or plain grey), shrinks
 and compresses every picture to fit, gives the finished folders one shape, and writes
 `pack.json`:
@@ -209,7 +211,7 @@ thing to ask.
 The Rust core (`crates/folderskin-core`) holds the folder template as vector paths,
 cover-fits your image into the back panel and the front panel,
 renders the whole thing once at 2048 px with `tiny-skia`, and downsamples to every icon size
-with Lanczos3. The webview never draws folder geometry — it shows PNGs the core rendered — so
+with Lanczos3. The webview never draws folder geometry. It shows PNGs the core rendered, so
 the gallery thumbnail, the preview and the icon on disk are the same pixels on every
 platform. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the details.
 
@@ -217,8 +219,8 @@ platform. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the details.
 
 | OS | mechanism | files written inside the folder | caveat |
 |---|---|---|---|
-| macOS | `NSWorkspace.setIcon` | the invisible `Icon\r` file macOS maintains | none; Finder updates immediately |
-| Windows | `desktop.ini` + `folderskin-<hash>.ico`, both hidden + system, folder marked read-only, then `SHChangeNotify` on the folder and its parent | `desktop.ini`, `folderskin-<hash>.ico` | none; the folder repaints as the apply finishes |
+| macOS | `NSWorkspace.setIcon` | the invisible `Icon\r` file macOS maintains | none: Finder updates immediately |
+| Windows | `desktop.ini` + `folderskin-<hash>.ico`, both hidden + system, folder marked read-only, then `SHChangeNotify` on the folder and its parent | `desktop.ini`, `folderskin-<hash>.ico` | none: the folder repaints as the apply finishes |
 | Linux | `.directory` for KDE, plus `gio set metadata::custom-icon` for Nautilus, Nemo and Caja | `.directory`, `.folderskin.png` | some tiling and minimal file managers read neither |
 
 Revert removes only what FolderSkin wrote, and is safe to run twice. Cloud-synced folders
@@ -280,8 +282,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Contributing
 
-Bug reports and skins are both welcome; skins go in through [community packs](docs/PACKS.md).
-[CONTRIBUTING.md](CONTRIBUTING.md) covers the workflow and the few house rules;
+Bug reports and skins are both welcome. Skins go in through [community packs](docs/PACKS.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the workflow and the few house rules, and
 [SECURITY.md](SECURITY.md) is how to report a vulnerability privately. Changes are recorded in
 [CHANGELOG.md](CHANGELOG.md), and [docs/RELEASING.md](docs/RELEASING.md) is how a release is
 built, signed and published.
@@ -295,7 +297,7 @@ FolderSkin is free software under the [GNU General Public License v3.0](LICENSE)
 (`GPL-3.0-only`): use it, study it, change it and share it. If you share a changed version, share
 its source under the same licence. Releases up to 0.1.6 came out under MIT and keep it.
 
-The FolderSkin name and logo aren't part of the licence; [TRADEMARKS.md](TRADEMARKS.md) says how
+The FolderSkin name and logo aren't part of the licence. [TRADEMARKS.md](TRADEMARKS.md) says how
 to use them. Skins in community packs carry their own licences, named in each pack.
 
 Copyright 2026 FolderSkin contributors.

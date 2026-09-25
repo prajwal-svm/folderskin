@@ -14,7 +14,7 @@ panels, and the front panel carrying the picture.
 
 ## 2. Paste the prompt
 
-Fill in the two lines in capitals. Keep the rest as it is; every sentence is there to stop a
+Fill in the two lines in capitals. Keep the rest as it is. Every sentence is there to stop a
 specific mistake (a tilted folder, a drop shadow, pink bleeding into the art).
 
 ```text
@@ -37,11 +37,11 @@ Square image.
 
 Want lettering on it? Add one line before the last paragraph:
 `Add the title "YOUR WORDS" in bold poster lettering on the front panel.` Keep it to one or
-two words; long text comes out garbled.
+two words, because long text comes out garbled.
 
 ## 3. Bring it into FolderSkin
 
-Save the image, then drop it on the FolderSkin window or use **Your photo**. The magenta is
+Save the image, then drop it on the FolderSkin window or use **Add your photo**. The magenta is
 removed automatically and the folder appears under **Yours**, ready to apply.
 
 If the edges show a pink fringe, the model drifted from pure magenta. Ask it to "repaint the

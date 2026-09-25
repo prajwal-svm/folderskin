@@ -11,7 +11,7 @@ that reproduces it. If you have a patch, say so and we will bring you into the p
 advisory rather than asking for a public pull request.
 
 Expect an acknowledgement within a week. Once a fix is ready we publish the advisory and
-release a patched version; you will be credited unless you ask otherwise.
+release a patched version. You will be credited unless you ask otherwise.
 
 ## Supported versions
 

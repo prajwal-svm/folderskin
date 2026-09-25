@@ -58,8 +58,8 @@ break them after it was published is removed.
 15. **A maintainer decides.** Packs can be declined for any of these reasons, and also for being
     a poor fit, low quality, or a near-duplicate of a pack that already exists. There is no
     obligation to publish anything.
-16. **It can be removed later.** If something turns up after a pack is published — a licence
-    problem, a report, anything on the list above — the pack is removed without waiting for a
+16. **It can be removed later.** If something turns up after a pack is published (a licence
+    problem, a report, anything on the list above), the pack is removed without waiting for a
     discussion.
 17. **It is public and it is kept.** Once the pack is published, the pack, its pictures and your
     FolderSkin name are public, and the packs repository keeps its history, so assume anything

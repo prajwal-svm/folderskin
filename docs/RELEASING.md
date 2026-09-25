@@ -26,7 +26,7 @@ update (see [Updates](#updates)).
 1. Set the new version in all three places: `package.json`, `src-tauri/tauri.conf.json` and
    `version` under `[workspace.package]` in `Cargo.toml`. Run `cargo check` so `Cargo.lock`
    follows. The workflow refuses a tag that doesn't match all three.
-2. In `CHANGELOG.md`, move what's under **Unreleased** into a `## X.Y.Z — YYYY-MM-DD` section.
+2. In `CHANGELOG.md`, move what's under **Unreleased** into a `## X.Y.Z - YYYY-MM-DD` section.
    The workflow stops if the version has no section.
 3. Make sure CI is green on `main`, then:
 
@@ -80,13 +80,13 @@ repository stops at the macOS step, naming the missing secrets, until all six ex
 none of them and builds unsigned.
 
 `src-tauri/entitlements.plist` turns on the two JIT entitlements the system WebView needs under
-the hardened runtime; Oleafly found that without them a notarized build can open to a blank
+the hardened runtime. Oleafly found that without them a notarized build can open to a blank
 window.
 
 ### Windows
 
 The workflow has the same optional Azure Trusted Signing step as Oleafly. It signs only when the
-`AZURE_*` secrets exist; until then the Windows installers are unsigned and SmartScreen shows
+`AZURE_*` secrets exist. Until then the Windows installers are unsigned and SmartScreen shows
 "More info → Run anyway". Oleafly's
 [signing guide](https://github.com/Oleafly/Oleafly/blob/main/docs/signing.md#windows-azure-trusted-signing)
 lists the six secrets and the Azure setup.
@@ -111,13 +111,13 @@ above.
 
 Every installed FolderSkin reads the newest public release's `latest.json` a few seconds after it
 opens (`plugins.updater` in `src-tauri/tauri.conf.json`), and installs a download only if it's
-signed with FolderSkin's update key. The public half is the `pubkey` there; the private half is a
+signed with FolderSkin's update key. The public half is the `pubkey` there. The private half is a
 repository secret, and it's FolderSkin's own, not Oleafly's.
 
 | Secret | Value |
 | --- | --- |
 | `TAURI_SIGNING_PRIVATE_KEY` | the private key file's contents |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password; leave it unset for a key made without one |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password (leave it unset for a key made without one) |
 
 The key goes in straight from its file, so it never appears on screen:
 
@@ -128,8 +128,8 @@ test -s path/to/folderskin.key && gh secret set TAURI_SIGNING_PRIVATE_KEY --repo
 With the secret set, each platform's build signs its installers and writes its part of the feed.
 The **Update feed** job puts the four parts into one `latest.json`, with the version's notes from
 `CHANGELOG.md`, and attaches it to the draft. The draft and publish checks refuse a release
-without it. A tag build in this repository stops at the signing step while the secret is missing;
-a fork builds without a feed.
+without it. A tag build in this repository stops at the signing step while the secret is missing.
+A fork builds without a feed.
 
 Keep the private key somewhere safe, such as a password manager, as well as in the secret: GitHub
 never shows it again, and without it no later version can reach people who already have
@@ -141,5 +141,5 @@ Publishing is what turns an update on, because the app asks for `releases/latest
 drafts. To watch it work, install the previous release, publish the new one and open the old copy:
 a few seconds later it offers the update.
 
-Local builds (`pnpm tauri build`) make no update files and need no key; only the release workflow
+Local builds (`pnpm tauri build`) make no update files and need no key. Only the release workflow
 turns `createUpdaterArtifacts` on.

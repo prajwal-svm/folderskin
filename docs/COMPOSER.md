@@ -11,16 +11,16 @@ any other skin, and **Save & apply** puts it straight on the folder you picked.
 | You want | Start from | Then |
 | --- | --- | --- |
 | A folder in one colour, any colour | **Colour** or **Plain** | Click the folder, pick the colour. The picker takes any colour, with transparency |
-| A labelled folder: *Recipes*, *Notes 2026* | **Label** | Type the words; pick a font, weight and colour. Short words read best at small sizes |
+| A labelled folder: *Recipes*, *Notes 2026* | **Label** | Type the words, then pick a font, weight and colour. Short words read best at small sizes |
 | A folder that says what's inside with one picture | **Emoji** | Double-click the emoji to swap it, or search the picker (*dog*, *plane*, *receipt*) |
 | A label on the tab itself | **Tab label** | The **Tab** button in *Place* puts any layer on the tab |
 | A back and a front in different colours | **Two-tone** | The split is hidden behind the paper sheet |
 | A see-through folder | **Glass** or **Tinted glass** | Lower the background's opacity, or delete it for a clear folder: only the paper and the edges stay |
 | A patterned folder | **Stripes**, **Gingham**, **Polka** | **Pattern** adds ten kinds, from stripes to confetti and film grain |
-| A photo with a caption | **Photo** | It asks for the picture first; drop or paste more later |
+| A photo with a caption | **Photo** | It asks for the picture first. Drop or paste more later |
 | A sticker, a badge, anything that isn't folder-shaped | **Sticker** | *Free icon* makes the design the whole icon |
 | A skin you already have, with your own touch | A skin's ⋯ menu → **Remix in the composer** | The skin becomes a picture layer to build on |
-| A change to something you designed before | Its ⋯ menu → **Edit design** | **Save changes** updates it in place; **Save as new** keeps both |
+| A change to something you designed before | Its ⋯ menu → **Edit design** | **Save changes** updates it in place, and **Save as new** keeps both |
 
 ## Using it
 
@@ -35,7 +35,7 @@ pasted onto the folder), a **Pattern**, and **Colour** (selects the background, 
 round knob above it to turn it.
 
 - Drag it to move it. It snaps to the middle of the folder, the tab, the folder's edges and other
-  layers; hold ⌘ (Ctrl) to place it freely.
+  layers. Hold ⌘ (Ctrl) to place it freely.
 - Drag a corner or side to resize it. Pictures keep their shape from a corner and crop from a
   side. Text and emoji always keep their shape.
 - Hold ⇧ to turn in 15° steps, or to keep a shape's proportions. Hold ⌥ to resize from the middle.
@@ -44,12 +44,12 @@ round knob above it to turn it.
 
 **Layers.** The list at the top right shows the stack, top first. Drag a row to restack it,
 double-click a name to rename it, and use the eye, the lock and the bin to hide a layer, pin it in
-place or delete it. **Delete all** at the end of the heading clears the design; the toast that
+place or delete it. **Delete all** at the end of the heading clears the design, and the toast that
 says so puts them back, as ⌘Z does. A heading's buttons, like a row's, show when it's pointed at.
 
 **Layers and Settings** are each opened and closed from their heading, and the bar between them is
-dragged to give the layers more room or less (double-click it to put it back; with it focused, the
-arrow keys move it). How they were left is remembered on this computer.
+dragged to give the layers more room or less (double-click it to put it back, and the arrow keys
+move it while it's focused). How they were left is remembered on this computer.
 
 **Settings.** Below the layers is everything about the selected layer, under its name, with the
 buttons to restack, duplicate and delete it in that heading:
@@ -74,7 +74,7 @@ beside it put the design on the window, a light desktop, a dark desktop or a col
 which matters for anything see-through. On the right, the icon at its real sizes (64, 32 and 16
 points) shows how it reads in Finder or Explorer.
 
-**Saving.** The name at the top right is the skin's name; left empty, the first words of the
+**Saving.** The name at the top right is the skin's name. Left empty, the first words of the
 design name it. **Save to Yours** keeps it in the library, and **Save & apply** also puts it on
 the chosen folder. Once saved, it stays open for more changes: **Save changes** updates the same
 skin in its place, and **Save as new** adds another. A design you haven't saved is kept while you
@@ -92,7 +92,7 @@ offers **See which**, which opens the folder panel's summary.
 | ⌘Z / ⇧⌘Z | Undo, redo |
 | Delete | Delete the selected layer |
 | ⌘D | Duplicate it |
-| ⌘C, then ⌘V | Copy it and paste a copy; ⌘V with a picture on the clipboard adds the picture |
+| ⌘C, then ⌘V | Copy it and paste a copy. ⌘V with a picture on the clipboard adds the picture |
 | Arrows, ⇧ arrows | Nudge by 1 or 10 |
 | ⌘] / ⌘[ | Bring forward, send backward (with ⌥: to the front, to the back) |
 | Esc | Select nothing |
@@ -127,7 +127,7 @@ for a drag. The saved icon is `compositor::render_master_placed`, which draws th
 with the same helpers, both panels filled with the design at its own place. The test
 `the_layers_stacked_around_a_design_are_the_saved_icon` holds the two within 3 levels per channel,
 so the canvas shows the icon that gets written. A fifth layer, `outline`, is the folder's visible
-edges; the flat view tints it, and it is never part of an icon.
+edges. The flat view tints it, and it is never part of an icon.
 
 ### Saving
 
@@ -158,8 +158,8 @@ A remix reads the skin's own picture with `composer_skin_image`:
 | command | input | output |
 | --- | --- | --- |
 | `composer_template` | – | `{size, back, front, middle, top, outline, parts}`: the layers as PNG data URLs, and where the folder's parts are (canvas units) |
-| `composer_save` | raw body; header `{name, tags, shape, design, replaces}` | `{skin, replaced}`: the saved skin, and the id of the design it replaced |
-| `composer_preview` | raw body; header `{shape, sizes}` | the icon at each size (16 to 512, at most six), as data URLs |
+| `composer_save` | raw body with header `{name, tags, shape, design, replaces}` | `{skin, replaced}`: the saved skin, and the id of the design it replaced |
+| `composer_preview` | raw body with header `{shape, sizes}` | the icon at each size (16 to 512, at most six), as data URLs |
 | `composer_image` | `path` | `{url, width, height, name, alpha}`: a picture file, at most 2048 px, PNG if it has transparency and JPEG if not |
 | `composer_skin_image` | `skinId` | the same, for a saved skin's own picture |
 | `composer_design` | `skinId` | the design's document, or `null` for a skin not made here |
@@ -210,7 +210,7 @@ draws, so they can't go stale.
 
 | | |
 | --- | --- |
-| `folderskin-core` compositor | the stacked layers equal the saved icon; a design lands where it was drawn; a see-through design leaves only the paper and edges; the outline follows the visible edges |
-| `src-tauri` store | a design's document is saved beside it, survives a restart, goes when it is deleted, and is cleared away if a crash orphans it; saving over a design keeps its place and refuses a skin that isn't a design |
-| `src-tauri` composer | the body framing, picture checks, previews, saving, naming, a damaged document, picture encodings; and a design sent as raw bytes through Tauri's own IPC (its mock runtime) is previewed and saved |
-| frontend (vitest) | the document: its changes and how it is read back; undo; moving, resizing, turning and snapping; text layout and curves; shapes; colours; picture adjustments; templates; the body framing |
+| `folderskin-core` compositor | the stacked layers equal the saved icon, a design lands where it was drawn, a see-through design leaves only the paper and edges, and the outline follows the visible edges |
+| `src-tauri` store | a design's document is saved beside it, survives a restart, goes when it is deleted, and is cleared away if a crash orphans it. Saving over a design keeps its place and refuses a skin that isn't a design |
+| `src-tauri` composer | the body framing, picture checks, previews, saving, naming, a damaged document and picture encodings. A design sent as raw bytes through Tauri's own IPC (its mock runtime) is previewed and saved |
+| frontend (vitest) | the document (its changes and how it is read back), undo, moving, resizing, turning and snapping, text layout and curves, shapes, colours, picture adjustments, templates and the body framing |

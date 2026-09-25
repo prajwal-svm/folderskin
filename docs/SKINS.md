@@ -79,7 +79,7 @@ cargo run -p folderskin-tools -- render ~/Pictures/koi.webp --out /tmp/koi.png -
 ```
 
 Look at the result before you share the picture. `--focus x,y` moves the crop of artwork, which
-is a quick way to see how much of a picture a different crop would keep; the app itself always
+is a quick way to see how much of a picture a different crop would keep. The app itself always
 crops around the centre, so bake the crop you want into the picture. `render --solid RRGGBB`
 draws the template in a flat colour, to look at the template itself.
 
@@ -93,7 +93,7 @@ systems draws), at least 256, at most 1.5 MB each and 64 MB for the whole pack. 
 | picture | format | why |
 |---|---|---|
 | a finished folder | lossless WebP, with its transparency | every pixel as drawn, the edge included, at about two thirds of a PNG's size |
-| artwork: photographs, paintings, gradients, grain | lossless WebP | no blocks or ringing; a detailed 1024 px picture comes to about 800 KB |
+| artwork: photographs, paintings, gradients, grain | lossless WebP | no blocks or ringing, and a detailed 1024 px picture comes to about 800 KB |
 | either, too detailed for 1.5 MB at 1024 px | lossless WebP at 896, then 768 px | smaller rather than blurred, and the app says which |
 
 Encoding by hand, a PNG is fine too, and so is `cwebp -lossless -z 9`. JPEG and lossy WebP
