@@ -10,6 +10,7 @@ use folderskin_core::compositor::{
 use folderskin_core::raster;
 use folderskin_share::{Client, DeviceKey};
 use folderskin_tools::cli::{Cli, Command, CommunityCommand, PacksCommand, Service};
+use folderskin_tools::normalize;
 use folderskin_tools::skin::Skin;
 use folderskin_tools::{catalog, composer, make, mirror, packs, pull, rename};
 use image::RgbaImage;
@@ -115,7 +116,35 @@ fn run(cli: Cli) -> Result<(), String> {
                 max_kb,
                 require_generated_ids,
                 require_lossless,
-            } => packs_check(&dir, max_kb, require_generated_ids, require_lossless),
+                require_one_shape,
+            } => {
+                let mut opts = packs::CheckOptions {
+                    require_generated_ids,
+                    require_lossless,
+                    require_one_shape,
+                    ..packs::CheckOptions::default()
+                };
+                if let Some(kb) = max_kb {
+                    opts.max_bytes = kb * 1024;
+                }
+                packs_check(&dir, &opts)
+            }
+            PacksCommand::Normalize {
+                dir,
+                ids,
+                tolerance,
+                drop_outliers,
+            } => {
+                let opts = normalize::Options {
+                    tolerance,
+                    outliers: if drop_outliers {
+                        normalize::Outliers::Drop
+                    } else {
+                        normalize::Outliers::Keep
+                    },
+                };
+                packs_normalize(&dir, &ids, &opts)
+            }
             PacksCommand::Index { dir } => packs_index(&dir),
             PacksCommand::Rename { dir, all, id, to } => {
                 let which = match (all, id) {
@@ -140,6 +169,7 @@ fn run(cli: Cli) -> Result<(), String> {
                 max_kb,
                 preview,
                 flat_backdrop,
+                keep_outliers,
             } => {
                 let opts = make::MakeOptions {
                     id,
@@ -150,6 +180,7 @@ fn run(cli: Cli) -> Result<(), String> {
                     dir,
                     max_bytes: max_kb * 1024,
                     flat_backdrop,
+                    keep_outliers,
                 };
                 packs_make(&pictures, &opts, preview.as_deref())
             }
@@ -274,6 +305,29 @@ fn community(command: CommunityCommand) -> Result<(), String> {
                     pulled.author,
                     pulled.skins
                 );
+                let shaped = &pulled.shaped;
+                if let Some(shape) = shaped.shape {
+                    println!(
+                        "  its {} finished folders are one shape, {}: {}",
+                        shaped.folders,
+                        normalize::times_as_wide(shape),
+                        shaped.summary().join(", ")
+                    );
+                }
+                // A warning the Action log shows, and the run's summary with it.
+                for o in &shaped.outliers {
+                    warn(
+                        "A folder kept its own shape",
+                        &format!(
+                            "{}: {}, more than the {} a folder is reshaped by, so it was kept as \
+                             it is. Drop it with `packs normalize --drop-outliers` or have it made \
+                             again",
+                            pulled.folder.display(),
+                            o.describe(),
+                            packs::percent(folderskin_core::shape::TOLERANCE),
+                        ),
+                    );
+                }
             }
             for problem in &report.problems {
                 println!("{problem}");
@@ -609,21 +663,8 @@ fn load_skin(path: &Path, focus: (f32, f32)) -> Result<Skin, String> {
 }
 
 /// Checks every pack in `dir`, printing each problem on its own line.
-fn packs_check(
-    dir: &Path,
-    max_kb: Option<usize>,
-    require_generated_ids: bool,
-    require_lossless: bool,
-) -> Result<(), String> {
-    let mut opts = packs::CheckOptions {
-        require_generated_ids,
-        require_lossless,
-        ..packs::CheckOptions::default()
-    };
-    if let Some(kb) = max_kb {
-        opts.max_bytes = kb * 1024;
-    }
-    let report = packs::check_with(dir, &opts)?;
+fn packs_check(dir: &Path, opts: &packs::CheckOptions) -> Result<(), String> {
+    let report = packs::check_with(dir, opts)?;
     for problem in &report.problems {
         println!("{problem}");
     }
@@ -635,30 +676,43 @@ fn packs_check(
 }
 
 /// Makes a pack from pictures and says what went into it: each skin's file, whether it is a
-/// finished folder or artwork, its size, and whether it was made smaller to fit.
+/// finished folder or artwork, its size, whether it was made smaller to fit, and whether it was
+/// redrawn at the pack's shape; and the pictures left out for being too far off that shape.
 fn packs_make(
     pictures: &[PathBuf],
     opts: &make::MakeOptions,
     preview: Option<&Path>,
 ) -> Result<(), String> {
-    let (folder, made) = make::make(pictures, opts)?;
+    let make::MadePack {
+        folder,
+        made,
+        shape,
+        left_out,
+    } = make::make(pictures, opts)?;
     for m in &made {
         let kind = if m.folder { "folder " } else { "artwork" };
         let scaled = m.scaled_to.map_or(String::new(), |side| {
             format!(", made {side} px to fit {} KB", opts.picture_limit() / 1024)
         });
         println!(
-            "{kind}  {:>4} KB  {}  \"{}\"  from {}{scaled}",
+            "{kind}  {:>4} KB  {}  \"{}\"  from {}{scaled}{}",
             m.bytes.div_ceil(1024),
             m.file,
             m.name,
-            m.source.display()
+            m.source.display(),
+            m.shape_note()
         );
+    }
+    for l in &left_out {
+        println!("{}", l.describe());
     }
     let total: usize = made.iter().map(|m| m.bytes).sum();
     let folders = made.iter().filter(|m| m.folder).count();
+    let one_shape = shape.map_or(String::new(), |shape| {
+        format!(", given one shape {}", normalize::times_as_wide(shape))
+    });
     println!(
-        "wrote {}: {} skins ({folders} finished folders, {} artwork), {} KB",
+        "wrote {}: {} skins ({folders} finished folders{one_shape}, {} artwork), {} KB",
         folder.display(),
         made.len(),
         made.len() - folders,
@@ -682,6 +736,45 @@ fn packs_make(
     }
     println!("Rename the skins in pack.json if their file names don't make good names.");
     Ok(())
+}
+
+/// Gives the finished folders in each pack one shape and says what it did: each pack's shape,
+/// every folder it redrew and every outlier, then the whole run in a line. Fails when a pack
+/// couldn't be read or given its shape, once every other pack has been.
+fn packs_normalize(dir: &Path, ids: &[String], opts: &normalize::Options) -> Result<(), String> {
+    let results = normalize::normalize(dir, ids, opts)?;
+    for line in normalize::report(&results, opts) {
+        println!("{line}");
+    }
+    match results.iter().filter(|r| r.result.is_err()).count() {
+        0 => Ok(()),
+        1 => Err("1 pack couldn't be given one shape; nothing in it was changed".into()),
+        n => Err(format!(
+            "{n} packs couldn't be given one shape; nothing in them was changed"
+        )),
+    }
+}
+
+/// Prints a warning. In a GitHub Actions run it is a workflow command, which the log shows as a
+/// warning and the run's summary lists; anywhere else, a line starting "warning:".
+fn warn(title: &str, message: &str) {
+    if std::env::var("GITHUB_ACTIONS").is_ok_and(|v| v == "true") {
+        println!("{}", workflow_warning(title, message));
+    } else {
+        println!("warning: {message}");
+    }
+}
+
+/// `::warning title=<title>::<message>`, with what the runner would read as its own syntax
+/// escaped.
+fn workflow_warning(title: &str, message: &str) -> String {
+    let data = |s: &str| {
+        s.replace('%', "%25")
+            .replace('\r', "%0D")
+            .replace('\n', "%0A")
+    };
+    let property = |s: &str| data(s).replace(':', "%3A").replace(',', "%2C");
+    format!("::warning title={}::{}", property(title), data(message))
 }
 
 /// Checks every community pack and, when all pass, brings the index and the previews up to date.
@@ -871,6 +964,19 @@ mod tests {
         for bad in ["FFF", "FF00FF00", "#GG00FF", ""] {
             assert!(rgb(bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_warning_in_an_action_is_a_workflow_command_the_log_shows() {
+        assert_eq!(
+            workflow_warning("A folder kept its own shape", "\"Dusk\" is 12% wider: kept"),
+            "::warning title=A folder kept its own shape::\"Dusk\" is 12% wider: kept"
+                .replace("12%", "12%25")
+        );
+        assert_eq!(
+            workflow_warning("a: b, c", "one\ntwo"),
+            "::warning title=a%3A b%2C c::one%0Atwo"
+        );
     }
 
     #[test]

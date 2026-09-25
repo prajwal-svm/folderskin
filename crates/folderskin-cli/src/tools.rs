@@ -11,7 +11,7 @@ use folderskin_core::compositor::{
 };
 use folderskin_core::matte;
 use folderskin_tools::cli::PacksCommand;
-use folderskin_tools::{catalog, make, packs, rename};
+use folderskin_tools::{catalog, make, normalize, packs, rename};
 use image::RgbaImage;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -192,10 +192,12 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             max_kb,
             require_generated_ids,
             require_lossless,
+            require_one_shape,
         } => {
             let mut opts = packs::CheckOptions {
                 require_generated_ids,
                 require_lossless,
+                require_one_shape,
                 ..packs::CheckOptions::default()
             };
             if let Some(kb) = max_kb {
@@ -281,6 +283,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             max_kb,
             preview,
             flat_backdrop,
+            keep_outliers,
         } => {
             let opts = make::MakeOptions {
                 id,
@@ -291,8 +294,25 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 dir,
                 max_bytes: max_kb * 1024,
                 flat_backdrop,
+                keep_outliers,
             };
             make_pack(&pictures, &opts, preview.as_deref(), out)
+        }
+        PacksCommand::Normalize {
+            dir,
+            ids,
+            tolerance,
+            drop_outliers,
+        } => {
+            let opts = normalize::Options {
+                tolerance,
+                outliers: if drop_outliers {
+                    normalize::Outliers::Drop
+                } else {
+                    normalize::Outliers::Keep
+                },
+            };
+            normalize_packs(&dir, &ids, &opts, out)
         }
         PacksCommand::Rename { dir, all, id, to } => rename_packs(&dir, all, id, to, out),
         PacksCommand::Catalog {
@@ -353,6 +373,53 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             Ok(())
         }
     }
+}
+
+/// `packs normalize`: one shape for the finished folders in every pack, or in the packs `ids`
+/// names. What it did to each pack is the result; a pack it couldn't do is the error, after it.
+fn normalize_packs(
+    dir: &Path,
+    ids: &[String],
+    opts: &normalize::Options,
+    out: &Arc<Out>,
+) -> Result<(), CliError> {
+    let results = normalize::normalize(dir, ids, opts).map_err(|why| unreadable_packs(dir, why))?;
+    let packs: Vec<serde_json::Value> = results
+        .iter()
+        .map(|r| match &r.result {
+            Ok(done) => json!({"id": r.id, "result": done}),
+            Err(why) => json!({"id": r.id, "error": why}),
+        })
+        .collect();
+    out.result(
+        Some(dir),
+        "normalize",
+        json!({"packs": packs}),
+        &normalize::report(&results, opts).join("\n"),
+        false,
+    );
+    let failed: Vec<String> = results
+        .iter()
+        .filter_map(|r| {
+            r.result
+                .as_ref()
+                .err()
+                .map(|why| format!("{}: {why}", r.id))
+        })
+        .collect();
+    if failed.is_empty() {
+        return Ok(());
+    }
+    Err(CliError::fixable(
+        "normalize_failed",
+        format!(
+            "{} couldn't be given one shape, and nothing in {} was changed.",
+            crate::ai::count(failed.len(), "pack"),
+            if failed.len() == 1 { "it" } else { "them" }
+        ),
+        failed.join("\n"),
+    )
+    .fix("Fix what it says and run it again: a pack at one shape already is left as it is."))
 }
 
 /// `packs rename`: generated ids for every pack that lacks one (`all`), or for pack `id`.
@@ -518,7 +585,12 @@ fn make_pack(
             skipped.join(", ")
         ));
     }
-    let (folder, made) = make::make(pictures, opts).map_err(|why| {
+    let make::MadePack {
+        folder,
+        made,
+        shape,
+        left_out: too_far,
+    } = make::make(pictures, opts).map_err(|why| {
         let given: Vec<&Path> = pictures
             .iter()
             .map(PathBuf::as_path)
@@ -538,19 +610,24 @@ fn make_pack(
                 format!(", made {side} px to fit {} KB", opts.picture_limit() / 1024)
             });
             format!(
-                "{}  {:>4} KB  {}  \"{}\"  from {}{scaled}",
+                "{}  {:>4} KB  {}  \"{}\"  from {}{scaled}{}",
                 if m.folder { "folder " } else { "artwork" },
                 m.bytes.div_ceil(1024),
                 m.file,
                 m.name,
-                m.source.display()
+                m.source.display(),
+                m.shape_note()
             )
         })
         .collect();
+    lines.extend(too_far.iter().map(make::LeftOut::describe));
     let total: usize = made.iter().map(|m| m.bytes).sum();
     let folders = made.iter().filter(|m| m.folder).count();
+    let one_shape = shape.map_or(String::new(), |shape| {
+        format!(", given one shape {}", normalize::times_as_wide(shape))
+    });
     lines.push(format!(
-        "wrote {}: {} ({}, {} artwork), {} KB",
+        "wrote {}: {} ({}{one_shape}, {} artwork), {} KB",
         folder.display(),
         crate::ai::count(made.len(), "skin"),
         crate::ai::count(folders, "finished folder"),
@@ -586,10 +663,20 @@ fn make_pack(
         lines.push(format!("preview: {}", path.display()));
     }
     lines.push("Rename the skins in pack.json if their file names don't make good names.".into());
+    let left_out_json: Vec<serde_json::Value> = too_far
+        .iter()
+        .map(|l| json!({"source": l.source, "reshaping": l.reshaping}))
+        .collect();
     out.result(
         Some(&folder),
         "pack",
-        json!({"skins": made.len(), "folders": folders, "bytes": total}),
+        json!({
+            "skins": made.len(),
+            "folders": folders,
+            "bytes": total,
+            "shape": shape,
+            "left_out": left_out_json,
+        }),
         &lines.join("\n"),
         false,
     );
@@ -718,6 +805,57 @@ mod tests {
         };
         assert_eq!(windows, render_preview_png_in(&art, 64, Style::Windows));
         assert_ne!(mac, windows, "Windows' folder is another shape");
+    }
+
+    #[test]
+    fn packs_normalize_gives_a_pack_one_shape_and_says_which_it_couldnt() {
+        let dir = std::env::temp_dir().join(format!("fs-normalize-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let pack = dir.join("packs").join("desk-k7q2mx");
+        std::fs::create_dir_all(&pack).unwrap();
+        // Two finished folders, 1.2 and 1.15 times as wide as tall.
+        let folder = |w: u32| {
+            RgbaImage::from_fn(w + 40, 340, |x, y| {
+                let inside = (20..20 + w).contains(&x) && (20..320).contains(&y);
+                image::Rgba(if inside {
+                    [40, 90, 200, 255]
+                } else {
+                    [0, 0, 0, 0]
+                })
+            })
+        };
+        for (file, w) in [("a.png", 360), ("b.png", 345)] {
+            let png = folderskin_core::raster::encode_png(&folder(w));
+            std::fs::write(pack.join(file), png).unwrap();
+        }
+        std::fs::write(
+            pack.join("pack.json"),
+            r#"{ "version": 1, "name": "Desk", "author": "prajwal-svm", "license": "CC0-1.0",
+  "tags": ["desk"], "skins": [{ "file": "a.png", "name": "A" }, { "file": "b.png", "name": "B" }] }"#,
+        )
+        .unwrap();
+        let out = Out::new(true, false);
+        let normalize = |ids: Vec<String>| {
+            let command = PacksCommand::Normalize {
+                dir: dir.clone(),
+                ids,
+                tolerance: 0.08,
+                drop_outliers: false,
+            };
+            packs(command, &out)
+        };
+        normalize(Vec::new()).unwrap();
+        let listed = std::fs::read_to_string(pack.join("pack.json")).unwrap();
+        assert!(
+            listed.contains("a.webp") && listed.contains("b.webp"),
+            "{listed}"
+        );
+        assert!(!pack.join("a.png").exists());
+
+        let e = normalize(vec!["desk-k7q2mx".into(), "nope-k7q2mx".into()]).unwrap_err();
+        assert_eq!(e.code, "normalize_failed");
+        assert!(e.why.contains("nope-k7q2mx: there's no pack"), "{}", e.why);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

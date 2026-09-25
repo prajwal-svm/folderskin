@@ -195,7 +195,7 @@ fn free_id(
 }
 
 /// The folders in `packs_dir`, leaving out dotfolders and anything that isn't a folder.
-fn pack_folders(packs_dir: &Path) -> Result<BTreeSet<String>, String> {
+pub(crate) fn pack_folders(packs_dir: &Path) -> Result<BTreeSet<String>, String> {
     let entries = std::fs::read_dir(packs_dir)
         .map_err(|e| format!("couldn't read {}: {e}", packs_dir.display()))?;
     let mut folders = BTreeSet::new();

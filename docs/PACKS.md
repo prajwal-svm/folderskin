@@ -129,7 +129,9 @@ Approving a pack publishes it. Nobody copies files by hand.
 3. `community pull --no-done` writes each approved pack into `packs/`, and checks every file's
    size and SHA-256 against what the service recorded when it was uploaded. The id the service
    gave has to be a generated one, and a folder that is there already is never written over or
-   given a number.
+   given a number. The pack's finished folders are given one shape ([One shape for a pack's
+   folders](#one-shape-for-a-packs-folders)) before it is checked. A folder too far off that shape
+   is kept as it is, and the run's log says so in a warning.
 4. `packs check` checks every pack, as it does for a pull request.
 5. Each pack is committed by github-actions[bot] as "Add the <name> pack", and pushed to `main`.
 6. Only then does `community done` tell the service the pack is published. A check or a push that
@@ -256,6 +258,53 @@ is about a third smaller than the same PNG, which is why the app and `packs make
 detailed 1024 px picture comes to between 0.6 and 1.5 MB, most of them about 800 KB; one that
 doesn't fit in 1.5 MB is made 896 px, then 768 px, still lossless, rather than blurred to fit.
 
+### One shape for a pack's folders
+
+FolderSkin fits the whole of a finished folder's picture into the icon. Folders made one at a
+time come out cropped tight to themselves, and no two renders have quite the same proportions:
+one pack's ran from 1.03 to 1.30 times as wide as they were tall. Side by side in Finder, the
+squat ones looked smaller than the tall ones. So the finished folders in a pack share one shape:
+
+- **The pack's shape** is the median of its folders' own. A folder is measured by the part of
+  its picture more than half opaque, width ÷ height, so a soft edge or a faint shadow doesn't
+  count.
+- **Each folder is redrawn at exactly that shape.** It is cropped to its folder and resized to
+  962 px wide, which is how wide FolderSkin's own folder is in its 1024 px template
+  (`folderskin-tools template`), and as tall as the shape makes it. Then it's put where the
+  template's folder is, on the same left edge and standing on the same baseline, in a
+  transparent 1024 × 1024 picture, and saved as a lossless WebP. A PNG becomes a `.webp` of the
+  same name, and `pack.json` follows.
+- **A folder is reshaped by 8% at most.** Nobody sees that much. A folder that would need more
+  is an *outlier*: stretched that far, lettering and faces look squashed, so it is never
+  reshaped. What happens to it depends on the command, and a person decides.
+- **Artwork is left alone.** FolderSkin wraps it onto its own folder, so it has no shape of its
+  own to fix. So is a pack with one finished folder.
+
+`packs make` does this for every pack it makes, `community pull` for every pack it pulls, and
+`packs normalize` for the packs already in `packs/`. Doing it twice changes nothing: a folder
+already at its pack's shape, in its place, is never redrawn, and a file that already holds what
+it would get isn't written.
+
+| command | an outlier |
+|---|---|
+| `packs make` | left out of the pack, and listed. `--keep-outliers` keeps it as it is |
+| `packs normalize` | listed, and left as it is. `--drop-outliers` takes it out of `pack.json` and deletes its picture |
+| `community pull` | kept as it is, with a warning in the output that the Packs workflow's log shows. A skin someone shared is never dropped without a person deciding |
+
+```sh
+cargo run -p folderskin-tools -- packs normalize --dir ../folderskin-community
+cargo run -p folderskin-tools -- packs normalize --dir ../folderskin-community classic-art-5rxas2 --tolerance 0.3
+cargo run -p folderskin-tools -- packs normalize --dir ../folderskin-community dreamscapes-ppfia6 --drop-outliers
+```
+
+`packs normalize` goes through every pack, or the ones named. For each it says the shape and
+what it redrew, and names every outlier with how far off it is. A pack that doesn't pass
+`packs check` is left alone until it does. `--tolerance` changes the 8%, for a pack whose
+outliers should take its shape anyway, as the Mona Lisa does in Classic Art. `--drop-outliers`
+is for the maintainer: nothing else ever removes a skin. `packs check --require-one-shape` turns
+down a pack whose folders are more than 1% apart ([Checking a pack
+yourself](#checking-a-pack-yourself)); folders redrawn at one shape never are.
+
 ### Licences
 
 Shared skins use Creative Commons or MIT:
@@ -294,6 +343,12 @@ most thorough setting takes several seconds a picture, so they're made on every 
 each picture went. Skins are named after their files, so name the files first or fix the names
 in `pack.json` afterwards, and `--preview` draws every skin as its folder in one PNG to look
 over.
+
+Two finished folders or more are given one shape ([One shape for a pack's
+folders](#one-shape-for-a-packs-folders)), and the report says which were redrawn. A folder more
+than 8% off the others' shape is left out, and the report says how far off it is;
+`--keep-outliers` keeps it as it is instead. A pack made with no outlier kept passes
+`packs check --require-one-shape`.
 
 `--id` makes a pack that is there already again, from new pictures: `--id 3d-k7q2mx` replaces
 everything in `packs/3d-k7q2mx/`, and the pack keeps its id, so everyone who added it gets the new
@@ -337,6 +392,12 @@ follow its own rules ([moved.json](#movedjson)). Names are never compared, since
 `--require-generated-ids` turns down any pack whose id isn't a generated one; it's off unless
 asked, and folderskin-community's workflow asks when its variable `REQUIRE_GENERATED_IDS` is
 `true`.
+
+`--require-one-shape` turns down a pack whose finished folders aren't one shape: two of them more
+than 1% apart, width ÷ height. Folders redrawn at one shape are always within it, so it catches a
+pack that was never given one, and an outlier someone kept. The problem names the two furthest
+apart and says what to run ([One shape for a pack's folders](#one-shape-for-a-packs-folders)).
+It's off unless asked, and meant for folderskin-community's workflow.
 
 ## How the app reads packs
 

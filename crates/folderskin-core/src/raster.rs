@@ -29,17 +29,30 @@ impl Premul {
 
 /// Resamples to `size`×`size` with Lanczos3, on the premultiplied channels.
 pub fn downsample(src: &Premul, size: u32) -> Premul {
+    resample(src, size, size)
+}
+
+/// Resamples to `width`×`height` with Lanczos3, on the premultiplied channels. The same size
+/// comes back as it is.
+pub fn resample(src: &Premul, width: u32, height: u32) -> Premul {
     let out = image::imageops::resize(
         &src.view(),
-        size,
-        size,
+        width,
+        height,
         image::imageops::FilterType::Lanczos3,
     );
     Premul {
-        width: size,
-        height: size,
+        width,
+        height,
         data: out.into_raw(),
     }
+}
+
+/// A straight-alpha picture resampled to `width`×`height` with Lanczos3, premultiplied on the
+/// way through, so a cut-out's transparent surround doesn't darken its edge the way resampling
+/// straight alpha does.
+pub fn resize(img: &RgbaImage, width: u32, height: u32) -> RgbaImage {
+    to_straight_rgba(&resample(&straight_to_premul(img), width, height))
 }
 
 /// Converts premultiplied RGBA8 to the straight-alpha RGBA8 that PNG (and `image`) expect.
@@ -328,5 +341,28 @@ mod tests {
             }
         }
         assert_eq!(small.get_pixel(7, 4).0, [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn resizing_a_cutout_to_any_shape_keeps_its_edge_its_own_colour() {
+        // Clear on the left, opaque red on the right, made wider and shorter than it was.
+        let img = image::RgbaImage::from_fn(40, 30, |x, _| {
+            Rgba(if x < 20 {
+                [0, 0, 0, 0]
+            } else {
+                [255, 0, 0, 255]
+            })
+        });
+        let out = resize(&img, 57, 21);
+        assert_eq!(out.dimensions(), (57, 21));
+        for px in out.pixels() {
+            if px.0[3] > 32 {
+                assert!(px.0[0] >= 240 && px.0[1] <= 8, "{px:?}");
+            }
+        }
+        assert_eq!(out.get_pixel(56, 10).0, [255, 0, 0, 255]);
+        assert_eq!(out.get_pixel(0, 10).0[3], 0);
+        // The same size is the same picture.
+        assert_eq!(resize(&img, 40, 30), img);
     }
 }

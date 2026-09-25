@@ -9,21 +9,25 @@
 //! folder that comes out passes `packs check` with `--require-lossless`, which runs on it before
 //! anything is reported.
 //!
+//! Two finished folders or more are given one shape, as `packs normalize` gives them
+//! ([`folderskin_core::shape`]): each is redrawn at the pack's shape, as wide as FolderSkin's own
+//! folder and on its baseline, in a 1024 px square. One more than 8% off that shape is left out
+//! and reported, unless [`MakeOptions::keep_outliers`] keeps it as it is. A pack with no folder
+//! kept as it is that way passes `packs check --require-one-shape` too.
+//!
 //! A new pack gets an id of its own, its name and six random characters ([`pack::new_id`]), so
 //! two packs can share a name. The id is its folder's name, and it never changes after.
 
-use crate::packs;
+use crate::{normalize, packs, parallel};
 use folderskin_core::pack::{
     self, Pack, PackSkin, MANIFEST_FILE, MAX_PACK_BYTES, MAX_PACK_TAGS, MAX_PICTURE_BYTES,
     MAX_PICTURE_SIDE, MAX_SKINS, MAX_SKIN_NAME_CHARS, MIN_PICTURE_SIDE, PACK_VERSION,
     PICTURE_EXTENSIONS,
 };
-use folderskin_core::{matte, raster};
+use folderskin_core::{matte, raster, shape};
 use image::RgbaImage;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
 
 /// Everything `make` needs besides the pictures.
 #[derive(Debug, Clone)]
@@ -47,6 +51,9 @@ pub struct MakeOptions {
     /// raspberry. Only the backdrop that reaches the edge goes, so the same colour inside the
     /// folder stays.
     pub flat_backdrop: bool,
+    /// Keep a finished folder more than [`shape::TOLERANCE`] off the pack's shape, as it is,
+    /// instead of leaving it out.
+    pub keep_outliers: bool,
 }
 
 impl MakeOptions {
@@ -69,13 +76,77 @@ pub struct Made {
     pub bytes: usize,
     /// The side it was made smaller to, 896 or 768 px, when it was over `max_bytes` at 1024.
     pub scaled_to: Option<u32>,
+    /// True for a finished folder redrawn at the pack's shape.
+    pub redrawn: bool,
+    /// For a finished folder kept as it is though it is more than the tolerance off the pack's
+    /// shape ([`MakeOptions::keep_outliers`]), how much it would have been reshaped.
+    pub outlier: Option<f32>,
+}
+
+impl Made {
+    /// What happened to its shape, to end its line in a report: ", redrawn at the pack's shape",
+    /// ", kept as it is: it is 43% wider for its height than the pack's shape", or nothing.
+    pub fn shape_note(&self) -> String {
+        match (self.redrawn, self.outlier) {
+            (true, _) => ", redrawn at the pack's shape".into(),
+            (false, Some(reshaping)) => {
+                format!(", kept as it is: it {}", normalize::off_by(reshaping))
+            }
+            (false, None) => String::new(),
+        }
+    }
+}
+
+/// A picture `make` left out: a finished folder more than the tolerance off the pack's shape.
+#[derive(Debug, Clone)]
+pub struct LeftOut {
+    pub source: PathBuf,
+    /// How much it would have been reshaped ([`shape::reshaping`]).
+    pub reshaping: f32,
+}
+
+impl LeftOut {
+    /// "left out: in/odd.png, a finished folder that is 43% wider for its height than the pack's
+    /// shape, more than 8%; --keep-outliers keeps it as it is".
+    pub fn describe(&self) -> String {
+        format!(
+            "left out: {}, a finished folder that {}, more than {}; --keep-outliers keeps it as \
+             it is",
+            self.source.display(),
+            normalize::off_by(self.reshaping),
+            packs::percent(shape::TOLERANCE)
+        )
+    }
+}
+
+/// The pack `make` wrote.
+#[derive(Debug, Clone)]
+pub struct MadePack {
+    /// Its folder, `<dir>/packs/<id>`.
+    pub folder: PathBuf,
+    /// Its skins, in order.
+    pub made: Vec<Made>,
+    /// The shape its finished folders were given, when it has two or more.
+    pub shape: Option<f32>,
+    /// The pictures left out for being too far off that shape.
+    pub left_out: Vec<LeftOut>,
+}
+
+/// What happens to a picture on its way into the pack.
+#[derive(Debug, Clone, Copy)]
+enum Treat {
+    /// A finished folder, redrawn at the pack's shape.
+    Redraw(f32),
+    /// Shrunk to 1024 px as it is. For a finished folder kept though it is more than the
+    /// tolerance off the pack's shape, how far off.
+    AsItIs(Option<f32>),
 }
 
 /// Makes `<dir>/packs/<id>` from `pictures` (files, or folders whose pictures are taken in name
 /// order) and returns the folder it wrote with what went into it: a new pack under a new id, or
 /// `opts.id` made again. Nothing is left behind when a picture can't be used, and a pack made
 /// again stays as it was.
-pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Made>), String> {
+pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String> {
     let packs_dir = opts.dir.join(packs::PACKS_DIR);
     let id = match &opts.id {
         Some(id) => to_make_again(&packs_dir, id)?,
@@ -93,9 +164,53 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
         ));
     }
 
-    // The pictures are made on every core at once: libwebp's smallest lossless file takes a few
-    // seconds a picture.
-    let prepared = prepare_all(&sources, opts)?;
+    // Every picture is looked at first, for its kind and a finished folder's shape, and turned
+    // down now if it can't go in; all on every core at once.
+    let looked = parallel::map(&sources, |source| {
+        look(source, opts).map_err(|e| format!("{} {e}", source.display()))
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>, String>>()?;
+    let aspects: Vec<f32> = looked.iter().flatten().copied().collect();
+    let plan = shape::plan(&aspects, shape::TOLERANCE);
+    let mut jobs: Vec<(&PathBuf, Treat)> = Vec::with_capacity(sources.len());
+    let mut left_out = Vec::new();
+    // Which finished folder this is, in the order `plan` has them.
+    let mut k = 0;
+    for (source, aspect) in sources.iter().zip(&looked) {
+        let (Some(plan), Some(_)) = (&plan, aspect) else {
+            jobs.push((source, Treat::AsItIs(None)));
+            continue;
+        };
+        let reshaping = plan.reshaping[k];
+        let outlier = plan.is_outlier(k);
+        k += 1;
+        if !outlier {
+            jobs.push((source, Treat::Redraw(plan.shape)));
+        } else if opts.keep_outliers {
+            jobs.push((source, Treat::AsItIs(Some(reshaping))));
+        } else {
+            left_out.push(LeftOut {
+                source: source.clone(),
+                reshaping,
+            });
+        }
+    }
+    if jobs.is_empty() {
+        return Err(format!(
+            "every picture is a finished folder more than {} off the others' shape, so none is \
+             left; --keep-outliers keeps them as they are",
+            packs::percent(shape::TOLERANCE)
+        ));
+    }
+
+    // Then made, on every core at once: libwebp's smallest lossless file takes most of a second
+    // a picture.
+    let prepared = parallel::map(&jobs, |(source, treat)| {
+        prepare(source, opts, *treat).map_err(|e| format!("{} {e}", source.display()))
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>, String>>()?;
     let total: usize = prepared.iter().map(|p| p.bytes.len()).sum();
     if total > MAX_PACK_BYTES {
         return Err(format!(
@@ -105,21 +220,26 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
             MAX_PACK_BYTES / (1024 * 1024)
         ));
     }
-    let mut made = Vec::with_capacity(sources.len());
-    let mut files: Vec<(String, Vec<u8>)> = Vec::with_capacity(sources.len());
-    for (n, (source, picture)) in sources.iter().zip(prepared).enumerate() {
+    let mut made = Vec::with_capacity(jobs.len());
+    let mut files: Vec<(String, Vec<u8>)> = Vec::with_capacity(jobs.len());
+    for (n, ((source, treat), picture)) in jobs.iter().zip(prepared).enumerate() {
         let stem = source
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
         let file = format!("{}.webp", unique_stem(&stem, n, &files));
         made.push(Made {
-            source: source.clone(),
+            source: (*source).clone(),
             file: file.clone(),
             name: display_name(&stem, n),
             folder: picture.folder,
             bytes: picture.bytes.len(),
             scaled_to: picture.scaled_to,
+            redrawn: matches!(treat, Treat::Redraw(_)),
+            outlier: match treat {
+                Treat::AsItIs(outlier) => *outlier,
+                Treat::Redraw(_) => None,
+            },
         });
         files.push((file, picture.bytes));
     }
@@ -163,6 +283,8 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
             let rules = packs::CheckOptions {
                 max_bytes: opts.max_bytes,
                 require_lossless: true,
+                // Its folders are one shape unless one was kept as it is on purpose.
+                require_one_shape: made.iter().all(|m| m.outlier.is_none()),
                 ..packs::CheckOptions::default()
             };
             packs::check_pack_with(&staging, &id, &rules).map_err(|problems| problems.join("; "))
@@ -172,7 +294,12 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<(PathBuf, Vec<Ma
         let _ = std::fs::remove_dir_all(&staging);
         return Err(e);
     }
-    Ok((folder, made))
+    Ok(MadePack {
+        folder,
+        made,
+        shape: plan.map(|p| p.shape),
+        left_out,
+    })
 }
 
 /// `id` when it is a pack in `packs_dir` to make again.
@@ -294,38 +421,10 @@ struct Prepared {
     scaled_to: Option<u32>,
 }
 
-/// [`prepare`] for every one of `sources`, on every core at once, in their order. The first that
-/// fails, in their order, is the error, and starts with the picture's path.
-fn prepare_all(sources: &[PathBuf], opts: &MakeOptions) -> Result<Vec<Prepared>, String> {
-    let next = AtomicUsize::new(0);
-    let done: Mutex<Vec<(usize, Result<Prepared, String>)>> = Mutex::new(Vec::new());
-    let workers = std::thread::available_parallelism()
-        .map_or(4, |n| n.get())
-        .min(sources.len().max(1));
-    std::thread::scope(|scope| {
-        for _ in 0..workers {
-            scope.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                let Some(source) = sources.get(i) else { break };
-                let prepared =
-                    prepare(source, opts).map_err(|e| format!("{} {e}", source.display()));
-                done.lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .push((i, prepared));
-            });
-        }
-    });
-    let mut done = done
-        .into_inner()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    done.sort_by_key(|(i, _)| *i);
-    done.into_iter().map(|(_, prepared)| prepared).collect()
-}
-
-/// One picture, ready for the pack: a lossless WebP of the finished folder cut out of it, or of
-/// the whole picture as artwork. The error finishes a sentence that starts with the picture's
-/// path.
-fn prepare(path: &Path, opts: &MakeOptions) -> Result<Prepared, String> {
+/// A picture as it goes into the pack, at its own size: the finished folder cut out of it, or the
+/// whole picture as artwork, and which it is. The error finishes a sentence that starts with the
+/// picture's path.
+fn load(path: &Path, opts: &MakeOptions) -> Result<(RgbaImage, bool), String> {
     let rgba = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
         .map_err(|e| format!("couldn't be read: {e}"))?
@@ -342,14 +441,32 @@ fn prepare(path: &Path, opts: &MakeOptions) -> Result<Prepared, String> {
         let solid = cut.pixels().filter(|p| p.0[3] >= 128).count() as f32;
         (solid >= 0.02 * rgba.width() as f32 * rgba.height() as f32).then_some(cut)
     });
-    let folder = cut.is_some();
-    let (img, when) = match cut {
-        Some(cut) => (cut, " once cut out"),
-        None => (rgba, ""),
+    Ok(match cut {
+        Some(cut) => (cut, true),
+        None => (rgba, false),
+    })
+}
+
+/// A finished folder's shape, `None` for artwork, once it has been made sure the picture can go
+/// into a pack. The error finishes a sentence that starts with the picture's path.
+fn look(path: &Path, opts: &MakeOptions) -> Result<Option<f32>, String> {
+    let (img, folder) = load(path, opts)?;
+    let (w, h) = raster::shrunk_size(img.width(), img.height(), MAX_PICTURE_SIDE);
+    big_enough(w, h, if folder { " once cut out" } else { "" })?;
+    Ok(if folder { shape::aspect(&img) } else { None })
+}
+
+/// One picture, ready for the pack: a lossless WebP of the finished folder cut out of it, redrawn
+/// at the pack's shape or as it is, or of the whole picture as artwork. The error finishes a
+/// sentence that starts with the picture's path.
+fn prepare(path: &Path, opts: &MakeOptions, treat: Treat) -> Result<Prepared, String> {
+    let (img, folder) = load(path, opts)?;
+    let img = match treat {
+        Treat::Redraw(shape) => {
+            shape::redraw(&img, shape).ok_or("has nothing more than half opaque to redraw")?
+        }
+        Treat::AsItIs(_) => raster::shrink_to(img, MAX_PICTURE_SIDE),
     };
-    // Measured here first, to say when it was measured.
-    let img = raster::shrink_to(img, MAX_PICTURE_SIDE);
-    big_enough(&img, when)?;
     let made = pack::encode_picture(img, opts.picture_limit())?;
     Ok(Prepared {
         bytes: made.webp,
@@ -407,9 +524,9 @@ pub(crate) fn run_cwebp(cwebp: &Path, img: &RgbaImage, quality: u8) -> Result<Ve
     result
 }
 
-/// Refuses a picture smaller than a pack allows. `when` says at what point it was measured.
-fn big_enough(img: &RgbaImage, when: &str) -> Result<(), String> {
-    let (w, h) = img.dimensions();
+/// Refuses a picture `w`×`h` px once shrunk to 1024 px, smaller than a pack allows. `when` says
+/// at what point it was measured.
+fn big_enough(w: u32, h: u32, when: &str) -> Result<(), String> {
     if w.min(h) < MIN_PICTURE_SIDE {
         return Err(format!(
             "is {w}×{h} px{when}; a pack needs at least {MIN_PICTURE_SIDE} px on each side"
@@ -496,6 +613,7 @@ mod tests {
                 dir: self.0.clone(),
                 max_bytes: MAX_PICTURE_BYTES,
                 flat_backdrop: false,
+                keep_outliers: false,
             }
         }
     }
@@ -529,7 +647,14 @@ mod tests {
         let scratch = Scratch::new("split");
         scratch.picture("glass_folder.png", &on_magenta());
         let jpeg = scratch.picture("sunset-photo.jpg", &photo());
-        let (folder, made) = make(&[scratch.0.join("in")], &scratch.options()).unwrap();
+        let MadePack {
+            folder,
+            made,
+            shape,
+            left_out,
+        } = make(&[scratch.0.join("in")], &scratch.options()).unwrap();
+        assert_eq!(shape, None, "one finished folder keeps its own shape");
+        assert!(left_out.is_empty() && made.iter().all(|m| !m.redrawn));
 
         assert_eq!(folder.parent(), Some(scratch.0.join("packs").as_path()));
         let id = folder.file_name().unwrap().to_string_lossy();
@@ -589,8 +714,10 @@ mod tests {
     fn packs_with_one_name_get_ids_of_their_own() {
         let scratch = Scratch::new("same-name");
         let photo = scratch.picture("a.jpg", &photo());
-        let (first, _) = make(std::slice::from_ref(&photo), &scratch.options()).unwrap();
-        let (second, _) = make(&[photo], &scratch.options()).unwrap();
+        let first = make(std::slice::from_ref(&photo), &scratch.options())
+            .unwrap()
+            .folder;
+        let second = make(&[photo], &scratch.options()).unwrap().folder;
         assert_ne!(first, second);
         let folders = pack_folders(&scratch);
         assert_eq!(folders.len(), 2, "{folders:?}");
@@ -628,7 +755,7 @@ mod tests {
     fn id_makes_a_pack_that_is_there_again_and_keeps_its_id() {
         let scratch = Scratch::new("again");
         let first = scratch.picture("first.jpg", &photo());
-        let (folder, _) = make(&[first], &scratch.options()).unwrap();
+        let folder = make(&[first], &scratch.options()).unwrap().folder;
         let id = folder.file_name().unwrap().to_string_lossy().into_owned();
 
         let second = scratch.picture("second_one.png", &on_magenta());
@@ -637,7 +764,9 @@ mod tests {
             name: "Test pack, redone".into(),
             ..scratch.options()
         };
-        let (same, made) = make(&[second], &again).unwrap();
+        let MadePack {
+            folder: same, made, ..
+        } = make(&[second], &again).unwrap();
         assert_eq!(same, folder);
         assert_eq!(made[0].file, "second-one.webp");
         let mut files: Vec<String> = std::fs::read_dir(&folder)
@@ -718,7 +847,7 @@ mod tests {
         scratch.picture("drifted.png", &on_raspberry());
         let pictures = [scratch.0.join("in")];
 
-        let (_, made) = make(&pictures, &scratch.options()).unwrap();
+        let made = make(&pictures, &scratch.options()).unwrap().made;
         assert!(
             !made[0].folder,
             "the app's own split: not magenta, so artwork"
@@ -728,11 +857,118 @@ mod tests {
             flat_backdrop: true,
             ..scratch.options()
         };
-        let (folder, made) = make(&pictures, &opts).unwrap();
+        let MadePack { folder, made, .. } = make(&pictures, &opts).unwrap();
         assert!(made[0].folder);
         let cut = image::open(folder.join("drifted.webp")).unwrap().to_rgba8();
         assert_eq!(cut.dimensions(), (400, 340));
         assert_eq!(cut.get_pixel(200, 170).0[3], 255, "the crimson patch stays");
+    }
+
+    /// A folder-shaped subject `w`×`h` px in `rgb` on magenta, as an image model paints one.
+    fn folder_on_magenta(w: u32, h: u32, rgb: [u8; 3]) -> RgbaImage {
+        RgbaImage::from_fn(w + 80, h + 80, |x, y| {
+            if (40..40 + w).contains(&x) && (40..40 + h).contains(&y) {
+                Rgba([rgb[0], rgb[1], rgb[2], 255])
+            } else {
+                Rgba([255, 0, 255, 255])
+            }
+        })
+    }
+
+    /// Four folders 1.25, 1.175, 1.2 and 1.75 times as wide as tall, which makes the pack's shape
+    /// 1.225 and the last 43% off it, and a photo.
+    fn a_batch_of_renders(scratch: &Scratch) -> [PathBuf; 1] {
+        scratch.picture("a.png", &folder_on_magenta(500, 400, [40, 120, 220]));
+        scratch.picture("b.png", &folder_on_magenta(470, 400, [200, 40, 40]));
+        scratch.picture("c.png", &folder_on_magenta(480, 400, [40, 160, 60]));
+        scratch.picture("odd.png", &folder_on_magenta(700, 400, [220, 180, 40]));
+        scratch.picture("photo.jpg", &photo());
+        [scratch.0.join("in")]
+    }
+
+    #[test]
+    fn a_packs_finished_folders_are_made_one_shape_and_an_outlier_is_left_out() {
+        let scratch = Scratch::new("one-shape");
+        let pictures = a_batch_of_renders(&scratch);
+        let MadePack {
+            folder,
+            made,
+            shape,
+            left_out,
+        } = make(&pictures, &scratch.options()).unwrap();
+
+        let shape = shape.unwrap();
+        assert!((shape - 1.225).abs() < 0.001, "{shape}");
+        assert_eq!(left_out.len(), 1);
+        assert!(left_out[0].source.ends_with("odd.png"));
+        assert!((left_out[0].reshaping - 0.4286).abs() < 0.001);
+        let files: Vec<(&str, bool, bool)> = made
+            .iter()
+            .map(|m| (m.file.as_str(), m.folder, m.redrawn))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                ("a.webp", true, true),
+                ("b.webp", true, true),
+                ("c.webp", true, true),
+                ("photo.webp", false, false),
+            ]
+        );
+        // Every folder is FolderSkin's width on its baseline, at the pack's shape.
+        let want = folderskin_core::shape::target(shape);
+        for file in ["a.webp", "b.webp", "c.webp"] {
+            let img = image::open(folder.join(file)).unwrap().to_rgba8();
+            let placed = folderskin_core::shape::Placed::of(&img).unwrap();
+            assert_eq!((img.dimensions(), placed.visible), ((1024, 1024), want));
+        }
+        let pack = Pack::parse(&std::fs::read(folder.join(MANIFEST_FILE)).unwrap()).unwrap();
+        assert_eq!(pack.skins.len(), 4, "the outlier isn't in it");
+        let one_shape = packs::CheckOptions {
+            require_one_shape: true,
+            require_lossless: true,
+            ..packs::CheckOptions::default()
+        };
+        assert!(packs::check_with(&scratch.0, &one_shape)
+            .unwrap()
+            .problems
+            .is_empty());
+    }
+
+    #[test]
+    fn keep_outliers_keeps_one_as_it_is() {
+        let scratch = Scratch::new("keep");
+        let pictures = a_batch_of_renders(&scratch);
+        let opts = MakeOptions {
+            keep_outliers: true,
+            ..scratch.options()
+        };
+        let MadePack {
+            folder,
+            made,
+            left_out,
+            ..
+        } = make(&pictures, &opts).unwrap();
+        assert!(left_out.is_empty());
+        assert_eq!(made.len(), 5);
+        let odd = &made[3];
+        assert_eq!(odd.file, "odd.webp");
+        assert!(!odd.redrawn && odd.outlier.is_some_and(|r| r > 0.4));
+        // Cut out and trimmed, as a lone folder would be.
+        let img = image::open(folder.join("odd.webp")).unwrap().to_rgba8();
+        assert_eq!(img.dimensions(), (700, 400));
+        assert!(made[..3].iter().all(|m| m.redrawn && m.outlier.is_none()));
+    }
+
+    #[test]
+    fn folders_too_far_apart_to_share_a_shape_make_no_pack() {
+        let scratch = Scratch::new("apart");
+        // 1.0 and 1.3: each is 13% off the shape between them.
+        scratch.picture("a.png", &folder_on_magenta(400, 400, [40, 120, 220]));
+        scratch.picture("b.png", &folder_on_magenta(520, 400, [200, 40, 40]));
+        let err = make(&[scratch.0.join("in")], &scratch.options()).unwrap_err();
+        assert!(err.contains("--keep-outliers keeps them"), "{err}");
+        assert!(!scratch.0.join("packs").exists() || pack_folders(&scratch).is_empty());
     }
 
     #[test]

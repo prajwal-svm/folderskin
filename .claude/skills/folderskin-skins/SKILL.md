@@ -83,6 +83,10 @@ cargo run -p folderskin-tools -- packs make "<folder or files>" --dir ../folders
 - `--license` defaults to `CC0-1.0`; pass the licence from step 1 if it is another.
 - Run again without `--id`, it makes a second pack. To make the same pack again, pass its id:
   `--id <id>` replaces `packs/<id>/` once the new folder passes, and the pack keeps its id.
+- Two finished folders or more are given one shape: each is redrawn at the median of their
+  shapes, as wide as FolderSkin's folder and on its baseline, so they come out the same size in
+  Finder. A folder more than 8% off that shape is left out, and the report says so;
+  `--keep-outliers` keeps it as it is. Tell the user which were left out.
 - It runs `packs check` on what it wrote, and leaves nothing behind if anything fails.
 
 ## Step 5 — check the split
@@ -197,8 +201,9 @@ folderskin-community, where a pull request proposes the pack.
 
 | command | use |
 |---|---|
-| `cargo run -p folderskin-tools -- packs make <pictures…> --dir ../folderskin-community --name … --tags … --author … [--id ID] [--preview PNG] [--flat-backdrop]` | make a pack in folderskin-community's `packs/` from pictures or folders of them; `--id` makes one that is there again |
-| `cargo run -p folderskin-tools -- packs check --dir ../folderskin-community` | check every community pack the way the app and CI do |
+| `cargo run -p folderskin-tools -- packs make <pictures…> --dir ../folderskin-community --name … --tags … --author … [--id ID] [--preview PNG] [--flat-backdrop] [--keep-outliers]` | make a pack in folderskin-community's `packs/` from pictures or folders of them; `--id` makes one that is there again |
+| `cargo run -p folderskin-tools -- packs check --dir ../folderskin-community [--require-one-shape]` | check every community pack the way the app and CI do |
+| `cargo run -p folderskin-tools -- packs normalize --dir ../folderskin-community [ids…] [--tolerance 0.08] [--drop-outliers]` | give the finished folders in packs already there one shape; outliers are only reported unless `--drop-outliers`, which is the maintainer's call |
 | `cargo run -p folderskin-tools -- packs index --dir ../folderskin-community` | rebuild `index.json` and the preview strips |
 | `cargo run -p folderskin-tools -- render "<picture>" --out /tmp/icon.png --size 512` | draw one picture as the folder the app makes of it, and say which kind it is |
 | `cargo run -p folderskin-tools -- render --solid RRGGBB --out /tmp/flat.png` | the template in a flat colour, to inspect the template itself |

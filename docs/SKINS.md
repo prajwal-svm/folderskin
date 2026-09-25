@@ -101,6 +101,10 @@ aren't taken for a new pack: the community service turns them down, and so does 
 --require-lossless`. Artwork has no transparency to keep, since the template supplies the
 folder's shape. Artwork at 1024 × 958 loses the least to the crop, but any size works.
 
+The finished folders in a pack share one shape, so they come out the same size side by side.
+`packs make` and the community's pull redraw them at the median of their own, and leave a folder
+too far off it to a person ([PACKS.md](PACKS.md#one-shape-for-a-packs-folders)).
+
 ## Licensing
 
 Share only pictures you made or are allowed to share, under one of the licences a pack can use
