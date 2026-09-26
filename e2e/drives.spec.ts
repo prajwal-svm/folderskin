@@ -113,16 +113,51 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(panel(page).getByRole("button", { name: "Apply skin" })).toBeDisabled();
   });
 
+  test("says so when a share's server turns the icon down", async ({ page }) => {
+    await pickDrive(page, "os=linux&drive=network");
+    await expect(title(page)).toHaveText("nas");
+    await tiles(page).first().locator(".tile-hit").click();
+    await panel(page).getByRole("button", { name: "Apply skin" }).click();
+    await expect(status(page)).toHaveText("Couldn't apply the skin: the server didn't let FolderSkin change this share's icon");
+    // Nothing was put on it, so it can be tried again.
+    await expect(panel(page).getByRole("button", { name: "Apply skin" })).toBeEnabled();
+  });
+
+  test("starts a design on the drive that's chosen, with words that fit its face and read on it", async ({ page }) => {
+    await pickDrive(page, "os=linux&drive=removable");
+    await openView(page, /design your own/i);
+    const chosen = page.getByRole("dialog").getByRole("group", { name: "The drive you chose" });
+    await expect(chosen.locator(".cmp-card-name")).toHaveText("STICK");
+    await expect(chosen.locator(".cmp-card-note")).toHaveText("USB stick");
+    await chosen.getByRole("button").click();
+    await expect(page.locator(".cmp-drive-pick")).toContainText("USB stick");
+
+    await page.getByRole("button", { name: /^text$/i }).first().click();
+    const words = async () => {
+      const draft = await page.evaluate(() => sessionStorage.getItem("folderskin.composer.draft.v1") ?? "{}");
+      const doc = (JSON.parse(draft) as { doc?: { layers: { kind: string; paint: { color: string }; size: number }[] } }).doc;
+      return doc?.layers.find((l) => l.kind === "text") ?? null;
+    };
+    await expect.poll(async () => (await words())?.paint.color).toBe("#1b1f27");
+    // The stick's label is narrow: the words are drawn small enough to fit on it.
+    expect((await words())!.size).toBeLessThan(100);
+  });
+
   test("names a Windows drive by its letter, and says the icon goes with the letter", async ({ page }) => {
-    await pickDrive(page, "os=windows&drive=removable,startup");
+    await pickDrive(page, "os=windows&drive=external,removable,startup");
+    await expect(title(page)).toHaveText("Backup (E:)");
+    await expect(where(page)).toHaveText("External drive · E:\\");
+
+    // One with no name of its own is called by its kind, which isn't said twice.
+    await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
     await expect(title(page)).toHaveText("USB drive (F:)");
-    await expect(where(page)).toHaveText("USB drive · F:\\");
+    await expect(where(page)).toHaveText("F:\\");
     await expect(stageImage(page)).toHaveAttribute("src", /drive-windows-removable/);
 
     // Windows keeps a drive's icon in the registry, so even the system drive can have one.
     await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
     await expect(title(page)).toHaveText("System drive (C:)");
-    await expect(where(page)).toHaveText("System drive · C:\\");
+    await expect(where(page)).toHaveText("C:\\");
     await tiles(page).first().locator(".tile-hit").click();
     await panel(page).getByRole("button", { name: "Apply skin" }).click();
     await expect(panel(page).getByText("Applied", { exact: true })).toBeVisible();

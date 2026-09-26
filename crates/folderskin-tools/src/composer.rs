@@ -1,8 +1,9 @@
 //! The layers the composer draws a design between, as the files `composer-layers` writes and
 //! `docs/images/composer/` keeps: FolderSkin's own folder at the top, Windows' in `windows/` and
 //! Linux's in `linux/`. Beside them, for the browser preview, every drive's layers in
-//! `drives/<id>/` with where each drive's face is in `drives/parts.json`, and every base's bare
-//! shape in `bases/<id>.webp` ([`folderskin_core::base`]).
+//! `drives/<id>/` with where each drive's face is in `drives/parts.json` and the strip its pack
+//! of drives shows in `drives/strip.webp`, and every base's bare shape in `bases/<id>.webp`
+//! ([`folderskin_core::base`]).
 
 use folderskin_core::bases::Base;
 use folderskin_core::compositor::{template_layers_in, Style};
@@ -78,6 +79,29 @@ pub fn base_pictures(size: u32) -> Vec<(String, RgbaImage)> {
         .collect()
 }
 
+/// The drives the browser preview's pack of drives starts with, in its order (`PLAIN_DRIVES` in
+/// src/lib/devMock.ts).
+const STRIP_DRIVES: [&str; 4] = [
+    "mac-external",
+    "mac-removable",
+    "mac-network",
+    "windows-internal",
+];
+
+/// The strip the browser preview's pack of drives shows in Community, as `drives/strip.webp`
+/// keeps it: its first drives side by side, each [`crate::packs::PREVIEW_SIDE`] px square, as
+/// [`crate::packs::preview_strip`] draws a pack's.
+pub fn drive_strip() -> RgbaImage {
+    let side = crate::packs::PREVIEW_SIDE;
+    let mut strip = RgbaImage::new(side * STRIP_DRIVES.len() as u32, side);
+    for (i, id) in STRIP_DRIVES.iter().enumerate() {
+        let shape = DriveShape::from_id(id).expect("a drive FolderSkin draws");
+        let tile = Base::Drive(shape).render(side);
+        image::imageops::replace(&mut strip, &tile, i64::from(i as u32 * side), 0);
+    }
+    strip
+}
+
 /// Whether two pictures show the same pixels: every pixel's alpha, and the colour of every pixel
 /// that shows. A lossless WebP may change the colour under a fully transparent pixel, which
 /// nothing ever shows.
@@ -148,5 +172,10 @@ mod tests {
             let path = format!("{dir}/bases/{id}.webp");
             assert!(same_pixels(&read(&path), &want), "{path} differs; {again}");
         }
+        let strip = format!("{dir}/drives/strip.webp");
+        assert!(
+            same_pixels(&read(&strip), &drive_strip()),
+            "{strip} differs; {again}"
+        );
     }
 }

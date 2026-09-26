@@ -19,6 +19,8 @@
  * app tells apart, on the system `?os` draws), before the sample folders; `?drive` alone picks
  * each sample drive in turn. Skins on a drive are drawn here from the drive's layers in
  * docs/images/composer/drives, a moment after they're first asked for, as the app draws them.
+ * The Mac's internal drive has a long name, and Linux's network share turns an icon down, as a
+ * server that doesn't let FolderSkin write would.
  *
  * `?bigtree` makes the first folder chosen a made-up Studio with 4,960 folders inside: one of them
  * holds 1,400 and one branch goes 36 levels down, to see choosing folders keep up. `?rushes` makes
@@ -305,6 +307,8 @@ const PREVIEW_OF: Record<string, string> = {
   colours: STRIPS.colours,
   "night-prints": STRIPS["classic-art"],
   "chrome-dreams": STRIPS.colours,
+  // Its first drives, as `folderskin-tools composer-layers` draws them for it.
+  "plain-drives": "/docs/images/composer/drives/strip.webp",
 };
 /** Classic Art's pictures, finished folders already, in the pack's order: each picture's SHA-256, which the
  *  published tree names it after, and its name. When the pack's pictures change, the old ones leave the tree,
@@ -516,7 +520,7 @@ const MOCK_DRIVES: Record<"macos" | "windows" | "linux", MockDrive[]> = {
     { path: "/Volumes/Holiday 2019", kind: "optical", label: "Holiday 2019", readOnly: true },
     { path: "/Volumes/Installer", kind: "disk-image", label: "Installer" },
     { path: "/Volumes/Time Machine Backups", kind: "time-machine", label: "Time Machine Backups" },
-    { path: "/Volumes/Scratch", kind: "internal", label: "Scratch" },
+    { path: "/Volumes/Scanned family photos 1998 to 2012", kind: "internal", label: "Scanned family photos 1998 to 2012" },
     { path: "/", kind: "startup", label: "Macintosh HD", startup: true, readOnly: true },
   ],
   windows: [
@@ -1345,6 +1349,7 @@ export const mockApi = {
     await sleep(600);
     const skin = library.find((s) => s.id === skinId);
     const drive = mockDriveAt(folder);
+    if (drive?.network && mockOs() === "linux") throw "the server didn't let FolderSkin change this share's icon";
     const onDrive = drive && skin?.kind === "artwork" ? mockDriveThumbnail(mockDrive(drive), skinId) : null;
     mockIcons.set(folder, onDrive ?? skin?.thumbnail ?? null);
   },

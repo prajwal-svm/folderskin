@@ -375,8 +375,9 @@ function StageCopy({ state, skin, browseLabel, doing }: { state: State; skin: Sk
         {folder.name}
       </h2>
       <p className="stage-path" data-tip={folder.path} data-tip-overflow>
-        {folder.drive && (
-          // What kind of drive it is, in words, before where it is.
+        {folder.drive?.label && (
+          // What kind of drive it is, in words, before where it is. A drive with no name of its
+          // own is already called by its kind.
           <>
             <span className="stage-kind">{driveKindName(folder.drive)}</span>
             {" · "}
