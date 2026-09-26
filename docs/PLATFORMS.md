@@ -65,6 +65,15 @@ overlapping calls garble each other's `Icon\r` (a 37 KB icon came out as 286 byt
 every change of a folder's icon takes one lock for the whole process, and each runs in its own
 autorelease pool so a long run over subfolders doesn't hold on to every folder's icon data.
 
+A run over subfolders goes through `setIcon` for its first folder only, since `setIcon` encodes
+the icon again and writes it twice for every folder: about 110 ms and 2.5 MB each. The rest get a
+copy of what it wrote. On an APFS disk that is a clone of the first folder's `Icon\r`
+(`clonefile`), which shares its blocks, so each folder takes about 30 KB and under a millisecond.
+On other disks and on network shares the icon is written straight into the folder's `Icon\r`
+resource fork, with the same Finder info and hidden flag `setIcon` gives it, but without the
+1024 px size: about 1 MB each, and Finder only draws that size for the largest icons on a Retina
+screen. A folder a copy can't be made for goes through `setIcon` after all.
+
 The window is transparent over the system's sidebar material (`NSVisualEffectView`), which is
 what makes the sidebar translucent. The light/dark switch sets the window's appearance so the
 material follows it. Transparent windows need Tauri's `macOSPrivateApi`, which rules out the

@@ -377,7 +377,8 @@ const tauriApi = {
   /** The folders directly inside `folder`, for one column of "Choose subfolders". */
   subfolderList: (folder: string) => invoke<SubfolderList>("subfolder_list", { folder }),
   /** The disk space one folder's copy of this skin's icon takes. */
-  treeBytes: (skinId: string) => invoke<number>("tree_bytes", { skinId }),
+  /** Disk each folder of a run over the folders inside `folder` takes for the skin's icon. */
+  treeBytes: (skinId: string, folder?: string) => invoke<number>("tree_bytes", { skinId, folder }),
   /**
    * Starts applying a skin to `folder` and the folders inside it `choice` takes (every one without
    * one), in the background. `onTreeRun` hears how it goes.

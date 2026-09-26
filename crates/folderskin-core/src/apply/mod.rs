@@ -44,14 +44,14 @@ pub use paths::validate_folder;
 const UNSUPPORTED: &str = "custom folder icons are not supported on this OS";
 
 /// An icon encoded for the current OS's writer, ready to go on any number of folders with
-/// [`apply_prepared`]: the `NSImage` on macOS, the bytes of `folderskin.ico` on Windows and of
-/// `.folderskin.png` on Linux.
+/// [`apply_prepared`]: the `NSImage` on macOS (and, once it has gone on a first folder, what the
+/// rest copy of it), the bytes of `folderskin.ico` on Windows and of `.folderskin.png` on Linux.
 ///
-/// On macOS it holds an AppKit object and so isn't `Send`: prepare it on the thread that
-/// applies it.
+/// On macOS it holds AppKit objects and so isn't `Send`: prepare it on the thread that applies
+/// it.
 pub struct PreparedIcon {
     #[cfg(target_os = "macos")]
-    image: objc2::rc::Retained<objc2_app_kit::NSImage>,
+    pub(crate) prepared: macos::Prepared,
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     bytes: Vec<u8>,
 }
@@ -66,7 +66,7 @@ impl std::fmt::Debug for PreparedIcon {
 pub fn prepare_icon(icons: &IconSet) -> Result<PreparedIcon, ApplyError> {
     #[cfg(target_os = "macos")]
     {
-        macos::prepare(icons).map(|image| PreparedIcon { image })
+        macos::prepare(icons).map(|prepared| PreparedIcon { prepared })
     }
     #[cfg(target_os = "windows")]
     {
@@ -97,7 +97,7 @@ pub fn apply_prepared(folder: &Path, icon: &PreparedIcon) -> Result<(), ApplyErr
     let folder = validate_folder(folder)?;
     #[cfg(target_os = "macos")]
     {
-        macos::apply(&folder, &icon.image)
+        macos::apply(&folder, &icon.prepared)
     }
     #[cfg(target_os = "windows")]
     {
@@ -119,27 +119,21 @@ pub fn apply_prepared(folder: &Path, icon: &PreparedIcon) -> Result<(), ApplyErr
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const TEXT_FILE_BYTES: u64 = 4096;
 
-/// How much disk one folder's copy of `icon` takes.
+/// How much disk each folder of a run over the folders inside `folder` takes for `icon` (`None`
+/// when it's anywhere).
 ///
 /// On Windows and Linux that is the icon file FolderSkin writes plus a block for the
-/// `desktop.ini` or `.directory` beside it. macOS encodes the icon itself as it attaches it, into
-/// the folder's `Icon\r` file, and that comes out several times the size of the PNGs; so it is
-/// measured exactly: attached to a scratch folder in the temp directory, weighed, and thrown
-/// away.
-pub fn bytes_per_folder(icon: &PreparedIcon) -> Result<u64, ApplyError> {
+/// `desktop.ini` or `.directory` beside it. On macOS a run clones the first folder's icon on an
+/// APFS disk, which costs a folder only its file record, and writes a lighter icon straight in
+/// anywhere else, measured as macOS writes it (see [`macos`]).
+pub fn bytes_per_folder(icon: &PreparedIcon, folder: Option<&Path>) -> Result<u64, ApplyError> {
     #[cfg(target_os = "macos")]
     {
-        let scratch = TempDir::new("folderskin-measure")?;
-        macos::apply(&scratch, &icon.image)?;
-        match macos::icon_file_bytes(&scratch) {
-            Some(bytes) if bytes > 0 => Ok(bytes),
-            _ => Err(ApplyError::Platform(
-                "couldn't measure the icon macOS wrote".into(),
-            )),
-        }
+        macos::bytes_per_folder(&icon.prepared, folder)
     }
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
+        let _ = folder;
         Ok(icon.bytes.len() as u64 + TEXT_FILE_BYTES)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
@@ -329,7 +323,7 @@ mod tests {
             (linux::PNG_NAME.to_string(), linux::prepare(&icons).unwrap())
         };
         assert_eq!(
-            bytes_per_folder(&icon).unwrap(),
+            bytes_per_folder(&icon, None).unwrap(),
             bytes.len() as u64 + TEXT_FILE_BYTES
         );
 

@@ -22,6 +22,11 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Changed
 
+- **Runs over subfolders on a Mac are about 100 times faster, and take a fraction of the
+  space.** On the Mac's own disks the folders share one copy of the icon, so each takes about
+  30 KB instead of 2.5 MB. On network drives and other disks each folder gets a copy of about
+  1 MB, without the icon's largest size, which Finder only draws for the biggest icons on a
+  Retina screen.
 - **Subfolders have no limit.** A folder's tree used to stop at 5,000 folders. Now it's counted
   in the background however big it is, and the switch shows the count as it grows until it has
   them all ("48,210 folders inside"). Picking another folder stops the count.

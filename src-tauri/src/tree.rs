@@ -281,17 +281,22 @@ pub(crate) fn list(dir: &Path, peek_for: Duration) -> SubfolderListDto {
     }
 }
 
-/// How many bytes of disk each folder's copy of a skin's icon takes (see
-/// [`bytes_per_folder`]), so the webview can say what a whole tree will use.
+/// How many bytes of disk each folder's copy of a skin's icon takes in a run over the folders
+/// inside `folder` (see [`bytes_per_folder`]: on a Mac's own disk the folders share one copy),
+/// so the webview can say what a whole tree will use.
 #[tauri::command]
-pub async fn tree_bytes(state: State<'_, AppState>, skin_id: String) -> Result<u64, String> {
+pub async fn tree_bytes(
+    state: State<'_, AppState>,
+    skin_id: String,
+    folder: Option<String>,
+) -> Result<u64, String> {
     let state = state.inner().clone();
     // One thread for all of it: on macOS the prepared icon is an AppKit object that stays on
     // the thread that made it.
     tauri::async_runtime::spawn_blocking(move || {
         let skin = state.resolve(&skin_id)?;
         let icon = prepare_icon(&skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
-        bytes_per_folder(&icon).map_err(|e| e.to_string())
+        bytes_per_folder(&icon, folder.as_deref().map(Path::new)).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?

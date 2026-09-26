@@ -95,6 +95,8 @@ const Studio = lazy(() => import("./components/studio/Studio").then((m) => ({ de
 type TreeAsk = {
   kind: "apply" | "remove";
   folderName: string;
+  /** The folder's path, which decides how much room the icons take (see `treeBytes`). */
+  folderPath: string;
   /** Folders inside the chosen one that the run takes, as counted so far. */
   inside: number;
   /** That's all of them: the count is done. */
@@ -531,7 +533,7 @@ export default function App() {
         setTreeAsk({ ...ask, bytes: null, resolve });
         if (ask.kind === "apply" && ask.skin) {
           api
-            .treeBytes(ask.skin.id)
+            .treeBytes(ask.skin.id, ask.folderPath || undefined)
             .then((bytes) => setTreeAsk((a) => (a && a.resolve === resolve ? { ...a, bytes } : a)))
             .catch(() => {});
         }
@@ -573,7 +575,7 @@ export default function App() {
       const inside = insideCount(s);
       const counted = insideCounted(s);
       if (kind === "apply" && counted && inside + 1 <= CONFIRM_ABOVE) return true;
-      return askTree({ kind, folderName: s.folder?.name ?? "", inside, counted, chosen: s.chosen !== null, skin });
+      return askTree({ kind, folderName: s.folder?.name ?? "", folderPath: s.folder?.path ?? "", inside, counted, chosen: s.chosen !== null, skin });
     },
     [askTree],
   );

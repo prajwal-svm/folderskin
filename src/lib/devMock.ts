@@ -1081,7 +1081,7 @@ export const mockApi = {
     const names = mockChildren(folder);
     return { path: folder, separator: "/", names, nested: names.map((name) => mockChildren(`${folder}/${name}`).length > 0) };
   },
-  treeBytes: async (_skinId: string): Promise<number> => {
+  treeBytes: async (_skinId: string, _folder?: string): Promise<number> => {
     await sleep(200);
     // What the app measured for a painted skin on macOS.
     return 2_670_631;
