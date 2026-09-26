@@ -95,6 +95,8 @@ activado, **Guardar y aplicar** pone el diseño en la carpeta y en cada carpeta 
 pregunta antes si son más de diez. El botón muestra cuánto lleva el proceso, con **Detener** al lado,
 y un aviso dice cómo terminó: un proceso detenido ofrece **Continuar**, y uno en el que no se
 pudieron cambiar algunas carpetas ofrece **Ver cuáles**, que abre el resumen del panel de la carpeta.
+Si sales del editor mientras tanto, el proceso sigue en segundo plano, y la parte de abajo de la
+barra lateral muestra cuánto lleva.
 
 Si elegiste algunas subcarpetas con **Elegir** en el panel de la carpeta, solo se incluyen esas, y
 el interruptor lo indica: **Incluir 22 de 28 subcarpetas**.

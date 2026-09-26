@@ -6,11 +6,45 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Runs over subfolders go on in the background.** Applying a skin to a folder and the folders
+  inside it, or removing their custom icons, no longer holds the app up: pick another folder,
+  look through Community or make a skin while it goes. The foot of the sidebar shows the run on
+  every view, with the skin, the folder, how many folders are done and **Stop**, and a click on
+  it brings that folder back. Once the run ends, the same place says how it went, with **Carry
+  on**, **Try again** and **Undo** where they apply, until you put it away.
+- **A notification when a run ends** while FolderSkin is behind other windows: "Dune is on
+  48,210 folders in Projects", and how many couldn't be changed when some couldn't.
+- **Big runs ask first.** A run over more than 5,000 folders, or over a folder still being
+  counted, says how many folders it has found so far, about how much space the icons take, and
+  that it goes on in the background.
+
 ### Changed
 
+- **Subfolders have no limit.** A folder's tree used to stop at 5,000 folders. Now it's counted
+  in the background however big it is, and the switch shows the count as it grows until it has
+  them all ("48,210 folders inside"). Picking another folder stops the count.
+- **Choose reads one folder at a time.** Each column lists only the folders in the one it
+  shows, so it opens at once however much is below, and "22 of 28 folders inside" fills in as
+  the count gets there. A tick takes the folder and everything inside it unless a tick further
+  down says otherwise, so ticking a folder with 40,000 inside costs no more than ticking one.
+- **A run starts at once** and finds its folders as it goes: it says "3,120 of 12,000+" until it
+  knows how many there are.
+- **One run at a time.** Starting another while one is going says which folder that one is in,
+  until it ends.
+- **A stopped run says how many couldn't be changed** before it stopped, as well as how many
+  wear the skin and how many weren't reached.
 - **Google's picture model is now Gemini 3.1 Flash Image**, with Gemini 3 Pro Image beside it for
   sharper lettering. Google shuts Gemini 2.5 Flash Image down on 2 October 2026, and FolderSkin
   moves you to the new one on its own.
+
+### Fixed
+
+- **Another disk mounted inside a folder** is left out of its subfolders, as links to other
+  folders already were.
+- **The folder panel scrolls from the top** in a short window. A long summary used to push the
+  folder's picture out of reach at the top and squash the Include subfolders box.
 
 ## 0.1.9 - 2026-09-25
 

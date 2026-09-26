@@ -103,11 +103,15 @@ again.
    custom icon offers **Remove custom icon** as soon as you pick it.
 
 To give the folders inside it the same skin, turn on **Include subfolders** under the folder's
-name. It counts them first (all levels down, leaving out hidden folders and app bundles), and the
-button becomes **Apply to 25 folders**, or however many there are. More than ten asks before it
-starts. The folder panel shows each folder as it's done, **Stop** ends the run after the folder in
-hand, and the summary says what changed, which folders couldn't be and why, and offers to carry on
-or try those again. **Revert all** takes off exactly what the run put on.
+name. It counts them in the background with no limit (all levels down, leaving out hidden
+folders, app bundles and other disks), and the button becomes **Apply to 25 folders**, or however
+many there are. **Choose** picks which of them go. More than ten asks before it starts, and a big
+run says how much space the icons take. The run goes on in the background, so you can pick
+another folder or use the rest of the app meanwhile: the folder panel and the foot of the sidebar
+show how far it has got, **Stop** ends it after the folder in hand, and the summary says what
+changed, which folders couldn't be and why, and offers to carry on or try those again. A
+notification says when it's done if FolderSkin isn't in front. **Revert all** takes off exactly
+what the run put on.
 
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
 **Yours** and stays there until you delete it, which asks first. A finished folder on a flat

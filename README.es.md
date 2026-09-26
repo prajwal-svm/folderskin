@@ -107,12 +107,15 @@ paquete se añade entero o no se añade, y siempre puedes llenar la biblioteca m
    personalizado**.
 
 Para darles el mismo aspecto a las carpetas que contiene, activa **Incluir subcarpetas** debajo del
-nombre de la carpeta. Primero las cuenta (en todos los niveles, sin las carpetas ocultas ni las
-apps), y el botón pasa a ser **Aplicar a 25 carpetas**, o las que haya. Si son más de diez, te
-pregunta antes de empezar. El panel de la carpeta muestra cada carpeta a medida que termina,
-**Detener** termina el proceso después de la carpeta en curso, y el resumen indica qué cambió, qué
-carpetas no se pudieron cambiar y por qué, y te ofrece continuar o volver a intentarlo con esas.
-**Restaurar todo** quita exactamente lo que puso el proceso.
+nombre de la carpeta. Las cuenta en segundo plano, sean las que sean (en todos los niveles, sin las
+carpetas ocultas, las apps ni otros discos), y el botón pasa a ser **Aplicar a 25 carpetas**, o las
+que haya. **Elegir** decide cuáles van. Si son más de diez, te pregunta antes de empezar, y si son
+muchas, te dice cuánto espacio ocupan los iconos. El proceso sigue en segundo plano, así que puedes
+elegir otra carpeta o usar el resto de la app mientras tanto: el panel de la carpeta y la parte de
+abajo de la barra lateral muestran cuánto lleva, **Detener** lo termina después de la carpeta en
+curso, y el resumen indica qué cambió, qué carpetas no se pudieron cambiar y por qué, y te ofrece
+continuar o volver a intentarlo con esas. Si FolderSkin no está delante, una notificación te avisa
+cuando termina. **Restaurar todo** quita exactamente lo que puso el proceso.
 
 Para usar tu propia imagen, suéltala en la ventana o haz clic en **Añadir tu foto**. Se guarda en
 **Mis aspectos** y se queda ahí hasta que la borres (FolderSkin te pide confirmación antes). Una carpeta

@@ -106,12 +106,17 @@ bibliothèque plus tard depuis **Communauté**. L'accueil ne s'affiche qu'une se
    icône personnalisée, **Retirer l'icône personnalisée** apparaît dès que vous le choisissez.
 
 Pour donner le même habillage aux dossiers qu'il contient, activez **Inclure les sous-dossiers** sous
-le nom du dossier. FolderSkin les compte d'abord (à tous les niveaux, sans les dossiers cachés ni les
-paquets d'applications), et le bouton devient **Appliquer à 25 dossiers**, avec le nombre trouvé. Au-delà
-de dix, il demande confirmation avant de commencer. Le panneau du dossier montre chaque dossier au
-fur et à mesure, **Arrêter** interrompt l'opération après le dossier en cours, et le récapitulatif
-indique ce qui a changé, quels dossiers n'ont pas pu l'être et pourquoi, puis propose de continuer ou
-de réessayer ceux-là. **Tout rétablir** retire exactement ce que l'opération a posé.
+le nom du dossier. FolderSkin les compte en arrière-plan, quel que soit leur nombre (à tous les
+niveaux, sans les dossiers cachés, les paquets d'applications ni les autres disques), et le bouton
+devient **Appliquer à 25 dossiers**, avec le nombre trouvé. **Choisir** permet de décider lesquels
+sont concernés. Au-delà de dix, il demande confirmation avant de commencer, et pour une grosse
+opération, il indique la place que prennent les icônes. L'opération continue en arrière-plan : vous
+pouvez choisir un autre dossier ou utiliser le reste de l'app en attendant. Le panneau du dossier et
+le bas de la barre latérale montrent où elle en est, **Arrêter** l'interrompt après le dossier en
+cours, et le récapitulatif indique ce qui a changé, quels dossiers n'ont pas pu l'être et pourquoi,
+puis propose de continuer ou de réessayer ceux-là. Une notification vous prévient quand elle est
+terminée si FolderSkin n'est pas au premier plan. **Tout rétablir** retire exactement ce que
+l'opération a posé.
 
 Pour utiliser votre propre image, déposez-la sur la fenêtre ou cliquez sur **Ajouter une photo**.
 Elle est enregistrée dans **Mes habillages** et y reste jusqu'à ce que vous la supprimiez, ce que

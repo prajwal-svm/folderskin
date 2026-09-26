@@ -154,13 +154,28 @@ for the text file.
 The run leaves alone, along with everything inside them: symlinks and junctions, folders whose
 names start with a dot, folders the OS hides (Finder's hidden flag, or Windows' hidden or system
 attribute), packages such as apps, photo and music libraries, Xcode projects and Keynote or
-Pages documents, and the system locations listed under Known limits. At most 5,000 folders go in
-one run. On a Mac a folder takes about a tenth of a second to skin and a thousandth to revert.
+Pages documents, the system locations listed under Known limits, and another disk or network
+share mounted inside the folder. There's no limit to how many folders a run takes. They're
+counted in the background as soon as the folder is picked, and a run can start before the count
+ends: it finds the folders as it goes, so it reads **3,120 of 12,000+** until they're all found.
+A run over more than 5,000 folders, or over a tree still being counted, asks first with the count
+so far and the space it takes. On a Mac a folder takes about a tenth of a second to skin and a
+thousandth to revert.
+
+A run goes on in the background: another folder can be picked and the rest of the app used
+meanwhile. The sidebar shows it on every view, with the skin, the folder, how far it has got and
+**Stop**, and once it ends, how it went, with **Carry on**, **Try them again** and **Undo** where
+they apply, until it's put away. A click on it brings the folder back. In a window shorter than
+the one FolderSkin opens in, it's a single row, and what comes next after a run is in the folder
+panel. When a run ends while FolderSkin isn't in front, a system notification says how it went,
+if the system's notification settings let it show. One run goes at a time: starting another
+while one is going says to let that one finish or stop it.
 
 **Choose**, at the end of the switch's row, opens the folders inside as Finder's column view, to
-tick the ones that go. A folder's box stands for it and everything inside it, and the row then
-says how many of them go (**22 of 28 folders inside**). A run takes only those, and so does
-**Remove custom icons**.
+tick the ones that go. Each column reads only its own folder's folders as it opens, so a folder
+with any number inside opens at once. A folder's box stands for it and everything inside it, and
+the row then says how many of them go (**22 of 28 folders inside**), filling in as the count gets
+to them. A run takes only those, and so does **Remove custom icons**.
 
 Reverting a run takes off exactly the folders it changed. Reverting the whole tree instead
 (**Remove custom icons**, with the switch on) takes the custom icon off every folder that has one.

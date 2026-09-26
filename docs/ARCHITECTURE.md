@@ -99,12 +99,16 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `import_image` | `path` | the picture saved as a skin, id `user:<hash>` (the saved one if it was imported before) |
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
-| `subfolder_count` | `folder` | `{count, more}`: the folders inside it a run would change, not counting itself, and `more` when there are over 5,000 |
-| `subfolder_tree` | `folder` | `{root, separator, names, parents, more}`: the same folders as the tree they make, in the walk's order, `parents[i]` being the folder `names[i]` is in (0 for `root`) |
+| `subfolder_count` | `folder` | `{folder, count, done}`: starts counting the folders inside it in the background (the count before it stops), and answers once it's done or after a moment. The rest comes as `subfolder-count` events |
+| `subfolder_counts` | `folder`, `paths` | `{folder, count, done, paths}`: how far that count has got, and for each of `paths` (folders in it) `{found, inside, done}` |
+| `subfolder_list` | `folder` | `{path, separator, names, nested}`: one folder's own folders, for a column of **Choose subfolders**, and whether each has folders inside (`null` when there wasn't time to look) |
 | `tree_bytes` | `skinId` | the bytes of disk one folder's copy of the skin's icon takes |
-| `apply_skin_tree` | `folder`, `skinId`, `only`, `onProgress` | `{total, changed, failed, skipped, remaining, stopped}` for the folder and every folder inside it, or for `only` those, with progress on the channel |
-| `revert_skin_tree` | `folder`, `only`, `skipPlain`, `onProgress` | the same. Without `only`, every folder in the tree that has a custom icon, the others `skipped`. With `only`, exactly those, unless `skipPlain` skips the ones without a custom icon too |
-| `stop_tree_run` | – | `{}`, and the run stops before its next folder |
+| `start_tree_apply` | `folder`, `skinId`, `choice` | `{seq, run}`: starts putting the skin on the folder and the folders inside it `choice` takes (all of them without one) in the background, refused while another run is going. The rest comes as `tree-run` events |
+| `start_tree_revert` | `folder`, `choice`, `skipPlain` | the same, taking the custom icons off. `skipPlain` leaves the folders without one alone |
+| `stop_tree_run` | `id` | `{}`, and run `id` stops before its next folder |
+| `carry_on_tree_run`, `retry_tree_run`, `undo_tree_run` | `id` | `{seq, run}`: run `id` carries on with the folders it didn't reach, tries the ones it couldn't change again, or has exactly the folders it changed taken off, as a run of its own |
+| `dismiss_tree_run` | `id` | `{}`, and run `id` is forgotten once it has ended |
+| `tree_run` | – | `{seq, run}`: the latest run, going or ended, or `run: null` |
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
 | `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line and at most 60 characters, the tags cleaned and at most 8), or an error string for the plain default folder's id |
 | `skins_folder` | – | the folder the saved skins live in |
@@ -347,16 +351,39 @@ in [PLATFORMS.md](PLATFORMS.md).
 ## A folder and its subfolders
 
 **Include subfolders** runs the same writer over a folder's tree (`src-tauri/src/tree.rs`, with
-the walk in `folderskin_core::apply::tree`).
+the walk in `folderskin_core::apply::tree`), however many folders it holds.
 
-- **Which folders.** `subfolders` walks breadth-first, so a run that stops part way has done
-  whole levels, and lists each folder's own folders by name ignoring case. It skips, along with
-  everything inside them: symlinks and junctions, names starting with a dot, folders the OS hides
-  (Finder's hidden flag, or Windows' hidden or system attribute), packages (apps, libraries and
-  documents that are folders on disk, known by their extension and, on macOS, by Launch
-  Services), and the system locations `validate_folder` refuses. A folder that is a package or
-  inside one has nothing inside as far as a run goes. More than 5,000 folders (`MAX_TREE`) is
-  refused with a sentence that says to pick a folder further down.
+- **Which folders.** `folders_in` lists a folder's own folders by name ignoring case. It skips,
+  along with everything inside them: symlinks and junctions (and a Windows volume mounted in a
+  folder, which is one), names starting with a dot, folders the OS hides (Finder's hidden flag,
+  or Windows' hidden or system attribute), packages (apps, libraries and documents that are
+  folders on disk, known by their extension and, on macOS, by Launch Services), the system
+  locations `validate_folder` refuses, and on macOS and Linux another volume mounted inside the
+  folder (a folder whose device isn't its parent's). A folder that is a package or inside one has
+  nothing inside as far as a run goes.
+- **Any size.** `Walk` reads a tree one folder at a time, whenever whoever drives it asks, into a
+  `Tree` that keeps each folder as its name, in one buffer, and the number of the folder it's in.
+  A million folders with names a dozen letters long take about 35 MB (a core test builds a tree
+  that size), and a count adds 8 bytes a folder, a run 1. A run walks breadth first, so one
+  that stops part way has done whole levels. Counting walks depth first, so each folder's insides
+  are finished before the next folder's and their counts are final one by one.
+- **Counting.** Picking a folder starts `subfolder_count` on a thread of its own, abandoning the
+  count of the folder before. It answers once it's done or after 80 ms, so a small folder is
+  counted before the panel shows, and a big one goes on, `subfolder-count` saying how far it has
+  got at most ten times a second. Each folder in its tree keeps how many folders have been found
+  inside it and how many in its tree are still to read, and `subfolder_counts` gives those for
+  the folders the webview asks about.
+- **Choosing some.** **Choose subfolders** (`src/components/SubfolderChooser.tsx`) reads each
+  column's folders with `subfolder_list` as it opens, looking into each for folders of its own for
+  a quarter of a second at most (the rest show a chevron and are read when opened), so a folder
+  with any number inside opens at once, and each column draws only the rows in view. What's
+  ticked is rules, not a list (`src/lib/folderChoice.ts`): ticking or clearing a folder decides it
+  and everything inside it unless a rule further down says otherwise, and a rule that says what
+  its folder says anyway isn't kept, so a folder with any rule inside it shows a dash without
+  anything being counted. How many folders the rules take comes from the counts of the folders
+  they're on: every folder as `all` says, and each rule changes its folder and everything in it
+  from what the folder it's in says, which is the same sum over the folders found so far while
+  the count is going.
 - **One icon for all of them.** `prepare_icon` encodes the icon once (the `NSImage` on macOS, the
   `.ico` or `.png` bytes elsewhere) and `apply_prepared` puts it on each folder, checking each
   one as `apply_icon` does. On a Mac an apply takes about 110 ms a folder (it took about 610 ms
@@ -364,27 +391,19 @@ the walk in `folderskin_core::apply::tree`).
   copy costs: on macOS it is measured, by attaching the icon to a scratch folder and weighing
   its `Icon\r` (about 2.7 MB for a painting), and elsewhere it is the icon file plus a disk block
   for the text file beside it.
-- **The run.** One blocking thread goes through the folders in order. The channel hears
-  `{done: 0, total, name}` with the folder's own name once the folders are known, before the
-  icon is rendered, then `{done, total, name}` after each folder. A stop flag, cleared as each
-  run starts, is checked before every folder, so Stop lets the folder in hand finish. There is
-  one flag, so there is one run at a time. Every folder ends up in exactly one of `changed`,
-  `failed` (with a sentence: no permission, gone, read-only disk, full disk, or the OS's own
-  words), `skipped` or `remaining`. `only` names exactly the folders to do, in order, each the
-  folder itself or inside it: carrying on after a stop, trying failures again, or undoing a run
-  with its `changed`. A named folder that has since gone fails on its own rather than refusing
-  the run. The webview shows the progress at most 20 times a second (`src/lib/throttle.ts`), as a
-  revert can report a thousand folders a second.
-- **Choosing some.** `subfolder_tree` reads the tree once with the same walk, as names and the
-  index of each folder's parent, and the webview builds each folder's path from those, so the
-  chooser offers exactly the folders a whole run would take. **Choose subfolders**
-  (`src/components/SubfolderChooser.tsx`) lays them out as Finder's column view, and each column
-  draws only the rows in view. The ticks are `src/lib/folderChoice.ts`: every folder keeps how
-  many folders it holds and how many of them are ticked, in depth-first order, so a tick fills one
-  stretch of a typed array and updates the folders above, whatever the size of the tree. A run
-  over the folders chosen is a run with `only`: the folder, then the ones chosen in the walk's
-  order. Taking the icons off them passes `skipPlain`, so the ones without an icon are left alone
-  as they are in a whole tree.
+- **The run** (`src-tauri/src/tree/job.rs`). `start_tree_apply` and `start_tree_revert` answer at
+  once, and the run goes on in the background, whatever the webview does. It is two threads over
+  one record: a walker reads the tree and adds the folders the run's rules take, and a worker goes
+  through them in the order they were found, starting on the folder itself straight away and
+  waiting for the walker when it catches up, so a run is well under way before the count of what
+  it takes is. The record keeps each folder's part in a byte beside its place in the tree (not in
+  the run, to do, changed, failed with a sentence, or skipped), which is everything **Carry on**,
+  **Try again** and undoing need, by the run's id: no list of folders crosses the IPC either way.
+  Undoing is a revert of exactly the folders the apply changed, over the same tree. Stop is
+  checked before every folder, so the folder in hand finishes. One run goes at a time: another is
+  refused with a sentence while one is going, and replaces the last once that has ended. The
+  webview hears `tree-run` at most twelve times a second, with the first hundred failures, and
+  every message is numbered so a late one never undoes a newer one.
 
 ## Frontend state
 
@@ -402,19 +421,25 @@ A folder that already wears a custom icon (`folder_icon` reports it, from
 `folderskin_core::apply::has_custom_icon`) waits instead, offering **Try on** or **Remove custom
 icon**, and a revert can start from there or from `folder` as well as from `applied`.
 
-The folders inside the chosen one are counted when it's picked (`subfolders`), and
-`includeSubfolders` is the **Include subfolders** switch, off again for every new folder. With
-it on, an apply or a revert is a run over the tree: `progress` follows the run's channel, and
-`run` keeps what it did (the folders it changed, the ones it couldn't with why, the ones a stop
-left, and whether it stopped) until the folder or the skin changes. The panel's summary, its
-**Carry on** and **Try again**, and a **Revert all** that takes off exactly what was put on, all
-read from `run`. A run that carries on or tries again works through only what's left and is
-merged into the one before (`mergeRuns` in `src/lib/tree.ts`, with the rest of the run's words),
-so the summary always covers the whole tree. A run that stopped before changing anything leaves
-the folder's phase as it was. `chosen` is the folders ticked in **Choose subfolders** when they
-aren't all of them: their paths, and how many folders there were. It stays while the same folder
-is chosen, whether the switch is on or off, and `insideCount` and `treeOnly` turn it into the
-counts the buttons show and the `only` a run is given.
+The folders inside the chosen one are counted when it's picked (`subfolders`: the count so far,
+and whether it's done), and `includeSubfolders` is the **Include subfolders** switch, off again
+for every new folder, and on while the count is still going as soon as it has begun. With it on,
+an apply or a revert is a run over the tree, which lives outside the panel: `src/state/treeRun.ts`
+keeps the latest run as the app tells of it, keeping only the newest message, and hears each one
+that was going end. The panel follows the run while its folder is on show (`runId`,
+`treeRunning` and `treeEnded`), and picking its folder again, or clicking the run at the foot of
+the sidebar (`RunDock.tsx`, on every view, one row in a window shorter than the one FolderSkin
+opens in), brings it back. The summary, its **Carry on** and **Try again**, and a **Revert all**
+that takes off exactly what was put on, name the run by its id. Until a run's own walk has found
+every folder, its count reads the total of the folder's count when that had finished first
+(`treeRuns.expect`), rather than "3,120 of 12,000+". A run that stopped before changing anything
+leaves the folder's phase as it was. A run that ends while the window isn't in front says so as
+a system notification (`src/lib/notify.ts`), with permission asked for the first time a run
+starts rather than as the app opens. `chosen` is the rules ticked in **Choose subfolders** when
+they aren't every folder, and how many folders they take, kept up to date as the count goes. It
+stays while the same folder is chosen, whether the switch is on or off, and `insideCount`,
+`insideCounted` and `treeChoice` turn it into the counts the buttons show and the rules a run is
+given.
 
 The library's filters are pure functions in `src/lib/filters.ts`: the sidebar's view, then the
 filters (where a skin came from, its pack, colours, brightness, when it was added, the AI model,

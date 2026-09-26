@@ -97,7 +97,9 @@ activé, **Enregistrer et appliquer** pose la création sur le dossier et sur ch
 contient, en demandant d'abord confirmation au-delà de dix. Le bouton montre où en est l'opération,
 avec **Arrêter** à côté, et un message indique comment elle s'est terminée : une opération
 interrompue propose **Continuer**, et une opération où certains dossiers n'ont pas pu être modifiés
-propose **Voir lesquels**, qui ouvre le récapitulatif du panneau du dossier.
+propose **Voir lesquels**, qui ouvre le récapitulatif du panneau du dossier. Si vous quittez
+l'éditeur en cours de route, l'opération continue en arrière-plan, et le bas de la barre latérale
+montre où elle en est.
 
 Si vous avez choisi certains sous-dossiers avec **Choisir** dans le panneau du dossier, seuls
 ceux-là sont concernés, et l'interrupteur l'indique : **Inclure 22 sous-dossiers sur 28**.

@@ -85,7 +85,8 @@ subfolders** switch: turning it on in either place turns it on in both. With it 
 apply** puts the design on the folder and every folder inside it, asking first when that's more
 than ten. The button shows how far the run has got, with **Stop** beside it, and a toast says how
 it ended: a stopped run offers **Carry on**, and one where some folders couldn't be changed
-offers **See which**, which opens the folder panel's summary.
+offers **See which**, which opens the folder panel's summary. Leave the composer while it goes
+and it carries on in the background, with how far it has got at the foot of the sidebar.
 
 When some of the folders inside were chosen with **Choose** in the folder panel, only those go,
 and the switch says so: **Include 22 of 28 folders inside**.
