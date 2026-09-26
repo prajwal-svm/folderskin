@@ -56,6 +56,7 @@ Free · Open source · No account · No tracking
 | Get your first skins | The first launch offers the community's packs, with Classic Art picked for you |
 | Give a folder a new look | Drop the folder on the window, click a skin, press **Apply skin** |
 | Do the folders inside it too | Turn on **Include subfolders** under the folder, then **Apply to** all of them |
+| Give a drive a new look | Drop the drive on the window, or pick it, then **Apply skin**: every skin is drawn on that kind of drive |
 | Use a photo of your own | Drop the picture on the window, or press **Add your photo** |
 | Design your own | **Design your own**: start from a colour, a label, an emoji or a photo, change anything, then **Save & apply** |
 | Have an AI paint one | **Generate with AI**, with your own API key, or the prompt for Grok's or ChatGPT's chat under **No API key?** |
@@ -117,6 +118,14 @@ changed, which folders couldn't be and why, and offers to carry on or try those 
 notification says when it's done if FolderSkin isn't in front. **Revert all** takes off exactly
 what the run put on.
 
+A drive works the same way. Drop it on the window, or pick it where the open panel lists your
+drives, and the folder panel says what kind of drive it is and shows every skin drawn on that kind
+of drive, with the skins made for drives first. **Apply skin** gives the drive its own icon, and
+**Include subfolders** gives the folders on it the skin as folders. A Mac's or a Linux PC's
+startup disk, and a drive that's read-only, can't have an icon of their own, and the panel says
+so. [docs/DRIVES.md](docs/DRIVES.md) has every kind of drive and where each system keeps a
+drive's icon.
+
 To use your own picture, drop it on the window or press **Add your photo**. It is saved under
 **Yours** and stays there until you delete it, which asks first. A finished folder on a flat
 magenta background, like the ones the chat prompt below produces, is cut out and used as it is.
@@ -168,8 +177,9 @@ a label, an emoji, two tones, glass, stripes or a photo with a caption, then cha
 - shadows, glows and sticker edges
 
 The **Folder skeleton** switch shows the design on the folder or flat, and the icon beside it at
-the sizes Finder draws shows how it reads. Make a see-through glass folder, or choose **Free icon**
-for a sticker that isn't folder-shaped at all. **Save & apply** puts it on your folder, and
+the sizes Finder draws shows how it reads. Make a see-through glass folder, choose **Free icon**
+for a sticker that isn't folder-shaped at all, or start on a drive, from a USB stick to a
+server, with the drive you chose first. **Save & apply** puts it on your folder or drive, and
 **Edit design** in its ⋯ menu opens it again. [docs/COMPOSER.md](docs/COMPOSER.md) has the
 details.
 
@@ -187,11 +197,13 @@ Apple silicon Macs with macOS 14 or later, and on Windows and Linux PCs. Or use 
 key** from a provider you already use. The key is encrypted and stored on your computer (with no
 keychain password prompts), FolderSkin has no server of its own, and nothing is sent anywhere
 until you press Enter. Open **Generate with AI** and describe a scene. Type / for thirty styles,
-ideas to start from and the prompts you've saved, and @ to pick what it's for: the Mac's folder,
-Windows' folder, or a **Free icon** that stands on its own. For a folder, choose **Whole folder**
-(the model paints the whole folder from FolderSkin's template, like a poster) or **Just the art**
-(flat art wrapped onto FolderSkin's folder). Words in quotes are lettered on the skin. Every
-result is saved to **Yours** and can be tried on at once.
+ideas to start from and the prompts you've saved, and @ to pick what it's for: the Mac's,
+Windows' or the Linux folder, any drive each system shows, or a **Free icon** that stands on its
+own. For a folder, choose **Whole folder** (the model paints the whole folder from FolderSkin's
+template, like a poster) or **Just the art** (flat art wrapped onto FolderSkin's folder), and a
+drive has **Whole drive** and **Just the art** the same way. With a drive chosen, a new chat starts
+on it. Words in quotes are lettered on the skin. Every result is saved to **Yours** and can be
+tried on at once.
 
 Choose where pictures are made in **Settings → AI Provider**: set up the Local Model there, or
 paste a key. Each provider's name links to the page where you make one.
@@ -228,7 +240,8 @@ cargo run -p folderskin-tools -- packs make ~/Pictures/renders --dir ../foldersk
 cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 ```
 
-`render` previews any picture as the folder it makes, and `guide` draws the template's safe
+`--drives` makes a pack of drives instead, whose skins go on drives. `render` previews any
+picture as the folder it makes, and `guide` draws the template's safe
 areas for artwork that gets wrapped onto the folder. [docs/PACKS.md](docs/PACKS.md) has the
 contract and how a pack is proposed, [docs/SKINS.md](docs/SKINS.md) how a picture becomes an
 icon, and [.claude/skills/folderskin-skins/SKILL.md](.claude/skills/folderskin-skins/SKILL.md)
@@ -251,6 +264,10 @@ platform. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the details.
 | macOS | `NSWorkspace.setIcon` | the invisible `Icon\r` file macOS maintains | none: Finder updates immediately |
 | Windows | `desktop.ini` + `folderskin-<hash>.ico`, both hidden + system, folder marked read-only, then `SHChangeNotify` on the folder and its parent | `desktop.ini`, `folderskin-<hash>.ico` | none: the folder repaints as the apply finishes |
 | Linux | `.directory` for KDE, plus `gio set metadata::custom-icon` for Nautilus, Nemo and Caja | `.directory`, `.folderskin.png` | some tiling and minimal file managers read neither |
+
+A drive's own icon goes where its system keeps one: `.VolumeIcon.icns` at a Mac drive's root, a
+setting for its letter in Windows' registry, which writes nothing to the drive, and the same files
+as a folder's plus `.xdg-volume-info` at a Linux drive's root.
 
 Revert removes only what FolderSkin wrote, and is safe to run twice. Cloud-synced folders
 (iCloud, OneDrive, Dropbox) will sync the helper files to your other machines. The full

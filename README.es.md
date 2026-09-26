@@ -57,6 +57,7 @@ Gratis · Código abierto · Sin cuenta · Sin rastreo
 | Conseguir tus primeros aspectos | En el primer inicio, FolderSkin te ofrece los paquetes de la comunidad, con Classic Art ya seleccionado |
 | Darle un aspecto nuevo a una carpeta | Suelta la carpeta en la ventana, haz clic en un aspecto y luego en **Aplicar aspecto** |
 | Aplicarlo también a las carpetas que contiene | Activa **Incluir subcarpetas** debajo de la carpeta y luego **Aplicar a** todas |
+| Darle un aspecto nuevo a una unidad | Suelta la unidad en la ventana, o elígela, y luego **Aplicar aspecto**: cada aspecto se dibuja sobre ese tipo de unidad |
 | Usar una foto tuya | Suelta la imagen en la ventana o haz clic en **Añadir tu foto** |
 | Diseñar el tuyo | **Diseña el tuyo**: empieza con un color, un rótulo, un emoji o una foto, cambia lo que quieras y luego **Guardar y aplicar** |
 | Que una IA te pinte uno | **Generar con IA**, con tu propia clave de API, o el prompt para el chat de Grok o de ChatGPT en **¿Sin clave de API?** |
@@ -121,6 +122,14 @@ curso, y el resumen indica qué cambió, qué carpetas no se pudieron cambiar y 
 continuar o volver a intentarlo con esas. Si FolderSkin no está delante, una notificación te avisa
 cuando termina. **Restaurar todo** quita exactamente lo que puso el proceso.
 
+Una unidad funciona igual. Suéltala en la ventana, o elígela donde el panel de abrir lista tus
+unidades, y el panel de la carpeta dice qué tipo de unidad es y muestra cada aspecto dibujado sobre
+ese tipo de unidad, con los aspectos hechos para unidades primero. **Aplicar aspecto** le da a la
+unidad su propio icono, e **Incluir subcarpetas** les da el aspecto a las carpetas que contiene,
+como carpetas. El disco de arranque de un Mac o de un PC con Linux, y una unidad de solo lectura,
+no pueden tener un icono propio, y el panel lo dice. [docs/DRIVES.md](docs/DRIVES.md) (en inglés)
+describe cada tipo de unidad y dónde guarda cada sistema el icono de una unidad.
+
 Para usar tu propia imagen, suéltala en la ventana o haz clic en **Añadir tu foto**. Se guarda en
 **Mis aspectos** y se queda ahí hasta que la borres (FolderSkin te pide confirmación antes). Una carpeta
 terminada sobre un fondo magenta liso, como las que produce el prompt para chat de más abajo, se
@@ -181,6 +190,9 @@ transparente, o elige **Icono libre** para un sticker que no tenga forma de carp
 aplicar** lo pone en tu carpeta, y **Editar el diseño**, en su menú ⋯, lo vuelve a abrir.
 [docs/es/COMPOSER.md](docs/es/COMPOSER.md) tiene los detalles.
 
+Un diseño también puede empezar en una unidad, de una memoria USB a un servidor, con la unidad que
+elegiste primero.
+
 <details><summary>El editor</summary>
 
 ![Diseñando un aspecto: un insecto de la biblioteca de iconos estampado en una carpeta azul, con la búsqueda de iconos al lado](docs/images/composer.webp)
@@ -201,6 +213,10 @@ carpeta de Mac, la de Windows o un **Icono libre**, que va por sí solo. Para un
 póster) o **Solo la imagen** (arte plano que se coloca sobre la carpeta de FolderSkin). Lo que
 escribas entre comillas aparece rotulado en el aspecto. Cada resultado se guarda en **Mis aspectos**
 y puedes probarlo al momento.
+
+@ ofrece también la carpeta de Linux y todas las unidades de cada sistema, con **Unidad entera** o
+**Solo la imagen**, como para una carpeta. Cuando hay una unidad elegida, un chat nuevo empieza en
+esa unidad.
 
 Elige dónde se crean las imágenes en **Ajustes → Proveedor de IA**: configura ahí el Modelo local o
 pega una clave. El nombre de cada proveedor lleva a la página donde se crea una.
@@ -240,6 +256,7 @@ cargo run -p folderskin-tools -- packs make ~/Pictures/renders --dir ../foldersk
 cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 ```
 
+`--drives` hace en cambio un paquete de unidades, cuyos aspectos van en unidades.
 `render` muestra cualquier imagen como la carpeta que produce, y `guide` dibuja las zonas seguras de
 la plantilla para las ilustraciones que se colocan sobre la carpeta.
 [docs/es/PACKS.md](docs/es/PACKS.md) explica el contrato y cómo se propone un paquete,
@@ -264,6 +281,10 @@ la galería, la vista previa y el icono en el disco son los mismos píxeles en t
 | macOS | `NSWorkspace.setIcon` | el archivo invisible `Icon\r` que mantiene macOS | nada: el Finder se actualiza al instante |
 | Windows | `desktop.ini` + `folderskin-<hash>.ico`, ambos ocultos + de sistema, la carpeta marcada como de solo lectura, y luego `SHChangeNotify` sobre la carpeta y la que la contiene | `desktop.ini`, `folderskin-<hash>.ico` | nada: la carpeta se redibuja en cuanto termina de aplicarse |
 | Linux | `.directory` para KDE, más `gio set metadata::custom-icon` para Nautilus, Nemo y Caja | `.directory`, `.folderskin.png` | algunos gestores de ventanas en mosaico y gestores de archivos minimalistas no leen ninguno de los dos |
+
+El icono propio de una unidad va donde su sistema lo guarda: `.VolumeIcon.icns` en la raíz de una
+unidad de Mac, un ajuste de su letra en el registro de Windows, que no escribe nada en la unidad, y
+los mismos archivos que una carpeta, más `.xdg-volume-info`, en la raíz de una unidad de Linux.
 
 Restaurar solo quita lo que escribió FolderSkin, y se puede ejecutar dos veces sin problema. Las
 carpetas sincronizadas en la nube (iCloud, OneDrive, Dropbox) sincronizarán los archivos auxiliares

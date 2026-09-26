@@ -57,6 +57,7 @@ Gratuit · Open source · Sans compte · Sans pistage
 | Obtenir vos premiers habillages | Au premier lancement, FolderSkin propose les packs de la communauté, avec Classic Art déjà sélectionné |
 | Changer l'apparence d'un dossier | Déposez le dossier sur la fenêtre, cliquez sur un habillage, puis sur **Appliquer l'habillage** |
 | Habiller aussi les dossiers qu'il contient | Activez **Inclure les sous-dossiers** sous le dossier, puis **Appliquer à** tous |
+| Changer l'apparence d'un disque | Déposez le disque sur la fenêtre, ou choisissez-le, puis **Appliquer l'habillage** : chaque habillage est dessiné sur ce type de disque |
 | Utiliser une de vos photos | Déposez l'image sur la fenêtre, ou cliquez sur **Ajouter une photo** |
 | Créer le vôtre | **Créer le vôtre** : partez d'une couleur, d'une étiquette, d'un emoji ou d'une photo, modifiez tout ce que vous voulez, puis **Enregistrer et appliquer** |
 | Faire peindre un habillage par une IA | **Générer avec l'IA**, avec votre propre clé d'API, ou le prompt pour le chat de Grok ou de ChatGPT sous **Pas de clé d'API ?** |
@@ -122,6 +123,15 @@ puis propose de continuer ou de réessayer ceux-là. Une notification vous prév
 terminée si FolderSkin n'est pas au premier plan. **Tout rétablir** retire exactement ce que
 l'opération a posé.
 
+Un disque fonctionne de la même façon. Déposez-le sur la fenêtre, ou choisissez-le là où le
+panneau d'ouverture liste vos disques : le panneau du dossier indique de quel type de disque il
+s'agit et montre chaque habillage dessiné sur ce type de disque, ceux faits pour les disques en
+premier. **Appliquer l'habillage** donne au disque sa propre icône, et **Inclure les
+sous-dossiers** habille les dossiers qu'il contient comme des dossiers. Le disque de démarrage d'un
+Mac ou d'un PC Linux, et un disque en lecture seule, ne peuvent pas avoir leur propre icône, et le
+panneau le dit. [docs/DRIVES.md](docs/DRIVES.md) (en anglais) décrit chaque type de disque et
+l'endroit où chaque système garde l'icône d'un disque.
+
 Pour utiliser votre propre image, déposez-la sur la fenêtre ou cliquez sur **Ajouter une photo**.
 Elle est enregistrée dans **Mes habillages** et y reste jusqu'à ce que vous la supprimiez, ce que
 FolderSkin vous fait confirmer. Un dossier fini sur fond magenta uni, comme ceux que produit le
@@ -186,6 +196,9 @@ transparent, ou choisissez **Icône libre** pour un autocollant qui n'a pas du t
 dossier. **Enregistrer et appliquer** la pose sur votre dossier, et **Modifier la création**, dans
 son menu ⋯, la rouvre. [docs/fr/COMPOSER.md](docs/fr/COMPOSER.md) donne tous les détails.
 
+Une création peut aussi partir d'un disque, d'une clé USB à un serveur, avec en premier le disque
+que vous avez choisi.
+
 <details><summary>L'éditeur</summary>
 
 ![Création d'un habillage : un insecte tiré de la bibliothèque d'icônes, incrusté dans un dossier bleu, avec la recherche d'icônes à côté](docs/images/composer.webp)
@@ -207,6 +220,10 @@ suffit à elle-même. Pour un dossier, choisissez **Dossier entier** (le modèle
 à partir du gabarit de FolderSkin, comme une affiche) ou **Juste l'image** (une image à plat,
 plaquée sur le dossier de FolderSkin). Les mots entre guillemets sont écrits dessus. Chaque
 résultat est enregistré dans **Mes habillages** et peut être essayé tout de suite.
+
+@ propose aussi le dossier Linux et chaque disque de chaque système, avec **Disque entier** ou
+**Juste l'image**, comme pour un dossier. Quand un disque est choisi, un nouveau chat part de ce
+disque.
 
 Choisissez où les images sont créées dans **Réglages → Fournisseur d'IA** : installez-y le Modèle
 local, ou collez une clé. Le nom de chaque fournisseur renvoie à la page où vous en créez une.
@@ -245,6 +262,7 @@ cargo run -p folderskin-tools -- packs make ~/Pictures/renders --dir ../foldersk
 cargo run -p folderskin-tools -- packs check --dir ../folderskin-community
 ```
 
+`--drives` fait plutôt un pack de disques, dont les habillages vont sur des disques.
 `render` montre n'importe quelle image sous la forme du dossier qu'elle donne, et `guide` dessine
 les zones de sécurité du gabarit pour les illustrations plaquées sur le dossier.
 [docs/fr/PACKS.md](docs/fr/PACKS.md) décrit le contrat et la façon de proposer un pack,
@@ -270,6 +288,10 @@ anglais).
 | macOS | `NSWorkspace.setIcon` | le fichier invisible `Icon\r` que gère macOS | rien : le Finder se met à jour immédiatement |
 | Windows | `desktop.ini` + `folderskin-<hash>.ico`, tous deux masqués + système, dossier marqué en lecture seule, puis `SHChangeNotify` sur le dossier et son parent | `desktop.ini`, `folderskin-<hash>.ico` | rien : le dossier se redessine dès la fin de l'opération |
 | Linux | `.directory` pour KDE, plus `gio set metadata::custom-icon` pour Nautilus, Nemo et Caja | `.directory`, `.folderskin.png` | certains gestionnaires de fenêtres en mosaïque et gestionnaires de fichiers minimalistes ne lisent ni l'un ni l'autre |
+
+L'icône propre d'un disque va là où son système la garde : `.VolumeIcon.icns` à la racine d'un
+disque Mac, un réglage de sa lettre dans le registre de Windows, qui n'écrit rien sur le disque, et
+les mêmes fichiers que pour un dossier, plus `.xdg-volume-info`, à la racine d'un disque Linux.
 
 Rétablir ne retire que ce que FolderSkin a écrit, et peut être lancé deux fois sans risque. Les
 dossiers synchronisés dans le cloud (iCloud, OneDrive, Dropbox) synchroniseront les fichiers

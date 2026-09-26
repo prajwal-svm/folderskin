@@ -29,8 +29,9 @@ any other skin, and **Save & apply** puts it straight on the folder you picked.
 design: nothing on it is fixed. Picking one while your design has unsaved changes asks first.
 **Start empty** has the Mac's, Windows' and Linux's own folders beside the empty ones, and **Start
 on a drive** has every drive each system shows, the Mac's, Windows' and Linux's in a row each
-([DRIVES.md](DRIVES.md) lists them). A drive template starts on this system's own external drive,
-or on the drive the last design was on.
+([DRIVES.md](DRIVES.md) lists them). With a drive chosen on the folder panel, **The drive you
+chose** leads the row, by the drive's own name. A drive template starts on that drive, or on the
+drive the last design was on, or else on this system's own external drive.
 
 **Adding.** The bar above the folder adds **Text**, an **Emoji**, a **Shape** (thirteen, from a
 rounded rectangle to a speech bubble), a **Picture** (a file, one of your skins, or one dropped or
@@ -76,9 +77,11 @@ With nothing selected, the settings choose **On the folder** or **Free icon**.
 between its hub and its rim. The rest of the drive (its base, its connector, the hole in a disc) is
 drawn around and over the face, and a see-through part of the design shows the drive's own face.
 The switch under the canvas reads **Drive skeleton**, and beside it a menu of every drive moves the
-design onto another, each layer keeping its place on the face and fitting it. There is no tab on a
-drive to move a layer to. Saved, a design on a drive is a drive skin, which the library puts first
-while a drive is picked.
+design onto another, each layer keeping its place on the face and fitting it. New words and shapes
+land on the face in a colour that reads there, dark on a light face and white on a coloured one,
+and words are never wider than the face: on a USB stick's narrow label they start small. There is
+no tab on a drive to move a layer to. Saved, a design on a drive is a drive skin, which the library
+puts first while a drive is picked.
 
 **Seeing it.** The **Folder skeleton** switch under the canvas shows the design on the folder
 (tab, paper sheet and edges), or flat with the folder's edges drawn over it, so you can see what
@@ -181,7 +184,7 @@ A remix reads the skin's own picture with `composer_skin_image`:
 | `composer_skin_image` | `skinId` | the same, for a saved skin's own picture |
 | `composer_design` | `skinId` | the design's document, or `null` for a skin not made here |
 | `composer_drive_template` | `drive` | a drive's layers in the folder's shape, as `composer_template` sends them: `back` empty, `middle` the plain drive, `front` its face's coverage, `top` what goes over the face, and `parts` with the face as the front (and, on a disc, `anchor`, where a new layer goes) |
-| `base_shapes` | `size` | every base a design or a picture can be drawn on, [below](#every-base-in-one-list) |
+| `shapes` | `size` | every shape a design or a picture can be made for, [below](#every-shape-in-one-list) |
 
 ### The document
 

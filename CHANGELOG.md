@@ -21,6 +21,10 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Design your own on a drive.** Start a new design on any of those shapes, with the drive you
   chose first, and words, shapes and pictures land on its face in a colour that reads there. The
   Linux folder is there too, beside the Mac's and Windows'.
+- **Paint for a drive, or the Linux folder.** Every drive shape is in the AI prompt's list of
+  shapes and in @, beside the folders, and a new chat starts on the drive on show. **Whole
+  drive** paints the drive on FolderSkin's drawing of it, **Just the art** paints its face, and
+  the picture goes with the drive skins.
 - **Packs of drives.** `folderskin-tools packs make --drives` makes one and `packs check` checks
   it, and Community marks it **Drives**. Its skins wait behind the folder skins until a drive is
   chosen. FolderSkin 0.1.9 doesn't see packs of drives at all, so it never puts one on a folder.
