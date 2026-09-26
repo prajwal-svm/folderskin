@@ -113,37 +113,80 @@ pub fn same_pixels(a: &RgbaImage, b: &RgbaImage) -> bool {
             .all(|(p, q)| p.0[3] == q.0[3] && (p.0[3] == 0 || p.0 == q.0))
 }
 
-/// Whether `a` and `b` are one picture, give or take the rounding another processor draws it
-/// with. The same drives drawn on an x86 computer and an Arm Mac came out a few pixels apart in each
-/// picture, by one colour level mostly and four at the most. So coverage within [`NEAR_ALPHA`]
-/// levels and colour within [`NEAR_COLOUR`] where it shows, and no more than one pixel in
-/// [`NEAR_SHARE`] off at all: a change to a drawing moves thousands.
-pub fn near_pixels(a: &RgbaImage, b: &RgbaImage) -> bool {
+/// How two pictures of one size differ: how many pixels differ at all, how many by more than a
+/// rounding ([`NEAR_ALPHA`] levels of coverage, or [`NEAR_COLOUR`] of colour where it shows), and
+/// the most any pixel's coverage and visible colour differ by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Difference {
+    pub off: usize,
+    pub beyond_rounding: usize,
+    pub most_alpha: u8,
+    pub most_colour: u8,
+}
+
+/// How `a` and `b` differ, or `None` when they aren't the same size.
+pub fn difference(a: &RgbaImage, b: &RgbaImage) -> Option<Difference> {
     if a.dimensions() != b.dimensions() {
-        return false;
+        return None;
     }
-    let mut off = 0usize;
+    let mut d = Difference {
+        off: 0,
+        beyond_rounding: 0,
+        most_alpha: 0,
+        most_colour: 0,
+    };
     for (p, q) in a.pixels().zip(b.pixels()) {
         // A pixel nobody sees may keep any colour: WebP keeps what it likes under no coverage.
         if p == q || (p.0[3] == 0 && q.0[3] == 0) {
             continue;
         }
-        off += 1;
+        d.off += 1;
         let coverage = p.0[3].abs_diff(q.0[3]);
-        let colour = (0..3).map(|c| p.0[c].abs_diff(q.0[c])).max().unwrap_or(0);
-        if coverage > NEAR_ALPHA || (p.0[3].min(q.0[3]) >= 16 && colour > NEAR_COLOUR) {
-            return false;
+        // The colour of a nearly transparent pixel is mostly rounding.
+        let colour = if p.0[3].min(q.0[3]) >= 16 {
+            (0..3).map(|c| p.0[c].abs_diff(q.0[c])).max().unwrap_or(0)
+        } else {
+            0
+        };
+        d.most_alpha = d.most_alpha.max(coverage);
+        d.most_colour = d.most_colour.max(colour);
+        if coverage > NEAR_ALPHA || colour > NEAR_COLOUR {
+            d.beyond_rounding += 1;
         }
     }
-    off <= (a.width() as usize * a.height() as usize / NEAR_SHARE).max(1)
+    Some(d)
 }
 
-/// How far a pixel's coverage may be from the other picture's in [`near_pixels`].
+/// Whether `a` and `b` are one picture, give or take the rounding another computer draws it with.
+/// The same drives drawn on x86 and on an Arm Mac come out a few pixels apart in each picture, by
+/// a level or a few, and Windows' x86 draws a few further apart than a Mac's does. A change to a
+/// drawing moves hundreds of pixels at its edges by far more. So: no more than one pixel in
+/// [`NEAR_SHARE`] off at all, one in [`NEAR_SHARE_BEYOND`] off by more than a rounding, and none
+/// by more than [`NEAR_MOST`] levels.
+pub fn near_pixels(a: &RgbaImage, b: &RgbaImage) -> bool {
+    difference(a, b).is_some_and(|d| d.within(a.width() as usize * a.height() as usize))
+}
+
+impl Difference {
+    /// Whether this much difference in a picture of `pixels` pixels is rounding.
+    pub fn within(&self, pixels: usize) -> bool {
+        self.off <= (pixels / NEAR_SHARE).max(1)
+            && self.beyond_rounding <= (pixels / NEAR_SHARE_BEYOND).max(1)
+            && self.most_alpha <= NEAR_MOST
+            && self.most_colour <= NEAR_MOST
+    }
+}
+
+/// How far a pixel's coverage may be from the other picture's and still be a rounding.
 const NEAR_ALPHA: u8 = 4;
-/// How far a pixel's colour may be from the other picture's in [`near_pixels`].
+/// How far a pixel's colour may be from the other picture's and still be a rounding.
 const NEAR_COLOUR: u8 = 8;
 /// One pixel in this many may differ at all in [`near_pixels`].
 const NEAR_SHARE: usize = 200;
+/// One pixel in this many may differ by more than a rounding in [`near_pixels`].
+const NEAR_SHARE_BEYOND: usize = 2000;
+/// No pixel's coverage or visible colour may differ by more than this in [`near_pixels`].
+const NEAR_MOST: u8 = 32;
 
 #[cfg(test)]
 mod tests {
@@ -191,10 +234,17 @@ mod tests {
                 .unwrap_or_else(|e| panic!("couldn't read {path}: {e}"))
                 .to_rgba8()
         };
+        let near = |path: &str, want: &RgbaImage| {
+            let got = read(path);
+            assert!(
+                near_pixels(&got, want),
+                "{path} differs ({:?}); {again}",
+                difference(&got, want)
+            );
+        };
         for shape in DriveShape::all() {
             for (file, want) in drive_layer_files(shape, 512) {
-                let path = format!("{dir}/drives/{}/{file}", shape.id());
-                assert!(near_pixels(&read(&path), &want), "{path} differs; {again}");
+                near(&format!("{dir}/drives/{}/{file}", shape.id()), &want);
             }
         }
         let parts: serde_json::Value =
@@ -205,14 +255,9 @@ mod tests {
             "drives/parts.json differs; {again}"
         );
         for (id, want) in base_pictures(256) {
-            let path = format!("{dir}/bases/{id}.webp");
-            assert!(near_pixels(&read(&path), &want), "{path} differs; {again}");
+            near(&format!("{dir}/bases/{id}.webp"), &want);
         }
-        let strip = format!("{dir}/drives/strip.webp");
-        assert!(
-            near_pixels(&read(&strip), &drive_strip()),
-            "{strip} differs; {again}"
-        );
+        near(&format!("{dir}/drives/strip.webp"), &drive_strip());
     }
 
     /// Whether two JSON values say the same, numbers within a hundredth of a unit: the drives'
