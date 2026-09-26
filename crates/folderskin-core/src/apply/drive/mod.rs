@@ -3,7 +3,8 @@
 //! Each system keeps it somewhere of its own:
 //!
 //! - **macOS** takes it with the same call as a folder's, on the drive's mount point, and writes
-//!   it to the drive as `.VolumeIcon.icns` with the custom-icon flag on the root.
+//!   it to the drive as `.VolumeIcon.icns` with the custom-icon flag on the root. A share that
+//!   refuses that call gets the same written in by hand, as a folder there does.
 //! - **Windows** looks it up by drive letter in the user's registry ([`windows`]), so nothing is
 //!   written to the drive.
 //! - **Linux** file managers draw a drive's root like any folder, and GNOME's list of drives reads
@@ -89,7 +90,7 @@ pub fn apply(volume: &Volume, icons: &IconSet) -> Result<(), ApplyError> {
     #[cfg(target_os = "macos")]
     {
         let image = super::macos::prepare(icons)?;
-        super::macos::apply(&volume.root, &image).map_err(|_| {
+        super::macos::apply_volume(&volume.root, &image).map_err(|_| {
             ApplyError::Platform(
                 if volume.network {
                     SERVER_REFUSED
@@ -129,7 +130,7 @@ pub fn revert(volume: &Volume) -> Result<(), ApplyError> {
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos::revert(&volume.root).map_err(|_| {
+        super::macos::revert_volume(&volume.root).map_err(|_| {
             ApplyError::Platform(
                 if volume.network {
                     SERVER_REFUSED
@@ -347,6 +348,38 @@ mod tests {
 
         revert(&volume).unwrap();
         assert!(!image.mount.join(".VolumeIcon.icns").exists());
+        assert!(!has_custom_icon(&volume));
+    }
+
+    /// A share that refuses `setIcon` refuses clearing too, and gets both done by hand, as a
+    /// folder there does. On a drive image the icon written in is the one AppKit writes, and
+    /// taking it off leaves the drive as a revert does.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "attaches a disk image and needs a desktop session: cargo test -p folderskin-core -- --ignored drive_image"]
+    fn a_drive_image_takes_its_icon_by_hand_as_a_share_that_refuses_appkit_does() {
+        use crate::apply::macos;
+
+        let image = Image::attach(false);
+        let volume = crate::drive::detect::volume_at(&image.mount).expect("a drive");
+        let icon = macos::prepare(&icons()).unwrap();
+        let file = image.mount.join(".VolumeIcon.icns");
+
+        macos::apply_volume(&image.mount, &icon).unwrap();
+        let appkit = std::fs::read(&file).unwrap();
+        macos::revert_volume(&image.mount).unwrap();
+        assert!(!file.exists());
+
+        macos::apply_volume_by_hand(&image.mount, &icon).unwrap();
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            appkit,
+            "the icon AppKit would have written"
+        );
+        assert!(has_custom_icon(&volume));
+
+        macos::revert_volume_by_hand(&image.mount).unwrap();
+        assert!(!file.exists());
         assert!(!has_custom_icon(&volume));
     }
 

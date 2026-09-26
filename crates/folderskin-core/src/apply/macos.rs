@@ -32,6 +32,10 @@
 //! AppKit refuses a folder, the icon it would have written goes in by hand, and a revert it
 //! refuses takes the icon off by hand.
 //!
+//! A drive's own icon goes on its mount point the same way ([`apply_volume`]), where AppKit
+//! writes it as `.VolumeIcon.icns` rather than an `Icon\r`, and a share that refuses AppKit gets
+//! that file written in and taken off by hand likewise.
+//!
 //! `setIcon` works off the main thread, but not on two threads at once: calls that overlap
 //! garble each other's `Icon\r` (a 37 KB icon came out as 286 bytes) or fail outright. An apply,
 //! a tree of them and a measurement can all be running together, so every change here takes one
@@ -62,6 +66,9 @@ const LIGHT_MAX_REP: u32 = 512;
 pub(crate) const CLONE_BYTES: u64 = 32 * 1024;
 /// The invisible file a folder's custom icon lives in.
 const ICON_FILE: &str = "Icon\r";
+/// The file at a drive's root its custom icon lives in: an `icns`, where a folder's is a
+/// resource fork.
+const VOLUME_ICON_FILE: &str = ".VolumeIcon.icns";
 /// kHasCustomIcon in the high byte of the big-endian Finder flags (byte 8 of the Finder info).
 const HAS_CUSTOM_ICON: u8 = 0x04;
 
@@ -96,6 +103,51 @@ struct First {
 struct IconFile {
     fork: Vec<u8>,
     info: Vec<u8>,
+}
+
+impl IconFile {
+    /// The icon in the fork as an `icns` file holds it: the data of the fork's `icns` resource,
+    /// found through the fork's map as the Resource Manager finds it.
+    fn icns(&self) -> io::Result<&[u8]> {
+        let unreadable = || io::Error::other("macOS wrote an icon FolderSkin couldn't read back");
+        let fork = self.fork.as_slice();
+        let u16_at = |at: usize| {
+            fork.get(at..at + 2)
+                .map(|b| usize::from(u16::from_be_bytes([b[0], b[1]])))
+        };
+        let u32_at = |at: usize| {
+            fork.get(at..at + 4)
+                .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize)
+        };
+        // The header: where the resources' data starts, and where the map that finds them is.
+        let (data, map) = (
+            u32_at(0).ok_or_else(unreadable)?,
+            u32_at(4).ok_or_else(unreadable)?,
+        );
+        let types = map + u16_at(map + 24).ok_or_else(unreadable)?;
+        let count = u16_at(types).ok_or_else(unreadable)? + 1;
+        for k in 0..count {
+            let entry = types + 2 + 8 * k;
+            if fork.get(entry..entry + 4) != Some(b"icns".as_slice()) {
+                continue;
+            }
+            // The first of its resources: its data's offset, three bytes after the id, the name's
+            // offset and the attributes, from the start of the data.
+            let refs = types + u16_at(entry + 6).ok_or_else(unreadable)?;
+            let offset = fork.get(refs + 5..refs + 8).ok_or_else(unreadable)?;
+            let at = data + u32::from_be_bytes([0, offset[0], offset[1], offset[2]]) as usize;
+            let len = u32_at(at).ok_or_else(unreadable)?;
+            let icns = fork.get(at + 4..at + 4 + len).ok_or_else(unreadable)?;
+            // An icns names itself and gives its own length first.
+            let whole = icns
+                .get(4..8)
+                .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize);
+            if icns.get(..4) == Some(b"icns".as_slice()) && whole == Some(len) {
+                return Ok(icns);
+            }
+        }
+        Err(unreadable())
+    }
 }
 
 /// The icon as the one `NSImage` macOS wants, a representation per rendered size up to
@@ -189,9 +241,61 @@ pub fn revert(folder: &Path) -> Result<(), ApplyError> {
 }
 
 /// True when Finder draws a custom icon for `folder`: the custom-icon flag in its Finder info,
-/// which a revert clears whoever set it.
+/// which a revert clears whoever set it. A drive's root is the same (see [`apply_volume`]).
 pub fn has_custom_icon(folder: &Path) -> bool {
     finder_info(folder).is_some_and(|info| info[8] & HAS_CUSTOM_ICON != 0)
+}
+
+/// Gives the drive mounted at `root` the [`prepare`]d icon as its own.
+///
+/// `setIcon` on a drive's mount point writes the icon as `.VolumeIcon.icns` at its root, with the
+/// custom-icon flag on the root, where a folder gets an `Icon\r`. A share that refuses `setIcon`
+/// gets the same by hand, as a folder there does: the `icns` AppKit would have written, taken out
+/// of the whole icon it writes for a folder.
+pub fn apply_volume(root: &Path, icon: &Prepared) -> Result<(), ApplyError> {
+    let _one_at_a_time = one_at_a_time();
+    if let Err(refused) = set_icon(root, Some(&icon.image)) {
+        write_volume_icon(root, icon).map_err(|_| refused)?;
+    }
+    Ok(())
+}
+
+/// Takes the drive mounted at `root`'s own icon off, by hand where a share refuses `setIcon`.
+pub fn revert_volume(root: &Path) -> Result<(), ApplyError> {
+    let _one_at_a_time = one_at_a_time();
+    if let Err(refused) = set_icon(root, None) {
+        take_off(root, &root.join(VOLUME_ICON_FILE)).map_err(|_| refused)?;
+    }
+    Ok(())
+}
+
+/// [`apply_volume`] as it goes on a share that refuses AppKit, for the tests: the icon written
+/// in by hand, with the lock taken.
+#[cfg(test)]
+pub(crate) fn apply_volume_by_hand(root: &Path, icon: &Prepared) -> io::Result<()> {
+    let _one_at_a_time = one_at_a_time();
+    write_volume_icon(root, icon)
+}
+
+/// [`revert_volume`] as it goes on a share that refuses AppKit, for the tests.
+#[cfg(test)]
+pub(crate) fn revert_volume_by_hand(root: &Path) -> io::Result<()> {
+    let _one_at_a_time = one_at_a_time();
+    take_off(root, &root.join(VOLUME_ICON_FILE))
+}
+
+/// Gives the drive at `root`, which AppKit refused, its icon as AppKit would have written it.
+/// Called with [`SET_ICON`] held.
+fn write_volume_icon(root: &Path, icon: &Prepared) -> io::Result<()> {
+    let whole = icon.whole()?;
+    let icns = whole.icns()?;
+    let target = root.join(VOLUME_ICON_FILE);
+    take_off(root, &target)?;
+    if let Err(e) = std::fs::write(&target, icns) {
+        let _ = std::fs::remove_file(&target);
+        return Err(e);
+    }
+    put_on(root)
 }
 
 /// Disk each folder of a run takes for `icon`: a clone of the first folder's `Icon\r` when
