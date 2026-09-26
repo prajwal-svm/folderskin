@@ -288,7 +288,7 @@ export function TurnCard({
                   )
                 ) : (
                   <button type="button" className="btn btn-primary btn-sm" onMouseDown={(e) => e.preventDefault()} onClick={act.chooseFolder}>
-                    {t("common.dialog.chooseFolder")}
+                    {shape?.family === "drive" ? t("ai.target.chooseDrive") : t("common.dialog.chooseFolder")}
                   </button>
                 )}
                 {folderName && !applied && (

@@ -225,7 +225,13 @@
     "another": "別のフォルダを選ぶ",
     "hide": "右側に表示しない",
     "show": "右側に表示する",
-    "none": "フォルダを使わない"
+    "none": "フォルダを使わない",
+    "chooseDrive": "ドライブを選択",
+    "chooseDriveTip": "これらの画像を使うドライブを選ぶ",
+    "labelDrive": "ドライブ「{{name}}」用",
+    "menuDrive": "ドライブ",
+    "anotherDrive": "別のドライブを選ぶ",
+    "noneDrive": "ドライブを使わない"
   },
   "local": {
     "name": "ローカルモデル",

@@ -229,7 +229,13 @@
     "another": "Choisir un autre dossier",
     "hide": "Le masquer à droite",
     "show": "L'afficher à droite",
-    "none": "N'utiliser aucun dossier"
+    "none": "N'utiliser aucun dossier",
+    "chooseDrive": "Choisir un disque",
+    "chooseDriveTip": "Choisir le disque auquel ces images sont destinées",
+    "labelDrive": "pour le disque {{name}}",
+    "menuDrive": "Le disque",
+    "anotherDrive": "Choisir un autre disque",
+    "noneDrive": "N'utiliser aucun disque"
   },
   "local": {
     "name": "Modèle local",

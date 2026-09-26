@@ -225,7 +225,13 @@
     "another": "다른 폴더 선택",
     "hide": "오른쪽에서 숨기기",
     "show": "오른쪽에 보이기",
-    "none": "폴더 안 쓰기"
+    "none": "폴더 안 쓰기",
+    "chooseDrive": "드라이브 선택",
+    "chooseDriveTip": "이 이미지들을 쓸 드라이브 선택",
+    "labelDrive": "{{name}} 드라이브용",
+    "menuDrive": "드라이브",
+    "anotherDrive": "다른 드라이브 선택",
+    "noneDrive": "드라이브 안 쓰기"
   },
   "local": {
     "name": "로컬 모델",

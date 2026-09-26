@@ -485,6 +485,7 @@ export const Studio = forwardRef<
         <span className="studio-head-space" data-tauri-drag-region />
         <FolderTarget
           folder={folder}
+          drive={folder ? Boolean(folder.drive) : family === "drive"}
           panelShown={panelShown}
           onChoose={props.onChooseFolder}
           onTogglePanel={props.onTogglePanel}

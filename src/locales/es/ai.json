@@ -229,7 +229,13 @@
     "another": "Elegir otra carpeta",
     "hide": "Ocultarla a la derecha",
     "show": "Mostrarla a la derecha",
-    "none": "No usar ninguna carpeta"
+    "none": "No usar ninguna carpeta",
+    "chooseDrive": "Elige una unidad",
+    "chooseDriveTip": "Elige la unidad para la que son estas imágenes",
+    "labelDrive": "para la unidad {{name}}",
+    "menuDrive": "La unidad",
+    "anotherDrive": "Elegir otra unidad",
+    "noneDrive": "No usar ninguna unidad"
   },
   "local": {
     "name": "Modelo local",

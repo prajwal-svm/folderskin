@@ -167,6 +167,7 @@ test.describe("a drive picked instead of a folder", () => {
     await openView(page, /generate with ai/i);
     const chip = page.locator(".shape-chip");
     await expect(chip).toHaveText("Windows SD card");
+    await expect(page.getByRole("button", { name: "for the drive CAMERA (G:)" })).toBeVisible();
     await page.locator("textarea").first().fill("a lighthouse in a storm");
     await page.keyboard.press("Enter");
     const card = page.locator("article.turn").last();
@@ -177,6 +178,21 @@ test.describe("a drive picked instead of a folder", () => {
 
     await card.getByRole("button", { name: "Apply to CAMERA (G:)" }).click();
     await expect(card.getByText("On CAMERA (G:)")).toBeVisible();
+  });
+
+  test("says drive in the AI view where a chat paints for a drive with nowhere chosen yet", async ({ page }) => {
+    await openApp(page, { query: "os=linux&localready" });
+    await openView(page, /generate with ai/i);
+    const target = page.locator(".folder-target");
+    await expect(target).toHaveText("Choose a folder");
+    await page.locator(".shape-chip").click();
+    await page.getByRole("radio", { name: /^Linux USB stick/ }).click();
+    await expect(target).toHaveText("Choose a drive");
+
+    await page.locator("textarea").first().fill("a koi pond at night");
+    await page.keyboard.press("Enter");
+    const card = page.locator("article.turn").last();
+    await expect(card.getByRole("button", { name: "Choose a drive" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("names a Windows drive by its letter, and says the icon goes with the letter", async ({ page }) => {

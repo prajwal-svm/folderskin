@@ -227,7 +227,13 @@
     "another": "Choose another folder",
     "hide": "Hide it on the right",
     "show": "Show it on the right",
-    "none": "Don't use a folder"
+    "none": "Don't use a folder",
+    "chooseDrive": "Choose a drive",
+    "chooseDriveTip": "Choose the drive these pictures are for",
+    "labelDrive": "for the drive {{name}}",
+    "menuDrive": "The drive",
+    "anotherDrive": "Choose another drive",
+    "noneDrive": "Don't use a drive"
   },
   "local": {
     "name": "Local Model",

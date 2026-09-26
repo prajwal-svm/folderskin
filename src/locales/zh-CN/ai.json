@@ -225,7 +225,13 @@
     "another": "选择其他文件夹",
     "hide": "在右侧隐藏",
     "show": "在右侧显示",
-    "none": "不指定文件夹"
+    "none": "不指定文件夹",
+    "chooseDrive": "选择磁盘",
+    "chooseDriveTip": "选择这些图片要用在哪个磁盘上",
+    "labelDrive": "用于磁盘 {{name}}",
+    "menuDrive": "磁盘",
+    "anotherDrive": "选择其他磁盘",
+    "noneDrive": "不指定磁盘"
   },
   "local": {
     "name": "本地模型",
