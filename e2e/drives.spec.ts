@@ -162,6 +162,23 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(page.getByRole("option", { name: /^Linux USB hard disk/ })).toBeVisible();
   });
 
+  test("keeps a new AI chat on the drive once it has painted for it, and the picture goes on it", async ({ page }) => {
+    await pickDrive(page, "os=windows&drive=card&localready");
+    await openView(page, /generate with ai/i);
+    const chip = page.locator(".shape-chip");
+    await expect(chip).toHaveText("Windows SD card");
+    await page.locator("textarea").first().fill("a lighthouse in a storm");
+    await page.keyboard.press("Enter");
+    const card = page.locator("article.turn").last();
+    await expect(card.getByRole("button", { name: "Apply to CAMERA (G:)" })).toBeVisible({ timeout: 10_000 });
+    // The next picture is for the same drive.
+    await expect(chip).toHaveText("Windows SD card");
+    await expect(page.locator("textarea").first()).toHaveAttribute("placeholder", "Describe a drive for CAMERA (G:)");
+
+    await card.getByRole("button", { name: "Apply to CAMERA (G:)" }).click();
+    await expect(card.getByText("On CAMERA (G:)")).toBeVisible();
+  });
+
   test("names a Windows drive by its letter, and says the icon goes with the letter", async ({ page }) => {
     await pickDrive(page, "os=windows&drive=external,removable,startup");
     await expect(title(page)).toHaveText("Backup (E:)");

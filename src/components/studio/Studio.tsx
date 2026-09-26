@@ -261,6 +261,9 @@ export const Studio = forwardRef<
       openSettings(provider.id);
       return;
     }
+    // A new chat painting for the drive on show keeps that drive once it has pictures, whatever
+    // is shown next.
+    if (onShow === shape.id) setChatBase(shape.id);
     const sent = ask(
       {
         idea: text,
