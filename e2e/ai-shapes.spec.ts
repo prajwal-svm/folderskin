@@ -132,6 +132,31 @@ test.describe("the / menu", () => {
     await expect(box(page)).toHaveValue(/a lighthouse on a rocky point/);
   });
 
+  test("a style picked goes with the prompt for Grok's or ChatGPT's own chat", async ({ page }) => {
+    await openApp(page);
+    await openView(page, /generate with ai/i);
+    await chat(page).locator(".model-pill").click();
+    await settings(page).getByRole("radio", { name: /OpenAI/ }).click();
+    await settings(page).getByRole("button", { name: "close" }).click();
+    await box(page).fill("a koi pond at night");
+    await box(page).pressSequentially(" /neon");
+    await box(page).press("Enter");
+    await chat(page).getByRole("button", { name: /No API key/ }).click();
+    const helper = page.getByRole("dialog", { name: "Make it in Grok or ChatGPT" });
+    // The styles under the prompt box, and the one picked in the chat, which is on.
+    const chips = helper.locator(".helper-styles .style-chip");
+    await expect(chips).toHaveCount(11);
+    await expect(helper.getByRole("button", { name: "Neon" })).toHaveAttribute("aria-pressed", "true");
+    await expect(helper.locator(".helper-prompt")).toContainText("Scene: a koi pond at night");
+    await expect(helper.locator(".helper-prompt")).toContainText("Style: glowing neon light tubes");
+    // Another style, or none.
+    await helper.getByRole("button", { name: "Clay" }).click();
+    await expect(helper.locator(".helper-prompt")).toContainText("Style: a handmade clay render");
+    await helper.getByRole("button", { name: "Clay" }).click();
+    await expect(helper.locator(".helper-prompt")).not.toContainText("Style:");
+    await expect(chips).toHaveCount(11);
+  });
+
   test("saves what's in the box as a prompt, with its style, and brings both back", async ({ page }) => {
     await withKey(page);
     await box(page).pressSequentially("/woodblock");

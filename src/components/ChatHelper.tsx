@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { chatPrompt, STYLES } from "../lib/prompts";
-import { styleName } from "../lib/styles";
+import { chatPrompt, CHIP_STYLES } from "../lib/prompts";
+import { styleById, styleName } from "../lib/styles";
 import type { ToastTone } from "../hooks/useToasts";
 import { Modal } from "./Modal";
 import { CheckIcon } from "./icons/check";
@@ -25,7 +25,13 @@ export function ChatHelper({
   toast: (text: string, opts?: { tone?: ToastTone }) => void;
 }) {
   const t = useT();
-  const [style, setStyle] = useState<string | null>(styleId);
+  // The styles under the prompt box, and the one picked in the chat if it's another: the rest are
+  // a / away there, and all thirty here would push the prompt out of sight.
+  const offered = useMemo(() => {
+    const picked = styleById(styleId);
+    return picked && !CHIP_STYLES.some((s) => s.id === picked.id) ? [picked, ...CHIP_STYLES] : CHIP_STYLES;
+  }, [styleId]);
+  const [style, setStyle] = useState<string | null>(styleById(styleId)?.id ?? null);
   const [copied, setCopied] = useState(false);
   const prompt = useMemo(() => chatPrompt(scene, style), [scene, style]);
 
@@ -64,7 +70,7 @@ export function ChatHelper({
           <div className="helper-step-text">
             <p className="helper-step-title">{t("ai.helper.paste")}</p>
             <div className="helper-styles">
-              {STYLES.map((s) => (
+              {offered.map((s) => (
                 <button
                   key={s.id}
                   type="button"
