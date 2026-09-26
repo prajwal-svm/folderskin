@@ -66,6 +66,10 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Fixed
 
+- **Network drives that refused custom icons take them now.** Some network drives keep a
+  folder's custom icon but refuse the way macOS sets one, so every folder on them failed, and
+  Remove custom icons left them half done. FolderSkin now writes the icon in itself there, and
+  takes it off itself.
 - **Grok works from pictures.** Every whole folder, and every picture of your own, went to xAI in
   a form it doesn't take.
 - **Ideogram gets the form its reference documents**, and a Recraft whole folder keeps the style

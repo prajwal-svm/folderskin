@@ -26,6 +26,12 @@
 //! Retina screen). When a copy can't be made, the folder goes through AppKit after all, which
 //! says what's wrong with it as a single folder always has.
 //!
+//! Some network shares keep a custom icon's bytes but refuse `setIcon` itself, both setting and
+//! clearing: a NAS measured on 2026-09-26 (SMB 3.1.1) took a 2 MB `Icon\r` written straight in,
+//! and Finder drew it, while `setIcon` returned false and left an empty file behind. So when
+//! AppKit refuses a folder, the icon it would have written goes in by hand, and a revert it
+//! refuses takes the icon off by hand.
+//!
 //! `setIcon` works off the main thread, but not on two threads at once: calls that overlap
 //! garble each other's `Icon\r` (a 37 KB icon came out as 286 bytes) or fail outright. An apply,
 //! a tree of them and a measurement can all be running together, so every change here takes one
@@ -73,6 +79,8 @@ pub struct Prepared {
     /// The icon without its 1024 px size as AppKit writes it, read back once from a scratch
     /// folder, for folders it's written straight into. The error, if that couldn't be done.
     light: OnceCell<Result<IconFile, String>>,
+    /// The whole icon as AppKit writes it, likewise, for a folder AppKit refuses.
+    whole: OnceCell<Result<IconFile, String>>,
 }
 
 /// The folder a run's copies come from.
@@ -110,6 +118,7 @@ pub fn prepare(icons: &IconSet) -> Result<Prepared, ApplyError> {
         image,
         first: RefCell::new(None),
         light: OnceCell::new(),
+        whole: OnceCell::new(),
     })
 }
 
@@ -159,7 +168,9 @@ pub fn apply(folder: &Path, icon: &Prepared) -> Result<(), ApplyError> {
     if copied {
         return Ok(());
     }
-    set_icon(folder, Some(&icon.image))?;
+    if let Err(refused) = set_icon(folder, Some(&icon.image)) {
+        write_whole(folder, icon).map_err(|_| refused)?;
+    }
     let mut first = icon.first.borrow_mut();
     if first.is_none() {
         *first = First::of(folder);
@@ -170,7 +181,11 @@ pub fn apply(folder: &Path, icon: &Prepared) -> Result<(), ApplyError> {
 /// Clears `folder`'s custom icon, putting the system folder icon back.
 pub fn revert(folder: &Path) -> Result<(), ApplyError> {
     let _one_at_a_time = one_at_a_time();
-    set_icon(folder, None)
+    if let Err(refused) = set_icon(folder, None) {
+        // A share that refuses setIcon refuses clearing too, and can leave the icon half gone.
+        take_off(folder, &folder.join(ICON_FILE)).map_err(|_| refused)?;
+    }
+    Ok(())
 }
 
 /// True when Finder draws a custom icon for `folder`: the custom-icon flag in its Finder info,
@@ -218,6 +233,15 @@ impl Prepared {
             .as_ref()
             .map_err(|e| io::Error::other(e.clone()))
     }
+
+    /// The whole icon as AppKit writes it, made the first time it's asked for. Called with
+    /// [`SET_ICON`] held.
+    fn whole(&self) -> io::Result<&IconFile> {
+        self.whole
+            .get_or_init(|| written_by_appkit(&self.image).map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(|e| io::Error::other(e.clone()))
+    }
 }
 
 /// What AppKit writes for `image`: attached to a scratch folder in the temp directory, read
@@ -251,6 +275,19 @@ fn copy_first(folder: &Path, icon: &Prepared, first: &First) -> io::Result<()> {
     }
     let light = icon.light()?;
     if let Err(e) = write_icon_file(&target, light) {
+        let _ = std::fs::remove_file(&target);
+        return Err(e);
+    }
+    put_on(folder)
+}
+
+/// Gives `folder`, which AppKit refused, the whole icon as AppKit would have written it.
+fn write_whole(folder: &Path, icon: &Prepared) -> io::Result<()> {
+    let whole = icon.whole()?;
+    let target = folder.join(ICON_FILE);
+    // A refused setIcon can leave an empty `Icon\r` behind.
+    take_off(folder, &target)?;
+    if let Err(e) = write_icon_file(&target, whole) {
         let _ = std::fs::remove_file(&target);
         return Err(e);
     }
@@ -718,6 +755,38 @@ mod tests {
             assert!(!has_custom_icon(folder));
             assert!(!folder.join("Icon\r").exists());
         }
+    }
+
+    #[test]
+    #[ignore = "touches a real folder and needs a desktop session: cargo test -p folderskin-core -- --ignored appkit_refuses"]
+    fn a_folder_appkit_refuses_gets_the_icon_written_in_and_taken_off_by_hand() {
+        use crate::apply::prepare_icon;
+
+        let icon = prepare_icon(&solid_icons(&[16, 32, 64, 128, 256, 512, 1024])).unwrap();
+        let folder = tempfile_dir();
+        // What a share that refuses setIcon leaves: an empty Icon file.
+        std::fs::File::create(folder.join(ICON_FILE)).unwrap();
+        {
+            let _one_at_a_time = one_at_a_time();
+            write_whole(&folder, &icon.prepared).unwrap();
+        }
+        assert!(has_custom_icon(&folder));
+        let fork = std::fs::read(folder.join("Icon\r/..namedfork/rsrc")).unwrap();
+        let whole = icon.prepared.whole().unwrap();
+        assert_eq!(fork, whole.fork, "the icon AppKit would have written");
+        assert!(
+            icns_kinds(&fork).iter().any(|k| k == "ic10"),
+            "all of it, 1024 px too"
+        );
+        assert!(
+            attributes(&folder.join("Icon\r")).contains('V'),
+            "the Icon file is invisible"
+        );
+
+        // Taking it off by hand leaves the folder as a revert does.
+        take_off(&folder, &folder.join(ICON_FILE)).unwrap();
+        assert!(!has_custom_icon(&folder));
+        assert!(!folder.join(ICON_FILE).exists());
     }
 
     #[test]

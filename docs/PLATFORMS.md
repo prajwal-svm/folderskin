@@ -74,6 +74,11 @@ resource fork, with the same Finder info and hidden flag `setIcon` gives it, but
 1024 px size: about 1 MB each, and Finder only draws that size for the largest icons on a Retina
 screen. A folder a copy can't be made for goes through `setIcon` after all.
 
+Some network shares keep a custom icon's bytes but refuse `setIcon` itself, setting and clearing
+alike: `setIcon` returns false and leaves an empty `Icon\r`. There FolderSkin writes the icon
+`setIcon` would have written straight in (read back once from a scratch folder in the temp
+directory), and a revert that `setIcon` refuses removes `Icon\r` and clears the flag itself.
+
 The window is transparent over the system's sidebar material (`NSVisualEffectView`), which is
 what makes the sidebar translucent. The light/dark switch sets the window's appearance so the
 material follows it. Transparent windows need Tauri's `macOSPrivateApi`, which rules out the
