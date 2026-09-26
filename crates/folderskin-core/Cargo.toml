@@ -23,8 +23,11 @@ webp = { version = "0.3.1", default-features = false }
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSGeometry"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSData", "NSDictionary", "NSIndexSet", "NSString", "NSGeometry"] }
 objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+# Lifting a free icon's subject off whatever the model painted it on, as Preview does (lift.rs).
+objc2-vision = { version = "0.3", default-features = false, features = ["std", "objc2-core-video", "VNGenerateForegroundInstanceMaskRequest", "VNObservation", "VNRequest", "VNRequestHandler"] }
+objc2-core-video = { version = "0.3", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Win32_UI_Shell_Common is for ITEMIDLIST: the Desktop hears about a changed icon as an item id

@@ -16,6 +16,7 @@
 //! assistant painted on magenta (or on real transparency) is already the icon, while an ordinary
 //! picture belongs on FolderSkin's template.
 
+use crate::backdrop::Backdrop;
 use image::RgbaImage;
 
 /// The key colour FolderSkin asks models for: pure magenta.
@@ -613,10 +614,160 @@ pub fn finished_cutout(img: &RgbaImage, key: [u8; 3]) -> Option<RgbaImage> {
     }
 }
 
+/// A pixel the mask gives less than this is left out altogether: haze around a lifted subject.
+const MASK_CLEAR: u8 = 8;
+/// A pixel the mask gives this much or more is the subject's own.
+const MASK_SOLID: u8 = 250;
+/// How far around a pixel on the mask's soft edge the subject's own colour is looked for.
+const MASK_REACH: u32 = 4;
+
+/// Cuts `img`'s subject out along `mask` (how much each pixel belongs to it, as
+/// [`crate::lift::subject_mask`] gives it), trimmed to the subject.
+///
+/// Along the mask's soft edge a pixel's colour is part backdrop. That part is taken out, using the
+/// backdrop there ([`Backdrop`] when the frame's edge is plain, else the backdrop pixels nearby)
+/// and the subject's own colour just inside, so the edge keeps the subject's colours instead of a
+/// lavender or pink rim. A pixel that is mostly backdrop takes the subject's colour: dividing by a
+/// small share magnifies noise.
+pub fn cut_by_mask(img: &RgbaImage, mask: &image::GrayImage) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let backdrop = Backdrop::measure(img).filter(|b| b.plain >= 0.9);
+    let m = |x: u32, y: u32| mask.get_pixel(x, y).0[0];
+    let rgb = |x: u32, y: u32| {
+        let p = img.get_pixel(x, y).0;
+        [p[0], p[1], p[2]].map(f32::from)
+    };
+    // The mean colour of the pixels within `reach` of (x, y) that `keep` picks.
+    let mean = |x: u32, y: u32, reach: u32, keep: &dyn Fn(u8) -> bool| {
+        let (mut sum, mut n) = ([0f32; 3], 0f32);
+        for ny in y.saturating_sub(reach)..=(y + reach).min(h - 1) {
+            for nx in x.saturating_sub(reach)..=(x + reach).min(w - 1) {
+                if keep(m(nx, ny)) {
+                    let p = rgb(nx, ny);
+                    (0..3).for_each(|c| sum[c] += p[c]);
+                    n += 1.0;
+                }
+            }
+        }
+        (n > 0.0).then(|| sum.map(|v| v / n))
+    };
+    let mut out = img.clone();
+    for (x, y, px) in out.enumerate_pixels_mut() {
+        let a = m(x, y);
+        if a < MASK_CLEAR {
+            px.0[3] = 0;
+            continue;
+        }
+        if a >= MASK_SOLID {
+            continue;
+        }
+        let share = f32::from(a) / 255.0;
+        let c = rgb(x, y);
+        let fore = mean(x, y, MASK_REACH, &|v| v >= MASK_SOLID);
+        let back = backdrop
+            .as_ref()
+            .map(|b| b.at(x, y).map(f32::from))
+            .or_else(|| mean(x, y, 2 * MASK_REACH, &|v| v < MASK_CLEAR));
+        let colour = match (fore, back) {
+            (Some(f), Some(k))
+                if (0..3).map(|i| (f[i] - k[i]).powi(2)).sum::<f32>() >= 25.0 * 25.0 =>
+            {
+                if share >= 0.5 {
+                    // No further from the subject's colour than the pixel was.
+                    [0, 1, 2].map(|i| {
+                        (k[i] + (c[i] - k[i]) / share).clamp(c[i].min(f[i]), c[i].max(f[i]))
+                    })
+                } else {
+                    f
+                }
+            }
+            (Some(f), _) if share < 0.5 => f,
+            _ => c,
+        };
+        px.0 = [
+            colour[0].round() as u8,
+            colour[1].round() as u8,
+            colour[2].round() as u8,
+            (f32::from(px.0[3]) * share).round() as u8,
+        ];
+    }
+    autocrop(&out, 0)
+}
+
+/// True when `img` stands on a plain backdrop all round, drifted or not: then one subject in it
+/// can be lifted off it, where a painting that fills the frame has none.
+pub fn on_plain_backdrop(img: &RgbaImage) -> bool {
+    Backdrop::measure(img).is_some_and(|b| b.plain >= 0.9)
+}
+
+/// The subject of `img` lifted off whatever it was painted on by the system ([`crate::lift`]),
+/// cut out and trimmed; `None` where the system can't lift subjects, finds none, or finds one too
+/// small to be the picture's ([`MIN_SUBJECT_SHARE`] of the frame).
+pub fn lifted(img: &RgbaImage) -> Option<RgbaImage> {
+    let mask = crate::lift::subject_mask(img)?;
+    let solid = mask.pixels().filter(|p| p.0[0] >= 128).count();
+    let frame = img.width() as f32 * img.height() as f32;
+    (solid as f32 >= MIN_SUBJECT_SHARE * frame).then(|| cut_by_mask(img, &mask))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use image::Rgba;
+
+    /// A green disc with a soft edge on a lavender sweep, and its coverage as a lifting model
+    /// gives it.
+    fn disc_on_lavender(size: u32) -> (RgbaImage, image::GrayImage) {
+        let c = size as f32 / 2.0;
+        let r = size as f32 * 0.3;
+        let cover = |x: u32, y: u32| {
+            let d = ((x as f32 + 0.5 - c).powi(2) + (y as f32 + 0.5 - c).powi(2)).sqrt();
+            ((r + 1.5 - d) / 3.0).clamp(0.0, 1.0)
+        };
+        let img = RgbaImage::from_fn(size, size, |x, y| {
+            let a = cover(x, y);
+            let back = [180.0 + 20.0 * x as f32 / size as f32, 150.0, 200.0];
+            let fore = [30.0, 170.0, 60.0];
+            let mix = |i: usize| (fore[i] * a + back[i] * (1.0 - a)).round() as u8;
+            Rgba([mix(0), mix(1), mix(2), 255])
+        });
+        let mask = image::GrayImage::from_fn(size, size, |x, y| {
+            image::Luma([(cover(x, y) * 255.0).round() as u8])
+        });
+        (img, mask)
+    }
+
+    #[test]
+    fn a_masked_subject_keeps_its_own_colour_along_its_edge() {
+        let (img, mask) = disc_on_lavender(120);
+        let cut = cut_by_mask(&img, &mask);
+        // Trimmed to the disc, 72 px across give or take its soft edge.
+        assert!(
+            (cut.width() as i32 - 75).abs() <= 3,
+            "width {}",
+            cut.width()
+        );
+        assert_eq!(cut.get_pixel(0, 0).0[3], 0, "the corner is clear");
+        let (mut soft, mut tinted) = (0, 0);
+        for p in cut.pixels().filter(|p| p.0[3] > 20 && p.0[3] < 235) {
+            soft += 1;
+            // Lavender left in a green edge shows as red and blue above green.
+            if i32::from(p.0[0].max(p.0[2])) > i32::from(p.0[1]) {
+                tinted += 1;
+            }
+        }
+        assert!(soft > 100, "{soft} soft edge pixels");
+        assert_eq!(tinted, 0, "{tinted} of {soft} edge pixels still lavender");
+        let middle = cut.get_pixel(cut.width() / 2, cut.height() / 2).0;
+        assert_eq!(middle, [30, 170, 60, 255]);
+    }
+
+    #[test]
+    fn nothing_is_lifted_where_the_system_cant() {
+        // Off macOS there is no lifting to ask; on a Mac a flat picture has no subject.
+        let flat = RgbaImage::from_pixel(64, 64, Rgba([90, 90, 200, 255]));
+        assert!(lifted(&flat).is_none());
+    }
 
     /// A magenta field with an opaque green square in the middle.
     fn plate(size: u32, subject: Rgba<u8>) -> RgbaImage {

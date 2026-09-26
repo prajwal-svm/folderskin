@@ -164,6 +164,7 @@ Open `previews/_sheet.png`, then any picture that looks doubtful at full size in
 | the subject cut by the paper strip, or high on the folder | another seed; or say where it is: "…, standing low in the frame" |
 | a blank band or a frame along the folder's edges | paper margins are cut already (the `.json` says `border_trimmed`); `folderskin image trim <picture>` does it for any picture; a frame drawn inside the art is the model's, so try another seed |
 | a whole folder whose fit was below 0.995 | another seed; the model moved or reshaped the folder (`folderskin image clip` cuts one that fits) |
+| a free icon left square on its backdrop | on macOS 14 or later the subject is lifted off any backdrop, as Preview does; elsewhere only a flat backdrop is cut out, so try another seed |
 | the style is weak | put more of the style into words, or try another preset |
 | the colours are a little off | `folderskin image saturate <picture> 20`, `brightness`, `contrast`, or `image adjust --hue …`: the composer's own adjustments |
 | text or a signature in the art | another seed; small models write when a style suggests posters |

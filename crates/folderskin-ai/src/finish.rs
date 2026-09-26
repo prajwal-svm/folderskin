@@ -267,10 +267,12 @@ pub enum Finished {
 /// the template, or by keying the colour it was asked for), artwork is cropped to the base's
 /// artwork size.
 ///
-/// A free icon also comes out of a backdrop that drifted from the key, or one of another flat
-/// colour, since it has no template whose shape could be mistaken for one. A whole folder or a
-/// free icon with no flat backdrop at all is [`AiError::NoBackdrop`]: the caller decides what to
-/// keep of it.
+/// A free icon on a backdrop that drifted from the key, and a whole folder the model reshaped, are
+/// lifted off it by the system where it can ([`matte::lifted`]: on a Mac, Preview's own lifting),
+/// which tells a subject from a backdrop by what it is rather than its colour. Failing that a free
+/// icon comes out of a key that drifted a little, or a backdrop of another flat colour, since it
+/// has no template whose shape could be mistaken for one. A whole folder or a free icon with no
+/// such backdrop at all is [`AiError::NoBackdrop`]: the caller decides what to keep of it.
 ///
 /// Magenta is keyed wherever it appears: it almost never belongs to the art. Green does, in every
 /// leaf and field, so a green backdrop is only taken away where it reaches the edge of the
@@ -281,6 +283,17 @@ pub fn finish(
     base: &Base,
     shape: Shape,
     cut: Cut,
+) -> Result<Finished, AiError> {
+    finish_lifting(result, base, shape, cut, matte::lifted)
+}
+
+/// [`finish`], lifting a subject off its backdrop with `lift`.
+pub fn finish_lifting(
+    result: &GenerateResult,
+    base: &Base,
+    shape: Shape,
+    cut: Cut,
+    lift: impl Fn(&RgbaImage) -> Option<RgbaImage>,
 ) -> Result<Finished, AiError> {
     let img = image::load_from_memory(&result.image)
         .map_err(|_| AiError::NotAnImage)?
@@ -297,21 +310,29 @@ pub fn finish(
         Shape::Folder => {
             // Along our own silhouette, as the local model's are cut: it doesn't mind a backdrop
             // that drifted, and the edge keeps the painting's colours instead of a key-coloured
-            // rim. A model that changed the shape falls back to the key.
+            // rim. A model that changed the shape is cut along its own outline instead: lifted off
+            // a plain backdrop, or keyed.
             let along = cut
                 .template
                 .and_then(|f| silhouette_of(base, f.width, f.height))
                 .and_then(|silhouette| painted::cut_along_silhouette(&img, &silhouette).image);
             match along {
                 Some(cutout) => Finished::Folder(matte::autocrop(&cutout, 0)),
-                None if matte::has_key_background(&img, key, KeyOptions::default()) => {
-                    Finished::Folder(keyed(&img))
-                }
-                None => return Err(AiError::NoBackdrop),
+                None => match matte::on_plain_backdrop(&img).then(|| lift(&img)).flatten() {
+                    Some(own) => Finished::Folder(own),
+                    None if matte::has_key_background(&img, key, KeyOptions::default()) => {
+                        Finished::Folder(keyed(&img))
+                    }
+                    None => return Err(AiError::NoBackdrop),
+                },
             }
         }
         Shape::Icon => {
-            if matte::has_key_background(&img, key, KeyOptions::default()) {
+            if matte::surround(&img, key) == matte::Surround::Keyed {
+                Finished::Folder(keyed(&img))
+            } else if let Some(lifted) = lift(&img) {
+                Finished::Folder(lifted)
+            } else if matte::has_key_background(&img, key, KeyOptions::default()) {
                 Finished::Folder(keyed(&img))
             } else if let Some(backdrop) = matte::flat_backdrop(&img) {
                 Finished::Folder(matte::cutout_connected(&img, backdrop))
@@ -341,6 +362,17 @@ mod tests {
     use crate::styles;
     use folderskin_core::base::{BASES, FREE, MAC_FOLDER, WINDOWS_FOLDER};
     use image::Rgba;
+
+    /// [`super::finish`] without the system's lifting, which a test machine may or may not have:
+    /// these hold the key and the silhouette to their own results.
+    fn finish(
+        result: &GenerateResult,
+        base: &Base,
+        shape: Shape,
+        cut: Cut,
+    ) -> Result<Finished, AiError> {
+        finish_lifting(result, base, shape, cut, |_| None)
+    }
 
     fn result(img: &RgbaImage, native_alpha: bool) -> GenerateResult {
         GenerateResult {

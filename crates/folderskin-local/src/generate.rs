@@ -613,16 +613,29 @@ fn generate_blocking(
                         ),
                     );
                 }
-                None => {
-                    reporter.log(
+                None => match cut_reshaped_folder(&img) {
+                    Some(own) => {
+                        keep_raw()?;
+                        std::fs::write(&out, folderskin_core::raster::encode_png(&own))
+                            .map_err(|e| Error::io("save the picture", &out, &e))?;
+                        reporter.log(
+                            Level::Warn,
+                            format!(
+                                "{name}: the model changed the folder's shape (fit {:.3}), so \
+                                 it's cut out along its own outline",
+                                cut.fit
+                            ),
+                        );
+                    }
+                    None => reporter.log(
                         Level::Warn,
                         format!(
                             "{name}: the model changed the folder's shape (fit {:.3}), so it's left \
                              on its backdrop",
                             cut.fit
                         ),
-                    );
-                }
+                    ),
+                },
             }
         }
     }
@@ -745,25 +758,47 @@ pub fn silhouette_of(base: &Base, width: u32, height: u32) -> Option<GrayImage> 
     folderskin_ai::finish::silhouette_of(base, width, height)
 }
 
-/// A free icon cut out of the flat backdrop it was painted on: the canvas's `key`, or whatever
-/// flat colour the model drifted to. `None` when there is no flat backdrop around it.
+/// A free icon cut out of what it was painted on: the canvas's `key` where the model kept it
+/// clean; otherwise the subject lifted off it by the system (on a Mac, Preview's own lifting,
+/// which tells a white robot lit lavender by its backdrop from the backdrop); otherwise any flat
+/// colour the model drifted to, cut from the edge in. `None` when none of that finds it.
 ///
 /// Magenta almost never belongs to the art, so it goes wherever it is. Green does, in every leaf
 /// and stem, so a green backdrop only goes where it reaches the edge of the picture, from the
 /// shade actually painted, as a drifted backdrop of any colour does.
 pub fn cut_icon(img: &RgbaImage, key: Key) -> Option<RgbaImage> {
-    let keyed = match key {
-        Key::Magenta => matte::finished_cutout(img, key.rgb()),
-        Key::Green => None,
-    };
-    keyed.or_else(|| {
-        let key = matte::flat_backdrop(img)?;
-        let cut = matte::cutout_connected(img, key);
+    cut_icon_lifting(img, key, matte::lifted)
+}
+
+/// [`cut_icon`], lifting the subject with `lift` where the key isn't clean.
+pub fn cut_icon_lifting(
+    img: &RgbaImage,
+    key: Key,
+    lift: impl Fn(&RgbaImage) -> Option<RgbaImage>,
+) -> Option<RgbaImage> {
+    let connected = |backdrop: [u8; 3]| {
+        let cut = matte::cutout_connected(img, backdrop);
         // Something substantial is left, or the backdrop took the subject with it.
         let solid = cut.pixels().filter(|p| p.0[3] >= 128).count();
         (solid as f32 >= matte::MIN_SUBJECT_SHARE * (img.width() * img.height()) as f32)
             .then_some(cut)
-    })
+    };
+    let clean = match (key, matte::surround(img, key.rgb())) {
+        (Key::Magenta, _) => matte::finished_cutout(img, key.rgb()),
+        (Key::Green, matte::Surround::Keyed) => matte::flat_backdrop(img).and_then(connected),
+        (Key::Green, _) => None,
+    };
+    clean
+        .or_else(|| lift(img))
+        .or_else(|| matte::flat_backdrop(img).and_then(connected))
+}
+
+/// A whole folder the model reshaped, cut out along its own outline: lifted off a plain backdrop
+/// by the system, the way a free icon is. `None` where it can't be.
+pub fn cut_reshaped_folder(img: &RgbaImage) -> Option<RgbaImage> {
+    matte::on_plain_backdrop(img)
+        .then(|| matte::lifted(img))
+        .flatten()
 }
 
 fn save_rgb(img: &RgbaImage, path: &Path) -> Result<(), Error> {
@@ -1167,7 +1202,8 @@ mod tests {
         // Magenta as asked, the purple klein drifts to, a plain white, and a green canvas.
         for backdrop in [[255, 0, 255], [150, 40, 170], [250, 250, 248], [0, 255, 0]] {
             for key in [Key::Magenta, Key::Green] {
-                let cut = cut_icon(&on(backdrop), key).unwrap_or_else(|| panic!("{backdrop:?}"));
+                let cut = cut_icon_lifting(&on(backdrop), key, |_| None)
+                    .unwrap_or_else(|| panic!("{backdrop:?}"));
                 assert_eq!(cut.dimensions(), (120, 160), "{backdrop:?}");
                 assert_eq!(cut.get_pixel(60, 80).0, [230, 160, 40, 255]);
             }
@@ -1176,7 +1212,40 @@ mod tests {
         let scene = RgbaImage::from_fn(300, 280, |x, y| {
             image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
         });
-        assert!(cut_icon(&scene, Key::Magenta).is_none());
+        assert!(cut_icon_lifting(&scene, Key::Magenta, |_| None).is_none());
+    }
+
+    #[test]
+    fn a_free_icon_on_a_clean_key_is_keyed_and_on_anything_else_lifted_first() {
+        let on = |backdrop: [u8; 3]| {
+            let mut img = RgbaImage::from_pixel(
+                300,
+                280,
+                image::Rgba([backdrop[0], backdrop[1], backdrop[2], 255]),
+            );
+            for y in 60..220 {
+                for x in 90..210 {
+                    img.put_pixel(x, y, image::Rgba([230, 160, 40, 255]));
+                }
+            }
+            img
+        };
+        let lifted = RgbaImage::from_pixel(7, 7, image::Rgba([1, 2, 3, 255]));
+        let lift = |_: &RgbaImage| Some(lifted.clone());
+        let size = |backdrop, key| {
+            cut_icon_lifting(&on(backdrop), key, lift)
+                .unwrap()
+                .dimensions()
+        };
+        assert_eq!(size([255, 0, 255], Key::Magenta), (120, 160), "keyed");
+        assert_eq!(
+            size([0, 255, 0], Key::Green),
+            (120, 160),
+            "cut from the edge"
+        );
+        // The lavender sweep klein drifts to, flat here, and white.
+        assert_eq!(size([181, 154, 198], Key::Magenta), (7, 7), "lifted");
+        assert_eq!(size([250, 250, 248], Key::Green), (7, 7), "lifted");
     }
 
     #[test]
@@ -1194,7 +1263,7 @@ mod tests {
                 img.put_pixel(x, y, image::Rgba(p));
             }
         }
-        let cut = cut_icon(&img, Key::Green).unwrap();
+        let cut = cut_icon_lifting(&img, Key::Green, |_| None).unwrap();
         assert_eq!(cut.dimensions(), (120, 160));
         assert_eq!(
             cut.get_pixel(60, 80).0,

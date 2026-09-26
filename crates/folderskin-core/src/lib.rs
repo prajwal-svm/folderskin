@@ -12,6 +12,7 @@ pub mod fit;
 pub mod geometry;
 pub mod geometry_windows;
 pub mod ico;
+pub mod lift;
 pub mod matte;
 pub mod pack;
 pub mod painted;
