@@ -25,7 +25,9 @@ pub enum AiError {
     #[error("couldn't reach {provider}: {detail}")]
     Network { provider: String, detail: String },
 
-    #[error("{provider} returned an error ({status}): {message}")]
+    /// A failure the provider explained in its own words, which are shown as they are: a
+    /// request the provider didn't expect reads as what it said, ready to report.
+    #[error("{}", said(.provider, *.status, .message))]
     Provider {
         provider: String,
         status: u16,
@@ -44,6 +46,12 @@ pub enum AiError {
     #[error("the provider returned something that is not an image")]
     NotAnImage,
 
+    /// The provider finished the request without a picture and without saying it was blocked:
+    /// Gemini's `NO_IMAGE`, or a reply with words but no picture. The same request often paints
+    /// one the next time, so this is worth trying again, as the person decides.
+    #[error("{0} finished without painting a picture. Try again, or reword the idea.")]
+    NoImage(String),
+
     /// A keyed whole-folder render came back without its flat backdrop.
     #[error(
         "the model drew a scene instead of a folder on a plain backdrop. Try again, or switch to \
@@ -56,10 +64,18 @@ impl AiError {
     /// Maps an HTTP status plus the provider's own message onto a friendly error.
     pub fn from_status(provider: &str, status: u16, message: String) -> Self {
         let message = trim_message(&message);
+        let about_the_key = message.to_lowercase().contains("key");
         match status {
-            401 | 403 => AiError::Unauthorized(provider.to_string()),
-            // Black Forest Labs' "Invalid API key format": the key, not the request.
-            422 if message.to_lowercase().contains("api key") => {
+            401 => AiError::Unauthorized(provider.to_string()),
+            // A 403 is a key without permission at some providers, and at others a model the
+            // account can't use yet ("Your organization must be verified"), which only the
+            // provider's own words explain.
+            403 if about_the_key || message.is_empty() => {
+                AiError::Unauthorized(provider.to_string())
+            }
+            // Google's "API key not valid", xAI's incorrect key and Black Forest Labs' "Invalid
+            // API key format": the key, not the request.
+            400 | 422 if message.to_lowercase().contains("api key") => {
                 AiError::Unauthorized(provider.to_string())
             }
             429 => AiError::RateLimited(provider.to_string()),
@@ -72,6 +88,15 @@ impl AiError {
                 message,
             },
         }
+    }
+}
+
+/// "OpenAI said: … (error 400)", or only the status when the provider gave no reason.
+fn said(provider: &str, status: u16, message: &str) -> String {
+    if message.trim().is_empty() {
+        format!("{provider} answered with error {status} and gave no reason")
+    } else {
+        format!("{provider} said: {message} (error {status})")
     }
 }
 
@@ -138,6 +163,47 @@ mod tests {
         assert!(matches!(e, AiError::Unauthorized(_)), "{e:?}");
         let other = AiError::from_status("Black Forest Labs", 422, "width must be even".into());
         assert!(matches!(other, AiError::Provider { status: 422, .. }));
+        // Google answers a bad key with 400 INVALID_ARGUMENT.
+        let google = AiError::from_status(
+            "Google Gemini",
+            400,
+            "API key not valid. Please pass a valid API key.".into(),
+        );
+        assert!(matches!(google, AiError::Unauthorized(_)), "{google:?}");
+    }
+
+    #[test]
+    fn a_forbidden_request_is_the_key_only_when_the_provider_says_so() {
+        for message in ["Your API key does not have permission", ""] {
+            assert!(matches!(
+                AiError::from_status("Black Forest Labs", 403, message.into()),
+                AiError::Unauthorized(_)
+            ));
+        }
+        let unverified = AiError::from_status(
+            "OpenAI",
+            403,
+            "Your organization must be verified to use the model `gpt-image-2`.".into(),
+        );
+        assert_eq!(
+            unverified.to_string(),
+            "OpenAI said: Your organization must be verified to use the model `gpt-image-2`. \
+             (error 403)"
+        );
+    }
+
+    #[test]
+    fn a_providers_own_words_are_shown_as_they_came() {
+        let e = AiError::from_status("xAI Grok", 422, "Invalid aspect_ratio: 7:3".into());
+        assert_eq!(
+            e.to_string(),
+            "xAI Grok said: Invalid aspect_ratio: 7:3 (error 422)"
+        );
+        let silent = AiError::from_status("Stability AI", 500, String::new());
+        assert_eq!(
+            silent.to_string(),
+            "Stability AI answered with error 500 and gave no reason"
+        );
     }
 
     #[test]

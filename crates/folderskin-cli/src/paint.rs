@@ -473,9 +473,11 @@ async fn byok(
             provider: provider.id.to_string(),
             model: model.id.to_string(),
             prompt: order.idea.trim().to_string(),
-            reference_png: reference,
-            size: None,
-            want_alpha: false,
+            references: reference
+                .into_iter()
+                .map(|png| folderskin_ai::Reference::new(folderskin_ai::Role::Subject, png))
+                .collect(),
+            ..folderskin_ai::GenerateRequest::default()
         }
     } else {
         let (p, i) = (provider.id.to_string(), idea.clone());
@@ -540,6 +542,7 @@ async fn byok(
         "shape": shape,
         "prompt": request.prompt,
         "revised_prompt": result.revised_prompt,
+        "usage": result.usage,
         "provider": provider.label,
         "model": model.label,
         "model_id": result.model_used,
@@ -616,6 +619,9 @@ pub fn ai_error(provider: &ProviderInfo, e: AiError) -> CliError {
         )
         .fix("Try again: another run usually keeps the backdrop.")
         .fix("Or paint artwork instead, which doesn't need one: --shape artwork"),
+        AiError::NoImage(_) => CliError::environment("no_image", text, "")
+            .fix("Run the same command again: the next request often paints one.")
+            .fix("If it keeps happening, word the idea differently."),
         AiError::Provider { .. }
         | AiError::Decode(_)
         | AiError::Unsupported(_)

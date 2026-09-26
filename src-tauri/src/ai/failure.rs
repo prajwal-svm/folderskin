@@ -1,8 +1,8 @@
 //! How an AI command fails: a code the chat offers the right next step for, a sentence, what to
 //! try, and a question ready to paste to Claude. src/lib/aiError.ts reads it; its codes are the
 //! ones there (`missing_key`, `unauthorized`, `rate_limited`, `network`, `refused`, `timeout`,
-//! `stopped`, `no_backdrop`, `local_not_ready`, `out_of_memory`, `failed`), plus the local
-//! engine's own (`no_build_for_platform`, `path_not_ascii`, `vc_runtime_missing`,
+//! `stopped`, `no_backdrop`, `no_image`, `local_not_ready`, `out_of_memory`, `failed`), plus the
+//! local engine's own (`no_build_for_platform`, `path_not_ascii`, `vc_runtime_missing`,
 //! `runtime_failed_to_start`, `busy`, …) passed through as they are.
 //!
 //! No message ever carries a key: a provider's words are scrubbed of it before they're kept.
@@ -113,6 +113,9 @@ pub fn from_provider(e: AiError, label: &str, doing: &str) -> AiFailure {
             .fix("Check the internet connection (and any proxy or firewall), then try again."),
         AiError::Timeout { .. } => AiFailure::new("timeout", text),
         AiError::NoBackdrop => AiFailure::new("no_backdrop", text),
+        // Nothing is wrong with the key or the words: the chat offers Try again, and FolderSkin
+        // never tries again by itself (docs/AI.md, Cost).
+        AiError::NoImage(_) => AiFailure::new("no_image", text),
         AiError::UnknownProvider(_) | AiError::UnknownModel { .. } => {
             AiFailure::failed(text).fix("Choose another model in the provider settings.")
         }
@@ -323,6 +326,18 @@ mod tests {
             "timeout"
         );
         assert_eq!(code(AiError::NoBackdrop), "no_backdrop");
+        let empty = from_provider(
+            AiError::NoImage("Google Gemini".into()),
+            "Google Gemini",
+            "asking Google Gemini for folder artwork",
+        );
+        assert_eq!(empty.code, "no_image");
+        assert_eq!(
+            empty.message,
+            "Google Gemini finished without painting a picture. Try again, or reword the idea."
+        );
+        // Trying again is the answer, so there is nothing to ask about.
+        assert_eq!(empty.ask, None);
         let odd = from_provider(
             AiError::Provider {
                 provider: "OpenAI".into(),

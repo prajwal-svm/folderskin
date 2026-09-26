@@ -129,6 +129,13 @@ describe("explain", async () => {
     expect(said.at(-1)?.vars).toEqual({ reason: "<native.os.permission>" });
     // A file's name, then a known sentence.
     expect(explain("b.png: it arrived damaged. Try again")).toBe("b.png: <native.community.damaged>");
+    // A provider's failures: a picture it didn't make, its filter, and its own words with the status.
+    expect(explain("Google Gemini finished without painting a picture. Try again, or reword the idea.")).toBe("<native.ai.noImage>");
+    expect(said.at(-1)?.vars).toEqual({ provider: "Google Gemini" });
+    expect(explain("xAI Grok declined that prompt: its filter blocked the picture.")).toBe("<native.ai.refused>");
+    expect(said.at(-1)?.vars).toEqual({ provider: "xAI Grok", reason: "<native.ai.filterBlocked>" });
+    expect(explain("OpenAI said: Your organization must be verified to use the model. (error 403)")).toBe("<native.ai.said>");
+    expect(said.at(-1)?.vars).toEqual({ provider: "OpenAI", reason: "Your organization must be verified to use the model.", status: "403" });
     // Anything else is shown as it came.
     expect(explain("the disk made a noise")).toBe("the disk made a noise");
     vi.doUnmock("../i18n");

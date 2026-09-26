@@ -1422,6 +1422,7 @@ export const mockApi = {
       }
       onEvent({ type: "stage", stage: "paint", message: `${who} is painting it` });
       await wait(1800);
+      if (fail === "noimage") throw { code: "no_image", message: `${who} finished without painting a picture. Try again, or reword the idea.` };
       await painted();
     }
     if (req.shape === "folder") {

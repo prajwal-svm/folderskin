@@ -4,9 +4,10 @@
 //! and hands it to [`generate`] for each request. There is no FolderSkin server: every call goes
 //! straight from the user's machine to the provider they chose.
 //!
-//! [`catalogue`] lists what is on offer, [`request`] builds each provider's body and reads its
-//! reply (pure, so it is all unit-tested), [`prompts`] composes the prompt, [`generate`]
-//! performs the one HTTP call, and [`finish`] plans the request and makes the answer a skin.
+//! [`catalogue`] lists what is on offer, [`request`] describes each provider's request and reads
+//! its reply (pure, so every field is unit-tested), [`prompts`] composes the prompt, [`generate`]
+//! sends the request and follows the reply to the picture, and [`finish`] plans the request and
+//! makes the answer a skin.
 
 pub mod catalogue;
 pub mod error;
@@ -18,22 +19,79 @@ pub use catalogue::{model, provider, providers, ModelInfo, ProviderInfo};
 pub use error::AiError;
 pub use finish::{finish, plan, Finished};
 
-use request::{BflPoll, Payload};
+use request::{Auth, Body, FieldValue, Incoming, Method, Outgoing, Picture, Wait};
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-/// What the caller wants generated. `prompt` is already composed; providers get it verbatim.
-#[derive(Clone, Debug)]
+/// What the caller wants generated: the contract between what composes a request ([`plan`]) and
+/// the providers. `prompt` is already composed, and every provider gets it verbatim. The other
+/// fields are settings: each goes into the provider's own parameters where it has one and is
+/// left out where it hasn't, and none of them is ever written into the prompt.
+#[derive(Clone, Debug, Default)]
 pub struct GenerateRequest {
     pub provider: String,
     pub model: String,
     pub prompt: String,
-    /// A picture to work from, for models that accept one.
-    pub reference_png: Option<Vec<u8>>,
-    /// "1024x1024"; `None` uses the model's first listed size.
+    /// Pictures to work from, each with its role. They are sent in role order (FolderSkin's
+    /// template, then the subject pictures, then the style pictures), which is how the prompt
+    /// numbers them, and a model that takes fewer gets the first ones.
+    pub references: Vec<Reference>,
+    /// The exact size the shape wants, "1024x960". Each provider asks for it, or for the nearest
+    /// size or aspect ratio it offers. `None` uses the model's first listed size.
     pub size: Option<String>,
     /// Ask for a transparent background. Only set for models that really support it.
     pub want_alpha: bool,
+    /// The flat colour around the subject when FolderSkin cuts it out itself: the colour the
+    /// prompt names and the template sits on, and the one [`finish`] keys out. Recraft is also
+    /// told it as a parameter. `None` when nothing is cut out.
+    pub key_colour: Option<[u8; 3]>,
+    /// What the picture must not show, as short phrases ("border", "cartoon"), for the providers
+    /// that take a negative prompt. Watermarks and signatures are always kept out, and text is
+    /// too unless `lettering` asks for some.
+    pub keep_out: Vec<String>,
+    /// The chosen style as the provider's own preset, by the provider's id for it: Stability's
+    /// "photographic", Ideogram's "WATERCOLOR" (or a style type, "REALISTIC"). Sent only where
+    /// the provider documents that preset; Recraft V4.1 and the rest have none.
+    pub style_preset: Option<String>,
+    /// The exact words to letter on the picture, when it should carry any. The prompt says them;
+    /// this sets the providers that have a switch for text.
+    pub lettering: Option<String>,
+}
+
+impl GenerateRequest {
+    /// The reference pictures in the order they are sent, at most `max` of them: the template
+    /// first, then the subject pictures, then the style pictures, each role in the order given.
+    pub fn references_in_order(&self, max: usize) -> Vec<&Reference> {
+        let mut refs: Vec<&Reference> = self.references.iter().collect();
+        refs.sort_by_key(|r| r.role);
+        refs.truncate(max);
+        refs
+    }
+}
+
+/// A picture sent with the prompt, and what it is for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reference {
+    pub role: Role,
+    /// The picture as a PNG, no longer than [`finish::REFERENCE_MAX_SIDE`] on its longer side.
+    pub png: Vec<u8>,
+}
+
+impl Reference {
+    pub fn new(role: Role, png: Vec<u8>) -> Reference {
+        Reference { role, png }
+    }
+}
+
+/// What a reference picture is for. They are sent in this order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Role {
+    /// FolderSkin's blank template: the exact shape to paint on.
+    Template,
+    /// The person's own picture of what to paint.
+    Subject,
+    /// The person's own picture of how to paint it: its medium, palette and light.
+    Style,
 }
 
 /// One generated image.
@@ -45,19 +103,88 @@ pub struct GenerateResult {
     pub native_alpha: bool,
     pub model_used: String,
     pub revised_prompt: Option<String>,
+    /// The colour the picture was asked to sit on, for [`finish`] to cut out: the request's own.
+    pub key_colour: Option<[u8; 3]>,
+    /// What the provider said the request used or cost, in its own units, for the log: "xAI Grok
+    /// charged $0.040".
+    pub usage: Option<String>,
 }
 
-/// Generation can take a while; a minute and a half is generous for every provider here.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
-/// Black Forest Labs is asynchronous: submit, then poll.
-const POLL_INTERVAL: Duration = Duration::from_secs(1);
-const POLL_LIMIT: u32 = 90;
+/// Where the requests go. The default is every provider's own API. A test points them all at a
+/// stand-in on this computer instead, which answers the way the provider's documentation says.
+#[derive(Clone, Debug)]
+pub struct Hosts {
+    /// Takes the place of every provider's own address ("https://api.openai.com") when set.
+    origin: Option<String>,
+    /// How long to wait before asking Black Forest Labs again whether its picture is ready.
+    poll_every: Duration,
+}
+
+impl Default for Hosts {
+    fn default() -> Hosts {
+        Hosts {
+            origin: None,
+            poll_every: Duration::from_secs(1),
+        }
+    }
+}
+
+impl Hosts {
+    /// Every provider at `origin` ("http://127.0.0.1:8080"), asked again without waiting.
+    pub fn at(origin: &str) -> Hosts {
+        Hosts {
+            origin: Some(origin.trim_end_matches('/').to_string()),
+            poll_every: Duration::from_millis(5),
+        }
+    }
+
+    /// `url` with a provider's own address swapped for the stand-in's, when there is one.
+    fn url(&self, url: &str) -> String {
+        match &self.origin {
+            Some(origin) => request::PROVIDER_ORIGINS
+                .iter()
+                .find_map(|o| url.strip_prefix(o))
+                .map_or_else(|| url.to_string(), |path| format!("{origin}{path}")),
+            None => url.to_string(),
+        }
+    }
+
+    /// Whether a URL a provider handed back may be sent the key: one of `hosts` over HTTPS, or
+    /// the stand-in. A key only ever goes to the provider it belongs to.
+    fn may_carry_key(&self, url: &str, hosts: &[&str]) -> bool {
+        if let Some(origin) = &self.origin {
+            if url.starts_with(&format!("{origin}/")) {
+                return true;
+            }
+        }
+        let Some(rest) = url.strip_prefix("https://") else {
+            return false;
+        };
+        let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+        // "user@host" and "host:port" say where it really goes.
+        if host.contains(['@', ':']) {
+            return false;
+        }
+        hosts
+            .iter()
+            .any(|h| host == *h || host.ends_with(&format!(".{h}")))
+    }
+}
+
+/// How long the one request that paints may take. A large model on a long prompt answers within
+/// two minutes; one that hasn't answered in five has stalled.
+const PAINT_TIMEOUT: Duration = Duration::from_secs(300);
+/// How long checking a key, asking whether a picture is ready or downloading it may take.
+const QUICK_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long to go on asking Black Forest Labs for a picture it has taken on.
+const WAIT_LIMIT: Duration = Duration::from_secs(300);
 
 fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(Duration::from_secs(20))
+            .timeout(PAINT_TIMEOUT)
             .user_agent(concat!("folderskin/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("a default reqwest client always builds")
@@ -77,57 +204,110 @@ fn net(provider: &str, e: reqwest::Error) -> AiError {
     }
 }
 
-/// Reads a response, turning any non-success status into a friendly error.
-async fn json_or_error(
-    provider: &str,
-    res: reqwest::Response,
-) -> Result<serde_json::Value, AiError> {
-    let status = res.status();
-    let text = res.text().await.map_err(|e| net(provider, e))?;
-    if !status.is_success() {
-        return Err(AiError::from_status(
-            provider,
-            status.as_u16(),
-            request::error_message(&text),
-        ));
+/// Sends `out` with `key` and reads the whole reply, whatever its status: what a status means is
+/// the provider's to say ([`request::read`]).
+async fn send(
+    out: &Outgoing,
+    key: &str,
+    hosts: &Hosts,
+    label: &str,
+    timeout: Duration,
+) -> Result<Incoming, AiError> {
+    let url = hosts.url(&out.url);
+    let mut builder = match out.method {
+        Method::Get => client().get(&url),
+        Method::Post => client().post(&url),
     }
-    serde_json::from_str(&text).map_err(|_| {
-        AiError::Decode(format!(
-            "{provider} replied with something FolderSkin could not read"
-        ))
+    .timeout(timeout);
+    builder = match out.auth {
+        Auth::Bearer => builder.bearer_auth(key),
+        Auth::Header(name) => {
+            let mut value = reqwest::header::HeaderValue::from_str(key.trim())
+                .map_err(|_| AiError::Unauthorized(label.to_string()))?;
+            value.set_sensitive(true);
+            builder.header(name, value)
+        }
+    };
+    if let Some(accept) = out.accept {
+        builder = builder.header(reqwest::header::ACCEPT, accept);
+    }
+    builder = match &out.body {
+        Body::Empty => builder,
+        Body::Json(value) => builder.json(value),
+        Body::Form(fields) => {
+            let mut form = reqwest::multipart::Form::new();
+            for field in fields {
+                form = match &field.value {
+                    FieldValue::Text(text) => form.text(field.name.clone(), text.clone()),
+                    FieldValue::File {
+                        file_name,
+                        mime,
+                        bytes,
+                    } => {
+                        let part = reqwest::multipart::Part::bytes(bytes.clone())
+                            .file_name(file_name.clone())
+                            .mime_str(mime)
+                            .map_err(|e| AiError::Decode(e.to_string()))?;
+                        form.part(field.name.clone(), part)
+                    }
+                };
+            }
+            builder.multipart(form)
+        }
+    };
+    let res = builder.send().await.map_err(|e| net(label, e))?;
+    let status = res.status().as_u16();
+    let headers = res
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+    let body = res.bytes().await.map_err(|e| net(label, e))?.to_vec();
+    Ok(Incoming {
+        status,
+        headers,
+        body,
     })
 }
 
-/// Downloads an image the provider left at a URL.
-async fn fetch_image(provider: &str, url: &str) -> Result<(Vec<u8>, String), AiError> {
+/// Downloads a picture the provider left at a link. The link is the provider's own and carries
+/// its own permission, so no key goes with it.
+async fn fetch_image(label: &str, url: &str, hosts: &Hosts) -> Result<(Vec<u8>, String), AiError> {
     let res = client()
-        .get(url)
+        .get(hosts.url(url))
+        .timeout(QUICK_TIMEOUT)
         .send()
         .await
-        .map_err(|e| net(provider, e))?;
+        .map_err(|e| net(label, e))?;
     let status = res.status();
     if !status.is_success() {
         return Err(AiError::Provider {
-            provider: provider.to_string(),
+            provider: label.to_string(),
             status: status.as_u16(),
             message: "the image link the provider gave could not be downloaded".into(),
         });
     }
-    let media = res
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("image/png")
-        .split(';')
-        .next()
-        .unwrap_or("image/png")
-        .to_string();
-    let bytes = res.bytes().await.map_err(|e| net(provider, e))?;
+    let media = request::media_type_of(
+        res.headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+    );
+    let bytes = res.bytes().await.map_err(|e| net(label, e))?;
     Ok((bytes.to_vec(), media))
 }
 
 /// Generates one image with the user's key.
 pub async fn generate(req: &GenerateRequest, api_key: &str) -> Result<GenerateResult, AiError> {
+    generate_with(req, api_key, &Hosts::default()).await
+}
+
+/// [`generate`], with the requests sent to `hosts`: how the tests send each provider's real
+/// request to a stand-in on this computer.
+pub async fn generate_with(
+    req: &GenerateRequest,
+    api_key: &str,
+    hosts: &Hosts,
+) -> Result<GenerateResult, AiError> {
     let provider =
         provider(&req.provider).ok_or_else(|| AiError::UnknownProvider(req.provider.clone()))?;
     let model = model(&req.provider, &req.model).ok_or_else(|| AiError::UnknownModel {
@@ -137,347 +317,104 @@ pub async fn generate(req: &GenerateRequest, api_key: &str) -> Result<GenerateRe
     if api_key.trim().is_empty() {
         return Err(AiError::MissingKey(provider.label.to_string()));
     }
-    if req.reference_png.is_some() && !model.accepts_reference {
+    if !req.references.is_empty() && !model.accepts_reference {
         return Err(AiError::Unsupported(format!(
             "{} cannot work from a reference picture. Clear it, or pick another model.",
             model.label
         )));
     }
-    let default_size = model.sizes[0];
     let label = provider.label;
-
-    let (image, media_type, revised) = match provider.id {
-        "openai" => openai(req, api_key, default_size, label).await?,
-        "xai" => xai(req, api_key, label).await?,
-        "recraft" => recraft(req, api_key, default_size, label).await?,
-        "google" => google(req, api_key, label).await?,
-        "bfl" => bfl(req, api_key, default_size, label).await?,
-        "stability" => stability(req, api_key, label).await?,
-        "ideogram" => ideogram(req, api_key, default_size, label).await?,
-        other => return Err(AiError::UnknownProvider(other.to_string())),
+    let out = request::build(provider.id, model, req);
+    let reply = send(&out, api_key, hosts, label, PAINT_TIMEOUT).await?;
+    let answer = request::read(provider.id, label, &reply)?;
+    let (image, media_type) = match answer.picture {
+        Picture::Bytes { bytes, media_type } => (bytes, media_type),
+        Picture::Link(url) => fetch_image(label, &url, hosts).await?,
+        Picture::Wait(wait) => wait_for(label, &wait, api_key, hosts).await?,
     };
-
     Ok(GenerateResult {
         image,
         media_type,
         native_alpha: req.want_alpha && model.native_alpha,
         model_used: model.id.to_string(),
-        revised_prompt: revised,
+        revised_prompt: answer.revised_prompt,
+        key_colour: req.key_colour,
+        usage: answer.usage,
     })
+}
+
+/// Asks where `wait` says until the picture is ready, then downloads it. Only Black Forest Labs
+/// works this way: it takes the request on, and paints it in its own time.
+async fn wait_for(
+    label: &str,
+    wait: &Wait,
+    key: &str,
+    hosts: &Hosts,
+) -> Result<(Vec<u8>, String), AiError> {
+    if !hosts.may_carry_key(&wait.url, wait.hosts) {
+        return Err(AiError::Decode(format!(
+            "{label} said to collect the picture somewhere FolderSkin doesn't send your key"
+        )));
+    }
+    let started = Instant::now();
+    loop {
+        // The runtime's timer: the thread serves other requests while this one waits.
+        tokio::time::sleep(hosts.poll_every).await;
+        let reply = send(&wait.poll(), key, hosts, label, QUICK_TIMEOUT).await?;
+        if let Some(url) = request::read_wait(label, &reply)? {
+            return fetch_image(label, &url, hosts).await;
+        }
+        if started.elapsed() > WAIT_LIMIT {
+            return Err(AiError::Timeout {
+                provider: label.to_string(),
+            });
+        }
+    }
 }
 
 /// A cheap authenticated call that proves the key works without generating anything.
 pub async fn test_key(provider_id: &str, api_key: &str) -> Result<(), AiError> {
+    test_key_with(provider_id, api_key, &Hosts::default()).await
+}
+
+/// [`test_key`], with the request sent to `hosts`.
+pub async fn test_key_with(provider_id: &str, api_key: &str, hosts: &Hosts) -> Result<(), AiError> {
     let provider =
         provider(provider_id).ok_or_else(|| AiError::UnknownProvider(provider_id.to_string()))?;
     if api_key.trim().is_empty() {
         return Err(AiError::MissingKey(provider.label.to_string()));
     }
     let label = provider.label;
-    let req = match provider.id {
-        "openai" => client()
-            .get("https://api.openai.com/v1/models")
-            .bearer_auth(api_key),
-        "xai" => client()
-            .get("https://api.x.ai/v1/models")
-            .bearer_auth(api_key),
-        "recraft" => client()
-            .get("https://external.api.recraft.ai/v1/users/me")
-            .bearer_auth(api_key),
-        "google" => client()
-            .get("https://generativelanguage.googleapis.com/v1beta/models")
-            .header("x-goog-api-key", api_key),
-        "stability" => client()
-            .get("https://api.stability.ai/v1/user/account")
-            .bearer_auth(api_key),
-        // The account's credit balance: free, and only answered for a key it knows.
-        "bfl" => client()
-            .get("https://api.bfl.ai/v1/credits")
-            .header("x-key", api_key),
-        // Ideogram has no "who am I". Describing a picture checks the key before it looks at the
-        // picture, so a few bytes that aren't one are turned away once the key is accepted, and
-        // nothing is described or charged.
-        "ideogram" => {
-            let part = reqwest::multipart::Part::bytes(b"not a picture".to_vec())
-                .file_name("key-check.png")
-                .mime_str("image/png")
-                .map_err(|e| AiError::Decode(e.to_string()))?;
-            client()
-                .post("https://api.ideogram.ai/describe")
-                .header("Api-Key", api_key)
-                .multipart(reqwest::multipart::Form::new().part("image_file", part))
-        }
-        other => return Err(AiError::UnknownProvider(other.to_string())),
-    };
-    let res = req.send().await.map_err(|e| net(label, e))?;
-    let status = res.status();
-    let text = if status.is_success() {
+    let out = request::key_check(provider.id)
+        .ok_or_else(|| AiError::UnknownProvider(provider.id.to_string()))?;
+    let reply = send(&out, api_key, hosts, label, QUICK_TIMEOUT).await?;
+    let message = if (200..300).contains(&reply.status) {
         String::new()
     } else {
-        res.text().await.unwrap_or_default()
+        request::error_message(&String::from_utf8_lossy(&reply.body))
     };
-    key_check(
-        provider.id,
-        label,
-        status.as_u16(),
-        request::error_message(&text),
-    )
+    key_check(provider.id, label, reply.status, message)
 }
 
-/// What the answer to [`test_key`]'s request says about the key.
+/// What the answer to [`test_key`]'s request says about the key. The request asks for nothing
+/// but the key, so a refusal is the key's, whatever the status.
 fn key_check(provider_id: &str, label: &str, status: u16, message: String) -> Result<(), AiError> {
+    let lower = message.to_lowercase();
     match (provider_id, status) {
         (_, 200..=299) => Ok(()),
-        // Black Forest Labs answers a key that isn't even shaped like one with 422.
-        ("bfl", 401 | 403 | 422) => Err(AiError::Unauthorized(label.to_string())),
+        // A restricted OpenAI key may paint without being allowed to list the models.
+        ("openai", 401 | 403) if lower.contains("scope") || lower.contains("permission") => Ok(()),
+        // Black Forest Labs answers a key that isn't even shaped like one with 422, and xAI an
+        // incorrect one with 400.
+        ("bfl", 422) | ("xai", 400) | (_, 401 | 403) => {
+            Err(AiError::Unauthorized(label.to_string()))
+        }
         // Past the key and turned away for the picture that isn't one: the key is good. Only
         // the answers that mean a bad picture: a 404 or 405 says the endpoint moved, not that
         // the key was accepted.
         ("ideogram", 400 | 415 | 422) => Ok(()),
         _ => Err(AiError::from_status(label, status, message)),
     }
-}
-
-// ---------------------------------------------------------------- per provider
-
-type Generated = (Vec<u8>, String, Option<String>);
-
-async fn openai(
-    req: &GenerateRequest,
-    key: &str,
-    default_size: &str,
-    label: &str,
-) -> Result<Generated, AiError> {
-    let res = match &req.reference_png {
-        // An edit takes the reference picture as a file part.
-        Some(png) => {
-            let part = reqwest::multipart::Part::bytes(png.clone())
-                .file_name("reference.png")
-                .mime_str("image/png")
-                .map_err(|e| AiError::Decode(e.to_string()))?;
-            let mut form = reqwest::multipart::Form::new()
-                .text("model", req.model.clone())
-                .text("prompt", req.prompt.clone())
-                .text("n", "1")
-                .text("size", request::size_string(req, default_size))
-                .part("image", part);
-            if req.want_alpha {
-                form = form
-                    .text("background", "transparent")
-                    .text("output_format", "png");
-            }
-            client()
-                .post("https://api.openai.com/v1/images/edits")
-                .bearer_auth(key)
-                .multipart(form)
-                .send()
-                .await
-        }
-        None => {
-            client()
-                .post("https://api.openai.com/v1/images/generations")
-                .bearer_auth(key)
-                .json(&request::openai_body(req, default_size))
-                .send()
-                .await
-        }
-    }
-    .map_err(|e| net(label, e))?;
-
-    let body = json_or_error(label, res).await?;
-    match request::read_data_array(label, &body)? {
-        (Payload::Bytes(b), revised) => Ok((b, "image/png".into(), revised)),
-        (Payload::Url(u), revised) => {
-            let (bytes, media) = fetch_image(label, &u).await?;
-            Ok((bytes, media, revised))
-        }
-    }
-}
-
-async fn xai(req: &GenerateRequest, key: &str, label: &str) -> Result<Generated, AiError> {
-    let url = if req.reference_png.is_some() {
-        "https://api.x.ai/v1/images/edits"
-    } else {
-        "https://api.x.ai/v1/images/generations"
-    };
-    let res = match &req.reference_png {
-        Some(png) => {
-            let part = reqwest::multipart::Part::bytes(png.clone())
-                .file_name("reference.png")
-                .mime_str("image/png")
-                .map_err(|e| AiError::Decode(e.to_string()))?;
-            let form = reqwest::multipart::Form::new()
-                .text("model", req.model.clone())
-                .text("prompt", req.prompt.clone())
-                .text("n", "1")
-                .text("response_format", "b64_json")
-                .part("image", part);
-            client()
-                .post(url)
-                .bearer_auth(key)
-                .multipart(form)
-                .send()
-                .await
-        }
-        None => {
-            client()
-                .post(url)
-                .bearer_auth(key)
-                .json(&request::xai_body(req))
-                .send()
-                .await
-        }
-    }
-    .map_err(|e| net(label, e))?;
-
-    let body = json_or_error(label, res).await?;
-    match request::read_data_array(label, &body)? {
-        (Payload::Bytes(b), revised) => Ok((b, "image/png".into(), revised)),
-        (Payload::Url(u), revised) => {
-            let (bytes, media) = fetch_image(label, &u).await?;
-            Ok((bytes, media, revised))
-        }
-    }
-}
-
-async fn recraft(
-    req: &GenerateRequest,
-    key: &str,
-    default_size: &str,
-    label: &str,
-) -> Result<Generated, AiError> {
-    let res = client()
-        .post("https://external.api.recraft.ai/v1/images/generations")
-        .bearer_auth(key)
-        .json(&request::recraft_body(req, default_size))
-        .send()
-        .await
-        .map_err(|e| net(label, e))?;
-    let body = json_or_error(label, res).await?;
-    match request::read_data_array(label, &body)? {
-        (Payload::Bytes(b), revised) => Ok((b, "image/png".into(), revised)),
-        (Payload::Url(u), revised) => {
-            let (bytes, media) = fetch_image(label, &u).await?;
-            Ok((bytes, media, revised))
-        }
-    }
-}
-
-async fn google(req: &GenerateRequest, key: &str, label: &str) -> Result<Generated, AiError> {
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
-        req.model
-    );
-    let res = client()
-        .post(url)
-        .header("x-goog-api-key", key)
-        .json(&request::google_body(req))
-        .send()
-        .await
-        .map_err(|e| net(label, e))?;
-    let body = json_or_error(label, res).await?;
-    Ok((request::read_google(&body)?, "image/png".into(), None))
-}
-
-async fn bfl(
-    req: &GenerateRequest,
-    key: &str,
-    default_size: &str,
-    label: &str,
-) -> Result<Generated, AiError> {
-    let submit = client()
-        .post(format!("https://api.bfl.ai/v1/{}", req.model))
-        .header("x-key", key)
-        .json(&request::bfl_body(req, default_size))
-        .send()
-        .await
-        .map_err(|e| net(label, e))?;
-    let body = json_or_error(label, submit).await?;
-    let polling_url = request::read_bfl_submit(&body)?;
-
-    for _ in 0..POLL_LIMIT {
-        // The runtime's timer: the thread serves other requests while this one waits.
-        tokio::time::sleep(POLL_INTERVAL).await;
-        let res = client()
-            .get(&polling_url)
-            .header("x-key", key)
-            .send()
-            .await
-            .map_err(|e| net(label, e))?;
-        let body = json_or_error(label, res).await?;
-        match request::read_bfl_poll(&body) {
-            BflPoll::Pending => continue,
-            BflPoll::Ready(url) => {
-                let (bytes, media) = fetch_image(label, &url).await?;
-                return Ok((bytes, media, None));
-            }
-            BflPoll::Failed(why) => {
-                return Err(AiError::Refused(format!(
-                    "{label} could not finish the image: {why}"
-                )))
-            }
-        }
-    }
-    Err(AiError::Timeout {
-        provider: label.to_string(),
-    })
-}
-
-async fn stability(req: &GenerateRequest, key: &str, label: &str) -> Result<Generated, AiError> {
-    let mut form = reqwest::multipart::Form::new();
-    for (name, value) in request::stability_fields(req) {
-        form = form.text(name, value);
-    }
-    let res = client()
-        .post(format!(
-            "https://api.stability.ai/v2beta/stable-image/generate/{}",
-            req.model
-        ))
-        .bearer_auth(key)
-        .header(reqwest::header::ACCEPT, "image/*")
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| net(label, e))?;
-    let status = res.status();
-    if !status.is_success() {
-        let text = res.text().await.unwrap_or_default();
-        return Err(AiError::from_status(
-            label,
-            status.as_u16(),
-            request::error_message(&text),
-        ));
-    }
-    let media = res
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("image/png")
-        .split(';')
-        .next()
-        .unwrap_or("image/png")
-        .to_string();
-    let bytes = res.bytes().await.map_err(|e| net(label, e))?;
-    Ok((bytes.to_vec(), media, None))
-}
-
-async fn ideogram(
-    req: &GenerateRequest,
-    key: &str,
-    default_size: &str,
-    label: &str,
-) -> Result<Generated, AiError> {
-    let res = client()
-        .post("https://api.ideogram.ai/v1/ideogram-v3/generate")
-        .header("Api-Key", key)
-        .json(&request::ideogram_body(req, default_size))
-        .send()
-        .await
-        .map_err(|e| net(label, e))?;
-    let body = json_or_error(label, res).await?;
-    let url = request::read_ideogram(&body)?;
-    let (bytes, media) = fetch_image(label, &url).await?;
-    Ok((bytes, media, None))
 }
 
 #[cfg(test)]
@@ -489,9 +426,7 @@ mod tests {
             provider: provider.into(),
             model: model.into(),
             prompt: "a copper patina".into(),
-            reference_png: None,
-            size: None,
-            want_alpha: false,
+            ..GenerateRequest::default()
         }
     }
 
@@ -516,10 +451,69 @@ mod tests {
 
     #[test]
     fn a_reference_picture_on_a_model_that_cannot_take_one_is_refused() {
-        let mut r = req("recraft", "recraftv3");
-        r.reference_png = Some(vec![1, 2, 3]);
+        let mut r = req("stability", "core");
+        r.references = vec![Reference::new(Role::Subject, vec![1, 2, 3])];
         let err = futures_lite_block(generate(&r, "key"));
         assert!(matches!(err, Err(AiError::Unsupported(m)) if m.contains("reference picture")));
+    }
+
+    #[test]
+    fn references_go_template_first_then_subject_then_style() {
+        let mut r = req("openai", "gpt-image-2.5-flare");
+        r.references = vec![
+            Reference::new(Role::Style, vec![3]),
+            Reference::new(Role::Subject, vec![2]),
+            Reference::new(Role::Template, vec![1]),
+            Reference::new(Role::Subject, vec![4]),
+        ];
+        let order: Vec<u8> = r.references_in_order(16).iter().map(|p| p.png[0]).collect();
+        assert_eq!(order, [1, 2, 4, 3]);
+        // A model that takes two gets the template and the first subject picture.
+        let order: Vec<u8> = r.references_in_order(2).iter().map(|p| p.png[0]).collect();
+        assert_eq!(order, [1, 2]);
+    }
+
+    #[test]
+    fn a_stand_in_takes_the_place_of_every_provider_but_nothing_else() {
+        let hosts = Hosts::at("http://127.0.0.1:9/");
+        assert_eq!(
+            hosts.url("https://api.openai.com/v1/images/edits"),
+            "http://127.0.0.1:9/v1/images/edits"
+        );
+        assert_eq!(
+            hosts.url("https://generativelanguage.googleapis.com/v1beta/models"),
+            "http://127.0.0.1:9/v1beta/models"
+        );
+        // A link a provider handed back goes where it says.
+        assert_eq!(
+            hosts.url("https://cdn.example.test/a.png"),
+            "https://cdn.example.test/a.png"
+        );
+        assert_eq!(
+            Hosts::default().url("https://api.x.ai/v1/images/generations"),
+            "https://api.x.ai/v1/images/generations"
+        );
+    }
+
+    #[test]
+    fn a_key_goes_only_to_its_own_provider() {
+        let real = Hosts::default();
+        let bfl = &["bfl.ai"];
+        assert!(real.may_carry_key("https://api.bfl.ai/v1/get_result?id=1", bfl));
+        assert!(real.may_carry_key("https://api.us1.bfl.ai/v1/get_result?id=1", bfl));
+        for elsewhere in [
+            "http://api.bfl.ai/v1/get_result",
+            "https://bfl.ai.example.test/v1",
+            "https://notbfl.ai/v1",
+            "https://api.bfl.ai@example.test/v1",
+            "https://api.bfl.ai:8443/v1",
+            "https://example.test/?https://api.bfl.ai/",
+        ] {
+            assert!(!real.may_carry_key(elsewhere, bfl), "{elsewhere}");
+        }
+        let test = Hosts::at("http://127.0.0.1:9");
+        assert!(test.may_carry_key("http://127.0.0.1:9/v1/get_result?id=1", bfl));
+        assert!(!test.may_carry_key("http://127.0.0.1:99/v1/get_result?id=1", bfl));
     }
 
     #[test]
@@ -527,6 +521,34 @@ mod tests {
         assert!(key_check("openai", "OpenAI", 200, String::new()).is_ok());
         assert!(matches!(
             key_check("openai", "OpenAI", 401, "no".into()),
+            Err(AiError::Unauthorized(_))
+        ));
+        // A restricted key that can't list models may still paint.
+        assert!(key_check(
+            "openai",
+            "OpenAI",
+            403,
+            "You have insufficient permissions for this operation. Missing scopes: \
+             api.model.read."
+                .into()
+        )
+        .is_ok());
+        // xAI answers an incorrect key with 400; Google with 400 and its own words.
+        assert!(matches!(
+            key_check("xai", "xAI Grok", 400, "Incorrect API key provided".into()),
+            Err(AiError::Unauthorized(_))
+        ));
+        assert!(matches!(
+            key_check(
+                "google",
+                "Google Gemini",
+                400,
+                "API key not valid. Please pass a valid API key.".into()
+            ),
+            Err(AiError::Unauthorized(_))
+        ));
+        assert!(matches!(
+            key_check("recraft", "Recraft", 403, "Forbidden".into()),
             Err(AiError::Unauthorized(_))
         ));
         // Black Forest Labs: 403 for a key it doesn't know, 422 for one that isn't shaped right.

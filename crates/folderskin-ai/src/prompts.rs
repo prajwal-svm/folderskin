@@ -120,9 +120,10 @@ sheet plain or give it only a faint tint. Where the artwork has depth, let its h
 stand out in relief and break over the folder's top edge; keep the folder itself square-on. \
 No text, letters, numbers, logos or watermarks.";
 
-/// The output contract: size, isolation and the key colour to be removed afterwards.
-fn output_contract(width: u32, height: u32, key_hex: Option<&str>) -> String {
-    let mut s = format!("Output: one high-resolution render, {width} by {height} pixels. ");
+/// The output contract: isolation, and the key colour to be removed afterwards. The size is a
+/// parameter of the request, never words: models don't paint to a pixel count they read.
+fn output_contract(key_hex: Option<&str>) -> String {
+    let mut s = String::from("Output: one high-resolution render. ");
     match key_hex {
         Some(hex) => s.push_str(&format!(
             "The folder is the only object in the frame, centred, filling it edge to edge with a \
@@ -142,30 +143,23 @@ fn output_contract(width: u32, height: u32, key_hex: Option<&str>) -> String {
 ///
 /// `idea` is the user's own words. `key_hex` is `Some("#FF00FF")` when the caller intends to key
 /// the background out, `None` when the model returns a real alpha channel.
-pub fn compose(shape: Shape, idea: &str, width: u32, height: u32, key_hex: Option<&str>) -> String {
+pub fn compose(shape: Shape, idea: &str, key_hex: Option<&str>) -> String {
     let idea = idea.trim();
     match shape {
         Shape::Skin => format!(
             "Create the artwork for a folder icon skin: {idea}.\n\n{SKIN_CONTRACT}\n\nOutput: one \
-             high-resolution image, {width} by {height} pixels, filled edge to edge with the \
-             artwork and nothing else."
+             high-resolution image, filled edge to edge with the artwork and nothing else."
         ),
         Shape::Folder => format!(
             "Create a folder icon illustration: {idea}.\n\n{FOLDER_CONTRACT}\n\n{}",
-            output_contract(width, height, key_hex)
+            output_contract(key_hex)
         ),
     }
 }
 
 /// Extra instructions for a run that also sends a reference picture.
-pub fn compose_with_reference(
-    shape: Shape,
-    idea: &str,
-    width: u32,
-    height: u32,
-    key_hex: Option<&str>,
-) -> String {
-    let base = compose(shape, idea, width, height, key_hex);
+pub fn compose_with_reference(shape: Shape, idea: &str, key_hex: Option<&str>) -> String {
+    let base = compose(shape, idea, key_hex);
     let lead = match shape {
         Shape::Skin => {
             "Use the supplied picture as the source of the artwork: keep its subject, \
@@ -181,12 +175,12 @@ pub fn compose_with_reference(
 }
 
 /// The prompt for a whole-folder run whose reference picture is FolderSkin's own blank template:
-/// a plain light-grey folder centred on the flat `key_hex` colour, at `width` x `height`.
+/// a plain light-grey folder centred on the flat `key_hex` colour.
 ///
 /// The model repaints that exact folder instead of inventing one, so the result keeps our
 /// silhouette, tab, paper strip and framing, and the key colour around it stays flat for the
 /// cutout.
-pub fn compose_on_template(idea: &str, width: u32, height: u32, key_hex: &str) -> String {
+pub fn compose_on_template(idea: &str, key_hex: &str) -> String {
     let idea = idea.trim();
     format!(
         "The attached image is the exact folder template to repaint: a blank light-grey folder, \
@@ -200,9 +194,9 @@ pub fn compose_on_template(idea: &str, width: u32, height: u32, key_hex: &str) -
          folder's own edges and rounded corners. Keep the paper strip plain or give it only a \
          faint tint. Soft light and shading that follow the folder's form are welcome. No text, \
          letters, numbers, logos or watermarks.\n\n\
-         Output: one image, {width} by {height} pixels, framed exactly like the template. Keep \
-         the background a completely flat {key_hex} with no gradient, texture, shadow, \
-         reflection or noise anywhere in it, and keep that colour out of the folder itself."
+         Output: one image, framed exactly like the template. Keep the background a completely \
+         flat {key_hex} with no gradient, texture, shadow, reflection or noise anywhere in it, \
+         and keep that colour out of the folder itself."
     )
 }
 
@@ -210,15 +204,26 @@ pub fn compose_on_template(idea: &str, width: u32, height: u32, key_hex: &str) -
 mod tests {
     use super::*;
 
+    /// The size goes in the request's parameters (request.rs), never in the words: no number as
+    /// long as a picture's side.
+    fn names_no_size(p: &str) {
+        let longest = p
+            .split(|c: char| !c.is_ascii_digit())
+            .map(str::len)
+            .max()
+            .unwrap_or(0);
+        assert!(longest < 3, "a prompt never states a size: {p}");
+    }
+
     #[test]
     fn skin_prompts_forbid_drawing_a_folder() {
-        let p = compose(Shape::Skin, "a copper patina", 1024, 958, None);
+        let p = compose(Shape::Skin, "a copper patina", None);
         assert!(p.contains("a copper patina"));
         assert!(
             p.contains("No folder"),
             "a skin prompt must rule out drawing the folder itself"
         );
-        assert!(p.contains("1024 by 958"));
+        names_no_size(&p);
         assert!(
             !p.contains("tab"),
             "skin prompts never mention folder construction: {p}"
@@ -227,40 +232,33 @@ mod tests {
 
     #[test]
     fn folder_prompts_pin_the_construction_and_the_key_colour() {
-        let p = compose(
-            Shape::Folder,
-            "a copper patina",
-            1166,
-            1091,
-            Some("#FF00FF"),
-        );
-        for needle in [
-            "exactly three parts",
-            "only tab",
-            "pure #FF00FF",
-            "1166 by 1091",
-        ] {
+        let p = compose(Shape::Folder, "a copper patina", Some("#FF00FF"));
+        for needle in ["exactly three parts", "only tab", "pure #FF00FF"] {
             assert!(p.contains(needle), "missing {needle:?} in: {p}");
         }
+        names_no_size(&p);
+        // Green, for the providers that key on it.
+        assert!(compose(Shape::Folder, "koi", Some("#00FF00")).contains("pure #00FF00"));
     }
 
     #[test]
     fn a_transparent_capable_model_is_not_told_about_a_key_colour() {
-        let p = compose(Shape::Folder, "a copper patina", 1024, 1024, None);
+        let p = compose(Shape::Folder, "a copper patina", None);
         assert!(p.contains("transparent background"));
         assert!(!p.contains("#FF00FF"));
     }
 
     #[test]
     fn reference_runs_lead_with_the_picture() {
-        let p = compose_with_reference(Shape::Skin, "keep it moody", 1024, 958, None);
+        let p = compose_with_reference(Shape::Skin, "keep it moody", None);
         assert!(p.starts_with("Use the supplied picture"));
         assert!(p.contains("keep it moody"));
+        names_no_size(&p);
     }
 
     #[test]
     fn template_runs_repaint_the_attached_folder_on_the_key_colour() {
-        let p = compose_on_template("  a copper patina ", 1166, 1091, "#FF00FF");
+        let p = compose_on_template("  a copper patina ", "#FF00FF");
         assert!(p.starts_with("The attached image is the exact folder template"));
         for needle in [
             "Paint this onto the folder: a copper patina.",
@@ -268,10 +266,11 @@ mod tests {
             "paper strip",
             "size and position in the frame",
             "flat #FF00FF",
-            "1166 by 1091",
+            "framed exactly like the template",
         ] {
             assert!(p.contains(needle), "missing {needle:?} in: {p}");
         }
+        names_no_size(&p);
         assert!(
             !p.contains("transparent"),
             "a template run keeps the key colour: {p}"

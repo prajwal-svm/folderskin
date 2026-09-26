@@ -264,6 +264,16 @@ test.describe("the AI chat", () => {
     await expect(box(page)).toHaveValue("something it won't draw");
   });
 
+  test("a provider that finishes without a picture offers to try again, and nothing else", async ({ page }) => {
+    await withKey(page, "aifail=noimage");
+    await sendIdea(page, "a lighthouse in fog");
+    const card = chat(page).locator("article.turn").last();
+    await expect(card.getByRole("alert")).toContainText("finished without painting a picture");
+    // The one way on is the person's own press: FolderSkin never asks again by itself.
+    await expect(card.getByRole("button", { name: "Try again" })).toHaveClass(/btn-primary/);
+    await expect(card.getByRole("button", { name: /Check the key|Reword it|Ask Claude/ })).toHaveCount(0);
+  });
+
   test("a network failure can simply be tried again", async ({ page }) => {
     await withKey(page, "aifail=network");
     await sendIdea(page, "a mountain lake");

@@ -78,6 +78,8 @@ pub struct AiGenerateRequest {
     pub idea: String,
     /// "skin" (flat artwork for our compositor) or "folder" (the model draws the whole folder).
     pub shape: String,
+    /// The model's first size, as the window sends it. The shape decides the size a picture is
+    /// asked for ([`folderskin_ai::plan`]), so this isn't used.
     pub size: Option<String>,
     pub reference_path: Option<String>,
     /// Every reference picture, for the models that take more than one.
@@ -556,11 +558,11 @@ async fn ask_provider(
         ),
         None => None,
     };
-    // The prompt, the size, and our blank template when a whole folder should repaint it; shared
-    // with the command line (folderskin_ai::finish).
-    let (provider, idea, size) = (info.id.to_string(), req.idea.clone(), req.size.clone());
+    // The prompt, the shape's size, and our blank template when a whole folder should repaint
+    // it; shared with the command line (folderskin_ai::finish).
+    let (provider, idea) = (info.id.to_string(), req.idea.clone());
     let request = tauri::async_runtime::spawn_blocking(move || {
-        folderskin_ai::plan(&provider, model, shape, &idea, size, reference_png)
+        folderskin_ai::plan(&provider, model, shape, &idea, None, reference_png)
     })
     .await
     .map_err(|e| AiFailure::bug(format!("Preparing the request stopped: {e}.")))?;
@@ -611,6 +613,10 @@ async fn ask_provider(
         send(AiEvent::info(format!(
             "{label} rewrote the prompt: {revised}"
         )));
+    }
+    // What the provider says it used or charged, so the price can be checked against the hint.
+    if let Some(usage) = &result.usage {
+        send(AiEvent::info(usage.clone()));
     }
     if shape == Shape::Folder {
         send(AiEvent::stage("cut", "Cutting it out of the background"));
@@ -869,6 +875,8 @@ mod tests {
             native_alpha: false,
             model_used: "m".into(),
             revised_prompt: None,
+            key_colour: None,
+            usage: None,
         }
     }
 
