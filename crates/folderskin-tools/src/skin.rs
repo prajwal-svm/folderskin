@@ -2,8 +2,17 @@
 //! what adding that picture to FolderSkin would.
 
 use folderskin_core::compositor::{self, Artwork, IconSet, Style};
+use folderskin_core::drive::{DriveShape, DriveStyle};
 use folderskin_core::matte;
+use folderskin_core::pack::PackShape;
 use image::RgbaImage;
+
+/// The drive a pack of drives' artwork is shown on in its previews: the Mac's external drive, as
+/// a pack of folders' is shown on FolderSkin's folder. In the app each skin goes on the drive
+/// picked.
+pub fn preview_drive() -> DriveShape {
+    DriveShape::default_for(DriveStyle::Mac)
+}
 
 /// A picture split the way the app's `prepare_import` splits it: a finished folder picture (cut
 /// out, or on the magenta key) is the icon itself, and anything else is artwork for FolderSkin's
@@ -31,6 +40,17 @@ impl Skin {
     /// The icon as a PNG, `size` px square, through the render the app uses.
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
         self.preview_png_in(size, Style::Mac)
+    }
+
+    /// [`Skin::preview_png`] for a skin of a pack of `shape`: a pack of drives' artwork on
+    /// [`preview_drive`], and a finished drive as it is.
+    pub fn preview_png_for(&self, size: u32, shape: PackShape) -> Vec<u8> {
+        match (self, shape) {
+            (Skin::Artwork(art), PackShape::Drive) => {
+                compositor::render_drive_preview_png(Some(art), size, preview_drive())
+            }
+            _ => self.preview_png(size),
+        }
     }
 
     /// [`Skin::preview_png`] with artwork on the folder of `style`, as the app draws it when

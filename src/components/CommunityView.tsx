@@ -13,7 +13,7 @@ import { community, countLine, progressLabel, progressShare, useCommunity, type 
 import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
-import { OfficialBadge } from "./OfficialBadge";
+import { DrivesBadge, OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { PackPreview } from "./PackPreview";
 import { PackViewer } from "./PackViewer";
@@ -376,6 +376,7 @@ const PackCard = memo(function PackCard({
         </p>
         <div className="pack-tags">
           {pack.official && <OfficialBadge />}
+          {pack.drives && <DrivesBadge />}
           {pack.tags.slice(0, 4).map((t) => (
             <button
               type="button"

@@ -52,7 +52,8 @@
     "removingLabel": "{{name}}を削除中",
     "removeTip": "このパックを削除",
     "removeLabel": "{{name}}を削除",
-    "add": "追加"
+    "add": "追加",
+    "drives": "ドライブ"
   },
   "viewer": {
     "add_other": "{{count}}個のスキンを追加",

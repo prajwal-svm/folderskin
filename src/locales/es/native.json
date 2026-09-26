@@ -53,7 +53,8 @@
     "catalogDamaged": "el catálogo de paquetes de la comunidad llegó dañado. Vuelve a intentarlo",
     "notPublished": "los paquetes de la comunidad aún no están publicados",
     "listDamaged": "la lista de ese paquete llegó dañada. Vuelve a intentarlo",
-    "listMismatch": "la lista de ese paquete no coincide con el catálogo. Prueba con Recargar"
+    "listMismatch": "la lista de ese paquete no coincide con el catálogo. Prueba con Recargar",
+    "mixedShapes": "un paquete lleva carpetas o unidades, no las dos cosas. Pon los aspectos de unidades en un paquete aparte"
   },
   "chats": {
     "noDataFolder": "los chats no se pueden guardar en este equipo: FolderSkin no tiene aquí una carpeta de datos",
@@ -95,7 +96,8 @@
     "keyNotSaved": "No se pudo guardar el archivo de recuperación: {{reason}}",
     "keyUnreadable": "No se pudo leer ese archivo.",
     "serviceUnreachable": "No se pudo conectar con el servicio para compartir de FolderSkin. Comprueba tu conexión y vuelve a intentarlo.",
-    "serviceUnreadable": "El servicio para compartir de FolderSkin respondió de una forma que esta versión no entiende. Actualiza FolderSkin y vuelve a intentarlo."
+    "serviceUnreadable": "El servicio para compartir de FolderSkin respondió de una forma que esta versión no entiende. Actualiza FolderSkin y vuelve a intentarlo.",
+    "noDrivePacks": "Los paquetes de unidades aún no se pueden compartir desde FolderSkin. Puedes guardar el paquete como carpeta."
   },
   "ai": {
     "missingKey": "Primero añade tu clave de API de {{provider}}.",

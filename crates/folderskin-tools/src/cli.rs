@@ -297,6 +297,10 @@ pub enum PacksCommand {
         /// it out
         #[arg(long)]
         keep_outliers: bool,
+        /// Make a pack of drives: its artwork goes on the drive it's put on, and its finished
+        /// drives are given one shape in the square FolderSkin's drives are drawn in
+        #[arg(long)]
+        drives: bool,
     },
     /// Give packs generated ids, a name and six random characters such as classic-art-k7q2mx:
     /// each folder moves with git mv, featured.json and official.json follow, and moved.json

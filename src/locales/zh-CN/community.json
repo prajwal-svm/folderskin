@@ -52,7 +52,8 @@
     "removingLabel": "正在移除 {{name}}",
     "removeTip": "移除这个皮肤包",
     "removeLabel": "移除 {{name}}",
-    "add": "添加"
+    "add": "添加",
+    "drives": "驱动器"
   },
   "viewer": {
     "add_other": "添加 {{count}} 款皮肤",

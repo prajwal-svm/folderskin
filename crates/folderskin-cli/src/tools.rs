@@ -285,6 +285,7 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
             preview,
             flat_backdrop,
             keep_outliers,
+            drives,
         } => {
             let opts = make::MakeOptions {
                 id,
@@ -296,6 +297,11 @@ pub fn packs(command: PacksCommand, out: &Arc<Out>) -> Result<(), CliError> {
                 max_bytes: max_kb * 1024,
                 flat_backdrop,
                 keep_outliers,
+                shape: if drives {
+                    folderskin_core::pack::PackShape::Drive
+                } else {
+                    folderskin_core::pack::PackShape::Folder
+                },
             };
             make_pack(&pictures, &opts, preview.as_deref(), out)
         }

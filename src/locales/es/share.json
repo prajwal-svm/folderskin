@@ -54,7 +54,9 @@
     "checking": "Comprobando si está disponible",
     "unavailable": "Ahora mismo no está disponible",
     "noSource": "Indica de dónde salieron las imágenes",
-    "agree": "Acepta las condiciones"
+    "agree": "Acepta las condiciones",
+    "mixedShapes": "Un paquete lleva carpetas o unidades, no las dos cosas",
+    "drivesSaveOnly": "Por ahora, un paquete de unidades se guarda como carpeta"
   },
   "dialogs": {
     "saveWhere": "Elige dónde guardar el paquete",

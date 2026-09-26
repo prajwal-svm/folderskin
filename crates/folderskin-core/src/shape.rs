@@ -16,6 +16,10 @@
 //!
 //! A folder's box is the bounding box of its pixels more than half opaque ([`folder_box`]), which
 //! a soft edge or a faint shadow doesn't move.
+//!
+//! The finished drives in a pack of drives share one shape the same way, in the square FolderSkin's
+//! own drives are drawn in ([`Frame::Drive`]), centred in it rather than standing on a baseline:
+//! a drive is as likely to be drawn from above as standing up.
 
 use crate::{compositor, matte, raster};
 use image::RgbaImage;
@@ -60,6 +64,38 @@ impl PixelBox {
     /// Width ÷ height.
     pub fn aspect(&self) -> f32 {
         self.width() as f32 / self.height().max(1) as f32
+    }
+}
+
+/// Where the finished pictures of a pack go in the [`CANVAS`] square.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Frame {
+    /// A folder: as wide as FolderSkin's own folder, standing on its baseline ([`frame`]).
+    #[default]
+    Folder,
+    /// A drive: filling the square FolderSkin's own drives are drawn in one way, and centred in
+    /// it the other ([`drive_frame`]).
+    Drive,
+}
+
+impl Frame {
+    /// The frame of a pack of `shape`.
+    pub fn of(shape: crate::pack::PackShape) -> Frame {
+        match shape {
+            crate::pack::PackShape::Folder => Frame::Folder,
+            crate::pack::PackShape::Drive => Frame::Drive,
+        }
+    }
+}
+
+/// The square FolderSkin's own drives are drawn in, in the [`CANVAS`] square: 84 px in from every
+/// side, the disc's whole round ([`crate::drive`]). Columns and rows 84 to 940.
+pub fn drive_frame() -> PixelBox {
+    PixelBox {
+        x0: 84,
+        y0: 84,
+        x1: 940,
+        y1: 940,
     }
 }
 
@@ -170,6 +206,31 @@ pub fn plan(aspects: &[f32], tolerance: f32) -> Option<Plan> {
     })
 }
 
+/// Where a picture of `shape` goes in `frame`: [`target`] for a folder, and for a drive the
+/// whole width of the [`drive_frame`] centred up and down in it, or for one taller than wide its
+/// whole height, centred across.
+pub fn target_in(frame: Frame, shape: f32) -> PixelBox {
+    if frame == Frame::Folder {
+        return target(shape);
+    }
+    let square = drive_frame();
+    let side = square.width() as f32;
+    let (w, h) = if shape >= 1.0 {
+        (side, (side / shape).round().max(1.0))
+    } else {
+        ((side * shape).round().max(1.0), side)
+    };
+    let (w, h) = (w as u32, h as u32);
+    let x0 = square.x0 + (square.width() - w) / 2;
+    let y0 = square.y0 + (square.height() - h) / 2;
+    PixelBox {
+        x0,
+        y0,
+        x1: x0 + w,
+        y1: y0 + h,
+    }
+}
+
 /// Where a folder of `shape` goes in the [`CANVAS`] square: as wide as the [`frame`], from its
 /// left edge, `round(width / shape)` tall, standing on its bottom edge. A folder too tall for its
 /// width to fit above that edge is as tall as the space there instead, and centred over the frame.
@@ -202,8 +263,13 @@ pub fn target(shape: f32) -> PixelBox {
 /// around it doesn't darken its edge, and put there in a transparent [`CANVAS`] px square. `None`
 /// when it has no folder.
 pub fn redraw(img: &RgbaImage, shape: f32) -> Option<RgbaImage> {
+    redraw_in(Frame::Folder, img, shape)
+}
+
+/// [`redraw`] into `frame`: a drive goes where [`target_in`] puts it.
+pub fn redraw_in(frame: Frame, img: &RgbaImage, shape: f32) -> Option<RgbaImage> {
     let from = folder_box(img)?;
-    let to = target(shape);
+    let to = target_in(frame, shape);
     let folder = image::imageops::crop_imm(img, from.x0, from.y0, from.width(), from.height());
     let drawn = raster::resize(&folder.to_image(), to.width(), to.height());
     let mut canvas = RgbaImage::new(CANVAS, CANVAS);
@@ -242,6 +308,11 @@ impl Placed {
     /// limit is stored ([`crate::pack::encode_picture`]), is measured against the target scaled
     /// to it, give or take the few pixels the resampling that made it smaller spreads its edge by.
     pub fn is_redrawn(&self, shape: f32) -> bool {
+        self.is_redrawn_in(Frame::Folder, shape)
+    }
+
+    /// [`Placed::is_redrawn`] for a picture of `frame`.
+    pub fn is_redrawn_in(&self, frame: Frame, shape: f32) -> bool {
         let (w, h) = self.size;
         if w != h || w == 0 || w > CANVAS {
             return false;
@@ -249,7 +320,7 @@ impl Placed {
         let scale = w as f32 / CANVAS as f32;
         // Lanczos3 reaches three pixels past an edge when it makes a picture smaller.
         let slack = if w == CANVAS { 1.0 } else { 4.0 };
-        let want = target(shape);
+        let want = target_in(frame, shape);
         let near = |got: u32, want: u32| (got as f32 - want as f32 * scale).abs() <= slack;
         let seen = self.visible;
         near(seen.x0, want.x0)
@@ -284,6 +355,38 @@ mod tests {
                 _ => Rgba([0, 0, 0, 0]),
             }
         })
+    }
+
+    #[test]
+    fn a_drive_fills_the_drives_square_one_way_and_is_centred_the_other() {
+        let square = drive_frame();
+        assert_eq!((square.width(), square.height()), (856, 856));
+        // Wider than tall: the whole width, centred up and down.
+        let slab = target_in(Frame::Drive, 2.0);
+        assert_eq!((slab.x0, slab.x1), (84, 940));
+        assert_eq!(slab.height(), 428);
+        assert_eq!(slab.y0 - square.y0, square.y1 - slab.y1);
+        // Taller than wide: the whole height, centred across.
+        let upright = target_in(Frame::Drive, 0.8);
+        assert_eq!((upright.y0, upright.y1), (84, 940));
+        assert_eq!(upright.width(), 685);
+        assert!(upright.x0 - square.x0 <= square.x1 - upright.x1 + 1);
+        // A folder's goes where it always has.
+        assert_eq!(target_in(Frame::Folder, 1.2), target(1.2));
+
+        // Redrawn there, a drive measures its shape, and is known to be redrawn.
+        let drawn = redraw_in(Frame::Drive, &folder(300, 150, 10), 2.0).unwrap();
+        let placed = Placed::of(&drawn).unwrap();
+        assert!(placed.is_redrawn_in(Frame::Drive, 2.0));
+        assert!(
+            !placed.is_redrawn_in(Frame::Folder, 2.0),
+            "not where a folder goes"
+        );
+        assert_eq!(
+            Frame::of(crate::pack::PackShape::Drive),
+            Frame::Drive,
+            "a pack of drives' frame"
+        );
     }
 
     #[test]

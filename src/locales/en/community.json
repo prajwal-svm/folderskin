@@ -53,7 +53,8 @@
     "removingLabel": "removing {{name}}",
     "removeTip": "Remove this pack",
     "removeLabel": "remove {{name}}",
-    "add": "Add"
+    "add": "Add",
+    "drives": "Drives"
   },
   "viewer": {
     "add_one": "Add {{count}} skin",

@@ -170,6 +170,7 @@ fn run(cli: Cli) -> Result<(), String> {
                 preview,
                 flat_backdrop,
                 keep_outliers,
+                drives,
             } => {
                 let opts = make::MakeOptions {
                     id,
@@ -181,6 +182,11 @@ fn run(cli: Cli) -> Result<(), String> {
                     max_bytes: max_kb * 1024,
                     flat_backdrop,
                     keep_outliers,
+                    shape: if drives {
+                        folderskin_core::pack::PackShape::Drive
+                    } else {
+                        folderskin_core::pack::PackShape::Folder
+                    },
                 };
                 packs_make(&pictures, &opts, preview.as_deref())
             }

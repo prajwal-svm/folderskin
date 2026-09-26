@@ -54,7 +54,8 @@
     "removingLabel": "retrait du pack {{name}}",
     "removeTip": "Retirer ce pack",
     "removeLabel": "retirer {{name}}",
-    "add": "Ajouter"
+    "add": "Ajouter",
+    "drives": "Disques"
   },
   "viewer": {
     "add_one": "Ajouter {{count}} habillage",

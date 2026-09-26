@@ -287,7 +287,10 @@ const MOCK_PACKS: MockPack[] = [
   { id: "colours", name: "Colours", author: "prajwal-svm", license: "CC0-1.0", tags: ["colour"], count: 8 },
   { id: "night-prints", name: "Night prints", author: "example", license: "CC-BY-4.0", tags: ["woodblock", "night", "animals"], count: 12 },
   { id: "chrome-dreams", name: "Chrome dreams", author: "example", license: "CC-BY-4.0", tags: ["airbrush", "retro"], count: 6 },
+  { id: "plain-drives", name: "Plain drives", author: "example", license: "CC0-1.0", tags: ["drives"], count: 6, drives: true },
 ];
+/** Plain drives' skins: finished drives, each shape's plain picture from docs/images/composer/bases. */
+const PLAIN_DRIVES = ["mac-external", "mac-removable", "mac-network", "windows-internal", "linux-removable", "linux-solid-state"];
 /** Real packs' preview strips in the published tree, by the version (the pack's hash) each shows. */
 const STRIPS = {
   "classic-art": `${COMMUNITY_TREE}/strips/ecfcc6015c286fba.webp`,
@@ -398,6 +401,10 @@ function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
   return Array.from({ length: pack.count }, (_, i) => {
     if (pack.id === "classic-art") return { name: CLASSIC_ART[i][1], thumbnail: classicArt(CLASSIC_ART[i][0]) };
     if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
+    if (pack.drives) {
+      const shape = PLAIN_DRIVES[i % PLAIN_DRIVES.length];
+      return { name: `Plain ${shape.replace("-", " ")}`, thumbnail: `/docs/images/composer/bases/drive-${shape}.webp` };
+    }
     return { name: pack.skins?.[i] ?? `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
   });
 }
@@ -405,7 +412,13 @@ function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
 /** The real preview strips, which the made-up packs borrow in turn. */
 const REAL_PREVIEWS = Object.values(STRIPS);
 /** When the sample packs were published, newest first. */
-const SAMPLE_DATES: Record<string, number> = { "classic-art": 1_780_000_000, colours: 1_770_000_000, "night-prints": 1_760_000_000, "chrome-dreams": 1_750_000_000 };
+const SAMPLE_DATES: Record<string, number> = {
+  "classic-art": 1_780_000_000,
+  colours: 1_770_000_000,
+  "night-prints": 1_760_000_000,
+  "chrome-dreams": 1_750_000_000,
+  "plain-drives": 1_745_000_000,
+};
 
 let mockCatalogue: MockCatalog | null = null;
 /** Whether the preview's catalog has been "downloaded" yet: the first search waits for it, as in the app. */
@@ -444,6 +457,7 @@ function communityPack(p: CatalogPack): CommunityPack {
     added,
     update: added && mockStale.has(p.id),
     official: MOCK_OFFICIAL.has(p.id),
+    drives: p.drives ?? false,
   };
 }
 
@@ -459,6 +473,7 @@ function mockPackSkins(pack: MockPack): Skin[] {
     thumbnail: p.thumbnail,
     custom: true,
     kind: "folder" as const,
+    shape: pack.drives ? ("drive" as const) : undefined,
     source: "community" as const,
     // The pack's first skin is the newest, as the app does it, so the library shows the pack in order.
     created_at: now + pack.count - i,

@@ -4,6 +4,10 @@
 //! before it saves anything from a pack, and `folderskin-tools packs check` runs the same ones on
 //! every pull request, so a pack that passes CI is a pack the app accepts. docs/PACKS.md is this
 //! contract in prose.
+//!
+//! A pack is of folders or of drives. A pack of folders is version 1, exactly as it always was. A
+//! pack of drives is version 2 and says `"shape": "drive"`, so a FolderSkin from before drives,
+//! which reads version 1 alone, says it's for a newer FolderSkin rather than taking it for folders.
 
 use crate::raster;
 use image::RgbaImage;
@@ -11,8 +15,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 
-/// The contract version a `pack.json` declares in `"version"`.
+/// The contract version a `pack.json` of folders declares in `"version"`.
 pub const PACK_VERSION: u32 = 1;
+/// The contract version a `pack.json` of drives declares, with `"shape": "drive"`.
+pub const DRIVE_PACK_VERSION: u32 = 2;
 /// The version of `community/index.json` this build reads.
 pub const INDEX_VERSION: u32 = 1;
 /// The file every pack has.
@@ -55,11 +61,43 @@ pub const PICTURE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 /// first: one whose lossless file is over the limit at 1024 px is made 896 px, then 768 px.
 pub const PICTURE_SIDES: [u32; 3] = [MAX_PICTURE_SIDE, 896, 768];
 
+/// What a pack's skins are drawn on.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum PackShape {
+    #[default]
+    Folder,
+    Drive,
+}
+
+impl PackShape {
+    pub fn is_folder(&self) -> bool {
+        *self == PackShape::Folder
+    }
+
+    /// The version a `pack.json` of this shape declares.
+    pub fn version(self) -> u32 {
+        match self {
+            PackShape::Folder => PACK_VERSION,
+            PackShape::Drive => DRIVE_PACK_VERSION,
+        }
+    }
+
+    /// What `pack.json` says of it: nothing for folders, `"drive"` for drives.
+    pub fn declared(self) -> Option<PackShape> {
+        (self == PackShape::Drive).then_some(PackShape::Drive)
+    }
+}
+
 /// `pack.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Pack {
     pub version: u32,
+    /// `"drive"` in a pack of drives, which is version 2. Left out of a pack of folders, so a
+    /// version 1 file is exactly what it always was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<PackShape>,
     pub name: String,
     /// The author's GitHub user name.
     pub author: String,
@@ -98,8 +136,8 @@ impl Pack {
         let head: Head = serde_json::from_slice(bytes)
             .map_err(|e| vec![format!("pack.json is not valid JSON: {e}")])?;
         match head.version.as_ref().and_then(serde_json::Value::as_u64) {
-            Some(v) if v == u64::from(PACK_VERSION) => {}
-            Some(v) if v > u64::from(PACK_VERSION) => {
+            Some(v) if v == u64::from(PACK_VERSION) || v == u64::from(DRIVE_PACK_VERSION) => {}
+            Some(v) if v > u64::from(DRIVE_PACK_VERSION) => {
                 return Err(vec![format!(
                     "this pack is for a newer FolderSkin (pack format {v})"
                 )])
@@ -120,6 +158,20 @@ impl Pack {
     /// The pictures are checked one at a time with [`check_picture`].
     pub fn problems(&self) -> Vec<String> {
         let mut problems = Vec::new();
+        match (self.version, self.shape) {
+            (PACK_VERSION, None) | (DRIVE_PACK_VERSION, Some(PackShape::Drive)) => {}
+            (PACK_VERSION, Some(_)) => problems.push(
+                "\"shape\" is for a pack of drives, which is \"version\": 2. A pack of folders is \
+                 version 1 and leaves it out"
+                    .into(),
+            ),
+            (DRIVE_PACK_VERSION, _) => problems
+                .push("a version 2 pack is a pack of drives, and says \"shape\": \"drive\"".into()),
+            (version, _) => problems.push(format!(
+                "\"version\" is {PACK_VERSION} for a pack of folders or {DRIVE_PACK_VERSION} for a \
+                 pack of drives, not {version}"
+            )),
+        }
         if !has_text(&self.name, MAX_PACK_NAME_CHARS) {
             problems.push(format!(
                 "\"name\" must be 1 to {MAX_PACK_NAME_CHARS} characters"
@@ -170,6 +222,11 @@ impl Pack {
         problems
     }
 
+    /// What its skins are drawn on.
+    pub fn shape(&self) -> PackShape {
+        self.shape.unwrap_or_default()
+    }
+
     /// The tags a skin from this pack gets: the pack's, then the skin's own.
     pub fn tags_for(&self, skin: &PackSkin) -> Vec<String> {
         clean_tags(self.tags.iter().chain(&skin.tags), MAX_TAGS)
@@ -185,7 +242,12 @@ impl Pack {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Index {
     pub version: u32,
+    /// The packs of folders.
     pub packs: Vec<IndexEntry>,
+    /// The packs of drives, apart from the others: a FolderSkin from before drives reads
+    /// `packs` alone, so it never lists a pack it can't add. Left out when there are none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drive_packs: Vec<IndexEntry>,
     /// Packs whose ids changed (`moved.json`), each old id to the one it has now. Left out when
     /// none has.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -910,6 +972,67 @@ mod tests {
     }
 
     #[test]
+    fn a_pack_of_drives_is_version_2_and_says_so() {
+        let drives = pack_json(1).replace(
+            r#""version": 1,"#,
+            r#""version": 2,
+  "shape": "drive","#,
+        );
+        let pack = Pack::parse(drives.as_bytes()).unwrap();
+        assert_eq!(pack.shape(), PackShape::Drive);
+        assert_eq!(pack.shape, Some(PackShape::Drive));
+        // Written back, it's what it was.
+        let written = serde_json::to_string_pretty(&pack).unwrap();
+        assert!(
+            written.starts_with("{\n  \"version\": 2,\n  \"shape\": \"drive\","),
+            "{written}"
+        );
+
+        // A pack of folders is version 1, and says nothing of its shape.
+        let folders = Pack::parse(pack_json(1).as_bytes()).unwrap();
+        assert_eq!((folders.shape(), folders.shape), (PackShape::Folder, None));
+        assert!(!serde_json::to_string(&folders).unwrap().contains("shape"));
+        assert_eq!(PackShape::Folder.version(), 1);
+        assert_eq!(PackShape::Drive.version(), 2);
+        assert_eq!(PackShape::Folder.declared(), None);
+
+        // Anything between is turned down, and says why.
+        let shaped_folders =
+            pack_json(1).replace(r#""version": 1,"#, r#""version": 1, "shape": "drive","#);
+        assert!(Pack::parse(shaped_folders.as_bytes()).unwrap_err()[0]
+            .contains("\"shape\" is for a pack of drives"));
+        let unshaped = pack_json(1).replace(r#""version": 1,"#, r#""version": 2,"#);
+        assert!(Pack::parse(unshaped.as_bytes()).unwrap_err()[0]
+            .contains("a version 2 pack is a pack of drives"));
+        let folder_two =
+            pack_json(1).replace(r#""version": 1,"#, r#""version": 2, "shape": "folder","#);
+        assert!(Pack::parse(folder_two.as_bytes()).is_err());
+        let round = pack_json(1).replace(r#""version": 1,"#, r#""version": 2, "shape": "round","#);
+        assert!(Pack::parse(round.as_bytes()).is_err(), "no such shape");
+        let newer = pack_json(1).replace(r#""version": 1,"#, r#""version": 3,"#);
+        assert_eq!(
+            Pack::parse(newer.as_bytes()).unwrap_err(),
+            ["this pack is for a newer FolderSkin (pack format 3)"]
+        );
+    }
+
+    #[test]
+    fn an_index_keeps_its_packs_of_drives_apart() {
+        let entry = r#"{ "id": "plain-drives", "name": "Plain drives", "author": "prajwal-svm",
+  "license": "CC0-1.0", "tags": ["drives"], "count": 6 }"#;
+        let index = format!(r#"{{ "version": 1, "packs": [], "drive_packs": [{entry}] }}"#);
+        let read = Index::parse(index.as_bytes()).unwrap();
+        assert!(read.packs.is_empty());
+        assert_eq!(read.drive_packs[0].id, "plain-drives");
+        // An index with none says nothing of them, as before there were any.
+        let none = Index::parse(br#"{ "version": 1, "packs": [] }"#).unwrap();
+        assert!(none.drive_packs.is_empty());
+        assert!(!serde_json::to_string(&none)
+            .unwrap()
+            .contains("drive_packs"));
+    }
+
+    #[test]
     fn a_pack_hash_changes_with_any_part_of_the_pack() {
         let base = pack_hash(b"{}", [("a.png", &b"one"[..]), ("b.png", &b"two"[..])]);
         assert_eq!(base.len(), 16);
@@ -1016,7 +1139,7 @@ mod tests {
 
     #[test]
     fn versions_and_unknown_fields_are_explained() {
-        let newer = r#"{ "version": 2, "whatever": true }"#;
+        let newer = r#"{ "version": 3, "whatever": true }"#;
         assert!(Pack::parse(newer.as_bytes()).unwrap_err()[0].contains("newer FolderSkin"));
         let missing = r#"{ "name": "x" }"#;
         assert!(Pack::parse(missing.as_bytes()).unwrap_err()[0].contains("\"version\": 1"));

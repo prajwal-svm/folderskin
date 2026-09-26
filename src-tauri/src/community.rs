@@ -19,10 +19,10 @@ use crate::commands::{data_url, prepare_import, SkinDto};
 use crate::pack_views::PackViews;
 use crate::previews;
 use crate::state::{parallel_map, parallel_queue, AppState};
-use crate::store::{self, NewSkin, SkinImage, SkinSource};
+use crate::store::{self, NewSkin, SkinImage, SkinShape, SkinSource};
 use folderskin_catalog::tree::{self, PublishedPack};
 use folderskin_catalog::{Facet, PackRow, Query, Sort};
-use folderskin_core::pack::{self, Pack, PackSkin};
+use folderskin_core::pack::{self, Pack, PackShape, PackSkin};
 use futures_util::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -72,6 +72,8 @@ pub struct PackDto {
     pub update: bool,
     /// True for a pack the maintainer marks as official (`official.json` in folderskin-community).
     pub official: bool,
+    /// True for a pack of drives.
+    pub drives: bool,
 }
 
 impl PackDto {
@@ -83,6 +85,7 @@ impl PackDto {
             added: have.is_some(),
             update: has_update(have, &row.hash),
             official: source.is_official(&row.id),
+            drives: source.is_drive_pack(&row.id),
             preview: previews::strip_url(&row.id, &row.hash),
             id: row.id,
             name: row.name,
@@ -565,7 +568,7 @@ fn published_skins(published: &PublishedPack) -> Vec<PackSkinDto> {
         .map(|(skin, meta)| PackSkinDto {
             name: skin.name.trim().to_string(),
             tags: pack.tags_for(skin),
-            thumbnail: previews::thumb_url(&meta.sha256),
+            thumbnail: previews::thumb_url_for(published.shape, &meta.sha256),
         })
         .collect()
 }
@@ -927,6 +930,16 @@ pub(crate) fn build_pack(
         pack::check_picture_size(w, h).map_err(|e| format!("{} {e}", entry.name))?;
         chosen.push((entry, image));
     }
+    // A pack is of folders or of drives, and says which.
+    let drives = chosen
+        .iter()
+        .filter(|(e, _)| e.shape == SkinShape::Drive)
+        .count();
+    let shape = match drives {
+        0 => PackShape::Folder,
+        n if n == chosen.len() => PackShape::Drive,
+        _ => return Err(MIXED_SHAPES.into()),
+    };
 
     // The slow part: seconds a picture.
     let total = chosen.len();
@@ -974,7 +987,8 @@ pub(crate) fn build_pack(
         ));
     }
     let pack = Pack {
-        version: pack::PACK_VERSION,
+        version: shape.version(),
+        shape: shape.declared(),
         name: name.trim().to_string(),
         author: author.trim().to_string(),
         license: license.to_string(),
@@ -989,6 +1003,10 @@ pub(crate) fn build_pack(
     files.push((pack::MANIFEST_FILE.to_string(), json.into_bytes()));
     Ok(Built { id, files, scaled })
 }
+
+/// Why a pack can't be made of these skins: some are folders' and some drives'.
+pub const MIXED_SHAPES: &str =
+    "a pack is all folders or all drives. Put the drive skins in a pack of their own";
 
 /// A pack saved as a folder: where it is, and the pictures made smaller to fit.
 #[derive(Serialize, Clone, Debug)]
@@ -1238,10 +1256,15 @@ fn prepare_pack<'p>(
     pictures: &[Vec<u8>],
 ) -> Result<Vec<(&'p PackSkin, String, SkinImage)>, String> {
     let listed: Vec<(&PackSkin, &Vec<u8>)> = pack.skins.iter().zip(pictures).collect();
+    // A pack of drives' skins are drive skins: artwork goes on the drive picked, and a finished
+    // drive is used as it is.
+    let shape = SkinShape::of_pack(pack.shape());
     parallel_map(&listed, |&(skin, bytes)| {
         let rgba = pack::decode_picture(bytes).map_err(|e| format!("{} {e}", skin.file))?;
-        let image = prepare_import(rgba).map_err(|e| format!("{}: {e}", skin.file))?;
-        Ok((skin, store::skin_id(bytes), image))
+        let image = prepare_import(rgba)
+            .map_err(|e| format!("{}: {e}", skin.file))?
+            .as_shape(shape);
+        Ok((skin, store::pack_skin_id(bytes, pack.shape()), image))
     })
     .into_iter()
     .collect()
@@ -1941,6 +1964,7 @@ pub(crate) mod tests {
             );
             let published = PublishedPack {
                 version: tree::MANIFEST_VERSION,
+                shape: PackShape::Folder,
                 id: id.to_string(),
                 hash: hash.clone(),
                 name: name.to_string(),
@@ -2006,6 +2030,7 @@ pub(crate) mod tests {
             official: Vec::new(),
             mirrors: Vec::new(),
             moved: Default::default(),
+            with_drives: None,
         };
         serve(format!("/v2/{}", tree::catalog_path(&generation)), gz);
         serve("/v2/head.json".into(), serde_json::to_vec(&head).unwrap());
@@ -2434,6 +2459,48 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn index_json_lists_its_packs_of_drives_and_marks_them() {
+        let index = r#"{ "version": 1, "packs": [
+  { "id": "colours", "name": "Colours", "author": "prajwal-svm", "license": "CC0-1.0",
+    "tags": ["colour"], "count": 8, "added": 1780000000 } ],
+  "drive_packs": [
+  { "id": "plain-drives", "name": "Plain drives", "author": "prajwal-svm", "license": "CC0-1.0",
+    "tags": ["drives"], "count": 6, "added": 1790000000 } ] }"#;
+        let (base, _) = serve(vec![(
+            "/index.json".into(),
+            index.as_bytes().to_vec(),
+            Duration::ZERO,
+        )]);
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
+        let all = search(&source, &HashMap::new(), &query("")).unwrap();
+        let marks: Vec<(&str, bool)> = all
+            .packs
+            .iter()
+            .map(|p| (p.id.as_str(), p.drives))
+            .collect();
+        assert_eq!(marks, [("plain-drives", true), ("colours", false)]);
+    }
+
+    #[test]
+    fn a_published_catalog_with_the_packs_of_drives_is_the_one_read() {
+        let (files, _, _) = tree_files(&colour_packs());
+        // The same catalog named as the one with drives too, and one of its packs as drives.
+        let files = changed_head(files, |head| {
+            head.with_drives = Some(tree::WithDrives {
+                generation: head.generation.clone(),
+                packs: head.packs,
+                skins: head.skins,
+                catalog: head.catalog.clone(),
+                drives: vec!["reds".into()],
+            });
+        });
+        let (base, _) = serve(files);
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
+        assert!(source.is_drive_pack("reds"));
+        assert!(!source.is_drive_pack("blues"));
+    }
+
+    #[test]
     fn a_link_finds_its_pack_and_looks_again_for_one_published_since() {
         // Reds and Blues now. Asked again past the caches, the host has Greens too, and marks
         // Blues official.
@@ -2695,6 +2762,139 @@ pub(crate) mod tests {
             id.starts_with("pack-") && pack::is_generated_id(&id),
             "{id}"
         );
+    }
+
+    /// A skin of the user's own, `image`, saved under its picture's id.
+    fn own_skin(state: &AppState, name: &str, picture: &[u8], image: SkinImage) -> String {
+        let (entry, _) = state
+            .save(
+                NewSkin {
+                    id: store::skin_id(picture),
+                    name: name.into(),
+                    source: SkinSource::Import,
+                    provider: None,
+                    model: None,
+                    idea: None,
+                    tags: Vec::new(),
+                    pack: None,
+                    pack_name: None,
+                    author: None,
+                    license: None,
+                    pack_hash: None,
+                },
+                image,
+            )
+            .unwrap();
+        entry.id
+    }
+
+    #[test]
+    fn a_pack_is_made_of_folders_or_of_drives_and_says_which() {
+        let store = temp_dir("build-drives");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let rgba = |c: [u8; 4]| {
+            image::load_from_memory(&png(512, 480, c))
+                .unwrap()
+                .to_rgba8()
+        };
+        let (a, b, c) = (
+            png(512, 480, [30, 90, 160, 255]),
+            png(512, 480, [160, 90, 30, 255]),
+            png(512, 480, [90, 160, 30, 255]),
+        );
+        let drive_one = own_skin(
+            &state,
+            "Blue drive",
+            &a,
+            SkinImage::Drive(Arc::new(rgba([30, 90, 160, 255]))),
+        );
+        let drive_two = own_skin(
+            &state,
+            "Amber drive",
+            &b,
+            SkinImage::Drive(Arc::new(rgba([160, 90, 30, 255]))),
+        );
+        let folder = own_skin(
+            &state,
+            "Green folder",
+            &c,
+            SkinImage::Folder(Arc::new(rgba([90, 160, 30, 255]))),
+        );
+        let build = |ids: &[String]| {
+            build_pack(
+                &state,
+                "Drives",
+                "sunny-otter",
+                "CC0-1.0",
+                &["drives".into()],
+                ids,
+                |_| false,
+                &|_| {},
+            )
+        };
+        // Drives and folders don't share a pack.
+        let mixed = build(&[drive_one.clone(), folder.clone()]).err();
+        assert_eq!(mixed.as_deref(), Some(MIXED_SHAPES));
+        // Drives alone make a pack of drives.
+        let built = build(&[drive_one, drive_two]).unwrap();
+        let manifest = &built.files.last().unwrap().1;
+        let pack = Pack::parse(manifest).unwrap();
+        assert_eq!(pack.shape(), PackShape::Drive);
+        assert_eq!(pack.version, pack::DRIVE_PACK_VERSION);
+        // Folders alone make one of folders, as always.
+        let pack = Pack::parse(&build(&[folder]).unwrap().files.last().unwrap().1).unwrap();
+        assert_eq!((pack.shape(), pack.version), (PackShape::Folder, 1));
+    }
+
+    #[test]
+    fn a_pack_of_drives_is_saved_as_drive_skins_apart_from_the_same_pictures_on_folders() {
+        let store = temp_dir("drive-pack-store");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let pictures = vec![
+            png(512, 480, [20, 140, 150, 255]),
+            png(512, 480, [180, 70, 30, 255]),
+        ];
+        let folders = Pack::parse(PACK.as_bytes()).unwrap();
+        let drives = Pack::parse(
+            PACK.replace(r#""version": 1,"#, r#""version": 2, "shape": "drive","#)
+                .as_bytes(),
+        )
+        .unwrap();
+        let on_folders = save_pack(
+            &state,
+            "test-colours",
+            &folders,
+            &pictures,
+            None,
+            &no_progress,
+        )
+        .unwrap();
+        let on_drives = save_pack(
+            &state,
+            "test-drives",
+            &drives,
+            &pictures,
+            None,
+            &no_progress,
+        )
+        .unwrap();
+        assert!(on_folders.iter().all(|s| s.shape == SkinShape::Folder));
+        assert!(on_drives.iter().all(|s| s.shape == SkinShape::Drive));
+        assert!(on_drives.iter().all(|s| s.kind == SkinKind::Artwork));
+        // The same pictures are two skins each: one goes on folders, the other on drives.
+        for (folder, drive) in on_folders.iter().zip(&on_drives) {
+            assert_ne!(folder.id, drive.id);
+        }
+        assert_eq!(state.saved_skins().len(), 4);
+        // Read back after a restart, a drive skin is still one.
+        let again = AppState::default();
+        again.open_store(store.to_path_buf());
+        assert!(matches!(
+            again.resolve(&on_drives[0].id).unwrap(),
+            SkinImage::DriveArt(_)
+        ));
     }
 
     #[test]

@@ -66,6 +66,8 @@ export type CommunityPack = {
   update: boolean;
   /** True for a pack the maintainer marks as official (`official.json` in folderskin-community). */
   official: boolean;
+  /** True for a pack of drives: its skins are drawn on the drive they go on. */
+  drives?: boolean;
 };
 
 /** One skin of a pack being looked through before it's added. */

@@ -124,6 +124,10 @@ export function SharePack({
   const chosen = yours.filter((s) => picked.includes(s.id));
   const allShown = shown.length > 0 && shown.every((s) => picked.includes(s.id));
   const clean = cleanName(name);
+  // A pack is of folders or of drives. The service publishes packs of folders only, so a pack of
+  // drives is saved as a folder for now (docs/PACKS.md).
+  const drives = chosen.filter((s) => s.shape === "drive").length;
+  const mixed = drives > 0 && drives < chosen.length;
   const verified = direct?.verified === true && Boolean(direct.handle);
   /** The version of the pack terms it goes out under: the service's, while it can be used. */
   const terms = direct?.available ? direct.terms_version : null;
@@ -137,15 +141,18 @@ export function SharePack({
         ? t("share.problems.tickOne")
         : chosen.length > MAX_PACK_SKINS
           ? t("share.problems.tooMany", { count: chosen.length, max: MAX_PACK_SKINS })
-          : !clean
-            ? t("share.problems.noName")
-            : packTags.length === 0
-              ? t("share.problems.noTag")
-              : null;
+          : mixed
+            ? t("share.problems.mixedShapes")
+            : !clean
+              ? t("share.problems.noName")
+              : packTags.length === 0
+                ? t("share.problems.noTag")
+                : null;
   const nameProblem = !isHandle(author) ? t("share.problems.noHandle") : null;
   /** What stops the pack being sent, in the order it's worth fixing. */
   const sendProblem =
     packProblem ??
+    (drives > 0 ? t("share.problems.drivesSaveOnly") : null) ??
     (!direct ? t("share.problems.checking") : terms === null ? t("share.problems.unavailable") : !source ? t("share.problems.noSource") : nameProblem) ??
     // The thing FolderSkin can't check for them, which is why they are asked rather than told.
     (!mine ? t("share.problems.agree") : null);

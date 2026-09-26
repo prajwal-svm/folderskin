@@ -13,14 +13,19 @@
 //!
 //! `index.json` and `previews/` are left as `packs index` writes them, for the versions of the
 //! app that read those.
+//!
+//! Packs of drives are published as the others are, with their thumbnails drawn on a drive in
+//! `drive-thumbs/`, and listed in a catalog of their own making: one of every pack, which
+//! `head.json` names as `with_drives`, while `catalog` goes on naming one of the packs of folders
+//! alone, for the versions of the app from before drives.
 
 use crate::packs::{self, Changes, Report, PACKS_DIR};
 use crate::{git, make};
 use folderskin_catalog::tree::{
-    self, CatalogRef, Head, PublishedPack, PublishedSkin, HEAD_FILE, HEAD_VERSION, MANIFEST_VERSION,
+    self, CatalogRef, Head, PublishedPack, PublishedSkin, WithDrives, HEAD_FILE, HEAD_VERSION,
 };
 use folderskin_catalog::{build, Catalog, PackRecord};
-use folderskin_core::pack::{self, IndexEntry, Moved, Pack, MANIFEST_FILE};
+use folderskin_core::pack::{self, IndexEntry, Moved, Pack, PackShape, MANIFEST_FILE};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -85,6 +90,7 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
     let mut changes = Changes::default();
     let mut keep: HashSet<String> = HashSet::new();
     let mut renders: Vec<Render> = Vec::new();
+    // Every pack's record, each with whether it is a pack of drives.
     let mut records = Vec::new();
     for (id, pack) in packs {
         let folder = dir.join(PACKS_DIR).join(id);
@@ -92,10 +98,11 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
             .map_err(|e| format!("{id}: {e}"))?;
         for (skin, source) in published.skins.iter().zip(&pack.skins) {
             keep.insert(tree::picture_path(&skin.sha256, &skin.ext()));
-            let thumb = tree::thumb_path(&skin.sha256);
+            let thumb = tree::thumb_path_for(published.shape, &skin.sha256);
             if !out.join(&thumb).is_file() && keep.insert(thumb.clone()) {
                 renders.push(Render::Thumb {
                     source: folder.join(&source.file),
+                    shape: published.shape,
                     to: out.join(&thumb),
                 });
             }
@@ -111,14 +118,71 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         }
         keep.insert(strip);
         keep.insert(tree::manifest_path(id, &published.hash));
-        records.push(record);
+        records.push((published.shape, record));
     }
     render_all(&renders, opts.cwebp.as_deref(), &mut changes)?;
 
-    let bytes = build::to_bytes(&records)?;
+    // The packs of folders alone, for every version of the app.
+    let folders: Vec<PackRecord> = records
+        .iter()
+        .filter(|(shape, _)| *shape == PackShape::Folder)
+        .map(|(_, record)| record.clone())
+        .collect();
+    let (generation, catalog) = write_database(out, &folders, &mut changes)?;
+    keep.insert(catalog.url.clone());
+    // Every pack, drives and all, for the versions that take packs of drives.
+    let drives: Vec<String> = records
+        .iter()
+        .filter(|(shape, _)| *shape == PackShape::Drive)
+        .map(|(_, record)| record.id.clone())
+        .collect();
+    let with_drives = if drives.is_empty() {
+        None
+    } else {
+        let every: Vec<PackRecord> = records.iter().map(|(_, record)| record.clone()).collect();
+        let (generation, catalog) = write_database(out, &every, &mut changes)?;
+        keep.insert(catalog.url.clone());
+        Some(WithDrives {
+            generation,
+            packs: every.len(),
+            skins: every.iter().map(|r| r.count).sum(),
+            catalog,
+            drives,
+        })
+    };
+
+    let head = Head {
+        version: HEAD_VERSION,
+        generation,
+        packs: folders.len(),
+        skins: folders.iter().map(|r| r.count).sum(),
+        catalog,
+        featured,
+        official,
+        mirrors: opts.mirrors.clone(),
+        // Apps that know it follow a pack added under an old id to the one it has now.
+        moved: report.moved.moved.clone(),
+        with_drives,
+    };
+    let json = serde_json::to_string_pretty(&head).map_err(|e| e.to_string())? + "\n";
+    write_changed(&out.join(HEAD_FILE), json.as_bytes(), &mut changes)?;
+
+    keep.extend(previous);
+    prune(out, &keep, &mut changes)?;
+    Ok(Built { head, changes })
+}
+
+/// Writes the catalog of `records` (unless it is there already, whatever gzip made it) and
+/// returns its generation and where it is.
+fn write_database(
+    out: &Path,
+    records: &[PackRecord],
+    changes: &mut Changes,
+) -> Result<(String, CatalogRef), String> {
+    let bytes = build::to_bytes(records)?;
     let generation = tree::sha256_hex(&bytes)[..16].to_string();
-    let catalog = tree::catalog_path(&generation);
-    let path = out.join(&catalog);
+    let url = tree::catalog_path(&generation);
+    let path = out.join(&url);
     let gz = match kept_catalog(&path, &bytes) {
         Some(gz) => gz,
         None => {
@@ -128,30 +192,14 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
             gz
         }
     };
-    keep.insert(catalog.clone());
-
-    let head = Head {
-        version: HEAD_VERSION,
+    Ok((
         generation,
-        packs: records.len(),
-        skins: records.iter().map(|r| r.count).sum(),
-        catalog: CatalogRef {
-            url: catalog,
+        CatalogRef {
+            url,
             sha256: tree::sha256_hex(&gz),
             bytes: gz.len() as u64,
         },
-        featured,
-        official,
-        mirrors: opts.mirrors.clone(),
-        // Apps that know it follow a pack added under an old id to the one it has now.
-        moved: report.moved.moved.clone(),
-    };
-    let json = serde_json::to_string_pretty(&head).map_err(|e| e.to_string())? + "\n";
-    write_changed(&out.join(HEAD_FILE), json.as_bytes(), &mut changes)?;
-
-    keep.extend(previous);
-    prune(out, &keep, &mut changes)?;
-    Ok(Built { head, changes })
+    ))
 }
 
 /// Reads one pack's files, copies its pictures in under their SHA-256, and writes its manifest.
@@ -199,7 +247,8 @@ fn publish_pack(
     }
     let bytes_total = pictures.iter().map(|p| p.len() as u64).sum();
     let published = PublishedPack {
-        version: MANIFEST_VERSION,
+        version: tree::manifest_version(pack.shape()),
+        shape: pack.shape(),
         id: id.to_string(),
         hash: hash.clone(),
         name: pack.name.trim().to_string(),
@@ -242,8 +291,12 @@ fn publish_pack(
 
 /// A picture to draw for the tree.
 enum Render {
-    /// One skin as its folder, [`THUMB_SIDE`] px.
-    Thumb { source: PathBuf, to: PathBuf },
+    /// One skin as its folder, or a pack of drives' as its drive, [`THUMB_SIDE`] px.
+    Thumb {
+        source: PathBuf,
+        shape: PackShape,
+        to: PathBuf,
+    },
     /// A pack's first skins side by side, as `packs index` draws its preview.
     Strip {
         folder: PathBuf,
@@ -289,7 +342,7 @@ fn render_all(
 
 fn render(job: &Render, cwebp: Option<&Path>) -> Result<PathBuf, String> {
     let (img, to) = match job {
-        Render::Thumb { source, to } => {
+        Render::Thumb { source, shape, to } => {
             let name = source
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -297,7 +350,8 @@ fn render(job: &Render, cwebp: Option<&Path>) -> Result<PathBuf, String> {
             let bytes =
                 std::fs::read(source).map_err(|e| format!("{name} couldn't be read: {e}"))?;
             let rgba = pack::decode_picture(&bytes).map_err(|e| format!("{name} {e}"))?;
-            let icon = packs::render_skin(rgba, THUMB_SIDE).map_err(|e| format!("{name} {e}"))?;
+            let icon = packs::render_skin_for(rgba, THUMB_SIDE, *shape)
+                .map_err(|e| format!("{name} {e}"))?;
             (icon, to)
         }
         Render::Strip { folder, pack, to } => (packs::preview_strip(folder, pack)?, to),
@@ -335,7 +389,9 @@ fn previous_files(out: &Path) -> HashSet<String> {
     else {
         return files;
     };
-    let catalog = std::fs::read(out.join(&head.catalog.url))
+    // The catalog of every pack names them all, drives and folders.
+    let (_, every, _) = head.catalog_with_drives();
+    let catalog = std::fs::read(out.join(&every.url))
         .ok()
         .and_then(|gz| tree::gunzip(&gz, tree::MAX_CATALOG_UNPACKED).ok())
         .and_then(|bytes| Catalog::from_bytes(&bytes).ok());
@@ -343,6 +399,7 @@ fn previous_files(out: &Path) -> HashSet<String> {
         return files;
     };
     files.insert(head.catalog.url.clone());
+    files.insert(every.url.clone());
     for (id, hash) in versions {
         let manifest = tree::manifest_path(&id, &hash);
         if let Some(published) = std::fs::read(out.join(&manifest))
@@ -351,7 +408,7 @@ fn previous_files(out: &Path) -> HashSet<String> {
         {
             for skin in &published.skins {
                 files.insert(tree::picture_path(&skin.sha256, &skin.ext()));
-                files.insert(tree::thumb_path(&skin.sha256));
+                files.insert(tree::thumb_path_for(published.shape, &skin.sha256));
             }
         }
         files.insert(manifest);
@@ -377,6 +434,7 @@ fn prune(out: &Path, keep: &HashSet<String>, changes: &mut Changes) -> Result<()
         ("catalog", is_catalog_file as fn(&str) -> bool),
         ("strips", |f| hex_named(f, 16, &["webp"])),
         ("thumbs", |f| hex_named(f, 64, &["webp"])),
+        ("drive-thumbs", |f| hex_named(f, 64, &["webp"])),
         ("pictures", |f| hex_named(f, 64, pack::PICTURE_EXTENSIONS)),
     ] {
         for file in names(&out.join(folder))? {
@@ -558,14 +616,23 @@ mod tests {
 
         /// Writes a pack whose skins are (file, name, colour).
         fn pack(&self, id: &str, name: &str, skins: &[(&str, &str, [u8; 3])]) {
+            self.pack_of(PackShape::Folder, id, name, skins);
+        }
+
+        /// Writes a pack of `shape` whose skins are (file, name, colour).
+        fn pack_of(&self, shape: PackShape, id: &str, name: &str, skins: &[(&str, &str, [u8; 3])]) {
             let folder = self.0.join(PACKS_DIR).join(id);
             std::fs::create_dir_all(&folder).unwrap();
             let listed: Vec<String> = skins
                 .iter()
                 .map(|(file, name, _)| format!(r#"{{ "file": "{file}", "name": "{name}" }}"#))
                 .collect();
+            let version = match shape {
+                PackShape::Folder => r#""version": 1"#,
+                PackShape::Drive => r#""version": 2, "shape": "drive""#,
+            };
             let json = format!(
-                r#"{{ "version": 1, "name": "{name}", "author": "prajwal-svm", "license": "CC0-1.0",
+                r#"{{ {version}, "name": "{name}", "author": "prajwal-svm", "license": "CC0-1.0",
   "tags": ["test"], "skins": [{}] }}"#,
                 listed.join(", ")
             );
@@ -707,6 +774,59 @@ mod tests {
             1 + 1 + 2 + 3 + 3 + 2,
             "head, catalog, manifests, pictures, thumbs, strips"
         );
+    }
+
+    #[test]
+    fn a_pack_of_drives_is_published_where_only_the_apps_that_take_drives_look() {
+        let c = Community::new("drives");
+        two_packs(&c);
+        c.pack_of(
+            PackShape::Drive,
+            "plain-drives",
+            "Plain drives",
+            &[("d.png", "Teal", [20, 150, 150])],
+        );
+        let head = c.build().unwrap().head;
+
+        // The catalog every version of the app reads lists the packs of folders alone.
+        let folders = open_catalog(&c, &head);
+        assert_eq!((head.packs, head.skins), (2, 3));
+        assert_eq!(folders.counts().0, 2);
+        assert!(folders.packs(&["plain-drives".into()]).unwrap().is_empty());
+
+        // The one the apps that take drives read has every pack, and says which are drives.
+        let with = head.with_drives.clone().expect("a catalog with the drives");
+        assert_eq!(with.drives, ["plain-drives"]);
+        assert_eq!((with.packs, with.skins), (3, 4));
+        let gz = std::fs::read(c.out().join(&with.catalog.url)).unwrap();
+        assert_eq!(tree::sha256_hex(&gz), with.catalog.sha256);
+        let bytes = tree::gunzip(&gz, tree::MAX_CATALOG_UNPACKED).unwrap();
+        assert_eq!(tree::sha256_hex(&bytes)[..16], with.generation);
+        let every = Catalog::from_bytes(&bytes).unwrap();
+        let row = &every.packs(&["plain-drives".into()]).unwrap()[0];
+
+        // Its manifest is one a FolderSkin from before drives says is newer, and its thumbnails
+        // are drawn on a drive: a drive stands narrower than a folder in the square.
+        let manifest =
+            std::fs::read(c.out().join(tree::manifest_path("plain-drives", &row.hash))).unwrap();
+        let published = PublishedPack::parse(&manifest).unwrap();
+        assert_eq!(published.shape, PackShape::Drive);
+        assert_eq!(published.version, tree::DRIVE_MANIFEST_VERSION);
+        let sha = &published.skins[0].sha256;
+        assert!(!c.out().join(tree::thumb_path(sha)).exists());
+        let thumb = image::open(c.out().join(tree::drive_thumb_path(sha)))
+            .unwrap()
+            .to_rgba8();
+        assert_eq!(thumb.get_pixel(20, 128).0[3], 0, "beside the drive");
+        assert_eq!(thumb.get_pixel(128, 128).0[3], 255, "its face");
+
+        // Built again, nothing changes; and with no pack of drives, the head says nothing of them.
+        assert!(c.build().unwrap().changes.is_empty());
+        std::fs::remove_dir_all(c.0.join(PACKS_DIR).join("plain-drives")).unwrap();
+        let head = c.build().unwrap().head;
+        assert_eq!(head.with_drives, None);
+        let json = std::fs::read_to_string(c.out().join(HEAD_FILE)).unwrap();
+        assert!(!json.contains("with_drives"), "{json}");
     }
 
     #[test]

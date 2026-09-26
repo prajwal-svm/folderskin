@@ -13,8 +13,8 @@
 
 use crate::skin::Skin;
 use folderskin_core::pack::{
-    self, Index, IndexEntry, Moved, Pack, PackSkin, INDEX_VERSION, MANIFEST_FILE, MAX_PACK_BYTES,
-    MAX_PICTURE_BYTES, MAX_READ_PICTURE_BYTES, MOVED_FILE,
+    self, Index, IndexEntry, Moved, Pack, PackShape, PackSkin, INDEX_VERSION, MANIFEST_FILE,
+    MAX_PACK_BYTES, MAX_PICTURE_BYTES, MAX_READ_PICTURE_BYTES, MOVED_FILE,
 };
 use folderskin_core::{matte, raster, shape};
 use image::RgbaImage;
@@ -314,7 +314,7 @@ pub fn check_pack_with(
             }
         }
     }
-    problems.extend(not_one_shape(name, &folders));
+    problems.extend(not_one_shape(name, listing.shape(), &folders));
     if total > MAX_PACK_BYTES {
         problems.push(format!(
             "its pictures come to {} MB, and a pack's come to {} MB at most; split it into two \
@@ -403,12 +403,17 @@ pub fn write_index(
             let mut entry = IndexEntry::new(id, pack, hash);
             entry.added = dates.get(id).copied().filter(|&at| at > 0);
             entry.official = official.contains(id);
-            Ok(entry)
+            Ok((pack.shape(), entry))
         })
         .collect::<Result<Vec<_>, String>>()?;
+    // The packs of drives go beside the others, where a FolderSkin from before drives doesn't look.
+    let (drives, folders): (Vec<_>, Vec<_>) = entries
+        .into_iter()
+        .partition(|(shape, _)| *shape == PackShape::Drive);
     let index = Index {
         version: INDEX_VERSION,
-        packs: entries,
+        packs: folders.into_iter().map(|(_, entry)| entry).collect(),
+        drive_packs: drives.into_iter().map(|(_, entry)| entry).collect(),
         moved: report.moved.moved.clone(),
     };
     let json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())? + "\n";
@@ -467,15 +472,16 @@ pub fn hash_pack(folder: &Path, pack: &Pack) -> Result<String, String> {
     ))
 }
 
-/// A pack's preview: its first [`PREVIEW_SKINS`] skins as folders side by side, each
-/// [`PREVIEW_SIDE`] px square, on transparency.
+/// A pack's preview: its first [`PREVIEW_SKINS`] skins as folders side by side, or a pack of
+/// drives' as drives, each [`PREVIEW_SIDE`] px square, on transparency.
 pub fn preview_strip(folder: &Path, pack: &Pack) -> Result<RgbaImage, String> {
     let shown = &pack.skins[..pack.skins.len().min(PREVIEW_SKINS)];
     let mut strip = RgbaImage::new(PREVIEW_SIDE * shown.len() as u32, PREVIEW_SIDE);
     for (i, skin) in shown.iter().enumerate() {
         let rgba = read_picture(&folder.join(&skin.file), MAX_READ_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
-        let icon = render_skin(rgba, PREVIEW_SIDE).map_err(|e| format!("{} {e}", skin.file))?;
+        let icon = render_skin_for(rgba, PREVIEW_SIDE, pack.shape())
+            .map_err(|e| format!("{} {e}", skin.file))?;
         // Copied rather than blended: the tiles never overlap, and copying keeps them exact.
         image::imageops::replace(&mut strip, &icon, i64::from(i as u32 * PREVIEW_SIDE), 0);
     }
@@ -485,7 +491,8 @@ pub fn preview_strip(folder: &Path, pack: &Pack) -> Result<RgbaImage, String> {
 /// The contact sheet's background.
 const SHEET_GREY: [u8; 3] = [235, 235, 235];
 
-/// Every skin of a pack as the folder the app makes of it, `side` px square, `columns` to a row,
+/// Every skin of a pack as the folder the app makes of it (or a pack of drives' as the drive),
+/// `side` px square, `columns` to a row,
 /// on light grey: a sheet to look over a pack before it ships. Not on transparency, which most
 /// viewers draw black: a cut-out that went into a dark coat or dark hair would look whole there.
 pub fn contact_sheet(
@@ -502,7 +509,8 @@ pub fn contact_sheet(
     for (i, skin) in pack.skins.iter().enumerate() {
         let rgba = read_picture(&folder.join(&skin.file), MAX_READ_PICTURE_BYTES)
             .map_err(|e| format!("{} {e}", skin.file))?;
-        let icon = render_skin(rgba, side).map_err(|e| format!("{} {e}", skin.file))?;
+        let icon =
+            render_skin_for(rgba, side, pack.shape()).map_err(|e| format!("{} {e}", skin.file))?;
         let (col, row) = (i as u32 % columns, i as u32 / columns);
         image::imageops::replace(
             &mut sheet,
@@ -518,7 +526,13 @@ pub fn contact_sheet(
 /// out, or on the magenta key) as it is, and anything else as artwork on FolderSkin's template
 /// ([`Skin`]). The error finishes a sentence that starts with the picture's name.
 pub fn render_skin(rgba: RgbaImage, size: u32) -> Result<RgbaImage, String> {
-    let png = Skin::from_picture(rgba, (0.5, 0.5))?.preview_png(size);
+    render_skin_for(rgba, size, PackShape::Folder)
+}
+
+/// [`render_skin`] for a skin of a pack of `shape`: a pack of drives' artwork goes on a drive
+/// ([`crate::skin::preview_drive`]), and a finished drive is as it is.
+pub fn render_skin_for(rgba: RgbaImage, size: u32, shape: PackShape) -> Result<RgbaImage, String> {
+    let png = Skin::from_picture(rgba, (0.5, 0.5))?.preview_png_for(size, shape);
     image::load_from_memory(&png)
         .map(|img| img.to_rgba8())
         .map_err(|e| format!("couldn't be rendered: {e}"))
@@ -613,17 +627,22 @@ fn check_listed_picture(
     Ok((bytes.len(), aspect))
 }
 
-/// The problem with a pack whose finished `folders`, each with its shape, aren't one shape
-/// ([`shape::is_one_shape`]): which two are furthest apart, and how to give them one.
-fn not_one_shape(id: &str, folders: &[(&PackSkin, f32)]) -> Option<String> {
+/// The problem with a pack whose finished `folders` (or drives, in a pack of `shape`), each with
+/// its shape, aren't one shape ([`shape::is_one_shape`]): which two are furthest apart, and how
+/// to give them one.
+fn not_one_shape(id: &str, shape: PackShape, folders: &[(&PackSkin, f32)]) -> Option<String> {
     let aspects: Vec<f32> = folders.iter().map(|(_, a)| *a).collect();
     if shape::is_one_shape(&aspects) {
         return None;
     }
     let widest = folders.iter().max_by(|a, b| a.1.total_cmp(&b.1))?;
     let narrowest = folders.iter().min_by(|a, b| a.1.total_cmp(&b.1))?;
+    let finished = match shape {
+        PackShape::Folder => "finished folders",
+        PackShape::Drive => "finished drives",
+    };
     Some(format!(
-        "its finished folders aren't one shape: \"{}\" ({}) is {:.2} times as wide as it is tall \
+        "its {finished} aren't one shape: \"{}\" ({}) is {:.2} times as wide as it is tall \
          and \"{}\" ({}) {:.2}, {} apart, and a pack's are held within {}. `folderskin-tools \
          packs normalize {id}` redraws them at one shape; one more than {} off it is left for you \
          to drop with --drop-outliers or make again",
@@ -1038,6 +1057,37 @@ mod tests {
                 "({x},{y}) {px:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_pack_of_drives_is_indexed_apart_and_its_strip_shows_drives() {
+        let c = Community::new("drives");
+        c.pack("zebra", &[("z.png", &artwork([10, 10, 10]))]);
+        let drives = manifest(&[skin("teal.png")])
+            .replace(r#""version": 1,"#, r#""version": 2, "shape": "drive","#);
+        c.put("teal-drives", MANIFEST_FILE, drives.as_bytes());
+        c.put(
+            "teal-drives",
+            "teal.png",
+            &raster::encode_png(&artwork([20, 150, 150])),
+        );
+        let report = check(&c.0).unwrap();
+        assert!(report.problems.is_empty(), "{:?}", report.problems);
+        write_index(&c.0, &report, &HashMap::new()).unwrap();
+
+        // A FolderSkin from before drives reads `packs`, which leaves the pack of drives out.
+        let index = Index::parse(&std::fs::read(c.path(INDEX_FILE)).unwrap()).unwrap();
+        let ids = |entries: &[IndexEntry]| entries.iter().map(|p| p.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&index.packs), ["zebra"]);
+        assert_eq!(ids(&index.drive_packs), ["teal-drives"]);
+
+        // Its strip has the artwork on a drive: nothing beside the drive, the teal on its face.
+        let strip = image::open(c.path("previews/teal-drives.png"))
+            .unwrap()
+            .to_rgba8();
+        assert_eq!(strip.get_pixel(10, 64).0[3], 0);
+        let face = strip.get_pixel(64, 64).0;
+        assert!(face[1] > 120 && face[2] > 120 && face[0] < 60, "{face:?}");
     }
 
     #[test]

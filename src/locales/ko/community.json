@@ -52,7 +52,8 @@
     "removingLabel": "{{name}} 제거하는 중",
     "removeTip": "이 팩 제거",
     "removeLabel": "{{name}} 제거",
-    "add": "추가"
+    "add": "추가",
+    "drives": "드라이브"
   },
   "viewer": {
     "add_other": "스킨 {{count}}개 추가",

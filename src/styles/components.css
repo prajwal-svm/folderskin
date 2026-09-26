@@ -312,6 +312,12 @@
   color: var(--accent-ink);
 }
 
+/* a pack of drives' mark (DrivesBadge): a plain tag with a drive in it */
+.tag-chip.is-drives {
+  gap: 4px;
+  padding: 0 8px 0 6px;
+}
+
 .tag-chip-x {
   width: 16px;
   height: 16px;

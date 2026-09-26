@@ -68,6 +68,8 @@ const NOT_YET: &str = "This build of FolderSkin can't share packs. You can still
 const UNREACHABLE: &str = "FolderSkin's sharing service can't be reached right now. Check your \
                            connection and try again.";
 const VERIFY_FIRST: &str = "Verify this computer first, so the service knows the pack is yours.";
+const NO_DRIVE_PACKS: &str = "Packs of drives can't be shared from FolderSkin yet. You can save \
+                              the pack as a folder.";
 
 /// Most tries of one request, the first included.
 const TRIES: u32 = 5;
@@ -511,6 +513,16 @@ pub async fn share_submit(
         let _ = on_progress.send(p);
     };
     progress(ShareProgress::Preparing);
+    // The community service publishes every pack as a pack of folders, so a pack of drives sent
+    // to it would come out as one. It goes in as a folder of its own instead (docs/PACKS.md).
+    let drives = pack.skin_ids.iter().any(|id| {
+        state
+            .entry(id)
+            .is_some_and(|e| e.shape == crate::store::SkinShape::Drive)
+    });
+    if drives {
+        return Err(NO_DRIVE_PACKS.into());
+    }
     let client = client(saved_key(&keys)?.ok_or_else(|| VERIFY_FIRST.to_string())?)?;
     // Borrowed, so every request's future can hold it however often it's tried.
     let client = &client;

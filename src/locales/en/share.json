@@ -50,7 +50,9 @@
     "checking": "Checking whether it's available",
     "unavailable": "Not available right now",
     "noSource": "Say where the pictures came from",
-    "agree": "Agree to the terms"
+    "agree": "Agree to the terms",
+    "mixedShapes": "A pack is all folders or all drives",
+    "drivesSaveOnly": "For now, a pack of drives is saved as a folder"
   },
   "dialogs": {
     "saveWhere": "Choose where to save the pack",

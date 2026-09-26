@@ -46,7 +46,9 @@
     "checking": "쓸 수 있는지 확인하는 중",
     "unavailable": "지금은 쓸 수 없어요",
     "noSource": "이미지의 출처를 알려 주세요",
-    "agree": "약관에 동의해 주세요"
+    "agree": "약관에 동의해 주세요",
+    "mixedShapes": "팩 하나에는 폴더만 넣거나 드라이브만 넣어 주세요",
+    "drivesSaveOnly": "지금은 드라이브 팩을 폴더로 저장할 수 있어요"
   },
   "dialogs": {
     "saveWhere": "팩을 저장할 위치 선택",

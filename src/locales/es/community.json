@@ -54,7 +54,8 @@
     "removingLabel": "quitando {{name}}",
     "removeTip": "Quitar este paquete",
     "removeLabel": "quitar {{name}}",
-    "add": "Añadir"
+    "add": "Añadir",
+    "drives": "Unidades"
   },
   "viewer": {
     "add_one": "Añadir {{count}} aspecto",

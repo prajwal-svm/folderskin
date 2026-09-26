@@ -33,6 +33,7 @@
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
 use folderskin_core::drive::{DriveShape, DriveStyle};
+use folderskin_core::pack::PackShape;
 use folderskin_core::{pack, raster};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
@@ -93,6 +94,14 @@ pub enum SkinShape {
 }
 
 impl SkinShape {
+    /// The shape of the skins of a pack of `shape`.
+    pub fn of_pack(shape: PackShape) -> SkinShape {
+        match shape {
+            PackShape::Folder => SkinShape::Folder,
+            PackShape::Drive => SkinShape::Drive,
+        }
+    }
+
     fn is_folder(&self) -> bool {
         *self == SkinShape::Folder
     }
@@ -363,6 +372,20 @@ pub fn clean_name(name: &str) -> Option<String> {
 /// The id of a skin made from `content`: the same bytes always give the same id.
 pub fn skin_id(content: &[u8]) -> String {
     format!("{ID_PREFIX}{}", crate::ai::hash12(content))
+}
+
+/// The id of a skin of a pack of `shape` made from `content`. A pack of drives' skins have ids
+/// of their own, so a picture in a pack of folders and in a pack of drives is a skin of each, the
+/// one on folders and the other on drives.
+pub fn pack_skin_id(content: &[u8], shape: PackShape) -> String {
+    match shape {
+        PackShape::Folder => skin_id(content),
+        PackShape::Drive => {
+            let mut salted = content.to_vec();
+            salted.extend_from_slice(b"\0drive");
+            skin_id(&salted)
+        }
+    }
 }
 
 /// Whether `id` has the shape of a saved skin's id, whether or not that skin is saved.

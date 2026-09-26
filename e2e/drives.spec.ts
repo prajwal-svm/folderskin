@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp } from "./app";
+import { openApp, openView } from "./app";
 
 // `?drive=external,network` makes the preview's first folders drives of those kinds
 // (src/lib/devMock.ts). On the Mac, Backup Disk is an external drive with five folders on it,
@@ -127,5 +127,47 @@ test.describe("a drive picked instead of a folder", () => {
     await panel(page).getByRole("button", { name: "Apply skin" }).click();
     await expect(panel(page).getByText("Applied", { exact: true })).toBeVisible();
     await expect(status(page)).toHaveText("Explorer shows this icon for any drive that gets the letter C.");
+  });
+});
+
+// The preview's Community has one pack of drives, Plain drives: six finished drives.
+test.describe("packs of drives", () => {
+  test("are marked in Community, and add drive skins that wait behind the folders' until a drive is picked", async ({ page }) => {
+    await openApp(page, { query: "packs=0&drive=external" });
+    await openView(page, /community/i);
+    const card = page.locator(".pack:not(.is-placeholder)").filter({ has: page.locator(".pack-name", { hasText: /^Plain drives$/ }) });
+    await expect(card.locator(".tag-chip.is-drives")).toHaveText("Drives");
+    await card.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(card.getByRole("img", { name: "Added to your library" })).toBeVisible({ timeout: 10_000 });
+
+    // Newest though they are, they come after the folder skins while no drive is picked.
+    await openView(page, /all skins/i);
+    await expect(tiles(page)).toHaveCount(14);
+    expect((await names(page)).slice(-6).every((n) => n.startsWith("Plain "))).toBe(true);
+    await panel(page).getByRole("button", { name: /^choose a folder from/ }).click();
+    await expect(title(page)).toHaveText("Backup Disk");
+    await expect.poll(async () => (await names(page)).slice(0, 6).every((n) => n.startsWith("Plain "))).toBe(true);
+  });
+
+  test("are saved as a folder for now, and never mixed with folders", async ({ page }) => {
+    await openApp(page, { query: "driveskins=2" });
+    await openView(page, /community/i);
+    await page.getByRole("button", { name: "Share your skins" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share a pack" });
+    const reason = dialog.locator(".modal-reason");
+    await dialog.getByPlaceholder("Neon nights").fill("Backup drives");
+    await dialog.getByRole("button", { name: "+ drive" }).click();
+    await dialog.getByRole("textbox", { name: "the name your packs show" }).fill("sunny-otter");
+    // Every skin of yours is ticked to start with, folders and drives.
+    await expect(reason).toHaveText("A pack is all folders or all drives");
+    await expect(dialog.getByRole("button", { name: "Save a folder" })).toBeDisabled();
+
+    // The drives alone make a pack that is saved as a folder, and not sent.
+    await dialog.getByRole("button", { name: "Clear" }).click();
+    await dialog.getByRole("button", { name: /^Plain mac/ }).first().click();
+    await dialog.getByRole("button", { name: /^Plain mac/ }).last().click();
+    await expect(reason).toHaveText("For now, a pack of drives is saved as a folder");
+    await expect(dialog.getByRole("button", { name: /send/i })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Save a folder" })).toBeEnabled();
   });
 });

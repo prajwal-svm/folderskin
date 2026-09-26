@@ -17,11 +17,15 @@
 //!
 //! A new pack gets an id of its own, its name and six random characters ([`pack::new_id`]), so
 //! two packs can share a name. The id is its folder's name, and it never changes after.
+//!
+//! A pack of drives ([`MakeOptions::shape`]) is made the same way: its finished drives are given
+//! one shape in the square FolderSkin's own drives are drawn in ([`shape::Frame::Drive`]), and its
+//! artwork goes on whichever drive it's put on.
 
 use crate::{normalize, packs, parallel};
 use folderskin_core::pack::{
-    self, Pack, PackSkin, MANIFEST_FILE, MAX_PACK_BYTES, MAX_PACK_TAGS, MAX_PICTURE_BYTES,
-    MAX_PICTURE_SIDE, MAX_SKINS, MAX_SKIN_NAME_CHARS, MIN_PICTURE_SIDE, PACK_VERSION,
+    self, Pack, PackShape, PackSkin, MANIFEST_FILE, MAX_PACK_BYTES, MAX_PACK_TAGS,
+    MAX_PICTURE_BYTES, MAX_PICTURE_SIDE, MAX_SKINS, MAX_SKIN_NAME_CHARS, MIN_PICTURE_SIDE,
     PICTURE_EXTENSIONS,
 };
 use folderskin_core::{matte, raster, shape};
@@ -54,6 +58,8 @@ pub struct MakeOptions {
     /// Keep a finished folder more than [`shape::TOLERANCE`] off the pack's shape, as it is,
     /// instead of leaving it out.
     pub keep_outliers: bool,
+    /// A pack of folders, or of drives.
+    pub shape: PackShape,
 }
 
 impl MakeOptions {
@@ -135,8 +141,8 @@ pub struct MadePack {
 /// What happens to a picture on its way into the pack.
 #[derive(Debug, Clone, Copy)]
 enum Treat {
-    /// A finished folder, redrawn at the pack's shape.
-    Redraw(f32),
+    /// A finished folder, or drive, redrawn at the pack's shape in its frame.
+    Redraw(shape::Frame, f32),
     /// Shrunk to 1024 px as it is. For a finished folder kept though it is more than the
     /// tolerance off the pack's shape, how far off.
     AsItIs(Option<f32>),
@@ -172,6 +178,7 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String
     .into_iter()
     .collect::<Result<Vec<_>, String>>()?;
     let aspects: Vec<f32> = looked.iter().flatten().copied().collect();
+    let frame = shape::Frame::of(opts.shape);
     let plan = shape::plan(&aspects, shape::TOLERANCE);
     let mut jobs: Vec<(&PathBuf, Treat)> = Vec::with_capacity(sources.len());
     let mut left_out = Vec::new();
@@ -186,7 +193,7 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String
         let outlier = plan.is_outlier(k);
         k += 1;
         if !outlier {
-            jobs.push((source, Treat::Redraw(plan.shape)));
+            jobs.push((source, Treat::Redraw(frame, plan.shape)));
         } else if opts.keep_outliers {
             jobs.push((source, Treat::AsItIs(Some(reshaping))));
         } else {
@@ -235,17 +242,18 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String
             folder: picture.folder,
             bytes: picture.bytes.len(),
             scaled_to: picture.scaled_to,
-            redrawn: matches!(treat, Treat::Redraw(_)),
+            redrawn: matches!(treat, Treat::Redraw(..)),
             outlier: match treat {
                 Treat::AsItIs(outlier) => *outlier,
-                Treat::Redraw(_) => None,
+                Treat::Redraw(..) => None,
             },
         });
         files.push((file, picture.bytes));
     }
 
     let manifest = Pack {
-        version: PACK_VERSION,
+        version: opts.shape.version(),
+        shape: opts.shape.declared(),
         name: opts.name.trim().to_string(),
         author: opts.author.trim().to_string(),
         license: opts.license.trim().to_string(),
@@ -462,9 +470,8 @@ fn look(path: &Path, opts: &MakeOptions) -> Result<Option<f32>, String> {
 fn prepare(path: &Path, opts: &MakeOptions, treat: Treat) -> Result<Prepared, String> {
     let (img, folder) = load(path, opts)?;
     let img = match treat {
-        Treat::Redraw(shape) => {
-            shape::redraw(&img, shape).ok_or("has nothing more than half opaque to redraw")?
-        }
+        Treat::Redraw(frame, shape) => shape::redraw_in(frame, &img, shape)
+            .ok_or("has nothing more than half opaque to redraw")?,
         Treat::AsItIs(_) => raster::shrink_to(img, MAX_PICTURE_SIDE),
     };
     let made = pack::encode_picture(img, opts.picture_limit())?;
@@ -614,6 +621,7 @@ mod tests {
                 max_bytes: MAX_PICTURE_BYTES,
                 flat_backdrop: false,
                 keep_outliers: false,
+                shape: PackShape::Folder,
             }
         }
     }
@@ -933,6 +941,38 @@ mod tests {
             .unwrap()
             .problems
             .is_empty());
+    }
+
+    #[test]
+    fn a_pack_of_drives_says_so_and_its_finished_drives_stand_in_the_drives_square() {
+        let scratch = Scratch::new("drives");
+        let pictures = a_batch_of_renders(&scratch);
+        let opts = MakeOptions {
+            name: "Test drives".into(),
+            shape: PackShape::Drive,
+            ..scratch.options()
+        };
+        let MadePack {
+            folder,
+            made,
+            shape,
+            ..
+        } = make(&pictures, &opts).unwrap();
+        let shape = shape.unwrap();
+
+        let pack = Pack::parse(&std::fs::read(folder.join(MANIFEST_FILE)).unwrap()).unwrap();
+        assert_eq!(pack.shape(), PackShape::Drive);
+        assert_eq!(pack.version, pack::DRIVE_PACK_VERSION);
+        // Each finished drive fills the square FolderSkin's drives are drawn in, across, and is
+        // centred up and down in it.
+        let want = folderskin_core::shape::target_in(folderskin_core::shape::Frame::Drive, shape);
+        assert_eq!((want.x0, want.x1), (84, 940));
+        for m in made.iter().filter(|m| m.redrawn) {
+            let img = image::open(folder.join(&m.file)).unwrap().to_rgba8();
+            let placed = folderskin_core::shape::Placed::of(&img).unwrap();
+            assert_eq!(placed.visible, want, "{}", m.file);
+        }
+        assert!(packs::check(&scratch.0).unwrap().problems.is_empty());
     }
 
     #[test]

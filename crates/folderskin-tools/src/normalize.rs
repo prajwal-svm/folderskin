@@ -210,13 +210,13 @@ struct Drawn {
     scaled_to: Option<u32>,
 }
 
-/// The finished folder in `file` redrawn at `shape` as a pack's picture: a lossless WebP of at
-/// most 1.5 MB, made 896 px and then 768 px if it has to be ([`pack::encode_picture`]). The
-/// error finishes a sentence that starts with the file's name.
-fn redraw(folder: &Path, file: &str, shape: f32) -> Result<Drawn, String> {
+/// The finished folder in `file` redrawn at `shape` in `frame` as a pack's picture: a lossless
+/// WebP of at most 1.5 MB, made 896 px and then 768 px if it has to be
+/// ([`pack::encode_picture`]). The error finishes a sentence that starts with the file's name.
+fn redraw(folder: &Path, file: &str, frame: shape::Frame, shape: f32) -> Result<Drawn, String> {
     let rgba = packs::read_picture(&folder.join(file), MAX_READ_PICTURE_BYTES)?;
     let canvas = matte::finished_cutout(&rgba, matte::MAGENTA)
-        .and_then(|cut| shape::redraw(&cut, shape))
+        .and_then(|cut| shape::redraw_in(frame, &cut, shape))
         .ok_or("isn't a finished folder with anything more than half opaque")?;
     let aspect = shape::aspect(&canvas).unwrap_or(shape);
     let made = pack::encode_picture(canvas, MAX_PICTURE_BYTES)?;
@@ -260,6 +260,8 @@ pub fn normalize_folder(folder: &Path, opts: &Options) -> Result<Normalized, Str
         return Ok(done);
     };
     done.shape = Some(plan.shape);
+    // A pack of drives' finished drives stand in the square FolderSkin's drives are drawn in.
+    let frame = shape::Frame::of(pack.shape());
 
     // Which folders are dropped, which are redrawn, and what each measures once it's done.
     let mut drop = BTreeSet::new();
@@ -278,7 +280,7 @@ pub fn normalize_folder(folder: &Path, opts: &Options) -> Result<Normalized, Str
             } else {
                 after.push((i, aspect));
             }
-        } else if placed.is_some_and(|p| p.is_redrawn(plan.shape)) {
+        } else if placed.is_some_and(|p| p.is_redrawn_in(frame, plan.shape)) {
             after.push((i, aspect));
         } else {
             to_draw.push(i);
@@ -295,7 +297,8 @@ pub fn normalize_folder(folder: &Path, opts: &Options) -> Result<Normalized, Str
     // Redrawn on every core at once: libwebp takes most of a second a picture.
     let drawn = parallel::map(&to_draw, |&i| {
         let file = &pack.skins[i].file;
-        redraw(folder, file, plan.shape).map_err(|e| format!("{file} {e}; nothing was changed"))
+        redraw(folder, file, frame, plan.shape)
+            .map_err(|e| format!("{file} {e}; nothing was changed"))
     })
     .into_iter()
     .collect::<Result<Vec<_>, String>>()?;

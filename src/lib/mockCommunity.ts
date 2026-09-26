@@ -22,6 +22,8 @@ export type MockPack = {
   skins: string[];
   /** Its preview strip. */
   preview: string;
+  /** True for a pack of drives. */
+  drives?: boolean;
 };
 
 export type MockHit = { pack: MockPack; name: string; index: number };

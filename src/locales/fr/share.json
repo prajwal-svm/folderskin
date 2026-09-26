@@ -54,7 +54,9 @@
     "checking": "Vérification de la disponibilité",
     "unavailable": "Indisponible pour le moment",
     "noSource": "Indiquez d'où viennent les images",
-    "agree": "Acceptez les conditions"
+    "agree": "Acceptez les conditions",
+    "mixedShapes": "Un pack contient des dossiers ou des disques, pas les deux",
+    "drivesSaveOnly": "Pour l'instant, un pack de disques s'enregistre comme dossier"
   },
   "dialogs": {
     "saveWhere": "Choisissez où enregistrer le pack",

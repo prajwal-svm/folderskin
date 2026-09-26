@@ -17,7 +17,7 @@ use crate::community::Fetch;
 use folderskin_catalog::tree::{self, PublishedPack};
 use folderskin_catalog::PackRow;
 use folderskin_core::apply::paths::write_atomic;
-use folderskin_core::pack;
+use folderskin_core::pack::{self, PackShape};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
@@ -52,6 +52,15 @@ pub fn thumb_url(sha256: &str) -> String {
     url(&format!("thumb/{sha256}"))
 }
 
+/// A skin's thumbnail as a pack of `shape` shows it: on its folder, or a pack of drives' on its
+/// drive.
+pub fn thumb_url_for(shape: PackShape, sha256: &str) -> String {
+    match shape {
+        PackShape::Folder => thumb_url(sha256),
+        PackShape::Drive => url(&format!("drive-thumb/{sha256}")),
+    }
+}
+
 /// The thumbnail of skin `position` of pack `id` at version `hash`, found through the pack's
 /// manifest: what the strip of matching skins shows.
 pub fn skin_url(id: &str, hash: &str, position: usize) -> String {
@@ -66,6 +75,10 @@ pub enum Asked {
         hash: Option<String>,
     },
     Thumb {
+        sha256: String,
+    },
+    /// A skin of a pack of drives, on its drive.
+    DriveThumb {
         sha256: String,
     },
     Skin {
@@ -94,6 +107,9 @@ impl Asked {
             ["thumb", sha] if tree::is_hex(sha, 64) => Some(Asked::Thumb {
                 sha256: sha.to_string(),
             }),
+            ["drive-thumb", sha] if tree::is_hex(sha, 64) => Some(Asked::DriveThumb {
+                sha256: sha.to_string(),
+            }),
             ["skin", id, hash, position] if pack::is_pack_id(id) && tree::is_hex(hash, 16) => {
                 Some(Asked::Skin {
                     id: id.to_string(),
@@ -112,6 +128,7 @@ impl Asked {
             Asked::Strip { id, hash: Some(h) } => Some(format!("strip-{id}-{h}")),
             Asked::Strip { hash: None, .. } => None,
             Asked::Thumb { sha256 } => Some(format!("thumb-{sha256}")),
+            Asked::DriveThumb { sha256 } => Some(format!("drive-thumb-{sha256}")),
             Asked::Skin { id, hash, position } => Some(format!("skin-{id}-{hash}-{position}")),
         }
     }
@@ -248,6 +265,7 @@ async fn download(
         } => tree::strip_path(hash),
         Asked::Strip { hash: None, .. } => return Err(StatusCode::NOT_FOUND),
         Asked::Thumb { sha256 } => tree::thumb_path(sha256),
+        Asked::DriveThumb { sha256 } => tree::drive_thumb_path(sha256),
         Asked::Skin { id, hash, position } => {
             // Only the version the catalog lists now can be checked, and it's the only one asked for.
             let row = source
@@ -263,7 +281,7 @@ async fn download(
                 .skins
                 .get(*position)
                 .ok_or(StatusCode::NOT_FOUND)?;
-            tree::thumb_path(&skin.sha256)
+            tree::thumb_path_for(published.shape, &skin.sha256)
         }
     };
     source

@@ -53,7 +53,8 @@
     "catalogDamaged": "le catalogue des packs de la communauté est arrivé endommagé. Réessayez",
     "notPublished": "les packs de la communauté ne sont pas encore publiés",
     "listDamaged": "la liste de ce pack est arrivée endommagée. Réessayez",
-    "listMismatch": "la liste de ce pack ne correspond pas au catalogue. Essayez Actualiser"
+    "listMismatch": "la liste de ce pack ne correspond pas au catalogue. Essayez Actualiser",
+    "mixedShapes": "un pack contient des dossiers ou des disques, pas les deux. Mettez les habillages de disques dans un pack à part"
   },
   "chats": {
     "noDataFolder": "les chats ne peuvent pas être conservés sur cet ordinateur : FolderSkin n'a pas de dossier de données ici",
@@ -95,7 +96,8 @@
     "keyNotSaved": "Le fichier de récupération n'a pas pu être enregistré : {{reason}}",
     "keyUnreadable": "Ce fichier n'a pas pu être lu.",
     "serviceUnreachable": "Impossible de joindre le service de partage de FolderSkin. Vérifiez votre connexion et réessayez.",
-    "serviceUnreadable": "Le service de partage de FolderSkin a répondu d'une façon que cette version ne sait pas lire. Mettez FolderSkin à jour et réessayez."
+    "serviceUnreadable": "Le service de partage de FolderSkin a répondu d'une façon que cette version ne sait pas lire. Mettez FolderSkin à jour et réessayez.",
+    "noDrivePacks": "Les packs de disques ne peuvent pas encore être partagés depuis FolderSkin. Vous pouvez enregistrer le pack comme dossier."
   },
   "ai": {
     "missingKey": "Ajoutez d'abord votre clé d'API {{provider}}.",

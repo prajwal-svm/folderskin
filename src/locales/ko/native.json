@@ -53,7 +53,8 @@
     "catalogDamaged": "커뮤니티 팩 카탈로그가 손상된 채로 도착했어요. 다시 시도하세요",
     "notPublished": "커뮤니티 팩이 아직 공개되지 않았어요",
     "listDamaged": "그 팩의 목록이 손상된 채로 도착했어요. 다시 시도하세요",
-    "listMismatch": "그 팩의 목록이 카탈로그와 맞지 않아요. 새로 고침해 보세요"
+    "listMismatch": "그 팩의 목록이 카탈로그와 맞지 않아요. 새로 고침해 보세요",
+    "mixedShapes": "팩 하나에는 폴더만 있거나 드라이브만 있어요. 드라이브 스킨은 따로 팩을 만들어 주세요"
   },
   "chats": {
     "noDataFolder": "이 컴퓨터에는 채팅을 보관할 수 없어요: 여기에는 FolderSkin 데이터 폴더가 없어요",
@@ -95,7 +96,8 @@
     "keyNotSaved": "복구 파일을 저장하지 못했어요: {{reason}}",
     "keyUnreadable": "그 파일을 읽지 못했어요.",
     "serviceUnreachable": "FolderSkin 공유 서비스에 연결하지 못했어요. 연결을 확인하고 다시 시도하세요.",
-    "serviceUnreadable": "FolderSkin 공유 서비스가 이 버전에서 읽을 수 없는 방식으로 응답했어요. FolderSkin을 업데이트하고 다시 시도하세요."
+    "serviceUnreadable": "FolderSkin 공유 서비스가 이 버전에서 읽을 수 없는 방식으로 응답했어요. FolderSkin을 업데이트하고 다시 시도하세요.",
+    "noDrivePacks": "드라이브 팩은 아직 FolderSkin에서 공유할 수 없어요. 폴더로 저장할 수는 있어요."
   },
   "ai": {
     "missingKey": "먼저 {{provider}} API 키를 추가하세요.",

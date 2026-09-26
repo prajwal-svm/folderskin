@@ -53,7 +53,8 @@
     "catalogDamaged": "コミュニティパックのカタログが壊れた状態で届きました。もう一度試してください",
     "notPublished": "コミュニティパックはまだ公開されていません",
     "listDamaged": "そのパックの一覧が壊れた状態で届きました。もう一度試してください",
-    "listMismatch": "そのパックの一覧がカタログと一致しません。再読み込みしてみてください"
+    "listMismatch": "そのパックの一覧がカタログと一致しません。再読み込みしてみてください",
+    "mixedShapes": "1つのパックはフォルダだけか、ドライブだけです。ドライブのスキンは別のパックにしてください"
   },
   "chats": {
     "noDataFolder": "このコンピュータにはチャットを保存できません：FolderSkinのデータフォルダがありません",
@@ -95,7 +96,8 @@
     "keyNotSaved": "復元用ファイルを保存できませんでした：{{reason}}",
     "keyUnreadable": "そのファイルを読み込めませんでした。",
     "serviceUnreachable": "FolderSkinの共有サービスに接続できませんでした。接続を確認して、もう一度試してください。",
-    "serviceUnreadable": "FolderSkinの共有サービスから、このバージョンでは読み取れない応答がありました。FolderSkinをアップデートして、もう一度試してください。"
+    "serviceUnreadable": "FolderSkinの共有サービスから、このバージョンでは読み取れない応答がありました。FolderSkinをアップデートして、もう一度試してください。",
+    "noDrivePacks": "ドライブのパックは、まだ FolderSkin から共有できません。フォルダとして保存することはできます。"
   },
   "ai": {
     "missingKey": "先に{{provider}}のAPIキーを追加してください。",

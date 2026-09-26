@@ -19,14 +19,14 @@ const searches = (page: Page) => page.evaluate(() => (window as { mockCommunityS
 
 test("typing searches ten thousand packs in under 300 ms, and only what's on screen is drawn", async ({ page }) => {
   await openCommunity(page);
-  await expect(page.locator(".community-count")).toHaveText("10,004 packs");
+  await expect(page.locator(".community-count")).toHaveText("10,005 packs");
   expect(await page.locator(".pack").count()).toBeLessThan(40);
 
   // One search first, as someone looking around would: the first also compiles the search code.
   await search(page).fill("lant");
   await expect(page.locator(".community-count")).toContainText("match “lant”");
   await search(page).fill("");
-  await expect(page.locator(".community-count")).toHaveText("10,004 packs");
+  await expect(page.locator(".community-count")).toHaveText("10,005 packs");
 
   // From the last key to the answer on screen, timed in the page itself.
   await page.evaluate(() => {

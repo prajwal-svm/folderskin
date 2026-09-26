@@ -53,7 +53,8 @@
     "catalogDamaged": "the catalog of community packs arrived damaged. Try again",
     "notPublished": "the community packs aren't published yet",
     "listDamaged": "that pack's list arrived damaged. Try again",
-    "listMismatch": "that pack's list doesn't match the catalog. Try Refresh"
+    "listMismatch": "that pack's list doesn't match the catalog. Try Refresh",
+    "mixedShapes": "a pack is all folders or all drives. Put the drive skins in a pack of their own"
   },
   "chats": {
     "noDataFolder": "chats can't be kept on this computer: FolderSkin has no data folder here",
@@ -95,7 +96,8 @@
     "keyNotSaved": "The recovery file couldn't be saved: {{reason}}",
     "keyUnreadable": "That file couldn't be read.",
     "serviceUnreachable": "FolderSkin's sharing service couldn't be reached. Check your connection and try again.",
-    "serviceUnreadable": "FolderSkin's sharing service answered in a way this version can't read. Update FolderSkin and try again."
+    "serviceUnreadable": "FolderSkin's sharing service answered in a way this version can't read. Update FolderSkin and try again.",
+    "noDrivePacks": "Packs of drives can't be shared from FolderSkin yet. You can save the pack as a folder."
   },
   "ai": {
     "missingKey": "Add your {{provider}} API key first.",

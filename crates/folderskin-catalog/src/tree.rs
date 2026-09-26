@@ -5,15 +5,21 @@
 //! catalog/<generation>.sqlite.gz     every pack and skin, searchable (see `build`)
 //! strips/<pack hash>.webp            a pack's first four skins as folders, side by side
 //! thumbs/<sha256>.webp               one skin as its folder, 256 px
+//! drive-thumbs/<sha256>.webp         one skin of a pack of drives as its drive, 256 px
 //! pictures/<sha256>.<ext>            one skin's picture, as the pack has it
 //! packs/<id>/<pack hash>.json        pack.json with each picture's size and SHA-256
 //! ```
+//!
+//! Packs of drives are in a catalog of their own making, beside the other: `with_drives` in
+//! `head.json` names a catalog of every pack, drives and all, and `catalog` goes on naming one of
+//! the packs of folders alone. A FolderSkin from before drives reads `catalog`, so it never lists
+//! a pack it can't add, and one that takes drives reads `with_drives`.
 //!
 //! Everything but `head.json` is named after what is in it, so a host can let every cache keep
 //! it forever: a changed pack is new files under new names, never new bytes under an old one.
 //! That is what lets the same tree sit on GitHub today and on a bucket behind a CDN later.
 
-use folderskin_core::pack::{self, Pack, PackSkin};
+use folderskin_core::pack::{self, Pack, PackShape, PackSkin};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -22,8 +28,11 @@ use std::io::{Read, Write};
 pub const HEAD_VERSION: u32 = 2;
 /// The one file that changes in place.
 pub const HEAD_FILE: &str = "head.json";
-/// The version a published `packs/<id>/<hash>.json` declares.
+/// The version a published `packs/<id>/<hash>.json` of folders declares.
 pub const MANIFEST_VERSION: u32 = 2;
+/// The version a published pack of drives declares, with `"shape": "drive"`: one a FolderSkin from
+/// before drives says is for a newer FolderSkin.
+pub const DRIVE_MANIFEST_VERSION: u32 = 3;
 /// Largest `head.json` the app reads.
 pub const MAX_HEAD_BYTES: usize = 256 * 1024;
 /// Largest gzipped catalog the app downloads, and the most it unpacks to. At 10,000 packs and
@@ -62,6 +71,32 @@ pub struct Head {
     /// so an app can follow a pack it added under an old id. Left out when none has.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub moved: BTreeMap<String, String>,
+    /// The catalog with the packs of drives in it as well, for the apps that take them. Left out
+    /// when there are none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub with_drives: Option<WithDrives>,
+}
+
+/// A catalog of every pack, the packs of drives with the others, and which of them are drives.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct WithDrives {
+    /// Names it, as [`Head::generation`] names the other.
+    pub generation: String,
+    pub packs: usize,
+    pub skins: usize,
+    pub catalog: CatalogRef,
+    /// The ids of the packs of drives in it.
+    pub drives: Vec<String>,
+}
+
+impl WithDrives {
+    fn is_sane(&self) -> bool {
+        is_hex(&self.generation, 16)
+            && is_hex(&self.catalog.sha256, 64)
+            && self.catalog.bytes > 0
+            && self.catalog.bytes <= MAX_CATALOG_BYTES
+            && is_catalog_url(&self.catalog.url)
+    }
 }
 
 /// Where the catalog is and how to know it arrived whole.
@@ -87,7 +122,11 @@ impl Head {
         if version.is_some_and(|v| v > u64::from(HEAD_VERSION)) {
             return Err("the community packs need a newer FolderSkin".into());
         }
-        let head: Head = serde_json::from_value(value).map_err(|_| damaged())?;
+        let mut head: Head = serde_json::from_value(value).map_err(|_| damaged())?;
+        // The packs of folders don't need the other catalog: one that isn't right is left out.
+        if head.with_drives.as_ref().is_some_and(|w| !w.is_sane()) {
+            head.with_drives = None;
+        }
         let sane = head.version == HEAD_VERSION
             && is_hex(&head.generation, 16)
             && is_hex(&head.catalog.sha256, 64)
@@ -109,6 +148,16 @@ impl Head {
     /// The official ids that are pack ids, in order, without repeats.
     pub fn official_ids(&self) -> Vec<String> {
         pack_ids(&self.official)
+    }
+
+    /// The catalog an app that takes packs of drives reads: its generation, where it is, and the
+    /// ids of the packs of drives in it (pack ids only, without repeats). The one of every pack
+    /// when there is one, and the packs of folders otherwise.
+    pub fn catalog_with_drives(&self) -> (&str, &CatalogRef, Vec<String>) {
+        match &self.with_drives {
+            Some(w) => (&w.generation, &w.catalog, pack_ids(&w.drives)),
+            None => (&self.generation, &self.catalog, Vec::new()),
+        }
     }
 
     /// The id pack `id` has now: where `moved` says it went, or `id` itself. An entry that
@@ -159,6 +208,10 @@ pub fn is_mirror(url: &str) -> bool {
 #[serde(deny_unknown_fields)]
 pub struct PublishedPack {
     pub version: u32,
+    /// `"drive"` for a pack of drives, which is version 3; left out of a pack of folders, which
+    /// is published exactly as it always was.
+    #[serde(default, skip_serializing_if = "PackShape::is_folder")]
+    pub shape: PackShape,
     pub id: String,
     /// [`pack::pack_hash`] of the pack's folder: the same version string `index.json` gives, so
     /// a pack added from either is recognised by the other.
@@ -196,14 +249,15 @@ impl PublishedPack {
         let value: serde_json::Value =
             serde_json::from_slice(bytes).map_err(|_| "that pack's list is damaged".to_string())?;
         let version = value.get("version").and_then(serde_json::Value::as_u64);
-        if version.is_some_and(|v| v > u64::from(MANIFEST_VERSION)) {
+        if version.is_some_and(|v| v > u64::from(DRIVE_MANIFEST_VERSION)) {
             return Err("this pack needs a newer FolderSkin".into());
         }
         let published: PublishedPack =
             serde_json::from_value(value).map_err(|_| "that pack's list is damaged".to_string())?;
         let mut problems = published.to_pack().problems();
-        if published.version != MANIFEST_VERSION {
-            problems.push(format!("it needs \"version\": {MANIFEST_VERSION}"));
+        let version = manifest_version(published.shape);
+        if published.version != version {
+            problems.push(format!("it needs \"version\": {version}"));
         }
         if !pack::is_pack_id(&published.id) || !is_hex(&published.hash, 16) {
             problems.push("its id or version isn't one FolderSkin can use".into());
@@ -237,7 +291,8 @@ impl PublishedPack {
     /// The pack as its `pack.json` has it, for the checks and for saving its skins.
     pub fn to_pack(&self) -> Pack {
         Pack {
-            version: pack::PACK_VERSION,
+            version: self.shape.version(),
+            shape: self.shape.declared(),
             name: self.name.clone(),
             author: self.author.clone(),
             license: self.license.clone(),
@@ -262,6 +317,14 @@ impl PublishedSkin {
     }
 }
 
+/// The version a published pack of `shape` declares.
+pub fn manifest_version(shape: PackShape) -> u32 {
+    match shape {
+        PackShape::Folder => MANIFEST_VERSION,
+        PackShape::Drive => DRIVE_MANIFEST_VERSION,
+    }
+}
+
 /// A picture file's extension, lower case.
 pub fn picture_ext(file: &str) -> String {
     file.rsplit_once('.')
@@ -280,6 +343,20 @@ pub fn strip_path(pack_hash: &str) -> String {
 
 pub fn thumb_path(sha256: &str) -> String {
     format!("thumbs/{sha256}.webp")
+}
+
+/// A skin's thumbnail as a pack of drives shows it: on a drive, which the same picture in a pack
+/// of folders isn't.
+pub fn drive_thumb_path(sha256: &str) -> String {
+    format!("drive-thumbs/{sha256}.webp")
+}
+
+/// [`thumb_path`] or [`drive_thumb_path`], for a skin of a pack of `shape`.
+pub fn thumb_path_for(shape: PackShape, sha256: &str) -> String {
+    match shape {
+        PackShape::Folder => thumb_path(sha256),
+        PackShape::Drive => drive_thumb_path(sha256),
+    }
 }
 
 pub fn picture_path(sha256: &str, ext: &str) -> String {
@@ -441,6 +518,64 @@ mod tests {
         assert!(PublishedPack::parse(big.as_bytes())
             .unwrap_err()
             .contains("p0.png isn't described properly"));
+    }
+
+    #[test]
+    fn a_published_pack_of_drives_is_version_3_and_one_of_folders_is_as_it_was() {
+        let folders = PublishedPack::parse(published(&"b".repeat(64)).as_bytes()).unwrap();
+        assert_eq!(folders.shape, PackShape::Folder);
+        assert!(!serde_json::to_string(&folders).unwrap().contains("shape"));
+        let drives = published(&"b".repeat(64))
+            .replace(r#""version": 2,"#, r#""version": 3, "shape": "drive","#);
+        let p = PublishedPack::parse(drives.as_bytes()).unwrap();
+        assert_eq!(p.shape, PackShape::Drive);
+        assert_eq!(p.to_pack().shape(), PackShape::Drive);
+        assert_eq!(p.to_pack().version, pack::DRIVE_PACK_VERSION);
+        // Each says its own version, and a newer one says so.
+        let mismatched = published(&"b".repeat(64))
+            .replace(r#""version": 2,"#, r#""version": 2, "shape": "drive","#);
+        assert!(PublishedPack::parse(mismatched.as_bytes())
+            .unwrap_err()
+            .contains("\"version\": 3"));
+        let newer = published(&"b".repeat(64)).replace(r#""version": 2,"#, r#""version": 4,"#);
+        assert!(PublishedPack::parse(newer.as_bytes())
+            .unwrap_err()
+            .contains("newer FolderSkin"));
+        assert_eq!(
+            thumb_path_for(PackShape::Drive, "ab"),
+            "drive-thumbs/ab.webp"
+        );
+        assert_eq!(thumb_path_for(PackShape::Folder, "ab"), "thumbs/ab.webp");
+    }
+
+    #[test]
+    fn a_head_names_a_catalog_with_the_packs_of_drives_for_the_apps_that_take_them() {
+        let plain = Head::parse(head("catalog/0123456789abcdef.sqlite.gz").as_bytes()).unwrap();
+        assert_eq!(plain.with_drives, None);
+        let (generation, catalog, drives) = plain.catalog_with_drives();
+        assert_eq!((generation, catalog), (&*plain.generation, &plain.catalog));
+        assert!(drives.is_empty());
+
+        let with = |url: &str| {
+            head("catalog/0123456789abcdef.sqlite.gz").replace(
+                r#""mirrors": []"#,
+                &format!(
+                    r#""mirrors": [], "with_drives": {{ "generation": "fedcba9876543210", "packs": 2,
+  "skins": 3, "catalog": {{ "url": "{url}", "sha256": "{}", "bytes": 12 }},
+  "drives": ["plain-drives", "Not An Id", "plain-drives"] }}"#,
+                    "c".repeat(64)
+                ),
+            )
+        };
+        let h = Head::parse(with("catalog/fedcba9876543210.sqlite.gz").as_bytes()).unwrap();
+        let (generation, catalog, drives) = h.catalog_with_drives();
+        assert_eq!(generation, "fedcba9876543210");
+        assert_eq!(catalog.url, "catalog/fedcba9876543210.sqlite.gz");
+        assert_eq!(drives, ["plain-drives"]);
+        // The packs of folders don't need it: one that isn't right is left out, not the head.
+        let wrong = Head::parse(with("../elsewhere.sqlite.gz").as_bytes()).unwrap();
+        assert_eq!(wrong.with_drives, None);
+        assert_eq!(wrong.catalog_with_drives().0, "0123456789abcdef");
     }
 
     #[test]

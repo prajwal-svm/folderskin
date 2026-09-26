@@ -3,7 +3,7 @@ import { api, errorMessage, type CommunityPack, type PackProgress, type PackSkin
 import { licenseLabel } from "../lib/packs";
 import { progressLabel, progressShare } from "../lib/communityStore";
 import { Modal } from "./Modal";
-import { OfficialBadge } from "./OfficialBadge";
+import { DrivesBadge, OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { DownloadIcon } from "./icons/download";
 import { LoaderIcon } from "./icons/loader";
@@ -121,9 +121,10 @@ export function PackViewer({
         </>
       }
     >
-      {(pack.official || pack.tags.length > 0) && (
+      {(pack.official || pack.drives || pack.tags.length > 0) && (
         <div className="pack-tags">
           {pack.official && <OfficialBadge />}
+          {pack.drives && <DrivesBadge />}
           {pack.tags.map((t) => (
             <span key={t} className="tag-chip">
               {t}

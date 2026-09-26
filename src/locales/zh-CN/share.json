@@ -46,7 +46,9 @@
     "checking": "正在检查是否可用",
     "unavailable": "暂时不可用",
     "noSource": "说明图片的来源",
-    "agree": "同意条款"
+    "agree": "同意条款",
+    "mixedShapes": "一个皮肤包里只能都是文件夹或都是驱动器",
+    "drivesSaveOnly": "目前驱动器皮肤包只能保存为文件夹"
   },
   "dialogs": {
     "saveWhere": "选择皮肤包的保存位置",

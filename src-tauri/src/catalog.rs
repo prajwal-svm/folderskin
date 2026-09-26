@@ -19,7 +19,7 @@
 
 use crate::community::{fetch, host, uncached, Fetch};
 use crate::previews::{DiskCache, CACHE_BYTES};
-use folderskin_catalog::tree::{self, Head};
+use folderskin_catalog::tree::{self, CatalogRef, Head};
 use folderskin_catalog::{build, Catalog, PackRecord, PackRow, Query, Results};
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::pack::{self, Index};
@@ -249,6 +249,8 @@ pub struct Source {
     /// The packs the maintainer marks as official: `official` in head.json, or the entries of
     /// index.json that say `"official": true`.
     pub official: Vec<String>,
+    /// The packs of drives: `with_drives` in head.json, or index.json's `drive_packs`.
+    pub drive_packs: Vec<String>,
     /// Packs whose ids changed, each old id to the one it has now: head.json's `moved`, less any
     /// entry [`Head::current_id`] wouldn't follow. Empty for a list made from index.json.
     moved: BTreeMap<String, String>,
@@ -281,6 +283,7 @@ impl Source {
             tree,
             featured: Vec::new(),
             official: Vec::new(),
+            drive_packs: Vec::new(),
             moved: BTreeMap::new(),
             followed: AtomicBool::new(false),
             generation,
@@ -297,6 +300,11 @@ impl Source {
     /// True for a pack the maintainer marks as official.
     pub fn is_official(&self, id: &str) -> bool {
         self.official.iter().any(|o| o == id)
+    }
+
+    /// True for a pack of drives.
+    pub fn is_drive_pack(&self, id: &str) -> bool {
+        self.drive_packs.iter().any(|d| d == id)
     }
 
     /// The id pack `id` has now: the one head.json says it moved to, or `id` itself. Every
@@ -557,18 +565,20 @@ fn catalog_file(generation: &str) -> String {
     format!("catalog-{generation}.sqlite")
 }
 
-/// The catalog `head` names: the copy kept in `cache` when there is one, downloaded and checked
-/// otherwise. For the last visit (`last_visit` says why it stands in) only a kept copy will do.
+/// The catalog `head` names for this FolderSkin, the one with the packs of drives in it when
+/// there is one: the copy kept in `cache` when there is one, downloaded and checked otherwise.
+/// For the last visit (`last_visit` says why it stands in) only a kept copy will do.
 async fn from_head(
     head: &Head,
     bases: Vec<String>,
     cache: Option<&Path>,
     last_visit: Option<LastVisit>,
 ) -> Result<Source, String> {
-    let kept = cache.map(|dir| dir.join(catalog_file(&head.generation)));
+    let (generation, catalog_ref, drive_packs) = head.catalog_with_drives();
+    let kept = cache.map(|dir| dir.join(catalog_file(generation)));
     let opened = match kept.clone().filter(|path| path.is_file()) {
         Some(path) => {
-            let generation = head.generation.clone();
+            let generation = generation.to_string();
             blocking(move || open_kept(&path, &generation)).await.ok()
         }
         None => None,
@@ -578,11 +588,12 @@ async fn from_head(
         None if last_visit.is_some() => {
             return Err("the packs from the last visit aren't kept".into())
         }
-        None => download_catalog(head, &bases, kept).await?,
+        None => download_catalog(generation, catalog_ref, &bases, kept).await?,
     };
-    let mut source = Source::new(catalog, bases, true, head.generation.clone(), last_visit);
+    let mut source = Source::new(catalog, bases, true, generation.to_string(), last_visit);
     source.featured = head.featured_ids();
     source.official = head.official_ids();
+    source.drive_packs = drive_packs;
     source.moved = moves(head);
     if !source.moved.is_empty() {
         // An id a pack still has is that pack's. A move from it is a mistake in moved.json, and
@@ -617,15 +628,17 @@ fn open_kept(path: &Path, generation: &str) -> Result<Catalog, String> {
     Catalog::open(path)
 }
 
-/// Downloads the catalog `head` names from the first of `bases` that has it whole, and keeps it
-/// at `keep` (then opens it there) or in memory. The other generations kept beside it go.
+/// Downloads the catalog of `generation` at `catalog` from the first of `bases` that has it
+/// whole, and keeps it at `keep` (then opens it there) or in memory. The other generations kept
+/// beside it go.
 async fn download_catalog(
-    head: &Head,
+    generation: &str,
+    catalog: &CatalogRef,
     bases: &[String],
     keep: Option<PathBuf>,
 ) -> Result<Catalog, String> {
-    let url = &head.catalog.url;
-    let max = head.catalog.bytes as usize;
+    let url = &catalog.url;
+    let max = catalog.bytes as usize;
     let tries: Vec<String> = if url.starts_with("https://") {
         vec![url.clone()]
     } else {
@@ -636,7 +649,7 @@ async fn download_catalog(
     for from in tries {
         match fetch(&from, max).await {
             Ok(gz) => {
-                let want = head.catalog.clone();
+                let want = catalog.clone();
                 let (gz, whole) = blocking(move || {
                     let whole =
                         gz.len() as u64 == want.bytes && tree::sha256_hex(&gz) == want.sha256;
@@ -664,7 +677,7 @@ async fn download_catalog(
             Some(e) => e.to_string(),
         });
     };
-    let generation = head.generation.clone();
+    let generation = generation.to_string();
     blocking(move || {
         let bytes = tree::gunzip(&gz, tree::MAX_CATALOG_UNPACKED)?;
         if tree::sha256_hex(&bytes)[..16] != generation {
@@ -720,9 +733,16 @@ pub fn from_index(
     let index = Index::parse(bytes)?;
     // Two entries with one id would be a broken index; the first one stands.
     let mut seen = std::collections::HashSet::new();
+    let drive_packs: Vec<String> = index
+        .drive_packs
+        .iter()
+        .filter(|p| pack::is_pack_id(&p.id))
+        .map(|p| p.id.clone())
+        .collect();
     let entries: Vec<_> = index
         .packs
         .into_iter()
+        .chain(index.drive_packs)
         .filter(|p| pack::is_pack_id(&p.id) && seen.insert(p.id.clone()))
         .collect();
     let official: Vec<String> = entries
@@ -756,6 +776,7 @@ pub fn from_index(
         last_visit,
     );
     source.official = official;
+    source.drive_packs = drive_packs;
     Ok(source)
 }
 
@@ -1017,7 +1038,13 @@ mod tests {
         let (github, _, _) = serve_logged(files);
         let bases = vec![format!("{mirror}/v2"), format!("{github}/v2")];
 
-        let catalog = block_on(download_catalog(&head, &bases, None)).unwrap();
+        let catalog = block_on(download_catalog(
+            &head.generation,
+            &head.catalog,
+            &bases,
+            None,
+        ))
+        .unwrap();
         assert_eq!(
             catalog.counts().0,
             2,

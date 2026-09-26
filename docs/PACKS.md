@@ -26,6 +26,12 @@ A pack is added whole or not at all: every picture is downloaded and checked fir
 them are saved in one go, so a dropped connection or a full disk never leaves half a pack in your
 library. Its skins appear in the pack's own order.
 
+A pack marked **Drives** is a pack of drives ([DRIVES.md](DRIVES.md)): its artwork goes on the drive
+you pick, drawn in its shape, and a finished drive is used as it was drawn. While a drive is picked
+the library puts drive skins first, and while a folder is, after the folder skins. Every skin still
+goes on either. FolderSkin 0.1.9 and earlier don't list packs of drives at all
+([How the app reads packs](#how-the-app-reads-packs)).
+
 ## Sharing yours
 
 You share from the app, and FolderSkin sends the pack to its community service at
@@ -53,6 +59,9 @@ A person looks at every pack before anyone else can see it. Once it's approved, 
 on its own, within about 15 minutes ([How approval publishes](#how-approval-publishes) below).
 Many packs can share a name: the one you pick is what everyone sees, and the pack gets an id of
 its own ([Pack ids](#pack-ids)).
+
+A pack is all folders or all drives. The community service publishes packs of folders, so for
+now a pack of drives is saved as a folder (**Save as folder**) and comes in by pull request, below.
 
 Packs also come in by hand, through a pull request to
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) that adds one folder
@@ -207,7 +216,8 @@ packs/night-prints-h4x2qe/
 
 | field | rule |
 |---|---|
-| `version` | `1` |
+| `version` | `1`, or `2` for a pack of drives |
+| `shape` | only in a pack of drives, and then `"drive"` |
 | `name` | 1 to 40 characters |
 | `author` | your GitHub user name |
 | `license` | `CC0-1.0`, `CC-BY-4.0` or `MIT` |
@@ -218,6 +228,21 @@ packs/night-prints-h4x2qe/
 | `skins[].tags` | optional, up to 3 more for that skin |
 
 No other fields are allowed, so a typo such as `"tag"` fails the check instead of being ignored.
+
+A pack of drives says so, after its version:
+
+```json
+{
+  "version": 2,
+  "shape": "drive",
+  "name": "Backup drives",
+  ...
+}
+```
+
+A pack of folders is version 1 and never says `shape`, so every pack published before drives is
+exactly what it was. FolderSkin 0.1.9 and earlier read version 1 alone, and say a version 2 pack
+is for a newer FolderSkin rather than take its drives for folders.
 
 ### Limits
 
@@ -280,6 +305,12 @@ squat ones looked smaller than the tall ones. So the finished folders in a pack 
 - **Artwork is left alone.** FolderSkin wraps it onto its own folder, so it has no shape of its
   own to fix. So is a pack with one finished folder.
 
+The finished drives in a pack of drives share one shape the same way, in the square FolderSkin's
+own drives are drawn in: 856 px on a side, 84 px in from every edge of the 1024 px picture. A drive
+wider than tall is redrawn as wide as the square and centred up and down in it, and a taller one
+as tall as the square and centred across, since a drive is as often drawn from above as standing
+up. Its artwork is left alone, as a folder pack's is.
+
 `packs make` does this for every pack it makes, `community pull` for every pack it pulls, and
 `packs normalize` for the packs already in `packs/`. Doing it twice changes nothing: a folder
 already at its pack's shape, in its place, is never redrawn, and a file that already holds what
@@ -326,6 +357,9 @@ below run from this repository, with folderskin-community checked out beside it:
 cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders --dir ../folderskin-community \
   --name "3D" --tags 3d,glossy --author your-github-name --preview /tmp/3d.png
 ```
+
+`--drives` makes a pack of drives: `pack.json` says so, and its finished drives take one shape in
+the drives' square.
 
 The pack gets an id of its own, its name and six random characters such as `3d-k7q2mx`, and
 that is its folder's name. The report says what it is. The id is never one a folder in `packs/`
@@ -402,7 +436,8 @@ It's off unless asked, and meant for folderskin-community's workflow.
 ## How the app reads packs
 
 Community has a **List** and a **Gallery** view, and **View** on any pack opens it: every skin
-drawn as the folder it makes, with its name, before anything is added. **Refresh** reads the list
+drawn as the folder it makes (a pack of drives' as the drive), with its name, before anything is
+added. **Refresh** reads the list
 again. A pack you added that has changed since shows **Update**, which swaps its skins for the
 new version. Folders keep their icons, and a favourite of a picture both versions share stays a
 favourite.
@@ -414,13 +449,19 @@ favourite.
   `pack.json`, under its first id) and, for a pack `official.json` lists, `"official": true`.
   `"moved"` beside the packs is [moved.json](#movedjson). `folderskin-tools packs index` writes it, together with
   `previews/<id>.png`, a strip of the pack's first four skins drawn as folders. Both are
-  generated on folderskin-community's `main`, so never edit them by hand.
+  generated on folderskin-community's `main`, so never edit them by hand. The packs of drives
+  are listed apart, in `"drive_packs"` beside `"packs"`, so FolderSkin 0.1.9 and earlier, which
+  read `"packs"`, never list a pack they can't add. Their strips show their skins on drives.
 - `v2/`, which `packs catalog` writes, is the same packs as a catalog the app searches on your
   computer. Its `head.json` names the current catalog, lists the `featured` and `official`
   packs, carries `moved`, and lists the mirrors that serve the same tree, such as
   `https://packs.folderskin.app` ([The mirror](#the-mirror)). The app fetches each file from the
   mirrors first and from GitHub when they fail, and checks every one against its hash either way.
-  From 0.1.7 it reads `head.json` itself from `https://packs.folderskin.app` first.
+  From 0.1.7 it reads `head.json` itself from `https://packs.folderskin.app` first. The catalog
+  `head.json` names in `"catalog"` has the packs of folders alone. When there are packs of drives,
+  `"with_drives"` names a second catalog, of every pack, with the ids of the packs of drives, and
+  that is the one the versions that take drives read. A pack of drives is published as version 3,
+  with `"shape": "drive"`, and its thumbnails, drawn on a drive, are in `drive-thumbs/`.
 - The app downloads a pack's pictures only when you add it, four at a time, and shows how many
   have arrived. It checks every one against the limits above and saves nothing unless all of
   them pass. Then it saves them together, so a pack is never half added.
@@ -430,7 +471,9 @@ favourite.
 
 `index.json` and `head.json` gain fields over time, and every version of the app reads the ones
 it knows and passes over the rest. `pack.json` is the opposite: it takes no field the contract
-doesn't name, so nothing may ever be added to it. Anything new about a pack goes in the index.
+doesn't name, so nothing may ever be added to a version of it. Something a pack has to say goes in
+a new version, as `shape` went in version 2, so a FolderSkin that can't read it says so. Anything
+else new about a pack goes in the index.
 
 ## Featured and official packs
 

@@ -53,7 +53,8 @@
     "catalogDamaged": "社区皮肤包目录下载后已损坏。请重试",
     "notPublished": "社区皮肤包还没有发布",
     "listDamaged": "这个皮肤包的列表下载后已损坏。请重试",
-    "listMismatch": "这个皮肤包的列表和目录对不上。试试刷新"
+    "listMismatch": "这个皮肤包的列表和目录对不上。试试刷新",
+    "mixedShapes": "一个皮肤包里只能都是文件夹或都是驱动器。请把驱动器皮肤放进单独的皮肤包"
   },
   "chats": {
     "noDataFolder": "无法在这台电脑上保存聊天：FolderSkin 在这里没有数据文件夹",
@@ -95,7 +96,8 @@
     "keyNotSaved": "无法保存恢复文件：{{reason}}",
     "keyUnreadable": "无法读取这个文件。",
     "serviceUnreachable": "无法连接 FolderSkin 的分享服务。请检查网络后重试。",
-    "serviceUnreadable": "这个版本的 FolderSkin 读不懂分享服务的回应。请更新 FolderSkin 后重试。"
+    "serviceUnreadable": "这个版本的 FolderSkin 读不懂分享服务的回应。请更新 FolderSkin 后重试。",
+    "noDrivePacks": "目前还不能从 FolderSkin 分享驱动器皮肤包。你可以把它保存为文件夹。"
   },
   "ai": {
     "missingKey": "请先添加你的 {{provider}} API 密钥。",
