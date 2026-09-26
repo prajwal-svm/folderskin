@@ -488,8 +488,9 @@ windows-latest and macos-latest.
 
 ## The AI assistant
 
-`crates/folderskin-ai` talks to the AI providers, and only when the user presses Generate. It holds the provider catalogue, the per-provider request bodies and response
-readers (pure functions, unit-tested without a network) and the prompt templates. The app crate
+`crates/folderskin-ai` talks to the AI providers, and only when the user presses Generate. It holds the provider catalogue, the per-provider requests and response
+readers (pure functions, unit-tested without a network, and sent for real to a stand-in server
+on localhost by `tests/providers.rs`) and the prompt templates. The app crate
 keeps the keys, encrypted in a private file rather than in the keychain (`src-tauri/src/keys.rs`
 explains how and why). `crates/folderskin-core/src/matte.rs` turns a keyed render into a clean cutout for the
 providers that cannot return an alpha channel. [AI.md](AI.md) covers the feature itself.

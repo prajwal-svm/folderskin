@@ -19,6 +19,11 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Big runs ask first.** A run over more than 5,000 folders, or over a folder still being
   counted, says how many folders it has found so far, about how much space the icons take, and
   that it goes on in the background.
+- **More models to choose from:** Grok Imagine 2.0, Gemini 3.1 Flash Lite Image, FLUX.2 pro,
+  max, flex and klein 4B, Recraft V4.1 Flash and Stable Image Ultra.
+- **Details says what a picture cost**, as the provider reports it: the price from xAI, Black
+  Forest Labs and Recraft, and the tokens OpenAI and Gemini used, with OpenAI's worked out in
+  dollars.
 
 ### Changed
 
@@ -43,9 +48,34 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Google's picture model is now Gemini 3.1 Flash Image**, with Gemini 3 Pro Image beside it for
   sharper lettering. Google shuts Gemini 2.5 Flash Image down on 2 October 2026, and FolderSkin
   moves you to the new one on its own.
+- **GPT Image 2 takes the place of GPT Image 1**, which OpenAI shuts down on 23 October 2026.
+  FLUX.2 pro takes FLUX 1.1 Pro's place, and Recraft V4.1 takes Recraft V3's. A model you chose
+  that FolderSkin no longer offers moves to the one that took its place, and the skins it made
+  keep its name.
+- **The price under the box is the price you pay.** Every price is the provider's own, at the
+  settings FolderSkin sends, and OpenAI is asked for a set quality (high for Flare, max for
+  Sunburst, medium for GPT Image 2) instead of one it picks.
+- **Each picture is asked for at its shape's own size**, as a setting rather than in the words:
+  exactly 1024 × 960 for the Mac look at OpenAI and Black Forest Labs, and the nearest size or
+  aspect ratio each other provider offers.
+- **Your idea is painted as you wrote it.** Ideogram's Magic Prompt and FLUX.2's prompt rewriting
+  are off. Stability AI and Ideogram get a real negative prompt, and their own style preset
+  where a style has one.
+- **Gemini paints whole folders on green** instead of magenta, which it tends to leave as a dark
+  rim around the folder. The greens painted on the folder itself stay.
 
 ### Fixed
 
+- **Grok works from pictures.** Every whole folder, and every picture of your own, went to xAI in
+  a form it doesn't take.
+- **Ideogram gets the form its reference documents**, and a Recraft whole folder keeps the style
+  you asked for instead of turning into a flat poster illustration.
+- **A picture Gemini didn't make says so**, and offers Try again. FolderSkin still makes one
+  request per press and never tries again by itself.
+- **A picture Stability AI blurred for its filter is no longer saved as a skin**, and its
+  moderation no longer reads as a rejected key.
+- **A provider's own words show when it turns a request down**, such as "xAI Grok said: …", so
+  it is clear what went wrong and easy to report.
 - **Another disk mounted inside a folder** is left out of its subfolders, as links to other
   folders already were.
 - **The folder panel scrolls from the top** in a short window. A long summary used to push the

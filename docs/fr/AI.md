@@ -17,8 +17,8 @@ installé, ou qu'un fournisseur a une clé.
 
 Il n'y a ni serveur FolderSkin, ni proxy, ni clé intégrée, ni offre gratuite à financer. Avec une
 clé, rien ne part tant que vous n'avez pas cliqué sur **Générer**, et ce qui part, c'est votre
-prompt, la taille choisie et l'image de référence si vous en avez choisi une (pour un dossier entier
-sans image de référence, le gabarit de dossier vierge de FolderSkin).
+prompt, la taille qu'exige la forme et l'image de référence si vous en avez choisi une (pour un
+dossier entier sans image de référence, le gabarit de dossier vierge de FolderSkin).
 
 ## Où est stockée la clé
 
@@ -64,29 +64,36 @@ un fond uni à détourer, et cette image devient directement l'icône, sans pass
 Vous renoncez à une géométrie exacte au pixel près, et vous gagnez une illustration qui peut avoir un
 vrai relief et déborder du bord supérieur du dossier.
 
-Quand le modèle sait partir d'une image (OpenAI, Grok, Gemini) et que vous n'en avez pas joint,
-FolderSkin envoie à la place son propre gabarit de dossier vierge : notre dossier, peint en gris
-clair uni, centré sur un magenta uni à la taille demandée (`compositor::blank_template`). Le prompt
-demande au modèle de repeindre exactement ce dossier, en gardant son contour, son onglet, sa bande de
-papier, sa taille et sa position, et de laisser le magenta uni. Le résultat garde la silhouette de
-FolderSkin au lieu du dossier que le modèle aurait inventé. Comme le gabarit est posé sur du magenta,
-une telle génération passe toujours par le détourage décrit ci-dessous, même avec un modèle capable
-de renvoyer de la transparence. Une image de référence que vous joignez vous-même sert
-d'illustration, comme avant.
+Quand le modèle sait partir d'une image (OpenAI, Grok, Gemini et FLUX.2) et que vous n'en avez pas
+joint, FolderSkin envoie à la place son propre gabarit de dossier vierge : notre dossier, peint en
+gris clair uni, centré sur la couleur de détourage unie, le tout en 1024 × 958 pixels
+(`compositor::blank_template`). Le prompt demande au modèle de repeindre exactement ce dossier, en
+gardant son contour, son onglet, sa bande de papier, sa taille et sa position, et de laisser le fond
+uni. Le résultat garde la silhouette de FolderSkin au lieu du dossier que le modèle aurait inventé.
+Comme le gabarit est posé sur la couleur de détourage, une telle génération passe toujours par le
+détourage décrit ci-dessous, même avec un modèle capable de renvoyer de la transparence. Une image de
+référence que vous joignez vous-même sert d'illustration, comme avant.
 
 ## La gestion de la transparence
 
-Les modèles se répartissent en deux groupes, et FolderSkin choisit la bonne méthode selon le modèle
-retenu :
+FolderSkin choisit la bonne méthode selon le modèle retenu :
 
 - **Alpha natif.** La requête demande un fond transparent, et le PNG renvoyé en a déjà un.
-  FolderSkin se contente de rogner la marge transparente.
-- **Pas d'alpha.** Le prompt demande le dossier seul sur un magenta uni, `#FF00FF`. FolderSkin
-  retire ensuite cette couleur, retire le magenta qui a débordé dans le bord adouci (l'étape qui
-  évite qu'un détourage ait l'air entouré d'un halo rose), puis rogne. Le magenta est utilisé parce
-  qu'il n'apparaît presque jamais dans les illustrations de dossiers, et parce qu'un fond manquant se
-  détecte : si la bordure n'est pas magenta, c'est que le modèle a ignoré la consigne, et FolderSkin
-  le signale au lieu d'appliquer une icône ratée.
+  FolderSkin se contente de rogner la marge transparente. GPT Image 2.5 Flare et Sunburst
+  fonctionnent ainsi.
+- **Pas d'alpha.** Le prompt demande le dossier seul sur une couleur de détourage unie : le magenta,
+  `#FF00FF`, chez tous les fournisseurs sauf Google. FolderSkin retire ensuite cette couleur, retire
+  le magenta qui a débordé dans le bord adouci (l'étape qui évite qu'un détourage ait l'air entouré
+  d'un halo rose), puis rogne. Le magenta est utilisé parce qu'il n'apparaît presque jamais dans les
+  illustrations de dossiers, et parce qu'un fond manquant se détecte : si la bordure n'est pas
+  magenta, c'est que le modèle a ignoré la consigne, et FolderSkin le signale au lieu d'appliquer une
+  icône ratée. Recraft reçoit aussi cette couleur en paramètre (`controls.background_color`), si bien
+  que son fond sort uni quel que soit le style demandé.
+- **Du vert pour Gemini.** Sur du magenta, Gemini laisse un liseré sombre et rougeâtre autour du
+  sujet. Son prompt et son gabarit utilisent donc du vert, `#00FF00`, à la place. Or le vert a toute
+  sa place dans les illustrations de dossiers (chaque feuille, chaque prairie). Un fond vert n'est
+  donc retiré que là où il touche le bord de l'image, à partir de la nuance de vert que Gemini a
+  réellement peinte, et les verts peints sur le dossier restent (`matte::cutout_connected`).
 
 Le code de détourage se trouve dans `crates/folderskin-core/src/matte.rs` et est couvert par des
 tests unitaires, y compris le cas d'un sujet vraiment rose sur un fond magenta.
@@ -104,18 +111,71 @@ parties qui font le travail relèvent de la structure plus que du style :
   Sans cette phrase, les modèles produisent à coup sûr des dossiers empilés et des onglets doublés.
 - **Les prompts de gabarit** (`compose_on_template`) accompagnent le gabarit vierge : l'image jointe
   est le dossier exact à repeindre, sa forme et son cadrage restent tels quels, l'idée est peinte sur
-  les panneaux arrière et avant, et le magenta reste uni.
-- **Tous** se terminent par un contrat de sortie strict qui fixe la taille en pixels, l'isolement du
-  sujet, et soit la couleur de détourage, soit le fond transparent.
+  les panneaux arrière et avant, et la couleur de détourage reste unie.
+- **Tous** se terminent par un contrat de sortie strict qui fixe l'isolement du sujet, et soit la
+  couleur de détourage, soit le fond transparent. Ils n'indiquent jamais de taille : un modèle ne
+  peint pas au nombre de pixels qu'il lit, si bien que la taille passe par les paramètres de la
+  requête elle-même (voir plus bas).
 
 Vous pouvez modifier ces prompts types. Ce sont de simples constantes de chaînes Rust, avec des tests
 qui vérifient la présence des phrases essentielles.
 
+## Ce que reçoit chaque fournisseur
+
+Dans `crates/folderskin-ai/src/request.rs`, chaque requête est construite exactement comme le décrit
+la référence de l'API de son fournisseur, et vérifiée avec le SDK du fournisseur lui-même quand il en
+a un. Les tests de ce fichier contrôlent chaque requête champ par champ. Un test de
+`crates/folderskin-ai/tests/providers.rs` envoie en outre chaque requête à un serveur factice qui
+tourne sur votre ordinateur et répond comme l'indique la documentation du fournisseur. La méthode,
+l'adresse, l'en-tête qui porte la clé, le type de contenu et chaque champ sont ainsi vérifiés tels
+qu'ils partent sur le réseau.
+
+Les options passent par les paramètres propres à chaque fournisseur, jamais par le texte du prompt.
+La taille est celle de la forme (1024 × 958 pour l'illustration du style Mac). Elle est envoyée
+telle quelle quand un fournisseur accepte n'importe quelle taille, et sinon sous la forme de la
+taille ou des proportions les plus proches qu'il propose :
+
+| Fournisseur | Requête | Taille | Autres paramètres |
+|---|---|---|---|
+| OpenAI | du JSON vers `images/generations`, ou un formulaire vers `images/edits` avec chaque image en `image[]` | exacte, sur une grille de 16 pixels (1024 × 960) | `quality` : high pour Flare, max pour Sunburst, medium pour GPT Image 2, pour que le prix soit connu d'avance |
+| xAI Grok | du JSON uniquement, les images étant incluses sous forme d'URL de données (`image`, ou `images` s'il y en a plusieurs) | l'`aspect_ratio` le plus proche, ou le cadre du gabarit lui-même | |
+| Google Gemini | du JSON vers `generateContent` | `generationConfig.imageConfig` : 1K, avec l'`aspectRatio` le plus proche ou le cadre du gabarit | `responseModalities: ["IMAGE"]` |
+| Black Forest Labs | du JSON, avec les images en `input_image`, `input_image_2` et ainsi de suite | exacte, dans la limite d'un mégapixel (FLUX.2 facture chaque mégapixel entamé) | réécriture du prompt désactivée (`disable_pup`, ou `prompt_upsampling: false` sur flex) |
+| Recraft | du JSON | la taille la plus proche dans la liste de V4.1 | une sortie en PNG, et la couleur de détourage en `controls.background_color` |
+| Stability AI | un formulaire | l'`aspect_ratio` le plus proche | un prompt négatif, et un préréglage de style quand le style en a un |
+| Ideogram | un formulaire | la plus proche des résolutions de 3.0 (1024 × 960) | Magic Prompt désactivé, un prompt négatif, et un type ou un préréglage de style |
+
+Le prompt négatif écarte le texte (sauf si vous en demandez), les filigranes et les signatures, ainsi
+que tout ce que le style choisi a tendance à ajouter. OpenAI, Gemini et Grok n'ont pas de prompt
+négatif : leur prompt dit donc la même chose en toutes lettres.
+
+## Modèles retirés
+
+Un choix enregistré à l'époque où un modèle était proposé passe au modèle qui l'a remplacé, et un
+habillage garde le nom du modèle qui l'a créé.
+
+| Ancien modèle | Nouveau modèle | Raison |
+|---|---|---|
+| OpenAI GPT Image 1 | GPT Image 2 | OpenAI l'arrête le 23 octobre 2026 |
+| Gemini 2.5 Flash Image | Gemini 3.1 Flash Image | Google l'arrête le 2 octobre 2026 |
+| FLUX 1.1 Pro | FLUX.2 pro | la génération précédente, qui n'acceptait pas d'images |
+| Recraft V3 | Recraft V4.1 | la génération précédente, dont les prompts s'arrêtent à 1 000 caractères, moins que n'en occupent les seules instructions de FolderSkin |
+
+Ideogram 4.0 n'est pas encore proposé : il réécrit tout prompt rédigé en texte libre, alors que
+FolderSkin garde l'idée exactement telle que vous l'avez écrite.
+
 ## Coût
 
 Chaque requête est facturée sur votre propre compte par votre fournisseur. La vue Générer affiche le
-prix approximatif du modèle avant que vous cliquiez sur le bouton. FolderSkin fait exactement une
-requête par clic, et ne réessaie jamais de lui-même.
+prix approximatif du modèle avant que vous cliquiez sur le bouton, d'après la page de tarifs du
+fournisseur pour les paramètres qu'envoie FolderSkin. Un dossier entier coûte un peu plus cher chez
+les fournisseurs qui facturent aussi les images qu'on leur envoie (xAI, Black Forest Labs). Sous
+chaque image, Détails indique ce que la requête a coûté selon le fournisseur (xAI, Black Forest Labs,
+Recraft), ou ce qu'elle a consommé (OpenAI, Gemini).
+
+FolderSkin fait exactement une requête par clic, et ne réessaie jamais de lui-même. C'est aussi vrai
+quand un fournisseur termine sans image, comme Gemini le fait parfois (`NO_IMAGE`) : le chat le
+signale et propose **Réessayer**, et seul votre clic renvoie la requête.
 
 ## Compilation et compilation croisée
 
@@ -132,8 +192,11 @@ workspace se vérifie en compilation croisée sans cela.
 | Message | Ce qui s'est passé |
 |---|---|
 | « add your … API key first » | Aucune clé enregistrée pour ce fournisseur |
-| « that key was rejected by … » | Le fournisseur a répondu 401 ou 403 |
+| « that key was rejected by … » | Le fournisseur a refusé la clé |
 | « … is rate limiting you right now » | 429 : attendez, puis réessayez |
+| « … finished without painting a picture » | Le fournisseur a répondu sans image et sans dire pourquoi (`NO_IMAGE` chez Gemini) : réessayez ou reformulez l'idée |
+| « … declined that prompt: its filter blocked the picture » | Le filtre de sécurité du fournisseur a bloqué le prompt ou l'image (l'image floutée de Stability ou le contrôle de sécurité d'Ideogram, par exemple) : reformulez le prompt |
+| « … said: … (error 400) » | Le message du fournisseur, affiché tel quel. À signaler s'il cite un champ envoyé par FolderSkin |
 | « the model drew a scene instead of a folder on a plain backdrop » | Mode dossier entier sans fond détourable : réessayez ou passez à Juste l'image |
 | « the provider returned something that is not an image » | Une réponse mal formée, ou qui n'est pas une image |
 
