@@ -14,6 +14,12 @@ export default async function warm(config: FullConfig) {
     await page.addInitScript(() => localStorage.setItem("folderskin.mock.onboarded", "1"));
     await page.goto("/?yours=8", { timeout: 120_000 });
     await page.getByRole("button", { name: /all skins/i }).first().waitFor();
+    // "Choose subfolders", which loads with its dialog.
+    await page.getByRole("button", { name: /^choose a folder from/ }).click();
+    await page.getByRole("switch", { name: /Include subfolders/ }).click();
+    await page.getByRole("button", { name: "Choose subfolders" }).click();
+    await page.getByRole("tree").getByRole("treeitem").first().waitFor();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: /design your own/i }).first().click();
     const start = page.getByRole("dialog", { name: "Start a new design" });
     await start.getByRole("button", { name: /^Plain$/ }).click();

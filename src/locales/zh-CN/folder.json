@@ -77,6 +77,8 @@
     "reverting": "正在还原",
     "includeSubfolders": "包括子文件夹",
     "inside_other": "其中有 {{count}} 个文件夹",
+    "insideChosen_other": "{{total}} 个文件夹中选了 {{count}} 个",
+    "choose": "选择",
     "stopping": "正在停止",
     "doneOf": "{{done}}/{{total}}",
     "startingWith": "从 {{name}} 开始",
@@ -110,6 +112,20 @@
     },
     "pickHintChat": "预览聊天里的图片"
   },
+  "choose": {
+    "title": "选择子文件夹",
+    "sub": "勾选 {{name}} 里要包括的文件夹。",
+    "treeLabel": "{{name}} 里的文件夹",
+    "pathLabel": "文件夹路径",
+    "loading": "正在读取里面的文件夹",
+    "failed": "没能读取里面的文件夹：{{reason}}",
+    "tryAgain": "重试",
+    "empty": "里面没有文件夹",
+    "count_other": "已选 {{count}} 个，共 {{total}} 个文件夹",
+    "all": "全选",
+    "none": "全不选",
+    "done": "完成"
+  },
   "toast": {
     "defaultBack": "{{name}} 已恢复默认图标"
   },
@@ -128,8 +144,11 @@
     "thisSkin": "这款皮肤",
     "removeTitle_other": "移除 {{count}} 个文件夹的自定义图标？",
     "applyText_other": "{{folder}} 及其中的 {{count}} 个文件夹都会换上这款皮肤，替换它们现有的图标。每个文件夹都会保存一份自己的图标副本。点“还原”可以把它们全部撤掉。",
+    "applyTextChosen_other": "{{folder}} 及你在其中选的 {{count}} 个文件夹都会换上这款皮肤，替换它们现有的图标。每个文件夹都会保存一份自己的图标副本。点“还原”可以把它们全部撤掉。",
     "applyTextSized_other": "{{folder}} 及其中的 {{count}} 个文件夹都会换上这款皮肤，替换它们现有的图标。每个文件夹都会保存一份自己的图标副本，每份约 {{size}}，总共约 {{total}}。点“还原”可以把它们全部撤掉。",
+    "applyTextChosenSized_other": "{{folder}} 及你在其中选的 {{count}} 个文件夹都会换上这款皮肤，替换它们现有的图标。每个文件夹都会保存一份自己的图标副本，每份约 {{size}}，总共约 {{total}}。点“还原”可以把它们全部撤掉。",
     "removeText": "{{folder}} 及其中的每个文件夹都会恢复成默认的文件夹图标，包括在 FolderSkin 之外设置的图标。没有自定义图标的文件夹保持不变。",
+    "removeTextChosen_other": "{{folder}} 及你在其中选的 {{count}} 个文件夹都会恢复成默认的文件夹图标，包括在 FolderSkin 之外设置的图标。没有自定义图标的文件夹保持不变。",
     "removeAction": "移除图标"
   }
 }

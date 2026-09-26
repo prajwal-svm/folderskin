@@ -109,6 +109,10 @@
     "inside_one": "{{count}} carpeta dentro",
     "inside_many": "{{count}} de carpetas dentro",
     "inside_other": "{{count}} carpetas dentro",
+    "insideChosen_one": "{{count}} de {{total}} carpetas dentro",
+    "insideChosen_many": "{{count}} de {{total}} carpetas dentro",
+    "insideChosen_other": "{{count}} de {{total}} carpetas dentro",
+    "choose": "Elegir",
     "stopping": "Deteniendo",
     "doneOf": "{{done}} de {{total}}",
     "startingWith": "Empezando por {{name}}",
@@ -148,6 +152,22 @@
     },
     "pickHintChat": "Previsualiza una imagen del chat"
   },
+  "choose": {
+    "title": "Elegir subcarpetas",
+    "sub": "Marca las subcarpetas de {{name}} que quieras incluir.",
+    "treeLabel": "carpetas dentro de {{name}}",
+    "pathLabel": "ruta de la carpeta",
+    "loading": "Leyendo las subcarpetas",
+    "failed": "No se pudieron leer las subcarpetas: {{reason}}",
+    "tryAgain": "Reintentar",
+    "empty": "No hay subcarpetas",
+    "count_one": "Carpetas elegidas: {{count}} de {{total}}",
+    "count_many": "Carpetas elegidas: {{count}} de {{total}}",
+    "count_other": "Carpetas elegidas: {{count}} de {{total}}",
+    "all": "Seleccionar todo",
+    "none": "Deseleccionar todo",
+    "done": "Listo"
+  },
   "toast": {
     "defaultBack": "{{name}} vuelve a tener su icono predeterminado"
   },
@@ -172,10 +192,19 @@
     "applyText_one": "{{folder}} y la carpeta que contiene reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono. Restaurar se los vuelve a quitar a todas.",
     "applyText_many": "{{folder}} y las {{count}} de carpetas que contiene reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono. Restaurar se los vuelve a quitar a todas.",
     "applyText_other": "{{folder}} y las {{count}} carpetas que contiene reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono. Restaurar se los vuelve a quitar a todas.",
+    "applyTextChosen_one": "{{folder}} y la carpeta que elegiste dentro reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono. Restaurar se los vuelve a quitar a todas.",
+    "applyTextChosen_many": "{{folder}} y las {{count}} de carpetas que elegiste dentro reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono. Restaurar se los vuelve a quitar a todas.",
+    "applyTextChosen_other": "{{folder}} y las {{count}} carpetas que elegiste dentro reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono. Restaurar se los vuelve a quitar a todas.",
     "applyTextSized_one": "{{folder}} y la carpeta que contiene reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono, de unos {{size}}, así que unos {{total}} en total. Restaurar se los vuelve a quitar a todas.",
     "applyTextSized_many": "{{folder}} y las {{count}} de carpetas que contiene reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono, de unos {{size}}, así que unos {{total}} en total. Restaurar se los vuelve a quitar a todas.",
     "applyTextSized_other": "{{folder}} y las {{count}} carpetas que contiene reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono, de unos {{size}}, así que unos {{total}} en total. Restaurar se los vuelve a quitar a todas.",
+    "applyTextChosenSized_one": "{{folder}} y la carpeta que elegiste dentro reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono, de unos {{size}}, así que unos {{total}} en total. Restaurar se los vuelve a quitar a todas.",
+    "applyTextChosenSized_many": "{{folder}} y las {{count}} de carpetas que elegiste dentro reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono, de unos {{size}}, así que unos {{total}} en total. Restaurar se los vuelve a quitar a todas.",
+    "applyTextChosenSized_other": "{{folder}} y las {{count}} carpetas que elegiste dentro reciben este aspecto, que reemplaza el icono que tengan ahora. Cada carpeta guarda su propia copia del icono, de unos {{size}}, así que unos {{total}} en total. Restaurar se los vuelve a quitar a todas.",
     "removeText": "{{folder}} y todas las carpetas que contiene vuelven al icono de carpeta predeterminado, incluidos los iconos que recibieron fuera de FolderSkin. Las carpetas sin icono propio se quedan como están.",
+    "removeTextChosen_one": "{{folder}} y la carpeta que elegiste dentro vuelven al icono de carpeta predeterminado, incluidos los iconos que recibieron fuera de FolderSkin. Las carpetas sin icono propio se quedan como están.",
+    "removeTextChosen_many": "{{folder}} y las {{count}} de carpetas que elegiste dentro vuelven al icono de carpeta predeterminado, incluidos los iconos que recibieron fuera de FolderSkin. Las carpetas sin icono propio se quedan como están.",
+    "removeTextChosen_other": "{{folder}} y las {{count}} carpetas que elegiste dentro vuelven al icono de carpeta predeterminado, incluidos los iconos que recibieron fuera de FolderSkin. Las carpetas sin icono propio se quedan como están.",
     "removeAction": "Quitar los iconos"
   }
 }

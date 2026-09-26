@@ -258,6 +258,7 @@ export const CaseUpperIcon = icon(
 
 export const ChevronUpIcon = icon(<path d="m18 15-6-6-6 6" />, "ChevronUpIcon");
 export const ChevronDownIcon = icon(<path d="m6 9 6 6 6-6" />, "ChevronDownIcon");
+export const ChevronRightIcon = icon(<path d="m9 18 6-6-6-6" />, "ChevronRightIcon");
 
 export const StickerIcon = icon(
   <>

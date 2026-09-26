@@ -27,7 +27,12 @@ export type TreeRunResult = {
   stopped: boolean;
 };
 
-export type TreeRun = TreeRunResult & { kind: "apply" | "revert" };
+/**
+ * A run, and which way it went. A revert that left alone the folders with no icon of their own
+ * (`leavesPlain`), as taking the icons off a tree does, leaves them alone again when it's carried
+ * on; one that undid an apply takes off exactly what that put on.
+ */
+export type TreeRun = TreeRunResult & { kind: "apply" | "revert"; leavesPlain?: boolean };
 
 /** How far a run has got: `done` of `total`, the last folder it finished. */
 export type TreeProgress = { done: number; total: number; name: string };
@@ -60,6 +65,7 @@ export function mergeRuns(prev: TreeRun, next: TreeRun): TreeRun {
   const retried = new Set([...next.changed, ...next.failed.map((f) => f.path), ...next.remaining]);
   return {
     kind: next.kind,
+    leavesPlain: next.leavesPlain,
     total: prev.total,
     changed,
     failed: [...prev.failed.filter((f) => !retried.has(f.path)), ...next.failed],

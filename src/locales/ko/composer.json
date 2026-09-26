@@ -414,6 +414,7 @@
   "changed": "저장한 뒤 바뀌었어요",
   "savedInYours": "내 스킨에 저장됨",
   "includeInside_other": "안에 있는 폴더 {{count}}개 포함",
+  "includeSomeInside_other": "안에 있는 폴더 {{total}}개 중 {{count}}개 포함",
   "applying": "적용하는 중 ({{done}}/{{total}})",
   "replacePicture": "이미지 바꾸기",
   "errors": {

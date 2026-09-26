@@ -1,0 +1,367 @@
+/*
+ * "Choose folders" (SubfolderChooser.tsx): the folders inside the chosen one as Finder's column
+ * view, five columns across, a path bar under them and a box on every folder. It comes with the
+ * dialog's own code, the first time the dialog opens.
+ *
+ * Selection is a tint, never an outline: the highlighted folder in the column the keys move in
+ * is accent-soft while the list has the keyboard, and the folders on the way to it are grey, as
+ * Finder greys a selection it isn't working in. A folder left out has a faded icon and name, so a
+ * dash can be read at a glance: a bright folder with a dash takes part itself, a faded one doesn't.
+ */
+
+/* One size whatever is open in it, so going deeper never makes the dialog jump. */
+.modal-chooser {
+  width: min(1080px, 100%);
+  height: min(620px, calc(100vh - 48px));
+  max-height: min(620px, calc(100vh - 48px));
+}
+
+.modal-chooser .modal-head {
+  padding-bottom: 14px;
+}
+
+/* The columns run edge to edge, with nothing faded under the heading: they scroll on their own. */
+.modal-chooser .modal-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.fsc {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- the columns ---------- */
+
+.fsc-strip {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 1px solid var(--line);
+  background: var(--island);
+}
+
+/* Five across, however wide the dialog is, and never too narrow for a name. */
+.fsc-col {
+  position: relative;
+  flex: 0 0 20%;
+  min-width: 180px;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Room for the scroll bar whether it's needed or not, so every column's rows are as wide. */
+  scrollbar-gutter: stable;
+  border-right: 1px solid var(--line);
+}
+
+/* Its line is the dialog's edge once the columns fill the width: hidden past it, not doubled. */
+.fsc-col:last-child {
+  margin-right: -1px;
+}
+
+.fsc-space {
+  position: relative;
+}
+
+.fsc-row {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  right: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 6px;
+  border-radius: 7px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.fsc-row:hover {
+  background: var(--nav-hover);
+}
+
+/* The folders on the way to the highlighted one, and the highlighted one while the keyboard is
+   elsewhere: grey. */
+.fsc-row.is-trail,
+.fsc-row.is-current {
+  background: var(--well-2);
+}
+
+.fsc-strip:focus .fsc-row.is-current {
+  background: var(--accent-soft);
+}
+
+/* The box's own target is the height of the row, so it's easy to hit without moving. */
+.fsc-hit {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.fsc-box {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 32%, transparent);
+  border-radius: 4.5px;
+  background: var(--island);
+  color: var(--on-accent);
+  transition:
+    background-color var(--t-fast) ease,
+    border-color var(--t-fast) ease;
+}
+
+.fsc-box svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fsc-box.is-on,
+.fsc-box.is-mixed {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.fsc-hit:hover .fsc-box.is-off {
+  border-color: var(--accent);
+}
+
+.fsc-hit:hover .fsc-box.is-on,
+.fsc-hit:hover .fsc-box.is-mixed {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.fsc-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  color: var(--muted);
+  transition:
+    opacity var(--t-fast) ease,
+    filter var(--t-fast) ease;
+}
+
+.fsc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+  transition: color var(--t-fast) ease;
+}
+
+/* A folder that won't take part itself. */
+.fsc-row.is-out .fsc-icon,
+.fsc-leaf-icon.is-out {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.fsc-row.is-out .fsc-name {
+  color: var(--muted);
+}
+
+.fsc-chev {
+  flex: none;
+  display: inline-flex;
+  color: var(--hint);
+}
+
+.fsc-row.is-trail .fsc-chev,
+.fsc-row.is-current .fsc-chev {
+  color: var(--muted);
+}
+
+.fsc-strip:focus .fsc-row.is-current .fsc-chev {
+  color: var(--accent-ink);
+}
+
+/* After a folder with none inside it: the folder itself, large, as Finder previews a file. */
+.fsc-leaf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 44px 16px 16px;
+  text-align: center;
+}
+
+.fsc-leaf-icon {
+  width: 76px;
+  height: 76px;
+  margin-bottom: 8px;
+  object-fit: contain;
+  display: grid;
+  place-items: center;
+  color: var(--hint);
+}
+
+.fsc-leaf-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 750;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.fsc-leaf-note {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Reading the folders, reading them failed, or there are none. */
+.fsc-status {
+  margin: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 24px;
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fsc-status.is-failed {
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+  text-align: center;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+/* ---------- the path bar ---------- */
+
+.fsc-path {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+
+/* As wide as the bar, so the share the last step may take is a share of the bar. */
+.fsc-path-list {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fsc-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Where the highlighted folder is gives way last. */
+.fsc-step.is-here {
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+.fsc-step-sep {
+  flex: none;
+  display: inline-flex;
+  margin: 0 1px;
+  color: var(--hint);
+}
+
+.fsc-step-gap {
+  flex: none;
+  padding: 0 5px;
+  font-weight: 700;
+  color: var(--hint);
+}
+
+.fsc-step-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 180px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-weight: 650;
+  font-size: 12.5px;
+  color: var(--muted);
+  transition:
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+}
+
+.fsc-step.is-here .fsc-step-btn {
+  max-width: 100%;
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.fsc-step-btn:hover,
+.fsc-step-btn:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.fsc-step-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.fsc-step-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- the footer ---------- */
+
+.fsc-count {
+  margin-right: 4px;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.fsc-foot-gap {
+  flex: 1;
+}

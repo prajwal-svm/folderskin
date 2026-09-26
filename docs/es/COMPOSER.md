@@ -96,6 +96,9 @@ pregunta antes si son más de diez. El botón muestra cuánto lleva el proceso, 
 y un aviso dice cómo terminó: un proceso detenido ofrece **Continuar**, y uno en el que no se
 pudieron cambiar algunas carpetas ofrece **Ver cuáles**, que abre el resumen del panel de la carpeta.
 
+Si elegiste algunas subcarpetas con **Elegir** en el panel de la carpeta, solo se incluyen esas, y
+el interruptor lo indica: **Incluir 22 de 28 subcarpetas**.
+
 | Teclas | |
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Deshacer, rehacer |

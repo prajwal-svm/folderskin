@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
 import { osOf, type Os } from "../lib/platform";
 import { t as tNow, useT } from "../i18n";
 import { applyLabel, runSummary, tooMany } from "../lib/tree";
-import type { State } from "../state/dropzone";
+import { insideCount, type State, type SubfolderChoice } from "../state/dropzone";
 import { FolderGhost } from "./FolderGhost";
 import { LookSwitch } from "./LookSwitch";
 import { useLook } from "../state/look";
@@ -15,10 +15,14 @@ import { FolderOpenIcon } from "./icons/folder-open";
 import { LoaderIcon } from "./icons/loader";
 import { RotateCcwIcon } from "./icons/rotate-ccw";
 import { BadgeAlertIcon } from "./icons/badge-alert";
-import { XIcon } from "./icons/composer";
+import { ChevronRightIcon, XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
 import { clip } from "../lib/names";
 import { explain } from "../lib/sentences";
+
+/** "Choose subfolders" and its column view, loaded the first time they're wanted. */
+const loadChooser = () => import("./SubfolderChooser");
+const SubfolderChooser = lazy(() => loadChooser().then((m) => ({ default: m.SubfolderChooser })));
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
 
@@ -51,6 +55,7 @@ export function FolderStage({
   onReveal,
   stopping,
   onIncludeSubfolders,
+  onChooseSubfolders,
   onStop,
   onCarryOn,
   onTryAgain,
@@ -78,6 +83,8 @@ export function FolderStage({
   /** Stop was pressed and the run is finishing the folder it's on. */
   stopping: boolean;
   onIncludeSubfolders: (on: boolean) => void;
+  /** Done in "Choose subfolders": the ones ticked, or null for every one of the `total` inside. */
+  onChooseSubfolders: (chosen: SubfolderChoice | null, total: number) => void;
   onStop: () => void;
   /** Carries on with the folders a stopped run didn't reach. */
   onCarryOn: () => void;
@@ -119,6 +126,10 @@ export function FolderStage({
     const t = window.setTimeout(() => setShaking(false), 440);
     return () => window.clearTimeout(t);
   }, [error]);
+
+  // "Choose subfolders" is open. Another folder closes it: what it shows is no longer there.
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => setChoosing(false), [folder?.path]);
 
   const tree = state.includeSubfolders || state.run !== null;
   const cls = [
@@ -184,7 +195,22 @@ export function FolderStage({
           </button>
         )}
 
-        {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} />}
+        {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} onChoose={() => setChoosing(true)} />}
+
+        {choosing && folder && (
+          <Suspense fallback={null}>
+            <SubfolderChooser
+              folder={folder}
+              chosen={state.chosen}
+              folderIcon={defaultThumb}
+              onCancel={() => setChoosing(false)}
+              onDone={(chosen, total) => {
+                setChoosing(false);
+                onChooseSubfolders(chosen, total);
+              }}
+            />
+          </Suspense>
+        )}
 
         {state.run && !busy && !drag && (
           <RunResult state={state} skinName={skin?.name ?? null} onCarryOn={onCarryOn} onTryAgain={onTryAgain} onDismiss={onDismissRun} />
@@ -331,7 +357,7 @@ function StageActions({
   if (drag || phase === "idle") return null;
 
   const noFocusSteal = (e: MouseEvent) => e.preventDefault();
-  const inside = state.includeSubfolders && state.subfolders ? state.subfolders.count : 0;
+  const inside = insideCount(state);
   // An apply over the tree has run: finished (some may have failed), or stopped, which its
   // summary offers to carry on. Either way what's next is showing or reverting it.
   const treeDone = state.run?.kind === "apply";
@@ -452,34 +478,69 @@ function DoneActions({
 }
 
 /**
- * "Include subfolders": the folder and every folder inside it get the skin, or lose their icons,
+ * "Include subfolders": the folder and the folders inside it get the skin, or lose their icons,
  * together. It shows only for a folder with folders inside, says how many, and can't be used on
- * more than a run can take.
+ * more than a run can take. Switched on, "Choose" at the end of its second line picks which of
+ * them go too: every one until some are chosen, and then it says how many of them.
  */
-function SubfolderSwitch({ state, onChange }: { state: State; onChange: (on: boolean) => void }) {
+function SubfolderSwitch({ state, onChange, onChoose }: { state: State; onChange: (on: boolean) => void; onChoose: () => void }) {
   const t = useT();
   const s = state.subfolders;
   if (!s || s.count === 0 || !state.folder) return null;
   const on = state.includeSubfolders;
   const busy = state.phase === "applying" || state.phase === "reverting";
+  const chosen = on ? state.chosen : null;
+  const keep = (e: MouseEvent) => e.preventDefault();
+  // "Choose" sits at the end of the line under the title, so switching on changes nothing's
+  // height and nothing moves under the pointer that pressed it.
+  const choose = (
+    <>
+      {t("folder.stage.choose")}
+      <ChevronRightIcon size={13} />
+    </>
+  );
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={busy || s.more}
-      className={on ? "stage-scope is-on" : "stage-scope"}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => onChange(!on)}
-    >
-      <span className="stage-scope-text">
-        <span className="stage-scope-title">{t("folder.stage.includeSubfolders")}</span>
-        <span className="stage-scope-sub">{s.more ? tooMany("folders") : t("folder.stage.inside", { count: s.count })}</span>
-      </span>
-      <span className={on ? "switch is-on" : "switch"} aria-hidden="true">
-        <span className="knob" />
-      </span>
-    </button>
+    <div className={on ? "stage-scope is-on" : "stage-scope"}>
+      <button type="button" role="switch" aria-checked={on} disabled={busy || s.more} className="stage-scope-switch" onMouseDown={keep} onClick={() => onChange(!on)}>
+        <span className="stage-scope-head">
+          <span className="stage-scope-title">{t("folder.stage.includeSubfolders")}</span>
+          <span className={on ? "switch is-on" : "switch"} aria-hidden="true">
+            <span className="knob" />
+          </span>
+        </span>
+        <span className="stage-scope-line">
+          <span className="stage-scope-sub">
+            {s.more
+              ? tooMany("folders")
+              : chosen
+                ? t("folder.stage.insideChosen", { count: chosen.paths.length, total: chosen.total })
+                : t("folder.stage.inside", { count: s.count })}
+          </span>
+          {/* The room "Choose" takes at the end of this line, whatever the language makes of it. */}
+          {on && (
+            <span className="stage-scope-room" aria-hidden="true">
+              {choose}
+            </span>
+          )}
+        </span>
+      </button>
+      {on && (
+        <button
+          type="button"
+          className="stage-scope-choose"
+          disabled={busy}
+          aria-haspopup="dialog"
+          aria-label={t("folder.choose.title")}
+          onMouseDown={keep}
+          // The dialog's code is on its way before the click lands.
+          onPointerEnter={() => void loadChooser()}
+          onFocus={() => void loadChooser()}
+          onClick={onChoose}
+        >
+          {choose}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -581,7 +642,7 @@ function RunResult({
 /** One quiet line under the buttons: what just happened or what happens next. */
 function statusLine(state: State, skin: Skin | null, os: Os, customIcon: boolean, stopping: boolean): string {
   const t = tNow;
-  const inside = state.includeSubfolders && state.subfolders ? state.subfolders.count : 0;
+  const inside = insideCount(state);
   if (state.progress && (state.phase === "applying" || state.phase === "reverting")) {
     if (stopping) return t("folder.stage.status.doneStay");
     return state.phase === "applying" ? t(`folder.stage.status.catchesUp.${os}`) : t("folder.stage.status.puttingIconsBack");

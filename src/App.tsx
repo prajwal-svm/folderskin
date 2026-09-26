@@ -14,7 +14,7 @@ import { applyLabel, CONFIRM_ABOVE, formatBytes, mergeRuns, runToast, type TreeP
 import { throttle } from "./lib/throttle";
 import { community } from "./lib/communityStore";
 import { watchInstallLinks } from "./lib/installLinks";
-import { initialState, reduce } from "./state/dropzone";
+import { initialState, insideCount, reduce, treeOnly } from "./state/dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { flushChats } from "./state/chatStore";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
@@ -92,8 +92,10 @@ const Studio = lazy(() => import("./components/studio/Studio").then((m) => ({ de
 type TreeAsk = {
   kind: "apply" | "remove";
   folderName: string;
-  /** Folders inside the chosen one. */
+  /** Folders inside the chosen one that the run takes. */
   inside: number;
+  /** They're the ones chosen in "Choose subfolders", not every folder inside. */
+  chosen: boolean;
   skin: Pick<Skin, "id" | "name" | "thumbnail"> | null;
   /** Disk space one folder's copy of the icon takes, once known. */
   bytes: number | null;
@@ -512,17 +514,23 @@ export default function App() {
     [refreshFolderIcon],
   );
 
-  /** Puts the default icon back on `only` those folders, or on every folder in the tree with an icon of its own. */
+  /**
+   * Puts the default icon back on `only` those folders, or on every folder in the tree with an icon
+   * of its own. `leavePlain` leaves alone the folders in `only` with no icon of their own, as the
+   * whole tree does. Undoing an apply leaves nothing alone: it takes off exactly what it put on.
+   */
   const revertTree = useCallback(
-    async (only: string[] | null, prev?: TreeRun): Promise<TreeRun | null> => {
+    async (only: string[] | null, prev?: TreeRun, leavePlain?: boolean): Promise<TreeRun | null> => {
       const folder = latestState.current.folder;
       if (!folder) return null;
       setStopping(false);
       dispatch({ type: "revertStarted" });
       const progress = throttle<TreeProgress>((p) => dispatch({ type: "treeProgress", progress: p }));
+      const leavesPlain = leavePlain ?? only === null;
       try {
-        const result = await api.revertSkinTree(folder.path, only, progress.push);
-        const run: TreeRun = prev ? mergeRuns(prev, { ...result, kind: "revert" }) : { ...result, kind: "revert" };
+        const result = await api.revertSkinTree(folder.path, only, progress.push, leavesPlain);
+        const next: TreeRun = { ...result, kind: "revert", leavesPlain };
+        const run: TreeRun = prev ? mergeRuns(prev, next) : next;
         dispatch({ type: "revertSucceeded", run });
         refreshFolderIcon(folder.path);
         return run;
@@ -538,13 +546,15 @@ export default function App() {
   );
 
   const apply = useCallback(async () => {
-    const { folder, skinId, includeSubfolders, subfolders } = latestState.current;
+    const s = latestState.current;
+    const { folder, skinId } = s;
     if (!folder || !skinId) return;
-    const inside = includeSubfolders && subfolders ? subfolders.count : 0;
+    const inside = insideCount(s);
     if (inside > 0) {
-      const skin = latestSkins.current.find((s) => s.id === skinId) ?? null;
-      if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, skin }))) return;
-      await applyTree(skinId);
+      const skin = latestSkins.current.find((k) => k.id === skinId) ?? null;
+      const chosen = s.chosen !== null;
+      if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, chosen, skin }))) return;
+      await applyTree(skinId, treeOnly(s) ?? undefined);
       return;
     }
     dispatch({ type: "applyStarted" });
@@ -585,7 +595,7 @@ export default function App() {
     const { run, skinId, folder } = latestState.current;
     if (!run?.stopped || run.remaining.length === 0 || !folder) return;
     if (run.kind === "revert") {
-      void revertTree(run.remaining, run);
+      void revertTree(run.remaining, run, run.leavesPlain);
       return;
     }
     if (!skinId) return;
@@ -607,7 +617,7 @@ export default function App() {
     if (!run || run.failed.length === 0) return;
     const paths = run.failed.map((f) => f.path);
     if (run.kind === "apply" && skinId) void applyTree(skinId, paths, run);
-    else if (run.kind === "revert") void revertTree(paths, run);
+    else if (run.kind === "revert") void revertTree(paths, run, run.leavesPlain);
   }, [applyTree, revertTree]);
 
   const stopRun = useCallback(() => {
@@ -619,13 +629,15 @@ export default function App() {
   // they are, for a skin it just saved. Resolves to what happened, for the composer to say.
   const applyFromComposer = useCallback(
     async (skin: Skin): Promise<ApplyOutcome> => {
-      const { folder, phase, includeSubfolders, subfolders } = latestState.current;
+      const s = latestState.current;
+      const { folder, phase } = s;
       if (!folder || phase === "applying" || phase === "reverting") return { ok: false };
       dispatch({ type: "skinSelected", skinId: skin.id });
-      const inside = includeSubfolders && subfolders ? subfolders.count : 0;
+      const inside = insideCount(s);
       if (inside > 0) {
-        if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, skin }))) return { ok: false };
-        const run = await applyTree(skin.id);
+        const chosen = s.chosen !== null;
+        if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, chosen, skin }))) return { ok: false };
+        const run = await applyTree(skin.id, treeOnly(s) ?? undefined);
         return "error" in run ? { ok: false, message: run.error, tone: "danger" } : treeOutcome(run, folder.name, skin.name);
       }
       dispatch({ type: "applyStarted" });
@@ -678,16 +690,21 @@ export default function App() {
   }, [view]);
 
   const revert = useCallback(async () => {
-    const { folder, includeSubfolders, subfolders, run, phase } = latestState.current;
+    const s = latestState.current;
+    const { folder, run, phase } = s;
     if (!folder) return;
-    const inside = includeSubfolders && subfolders ? subfolders.count : 0;
+    const inside = insideCount(s);
     if (inside > 0) {
       // Undoing an apply over the tree takes off exactly what it put on. Anything else clears
-      // every icon in the tree, which asks first.
+      // every icon in the tree, or in the folders chosen in it, which asks first.
       // A run stopped before it changed anything leaves only the folder's own earlier apply.
       const undo = phase === "applied" && run?.kind === "apply" ? (run.changed.length > 0 ? run.changed : [folder.path]) : null;
-      if (!undo && !(await askTree({ kind: "remove", folderName: folder.name, inside, skin: null }))) return;
-      await revertTree(undo);
+      if (undo) {
+        await revertTree(undo, undefined, false);
+        return;
+      }
+      if (!(await askTree({ kind: "remove", folderName: folder.name, inside, chosen: s.chosen !== null, skin: null }))) return;
+      await revertTree(treeOnly(s), undefined, true);
       return;
     }
     dispatch({ type: "revertStarted" });
@@ -1067,6 +1084,7 @@ export default function App() {
           drag={composing ? state.drag : null}
           subfolders={state.subfolders}
           includeSubfolders={state.includeSubfolders}
+          chosen={state.chosen}
           onIncludeSubfolders={(on) => dispatch({ type: "includeSubfolders", on })}
           progress={state.progress}
           stopping={stopping}
@@ -1099,6 +1117,10 @@ export default function App() {
         onReveal={reveal}
         stopping={stopping}
         onIncludeSubfolders={(on) => dispatch({ type: "includeSubfolders", on })}
+        onChooseSubfolders={(chosen, total) => {
+          const path = latestState.current.folder?.path;
+          if (path) dispatch({ type: "subfoldersChosen", path, total, chosen });
+        }}
         onStop={stopRun}
         onCarryOn={carryOn}
         onTryAgain={tryAgain}
@@ -1157,14 +1179,16 @@ export default function App() {
           text={
             treeAsk.kind === "apply"
               ? treeAsk.bytes
-                ? t("folder.ask.applyTextSized", {
+                ? t(treeAsk.chosen ? "folder.ask.applyTextChosenSized" : "folder.ask.applyTextSized", {
                     folder: clip(treeAsk.folderName),
                     count: treeAsk.inside,
                     size: formatBytes(treeAsk.bytes),
                     total: formatBytes(treeAsk.bytes * (treeAsk.inside + 1)),
                   })
-                : t("folder.ask.applyText", { folder: clip(treeAsk.folderName), count: treeAsk.inside })
-              : t("folder.ask.removeText", { folder: clip(treeAsk.folderName) })
+                : t(treeAsk.chosen ? "folder.ask.applyTextChosen" : "folder.ask.applyText", { folder: clip(treeAsk.folderName), count: treeAsk.inside })
+              : treeAsk.chosen
+                ? t("folder.ask.removeTextChosen", { folder: clip(treeAsk.folderName), count: treeAsk.inside })
+                : t("folder.ask.removeText", { folder: clip(treeAsk.folderName) })
           }
           image={treeAsk.kind === "apply" ? treeAsk.skin?.thumbnail : undefined}
           action={treeAsk.kind === "apply" ? applyLabel(treeAsk.inside) : t("folder.ask.removeAction")}

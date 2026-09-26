@@ -87,6 +87,9 @@ than ten. The button shows how far the run has got, with **Stop** beside it, and
 it ended: a stopped run offers **Carry on**, and one where some folders couldn't be changed
 offers **See which**, which opens the folder panel's summary.
 
+When some of the folders inside were chosen with **Choose** in the folder panel, only those go,
+and the switch says so: **Include 22 of 28 folders inside**.
+
 | Keys | |
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Undo, redo |

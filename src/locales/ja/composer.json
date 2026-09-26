@@ -414,6 +414,7 @@
   "changed": "保存後に変更されています",
   "savedInYours": "マイスキンに保存済み",
   "includeInside_other": "内側の{{count}}個のフォルダも含める",
+  "includeSomeInside_other": "内側の{{total}}個のうち{{count}}個も含める",
   "applying": "適用中（{{done}}/{{total}}）",
   "replacePicture": "画像を置き換える",
   "errors": {

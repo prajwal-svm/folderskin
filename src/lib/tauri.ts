@@ -4,6 +4,7 @@ import { isTauri, mockApi } from "./devMock";
 import { frame } from "../composer/body";
 import type { FolderStyle, Parts } from "../composer/parts";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
+import type { SubfolderTree } from "./folderChoice";
 import type { AiEvent } from "../state/chats";
 import { t } from "../i18n";
 import { explain } from "./sentences";
@@ -342,14 +343,20 @@ const tauriApi = {
   // ---- a folder and every folder inside it ----
   /** How many folders are inside `folder` (hidden ones, packages and links aside), up to 5,000. */
   subfolderCount: (folder: string) => invoke<Subfolders>("subfolder_count", { folder }),
+  /** The same folders as the tree they make, read once, for choosing which of them a run takes. */
+  subfolderTree: (folder: string) => invoke<SubfolderTree>("subfolder_tree", { folder }),
   /** The disk space one folder's copy of this skin's icon takes. */
   treeBytes: (skinId: string) => invoke<number>("tree_bytes", { skinId }),
   /** Applies a skin to `folder` and every folder inside it, or to `only` those; progress on `onProgress`. */
   applySkinTree: (folder: string, skinId: string, only: string[] | null, onProgress: (p: TreeProgress) => void) =>
     invoke<TreeRunResult>("apply_skin_tree", { folder, skinId, only, onProgress: new Channel<TreeProgress>(onProgress) }),
-  /** Puts the default icon back on `only` those folders, or on every folder in the tree that has an icon of its own. */
-  revertSkinTree: (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void) =>
-    invoke<TreeRunResult>("revert_skin_tree", { folder, only, onProgress: new Channel<TreeProgress>(onProgress) }),
+  /**
+   * Puts the default icon back on `only` those folders, or on every folder in the tree that has an
+   * icon of its own. `skipPlain` leaves alone the folders in `only` that have none, as the whole
+   * tree does.
+   */
+  revertSkinTree: (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void, skipPlain?: boolean) =>
+    invoke<TreeRunResult>("revert_skin_tree", { folder, only, skipPlain: skipPlain ?? null, onProgress: new Channel<TreeProgress>(onProgress) }),
   /** Stops a run over a tree after the folder it's on. */
   stopTreeRun: () => invoke<void>("stop_tree_run"),
   /** The folder's current icon (the real OS icon where available), and whether it's a custom one. */

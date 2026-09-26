@@ -109,6 +109,10 @@
     "inside_one": "{{count}} dossier à l'intérieur",
     "inside_many": "{{count}} de dossiers à l'intérieur",
     "inside_other": "{{count}} dossiers à l'intérieur",
+    "insideChosen_one": "{{count}} sous-dossier sur {{total}}",
+    "insideChosen_many": "{{count}} de sous-dossiers sur {{total}}",
+    "insideChosen_other": "{{count}} sous-dossiers sur {{total}}",
+    "choose": "Choisir",
     "stopping": "Arrêt en cours",
     "doneOf": "{{done}} sur {{total}}",
     "startingWith": "On commence par {{name}}",
@@ -148,6 +152,22 @@
     },
     "pickHintChat": "Prévisualiser une image du chat"
   },
+  "choose": {
+    "title": "Choisir les sous-dossiers",
+    "sub": "Cochez les sous-dossiers à inclure avec {{name}}.",
+    "treeLabel": "dossiers dans {{name}}",
+    "pathLabel": "chemin du dossier",
+    "loading": "Lecture des sous-dossiers",
+    "failed": "Impossible de lire les sous-dossiers : {{reason}}",
+    "tryAgain": "Réessayer",
+    "empty": "Aucun sous-dossier",
+    "count_one": "{{count}} dossier sur {{total}} choisi",
+    "count_many": "{{count}} de dossiers sur {{total}} choisis",
+    "count_other": "{{count}} dossiers sur {{total}} choisis",
+    "all": "Tout sélectionner",
+    "none": "Tout désélectionner",
+    "done": "Terminé"
+  },
   "toast": {
     "defaultBack": "{{name}} a retrouvé son icône par défaut"
   },
@@ -172,10 +192,19 @@
     "applyText_one": "{{folder}} et le dossier qu'il contient reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône. Rétablir les retire toutes.",
     "applyText_many": "{{folder}} et les {{count}} de dossiers qu'il contient reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône. Rétablir les retire toutes.",
     "applyText_other": "{{folder}} et les {{count}} dossiers qu'il contient reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône. Rétablir les retire toutes.",
+    "applyTextChosen_one": "{{folder}} et le dossier choisi à l'intérieur reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône. Rétablir les retire toutes.",
+    "applyTextChosen_many": "{{folder}} et les {{count}} de dossiers choisis à l'intérieur reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône. Rétablir les retire toutes.",
+    "applyTextChosen_other": "{{folder}} et les {{count}} dossiers choisis à l'intérieur reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône. Rétablir les retire toutes.",
     "applyTextSized_one": "{{folder}} et le dossier qu'il contient reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône, d'environ {{size}}, soit environ {{total}} en tout. Rétablir les retire toutes.",
     "applyTextSized_many": "{{folder}} et les {{count}} de dossiers qu'il contient reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône, d'environ {{size}}, soit environ {{total}} en tout. Rétablir les retire toutes.",
     "applyTextSized_other": "{{folder}} et les {{count}} dossiers qu'il contient reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône, d'environ {{size}}, soit environ {{total}} en tout. Rétablir les retire toutes.",
+    "applyTextChosenSized_one": "{{folder}} et le dossier choisi à l'intérieur reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône, d'environ {{size}}, soit environ {{total}} en tout. Rétablir les retire toutes.",
+    "applyTextChosenSized_many": "{{folder}} et les {{count}} de dossiers choisis à l'intérieur reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône, d'environ {{size}}, soit environ {{total}} en tout. Rétablir les retire toutes.",
+    "applyTextChosenSized_other": "{{folder}} et les {{count}} dossiers choisis à l'intérieur reçoivent cet habillage, qui remplace leur icône actuelle. Chaque dossier garde sa propre copie de l'icône, d'environ {{size}}, soit environ {{total}} en tout. Rétablir les retire toutes.",
     "removeText": "{{folder}} et tous les dossiers qu'il contient retrouvent l'icône de dossier par défaut, y compris les icônes reçues en dehors de FolderSkin. Les dossiers qui n'en ont pas restent tels quels.",
+    "removeTextChosen_one": "{{folder}} et le dossier choisi à l'intérieur retrouvent l'icône de dossier par défaut, y compris les icônes reçues en dehors de FolderSkin. Les dossiers qui n'en ont pas restent tels quels.",
+    "removeTextChosen_many": "{{folder}} et les {{count}} de dossiers choisis à l'intérieur retrouvent l'icône de dossier par défaut, y compris les icônes reçues en dehors de FolderSkin. Les dossiers qui n'en ont pas restent tels quels.",
+    "removeTextChosen_other": "{{folder}} et les {{count}} dossiers choisis à l'intérieur retrouvent l'icône de dossier par défaut, y compris les icônes reçues en dehors de FolderSkin. Les dossiers qui n'en ont pas restent tels quels.",
     "removeAction": "Retirer les icônes"
   }
 }

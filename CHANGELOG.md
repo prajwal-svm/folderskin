@@ -4,6 +4,23 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Choose which subfolders get the skin.** With **Include subfolders** on, **Choose** opens the
+  folders inside as Finder's column view: go from the first level down to the deepest with a
+  click or the keys Finder uses, and tick the folders that go. A folder's box ticks or clears
+  everything inside it, and a dash shows a folder with only some of it ticked. The row then says
+  how many go ("22 of 28 folders inside"), Apply says how many folders it changes, and **Remove
+  custom icons** takes the icons off only those. It keeps up at the most a run takes, 5,000
+  folders, however many are in one folder and however deep they go.
+
+### Fixed
+
+- **Carrying on after stopping Remove custom icons** leaves the folders with no icon of their
+  own alone, as the rest of the run did. It used to write to them.
+
 ## 0.1.8 - 2026-09-25
 
 ### Added

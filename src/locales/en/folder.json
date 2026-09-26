@@ -93,6 +93,9 @@
     "includeSubfolders": "Include subfolders",
     "inside_one": "{{count}} folder inside",
     "inside_other": "{{count}} folders inside",
+    "insideChosen_one": "{{count}} of {{total}} folders inside",
+    "insideChosen_other": "{{count}} of {{total}} folders inside",
+    "choose": "Choose",
     "stopping": "Stopping",
     "doneOf": "{{done}} of {{total}}",
     "startingWith": "Starting with {{name}}",
@@ -129,6 +132,21 @@
     },
     "pickHintChat": "Preview a picture from the chat"
   },
+  "choose": {
+    "title": "Choose subfolders",
+    "sub": "Tick the folders inside {{name}} to include.",
+    "treeLabel": "folders inside {{name}}",
+    "pathLabel": "folder path",
+    "loading": "Reading the folders inside",
+    "failed": "Couldn't read the folders inside: {{reason}}",
+    "tryAgain": "Try again",
+    "empty": "No folders inside",
+    "count_one": "{{count}} of {{total}} folders chosen",
+    "count_other": "{{count}} of {{total}} folders chosen",
+    "all": "Select all",
+    "none": "Select none",
+    "done": "Done"
+  },
   "toast": {
     "defaultBack": "{{name}} has its default icon back"
   },
@@ -150,9 +168,15 @@
     "removeTitle_other": "Remove the custom icons from {{count}} folders?",
     "applyText_one": "{{folder}} and the {{count}} folder inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon. Revert takes them all off again.",
     "applyText_other": "{{folder}} and the {{count}} folders inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon. Revert takes them all off again.",
+    "applyTextChosen_one": "{{folder}} and the folder you chose inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon. Revert takes them all off again.",
+    "applyTextChosen_other": "{{folder}} and the {{count}} folders you chose inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon. Revert takes them all off again.",
     "applyTextSized_one": "{{folder}} and the {{count}} folder inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon, about {{size}}, so about {{total}} in all. Revert takes them all off again.",
     "applyTextSized_other": "{{folder}} and the {{count}} folders inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon, about {{size}}, so about {{total}} in all. Revert takes them all off again.",
+    "applyTextChosenSized_one": "{{folder}} and the folder you chose inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon, about {{size}}, so about {{total}} in all. Revert takes them all off again.",
+    "applyTextChosenSized_other": "{{folder}} and the {{count}} folders you chose inside it get this skin, replacing any icon they have now. Each folder keeps its own copy of the icon, about {{size}}, so about {{total}} in all. Revert takes them all off again.",
     "removeText": "{{folder}} and every folder inside it go back to the default folder icon, including icons they were given outside FolderSkin. Folders without one are left as they are.",
+    "removeTextChosen_one": "{{folder}} and the folder you chose inside it go back to the default folder icon, including icons they were given outside FolderSkin. Folders without one are left as they are.",
+    "removeTextChosen_other": "{{folder}} and the {{count}} folders you chose inside it go back to the default folder icon, including icons they were given outside FolderSkin. Folders without one are left as they are.",
     "removeAction": "Remove the icons"
   }
 }

@@ -8,7 +8,7 @@ import "../../i18n/composer";
 import { t as tNow, useT } from "../../i18n";
 import { formatNumber } from "../../i18n/format";
 import { cleanName, clip as clipName, MAX_NAME_CHARS } from "../../lib/names";
-import type { DragInfo, Folder } from "../../state/dropzone";
+import type { DragInfo, Folder, SubfolderChoice } from "../../state/dropzone";
 import { applyLabel, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
 import type { ToastTone } from "../../hooks/useToasts";
 import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
@@ -462,6 +462,7 @@ export function Composer({
   drag,
   subfolders,
   includeSubfolders,
+  chosen = null,
   onIncludeSubfolders,
   progress,
   stopping,
@@ -485,6 +486,8 @@ export function Composer({
   subfolders: Subfolders | null;
   /** Save & apply reaches them too; the same switch as the folder panel's. */
   includeSubfolders: boolean;
+  /** The folders inside it chosen in the folder panel, when not every one. */
+  chosen?: SubfolderChoice | null;
   onIncludeSubfolders: (on: boolean) => void;
   /** How far an apply over the folder and its subfolders has got. */
   progress: TreeProgress | null;
@@ -1159,7 +1162,7 @@ export function Composer({
   const used = useMemo(() => colorsOf(doc), [doc]);
   const busy = saving !== null || applying;
 
-  const inside = folder && includeSubfolders && subfolders ? subfolders.count : 0;
+  const inside = folder && includeSubfolders && subfolders ? (chosen ? chosen.paths.length : subfolders.count) : 0;
   const primary = folder
     ? {
         label:
@@ -1428,7 +1431,11 @@ export function Composer({
               onClick={() => onIncludeSubfolders(!includeSubfolders)}
             >
               <span className="cmp-subfolders-text">
-                {subfolders.more ? tooMany("subfolders") : t("composer.includeInside", { count: subfolders.count })}
+                {subfolders.more
+                  ? tooMany("subfolders")
+                  : includeSubfolders && chosen
+                    ? t("composer.includeSomeInside", { count: chosen.paths.length, total: chosen.total })
+                    : t("composer.includeInside", { count: subfolders.count })}
               </span>
               <span className={includeSubfolders ? "switch is-on" : "switch"} aria-hidden="true">
                 <span className="knob" />
