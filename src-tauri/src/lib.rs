@@ -119,6 +119,7 @@ pub fn run() {
             commands::folder_icon,
             commands::platform_info,
             tree::subfolder_count,
+            tree::subfolder_tree,
             tree::tree_bytes,
             tree::apply_skin_tree,
             tree::revert_skin_tree,
