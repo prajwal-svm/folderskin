@@ -5,6 +5,7 @@
 
 pub mod adjust;
 pub mod apply;
+pub mod base;
 pub mod compositor;
 pub mod fit;
 pub mod geometry;

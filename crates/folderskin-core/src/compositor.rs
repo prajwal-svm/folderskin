@@ -69,6 +69,13 @@ impl Style {
         let (back, front) = self.fit_boxes();
         (front.y0 - back.y0) / back.height()
     }
+
+    /// The whole folder's width over its height, from its own outlines: the shape of a frame it
+    /// fills. About 1.06 for the Mac's folder, 1.27 for Windows'.
+    pub fn aspect(self) -> f32 {
+        let [x0, y0, x1, y1] = Template::new(g::CANVAS as u32, self).extent();
+        (x1 - x0) / (y1 - y0)
+    }
 }
 
 /// The Windows folder's shading: its back panel a shade darker than its front (the tab and the
@@ -658,19 +665,38 @@ const TEMPLATE_MARGIN: f32 = 0.03;
 /// the model makes up. It is the normal render with grey artwork, scaled so the folder fills the
 /// frame less a 3% margin, and centred.
 pub fn blank_template(width: u32, height: u32, backdrop: [u8; 3]) -> image::RgbaImage {
-    crate::matte::flatten(&blank_template_cutout(width, height), backdrop)
+    blank_template_in(Style::Mac, width, height, backdrop)
+}
+
+/// [`blank_template`] of the folder of `style`: Windows' own, with its tab and no paper strip,
+/// for a whole folder painted in Windows' look.
+pub fn blank_template_in(
+    style: Style,
+    width: u32,
+    height: u32,
+    backdrop: [u8; 3],
+) -> image::RgbaImage {
+    crate::matte::flatten(&blank_template_cutout_in(style, width, height), backdrop)
 }
 
 /// [`blank_template`] before it goes on its backdrop: the same grey folder in the same place, on
 /// transparency. Its alpha is the folder's exact silhouette in that frame, which is the mask for
 /// a model that paints only inside the folder.
 pub fn blank_template_cutout(width: u32, height: u32) -> image::RgbaImage {
+    blank_template_cutout_in(Style::Mac, width, height)
+}
+
+/// [`blank_template_cutout`] of the folder of `style`.
+pub fn blank_template_cutout_in(style: Style, width: u32, height: u32) -> image::RgbaImage {
     let art = Artwork {
         rgba: image::RgbaImage::from_pixel(8, 8, image::Rgba(TEMPLATE_GREY)),
         focus: (0.5, 0.5),
     };
-    let place = BlankPlacement::new(width, height);
-    let icon = render_icon_set(&art, &[place.size]).sizes.remove(0).1;
+    let place = BlankPlacement::new(width, height, style);
+    let icon = render_icon_set_in(&art, &[place.size], style)
+        .sizes
+        .remove(0)
+        .1;
     let mut frame = image::RgbaImage::new(width, height);
     image::imageops::replace(&mut frame, &icon, place.left, place.top);
     frame
@@ -684,7 +710,7 @@ pub fn blank_template_cutout(width: u32, height: u32) -> image::RgbaImage {
 ///
 /// It comes from the template's own outlines, placed where the blank template puts them.
 pub fn blank_template_folder_box(width: u32, height: u32) -> [u32; 4] {
-    let place = BlankPlacement::new(width, height);
+    let place = BlankPlacement::new(width, height, Style::Mac);
     let [left, top, right, bottom] = Template::new(place.size, Style::Mac).extent();
     // An edge at 30.53 leaves column 30 less than half covered and column 31 more; one at 993.47
     // covers column 992 more than half and column 993 less, so the box ends before 993.
@@ -697,8 +723,8 @@ pub fn blank_template_folder_box(width: u32, height: u32) -> [u32; 4] {
     ]
 }
 
-/// Where [`blank_template_cutout`] puts FolderSkin's folder in its frame: the side of the square
-/// icon it renders, and where that icon's top-left corner goes.
+/// Where [`blank_template_cutout_in`] puts a folder in its frame: the side of the square icon it
+/// renders, and where that icon's top-left corner goes.
 struct BlankPlacement {
     size: u32,
     left: i64,
@@ -706,11 +732,11 @@ struct BlankPlacement {
 }
 
 impl BlankPlacement {
-    /// The folder as big as it fits in a `width` × `height` frame less a [`TEMPLATE_MARGIN`] on
-    /// every side, centred.
-    fn new(width: u32, height: u32) -> BlankPlacement {
+    /// The folder of `style` as big as it fits in a `width` × `height` frame less a
+    /// [`TEMPLATE_MARGIN`] on every side, centred.
+    fn new(width: u32, height: u32, style: Style) -> BlankPlacement {
         // The folder's extent in canvas units, from the template's outlines at one pixel a unit.
-        let [x0, y0, x1, y1] = Template::new(g::CANVAS as u32, Style::Mac).extent();
+        let [x0, y0, x1, y1] = Template::new(g::CANVAS as u32, style).extent();
         let usable = 1.0 - 2.0 * TEMPLATE_MARGIN;
         let px_per_unit =
             (width as f32 * usable / (x1 - x0)).min(height as f32 * usable / (y1 - y0));
@@ -736,6 +762,9 @@ mod tests {
         // What shows above the front: an eighth of the Mac's artwork, a sixth of Windows'.
         assert!((Style::Mac.tab_share() - 0.132).abs() < 0.005);
         assert!((Style::Windows.tab_share() - 0.159).abs() < 0.005);
+        // The whole folders: 994 x 937 canvas units, and 896 x 704.
+        assert!((Style::Mac.aspect() - 994.0 / 937.0).abs() < 0.005);
+        assert!((Style::Windows.aspect() - 896.0 / 704.0).abs() < 0.005);
     }
 
     #[test]
@@ -1038,6 +1067,40 @@ mod tests {
                 "{w}×{h}"
             );
         }
+    }
+
+    #[test]
+    fn the_windows_blank_template_is_windows_folder_centred_on_the_backdrop() {
+        let (w, h) = (1024, 960);
+        let img = blank_template_in(Style::Windows, w, h, [255, 0, 255]);
+        let cut = blank_template_cutout_in(Style::Windows, w, h);
+        assert_eq!(img.dimensions(), (w, h));
+        assert_eq!(img.get_pixel(0, 0).0, [255, 0, 255, 255]);
+        assert_eq!(crate::matte::flatten(&cut, [255, 0, 255]), img);
+        // Windows' folder is wider for its height than the Mac's (896 x 704 canvas units), so it
+        // is width-bound in the same frame: 94% of the width, centred.
+        let (x0, y0, x1, y1) = crate::matte::alpha_bounds(&cut, 128).unwrap();
+        let (fw, fh) = (x1 - x0 + 1, y1 - y0 + 1);
+        assert!((fw as f32 - 0.94 * w as f32).abs() <= 3.0, "width {fw}");
+        assert!(
+            (fw as f32 / fh as f32 - 896.0 / 704.0).abs() < 0.01,
+            "{fw}x{fh}"
+        );
+        assert!(
+            (y0 as i32 - (h - y1 - 1) as i32).abs() <= 2,
+            "centred: {y0}..{y1}"
+        );
+        // No paper strip: right of the tab, just under the back panel's top, it's the back panel.
+        let at = |cx: f32, cy: f32| {
+            let x = x0 as f32 + (cx - 64.0) / 896.0 * fw as f32;
+            let y = y0 as f32 + (cy - 136.0) / 704.0 * fh as f32;
+            img.get_pixel(x.round() as u32, y.round() as u32).0
+        };
+        let back = at(700.0, 240.0);
+        assert!(back[..3].iter().all(|&c| c < 0xCC), "shaded back: {back:?}");
+        assert_eq!(at(700.0, 150.0), [255, 0, 255, 255], "beside the tab");
+        // And it is a different silhouette from the Mac's.
+        assert_ne!(cut, blank_template_cutout(w, h));
     }
 
     #[test]

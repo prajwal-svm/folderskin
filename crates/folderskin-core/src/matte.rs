@@ -35,7 +35,7 @@ pub const DETECT_TOLERANCE: f32 = 0.12;
 
 /// Share of the picture the keyed-out subject must cover, so an all-magenta picture is not "cut
 /// out" to nothing.
-const MIN_SUBJECT_SHARE: f32 = 0.02;
+pub const MIN_SUBJECT_SHARE: f32 = 0.02;
 
 /// How close a pixel must be to the key colour to count as background, and how wide the soft
 /// edge between background and subject is. Both are distances in 0..=1 chroma space.
