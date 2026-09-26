@@ -1140,7 +1140,13 @@ mod tests {
             }
         }
         let (image, _) = finish(&keyed(&whole), stick, Shape::Folder, MAGENTA_CUT).unwrap();
-        assert!(matches!(&image, SkinImage::Drive(d) if d.dimensions() == (100, 200)));
+        // A finished drive, cut out to what was painted: by the key, or on a Mac lifted off its
+        // backdrop, whose soft edge can take a pixel or two more.
+        let SkinImage::Drive(drive) = &image else {
+            panic!("a whole drive is kept as a finished drive");
+        };
+        let (w, h) = drive.dimensions();
+        assert!(w.abs_diff(100) <= 4 && h.abs_diff(200) <= 4, "{w} x {h}");
     }
 
     #[test]
