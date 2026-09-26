@@ -103,6 +103,7 @@
     },
     "ok": "Compris",
     "heroTitle": "À quoi doit ressembler votre dossier ?",
+    "heroTitleDrive": "À quoi doit ressembler votre disque ?",
     "heroSub": "Décrivez une scène, ou cliquez sur un style ci-dessous pour partir d'une idée.",
     "heroSubLocal": "Décrivez une scène, ou cliquez sur un style ci-dessous pour partir d'une idée. L'image est générée ici même, sur votre machine.",
     "heroSubKey": "Décrivez une scène, ou cliquez sur un style ci-dessous pour partir d'une idée. La demande part directement de cet ordinateur vers {{provider}}, avec votre propre clé.",

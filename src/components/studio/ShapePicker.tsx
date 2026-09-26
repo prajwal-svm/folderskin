@@ -62,6 +62,10 @@ export function ShapePicker({
       { duration: 800, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
     );
   }, [flash]);
+  // Opened, the list shows the shape that's chosen, however far down the drives it is.
+  useEffect(() => {
+    if (anchor) list.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [anchor]);
   const name = shape ? shapeName(shape) : "";
   const art = Boolean(shape?.whole) && make === "skin";
   const close = () => setAnchor(null);

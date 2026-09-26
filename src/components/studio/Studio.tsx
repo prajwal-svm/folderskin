@@ -62,8 +62,9 @@ export const Studio = forwardRef<
   {
     active: boolean;
     os: string;
-    /** The folder the pictures are for: the one on show on the right. */
-    folder: ChatFolder | null;
+    /** The folder the pictures are for: the one on show on the right, and when it's a drive, the
+     *  shape the stage shows it as (lib/drives.ts). */
+    folder: (ChatFolder & { drive?: { shape: string } | null }) | null;
     /** The skin tried on that folder now, and the one it wears. */
     shownId: string | null;
     appliedId: string | null;
@@ -138,7 +139,7 @@ export const Studio = forwardRef<
   // The shapes the chat can paint on, drawn once.
   useEffect(() => {
     api
-      .aiShapes()
+      .shapes()
       .then(setShapes)
       .catch(() => setShapes([]));
   }, []);
@@ -169,10 +170,12 @@ export const Studio = forwardRef<
     }
   }, [providerId, modelId, make]);
 
-  // The shape is part of the chat: the one it was left on, or for a new chat, the folder the app
-  // puts skins on. Until the shapes are in, that folder by name.
+  // The shape is part of the chat: the one it was left on, or for a new chat, the drive on show
+  // when a drive is, and otherwise the folder the app puts skins on. Until the shapes are in, that
+  // folder by name.
+  const onShow = chat && chat.turns.length === 0 ? (folder?.drive?.shape ?? undefined) : undefined;
   const shape: ShapeInfo | undefined =
-    shapeOf(shapes, chat?.base, folderLook) ??
+    shapeOf(shapes, chat?.base ?? onShow, folderLook) ??
     (shapes.length === 0 ? { id: `${folderLook}-folder`, label: "", family: "folder", system: folderLook, whole: true, thumbnail: null } : undefined);
   // The chat opened shows its own folder; a folder chosen while it's open becomes its folder.
   const chatId = chat?.id ?? null;
@@ -529,7 +532,7 @@ export const Studio = forwardRef<
             <span className="studio-hero-glyph">
               <SparklesIcon size={22} playOnMount />
             </span>
-            <h2 className="studio-title">{t("ai.studio.heroTitle")}</h2>
+            <h2 className="studio-title">{family === "drive" ? t("ai.studio.heroTitleDrive") : t("ai.studio.heroTitle")}</h2>
             <p className="studio-sub">
               {/* Where it goes once the providers are in: until then, nothing that might not be so. */}
               {!catalogue

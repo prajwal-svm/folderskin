@@ -103,6 +103,7 @@
     },
     "ok": "Entendido",
     "heroTitle": "¿Cómo quieres que se vea tu carpeta?",
+    "heroTitleDrive": "¿Cómo quieres que se vea tu unidad?",
     "heroSub": "Describe una escena, o elige un estilo de abajo para tener una idea de partida.",
     "heroSubLocal": "Describe una escena, o elige un estilo de abajo para tener una idea de partida. Se genera aquí mismo, en tu equipo.",
     "heroSubKey": "Describe una escena, o elige un estilo de abajo para tener una idea de partida. Va directamente de este equipo a {{provider}} con tu propia clave.",

@@ -551,10 +551,15 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   padding: 6px;
 }
 
+/* Folders, every drive and the free icon: the list scrolls on its own, so what the model paints
+   of the shape stays in sight under it. */
 .shape-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: min(360px, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .shape-group + .shape-group {

@@ -103,6 +103,7 @@
     },
     "ok": "OK",
     "heroTitle": "What should your folder look like?",
+    "heroTitleDrive": "What should your drive look like?",
     "heroSub": "Describe a scene, or tap a style below for an idea to start from.",
     "heroSubLocal": "Describe a scene, or tap a style below for an idea to start from. It's generated right here, on your machine.",
     "heroSubKey": "Describe a scene, or tap a style below for an idea to start from. It goes straight from this computer to {{provider}} with your own key.",
