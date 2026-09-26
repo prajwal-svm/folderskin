@@ -1,7 +1,26 @@
+import { useLayoutEffect, useRef } from "react";
 import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { DeleteIcon } from "./icons/delete";
 import { branded } from "./Brand";
+
+/**
+ * Holds an element at the largest `axis` it has had while the dialog is open, so words that
+ * change while it asks (a count still going) never move the buttons under the pointer.
+ */
+function useSteady<T extends HTMLElement>(words: string, axis: "height" | "width") {
+  const ref = useRef<T>(null);
+  const most = useRef(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const prop = axis === "height" ? "minHeight" : "minWidth";
+    el.style[prop] = "";
+    most.current = Math.max(most.current, el.getBoundingClientRect()[axis]);
+    el.style[prop] = `${most.current}px`;
+  }, [words, axis]);
+  return ref;
+}
 
 /**
  * "Are you sure?" before something can't be undone, like deleting a skin or removing a pack, or
@@ -29,6 +48,8 @@ export function Confirm({
   onConfirm: () => void;
 }) {
   const t = useT();
+  const textRef = useSteady<HTMLParagraphElement>(text, "height");
+  const actionRef = useSteady<HTMLButtonElement>(action, "width");
   return (
     <Modal
       narrow
@@ -39,7 +60,7 @@ export function Confirm({
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
             {t("common.cancel")}
           </button>
-          <button type="button" className={tone === "danger" ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm}>
+          <button type="button" ref={actionRef} className={tone === "danger" ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm}>
             {tone === "danger" && <DeleteIcon size={15} />}
             {action}
           </button>
@@ -48,7 +69,9 @@ export function Confirm({
     >
       <div className="confirm">
         {image && <img className="confirm-thumb" src={image} alt="" draggable={false} />}
-        <p className="confirm-text">{branded(text)}</p>
+        <p className="confirm-text" ref={textRef}>
+          {branded(text)}
+        </p>
       </div>
     </Modal>
   );
