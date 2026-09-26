@@ -4,6 +4,7 @@ import { clip } from "../../lib/names";
 import { worthRetrying } from "../../lib/aiError";
 import { progressOf, refRole, type Turn } from "../../state/chats";
 import type { ShapeInfo } from "../../lib/shapes";
+import { isFolderStyle } from "../../composer/parts";
 import { FolderGhost, IconGhost } from "../FolderGhost";
 import { OkBadge } from "../OkBadge";
 import { ChevronDownIcon, StopIcon, TerminalIcon } from "../icons/composer";
@@ -66,16 +67,24 @@ function Log({ lines, open, onToggle }: { lines: string[]; open: boolean; onTogg
 
 /**
  * The picture developing: the shape it's made for, blank, with light running through it. A
- * folder is drawn as its system draws it and the light kept inside its outline; a free icon,
- * which has no folder, is a soft square.
+ * folder is drawn as its system draws it and the light kept inside its outline; a drive is its
+ * own picture, faded, with the light inside it; a free icon, which has no folder, is a soft
+ * square.
  */
 function Develop({ shape }: { shape: ShapeInfo | undefined }) {
   const free = shape?.family === "free";
-  const look = shape?.system === "windows" ? "windows" : shape?.system === "mac" ? "mac" : undefined;
+  const drive = shape?.family === "drive" && shape.thumbnail ? shape.thumbnail : null;
+  const look = shape && isFolderStyle(shape.system) ? shape.system : undefined;
   const mask = !free && shape?.thumbnail ? `url("${shape.thumbnail}")` : undefined;
   return (
     <div className={free ? "develop is-free" : "develop"}>
-      {free ? <IconGhost className="develop-ghost" /> : <FolderGhost className="develop-ghost" look={look} />}
+      {free ? (
+        <IconGhost className="develop-ghost" />
+      ) : drive ? (
+        <img className="develop-ghost develop-drive" src={drive} alt="" draggable={false} />
+      ) : (
+        <FolderGhost className="develop-ghost" look={look} />
+      )}
       <span className="develop-light" aria-hidden="true" style={mask ? ({ maskImage: mask, WebkitMaskImage: mask } as CSSProperties) : undefined} />
     </div>
   );

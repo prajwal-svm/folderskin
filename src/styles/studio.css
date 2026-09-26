@@ -1201,6 +1201,18 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   animation-play-state: var(--loop-state);
 }
 
+/* A drive has no outline to march: its own picture, blank and faded, keeps the light inside it. */
+.develop-drive {
+  display: block;
+  object-fit: contain;
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+:root[data-theme="dark"] .develop-drive {
+  opacity: 0.3;
+}
+
 /* A free icon has no folder to keep the light inside: its soft square does. */
 .develop.is-free .develop-light {
   inset: 14.8%;

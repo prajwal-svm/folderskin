@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
-import type { ShapeInfo } from "../../lib/shapes";
+import { SHAPE_PICTURE_SIZE, type ShapeInfo } from "../../lib/shapes";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { keys, localOs } from "../../lib/platform";
@@ -591,7 +591,7 @@ export function Composer({
     if (!starting || shapes) return;
     let live = true;
     api
-      .shapes(208)
+      .shapes(SHAPE_PICTURE_SIZE)
       .then((list) => live && setShapes(list))
       .catch(() => {
         // The drives' cards wait with a blank picture; each still starts its drive.

@@ -1,14 +1,16 @@
 import { useId } from "react";
+import type { FolderStyle } from "../composer/parts";
 import { useLook } from "../state/look";
 
 /**
- * The folder template as SVG: FolderSkin's own, or the folder Windows draws when skins go on
- * that one (state/look.ts). The paths are the compositor's shapes on its 1024 canvas
+ * The folder template as SVG: FolderSkin's own, or the folder Windows or Linux draws when skins
+ * go on that one (state/look.ts). The paths are the compositor's shapes on its 1024 canvas
  * (printed by `cargo run -p folderskin-core --example outline_svg`), so a real folder rendered
  * into the same box lines up with this outline exactly.
  *
  * `tone="mac"` fills it with the default folder's colours: macOS's blue (the same gradient
- * `compositor::default_folder_artwork` uses), or Windows' yellow. `tone="neutral"` is a quiet grey
+ * `compositor::default_folder_artwork` uses), Windows' yellow or Linux's deeper blue
+ * (`compositor::default_folder_artwork_in`). `tone="neutral"` is a quiet grey
  * placeholder. `layer` draws the filled folder, its marching dashed outline, or both, so the
  * outline can sit on top of something shown inside the folder.
  */
@@ -23,10 +25,21 @@ const WIN_BACK =
   "M64 176C64 153.9 81.9 136 104 136L356 136C410 136 410 232 464 232L924 232C943.9 232 960 248.1 960 268L960 804C960 823.9 943.9 840 924 840L100 840C80.1 840 64 823.9 64 804Z";
 const WIN_FRONT =
   "M64 332C64 312.1 80.1 296 100 296L376 296C420 296 420 248 464 248L924 248C943.9 248 960 264.1 960 284L960 804C960 823.9 943.9 840 924 840L100 840C80.1 840 64 823.9 64 804Z";
+/** The Linux folder: a tab that slopes down to its body, and no paper either. */
+const LIN_BACK =
+  "M72 174C72 155.2 87.2 140 106 140L360.8 140C368 140 375 142.6 380.5 147.4L439.4 198.6C444.9 203.4 451.9 206 459.1 206L912 206C934.1 206 952 223.9 952 246L952 832C952 854.1 934.1 872 912 872L112 872C89.9 872 72 854.1 72 832Z";
+const LIN_FRONT =
+  "M72 316C72 293.9 89.9 276 112 276L912 276C934.1 276 952 293.9 952 316L952 832C952 854.1 934.1 872 912 872L112 872C89.9 872 72 854.1 72 832Z";
+const PATHS: Record<FolderStyle, { back: string; front: string }> = {
+  mac: { back: BACK, front: FRONT },
+  windows: { back: WIN_BACK, front: WIN_FRONT },
+  linux: { back: LIN_BACK, front: LIN_FRONT },
+};
 
-const COLOURS = {
+const COLOURS: Record<FolderStyle, { back: [string, string]; front: [string, string] }> = {
   mac: { back: ["#64b9f1", "#3f9cdd"], front: ["#8ad0f8", "#52abe7"] },
   windows: { back: ["#fdbe18", "#f2ab0c"], front: ["#ffe18a", "#ffd256"] },
+  linux: { back: ["#5e93d2", "#2f6fc4"], front: ["#6caaf2", "#3a86e4"] },
 };
 
 export function FolderGhost({
@@ -39,15 +52,16 @@ export function FolderGhost({
   tone?: "mac" | "neutral";
   layer?: "fill" | "line" | "both";
   /** The folder to draw, when it isn't the one skins go on now: a picture made for Windows' folder shows Windows' folder. */
-  look?: "mac" | "windows";
+  look?: FolderStyle;
 }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const fill = layer !== "line";
   const line = layer !== "fill";
   const mac = tone === "mac";
   const current = useLook();
-  const windows = (look ?? current) === "windows";
-  const colours = COLOURS[windows ? "windows" : "mac"];
+  const which = look ?? current;
+  const colours = COLOURS[which];
+  const paths = PATHS[which];
   const cls = ["ghost", `ghost-${tone}`, fill ? "ghost-fill" : "", line ? "ghost-line" : "", className]
     .filter(Boolean)
     .join(" ");
@@ -65,9 +79,9 @@ export function FolderGhost({
           </linearGradient>
         </defs>
       )}
-      <path className="ghost-back" d={windows ? WIN_BACK : BACK} fill={mac && fill ? `url(#${id}back)` : undefined} />
-      {!windows && <path className="ghost-paper" d={PAPER} />}
-      <path className="ghost-front" d={windows ? WIN_FRONT : FRONT} fill={mac && fill ? `url(#${id}front)` : undefined} />
+      <path className="ghost-back" d={paths.back} fill={mac && fill ? `url(#${id}back)` : undefined} />
+      {which === "mac" && <path className="ghost-paper" d={PAPER} />}
+      <path className="ghost-front" d={paths.front} fill={mac && fill ? `url(#${id}front)` : undefined} />
     </svg>
   );
 }

@@ -7,7 +7,7 @@ import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { CHIP_STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
 import { lookName, sameLook, styleById, styleDescription, styleName, type Look } from "../../lib/styles";
-import { shapeName, shapeOf, type ShapeInfo } from "../../lib/shapes";
+import { SHAPE_PICTURE_SIZE, shapeName, shapeOf, type ShapeInfo } from "../../lib/shapes";
 import { clip } from "../../lib/names";
 import type { ToastTone } from "../../hooks/useToasts";
 import { ask, deleteChat, dismissProblem, keepReference, openChat, renameChatTo, setChatBase, setChatFolder, startChats, startNewChat, stop, useChats } from "../../state/chatStore";
@@ -139,7 +139,7 @@ export const Studio = forwardRef<
   // The shapes the chat can paint on, drawn once.
   useEffect(() => {
     api
-      .shapes()
+      .shapes(SHAPE_PICTURE_SIZE)
       .then(setShapes)
       .catch(() => setShapes([]));
   }, []);

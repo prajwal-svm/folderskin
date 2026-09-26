@@ -25,6 +25,13 @@ export type ShapeInfo = {
   thumbnail: string | null;
 };
 
+/**
+ * The size every view asks for the shapes' pictures at, so the app draws them once for all of
+ * them: the composer's cards and a picture on its way in the AI view are shown at about this size,
+ * and the pickers draw them smaller.
+ */
+export const SHAPE_PICTURE_SIZE = 208;
+
 const NAMED = new Set(Object.keys(common.shapes));
 
 /** A shape's name in the language on show. */
