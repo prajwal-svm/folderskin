@@ -296,9 +296,12 @@ export const PromptBox = forwardRef<
         }}
         onClick={readCaret}
         onBlur={() => {
-          // Leaving the box puts the menu away, unless it's for naming a prompt, which is in it.
+          // Leaving the box puts the menu away, unless it's for naming a prompt, which is in it,
+          // or the box has its focus back by the time this runs: a busy frame can come after the
+          // next "@" has been typed.
           requestAnimationFrame(() => {
-            if (!document.activeElement?.closest(".pm")) setTrigger(null);
+            const now = document.activeElement;
+            if (now !== input.current && !now?.closest(".pm")) setTrigger(null);
           });
         }}
       />

@@ -39,7 +39,7 @@ test.describe("the shape a picture is for", () => {
 
     // "@" narrows as it's typed; Enter takes the first, and what was typed to open it goes.
     await box(page).click();
-    await box(page).pressSequentially("a cheerful fox @fr");
+    await box(page).pressSequentially("a cheerful fox @free");
     await expect(menu(page).getByRole("option")).toHaveCount(1);
     await expect(option(page, /Free icon/)).toHaveAttribute("aria-selected", "true");
     await box(page).press("Enter");
@@ -55,7 +55,8 @@ test.describe("the shape a picture is for", () => {
 
     // The arrow keys move through the rows, Tab chooses too, and Escape puts the menu away.
     await box(page).pressSequentially("@");
-    await expect(menu(page).getByRole("option")).toHaveCount(3);
+    // Every shape: the three folders, every drive each system shows, and the free icon.
+    await expect(menu(page).getByRole("option")).toHaveCount(3 + 9 + 6 + 10 + 1);
     await box(page).press("ArrowDown");
     await expect(option(page, /Windows folder/)).toHaveAttribute("aria-selected", "true");
     await box(page).press("Tab");
