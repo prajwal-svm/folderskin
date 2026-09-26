@@ -256,6 +256,10 @@ test.describe("the chat", () => {
 
     for (const view of [/all skins/i, /design your own/i, /community/i]) {
       await openView(page, view);
+      // The composer asks what to start from on its first visit.
+      if (view.source.includes("design")) {
+        await page.getByRole("dialog", { name: "Start a new design" }).getByRole("button", { name: /^Label$/ }).click();
+      }
       await expect(chat(page)).toHaveCount(0);
       await openView(page, /generate with ai/i);
       await expect(card.getByRole("button", { name: "Stop" })).toBeVisible();
