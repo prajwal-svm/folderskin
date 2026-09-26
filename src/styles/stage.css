@@ -21,10 +21,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 18px;
   padding: 30px 26px 26px;
   text-align: center;
+}
+
+/* Centred by the space around the first and last, not by justify-content: when there's more
+   than fits, a short window scrolls it from the top rather than cutting the top off, and
+   nothing in it is squashed to make room. */
+.stage > * {
+  flex-shrink: 0;
+}
+
+.stage > :first-child {
+  margin-top: auto;
+}
+
+.stage > :last-child {
+  margin-bottom: auto;
 }
 
 /* ---------- the rotating glow while something is dragged over the window ---------- */
