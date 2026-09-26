@@ -424,6 +424,9 @@
   "includeInside_one": "Incluir {{count}} subcarpeta",
   "includeInside_many": "Incluir las {{count}} de subcarpetas",
   "includeInside_other": "Incluir las {{count}} subcarpetas",
+  "includeSomeInside_one": "Incluir {{count}} de {{total}} subcarpetas",
+  "includeSomeInside_many": "Incluir {{count}} de {{total}} subcarpetas",
+  "includeSomeInside_other": "Incluir {{count}} de {{total}} subcarpetas",
   "applying": "Aplicando {{done}} de {{total}}",
   "replacePicture": "Reemplazar la imagen",
   "errors": {

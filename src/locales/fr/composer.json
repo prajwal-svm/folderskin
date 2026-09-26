@@ -424,6 +424,9 @@
   "includeInside_one": "Inclure {{count}} sous-dossier",
   "includeInside_many": "Inclure les {{count}} de sous-dossiers",
   "includeInside_other": "Inclure les {{count}} sous-dossiers",
+  "includeSomeInside_one": "Inclure {{count}} sous-dossier sur {{total}}",
+  "includeSomeInside_many": "Inclure {{count}} de sous-dossiers sur {{total}}",
+  "includeSomeInside_other": "Inclure {{count}} sous-dossiers sur {{total}}",
   "applying": "Application : {{done}} sur {{total}}",
   "replacePicture": "Remplacer l'image",
   "errors": {

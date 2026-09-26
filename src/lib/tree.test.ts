@@ -71,6 +71,16 @@ describe("runs over a folder and its subfolders", () => {
     expect(merged.remaining).toEqual([]);
   });
 
+  it("carries on taking icons off the way the stopped run did", () => {
+    // Taking the icons off a tree left the folders without one alone, and carrying on does too.
+    const first = run({ kind: "revert", leavesPlain: true, changed: paths(3), skipped: 5, remaining: paths(17, 8), stopped: true });
+    const next = run({ kind: "revert", leavesPlain: true, total: 17, changed: paths(2, 8), skipped: 15 });
+    const merged = mergeRuns(first, next);
+    expect(merged.leavesPlain).toBe(true);
+    expect(merged.skipped).toBe(20);
+    expect(merged.changed).toHaveLength(5);
+  });
+
   it("forgets a failure that worked the second time", () => {
     const first = run({ changed: paths(23), failed: [{ path: "/a", name: "a", reason: "no" }, { path: "/b", name: "b", reason: "no" }] });
     const retry = run({ total: 2, changed: ["/a"], failed: [{ path: "/b", name: "b", reason: "still no" }] });

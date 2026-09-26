@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialState, reduce, type Action, type State } from "./dropzone";
+import { initialState, insideCount, reduce, treeOnly, type Action, type State, type SubfolderChoice } from "./dropzone";
 import { loadFavorites, saveFavorites, toggleFavorite, type KeyValueStore } from "./favorites";
 import { browseLabel } from "../lib/platform";
 
@@ -261,6 +261,49 @@ describe("a folder and its subfolders", () => {
     expect(reduce(done, { type: "skinSelected", skinId: "coral" }).run).not.toBeNull();
     expect(reduce(done, { type: "skinSelected", skinId: "mint" }).run).toBeNull();
     expect(reduce(done, { type: "runDismissed" }).run).toBeNull();
+  });
+
+  const choice = (paths: string[], total = 24): SubfolderChoice => ({ root: projects.path, paths: paths.map((p) => `${projects.path}/${p}`), total });
+  const chose = (chosen: SubfolderChoice | null, total = 24, path = projects.path): Action => ({ type: "subfoldersChosen", path, total, chosen });
+
+  it("takes the folders chosen inside, and counts them", () => {
+    const on = reduce(ready(), { type: "includeSubfolders", on: true });
+    expect(insideCount(on)).toBe(24);
+    expect(treeOnly(on)).toBeNull();
+    const some = reduce(on, chose(choice(["a", "b", "a/c"])));
+    expect(insideCount(some)).toBe(3);
+    expect(treeOnly(some)).toEqual(["/Users/me/Projects", "/Users/me/Projects/a", "/Users/me/Projects/b", "/Users/me/Projects/a/c"]);
+    // Switched off, the folder goes alone, and the choice waits for the switch to come on again.
+    const off = reduce(some, { type: "includeSubfolders", on: false });
+    expect(insideCount(off)).toBe(0);
+    expect(treeOnly(off)).toBeNull();
+    expect(insideCount(reduce(off, { type: "includeSubfolders", on: true }))).toBe(3);
+  });
+
+  it("goes back to the whole tree when every folder is ticked, and to the folder alone when none is", () => {
+    const some = run([{ type: "includeSubfolders", on: true }, chose(choice(["a"]))], ready());
+    const all = reduce(some, chose(null, 26));
+    expect(all.chosen).toBeNull();
+    expect(all.includeSubfolders).toBe(true);
+    expect(all.subfolders).toEqual({ count: 26, more: false });
+    expect(insideCount(all)).toBe(26);
+    const none = reduce(some, chose(choice([])));
+    expect(none.chosen).toBeNull();
+    expect(none.includeSubfolders).toBe(false);
+    expect(insideCount(none)).toBe(0);
+  });
+
+  it("keeps the choice while the same folder is chosen, and forgets it for another", () => {
+    const some = run([{ type: "includeSubfolders", on: true }, chose(choice(["a"]))], ready());
+    const again = run([{ type: "folderDropped", folder: projects }, counted(24)], some);
+    expect(again.chosen?.paths).toEqual(["/Users/me/Projects/a"]);
+    expect(again.includeSubfolders).toBe(false);
+    expect(reduce(some, { type: "folderDropped", folder: readme }).chosen).toBeNull();
+    expect(reduce(some, { type: "folderCleared" }).chosen).toBeNull();
+    // Chosen for a folder that isn't on show any more, or while a run is going: nothing changes.
+    expect(reduce(ready(), chose(choice(["a"]), 24, readme.path)).chosen).toBeNull();
+    const applying = run([{ type: "includeSubfolders", on: true }, { type: "applyStarted" }], ready());
+    expect(reduce(applying, chose(choice(["a"])))).toBe(applying);
   });
 
   it("reports a revert over the tree the same way", () => {

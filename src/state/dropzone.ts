@@ -6,6 +6,19 @@ import type { Subfolders, TreeProgress, TreeRun } from "../lib/tree";
 
 export type Folder = { path: string; name: string };
 
+/**
+ * The folders inside the chosen one that a run over the tree takes when they aren't all of them,
+ * as ticked in the chooser (components/SubfolderChooser.tsx).
+ */
+export type SubfolderChoice = {
+  /** The folder itself, as a run names it. */
+  root: string;
+  /** The folders inside it that were ticked, nearest first as a run goes through them. */
+  paths: string[];
+  /** How many folders were inside it in all. */
+  total: number;
+};
+
 /** What is being dragged over the window, guessed from its path before it lands. */
 export type DragInfo = { kind: "folder" | "image"; name: string };
 
@@ -30,8 +43,10 @@ export type State = {
   arriving: boolean;
   /** The folders inside the chosen one: null until they've been counted. */
   subfolders: Subfolders | null;
-  /** Apply and revert reach every folder inside the chosen one too. */
+  /** Apply and revert reach the folders inside the chosen one too. */
   includeSubfolders: boolean;
+  /** Which folders inside it they reach when not all of them. Kept while the same folder is chosen. */
+  chosen: SubfolderChoice | null;
   /** How far an apply or revert over the folder and its subfolders has got. */
   progress: TreeProgress | null;
   /** What the last run over the folder and its subfolders did, until the skin or folder changes. */
@@ -47,6 +62,9 @@ export type Action =
   | { type: "skinCleared" }
   | { type: "subfoldersCounted"; path: string; subfolders: Subfolders | null }
   | { type: "includeSubfolders"; on: boolean }
+  /** The chooser was closed with Done: `chosen` is null when every one of the `total` folders
+   *  inside `path` was ticked. */
+  | { type: "subfoldersChosen"; path: string; total: number; chosen: SubfolderChoice | null }
   | { type: "applyStarted" }
   | { type: "treeProgress"; progress: TreeProgress }
   | { type: "applySucceeded"; run?: TreeRun }
@@ -69,11 +87,23 @@ export const initialState: State = {
   arriving: false,
   subfolders: null,
   includeSubfolders: false,
+  chosen: null,
   progress: null,
   run: null,
 };
 
 const busy = (state: State) => state.phase === "applying" || state.phase === "reverting";
+
+/** How many folders inside the chosen one a run over the tree takes: none unless they're included, then every one or the ones chosen. */
+export function insideCount(state: State): number {
+  if (!state.includeSubfolders || !state.subfolders) return 0;
+  return state.chosen ? state.chosen.paths.length : state.subfolders.count;
+}
+
+/** What a run over the tree names as `only`: the folder and the ones chosen inside it, or null for the whole tree. */
+export function treeOnly(state: State): string[] | null {
+  return state.includeSubfolders && state.chosen ? [state.chosen.root, ...state.chosen.paths] : null;
+}
 
 function actionablePhase(state: State): Phase {
   if (!state.folder) return "idle";
@@ -89,7 +119,8 @@ export function reduce(state: State, action: Action): State {
     case "folderDropped": {
       const arriving = state.folder !== null && state.skinId !== null;
       // A new folder starts with only itself in play: its subfolders are counted afresh and
-      // including them is chosen again, so a whole tree is never changed by accident.
+      // including them is chosen again, so a whole tree is never changed by accident. The same
+      // folder picked again keeps the folders chosen inside it.
       const next = {
         ...state,
         folder: action.folder,
@@ -100,6 +131,7 @@ export function reduce(state: State, action: Action): State {
         arriving,
         subfolders: null,
         includeSubfolders: false,
+        chosen: state.folder?.path === action.folder.path ? state.chosen : null,
         progress: null,
         run: null,
       };
@@ -117,6 +149,19 @@ export function reduce(state: State, action: Action): State {
       const s = state.subfolders;
       if (action.on && (!s || s.count === 0 || s.more)) return state;
       return { ...state, includeSubfolders: action.on };
+    }
+
+    // Done in the chooser. Every folder ticked is the whole tree again, as it was before anything
+    // was chosen, and none ticked is the folder on its own.
+    case "subfoldersChosen": {
+      if (busy(state) || state.folder?.path !== action.path) return state;
+      const some = action.chosen !== null && action.chosen.paths.length > 0;
+      return {
+        ...state,
+        subfolders: { count: action.total, more: false },
+        chosen: some ? action.chosen : null,
+        includeSubfolders: some || (action.chosen === null && action.total > 0),
+      };
     }
 
     case "treeProgress":

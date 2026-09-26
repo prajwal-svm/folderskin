@@ -414,6 +414,7 @@
   "changed": "保存后又有改动",
   "savedInYours": "已保存到我的皮肤",
   "includeInside_other": "包括里面的 {{count}} 个文件夹",
+  "includeSomeInside_other": "包括里面 {{total}} 个中选的 {{count}} 个",
   "applying": "正在应用 {{done}}/{{total}}",
   "replacePicture": "替换图片",
   "errors": {

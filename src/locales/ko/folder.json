@@ -77,6 +77,8 @@
     "reverting": "되돌리는 중",
     "includeSubfolders": "하위 폴더 포함",
     "inside_other": "안에 폴더 {{count}}개",
+    "insideChosen_other": "안에 있는 폴더 {{total}}개 중 {{count}}개",
+    "choose": "선택",
     "stopping": "멈추는 중",
     "doneOf": "{{done}}/{{total}}",
     "startingWith": "{{name}} 폴더부터 시작하는 중",
@@ -110,6 +112,20 @@
     },
     "pickHintChat": "채팅의 이미지 미리 보기"
   },
+  "choose": {
+    "title": "하위 폴더 선택",
+    "sub": "{{name}} 폴더 안에서 포함할 폴더에 체크하세요.",
+    "treeLabel": "{{name}} 안의 폴더",
+    "pathLabel": "폴더 경로",
+    "loading": "안에 있는 폴더를 읽는 중",
+    "failed": "안에 있는 폴더를 읽지 못했어요: {{reason}}",
+    "tryAgain": "다시 시도",
+    "empty": "안에 폴더가 없어요",
+    "count_other": "폴더 {{total}}개 중 {{count}}개 선택됨",
+    "all": "모두 선택",
+    "none": "모두 해제",
+    "done": "완료"
+  },
   "toast": {
     "defaultBack": "{{name}} 폴더가 기본 아이콘으로 돌아갔어요"
   },
@@ -128,8 +144,11 @@
     "thisSkin": "이 스킨",
     "removeTitle_other": "폴더 {{count}}개에서 사용자 지정 아이콘을 제거할까요?",
     "applyText_other": "{{folder}} 폴더와 그 안의 폴더 {{count}}개에 이 스킨을 입히고, 지금 있는 아이콘을 바꿔요. 아이콘 사본은 폴더마다 따로 저장돼요. '되돌리기'를 누르면 모두 다시 벗겨 내요.",
+    "applyTextChosen_other": "{{folder}} 폴더와 그 안에서 고른 폴더 {{count}}개에 이 스킨을 입히고, 지금 있는 아이콘을 바꿔요. 아이콘 사본은 폴더마다 따로 저장돼요. '되돌리기'를 누르면 모두 다시 벗겨 내요.",
     "applyTextSized_other": "{{folder}} 폴더와 그 안의 폴더 {{count}}개에 이 스킨을 입히고, 지금 있는 아이콘을 바꿔요. 아이콘 사본은 폴더마다 약 {{size}}씩 따로 저장되어, 모두 합쳐 약 {{total}} 정도예요. '되돌리기'를 누르면 모두 다시 벗겨 내요.",
+    "applyTextChosenSized_other": "{{folder}} 폴더와 그 안에서 고른 폴더 {{count}}개에 이 스킨을 입히고, 지금 있는 아이콘을 바꿔요. 아이콘 사본은 폴더마다 약 {{size}}씩 따로 저장되어, 모두 합쳐 약 {{total}} 정도예요. '되돌리기'를 누르면 모두 다시 벗겨 내요.",
     "removeText": "{{folder}} 폴더와 그 안의 모든 폴더를 기본 폴더 아이콘으로 되돌려요. FolderSkin 밖에서 붙인 아이콘도 포함돼요. 아이콘이 없는 폴더는 그대로 둬요.",
+    "removeTextChosen_other": "{{folder}} 폴더와 그 안에서 고른 폴더 {{count}}개를 기본 폴더 아이콘으로 되돌려요. FolderSkin 밖에서 붙인 아이콘도 포함돼요. 아이콘이 없는 폴더는 그대로 둬요.",
     "removeAction": "아이콘 제거"
   }
 }

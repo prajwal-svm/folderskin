@@ -100,9 +100,10 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string |
 | `revert_skin` | `folder` | `{}` or an error string |
 | `subfolder_count` | `folder` | `{count, more}`: the folders inside it a run would change, not counting itself, and `more` when there are over 5,000 |
+| `subfolder_tree` | `folder` | `{root, separator, names, parents, more}`: the same folders as the tree they make, in the walk's order, `parents[i]` being the folder `names[i]` is in (0 for `root`) |
 | `tree_bytes` | `skinId` | the bytes of disk one folder's copy of the skin's icon takes |
 | `apply_skin_tree` | `folder`, `skinId`, `only`, `onProgress` | `{total, changed, failed, skipped, remaining, stopped}` for the folder and every folder inside it, or for `only` those, with progress on the channel |
-| `revert_skin_tree` | `folder`, `only`, `onProgress` | the same. Without `only`, every folder in the tree that has a custom icon, the others `skipped` |
+| `revert_skin_tree` | `folder`, `only`, `skipPlain`, `onProgress` | the same. Without `only`, every folder in the tree that has a custom icon, the others `skipped`. With `only`, exactly those, unless `skipPlain` skips the ones without a custom icon too |
 | `stop_tree_run` | – | `{}`, and the run stops before its next folder |
 | `delete_skin` | `skinId` | `{}`, or an error string for the plain default folder's id |
 | `edit_skin` | `skinId`, `name`, `tags` | `{name, tags}` as saved (the name on one line and at most 60 characters, the tags cleaned and at most 8), or an error string for the plain default folder's id |
@@ -374,6 +375,16 @@ the walk in `folderskin_core::apply::tree`).
   with its `changed`. A named folder that has since gone fails on its own rather than refusing
   the run. The webview shows the progress at most 20 times a second (`src/lib/throttle.ts`), as a
   revert can report a thousand folders a second.
+- **Choosing some.** `subfolder_tree` reads the tree once with the same walk, as names and the
+  index of each folder's parent, and the webview builds each folder's path from those, so the
+  chooser offers exactly the folders a whole run would take. **Choose subfolders**
+  (`src/components/SubfolderChooser.tsx`) lays them out as Finder's column view, and each column
+  draws only the rows in view. The ticks are `src/lib/folderChoice.ts`: every folder keeps how
+  many folders it holds and how many of them are ticked, in depth-first order, so a tick fills one
+  stretch of a typed array and updates the folders above, whatever the size of the tree. A run
+  over the folders chosen is a run with `only`: the folder, then the ones chosen in the walk's
+  order. Taking the icons off them passes `skipPlain`, so the ones without an icon are left alone
+  as they are in a whole tree.
 
 ## Frontend state
 
@@ -400,7 +411,10 @@ left, and whether it stopped) until the folder or the skin changes. The panel's 
 read from `run`. A run that carries on or tries again works through only what's left and is
 merged into the one before (`mergeRuns` in `src/lib/tree.ts`, with the rest of the run's words),
 so the summary always covers the whole tree. A run that stopped before changing anything leaves
-the folder's phase as it was.
+the folder's phase as it was. `chosen` is the folders ticked in **Choose subfolders** when they
+aren't all of them: their paths, and how many folders there were. It stays while the same folder
+is chosen, whether the switch is on or off, and `insideCount` and `treeOnly` turn it into the
+counts the buttons show and the `only` a run is given.
 
 The library's filters are pure functions in `src/lib/filters.ts`: the sidebar's view, then the
 filters (where a skin came from, its pack, colours, brightness, when it was added, the AI model,

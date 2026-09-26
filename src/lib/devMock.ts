@@ -15,6 +15,10 @@
  *
  * `?yours=8` starts with eight skins of your own, for the parts that need a library to work on.
  *
+ * `?bigtree` makes the first folder chosen a made-up Studio with 4,960 folders inside, nearly as
+ * many as a run takes: one of them holds 1,400 and one branch goes 36 levels down, to see
+ * choosing folders keep up at the size it's built for.
+ *
  * `?packs=10000` adds that many made-up packs to Community (mockCommunity.ts), searched the way
  * the app searches its catalog, to see and test the view at the size it is built for. Classic Art
  * and Colours are marked official, as official.json would.
@@ -67,6 +71,7 @@ import type {
 import type { AvailableUpdate } from "./updater";
 import type { AiEvent } from "../state/chats";
 import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
+import type { SubfolderTree } from "./folderChoice";
 import { cleanName } from "./names";
 import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
@@ -359,33 +364,92 @@ function keep(skins: Skin[]) {
 
 const packAdded = (id: string) => library.some((s) => s.pack === id);
 
-/** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried. */
-const SAMPLE_FOLDERS = ["/Users/you/Documents/Projects", "/Users/you/Pictures/Wedding", "/Users/you/Desktop/Taxes 2026", "/Users/you/Pictures/Photo archive"];
+/** Nearly as big a tree as a run takes, with `?bigtree`: see `bigTree`. */
+const BIG_TREE = "/Users/you/Documents/Studio";
+/** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried.
+ *  With `?bigtree`, the big one comes first. */
+const SAMPLE_FOLDERS = [
+  ...(new URLSearchParams(location.search).has("bigtree") ? [BIG_TREE] : []),
+  "/Users/you/Documents/Projects",
+  "/Users/you/Pictures/Wedding",
+  "/Users/you/Desktop/Taxes 2026",
+  "/Users/you/Pictures/Photo archive",
+];
 /** Too big for a run: its switch can't be turned on. */
 const HUGE_TREE = "/Users/you/Pictures/Photo archive";
 let nextSample = 0;
 /**
- * The icon each folder wears in the preview: Projects starts plain and the others with a colour
- * of their own, so a custom icon can be tried. Applying and reverting change it.
+ * The icon each folder wears in the preview: Projects (and the big tree) start plain and the others
+ * with a colour of their own, so a custom icon can be tried. Applying and reverting change it.
  */
-const mockIcons = new Map<string, string | null>(SAMPLE_FOLDERS.map((path, i) => [path, i === 0 ? null : COLOUR_FOLDERS[i]]));
+const mockIcons = new Map<string, string | null>(
+  SAMPLE_FOLDERS.map((path, i) => [path, path === BIG_TREE || path.endsWith("/Projects") ? null : COLOUR_FOLDERS[i % COLOUR_FOLDERS.length]]),
+);
 
 /**
- * The folders inside each sample folder, for trying "Include subfolders": Projects has plenty,
- * Wedding has one the preview can't change (to show a partial result), Taxes 2026 has none, and
- * Photo archive has more than a run takes.
+ * The folders inside each sample folder, for trying "Include subfolders" and choosing some of them:
+ * Projects has plenty, one branch six levels deep, Wedding has one the preview can't change (to show
+ * a partial result), Taxes 2026 has none, and Photo archive has more than a run takes. Nearest first,
+ * as the app's walk finds them.
  */
 const SAMPLE_TREES: Record<string, string[]> = {
   "/Users/you/Documents/Projects": [
     "Clients", "Design", "Invoices", "Notes", "Photos", "Research", "Templates", "Videos",
     "Clients/Acme", "Clients/Globex", "Clients/Initech", "Design/Icons", "Design/Mockups",
     "Invoices/2025", "Invoices/2026", "Photos/2019", "Photos/2020", "Photos/2021", "Research/Papers",
-    "Templates/Letters", "Videos/Raw", "Videos/Edited", "Clients/Acme/Contracts", "Photos/2021/Holiday",
+    "Templates/Letters", "Videos/Edited", "Videos/Raw", "Clients/Acme/Contracts", "Photos/2021/Holiday",
+    "Research/Papers/2026", "Research/Papers/2026/Drafts", "Research/Papers/2026/Drafts/Figures",
+    "Research/Papers/2026/Drafts/Figures/Final",
   ].map((p) => `/Users/you/Documents/Projects/${p}`),
-  "/Users/you/Pictures/Wedding": ["Ceremony", "Guests", "Private", "Reception", "Ceremony/Rings", "Reception/Speeches"].map(
+  "/Users/you/Pictures/Wedding": ["Ceremony", "Guests", "Private", "Reception", "Ceremony/Rings", "Reception/Speeches, toasts and the first dance"].map(
     (p) => `/Users/you/Pictures/Wedding/${p}`,
   ),
 };
+
+/**
+ * `?bigtree`'s Studio: 4,960 folders, just under the 5,000 a run takes, to see the chooser keep up.
+ * Camera roll holds 1,400 folders side by side, Deep dive goes 36 levels down, and Clients, Music,
+ * Research and Scans are wide and bushy around them.
+ */
+function bigTree(): string[] {
+  const paths: string[] = ["Camera roll", "Clients", "Deep dive", "Music", "Research", "Scans"];
+  for (let day = 1; day <= 1400; day++) paths.push(`Camera roll/Day ${day}`);
+  for (let c = 1; c <= 60; c++) {
+    paths.push(`Clients/Client ${c}`);
+    for (let p = 1; p <= 3; p++) {
+      paths.push(`Clients/Client ${c}/Project ${p}`);
+      for (const part of ["Brief", "Drafts", "Final", "Invoices"]) paths.push(`Clients/Client ${c}/Project ${p}/${part}`);
+    }
+  }
+  let deep = "Deep dive";
+  for (let level = 1; level <= 36; level++) paths.push((deep = `${deep}/Level ${level}`));
+  for (let a = 1; a <= 200; a++) {
+    paths.push(`Music/Artist ${a}`);
+    for (let album = 1; album <= 4; album++) paths.push(`Music/Artist ${a}/Album ${album}`);
+  }
+  const topics = ["Topic A", "Topic B", "Topic C", "Topic D"];
+  for (const a of topics) {
+    paths.push(`Research/${a}`);
+    for (let b = 1; b <= 4; b++) {
+      paths.push(`Research/${a}/Part ${b}`);
+      for (let c = 1; c <= 4; c++) {
+        paths.push(`Research/${a}/Part ${b}/Section ${c}`);
+        for (let d = 1; d <= 4; d++) paths.push(`Research/${a}/Part ${b}/Section ${c}/Note ${d}`);
+      }
+    }
+  }
+  for (let scan = 1; paths.length < 4960; scan++) paths.push(`Scans/Scan ${scan}`);
+  // Nearest first, as the walk finds them; each level keeps the order it was made in.
+  const depth = (path: string) => path.split("/").length;
+  return paths.sort((a, b) => depth(a) - depth(b)).map((p) => `${BIG_TREE}/${p}`);
+}
+
+/** The folders inside a sample folder, the big tree's made the first time it's asked for. */
+function sampleTree(root: string): string[] {
+  if (root === BIG_TREE) SAMPLE_TREES[BIG_TREE] ??= bigTree();
+  return SAMPLE_TREES[root] ?? [];
+}
+
 /** Folders in the sample trees that wear an icon of their own. */
 const mockTreeIcons = new Set<string>(["/Users/you/Pictures/Wedding/Guests"]);
 let mockStop = false;
@@ -398,16 +462,18 @@ async function mockTreeRun(
   act: (path: string) => "changed" | "skipped" | string,
 ): Promise<TreeRunResult> {
   mockStop = false;
-  const plan = only ?? [root, ...(SAMPLE_TREES[root] ?? [])];
+  const plan = only ?? [root, ...sampleTree(root)];
   const result: TreeRunResult = { total: plan.length, changed: [], failed: [], skipped: 0, remaining: [], stopped: false };
   onProgress({ done: 0, total: plan.length, name: lastPart(root) });
+  // A moment per folder, and a few seconds at most for thousands of them.
+  const pause = Math.max(1, Math.min(140, 7000 / plan.length));
   for (let i = 0; i < plan.length; i++) {
     if (mockStop) {
       result.stopped = true;
       result.remaining = plan.slice(i);
       break;
     }
-    await sleep(140);
+    await sleep(pause);
     const path = plan[i];
     const outcome = act(path);
     if (outcome === "changed") result.changed.push(path);
@@ -726,7 +792,21 @@ export const mockApi = {
   subfolderCount: async (folder: string): Promise<Subfolders> => {
     await sleep(260);
     if (folder === HUGE_TREE) return { count: 5000, more: true };
-    return { count: SAMPLE_TREES[folder]?.length ?? 0, more: false };
+    return { count: sampleTree(folder).length, more: false };
+  },
+  subfolderTree: async (folder: string): Promise<SubfolderTree> => {
+    await sleep(folder === BIG_TREE ? 450 : 220);
+    if (folder === HUGE_TREE) return { root: folder, separator: "/", names: [], parents: [], more: true };
+    const index = new Map<string, number>([[folder, 0]]);
+    const names: string[] = [];
+    const parents: number[] = [];
+    sampleTree(folder).forEach((path, i) => {
+      const cut = path.lastIndexOf("/");
+      parents.push(index.get(path.slice(0, cut)) ?? 0);
+      names.push(path.slice(cut + 1));
+      index.set(path, i + 1);
+    });
+    return { root: folder, separator: "/", names, parents, more: false };
   },
   treeBytes: async (_skinId: string): Promise<number> => {
     await sleep(200);
@@ -743,10 +823,10 @@ export const mockApi = {
     if (result.changed.includes(folder)) mockIcons.set(folder, thumb);
     return result;
   },
-  revertSkinTree: async (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void): Promise<TreeRunResult> => {
+  revertSkinTree: async (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void, skipPlain?: boolean): Promise<TreeRunResult> => {
     const result = await mockTreeRun(folder, only, onProgress, (path) => {
       const has = mockTreeIcons.has(path) || (path === folder && mockIcons.get(folder) != null);
-      if (!only && !has) return "skipped";
+      if ((skipPlain ?? !only) && !has) return "skipped";
       mockTreeIcons.delete(path);
       return "changed";
     });

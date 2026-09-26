@@ -157,6 +157,11 @@ attribute), packages such as apps, photo and music libraries, Xcode projects and
 Pages documents, and the system locations listed under Known limits. At most 5,000 folders go in
 one run. On a Mac a folder takes about a tenth of a second to skin and a thousandth to revert.
 
+**Choose**, at the end of the switch's row, opens the folders inside as Finder's column view, to
+tick the ones that go. A folder's box stands for it and everything inside it, and the row then
+says how many of them go (**22 of 28 folders inside**). A run takes only those, and so does
+**Remove custom icons**.
+
 Reverting a run takes off exactly the folders it changed. Reverting the whole tree instead
 (**Remove custom icons**, with the switch on) takes the custom icon off every folder that has one.
 On macOS that is any custom icon, whoever set it, as with a single folder. On Windows and Linux

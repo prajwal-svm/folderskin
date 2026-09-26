@@ -77,6 +77,8 @@
     "reverting": "元に戻しています",
     "includeSubfolders": "サブフォルダも含める",
     "inside_other": "中に{{count}}個のフォルダ",
+    "insideChosen_other": "中の{{total}}個のうち{{count}}個",
+    "choose": "選ぶ",
     "stopping": "停止中",
     "doneOf": "{{done}}/{{total}}",
     "startingWith": "{{name}}から始めています",
@@ -110,6 +112,20 @@
     },
     "pickHintChat": "チャットの画像をプレビュー"
   },
+  "choose": {
+    "title": "サブフォルダを選ぶ",
+    "sub": "{{name}}の中で、含めるフォルダにチェックを入れてください。",
+    "treeLabel": "{{name}}の中のフォルダ",
+    "pathLabel": "フォルダのパス",
+    "loading": "中のフォルダを読み込んでいます",
+    "failed": "中のフォルダを読み込めませんでした：{{reason}}",
+    "tryAgain": "もう一度試す",
+    "empty": "中にフォルダはありません",
+    "count_other": "{{total}}個中{{count}}個を選択",
+    "all": "すべて選択",
+    "none": "すべて解除",
+    "done": "完了"
+  },
   "toast": {
     "defaultBack": "{{name}}が標準のアイコンに戻りました"
   },
@@ -128,8 +144,11 @@
     "thisSkin": "このスキン",
     "removeTitle_other": "{{count}}個のフォルダからカスタムアイコンを削除しますか？",
     "applyText_other": "{{folder}}と、その中の{{count}}個のフォルダにこのスキンを付け、今あるアイコンを置き換えます。アイコンのコピーはフォルダごとに保存されます。「元に戻す」を押せば、すべて外せます。",
+    "applyTextChosen_other": "{{folder}}と、その中から選んだ{{count}}個のフォルダにこのスキンを付け、今あるアイコンを置き換えます。アイコンのコピーはフォルダごとに保存されます。「元に戻す」を押せば、すべて外せます。",
     "applyTextSized_other": "{{folder}}と、その中の{{count}}個のフォルダにこのスキンを付け、今あるアイコンを置き換えます。アイコンのコピーはフォルダごとに約{{size}}ずつ保存されるので、合計で約{{total}}になります。「元に戻す」を押せば、すべて外せます。",
+    "applyTextChosenSized_other": "{{folder}}と、その中から選んだ{{count}}個のフォルダにこのスキンを付け、今あるアイコンを置き換えます。アイコンのコピーはフォルダごとに約{{size}}ずつ保存されるので、合計で約{{total}}になります。「元に戻す」を押せば、すべて外せます。",
     "removeText": "{{folder}}とその中のすべてのフォルダを、標準のフォルダアイコンに戻します。FolderSkin以外で付けたアイコンも対象です。アイコンの付いていないフォルダはそのままです。",
+    "removeTextChosen_other": "{{folder}}と、その中から選んだ{{count}}個のフォルダを、標準のフォルダアイコンに戻します。FolderSkin以外で付けたアイコンも対象です。アイコンの付いていないフォルダはそのままです。",
     "removeAction": "アイコンを削除"
   }
 }

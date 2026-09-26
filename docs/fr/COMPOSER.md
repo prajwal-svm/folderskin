@@ -99,6 +99,9 @@ avec **Arrêter** à côté, et un message indique comment elle s'est terminée�
 interrompue propose **Continuer**, et une opération où certains dossiers n'ont pas pu être modifiés
 propose **Voir lesquels**, qui ouvre le récapitulatif du panneau du dossier.
 
+Si vous avez choisi certains sous-dossiers avec **Choisir** dans le panneau du dossier, seuls
+ceux-là sont concernés, et l'interrupteur l'indique : **Inclure 22 sous-dossiers sur 28**.
+
 | Touches | |
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Annuler, refaire |

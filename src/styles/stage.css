@@ -548,50 +548,113 @@
   }
 }
 
-/* "Include subfolders": a quiet row that turns accent while it's on. */
+/* "Include subfolders": a quiet row that turns accent while it's on. Switched on, "Choose" at the
+   end of its second line picks which folders inside go too. It takes no room of its own, so the
+   row keeps its height and nothing moves under the pointer that switched it on. */
 .stage-scope {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  position: relative;
   width: min(260px, 100%);
-  padding: 9px 12px 9px 14px;
   border-radius: 14px;
   background: var(--well);
-  text-align: left;
+  overflow: hidden;
   transition: background-color var(--t-fast) ease;
   animation: fade-up var(--t-base) var(--ease-out) both;
-}
-
-.stage-scope:hover:not(:disabled),
-.stage-scope:focus-visible {
-  background: var(--well-2);
 }
 
 .stage-scope.is-on {
   background: var(--accent-soft);
 }
 
+/* The switch sits level with the title, leaving the end of the second line to "Choose". */
+.stage-scope-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 9px 12px 9px 14px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.stage-scope-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 18px;
+}
+
+/* A little taller than the title's line, and no taller for it. */
+.stage-scope-head .switch {
+  margin: -2px 0;
+}
+
+.stage-scope-switch:hover:not(:disabled),
+.stage-scope-switch:focus-visible {
+  background: var(--well-2);
+}
+
 /* Switched on, the row still has to answer the pointer and the keyboard: without this it keeps
    the same tint whatever happens, so a focused switch looks like an unfocused one. */
-.stage-scope.is-on:hover:not(:disabled),
-.stage-scope.is-on:focus-visible {
+.stage-scope.is-on .stage-scope-switch:hover:not(:disabled),
+.stage-scope.is-on .stage-scope-switch:focus-visible {
   background: color-mix(in srgb, var(--accent) 22%, var(--island));
 }
 
-.stage-scope:disabled {
+.stage-scope-switch:disabled,
+.stage-scope-choose:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.stage-scope-text {
-  flex: 1;
-  min-width: 0;
+/* The second line: how many folders go, and the room "Choose" takes at its end. */
+.stage-scope-line {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  line-height: 16px;
+}
+
+.stage-scope-room,
+.stage-scope-choose {
+  display: inline-flex;
+  align-items: center;
   gap: 1px;
+  padding: 0 4px 0 7px;
+  font-weight: 750;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.stage-scope-room {
+  flex: none;
+  margin-left: auto;
+  visibility: hidden;
+}
+
+/* Over the switch, on the room kept for it, and a pill of its own under the pointer. */
+.stage-scope-choose {
+  position: absolute;
+  right: 12px;
+  bottom: 5px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--accent-ink);
+  transition: background-color var(--t-fast) ease;
+  animation: fade-in var(--t-base) ease both;
+}
+
+.stage-scope-choose:hover:not(:disabled),
+.stage-scope-choose:focus-visible {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.stage-scope-choose svg {
+  flex: none;
 }
 
 .stage-scope-title {
+  flex: 1;
+  min-width: 0;
   font-weight: 750;
   font-size: 13px;
   color: var(--ink);
@@ -599,6 +662,8 @@
 
 /* never cut short: when the switch can't be turned on, this line says why */
 .stage-scope-sub {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   font-size: 11.5px;
   color: var(--muted);

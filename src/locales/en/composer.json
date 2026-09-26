@@ -419,6 +419,8 @@
   "savedInYours": "Saved in Yours",
   "includeInside_one": "Include {{count}} folder inside",
   "includeInside_other": "Include {{count}} folders inside",
+  "includeSomeInside_one": "Include {{count}} of {{total}} folders inside",
+  "includeSomeInside_other": "Include {{count}} of {{total}} folders inside",
   "applying": "Applying {{done}} of {{total}}",
   "replacePicture": "Replace the picture",
   "errors": {
