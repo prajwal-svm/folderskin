@@ -45,8 +45,7 @@ button {
   margin: 0;
 }
 
-/* Anything that reacts to a click shows the hand; text fields show the text cursor. On macOS the
-   window's own cursor follows this too (lib/cursor.ts). */
+/* Anything that reacts to a click shows the hand; text fields show the text cursor. */
 button,
 [role="button"],
 [role="tab"],
