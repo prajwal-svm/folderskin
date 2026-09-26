@@ -4,7 +4,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.9 - 2026-09-25
 
 ### Added
 
@@ -16,8 +16,23 @@ All notable changes to FolderSkin are recorded here. The format follows
   custom icons** takes the icons off only those. It keeps up at the most a run takes, 5,000
   folders, however many are in one folder and however deep they go.
 
+- **Search everything instead.** When nothing in a tag matches a search, **Search all packs
+  instead** (or **Search all skins instead**) looks in All with the same words.
+
+### Changed
+
+- **A search in a tag says so:** "Search packs in Mountains", "Search skins in Painting". It used
+  to look like a search of everything.
+- **The theme row is one button.** It says **Dark mode** with a moon in light mode and **Light
+  mode** with a sun in dark mode, and a click swaps them. The switch beside it is gone.
+- **Community is tidier.** How packs are checked is an info icon beside the count, with the
+  sentence in its tip and the guide a click away. A pack's **Update** comes before **View**, so
+  View always sits beside the last button. The pack viewer no longer links to GitHub.
+
 ### Fixed
 
+- **French** no longer puts "de" or "que" in front of a name: "Essai de Isaac Newton" is now
+  "À l'essai : Isaac Newton", and the same for packs, files and providers.
 - **Carrying on after stopping Remove custom icons** leaves the folders with no icon of their
   own alone, as the rest of the run did. It used to write to them.
 
