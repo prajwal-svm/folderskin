@@ -39,7 +39,6 @@
     "placeholder": "描述你想要的文件夹",
     "placeholderFor": "为 {{name}} 描述一个文件夹",
     "foot": {
-      "localReady": "免费，直接在你的电脑上生成。",
       "localNotReady": "设置好本地模型后即可免费使用。",
       "billed": "{{price}}，计入你的 {{provider}} 账户。",
       "priced": "按张计费",
@@ -141,7 +140,7 @@
     },
     "addRefLabel": "添加参考图",
     "cantRef": "{{model}} 不能参考图片作画",
-    "addRef": "添加一张参考图（或者拖到这里）",
+    "addRef": "添加一张参考图",
     "pillTip": "{{where}}：{{status}}。选择服务商和模型",
     "choose": "选择服务商和模型",
     "loading": "正在加载服务商",

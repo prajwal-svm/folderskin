@@ -338,7 +338,7 @@ export const Studio = forwardRef<
     ? null
     : local
       ? provider.has_key
-        ? t("ai.studio.foot.localReady")
+        ? null
         : t("ai.studio.foot.localNotReady")
       : provider.has_key
         ? t("ai.studio.foot.billed", { price: model?.price_hint ? explain(model.price_hint) : t("ai.studio.foot.priced"), provider: provider.label })
@@ -464,7 +464,7 @@ export const Studio = forwardRef<
             </button>
           </div>
         )}
-        {showFoot && (
+        {showFoot && (foot || (catalogue && !local)) && (
           <p className="studio-foot">
             {foot && <span>{foot}</span>}
             {catalogue && !local && (

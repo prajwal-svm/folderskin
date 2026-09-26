@@ -39,7 +39,6 @@
     "placeholder": "원하는 폴더를 설명해 주세요",
     "placeholderFor": "{{name}} 폴더를 설명해 주세요",
     "foot": {
-      "localReady": "무료이고, 바로 이 컴퓨터에서 만들어요.",
       "localNotReady": "로컬 모델을 설정하면 무료예요.",
       "billed": "{{price}}, {{provider}} 계정으로 청구돼요.",
       "priced": "이미지 한 장마다 비용이 들어요",
@@ -141,7 +140,7 @@
     },
     "addRefLabel": "참고 이미지 추가",
     "cantRef": "{{model}} 모델은 이미지를 바탕으로 그리지 못해요",
-    "addRef": "바탕으로 그릴 이미지 추가(여기에 끌어다 놓아도 돼요)",
+    "addRef": "바탕으로 그릴 이미지 추가",
     "pillTip": "{{where}}: {{status}}. 제공업체와 모델 선택",
     "choose": "제공업체와 모델 선택",
     "loading": "제공업체를 불러오는 중",

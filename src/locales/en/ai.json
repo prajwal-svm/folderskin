@@ -39,7 +39,6 @@
     "placeholder": "Describe the folder you want",
     "placeholderFor": "Describe a folder for {{name}}",
     "foot": {
-      "localReady": "Free, and generated right here on your machine.",
       "localNotReady": "Free once the local model is set up.",
       "billed": "{{price}}, billed to your {{provider}} account.",
       "priced": "Priced by the picture",
@@ -143,7 +142,7 @@
     },
     "addRefLabel": "add a reference picture",
     "cantRef": "{{model}} can't paint from a picture",
-    "addRef": "Add a picture to paint from (or drop one here)",
+    "addRef": "Add a picture to paint from",
     "pillTip": "{{where}}: {{status}}. Choose the provider and model",
     "choose": "Choose the provider and model",
     "loading": "Loading the providers",

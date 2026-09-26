@@ -39,7 +39,6 @@
     "placeholder": "Décrivez le dossier que vous voulez",
     "placeholderFor": "Décrivez un dossier pour {{name}}",
     "foot": {
-      "localReady": "Gratuit, et généré ici même, sur votre machine.",
       "localNotReady": "Gratuit une fois le modèle local installé.",
       "billed": "{{price}}, facturé sur votre compte {{provider}}.",
       "priced": "Prix à l'image",
@@ -145,7 +144,7 @@
     },
     "addRefLabel": "ajouter une image de référence",
     "cantRef": "{{model}} ne sait pas partir d'une image",
-    "addRef": "Ajouter une image de référence (ou en déposer une ici)",
+    "addRef": "Ajouter une image de référence",
     "pillTip": "{{where}} : {{status}}. Choisir le fournisseur et le modèle",
     "choose": "Choisir le fournisseur et le modèle",
     "loading": "Chargement des fournisseurs",

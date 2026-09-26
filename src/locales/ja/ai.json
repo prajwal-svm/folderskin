@@ -39,7 +39,6 @@
     "placeholder": "作りたいフォルダを説明してください",
     "placeholderFor": "{{name}}のためのフォルダを説明してください",
     "foot": {
-      "localReady": "無料で、このコンピュータ上で生成します。",
       "localNotReady": "ローカルモデルをセットアップすれば無料です。",
       "billed": "{{price}}。{{provider}}のアカウントに請求されます。",
       "priced": "画像1枚ごとの料金",
@@ -141,7 +140,7 @@
     },
     "addRefLabel": "参照画像を追加",
     "cantRef": "{{model}}は画像をもとに描けません",
-    "addRef": "描くもとにする画像を追加（ここにドロップしても可）",
+    "addRef": "描くもとにする画像を追加",
     "pillTip": "{{where}}：{{status}}。プロバイダとモデルを選ぶ",
     "choose": "プロバイダとモデルを選ぶ",
     "loading": "プロバイダを読み込み中",

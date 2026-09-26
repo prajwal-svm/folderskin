@@ -287,7 +287,8 @@ test.describe("the AI chat", () => {
     await finishSetup(page);
     await expect(tile.getByRole("img", { name: "downloading" })).toHaveCount(0);
     await settings(page).getByRole("button", { name: "close" }).click();
-    await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
+    // A local model that's ready needs no line under the box.
+    await expect(chat(page).locator(".studio-foot")).toHaveCount(0);
     await sendIdea(page, "a paper boat");
     const card = chat(page).locator("article.turn").last();
     await expect(card.locator(".turn-where")).toContainText(/Step \d of 4/, { timeout: 10_000 });
@@ -340,7 +341,8 @@ test.describe("the AI chat", () => {
   test("the local model paints one picture at a time, whichever chat asks", async ({ page }) => {
     await openApp(page, { query: "localready&holdpaint" });
     await openView(page, /generate with ai/i);
-    await expect(chat(page).locator(".studio-foot")).toContainText("generated right here on your machine");
+    // A local model that's ready needs no line under the box.
+    await expect(chat(page).locator(".studio-foot")).toHaveCount(0);
     await sendIdea(page, "a paper boat");
     // In a chat the box sits at the bottom with nothing under it.
     await expect(chat(page).locator(".studio-foot")).toHaveCount(0);

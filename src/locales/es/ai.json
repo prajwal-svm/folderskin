@@ -39,7 +39,6 @@
     "placeholder": "Describe la carpeta que quieres",
     "placeholderFor": "Describe una carpeta para {{name}}",
     "foot": {
-      "localReady": "Gratis, y se genera aquí mismo, en tu equipo.",
       "localNotReady": "Gratis cuando el modelo local esté configurado.",
       "billed": "{{price}}, facturado a tu cuenta de {{provider}}.",
       "priced": "Precio por imagen",
@@ -145,7 +144,7 @@
     },
     "addRefLabel": "añadir una imagen de referencia",
     "cantRef": "{{model}} no puede basarse en una imagen",
-    "addRef": "Añade una imagen de referencia (o suéltala aquí)",
+    "addRef": "Añade una imagen de referencia",
     "pillTip": "{{where}}: {{status}}. Elige el proveedor y el modelo",
     "choose": "Elegir el proveedor y el modelo",
     "loading": "Cargando los proveedores",
