@@ -12,8 +12,14 @@
 //! Encoding the icon for the OS is the slow part of applying it, and the same for every folder,
 //! so it is its own step: [`prepare_icon`] once, then [`apply_prepared`] to as many folders as
 //! wanted (a whole tree of them; see [`tree`]). [`apply_icon`] is the two together.
+//!
+//! A drive's root is not a folder to any of this: each system keeps a drive's icon its own way
+//! ([`drive`]), and [`apply_icon`], [`revert_icon`] and [`has_custom_icon`] hand a drive to it. A
+//! drive's icon is drawn for its shape, so a run over the folders on a drive leaves the drive
+//! itself to the apply of its own that goes first ([`apply_prepared`]).
 
 use crate::compositor::IconSet;
+use crate::drive::detect::volume_at;
 use std::path::{Path, PathBuf};
 
 pub mod drive;
@@ -84,8 +90,12 @@ pub fn prepare_icon(icons: &IconSet) -> Result<PreparedIcon, ApplyError> {
     }
 }
 
-/// Applies the rendered icon set to `folder` using the current OS mechanism.
+/// Applies the rendered icon set to `folder` using the current OS mechanism, or to a drive's
+/// root as that drive's own icon ([`drive::apply`]).
 pub fn apply_icon(folder: &Path, icons: &IconSet) -> Result<(), ApplyError> {
+    if let Some(volume) = volume_at(folder) {
+        return drive::apply(&volume, icons);
+    }
     // Checked before the icon is encoded, the slow part, so a folder that can't be used fails
     // at once, as it always has.
     validate_folder(folder)?;
@@ -94,8 +104,15 @@ pub fn apply_icon(folder: &Path, icons: &IconSet) -> Result<(), ApplyError> {
 
 /// Applies a [`prepare_icon`]d icon to `folder`, which is checked exactly as [`apply_icon`]
 /// checks it.
+///
+/// A drive's root is left as it is. Its own icon is drawn for its shape rather than a folder's,
+/// so it goes on with [`apply_icon`] (or [`drive::apply`]) before a run over the folders on it,
+/// which comes here for the drive as for any folder.
 pub fn apply_prepared(folder: &Path, icon: &PreparedIcon) -> Result<(), ApplyError> {
     let folder = validate_folder(folder)?;
+    if volume_at(&folder).is_some() {
+        return Ok(());
+    }
     #[cfg(target_os = "macos")]
     {
         macos::apply(&folder, &icon.prepared)
@@ -144,8 +161,12 @@ pub fn bytes_per_folder(icon: &PreparedIcon, folder: Option<&Path>) -> Result<u6
     }
 }
 
-/// Restores the OS default icon for `folder`.
+/// Restores the OS default icon for `folder`, or for a drive's root, the drive's
+/// ([`drive::revert`]).
 pub fn revert_icon(folder: &Path) -> Result<(), ApplyError> {
+    if let Some(volume) = volume_at(folder) {
+        return drive::revert(&volume);
+    }
     let folder = validate_folder(folder)?;
     #[cfg(target_os = "macos")]
     {
@@ -184,6 +205,9 @@ pub fn refresh_shell_icons() {
 /// icon on macOS, FolderSkin's on Windows, and FolderSkin's or a GIO custom icon on Linux. False
 /// for a folder FolderSkin wouldn't touch at all, since a revert there is refused.
 pub fn has_custom_icon(folder: &Path) -> bool {
+    if let Some(volume) = volume_at(folder) {
+        return drive::has_custom_icon(&volume);
+    }
     let Ok(folder) = validate_folder(folder) else {
         return false;
     };

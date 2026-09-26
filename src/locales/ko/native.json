@@ -182,6 +182,12 @@
   "drive": {
     "startupSealed": "macOS가 시동 디스크를 봉인해 두어서 아이콘을 바꿀 수 없어요",
     "startupSystem": "시동 디스크에는 시스템만 쓸 수 있어서 아이콘을 바꿀 수 없어요",
-    "readOnly": "이 드라이브는 읽기 전용이라 아이콘을 바꿀 수 없어요"
+    "readOnly": "이 드라이브는 읽기 전용이라 아이콘을 바꿀 수 없어요",
+    "serverRefused": "서버가 FolderSkin이 이 공유의 아이콘을 바꾸도록 허락하지 않았어요",
+    "macosRefused": "macOS가 이 드라이브의 아이콘 변경을 거부했어요",
+    "lettersOnly": "Windows는 드라이브 문자가 있는 드라이브에만 따로 아이콘을 붙여요",
+    "noAppData": "Windows가 앱 데이터가 어디에 있는지 알려 주지 않았어요",
+    "registrySave": "Windows가 드라이브의 아이콘을 레지스트리에 저장하지 못했어요 ({{detail}})",
+    "registryRemove": "Windows가 드라이브의 아이콘을 레지스트리에서 지우지 못했어요 ({{detail}})"
   }
 }

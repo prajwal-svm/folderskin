@@ -176,21 +176,33 @@ it says why. It offers no run over its folders either.
 
 ## How FolderSkin sets a drive's icon
 
+The writers are in `crates/folderskin-core/src/apply/drive/`. `apply_icon`, `revert_icon` and
+`has_custom_icon` hand a drive's root to them, so every caller that takes a folder takes a drive.
+
 ### macOS
 
 | | |
 |---|---|
 | apply | `NSWorkspace.setIcon(image, forFile: <mount point>)`, the call Finder's own Get Info uses. For a volume it writes the icon as `.VolumeIcon.icns` at the root and sets the custom-icon flag on the root. Finder is told the volume changed |
 | revert | `setIcon(nil, …)`, which takes both away again |
-| refused | the startup disk (macOS keeps it sealed and read-only), a read-only volume or disk image, and a share whose server doesn't let FolderSkin write, each with a sentence that says so |
+| refused | the startup disk (macOS keeps it sealed and read-only) and a read-only volume or disk image, before anything is tried, and a share whose server doesn't let FolderSkin write, each with a sentence that says so |
+
+A test attaches a disk image made in the temp folder, applies an icon to it, checks for
+`.VolumeIcon.icns` and the flag, reverts it and detaches it (`cargo test -p folderskin-core --
+--ignored drive_image`), and one attached read-only is refused.
 
 ### Windows
 
 | | |
 |---|---|
-| apply | writes the icon as `folderskin-drive-<hash>.ico` in FolderSkin's own data folder (`%APPDATA%\app.folderskin.desktop\drive-icons\`), and points `HKEY_CURRENT_USER\Software\Classes\Applications\Explorer.exe\Drives\<letter>\DefaultIcon` at it. Explorer is told to draw icons again |
-| revert | deletes that `DefaultIcon` key, and the letter's key when nothing else is in it, only when the key names FolderSkin's icon file, and then the icon file |
-| the drive's own | a `DefaultIcon` that was there before is kept aside in the same key and put back by revert |
+| apply | writes the icon as `folderskin-drive-<letter>-<hash>.ico` in FolderSkin's own data folder (`%APPDATA%\app.folderskin.desktop\drive-icons\`), and points `HKEY_CURRENT_USER\Software\Classes\Applications\Explorer.exe\Drives\<letter>\DefaultIcon` at it. The letter's older icon files go. Explorer is told to draw icons again |
+| revert | only when the key names FolderSkin's icon file: puts back the icon the key named before, or deletes that `DefaultIcon` key, and the letter's key when nothing else is in it, and then the letter's icon files |
+| the drive's own | a `DefaultIcon` that was there before is kept aside in the same key, as `FolderSkinBefore`, and put back by revert |
+
+The name carries a hash of the icon, as a folder's does, because Explorer caches an icon against
+the path it came from: a new skin is a new path, so it shows at once. How the key is kept and given
+back is pure logic over a stand-in registry, tested on any computer. Only the registry calls
+themselves are Windows'.
 
 The key is per user and needs no administrator. It works for fixed disks, removable drives and
 mapped network drives alike, because Explorer looks it up by the drive letter. That is also its
@@ -208,7 +220,7 @@ writes one.
 |---|---|
 | apply | writes `.folderskin.png` (512 px) at the drive's root, a `.directory` pointing at it for Dolphin, a `.xdg-volume-info` with `IconFile=.folderskin.png` for GNOME's volume list, and sets `metadata::custom-icon` on the mount point with `gio` for Nautilus, Nemo and Caja |
 | revert | removes FolderSkin's lines from `.directory` and `.xdg-volume-info` (deleting each when nothing else is left in it), deletes `.folderskin.png`, and unsets the GIO attribute |
-| refused | `/`, and a volume mounted read-only |
+| refused | `/`, and a volume mounted read-only, before anything is tried |
 
 GNOME reads `.xdg-volume-info` as it mounts a drive, so its sidebar shows the new icon the next time
 the drive is mounted. A name already in `.xdg-volume-info` (`Name=`) stays. KDE draws the drive with
@@ -218,8 +230,14 @@ as a folder.
 ## Include subfolders on a drive
 
 With **Include subfolders** on, the drive gets its drive icon and every folder on it gets the skin
-as a folder icon, the way a folder and its subfolders do. A run takes the drive first. Removing
-custom icons takes the drive's icon off too.
+as a folder icon, the way a folder and its subfolders do. The drive's own icon goes on first, and
+then the run goes through the folders on it, leaving the drive itself be, since its icon is drawn
+for its shape (`apply_prepared`). Reverting, or removing custom icons, takes the drive's icon off
+too.
+
+A drive whose icon can't be changed offers no run. Neither do Windows' system drive, whose folders
+are Windows' own and the user's home, and a mapped network drive, which Windows resolves to the
+share's own path.
 
 ## Sources
 

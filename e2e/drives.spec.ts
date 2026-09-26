@@ -55,6 +55,26 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(stageImage(page)).toHaveAttribute("src", /drive-mac-external/);
   });
 
+  test("with its subfolders, gives the drive its own icon and the folders on it the skin", async ({ page }) => {
+    await pickDrive(page, "drive=external");
+    await tiles(page).first().locator(".tile-hit").click();
+    const include = panel(page).getByRole("switch", { name: /Include subfolders/ });
+    await expect(include).toContainText("5 folders inside");
+    await include.click();
+    // The folders inside stack up behind it as folders, not as more drives.
+    await expect(panel(page).locator(".stage-stack-img").first()).not.toHaveAttribute("src", /drive-mac-external/);
+
+    await panel(page).getByRole("button", { name: "Apply to 6 folders" }).click();
+    await expect(panel(page).getByRole("button", { name: "Revert all 6" })).toBeVisible();
+    // The drive wears the skin drawn for it.
+    await expect(stageImage(page)).toHaveAttribute("src", /^data:image\/png/);
+
+    // Revert takes it off the drive and the folders alike.
+    await panel(page).getByRole("button", { name: "Revert all 6" }).click();
+    await expect(panel(page).getByText("6 folders have the default icon back")).toBeVisible();
+    await expect(stageImage(page)).toHaveAttribute("src", /drive-mac-external/);
+  });
+
   test("puts drive skins first while a drive is picked, and after the folder skins otherwise", async ({ page }) => {
     await openApp(page, { query: "driveskins=2&drive=external" });
     const drives = ["Plain mac external", "Plain mac removable"];

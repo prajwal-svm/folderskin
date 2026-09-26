@@ -425,6 +425,8 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
     .map_err(|e| e.to_string())?
 }
 
+/// Puts a skin on a folder, or on a drive as its own icon: artwork drawn on the drive's shape, a
+/// finished skin as it was drawn (docs/DRIVES.md).
 #[tauri::command]
 pub async fn apply_skin(
     state: State<'_, AppState>,
@@ -432,6 +434,13 @@ pub async fn apply_skin(
     skin_id: String,
 ) -> Result<(), String> {
     let state = state.inner().clone();
+    let path = PathBuf::from(&folder);
+    let drive = tauri::async_runtime::spawn_blocking(move || drive_at(&path))
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(drive) = drive {
+        return apply_to_drive(state, drive, skin_id).await;
+    }
     let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
     // A finished folder image is already the icon; artwork goes through the compositor. A saved
     // skin that is not in memory is read back from disk here, off the async threads.
@@ -448,6 +457,29 @@ pub async fn apply_skin(
     tauri::async_runtime::spawn_blocking(move || {
         apply_icon(&folder, &icons).map_err(|e| e.to_string())?;
         // Once the folder is written: on Windows the Desktop repaints for nothing narrower.
+        refresh_shell_icons();
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// [`apply_skin`] on a drive: refused at once when the drive can't have an icon of its own,
+/// before the icon is drawn.
+async fn apply_to_drive(state: AppState, drive: Drive, skin_id: String) -> Result<(), String> {
+    if let Some(refusal) = folderskin_core::apply::drive::refusal(&drive.volume) {
+        return Err(refusal.sentence().into());
+    }
+    let shape = drive.shape;
+    let icons = tauri::async_runtime::spawn_blocking(move || {
+        state
+            .resolve(&skin_id)
+            .map(|skin| skin.drive_icon_set(&ICON_SIZES, shape))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    tauri::async_runtime::spawn_blocking(move || {
+        folderskin_core::apply::drive::apply(&drive.volume, &icons).map_err(|e| e.to_string())?;
         refresh_shell_icons();
         Ok(())
     })
@@ -507,11 +539,11 @@ pub async fn edit_skin(
     .map_err(|e| e.to_string())?
 }
 
+/// Puts the default icon back on a folder, or on a drive (`revert_icon` tells them apart).
 #[tauri::command]
 pub async fn revert_skin(folder: String) -> Result<(), String> {
-    let folder = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
-        revert_icon(&folder).map_err(|e| e.to_string())?;
+        revert_icon(Path::new(&folder)).map_err(|e| e.to_string())?;
         refresh_shell_icons();
         Ok(())
     })

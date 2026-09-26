@@ -182,6 +182,12 @@
   "drive": {
     "startupSealed": "macOS keeps the startup disk sealed, so its icon can't be changed",
     "startupSystem": "only the system can write to the startup disk, so its icon can't be changed",
-    "readOnly": "this drive is read-only, so its icon can't be changed"
+    "readOnly": "this drive is read-only, so its icon can't be changed",
+    "serverRefused": "the server didn't let FolderSkin change this share's icon",
+    "macosRefused": "macOS refused to change this drive's icon",
+    "lettersOnly": "Windows gives an icon of its own only to a drive letter",
+    "noAppData": "Windows didn't say where your app data is kept",
+    "registrySave": "Windows couldn't save the drive's icon in the registry ({{detail}})",
+    "registryRemove": "Windows couldn't take the drive's icon out of the registry ({{detail}})"
   }
 }

@@ -182,6 +182,12 @@
   "drive": {
     "startupSealed": "macOS 会封存启动磁盘，所以它的图标无法更改",
     "startupSystem": "只有系统能写入启动磁盘，所以它的图标无法更改",
-    "readOnly": "这个驱动器是只读的，所以它的图标无法更改"
+    "readOnly": "这个驱动器是只读的，所以它的图标无法更改",
+    "serverRefused": "服务器不允许 FolderSkin 更改这个共享的图标",
+    "macosRefused": "macOS 拒绝更改这个驱动器的图标",
+    "lettersOnly": "Windows 只会给有盘符的驱动器单独设置图标",
+    "noAppData": "Windows 没有告知应用数据保存在哪里",
+    "registrySave": "Windows 无法把驱动器的图标保存到注册表（{{detail}}）",
+    "registryRemove": "Windows 无法从注册表中移除驱动器的图标（{{detail}}）"
   }
 }

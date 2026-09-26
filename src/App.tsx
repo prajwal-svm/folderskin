@@ -609,18 +609,28 @@ export default function App() {
     const chosen = choice && forRun(choice);
     // The folder itself and the ones inside it the count has found, once it has found them all.
     const expected = insideCounted(s) ? insideCount(s) + 1 : null;
+    // A drive's own icon is drawn for its shape, and a run over the folders on it leaves the drive
+    // itself alone (docs/DRIVES.md): it goes on first, while the panel says it's applying.
+    let drive = false;
+    const refused = (error: string) => {
+      dispatch(drive ? { type: "applyFailed", message: error } : { type: "treeRefused", message: error });
+      return { refused: error };
+    };
     try {
+      if (skinId !== null && folder.drive) {
+        drive = true;
+        dispatch({ type: "applyStarted" });
+        await api.applySkin(folder.path, skinId);
+      }
       const event = skinId ? await api.startTreeApply(folder.path, skinId, chosen) : await api.startTreeRevert(folder.path, chosen, true);
       if (event.run && expected !== null) treeRuns.expect(event.run.id, expected);
       treeRuns.take(event);
-      if (!event.run) return { refused: tNow("common.errors.somethingWrong") };
+      if (!event.run) return drive ? refused(tNow("common.errors.somethingWrong")) : { refused: tNow("common.errors.somethingWrong") };
       dispatch({ type: "treeRunning", path: folder.path, run: runInfo(event.run) });
       return event.run;
     } catch (e) {
       const reason = errorMessage(e);
-      const error = skinId ? tNow("folder.errors.apply", { reason }) : tNow("folder.errors.revertTree", { reason });
-      dispatch({ type: "treeRefused", message: error });
-      return { refused: error };
+      return refused(skinId ? tNow("folder.errors.apply", { reason }) : tNow("folder.errors.revertTree", { reason }));
     }
   }, []);
 

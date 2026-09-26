@@ -182,6 +182,12 @@
   "drive": {
     "startupSealed": "macOS は起動ディスクを封印しているため、そのアイコンは変更できません",
     "startupSystem": "起動ディスクに書き込めるのはシステムだけなので、そのアイコンは変更できません",
-    "readOnly": "このドライブは読み出し専用のため、そのアイコンは変更できません"
+    "readOnly": "このドライブは読み出し専用のため、そのアイコンは変更できません",
+    "serverRefused": "サーバーが、この共有のアイコンを FolderSkin で変更することを許可しませんでした",
+    "macosRefused": "macOS がこのドライブのアイコンの変更を拒否しました",
+    "lettersOnly": "Windows が独自のアイコンを付けられるのは、ドライブ文字のあるドライブだけです",
+    "noAppData": "Windows からアプリのデータの保存場所を取得できませんでした",
+    "registrySave": "Windows はドライブのアイコンをレジストリに保存できませんでした（{{detail}}）",
+    "registryRemove": "Windows はドライブのアイコンをレジストリから削除できませんでした（{{detail}}）"
   }
 }

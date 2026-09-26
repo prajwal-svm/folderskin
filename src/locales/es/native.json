@@ -182,6 +182,12 @@
   "drive": {
     "startupSealed": "macOS mantiene sellado el disco de arranque, así que su icono no se puede cambiar",
     "startupSystem": "solo el sistema puede escribir en el disco de arranque, así que su icono no se puede cambiar",
-    "readOnly": "esta unidad es de solo lectura, así que su icono no se puede cambiar"
+    "readOnly": "esta unidad es de solo lectura, así que su icono no se puede cambiar",
+    "serverRefused": "el servidor no dejó que FolderSkin cambiara el icono de este recurso compartido",
+    "macosRefused": "macOS se negó a cambiar el icono de esta unidad",
+    "lettersOnly": "Windows solo da un icono propio a una letra de unidad",
+    "noAppData": "Windows no indicó dónde se guardan los datos de tus aplicaciones",
+    "registrySave": "Windows no pudo guardar el icono de la unidad en el registro ({{detail}})",
+    "registryRemove": "Windows no pudo quitar el icono de la unidad del registro ({{detail}})"
   }
 }

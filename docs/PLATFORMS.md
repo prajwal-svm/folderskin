@@ -17,6 +17,11 @@ All three writers validate that the path is an existing directory, refuse filesy
 roots, and write atomically (temp file, then rename), so a failure never leaves a folder
 half-skinned.
 
+A drive is not a folder to them. Picked as it is, the root of a volume gets a drive-shaped icon,
+kept where its system keeps a drive's icon: `.VolumeIcon.icns` at its root on macOS, a per-user
+registry key for its letter on Windows, and `.xdg-volume-info` beside the folder files at its root
+on Linux. [DRIVES.md](DRIVES.md) has what is written and when a drive is refused.
+
 ### The marker lines
 
 On Windows and Linux the icon lives in a text file that the user may also own, so
@@ -215,8 +220,11 @@ it is only FolderSkin's own files, as always. Cloud-synced trees sync every fold
   the OS.
 - **Folders inside an app bundle or a system directory.** Refused before anything is written:
   `/System`, `/Library`, `/usr`, `/bin`, `/sbin`, `/etc`, `/var`, anything inside a `.app`
-  bundle, and on Windows the `Windows`, `Program Files` and `ProgramData` trees. Drive roots
-  and your home folder itself are refused too.
+  bundle, and on Windows the `Windows`, `Program Files` and `ProgramData` trees. Your home
+  folder itself is refused too. A drive's root takes an icon of its own ([DRIVES.md](DRIVES.md)),
+  except the startup disk on macOS and Linux and a drive mounted read-only.
+- **A Windows drive's icon belongs to its letter.** Another drive that gets the same letter
+  shows it too, and the drive shows its own again under another letter.
 
 ## Reverting by hand
 
@@ -228,3 +236,9 @@ If you uninstall FolderSkin before reverting, the icon is easy to remove yoursel
   folder's read-only attribute (`attrib -r <folder>`).
 - Linux: delete `.directory` and `.folderskin.png`, then run
   `gio set -t unset <folder> metadata::custom-icon`.
+
+A drive, the same way on macOS and Linux (on Linux, also take `IconFile=.folderskin.png` out of
+`.xdg-volume-info` at its root). On Windows, delete the key
+`HKEY_CURRENT_USER\Software\Classes\Applications\Explorer.exe\Drives\<letter>` in the Registry
+Editor, or put back the value it kept as `FolderSkinBefore`, and delete the drive's icon files from
+`%APPDATA%\app.folderskin.desktop\drive-icons`.

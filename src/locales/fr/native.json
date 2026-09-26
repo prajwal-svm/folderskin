@@ -182,6 +182,12 @@
   "drive": {
     "startupSealed": "macOS garde le disque de démarrage scellé, son icône ne peut donc pas être changée",
     "startupSystem": "seul le système peut écrire sur le disque de démarrage, son icône ne peut donc pas être changée",
-    "readOnly": "ce disque est en lecture seule, son icône ne peut donc pas être changée"
+    "readOnly": "ce disque est en lecture seule, son icône ne peut donc pas être changée",
+    "serverRefused": "le serveur n'a pas laissé FolderSkin changer l'icône de ce partage",
+    "macosRefused": "macOS a refusé de changer l'icône de ce disque",
+    "lettersOnly": "Windows ne donne une icône à part qu'à une lettre de lecteur",
+    "noAppData": "Windows n'a pas indiqué où sont gardées vos données d'applications",
+    "registrySave": "Windows n'a pas pu enregistrer l'icône du lecteur dans le registre ({{detail}})",
+    "registryRemove": "Windows n'a pas pu retirer l'icône du lecteur du registre ({{detail}})"
   }
 }

@@ -20,11 +20,18 @@ const VERBATIM_UNC: &str = r"\\?\UNC\";
 /// itself — a skin on either is a mistake the user cannot easily see, let alone undo.
 /// Canonicalising resolves symlinks, so the returned path is the folder that will really be
 /// written to and is what the refusals are checked against.
+///
+/// A Windows drive letter's root is the one root taken: a drive (docs/DRIVES.md), whose folders a
+/// run can go through as a folder's. Not the system drive's, whose folders are Windows' own and
+/// the user's home, nor a network drive's, which Windows resolves to a share's path.
 pub fn validate_folder(path: &Path) -> Result<PathBuf, ApplyError> {
     if !path.is_dir() {
         return Err(ApplyError::NotADirectory(path.to_path_buf()));
     }
     if is_root(path) {
+        if let Some(root) = drive_root_to_run_over(path) {
+            return Ok(root);
+        }
         return Err(ApplyError::Refused(
             "this is the root of a drive, not a folder FolderSkin can skin".into(),
         ));
@@ -100,6 +107,22 @@ pub fn is_system_location(path: &Path) -> bool {
         }
     }
     false
+}
+
+/// The root of the Windows drive `path` is, when a run can go through the folders on it: a local
+/// drive that isn't the system drive.
+#[cfg(windows)]
+fn drive_root_to_run_over(path: &Path) -> Option<PathBuf> {
+    crate::drive::detect::volume_at(path)
+        .filter(|volume| !volume.startup && !volume.network)
+        .map(|volume| volume.root)
+}
+
+/// No root on macOS or Linux is one: `/` is the startup disk, and a drive mounted elsewhere
+/// isn't a root to [`is_root`].
+#[cfg(not(windows))]
+fn drive_root_to_run_over(_path: &Path) -> Option<PathBuf> {
+    None
 }
 
 /// True when `path` is a filesystem root: `/`, a Windows drive root, or a UNC share root.

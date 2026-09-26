@@ -991,7 +991,8 @@ async function work(j: MockJob) {
   r.total = left && !r.counted ? r.total : j.plan.length;
   r.counted = !left || r.counted;
   j.going = false;
-  if (r.kind === "apply" && j.parts.get(r.root) === "changed") mockIcons.set(r.root, j.thumb);
+  // A drive's own icon went on before the run, as the app puts it on; the run leaves it be.
+  if (r.kind === "apply" && j.parts.get(r.root) === "changed" && !mockDriveAt(r.root)) mockIcons.set(r.root, j.thumb);
   if (r.kind === "revert" && j.parts.get(r.root) === "changed") mockIcons.set(r.root, null);
   tellRun();
 }

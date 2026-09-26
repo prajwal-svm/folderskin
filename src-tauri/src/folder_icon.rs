@@ -60,7 +60,21 @@ pub fn current_icon_png(folder: &Path, size: u32) -> Option<Vec<u8>> {
     Some(data.to_vec())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+/// On Linux, the picture FolderSkin put at a drive's root, when it wears one; `None` for anything
+/// else, which shows as the plain folder or drive.
+#[cfg(target_os = "linux")]
+pub fn current_icon_png(folder: &Path, _size: u32) -> Option<Vec<u8>> {
+    use folderskin_core::apply::{drive, linux::PNG_NAME};
+    let volume = folderskin_core::drive::detect::volume_at(folder)?;
+    if !drive::has_custom_icon(&volume) {
+        return None;
+    }
+    std::fs::read(volume.root.join(PNG_NAME))
+        .ok()
+        .filter(|png| png.starts_with(b"\x89PNG"))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn current_icon_png(_folder: &Path, _size: u32) -> Option<Vec<u8>> {
     None
 }
@@ -73,6 +87,19 @@ pub fn current_icon_png(_folder: &Path, _size: u32) -> Option<Vec<u8>> {
 #[cfg(target_os = "windows")]
 pub fn current_icon_png(folder: &Path, size: u32) -> Option<Vec<u8>> {
     use folderskin_core::apply::windows::{decode_ini, icon_resource_of, INI_NAME};
+
+    // A drive letter's root wears the icon the registry names for its letter, anyone's; one it
+    // names none for shows as the plain drive.
+    if let Some(letter) =
+        folderskin_core::drive::detect::windows::root_letter(&folder.to_string_lossy())
+    {
+        use folderskin_core::apply::drive::windows::{current_icon, icon_location};
+        let value = current_icon(letter)?;
+        let (named, index) = icon_location(&value);
+        let path = std::path::PathBuf::from(win::expand_env(named));
+        let rgba = win::extract_icon(&path, index, size)?;
+        return Some(folderskin_core::raster::encode_png(&rgba));
+    }
 
     // UTF-8, or UTF-16 as Windows writes it; anything else reads as no icon, not a wrong one.
     let (ini, _) = decode_ini(&std::fs::read(folder.join(INI_NAME)).ok()?)?;
