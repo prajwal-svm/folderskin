@@ -74,6 +74,25 @@ pub(crate) fn sweep(cx: f32, cy: f32, start: f32, stops: &[(f32, [u8; 4])]) -> I
     Ink::Sweep((cx, cy), start, stops.to_vec())
 }
 
+/// `c` at `y0` and above, gone by `y1`: the light along a shape's top that dies away down its
+/// sides, where a line of one colour would stop short.
+pub(crate) fn fading(y0: f32, y1: f32, c: [u8; 4]) -> Ink {
+    down(y0, y1, &[(0.0, c), (1.0, fade(c, 0.0))])
+}
+
+impl Ink {
+    /// This ink with every colour's alpha scaled by `by` (0 to 1).
+    fn faded(&self, by: f32) -> Ink {
+        let stops = |s: &[(f32, [u8; 4])]| s.iter().map(|&(at, c)| (at, fade(c, by))).collect();
+        match self {
+            Ink::Solid(c) => Ink::Solid(fade(*c, by)),
+            Ink::Linear(a, b, s) => Ink::Linear(*a, *b, stops(s)),
+            Ink::Radial(c, r, s) => Ink::Radial(*c, *r, stops(s)),
+            Ink::Sweep(c, start, s) => Ink::Sweep(*c, *start, stops(s)),
+        }
+    }
+}
+
 /// Which of a drive's two layers something goes in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Layer {
@@ -457,14 +476,15 @@ impl Drawing {
     /// the folder's panels have ([`crate::compositor`]), for a drive's edges. `edge` may be an open
     /// part of `inside`'s outline; the line sits on it and `inside` throws its outer half away.
     pub fn rim(&mut self, layer: Layer, edge: &Path, inside: &Path, c: [u8; 4], band: f32) {
+        self.rim_ink(layer, edge, inside, &solid(c), band);
+    }
+
+    /// [`Drawing::rim`] in `ink`, so a light can fade along the edge it follows ([`fading`]).
+    pub fn rim_ink(&mut self, layer: Layer, edge: &Path, inside: &Path, ink: &Ink, band: f32) {
         let mask = self.mask(inside);
         let e = self.dev(edge);
         for (w, a) in [(2.0, 0.45), (1.25, 0.55), (0.625, 0.65)] {
-            let mut paint = Paint {
-                anti_alias: true,
-                ..Paint::default()
-            };
-            paint.set_color_rgba8(c[0], c[1], c[2], (c[3] as f32 * a) as u8);
+            let paint = self.paint(&ink.faded(a));
             let stroke = Stroke {
                 width: w * band * self.scale,
                 line_cap: LineCap::Round,
@@ -476,14 +496,13 @@ impl Drawing {
         }
     }
 
-    /// `glyph` pressed into the surface under it, the way a mark is pressed into a disk's front:
-    /// a shade darker than `surface`, its top edge in shadow and a lit lip under its bottom edge.
-    /// `depth` is how far the shadow and the lip reach, in canvas units.
-    pub fn press(&mut self, layer: Layer, glyph: &Path, surface: [u8; 4], depth: f32) {
+    /// `glyph` pressed into the surface under it in `colour`, the way a mark is pressed into a
+    /// disk's front: its top edge in shadow and a lit lip under its bottom edge. `depth` is how
+    /// far the shadow and the lip reach, in canvas units.
+    pub fn press(&mut self, layer: Layer, glyph: &Path, colour: [u8; 4], depth: f32) {
         let lip = moved(glyph, 0.0, depth);
         self.fill(layer, &lip, &solid(rgba(0xffffff, 120)));
-        let dark = mix(surface, rgb(0x000000), 0.14);
-        self.fill(layer, glyph, &solid(dark));
+        self.fill(layer, glyph, &solid(colour));
         // The glyph less its own copy moved down: the band along its top that the wall shades.
         let mut top = self.mask(glyph);
         let mut under = self.mask(&moved(glyph, 0.0, depth * 1.3));

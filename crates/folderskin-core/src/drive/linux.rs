@@ -77,11 +77,14 @@ fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face:
         layer
     };
     // Over the front: its top lit, the seam into the band, and a screw in each corner.
-    let top = open_polygon(
-        &[(x0, band - 30.0), (x0, y0), (x1, y0), (x1, band - 30.0)],
-        r,
+    let top = open_polygon(&[(x0, band), (x0, y0), (x1, y0), (x1, band)], r);
+    d.rim_ink(
+        over,
+        &top,
+        &front,
+        &fading(y0 + 20.0, y0 + (band - y0) * 0.7, rgba(0xffffff, 200)),
+        5.0,
     );
-    d.rim(over, &top, &front, rgba(0xffffff, 200), 5.0);
     d.fill_in(
         over,
         &front,
@@ -98,6 +101,8 @@ fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face:
         &solid(rgba(0x000000, 110)),
         4.0,
     );
+    // A fine edge all round, so a light front keeps its top on a white window.
+    d.stroke(over, &whole, &solid(rgba(0x1d2530, 40)), 3.0);
     let inset = 40.0;
     for (sx, sy) in [
         (x0 + inset, y0 + inset),
@@ -123,53 +128,95 @@ fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face:
     }
 }
 
-/// A solid-state disk: a dark case with a label, and its connector's pins along the bottom.
+/// A solid-state drive as the card it is now: a dark board with its label across most of it, the
+/// gold fingers of its connector along one end with the key cut between them, and at the other
+/// end the half-round notch its screw holds. A dark case around a light label would read as a
+/// tablet; the board's fingers and notch read as nothing but a drive.
 fn solid_state(d: &mut Drawing) {
-    let (x0, y0, x1, y1) = (140.0, 136.0, 884.0, 888.0);
-    let case = rrect(x0, y0, x1, y1, 36.0);
+    let (x0, y0, x1, y1) = (96.0, 312.0, 928.0, 712.0);
+    let (r, cy, notch) = (18.0, (y0 + y1) / 2.0, 34.0);
+    // The key: a slot cut into the connector's end, a third of the way down.
+    let (ky0, ky1, kd) = (y0 + 118.0, y0 + 146.0, 46.0);
+    let board = {
+        let k = 0.5523 * notch;
+        let mut pb = tiny_skia::PathBuilder::new();
+        pb.move_to(x0 + r, y0);
+        pb.line_to(x1 - r, y0);
+        pb.quad_to(x1, y0, x1, y0 + r);
+        pb.line_to(x1, ky0);
+        pb.line_to(x1 - kd, ky0);
+        pb.line_to(x1 - kd, ky1);
+        pb.line_to(x1, ky1);
+        pb.line_to(x1, y1 - r);
+        pb.quad_to(x1, y1, x1 - r, y1);
+        pb.line_to(x0 + r, y1);
+        pb.quad_to(x0, y1, x0, y1 - r);
+        pb.line_to(x0, cy + notch);
+        pb.cubic_to(x0 + k, cy + notch, x0 + notch, cy + k, x0 + notch, cy);
+        pb.cubic_to(x0 + notch, cy - k, x0 + k, cy - notch, x0, cy - notch);
+        pb.line_to(x0, y0 + r);
+        pb.quad_to(x0, y0, x0 + r, y0);
+        pb.close();
+        pb.finish().expect("the board")
+    };
     d.fill(
         Layer::Body,
-        &case,
-        &down(y0, y1, &[(0.0, rgb(0x4a5057)), (1.0, rgb(0x272b2f))]),
+        &board,
+        &down(y0, y1, &[(0.0, rgb(0x3d444b)), (1.0, rgb(0x22262a))]),
     );
-    d.rim(Layer::Body, &case, &case, rgba(0xffffff, 40), 5.0);
-    d.edge(&case);
-    // The connector: two runs of pins either side of the key.
-    let (p0, p1) = (y1 - 96.0, y1 - 44.0);
-    for (from, to) in [(x0 + 56.0, x0 + 380.0), (x0 + 420.0, x0 + 572.0)] {
-        let mut x = from;
-        while x + 14.0 <= to {
+    d.rim(Layer::Body, &board, &board, rgba(0xffffff, 60), 4.0);
+    d.edge(&board);
+    // The gold fingers, one after another down the connector's end, and none across the key.
+    let from = x1 - 64.0;
+    let mut y = y0 + 22.0;
+    while y + 12.0 <= y1 - 22.0 {
+        if y + 12.0 < ky0 - 6.0 || y > ky1 + 6.0 {
             d.fill(
                 Layer::Body,
-                &rrect(x, p0, x + 14.0, p1, 3.0),
-                &down(p0, p1, &[(0.0, rgb(0xf2d27a)), (1.0, rgb(0xc9982e))]),
+                &rrect(from, y, x1 - 6.0, y + 12.0, 3.0),
+                &across(
+                    from,
+                    x1,
+                    &[
+                        (0.0, rgb(0xc9982e)),
+                        (0.5, rgb(0xf2d27a)),
+                        (1.0, rgb(0xd6a940)),
+                    ],
+                ),
             );
-            x += 24.0;
         }
+        y += 22.0;
     }
-    let bottom = y1 - 134.0;
-    let label = rrect(x0 + 40.0, y0 + 40.0, x1 - 40.0, bottom, 20.0);
+    // Two small parts on the board between the label and the fingers.
+    for (py0, py1) in [(y0 + 70.0, y0 + 102.0), (y1 - 150.0, y1 - 118.0)] {
+        d.fill(
+            Layer::Body,
+            &rrect(from - 58.0, py0, from - 22.0, py1, 4.0),
+            &down(py0, py1, &[(0.0, rgb(0x5b636b)), (1.0, rgb(0x33393f))]),
+        );
+    }
+    let label = rrect(x0 + 60.0, y0 + 34.0, from - 76.0, y1 - 34.0, 12.0);
     d.fill(
         Layer::Body,
         &label,
-        &down(y0 + 40.0, bottom, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
+        &down(y0 + 34.0, y1 - 34.0, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
     );
     d.set_face(&label);
-    d.rim(Layer::Over, &label, &label, rgba(0x000000, 60), 4.0);
-    d.rim(
+    d.rim(Layer::Over, &label, &label, rgba(0x000000, 70), 4.0);
+    d.rim_ink(
         Layer::Over,
         &open_polygon(
             &[
-                (x0 + 40.0, y0 + 110.0),
-                (x0 + 40.0, y0 + 40.0),
-                (x1 - 40.0, y0 + 40.0),
-                (x1 - 40.0, y0 + 110.0),
+                (x0 + 60.0, y1 - 34.0),
+                (x0 + 60.0, y0 + 34.0),
+                (from - 76.0, y0 + 34.0),
+                (from - 76.0, y1 - 34.0),
             ],
-            20.0,
+            12.0,
         ),
         &label,
-        rgba(0xffffff, 180),
-        5.0,
+        &fading(y0 + 50.0, y1 - 80.0, rgba(0xffffff, 170)),
+        4.0,
     );
 }
 
@@ -212,15 +259,18 @@ fn usb_disk(d: &mut Drawing) {
     disk(d, 100.0, 184.0, 852.0, 690.0, Layer::Body, true);
 }
 
-/// A USB stick standing up, its connector at the top and a hole for a key ring at the bottom.
+/// A USB stick standing up: its metal connector at the top, a body of blue plastic whose far end is
+/// round with a hole for a key ring through it, and a label on its front. The round end, the ring
+/// hole in it and the plastic around the label are what keep it a stick and not a phone, which a
+/// dark case around a picture looks like.
 fn stick(d: &mut Drawing) {
-    let plug = rrect(412.0, 104.0, 612.0, 300.0, 12.0);
+    let plug = rrect(420.0, 100.0, 604.0, 300.0, 12.0);
     d.fill(
         Layer::Body,
         &plug,
         &across(
-            412.0,
-            612.0,
+            420.0,
+            604.0,
             &[
                 (0.0, rgb(0xb3b9c0)),
                 (0.45, rgb(0xf4f5f7)),
@@ -228,54 +278,74 @@ fn stick(d: &mut Drawing) {
             ],
         ),
     );
-    for hx in [448.0, 532.0] {
+    for hx in [452.0, 530.0] {
         d.fill(
             Layer::Body,
-            &rrect(hx, 150.0, hx + 44.0, 196.0, 6.0),
+            &rrect(hx, 146.0, hx + 42.0, 190.0, 6.0),
             &solid(rgb(0x4c5258)),
         );
     }
     d.edge(&plug);
+    // The body, with the ring hole through its round end.
+    let (x0, x1, top, bottom) = (356.0, 668.0, 282.0, 944.0);
+    let end = (x1 - x0) / 2.0;
     let body = {
         let mut pb = tiny_skia::PathBuilder::new();
-        pb.push_path(&rrect4(
-            356.0,
-            286.0,
-            668.0,
-            940.0,
-            [34.0, 34.0, 70.0, 70.0],
-        ));
-        circle_path(&mut pb, 512.0, 894.0, 20.0, false);
+        pb.push_path(&rrect4(x0, top, x1, bottom, [30.0, 30.0, end, end]));
+        circle_path(&mut pb, 512.0, bottom - 70.0, 24.0, false);
         pb.finish().expect("the body")
     };
     d.fill(
         Layer::Body,
         &body,
-        &down(286.0, 940.0, &[(0.0, DARK[0]), (1.0, DARK[1])]),
+        &down(top, bottom, &[(0.0, rgb(0x4fb8ee)), (1.0, rgb(0x1f7cc4))]),
     );
-    d.rim(Layer::Body, &body, &body, rgba(0xffffff, 36), 5.0);
+    // The plastic is rounded: lit down its left side and in shadow down its right.
+    d.fill_in(
+        Layer::Body,
+        &body,
+        &across(
+            x0,
+            x1,
+            &[
+                (0.0, rgba(0xffffff, 70)),
+                (0.18, rgba(0xffffff, 0)),
+                (0.8, rgba(0x000000, 0)),
+                (1.0, rgba(0x000000, 60)),
+            ],
+        ),
+        &body,
+    );
+    d.rim(Layer::Body, &body, &body, rgba(0xffffff, 110), 5.0);
+    // The ring hole's wall, in shadow.
+    d.stroke(
+        Layer::Body,
+        &circle(512.0, bottom - 70.0, 26.0),
+        &solid(rgba(0x0b3d66, 120)),
+        5.0,
+    );
     d.edge(&body);
-    let label = rrect(392.0, 326.0, 632.0, 846.0, 30.0);
+    let label = rrect(392.0, 330.0, 632.0, 800.0, 22.0);
     d.fill(
         Layer::Body,
         &label,
-        &down(326.0, 846.0, &[(0.0, rgb(0x5cc2f2)), (1.0, rgb(0x1d8fd8))]),
+        &down(330.0, 800.0, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
     );
     d.set_face(&label);
-    d.rim(Layer::Over, &label, &label, rgba(0x000000, 60), 4.0);
-    d.rim(
+    d.rim(Layer::Over, &label, &label, rgba(0x000000, 70), 4.0);
+    d.rim_ink(
         Layer::Over,
         &open_polygon(
             &[
-                (392.0, 400.0),
-                (392.0, 326.0),
-                (632.0, 326.0),
-                (632.0, 400.0),
+                (392.0, 800.0),
+                (392.0, 330.0),
+                (632.0, 330.0),
+                (632.0, 800.0),
             ],
-            30.0,
+            22.0,
         ),
         &label,
-        rgba(0xffffff, 150),
+        &fading(350.0, 640.0, rgba(0xffffff, 160)),
         5.0,
     );
 }
@@ -363,14 +433,11 @@ fn disc_drive(d: &mut Drawing) {
     d.fill(Layer::Body, &eject, &solid(rgb(0xe6e9ec)));
     d.edge(&whole);
     d.set_face(&top);
-    d.rim(
+    d.rim_ink(
         Layer::Over,
-        &open_polygon(
-            &[(x0, band - 30.0), (x0, y0), (x1, y0), (x1, band - 30.0)],
-            36.0,
-        ),
+        &open_polygon(&[(x0, band), (x0, y0), (x1, y0), (x1, band)], 36.0),
         &top,
-        rgba(0xffffff, 200),
+        &fading(y0 + 20.0, y0 + (band - y0) * 0.7, rgba(0xffffff, 200)),
         5.0,
     );
     d.fill_in(
@@ -389,6 +456,7 @@ fn disc_drive(d: &mut Drawing) {
         &solid(rgba(0x000000, 110)),
         4.0,
     );
+    d.stroke(Layer::Over, &whole, &solid(rgba(0x1d2530, 40)), 3.0);
 }
 
 /// A disc, drawn flat, printable between its hub and its rim.
@@ -453,62 +521,119 @@ fn disc(d: &mut Drawing) {
     );
 }
 
-/// A server: a tall dark case, its front panel the face, over a row of drive bays.
+/// A server: three units in a rack, each held by the ears either side of it. The top unit is the
+/// tall one, its light front the face over a dark band of vents and lights, and the two under it
+/// are the thin dark ones with their own. A tall dark case with a light panel read as a phone; a
+/// stack of units with lights down their right reads as nothing but a server, even at 16 px.
 fn server(d: &mut Drawing) {
-    let (x0, y0, x1, y1) = (272.0, 72.0, 752.0, 952.0);
-    let case = rrect(x0, y0, x1, y1, 40.0);
-    d.fill(
-        Layer::Body,
-        &case,
-        &down(y0, y1, &[(0.0, rgb(0x565d64)), (1.0, rgb(0x2c3035))]),
-    );
-    d.rim(Layer::Body, &case, &case, rgba(0xffffff, 40), 5.0);
-    d.edge(&case);
-    for i in 0..3 {
-        let by = 680.0 + i as f32 * 84.0;
-        let bay = rrect(x0 + 40.0, by, x1 - 40.0, by + 64.0, 12.0);
+    let (x0, x1, r) = (124.0, 900.0, 26.0);
+    let units = [(116.0, 596.0), (624.0, 748.0), (776.0, 900.0)];
+    // The ears first, under the units, each with the hole its screw goes through.
+    for &(y0, y1) in &units {
+        let holes: &[f32] = if y1 - y0 > 200.0 {
+            &[y0 + 64.0, y1 - 64.0]
+        } else {
+            &[(y0 + y1) / 2.0]
+        };
+        for (ex0, ex1, hx) in [
+            (x0 - 36.0, x0 + 20.0, x0 - 16.0),
+            (x1 - 20.0, x1 + 36.0, x1 + 16.0),
+        ] {
+            let ear = rrect(ex0, y0 + 12.0, ex1, y1 - 12.0, 10.0);
+            d.fill(
+                Layer::Body,
+                &ear,
+                &down(y0, y1, &[(0.0, rgb(0x7a8189)), (1.0, rgb(0x565c63))]),
+            );
+            d.edge(&ear);
+            for &hy in holes {
+                d.fill(Layer::Body, &circle(hx, hy, 9.0), &solid(rgb(0x24282c)));
+            }
+        }
+    }
+    // Each unit's lights, down its right: a blue one and a green one.
+    let lights = |d: &mut Drawing, y: f32| {
+        for (lx, lit) in [(x1 - 56.0, rgb(0x8fd6fb)), (x1 - 104.0, rgb(0x7ee08f))] {
+            d.fill(
+                Layer::Body,
+                &circle(lx, y, 26.0),
+                &radial(lx, y, 26.0, &[(0.0, fade(lit, 0.5)), (1.0, fade(lit, 0.0))]),
+            );
+            d.fill(Layer::Body, &circle(lx, y, 10.0), &solid(lit));
+        }
+    };
+    let vents = |d: &mut Drawing, y0: f32, y1: f32| {
+        for i in 0..7 {
+            let vx = x0 + 48.0 + i as f32 * 38.0;
+            d.fill(
+                Layer::Body,
+                &rrect(vx, y0, vx + 18.0, y1, 7.0),
+                &solid(rgba(0x000000, 100)),
+            );
+        }
+    };
+    // The two thin units.
+    for &(y0, y1) in &units[1..] {
+        let unit = rrect(x0, y0, x1, y1, r);
         d.fill(
             Layer::Body,
-            &bay,
-            &down(by, by + 64.0, &[(0.0, rgb(0x6d747c)), (1.0, rgb(0x50565d))]),
+            &unit,
+            &down(y0, y1, &[(0.0, DARK[0]), (1.0, DARK[1])]),
         );
-        d.stroke(
+        d.rim_ink(
             Layer::Body,
-            &polyline(&[(x0 + 76.0, by + 32.0), (x0 + 250.0, by + 32.0)]),
-            &solid(rgba(0x000000, 90)),
-            8.0,
+            &unit,
+            &unit,
+            &fading(y0, y0 + 50.0, rgba(0xffffff, 70)),
+            4.0,
         );
-        let lx = x1 - 76.0;
-        let lit = if i == 1 { rgb(0x7ee08f) } else { rgb(0x8fd6fb) };
-        d.fill(Layer::Body, &circle(lx, by + 32.0, 11.0), &solid(lit));
+        vents(d, y0 + 38.0, y1 - 38.0);
+        lights(d, (y0 + y1) / 2.0);
+        d.edge(&unit);
     }
-    let panel = rrect(x0 + 40.0, y0 + 40.0, x1 - 40.0, 640.0, 20.0);
+    // The tall one: its front over its band.
+    let (y0, y1) = units[0];
+    let band = y1 - 92.0;
+    let whole = rrect(x0, y0, x1, y1, r);
     d.fill(
         Layer::Body,
-        &panel,
-        &down(
-            y0 + 40.0,
-            640.0,
-            &[(0.0, rgb(0xeef1f4)), (1.0, rgb(0xcdd3da))],
-        ),
+        &whole,
+        &down(band, y1, &[(0.0, DARK[0]), (1.0, DARK[1])]),
     );
-    d.set_face(&panel);
-    d.rim(Layer::Over, &panel, &panel, rgba(0x000000, 60), 4.0);
-    d.rim(
+    vents(d, band + 30.0, y1 - 30.0);
+    lights(d, (band + y1) / 2.0);
+    let front = rrect4(x0, y0, x1, band, [r, r, 0.0, 0.0]);
+    d.fill(
+        Layer::Body,
+        &front,
+        &down(y0, band, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
+    );
+    d.edge(&whole);
+    d.set_face(&front);
+    d.rim_ink(
         Layer::Over,
-        &open_polygon(
-            &[
-                (x0 + 40.0, y0 + 110.0),
-                (x0 + 40.0, y0 + 40.0),
-                (x1 - 40.0, y0 + 40.0),
-                (x1 - 40.0, y0 + 110.0),
-            ],
-            20.0,
-        ),
-        &panel,
-        rgba(0xffffff, 170),
+        &open_polygon(&[(x0, band), (x0, y0), (x1, y0), (x1, band)], r),
+        &front,
+        &fading(y0 + 20.0, y0 + (band - y0) * 0.7, rgba(0xffffff, 200)),
         5.0,
     );
+    d.fill_in(
+        Layer::Over,
+        &front,
+        &down(
+            band - 40.0,
+            band,
+            &[(0.0, rgba(0x000000, 0)), (1.0, rgba(0x000000, 40))],
+        ),
+        &front,
+    );
+    d.stroke(
+        Layer::Over,
+        &polyline(&[(x0 + 2.0, band), (x1 - 2.0, band)]),
+        &solid(rgba(0x000000, 110)),
+        4.0,
+    );
+    d.stroke(Layer::Over, &whole, &solid(rgba(0x1d2530, 40)), 3.0);
 }
 
 /// A folder on the network: the Linux folder, as FolderSkin draws it for the folder look

@@ -98,7 +98,8 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
         &front,
         &down(TOP, SEAM, &[(0.0, hi), (0.45, mid), (1.0, lo)]),
     );
-    d.press(Layer::Body, mark, mix(hi, mid, 0.6), 7.0);
+    // The mark is a deeper shade of the front, the way Finder's own disks carry theirs.
+    d.press(Layer::Body, mark, mix(lo, rgb(0x000000), 0.1), 7.0);
     d.set_face(&front);
     d.edge(&front);
 
@@ -112,11 +113,18 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
     );
     let top_of_strip = polyline(&[(X0, SEAM), (X1, SEAM)]);
     d.rim(Layer::Body, &top_of_strip, &strip, rgba(0xffffff, 150), 5.0);
-    let foot_edge = open_polygon(
-        &[(X0, SEAM + 40.0), (X0, FOOT), (X1, FOOT), (X1, SEAM + 40.0)],
-        FOOT_R,
+    let foot_edge = open_polygon(&[(X0, SEAM), (X0, FOOT), (X1, FOOT), (X1, SEAM)], FOOT_R);
+    d.rim_ink(
+        Layer::Body,
+        &foot_edge,
+        &strip,
+        &down(
+            SEAM + 30.0,
+            FOOT - 20.0,
+            &[(0.0, rgba(0x000000, 0)), (1.0, rgba(0x000000, 60))],
+        ),
+        7.0,
     );
-    d.rim(Layer::Body, &foot_edge, &strip, rgba(0x000000, 60), 7.0);
     let light = (X1 - 62.0, (SEAM + FOOT) / 2.0 + 2.0);
     d.fill(
         Layer::Body,
@@ -138,33 +146,37 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
     );
     d.edge(&strip);
 
-    // Over whatever is on the front: its sides turning away, the light along its top edge and its
-    // foot darkening into the seam.
+    // Over whatever is on the front: its sides turning away, each shade easing out so no line
+    // shows where it ends, the light along its top edge and its foot darkening into the seam.
+    let ease = |a: u8| {
+        let at = |k: f32| rgba(0x000000, (f32::from(a) * k).round() as u8);
+        [
+            (0.0, at(1.0)),
+            (0.3, at(0.5)),
+            (0.65, at(0.16)),
+            (1.0, at(0.0)),
+        ]
+    };
     d.fill_in(
         Layer::Over,
         &front,
-        &across(
-            X0,
-            X0 + 90.0,
-            &[(0.0, rgba(0x000000, 46)), (1.0, rgba(0x000000, 0))],
-        ),
+        &across(X0, X0 + 110.0, &ease(46)),
         &front,
     );
     d.fill_in(
         Layer::Over,
         &front,
-        &across(
-            X1 - 90.0,
-            X1,
-            &[(0.0, rgba(0x000000, 0)), (1.0, rgba(0x000000, 56))],
-        ),
+        &across(X1, X1 - 110.0, &ease(56)),
         &front,
     );
-    let top_edge = open_polygon(
-        &[(X0, SEAM - 40.0), (X0, TOP), (X1, TOP), (X1, SEAM - 40.0)],
-        TOP_R,
+    let top_edge = open_polygon(&[(X0, SEAM), (X0, TOP), (X1, TOP), (X1, SEAM)], TOP_R);
+    d.rim_ink(
+        Layer::Over,
+        &top_edge,
+        &front,
+        &fading(TOP + 20.0, TOP + 420.0, rgba(0xffffff, 170)),
+        6.0,
     );
-    d.rim(Layer::Over, &top_edge, &front, rgba(0xffffff, 170), 6.0);
     d.fill_in(
         Layer::Over,
         &front,
@@ -180,6 +192,13 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
         &polyline(&[(X0 + 2.0, SEAM), (X1 - 2.0, SEAM)]),
         &solid(rgba(0x000000, 90)),
         4.0,
+    );
+    // A fine edge all round, so a light disk keeps its top on a white window.
+    d.stroke(
+        Layer::Over,
+        &rrect4(X0, TOP, X1, FOOT, [TOP_R, TOP_R, FOOT_R, FOOT_R]),
+        &solid(rgba(0x1d2530, 34)),
+        3.0,
     );
 }
 
@@ -356,15 +375,21 @@ fn card(d: &mut Drawing) {
     d.rim(Layer::Over, &label, &label, rgba(0x000000, 70), 5.0);
     let top = open_polygon(
         &[
-            (x0, y1 - 60.0),
+            (x0, y1),
             (x0, y0),
             (x1 - 128.0, y0),
             (x1, y0 + 128.0),
-            (x1, y0 + 260.0),
+            (x1, y1),
         ],
         40.0,
     );
-    d.rim(Layer::Over, &top, &body, rgba(0xffffff, 90), 5.0);
+    d.rim_ink(
+        Layer::Over,
+        &top,
+        &body,
+        &fading(y0 + 140.0, y1 - 80.0, rgba(0xffffff, 90)),
+        5.0,
+    );
 }
 
 /// A disc, printable between its hub and its rim.

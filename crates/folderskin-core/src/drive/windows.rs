@@ -187,17 +187,26 @@ fn slab(d: &mut Drawing, s: &Slab, layer: Layer, face: bool) {
     }
     // Over the top: light along its back edge and a shade where it turns into the front.
     let over = if face { Layer::Over } else { layer };
-    let mid = |a: f32, b: f32| (a + b) / 2.0;
     let back = open_polygon(
         &[
-            (mid(s.x0, s.x0 + s.narrow), mid(s.edge, s.back)),
+            (s.x0, s.edge),
             (s.x0 + s.narrow, s.back),
             (s.x1 - s.narrow, s.back),
-            (mid(s.x1, s.x1 - s.narrow), mid(s.edge, s.back)),
+            (s.x1, s.edge),
         ],
         Slab::R,
     );
-    d.rim(over, &back, &top, rgba(0xffffff, 210), 6.0);
+    d.rim_ink(
+        over,
+        &back,
+        &top,
+        &fading(
+            s.back + 30.0,
+            s.back + (s.edge - s.back) * 0.8,
+            rgba(0xffffff, 210),
+        ),
+        6.0,
+    );
     d.fill_in(
         over,
         &top,
@@ -326,15 +335,21 @@ fn card(d: &mut Drawing) {
     d.rim(Layer::Over, &label, &label, rgba(0x1b2533, 60), 5.0);
     let top = open_polygon(
         &[
-            (x0, y1 - 60.0),
+            (x0, y1),
             (x0, y0),
             (x1 - 132.0, y0),
             (x1, y0 + 132.0),
-            (x1, y0 + 260.0),
+            (x1, y1),
         ],
         46.0,
     );
-    d.rim(Layer::Over, &top, &body, rgba(0xffffff, 110), 6.0);
+    d.rim_ink(
+        Layer::Over,
+        &top,
+        &body,
+        &fading(y0 + 140.0, y1 - 80.0, rgba(0xffffff, 110)),
+        6.0,
+    );
 }
 
 /// A disc drive: a disc standing in the slab, the disc its face.
