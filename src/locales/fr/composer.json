@@ -333,6 +333,7 @@
     "drives": {
       "heading": "Partir d'un disque",
       "label": "partir d'un disque",
+      "picked": "Le disque que vous avez choisi",
       "sub": "Chaque sorte de disque que chaque système affiche. Votre création se pose sur sa face avant."
     }
   },

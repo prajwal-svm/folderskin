@@ -560,6 +560,20 @@
   line-height: 1.25;
 }
 
+/* The chosen drive's own name, cut to its card's width. */
+.cmp-card.is-drive .cmp-card-name {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cmp-card.is-drive .cmp-card-note {
+  margin-top: -3px;
+  font-size: 11px;
+  text-align: center;
+}
+
 /* A drive's picture on its way: a faint square where it will be. */
 .cmp-card-wait {
   border-radius: 14px;

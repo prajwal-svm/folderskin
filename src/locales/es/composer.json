@@ -333,6 +333,7 @@
     "drives": {
       "heading": "Empezar en una unidad",
       "label": "empezar en una unidad",
+      "picked": "La unidad que elegiste",
       "sub": "Cada tipo de unidad que muestra cada sistema. Tu diseño va en su cara frontal."
     }
   },

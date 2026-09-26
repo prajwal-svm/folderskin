@@ -333,6 +333,7 @@
     "drives": {
       "heading": "Start on a drive",
       "label": "start on a drive",
+      "picked": "The drive you chose",
       "sub": "Every kind of drive each system shows. Your design goes on its face."
     }
   },

@@ -47,6 +47,30 @@ export const surfaceKey = (doc: Pick<Doc, "shape" | "style" | "drive">) => (doc.
 export type Surfaces = Partial<Record<string, { images: TemplateImages; parts: Parts } | null>>;
 
 /**
+ * A drive to start a design on, by what it is ("External drive"), or for the drive that's chosen
+ * by its own `name` with what it is under it.
+ */
+function DriveCard({ id, picture, name, onStart }: { id: string; picture: string | undefined; name?: string; onStart: (start: Start) => void }) {
+  return (
+    <button type="button" className="cmp-card is-drive" data-drive={id} onClick={() => onStart({ kind: "drive", drive: id })}>
+      <span className="cmp-card-art" aria-hidden="true">
+        {picture ? <img src={picture} alt="" draggable={false} /> : <span className="cmp-card-wait" />}
+      </span>
+      {name ? (
+        <>
+          <span className="cmp-card-label cmp-card-name" data-tip={name} data-tip-overflow>
+            {name}
+          </span>
+          <span className="cmp-card-note">{driveLabel(id)}</span>
+        </>
+      ) : (
+        <span className="cmp-card-label">{driveLabel(id)}</span>
+      )}
+    </button>
+  );
+}
+
+/**
  * Where every new design starts: empty, on a drive, or from one of the templates. A real dialog
  * over the whole window, so the design in progress can't be edited, or mistaken for the new one,
  * while it's open. When that design has changes that aren't saved, the dialog says so first and
@@ -56,6 +80,7 @@ export function NewDesign({
   surfaces,
   style,
   drive,
+  picked,
   bases,
   assets,
   version,
@@ -70,6 +95,8 @@ export function NewDesign({
   style: FolderStyle;
   /** The drive a design on a drive starts on. */
   drive: string;
+  /** The drive chosen on the stage, by its shape and its name, when a drive is. */
+  picked: { drive: string; name: string } | null;
   /** Every base's bare shape, from Rust, for the drives to start on; null while they're on their way. */
   bases: BaseShape[] | null;
   assets: Assets;
@@ -151,21 +178,22 @@ export function NewDesign({
       <section className="new-section" aria-label={t("composer.new.drives.label")}>
         <h3 className="new-heading">{t("composer.new.drives.heading")}</h3>
         <p className="new-sub">{t("composer.new.drives.sub")}</p>
+        {picked && (
+          // The drive on the stage first, by its own name, so a design for it is one click away.
+          <div className="new-drives" role="group" aria-label={t("composer.new.drives.picked")}>
+            <h4 className="new-drives-heading">{t("composer.new.drives.picked")}</h4>
+            <div className="cmp-drive-grid">
+              <DriveCard id={picked.drive} picture={pictures.get(`drive-${picked.drive}`)} name={picked.name} onStart={onStart} />
+            </div>
+          </div>
+        )}
         {DRIVE_STYLES.map((system) => (
           <div key={system} className="new-drives" role="group" aria-label={t(`common.systems.${system}`)}>
             <h4 className="new-drives-heading">{t(`common.systems.${system}`)}</h4>
             <div className="cmp-drive-grid">
               {DRIVE_KINDS[system].map((kind) => {
                 const id = `${system}-${kind}`;
-                const picture = pictures.get(`drive-${id}`);
-                return (
-                  <button key={id} type="button" className="cmp-card is-drive" data-drive={id} onClick={() => onStart({ kind: "drive", drive: id })}>
-                    <span className="cmp-card-art" aria-hidden="true">
-                      {picture ? <img src={picture} alt="" draggable={false} /> : <span className="cmp-card-wait" />}
-                    </span>
-                    <span className="cmp-card-label">{driveLabel(id)}</span>
-                  </button>
-                );
+                return <DriveCard key={id} id={id} picture={pictures.get(`drive-${id}`)} onStart={onStart} />;
               })}
             </div>
           </div>

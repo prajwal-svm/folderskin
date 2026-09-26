@@ -34,6 +34,50 @@ export async function loadTemplate(src: TemplateSources): Promise<TemplateImages
   return { back, front, middle, top, outline };
 }
 
+/** Each drive's face colour once it has been worked out, by its layers and its face's box. */
+const faceColors = new WeakMap<TemplateImages, Map<string, string | null>>();
+
+/**
+ * The colour a drive's face shows with nothing on it: the plain drive (`middle`) over `face`, a
+ * box in canvas units, averaged. New words and shapes are dark on a light face, as they are on a
+ * light colour. Null when the picture can't be read.
+ */
+export function faceColor(images: TemplateImages, face: [number, number, number, number]): string | null {
+  const key = face.join();
+  const known = faceColors.get(images) ?? new Map<string, string | null>();
+  faceColors.set(images, known);
+  if (known.has(key)) return known.get(key) ?? null;
+  let color: string | null = null;
+  try {
+    const n = 24;
+    const canvas = document.createElement("canvas");
+    canvas.width = n;
+    canvas.height = n;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const src = images.middle as HTMLImageElement;
+    const k = (src.naturalWidth || Number(src.width)) / 1024;
+    if (ctx && k > 0) {
+      const [x0, y0, x1, y1] = face;
+      ctx.drawImage(src, x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k, 0, 0, n, n);
+      const px = ctx.getImageData(0, 0, n, n).data;
+      let [r, g, b, a] = [0, 0, 0, 0];
+      for (let i = 0; i < px.length; i += 4) {
+        const w = px[i + 3] / 255;
+        r += px[i] * w;
+        g += px[i + 1] * w;
+        b += px[i + 2] * w;
+        a += w;
+      }
+      const hex = (v: number) => Math.round(v / a).toString(16).padStart(2, "0");
+      if (a > 0) color = `#${hex(r)}${hex(g)}${hex(b)}`;
+    }
+  } catch {
+    color = null;
+  }
+  known.set(key, color);
+  return color;
+}
+
 type Ctx = CanvasRenderingContext2D;
 
 function reset(c: Ctx) {

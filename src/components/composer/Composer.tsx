@@ -14,7 +14,7 @@ import type { ToastTone } from "../../hooks/useToasts";
 import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
 import { canvasPng } from "../../composer/body";
 import { inkOn, luminance } from "../../composer/color";
-import { loadTemplate, type View } from "../../composer/composite";
+import { faceColor, loadTemplate, type View } from "../../composer/composite";
 import {
   addLayer,
   anchorOf,
@@ -132,6 +132,8 @@ const PREVIEW_SIZES = [128, 64, 32];
 
 /** How small new words may be drawn, across their height, to find them a free spot. */
 const SMALLEST_WORDS = 80;
+/** Room left either side of new words on a front narrower than they are, in canvas units. */
+const WORDS_MARGIN = 32;
 
 /**
  * The design being made, kept for this run of the app only (sessionStorage): leaving the canvas
@@ -563,8 +565,13 @@ export function Composer({
   const folderLoading = templates[surface] === undefined;
   const onDrive = doc.drive !== undefined && doc.shape !== "folder";
   const parts = template?.parts ?? (onDrive && doc.drive ? driveParts(doc.drive) : fallbackParts(doc.style));
-  /** The drive a new design on a drive starts on: the one this design is on, or this system's own. */
-  const startDrive = doc.drive && isDriveId(doc.drive) ? doc.drive : defaultDrive(localOs());
+  /** The drive chosen on the stage, by its shape, when a drive is. */
+  const pickedDrive = folder?.drive && isDriveId(folder.drive.shape) ? folder.drive.shape : null;
+  /**
+   * The drive a new design on a drive starts on: the one chosen on the stage, or the one this
+   * design is on, or this system's own.
+   */
+  const startDrive = pickedDrive ?? (doc.drive && isDriveId(doc.drive) ? doc.drive : defaultDrive(localOs()));
   /** Every base's bare shape, for the drives in the "Start a new design" dialog; fetched as it first opens. */
   const [bases, setBases] = useState<BaseShape[] | null>(null);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
@@ -789,8 +796,11 @@ export function Composer({
   // New layers go in the middle of the front, or on a disc a point on it that shows.
   const front = anchorOf(parts);
   const bg = backgroundColor(doc);
-  // New words, shapes and icons land on the front, whatever covers it.
-  const under = backgroundColor(doc, parts.front);
+  // New words, shapes and icons land on the front, whatever covers it: a drive's face itself when
+  // nothing does, light on most drives.
+  const covered = doc.layers.some((l) => !l.hidden && (l.kind === "fill" || l.kind === "image"));
+  const bare = onDrive && template && !covered ? faceColor(template.images, parts.front) : null;
+  const under = backgroundColor(doc, parts.front) ?? bare;
   const ink = under ? inkOn(under) : "#ffffff";
   const accent = under && luminance(under) > 0.5 ? "#3a86ff" : "#ffffff";
 
@@ -803,11 +813,15 @@ export function Composer({
   );
 
   const addText = () => {
-    const text = makeText(tNow("composer.yourWords"), front.x, front.y, ink);
+    const made = makeText(tNow("composer.yourWords"), front.x, front.y, ink);
+    // No wider than the front they go on: a stick's label is a third of a folder's width.
+    const [fx0, , fx1] = parts.front;
+    const narrow = Math.min(1, (fx1 - fx0 - 2 * WORDS_MARGIN) / boxOf(made, assets).w);
+    const text = narrow < 1 ? { ...made, size: Math.round(made.size * narrow) } : made;
     // Beside what's there already, as an icon goes, not over a label's own words: a size smaller
     // where the front is too narrow for them at their own (Windows' is).
     const { w, h } = boxOf(text, assets);
-    const at = fitSpot(parts, front, w, h, taken, SMALLEST_WORDS);
+    const at = fitSpot(parts, front, w, h, taken, Math.min(SMALLEST_WORDS, h));
     add(at ? { ...text, x: at.x, y: at.y, size: Math.round(text.size * at.scale) } : text);
     window.setTimeout(() => {
       textRef.current?.focus();
@@ -1564,6 +1578,7 @@ export function Composer({
           surfaces={templates}
           style={doc.style}
           drive={startDrive}
+          picked={pickedDrive && folder ? { drive: pickedDrive, name: folder.name } : null}
           bases={bases}
           assets={assets}
           version={version}
