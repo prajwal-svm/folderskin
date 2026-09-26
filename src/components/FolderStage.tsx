@@ -20,6 +20,7 @@ import { ChevronRightIcon, XIcon } from "./icons/composer";
 import { OkBadge } from "./OkBadge";
 import { clip } from "../lib/names";
 import { explain } from "../lib/sentences";
+import { driveKindName } from "../lib/drives";
 
 /** "Choose subfolders" and its column view, loaded the first time they're wanted. */
 const loadChooser = () => import("./SubfolderChooser");
@@ -44,6 +45,7 @@ const maskOf = (src: string): CSSProperties => ({ maskImage: `url("${src}")`, We
 export function FolderStage({
   state,
   skin,
+  skinPicture,
   folderIcon,
   customIcon,
   defaultThumb,
@@ -69,6 +71,8 @@ export function FolderStage({
   state: State;
   /** The skin selected in the library, if any. */
   skin: Skin | null;
+  /** The skin as it looks on the drive picked, when a drive is; its own thumbnail otherwise. */
+  skinPicture?: string | null;
   /** The folder's real icon as the OS draws it now; undefined while it's on its way. */
   folderIcon: string | null | undefined;
   /** The folder wears an icon of its own (not the default one) that a revert would take off. */
@@ -123,7 +127,13 @@ export function FolderStage({
   // What the folder shows: the icon it has, or the skin it is trying on. A folder that has just
   // replaced another shows its own icon for a moment first.
   const showsOwn = phase === "folder" || phase === "reverting" || (phase === "ready" && state.arriving);
-  const src = phase === "idle" ? null : showsOwn ? ownIcon : (skin?.thumbnail ?? ownIcon);
+  const drive = folder?.drive ?? null;
+  const wanted = phase === "idle" ? null : showsOwn ? ownIcon : ((skinPicture ?? skin?.thumbnail) || ownIcon);
+  // A skin's picture on a drive is drawn when it's first asked for: the picture before it stays
+  // until it has arrived, so the stage never shows an empty drive in between.
+  const src = useArrived(wanted, drive !== null);
+  // The folders inside, stacked behind while they're included, are folders even on a drive.
+  const stacked = drive ? (showsOwn ? defaultThumb : (skin?.thumbnail ?? defaultThumb)) : src;
 
   const [shaking, setShaking] = useState(false);
   useEffect(() => {
@@ -161,11 +171,11 @@ export function FolderStage({
           data-tip={folder ? t("folder.stage.chooseOther") : undefined}
         >
           <span className="stage-halo" aria-hidden="true" />
-          {src && state.includeSubfolders && !drag && (
+          {stacked && state.includeSubfolders && !drag && (
             // The folders inside, stacked behind it, while they're included.
             <span className="stage-stack" aria-hidden="true">
-              <img className="stage-stack-img is-far" src={src} alt="" draggable={false} />
-              <img className="stage-stack-img is-near" src={src} alt="" draggable={false} />
+              <img className="stage-stack-img is-far" src={stacked} alt="" draggable={false} />
+              <img className="stage-stack-img is-near" src={stacked} alt="" draggable={false} />
             </span>
           )}
           {src ? (
@@ -229,6 +239,7 @@ export function FolderStage({
             state={state}
             run={run}
             skin={skin}
+            locked={Boolean(drive?.locked)}
             customIcon={customIcon}
             os={system}
             onApply={onApply}
@@ -241,11 +252,37 @@ export function FolderStage({
         )}
 
         <p className={error ? "stage-status is-error" : "stage-status"} role={error ? "alert" : undefined} aria-live="polite">
-          {error ?? statusLine(state, run, skin, system, customIcon)}
+          {error ?? (drive?.locked && !drag ? t(`folder.stage.locked.${drive.locked}`) : statusLine(state, run, skin, system, customIcon))}
         </p>
       </div>
     </aside>
   );
+}
+
+/**
+ * `src`, or while `wait` is on and it hasn't loaded yet, the picture shown before it. A skin on a
+ * drive is drawn when it's first asked for; a data URL is here already and shows at once.
+ */
+function useArrived(src: string | null, wait: boolean): string | null {
+  const [shown, setShown] = useState(src);
+  const now = !wait || !src || src.startsWith("data:");
+  useEffect(() => {
+    if (now || !src) {
+      setShown(src);
+      return;
+    }
+    let live = true;
+    const img = new Image();
+    const show = () => live && setShown(src);
+    img.onload = show;
+    // One that fails shows as it is, as any picture that doesn't load would.
+    img.onerror = show;
+    img.src = src;
+    return () => {
+      live = false;
+    };
+  }, [src, now]);
+  return now ? src : shown;
 }
 
 /** Which folder skins go on, chosen while there's no folder and no skin yet: the empty one above shows it. */
@@ -282,9 +319,10 @@ function StageCopy({ state, skin, browseLabel, doing }: { state: State; skin: Sk
 
   if (drag) {
     const image = drag.kind === "image";
+    const title = image ? t("folder.stage.drag.imageTitle") : drag.kind === "drive" ? t("folder.stage.drag.driveTitle") : t("folder.stage.drag.folderTitle");
     return (
       <div className="stage-copy" key={`drag:${drag.kind}`}>
-        <h2 className="stage-title is-words">{image ? t("folder.stage.drag.imageTitle") : t("folder.stage.drag.folderTitle")}</h2>
+        <h2 className="stage-title is-words">{title}</h2>
         <p className="stage-sub">
           {image
             ? drag.name
@@ -337,6 +375,13 @@ function StageCopy({ state, skin, browseLabel, doing }: { state: State; skin: Sk
         {folder.name}
       </h2>
       <p className="stage-path" data-tip={folder.path} data-tip-overflow>
+        {folder.drive && (
+          // What kind of drive it is, in words, before where it is.
+          <>
+            <span className="stage-kind">{driveKindName(folder.drive)}</span>
+            {" · "}
+          </>
+        )}
         {prettyPath(folder.path)}
       </p>
     </div>
@@ -347,6 +392,7 @@ function StageActions({
   state,
   run,
   skin,
+  locked,
   customIcon,
   os,
   onApply,
@@ -359,6 +405,8 @@ function StageActions({
   state: State;
   run: TreeRun | null;
   skin: Skin | null;
+  /** A drive whose icon can't be changed: skins can be tried on it, not applied. */
+  locked: boolean;
   customIcon: boolean;
   os: Os;
   onApply: () => void;
@@ -402,7 +450,7 @@ function StageActions({
         ) : (
           nudge
         )}
-        <button type="button" className="btn btn-ghost" disabled={removing} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
+        <button type="button" className="btn btn-ghost" disabled={removing || locked} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
           {removing ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
           {removing ? t("folder.stage.removing") : tree ? t("folder.stage.removeIcons") : t("folder.stage.removeIcon")}
         </button>
@@ -433,7 +481,7 @@ function StageActions({
       <button
         type="button"
         className="btn btn-primary btn-lg"
-        disabled={applying}
+        disabled={applying || locked}
         aria-busy={applying}
         onMouseDown={noFocusSteal}
         onClick={onApply}
@@ -684,7 +732,10 @@ function statusLine(state: State, run: TreeRun | null, skin: Skin | null, os: Os
         folder: state.folder ? clip(state.folder.name) : t("folder.stage.theFolder"),
       });
     case "applied":
-      return t(`folder.stage.status.catchUp.${os}`);
+      // Windows keeps a drive's icon for its letter, not the disk: worth knowing once it's on.
+      return state.folder?.drive?.letter
+        ? t("folder.stage.status.driveLetter", { letter: state.folder.drive.letter })
+        : t(`folder.stage.status.catchUp.${os}`);
     case "reverting":
       return t("folder.stage.status.puttingIconBack");
     default:

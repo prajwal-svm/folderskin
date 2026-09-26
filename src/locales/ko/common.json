@@ -103,5 +103,19 @@
     "mac": "Mac",
     "windows": "Windows",
     "linux": "Linux"
+  },
+  "drives": {
+    "startup": "시동 디스크",
+    "system": "시스템 드라이브",
+    "internal": "내장 디스크",
+    "solid-state": "SSD",
+    "external": "외장 디스크",
+    "removable": "USB 드라이브",
+    "card": "메모리 카드",
+    "optical": "광 디스크",
+    "disk-image": "디스크 이미지",
+    "network": "네트워크 드라이브",
+    "time-machine": "Time Machine 디스크",
+    "multi-disk": "RAID 세트"
   }
 }

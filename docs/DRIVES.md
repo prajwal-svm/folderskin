@@ -86,7 +86,10 @@ Two more shapes are only for designing: Linux's optical drive (`optical-drive`) 
 
 ## How FolderSkin tells what was picked
 
-A drive is the root of a volume, its mount point. A folder inside a drive is still a folder.
+A drive is the root of a volume, its mount point. A folder inside a drive is still a folder. The
+rules below are in `crates/folderskin-core/src/drive/detect/`: what each system says is turned into
+a kind by a pure function, tested on any computer, and only the asking is done on the system
+itself.
 
 ### On macOS
 
@@ -97,25 +100,33 @@ A drive is the root of a volume, its mount point. A folder inside a drive is sti
 3. The file system type says a network share (`smbfs`, `afpfs`, `nfs`, `webdav`, `ftp`, or any
    mount that isn't local) and a disc (`cd9660`, `cddafs`, `udf`).
 4. For a local disk, `diskutil info -plist` says the rest: a `BusProtocol` of `Disk Image` is a
-   disk image and `Secure Digital` a memory card, `OpticalMediaType` is a disc, `Internal` is an
-   internal drive, `RemovableMedia` a USB drive, and anything else an external drive.
-5. A disk with `Backups.backupdb` at its root, or an APFS volume whose role is `Backup`, is a Time
-   Machine disk.
+   disk image and `Secure Digital` a memory card (as is a card reader, by its `MediaName`),
+   `OpticalMediaType` is a disc, `Internal` is an internal drive, `RemovableMedia` a USB drive, and
+   anything else an external drive.
+5. A disk with `Backups.backupdb` at its root, or one Time Machine backs up to
+   (`tmutil destinationinfo`), is a Time Machine disk.
+6. Its name is the one Finder shows (`Macintosh HD` for `/`).
 
 ### On Windows
 
 1. A drive is a drive letter's root, such as `D:\`. A network share by its `\\server\share` path
-   has no letter, and Windows gives it no icon of its own, so it stays a folder.
+   has no letter, and Windows gives it no icon of its own, so it stays a folder. Its name is its
+   label and its letter, `Backup (E:)`, or what kind of drive it is when it has no label,
+   `USB drive (F:)`, as Explorer names it.
 2. `GetDriveType` says a network drive (`DRIVE_REMOTE`), a disc drive (`DRIVE_CDROM`) and
    removable media (`DRIVE_REMOVABLE`).
 3. A fixed disk is the startup disk when its letter is `%SystemDrive%`. Otherwise its bus
    (`IOCTL_STORAGE_QUERY_PROPERTY`) says the rest: USB is an external drive, SD and MMC a memory
-   card, a file-backed virtual disk a disk image, and anything else an internal drive.
+   card, a file-backed virtual disk a disk image, Storage Spaces and RAID a RAID set, and anything
+   else an internal drive.
 
 ### On Linux
 
-1. `/proc/self/mounts` lists every mount point. The path is a drive when it is one of them, at
-   `/media/<user>/`, `/run/media/<user>/`, `/mnt/` or anywhere else, and `/` is the startup disk.
+1. `/proc/self/mounts` lists every mount point, but a drive is one the file manager shows as a
+   drive: `/`, the startup disk, anything mounted under `/media/`, `/run/media/`, `/mnt/` or the
+   home folder, and a network share anywhere. `/boot`, `/home` on a partition of its own and the
+   kernel's own file systems stay folders. GNOME mounts a share through GVfs, as a folder under
+   `/run/user/<uid>/gvfs/`, and that folder is a network drive too.
 2. The file system type says a network drive (`nfs`, `nfs4`, `cifs`, `smb3`, `sshfs`, `davfs` and
    other network file systems) and a disc (`iso9660`, `udf`).
 3. The device says the rest. `/dev/loop*` is a disk image, `/dev/md*` a RAID set and
@@ -148,6 +159,20 @@ as its kind.
 
 The library puts drive skins first while a drive is picked, and after the folder skins while a
 folder is. Every skin still goes on either.
+
+## What the stage shows for a drive
+
+The stage names the drive as its system does and says what kind it is, "External drive ·
+/Volumes/Backup Disk", and shows its icon as it is now: its own, or the plain drive of its kind.
+While it's picked, every card in the library shows its skin on that drive. A card's picture is
+drawn the first time it comes into view, a few at a time, served to the webview under the
+`fsdrive:` scheme (`src-tauri/src/drive_thumbs.rs`), and kept beside the skin as
+`<id>.thumb-v3-drive-<shape>.png`, so it's drawn once. The plain drive stands in for it until it
+arrives.
+
+A drive whose icon can't be changed (the startup disk on macOS and Linux, a drive mounted
+read-only on either) can still have skins tried on it. Its Apply button is off, and the line under
+it says why. It offers no run over its folders either.
 
 ## How FolderSkin sets a drive's icon
 

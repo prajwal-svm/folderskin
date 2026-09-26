@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
 import type { Skin } from "../lib/tauri";
 import { FolderThumb } from "./FolderThumb";
+import { drawnOnDrive } from "../lib/drives";
 import { useT } from "../i18n";
 
 export type Empty = { icon: ReactNode; title: string; text: string; action?: ReactNode };
 
 export function Gallery({
   skins,
+  pictureOf,
+  under,
   selectedId,
   favorites,
   empty,
@@ -19,6 +22,10 @@ export function Gallery({
   menuFor,
 }: {
   skins: Skin[];
+  /** Each skin's picture in place of its thumbnail: on the drive picked (hooks/useDrivePictures.ts). */
+  pictureOf?: (skin: Skin) => string;
+  /** What shows under a picture that's being drawn for the drive: the plain drive. */
+  under?: string;
   selectedId: string | null;
   favorites: string[];
   /** Shown instead of the grid when there is nothing to list. */
@@ -68,6 +75,8 @@ export function Gallery({
         <div role="listitem" key={skin.id}>
           <FolderThumb
             skin={skin}
+            picture={pictureOf?.(skin)}
+            under={pictureOf && drawnOnDrive(skin) ? under : undefined}
             index={onAdd ? i + 1 : i}
             selected={skin.id === selectedId}
             favorite={favorites.includes(skin.id)}

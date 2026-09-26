@@ -16,6 +16,7 @@
 use crate::compositor::IconSet;
 use std::path::{Path, PathBuf};
 
+pub mod drive;
 pub mod linux;
 pub mod paths;
 pub mod tree;

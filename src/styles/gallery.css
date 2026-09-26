@@ -181,6 +181,16 @@
   object-fit: contain;
 }
 
+/* On a drive, a skin's picture is drawn the first time it's shown: the plain drive waits in its
+   place, faded, and gives way to it as soon as it arrives. */
+.tile-img.is-under {
+  opacity: 0.5;
+}
+
+.tile-img.is-coming {
+  opacity: 0;
+}
+
 .tile-name {
   grid-area: 2 / 1;
   display: inline-flex;

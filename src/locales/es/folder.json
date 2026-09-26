@@ -96,13 +96,14 @@
       "imageNamed": "{{name}} se convierte en un aspecto en Mis aspectos.",
       "image": "Se convierte en un aspecto en Mis aspectos.",
       "folderNamed": "{{name}} aparecerá aquí, lista para un aspecto.",
-      "folder": "Aparecerá aquí, lista para un aspecto."
+      "folder": "Aparecerá aquí, lista para un aspecto.",
+      "driveTitle": "Suelta para elegir esta unidad"
     },
     "empty": {
       "titleWithSkin": "Ahora suelta una carpeta",
       "title": "Suelta una carpeta aquí",
       "subWithSkin": "{{name}} está listo. Suelta aquí cualquier carpeta o haz clic para elegir una de {{place}}.",
-      "sub": "O haz clic para elegir una de {{place}}."
+      "sub": "Una unidad también sirve. O haz clic para elegir una de {{place}}."
     },
     "applied": "Aplicado",
     "tryingOn": "Probando {{name}}",
@@ -175,9 +176,15 @@
         "windows": "El Explorador de archivos puede tardar un segundo en ponerse al día.",
         "linux": "Archivos puede tardar un segundo en ponerse al día."
       },
-      "puttingIconBack": "Restaurando el icono predeterminado"
+      "puttingIconBack": "Restaurando el icono predeterminado",
+      "driveLetter": "El Explorador de archivos muestra este icono en cualquier unidad que reciba la letra {{letter}}."
     },
-    "pickHintChat": "Previsualiza una imagen del chat"
+    "pickHintChat": "Previsualiza una imagen del chat",
+    "locked": {
+      "startup-sealed": "macOS mantiene sellado el disco de arranque, así que FolderSkin no puede cambiar su icono.",
+      "startup-system": "Solo el sistema puede escribir en el disco de arranque, así que FolderSkin no puede cambiar su icono.",
+      "read-only": "Esta unidad es de solo lectura, así que FolderSkin no puede cambiar su icono."
+    }
   },
   "choose": {
     "title": "Elegir subcarpetas",

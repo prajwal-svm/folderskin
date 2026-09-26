@@ -60,13 +60,14 @@
       "imageNamed": "{{name}} 会成为一款皮肤，存入我的皮肤。",
       "image": "它会成为一款皮肤，存入我的皮肤。",
       "folderNamed": "{{name}} 会出现在这里，等你给它换上皮肤。",
-      "folder": "它会出现在这里，等你给它换上皮肤。"
+      "folder": "它会出现在这里，等你给它换上皮肤。",
+      "driveTitle": "松开即可选择这个驱动器"
     },
     "empty": {
       "titleWithSkin": "现在拖入一个文件夹",
       "title": "把文件夹拖到这里",
       "subWithSkin": "{{name}} 已准备好。把任意文件夹拖到这里，或者点击从{{place}}中选择一个。",
-      "sub": "或者点击从{{place}}中选择一个。"
+      "sub": "驱动器也可以。或者点击从{{place}}中选择一个。"
     },
     "applied": "已应用",
     "tryingOn": "正在试穿 {{name}}",
@@ -119,9 +120,15 @@
         "windows": "文件资源管理器可能要过一秒钟才会更新。",
         "linux": "“文件”可能要过一秒钟才会更新。"
       },
-      "puttingIconBack": "正在恢复默认图标"
+      "puttingIconBack": "正在恢复默认图标",
+      "driveLetter": "文件资源管理器会给任何分到盘符 {{letter}} 的驱动器显示这个图标。"
     },
-    "pickHintChat": "预览聊天里的图片"
+    "pickHintChat": "预览聊天里的图片",
+    "locked": {
+      "startup-sealed": "macOS 会封存启动磁盘，所以 FolderSkin 无法更改它的图标。",
+      "startup-system": "只有系统能写入启动磁盘，所以 FolderSkin 无法更改它的图标。",
+      "read-only": "这个驱动器是只读的，所以 FolderSkin 无法更改它的图标。"
+    }
   },
   "choose": {
     "title": "选择子文件夹",

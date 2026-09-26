@@ -306,6 +306,15 @@ impl SkinImage {
         }
     }
 
+    /// PNG preview at `size` px on a drive of `shape`, as it would be applied to one: artwork
+    /// wrapped onto the drive, a finished drive or folder as it is.
+    pub fn drive_preview_png(&self, size: u32, shape: DriveShape) -> Vec<u8> {
+        match self.artwork() {
+            Some(art) => compositor::render_drive_preview_png(Some(art), size, shape),
+            None => compositor::preview_png_from_image(self.rgba(), size),
+        }
+    }
+
     /// The same skin with its picture no larger than [`MAX_STORED_SIDE`].
     fn bounded(&self) -> SkinImage {
         let (w, h) = self.rgba().dimensions();
@@ -396,6 +405,16 @@ fn picture_path(dir: &Path, stem: &str) -> Option<PathBuf> {
 
 fn thumb_file(stem: &str) -> String {
     format!("{stem}.thumb-{}.png", crate::commands::thumb_tag())
+}
+
+/// A skin's thumbnail on the drive of `shape`, beside its folder thumbnails, so a delete takes
+/// it too.
+fn drive_thumb_file(stem: &str, shape: DriveShape) -> String {
+    format!(
+        "{stem}.thumb-v{}-drive-{}.png",
+        crate::commands::THUMB_CACHE_VERSION,
+        shape.id()
+    )
 }
 
 /// What follows the stem in the name of a composer design's document.
@@ -854,17 +873,44 @@ impl Store {
     /// when the file is missing, damaged or from an older renderer.
     pub fn thumbnail_png(&self, entry: &SavedSkin) -> Result<Vec<u8>, String> {
         let stem = stem(&entry.id).ok_or_else(|| "that skin isn't saved".to_string())?;
-        let path = self.dir.join(thumb_file(stem));
-        if let Ok(bytes) = std::fs::read(&path) {
+        self.cached_png(&entry.id, &self.dir.join(thumb_file(stem)), |image| {
+            image.preview_png(THUMB_SIZE)
+        })
+    }
+
+    /// A saved skin's thumbnail on the drive of `shape` ([`SkinImage::drive_preview_png`]), kept
+    /// on disk as its folder thumbnail is: drawn the first time it's asked for, read back after.
+    pub fn drive_thumbnail_png(
+        &self,
+        entry: &SavedSkin,
+        shape: DriveShape,
+    ) -> Result<Vec<u8>, String> {
+        let stem = stem(&entry.id).ok_or_else(|| "that skin isn't saved".to_string())?;
+        self.cached_png(
+            &entry.id,
+            &self.dir.join(drive_thumb_file(stem, shape)),
+            |image| image.drive_preview_png(THUMB_SIZE, shape),
+        )
+    }
+
+    /// The PNG cached at `path`, or `draw`'s picture of skin `id` when there is none (or it is
+    /// damaged), which is then cached there.
+    fn cached_png(
+        &self,
+        id: &str,
+        path: &Path,
+        draw: impl FnOnce(&SkinImage) -> Vec<u8>,
+    ) -> Result<Vec<u8>, String> {
+        if let Ok(bytes) = std::fs::read(path) {
             if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
                 return Ok(bytes);
             }
         }
         let image = self
-            .load(&entry.id)?
+            .load(id)?
             .ok_or_else(|| "that skin isn't saved any more".to_string())?;
-        let png = image.preview_png(THUMB_SIZE);
-        if let Err(e) = write_atomic(&path, &png) {
+        let png = draw(&image);
+        if let Err(e) = write_atomic(path, &png) {
             eprintln!(
                 "folderskin: couldn't cache the thumbnail {}: {e}",
                 path.display()
@@ -1305,6 +1351,53 @@ mod tests {
             (decoded.width(), decoded.height()),
             (THUMB_SIZE, THUMB_SIZE)
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_skin_on_a_drive_is_drawn_once_and_goes_with_the_skin() {
+        let dir = temp_dir("drive-thumbs");
+        let store = Store::open(dir.clone());
+        let art = artwork([20, 90, 200], (0.5, 0.5));
+        let (sea, _) = store
+            .add(new_skin(&skin_id(b"sea"), "Sea", SkinSource::Import), &art)
+            .unwrap();
+        let (done, _) = store
+            .add(
+                new_skin(&skin_id(b"done"), "Done", SkinSource::Import),
+                &folder(),
+            )
+            .unwrap();
+        let stick = DriveShape::from_id("linux-removable").unwrap();
+
+        let on_stick = store.drive_thumbnail_png(&sea, stick).unwrap();
+        assert_eq!(on_stick, art.drive_preview_png(THUMB_SIZE, stick));
+        assert_ne!(
+            on_stick,
+            store.thumbnail_png(&sea).unwrap(),
+            "artwork goes on the drive, not the folder"
+        );
+        let file = dir.join(drive_thumb_file(stem(&sea.id).unwrap(), stick));
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            on_stick,
+            "kept beside the skin"
+        );
+        // Asked again, it's read back rather than drawn again.
+        let kept = store.thumbnail_png(&done).unwrap();
+        std::fs::write(&file, &kept).unwrap();
+        assert_eq!(store.drive_thumbnail_png(&sea, stick).unwrap(), kept);
+
+        // A finished skin is used as drawn, on a drive as on a folder.
+        let finished = store.load(&done.id).unwrap().unwrap();
+        assert_eq!(
+            store.drive_thumbnail_png(&done, stick).unwrap(),
+            finished.preview_png(THUMB_SIZE)
+        );
+
+        // Deleting a skin takes its drive thumbnails with it.
+        store.delete(&sea.id).unwrap();
+        assert!(!file.exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

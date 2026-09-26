@@ -12,6 +12,8 @@ use folderskin_core::apply::{
     apply_icon, has_custom_icon, refresh_shell_icons, revert_icon, validate_folder,
 };
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
+use folderskin_core::drive::detect::{drive_at, Drive};
+use folderskin_core::drive::DriveShape;
 use folderskin_core::matte;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -128,11 +130,55 @@ pub struct SkinListDto {
     pub default_thumbnail: String,
 }
 
+/// What a picked path is: `folder`, `drive`, `image` or `other`.
 #[derive(Serialize)]
 pub struct PathInfo {
     pub kind: String,
     pub name: String,
     pub path: String,
+    /// For a drive, what kind it is and what FolderSkin can do with it.
+    pub drive: Option<DriveDto>,
+}
+
+/// A drive, as the stage shows it (docs/DRIVES.md).
+#[derive(Serialize, Debug, PartialEq)]
+pub struct DriveDto {
+    /// Its kind: `external`, `network`, `startup`.
+    pub kind: &'static str,
+    /// The shape a skin goes on for it here: `mac-external`.
+    pub shape: String,
+    /// Its own name, or empty when it has none.
+    pub label: String,
+    /// A Windows drive's letter.
+    pub letter: Option<char>,
+    pub startup: bool,
+    pub read_only: bool,
+    pub network: bool,
+    /// Why FolderSkin can't change its icon, when it can't: `startup-sealed`, `startup-system`
+    /// or `read-only` (`folderskin_core::apply::drive::Refusal`).
+    pub locked: Option<&'static str>,
+    /// The drive with nothing on it, as a PNG data URL: what shows while a skin's picture on it
+    /// is on its way.
+    pub plain: String,
+    /// Where each skin's thumbnail on it is: this, then the skin's id.
+    pub thumbnails: String,
+}
+
+impl DriveDto {
+    pub fn new(drive: &Drive, plain: String) -> DriveDto {
+        DriveDto {
+            kind: drive.kind.id(),
+            shape: drive.shape.id(),
+            label: drive.name.clone(),
+            letter: drive.volume.letter(),
+            startup: drive.volume.startup,
+            read_only: drive.volume.read_only,
+            network: drive.volume.network,
+            locked: folderskin_core::apply::drive::refusal(&drive.volume).map(|r| r.code()),
+            thumbnails: crate::drive_thumbs::base(drive.shape),
+            plain,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -313,16 +359,29 @@ pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<Sk
 }
 
 #[tauri::command]
-pub async fn inspect_path(path: String) -> Result<PathInfo, String> {
+pub async fn inspect_path(state: State<'_, AppState>, path: String) -> Result<PathInfo, String> {
+    let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let p = PathBuf::from(&path);
         if !p.exists() {
             return Err("that path doesn't exist any more".to_string());
         }
+        let drive = p.is_dir().then(|| drive_at(&p)).flatten();
         Ok(PathInfo {
-            kind: classify(&p).to_string(),
-            name: display_name(&p),
+            kind: if drive.is_some() {
+                "drive"
+            } else {
+                classify(&p)
+            }
+            .to_string(),
+            name: match &drive {
+                Some(drive) if !drive.name.is_empty() => drive.name.clone(),
+                _ => display_name(&p),
+            },
             path,
+            drive: drive
+                .as_ref()
+                .map(|drive| DriveDto::new(drive, plain_drive(&state, drive.shape))),
         })
     })
     .await
@@ -464,9 +523,18 @@ pub async fn revert_skin(folder: String) -> Result<(), String> {
 #[derive(Serialize)]
 pub struct FolderIconDto {
     /// A data URL: the real OS icon on macOS, the plain rendered folder elsewhere (or when the
-    /// OS cannot provide one).
+    /// OS cannot provide one). For a drive, the plain drive of its kind.
     pub url: String,
     pub custom: bool,
+}
+
+/// The plain drive of `shape` as a data URL, drawn once a shape while the app runs.
+fn plain_drive(state: &AppState, shape: DriveShape) -> String {
+    state.plain_drive(shape, || {
+        data_url(&compositor::render_drive_preview_png(
+            None, THUMB_SIZE, shape,
+        ))
+    })
 }
 
 /// The folder's current icon, and whether it's a custom one FolderSkin can remove.
@@ -481,7 +549,10 @@ pub async fn folder_icon(
         let p = PathBuf::from(&folder);
         let url = match crate::folder_icon::current_icon_png(&p, THUMB_SIZE) {
             Some(png) => data_url(&png),
-            None => default_thumbnail(&app, &state),
+            None => match drive_at(&p) {
+                Some(drive) => plain_drive(&state, drive.shape),
+                None => default_thumbnail(&app, &state),
+            },
         };
         FolderIconDto {
             url,
@@ -529,6 +600,44 @@ mod tests {
         assert_eq!(classify(&dir.join("missing.png")), "other");
         assert_eq!(display_name(&dir.join("photo.JPG")), "photo");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The startup disk is a drive on macOS and Linux, and the stage hears what it needs: its
+    /// kind, its shape, why its icon can't be changed and where its skins' pictures are.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn the_startup_disk_is_described_for_the_stage() {
+        let drive = drive_at(Path::new("/")).expect("/ is a drive");
+        let dto = DriveDto::new(&drive, "data:image/png;base64,".into());
+        assert_eq!(dto.kind, "startup");
+        assert!(dto.startup);
+        let sealed = if cfg!(target_os = "macos") {
+            "startup-sealed"
+        } else {
+            "startup-system"
+        };
+        assert_eq!(dto.locked, Some(sealed));
+        assert!(
+            dto.thumbnails.ends_with(&format!("/{}/", dto.shape)),
+            "{}",
+            dto.thumbnails
+        );
+        let json = serde_json::to_value(&dto).unwrap();
+        for key in [
+            "kind",
+            "shape",
+            "label",
+            "letter",
+            "startup",
+            "read_only",
+            "network",
+            "locked",
+            "thumbnails",
+            "plain",
+        ] {
+            assert!(json.get(key).is_some(), "{key}");
+        }
+        assert!(json["letter"].is_null());
     }
 
     /// A folder-ish block: an opaque rectangle with a tab, `fill` inside, `around` outside.

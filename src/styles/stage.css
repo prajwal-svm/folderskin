@@ -445,6 +445,14 @@
   animation: fade-up var(--t-base) var(--ease-out) 40ms both;
 }
 
+/* A drive's kind, in words, ahead of its path. */
+.stage-kind {
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 /* Rises in whenever the choice changes: the first skin on a folder, and again after an apply. */
 .stage-actions {
   display: flex;

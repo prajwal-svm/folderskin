@@ -15,6 +15,11 @@
  *
  * `?yours=8` starts with eight skins of your own, for the parts that need a library to work on.
  *
+ * `?drive=external,network` makes the first folders chosen drives of those kinds (every kind the
+ * app tells apart, on the system `?os` draws), before the sample folders; `?drive` alone picks
+ * each sample drive in turn. Skins on a drive are drawn here from the drive's layers in
+ * docs/images/composer/drives, a moment after they're first asked for, as the app draws them.
+ *
  * `?bigtree` makes the first folder chosen a made-up Studio with 4,960 folders inside: one of them
  * holds 1,400 and one branch goes 36 levels down, to see choosing folders keep up. `?rushes` makes
  * it a folder of film rushes with 101,040 folders and long names, for runs at that size. The
@@ -35,7 +40,8 @@
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
 import { fallbackParts, FOLDER_STYLES, isFolderStyle, type FolderStyle } from "../composer/parts";
-import { DRIVE_IDS, driveParts, driveStyleOf, driveKindOf } from "../composer/drives";
+import { DRIVE_IDS, DRIVE_KINDS, driveParts, driveStyleOf, driveKindOf, type DriveStyle } from "../composer/drives";
+import type { Drive, DriveKind, DriveLock } from "./drives";
 import type {
   AiCatalogue,
   AiGenerateRequest,
@@ -322,22 +328,47 @@ const CLASSIC_ART = [
 const classicArt = (sha256: string) => `${COMMUNITY_TREE}/pictures/${sha256}.webp`;
 const COLOUR_NAMES = ["Blue", "Orange", "Purple", "Green"];
 
-/** `?yours=8` starts with that many skins of your own, so sharing can be tried without making any. */
+/** Finished drives `?driveskins` adds: each drive's plain picture, as a drive pack's would look. */
+const SEED_DRIVES = ["mac-external", "mac-removable", "mac-network", "windows-internal", "linux-removable"];
+
+/**
+ * `?yours=8` starts with that many skins of your own, so sharing can be tried without making any,
+ * and `?driveskins=2` with that many drive skins as well, older than them.
+ */
 function seeded(): Skin[] {
-  const many = Number(new URLSearchParams(location.search).get("yours") ?? "0");
+  const params = new URLSearchParams(location.search);
+  const many = Number(params.get("yours") ?? "0");
   if (!Number.isFinite(many) || many < 1) return [];
   const now = Date.now();
-  return Array.from({ length: Math.min(many, 40) }, (_, i) => ({
-    id: `user:seed${i}`,
-    name: CLASSIC_ART[i % CLASSIC_ART.length][1],
-    collection: "yours",
-    thumbnail: picture(i),
-    custom: true,
-    kind: "artwork" as const,
-    source: "import" as const,
-    created_at: now - i,
-    tags: i % 3 === 0 ? ["painting"] : ["photo"],
-  }));
+  const drives = Math.min(Math.max(Number(params.get("driveskins") ?? "0") || 0, 0), 10);
+  return [
+    ...Array.from({ length: Math.min(many, 40) }, (_, i) => ({
+      id: `user:seed${i}`,
+      name: CLASSIC_ART[i % CLASSIC_ART.length][1],
+      collection: "yours",
+      thumbnail: picture(i),
+      custom: true,
+      kind: "artwork" as const,
+      source: "import" as const,
+      created_at: now - i,
+      tags: i % 3 === 0 ? ["painting"] : ["photo"],
+    })),
+    ...Array.from({ length: drives }, (_, i): Skin => {
+      const shape = SEED_DRIVES[i % SEED_DRIVES.length];
+      return {
+        id: `user:drive${i}`,
+        name: `Plain ${shape.replace("-", " ")}`,
+        collection: "yours",
+        thumbnail: `/docs/images/composer/bases/drive-${shape}.webp`,
+        custom: true,
+        kind: "folder",
+        shape: "drive",
+        source: "import",
+        created_at: now - 1000 - i,
+        tags: ["drive"],
+      };
+    }),
+  ];
 }
 
 /** Everything in the preview's library, newest first. */
@@ -448,11 +479,159 @@ const packAdded = (id: string) => library.some((s) => s.pack === id);
 
 /** A folder of thousands with `?bigtree`: see `bigTree`. */
 const BIG_TREE = "/Users/you/Documents/Studio";
-/** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried.
- *  With `?bigtree`, the big one comes first. */
 /** A tree of over a hundred thousand folders with long names, with `?rushes`: see `rushes`. */
 const RUSHES = "/Users/you/Movies/Rushes from the lighthouse documentary, every camera and every day of the shoot";
+
+/** The system the preview draws, as `?os` says. */
+const mockOs = (): "macos" | "windows" | "linux" => {
+  const os = new URLSearchParams(location.search).get("os");
+  return os === "windows" || os === "linux" ? os : "macos";
+};
+
+/** A drive in the preview: where it's mounted and what the app would say about it. */
+type MockDrive = { path: string; kind: DriveKind; label: string; letter?: string; startup?: boolean; readOnly?: boolean; network?: boolean };
+
+/** Each system's sample drives, one of every kind that system shows. */
+const MOCK_DRIVES: Record<"macos" | "windows" | "linux", MockDrive[]> = {
+  macos: [
+    { path: "/Volumes/Backup Disk", kind: "external", label: "Backup Disk" },
+    { path: "/Volumes/Studio NAS", kind: "network", label: "Studio NAS", network: true },
+    { path: "/Volumes/UNTITLED", kind: "removable", label: "UNTITLED" },
+    { path: "/Volumes/EOS_DIGITAL", kind: "card", label: "EOS_DIGITAL" },
+    { path: "/Volumes/Holiday 2019", kind: "optical", label: "Holiday 2019", readOnly: true },
+    { path: "/Volumes/Installer", kind: "disk-image", label: "Installer" },
+    { path: "/Volumes/Time Machine Backups", kind: "time-machine", label: "Time Machine Backups" },
+    { path: "/Volumes/Scratch", kind: "internal", label: "Scratch" },
+    { path: "/", kind: "startup", label: "Macintosh HD", startup: true, readOnly: true },
+  ],
+  windows: [
+    { path: "E:\\", kind: "external", label: "Backup", letter: "E" },
+    { path: "F:\\", kind: "removable", label: "", letter: "F" },
+    { path: "Z:\\", kind: "network", label: "media", letter: "Z", network: true },
+    { path: "G:\\", kind: "card", label: "CAMERA", letter: "G" },
+    { path: "D:\\", kind: "optical", label: "HOLIDAY_2019", letter: "D", readOnly: true },
+    { path: "C:\\", kind: "startup", label: "", letter: "C", startup: true },
+  ],
+  linux: [
+    { path: "/media/you/Backup", kind: "external", label: "Backup" },
+    { path: "/media/you/STICK", kind: "removable", label: "STICK" },
+    { path: "/media/you/Work", kind: "solid-state", label: "Work" },
+    { path: "/mnt/nas", kind: "network", label: "nas", network: true },
+    { path: "/media/you/CAMERA", kind: "card", label: "CAMERA" },
+    { path: "/media/you/HOLIDAY_2019", kind: "optical", label: "HOLIDAY_2019", readOnly: true },
+    { path: "/", kind: "startup", label: "", startup: true },
+  ],
+};
+
+/** The drives `?drive` asks for, in its order: the kinds it names, or every sample drive. */
+function askedDrives(): MockDrive[] {
+  const asked = new URLSearchParams(location.search).get("drive");
+  if (asked === null) return [];
+  const drives = MOCK_DRIVES[mockOs()];
+  if (asked === "") return drives;
+  return asked.split(",").flatMap((kind) => drives.filter((d) => d.kind === kind));
+}
+
+const mockDriveAt = (path: string) => MOCK_DRIVES[mockOs()].find((d) => d.path === path) ?? null;
+
+/** The shape a drive of `kind` is drawn as on `style`'s drives: `DriveShape::for_kind`. */
+function mockShape(style: DriveStyle, kind: string): string {
+  if (DRIVE_KINDS[style].includes(kind)) return `${style}-${kind}`;
+  const nearest: Record<DriveStyle, Record<string, string>> = {
+    mac: { "solid-state": "internal", "optical-drive": "optical", server: "network", "multi-disk": "external" },
+    windows: { "optical-drive": "optical", server: "network" },
+    linux: { startup: "internal", "disk-image": "removable", "time-machine": "external" },
+  };
+  return `${style}-${nearest[style][kind] ?? "internal"}`;
+}
+
+/** What `inspect_path` says about a sample drive. */
+function mockDrive(d: MockDrive): Drive {
+  const os = mockOs();
+  const style: DriveStyle = os === "macos" ? "mac" : os;
+  const shape = mockShape(style, d.kind);
+  const locked: DriveLock | null =
+    os === "windows" ? null : d.startup ? (os === "macos" ? "startup-sealed" : "startup-system") : d.readOnly ? "read-only" : null;
+  return {
+    kind: d.kind,
+    shape,
+    label: d.label,
+    letter: d.letter ?? null,
+    startup: d.startup ?? false,
+    read_only: d.readOnly ?? false,
+    network: d.network ?? false,
+    locked,
+    thumbnails: `mock-drive:${shape}:`,
+    plain: `/docs/images/composer/bases/drive-${shape}.webp`,
+  };
+}
+
+/** Skins drawn on a drive so far, by the drive's shape and the skin, as data URLs. */
+const mockDrawn = new Map<string, string>();
+const mockDrawing = new Set<string>();
+const mockDrawnWatchers = new Set<() => void>();
+
+/**
+ * Skin `skinId` on the drive of `shape`, drawn the first time it's asked for: the drive's layers
+ * with the middle of the skin's picture on its face. The sample skins are finished folders, and
+ * the middle of one is its artwork. Null until it's drawn.
+ */
+function mockDriveThumbnail(drive: Drive, skinId: string): string | null {
+  const key = `${drive.shape}|${skinId}`;
+  const done = mockDrawn.get(key);
+  if (done) return done;
+  const skin = library.find((s) => s.id === skinId);
+  if (!skin || mockDrawing.has(key)) return null;
+  mockDrawing.add(key);
+  drawOnMockDrive(drive.shape, skin.thumbnail)
+    .then((url) => {
+      mockDrawn.set(key, url);
+      for (const watcher of mockDrawnWatchers) watcher();
+    })
+    .catch(() => {});
+  return null;
+}
+
+async function drawOnMockDrive(shape: string, picture: string): Promise<string> {
+  // Offline, a picture from GitHub doesn't come: the face is a plain colour instead.
+  const [layers, art] = await Promise.all([templateImages(`drive:${shape}`), loadImg(picture, true).catch(() => null)]);
+  const size = 256;
+  const unit = size / 1024;
+  const [x0, y0, x1, y1] = driveParts(shape).front;
+  const box = { w: (x1 - x0) * unit, h: (y1 - y0) * unit };
+  const face = document.createElement("canvas");
+  face.width = size;
+  face.height = size;
+  const f = face.getContext("2d")!;
+  if (art) {
+    // The middle of the folder's front, where its artwork is.
+    const sw = art.naturalWidth * 0.6;
+    const sh = art.naturalHeight * 0.36;
+    const sx = art.naturalWidth * 0.2;
+    const sy = art.naturalHeight * 0.42;
+    const k = Math.max(box.w / sw, box.h / sh);
+    f.drawImage(art, sx, sy, sw, sh, x0 * unit + (box.w - sw * k) / 2, y0 * unit + (box.h - sh * k) / 2, sw * k, sh * k);
+  } else {
+    f.fillStyle = "#5b7fa6";
+    f.fillRect(x0 * unit, y0 * unit, box.w, box.h);
+  }
+  f.globalCompositeOperation = "destination-in";
+  f.drawImage(layers.front, 0, 0, size, size);
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(layers.middle, 0, 0, size, size);
+  ctx.drawImage(face, 0, 0);
+  ctx.drawImage(layers.top, 0, 0, size, size);
+  return c.toDataURL("image/png");
+}
+
+/** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried.
+ *  With `?bigtree`, the big one comes first. */
 const SAMPLE_FOLDERS = [
+  ...askedDrives().map((d) => d.path),
   ...(new URLSearchParams(location.search).has("bigtree") ? [BIG_TREE] : []),
   ...(new URLSearchParams(location.search).has("rushes") ? [RUSHES] : []),
   "/Users/you/Documents/Projects",
@@ -469,7 +648,10 @@ let nextSample = 0;
  * reverting change it.
  */
 const mockIcons = new Map<string, string | null>(
-  SAMPLE_FOLDERS.map((path, i) => [path, path === BIG_TREE || path === RUSHES || path.endsWith("/Projects") ? null : COLOUR_FOLDERS[i % COLOUR_FOLDERS.length]]),
+  SAMPLE_FOLDERS.filter((path) => !mockDriveAt(path)).map((path, i) => [
+    path,
+    path === BIG_TREE || path === RUSHES || path.endsWith("/Projects") ? null : COLOUR_FOLDERS[i % COLOUR_FOLDERS.length],
+  ]),
 );
 
 /**
@@ -489,6 +671,7 @@ const SAMPLE_TREES: Record<string, string[]> = {
   "/Users/you/Pictures/Wedding": ["Ceremony", "Guests", "Private", "Reception", "Ceremony/Rings", "Reception/Speeches, toasts and the first dance"].map(
     (p) => `/Users/you/Pictures/Wedding/${p}`,
   ),
+  "/Volumes/Backup Disk": ["Archive", "Photos", "Projects", "Photos/2025", "Photos/2026"].map((p) => `/Volumes/Backup Disk/${p}`),
 };
 
 /**
@@ -920,9 +1103,11 @@ function base64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-function loadImg(src: string): Promise<HTMLImageElement> {
+function loadImg(src: string, shared = false): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // A picture from GitHub, drawn on a canvas that is read back, has to be asked for this way.
+    if (shared) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("couldn't read that picture"));
     img.src = src;
@@ -1128,11 +1313,11 @@ export const mockApi = {
       default_thumbnail: COLOUR_FOLDERS[0],
     };
   },
-  inspectPath: async (path: string): Promise<PathInfo> => ({
-    kind: isImagePath(path) ? "image" : "folder",
-    name: path.split(/[\\/]/).pop() || path,
-    path,
-  }),
+  inspectPath: async (path: string): Promise<PathInfo> => {
+    const drive = mockDriveAt(path);
+    if (drive) return { kind: "drive", name: drive.label || path, path, drive: mockDrive(drive) };
+    return { kind: isImagePath(path) ? "image" : "folder", name: path.split(/[\\/]/).pop() || path, path, drive: null };
+  },
   importImage: async (path: string): Promise<Skin> => {
     await sleep(500);
     const name = (path.split(/[\\/]/).pop() || "Your picture").replace(/\.[^.]+$/, "");
@@ -1142,7 +1327,10 @@ export const mockApi = {
   },
   applySkin: async (folder: string, skinId: string) => {
     await sleep(600);
-    mockIcons.set(folder, library.find((s) => s.id === skinId)?.thumbnail ?? null);
+    const skin = library.find((s) => s.id === skinId);
+    const drive = mockDriveAt(folder);
+    const onDrive = drive && skin?.kind === "artwork" ? mockDriveThumbnail(mockDrive(drive), skinId) : null;
+    mockIcons.set(folder, onDrive ?? skin?.thumbnail ?? null);
   },
   revertSkin: async (folder: string) => {
     await sleep(400);
@@ -1269,7 +1457,13 @@ export const mockApi = {
   folderIcon: async (path: string): Promise<FolderIcon> => {
     await sleep(120);
     const custom = mockIcons.get(path) ?? null;
-    return { url: custom ?? COLOUR_FOLDERS[0], custom: custom !== null };
+    const drive = mockDriveAt(path);
+    return { url: custom ?? (drive ? mockDrive(drive).plain : COLOUR_FOLDERS[0]), custom: custom !== null };
+  },
+  driveThumbnail: (drive: Drive, skinId: string): string | null => mockDriveThumbnail(drive, skinId),
+  watchDriveThumbnails: (onDrawn: () => void): (() => void) => {
+    mockDrawnWatchers.add(onDrawn);
+    return () => void mockDrawnWatchers.delete(onDrawn);
   },
   skinsFolder: async () => "/Users/you/Library/Application Support/app.folderskin/skins",
   deleteSkin: async (skinId: string) => {

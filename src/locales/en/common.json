@@ -105,5 +105,19 @@
     "mac": "Mac",
     "windows": "Windows",
     "linux": "Linux"
+  },
+  "drives": {
+    "startup": "Startup disk",
+    "system": "System drive",
+    "internal": "Internal drive",
+    "solid-state": "Solid-state drive",
+    "external": "External drive",
+    "removable": "USB drive",
+    "card": "Memory card",
+    "optical": "Disc",
+    "disk-image": "Disk image",
+    "network": "Network drive",
+    "time-machine": "Time Machine disk",
+    "multi-disk": "RAID set"
   }
 }

@@ -78,13 +78,14 @@
       "imageNamed": "{{name}} becomes a skin in Yours.",
       "image": "It becomes a skin in Yours.",
       "folderNamed": "{{name}} will show up here, ready for a skin.",
-      "folder": "It will show up here, ready for a skin."
+      "folder": "It will show up here, ready for a skin.",
+      "driveTitle": "Let go to pick this drive"
     },
     "empty": {
       "titleWithSkin": "Now drop a folder",
       "title": "Drop a folder here",
       "subWithSkin": "{{name}} is ready. Drop any folder here, or click to pick one from {{place}}.",
-      "sub": "Or click to pick one from {{place}}."
+      "sub": "A drive works too. Or click to pick one from {{place}}."
     },
     "applied": "Applied",
     "tryingOn": "Trying on {{name}}",
@@ -147,9 +148,15 @@
         "windows": "Explorer can take a second to catch up.",
         "linux": "Files can take a second to catch up."
       },
-      "puttingIconBack": "Putting the default icon back"
+      "puttingIconBack": "Putting the default icon back",
+      "driveLetter": "Explorer shows this icon for any drive that gets the letter {{letter}}."
     },
-    "pickHintChat": "Preview a picture from the chat"
+    "pickHintChat": "Preview a picture from the chat",
+    "locked": {
+      "startup-sealed": "macOS keeps the startup disk sealed, so FolderSkin can't change its icon.",
+      "startup-system": "Only the system can write to the startup disk, so FolderSkin can't change its icon.",
+      "read-only": "This drive is read-only, so FolderSkin can't change its icon."
+    }
   },
   "choose": {
     "title": "Choose subfolders",

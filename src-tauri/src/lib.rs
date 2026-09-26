@@ -8,6 +8,7 @@ pub mod commands;
 pub mod community;
 pub mod composer;
 pub mod deep_link;
+pub mod drive_thumbs;
 pub mod folder_icon;
 pub mod icons;
 pub mod installs;
@@ -97,6 +98,8 @@ pub fn run() {
         .manage(catalog::Community::default())
         // Community strips and thumbnails, fetched as the cards that show them scroll in.
         .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
+        // Skins on the drive picked, drawn as the cards that show them scroll in.
+        .register_asynchronous_uri_scheme_protocol(drive_thumbs::SCHEME, drive_thumbs::handle)
         .manage(share::Waiting::default())
         .manage(deep_link::InstallLinks::default())
         // The folders inside the folder on show, counted in the background, and the latest run

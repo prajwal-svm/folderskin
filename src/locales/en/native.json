@@ -178,5 +178,10 @@
       "noGpu": "No graphics card it can use was found, so pictures are painted on the processor: expect a few minutes each.",
       "lowMemory": "With {{memory}} GB of memory this Mac paints slowly, and other apps slow down while it does: the model needs about 8 GB. A provider with your own key is quicker."
     }
+  },
+  "drive": {
+    "startupSealed": "macOS keeps the startup disk sealed, so its icon can't be changed",
+    "startupSystem": "only the system can write to the startup disk, so its icon can't be changed",
+    "readOnly": "this drive is read-only, so its icon can't be changed"
   }
 }

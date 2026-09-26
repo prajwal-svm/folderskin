@@ -178,5 +178,10 @@
       "noGpu": "Aucune carte graphique utilisable n'a été trouvée, les images sont donc peintes par le processeur : comptez quelques minutes par image.",
       "lowMemory": "Avec {{memory}} Go de mémoire, ce Mac peint lentement, et les autres apps ralentissent pendant ce temps : le modèle a besoin d'environ 8 Go. Un fournisseur avec votre propre clé est plus rapide."
     }
+  },
+  "drive": {
+    "startupSealed": "macOS garde le disque de démarrage scellé, son icône ne peut donc pas être changée",
+    "startupSystem": "seul le système peut écrire sur le disque de démarrage, son icône ne peut donc pas être changée",
+    "readOnly": "ce disque est en lecture seule, son icône ne peut donc pas être changée"
   }
 }

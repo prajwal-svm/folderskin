@@ -107,5 +107,19 @@
     "mac": "Mac",
     "windows": "Windows",
     "linux": "Linux"
+  },
+  "drives": {
+    "startup": "Disque de démarrage",
+    "system": "Lecteur système",
+    "internal": "Disque interne",
+    "solid-state": "Disque SSD",
+    "external": "Disque externe",
+    "removable": "Clé USB",
+    "card": "Carte mémoire",
+    "optical": "Disque optique",
+    "disk-image": "Image disque",
+    "network": "Lecteur réseau",
+    "time-machine": "Disque Time Machine",
+    "multi-disk": "Grappe RAID"
   }
 }

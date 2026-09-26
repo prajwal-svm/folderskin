@@ -52,6 +52,8 @@ import { FolderOpenIcon } from "./components/icons/folder-open";
 import { ListFilterIcon } from "./components/icons/list-filter";
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "./components/icons/panel-right";
 import { clip } from "./lib/names";
+import { driveName, shapeFirst } from "./lib/drives";
+import { useDrivePictures } from "./hooks/useDrivePictures";
 
 
 function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref) => void; toggle: () => void } {
@@ -383,10 +385,14 @@ export default function App() {
   // The search box says where it looks: in the tag picked, so nobody takes it for a search of everything.
   const activeTagName = activeTag ? (tabs.find((tab) => tab.id === activeTag)?.label ?? tagLabel(activeTag)) : "";
 
+  // Drive skins come first while a drive is picked, and after the folder skins otherwise.
+  const drive = state.folder?.drive ?? null;
   const visible = useMemo(
-    () => sortSkins(filtered.filter((s) => (!activeTag || s.tags.includes(activeTag)) && matchesQuery(s, query)), sort),
-    [filtered, activeTag, query, sort],
+    () => shapeFirst(sortSkins(filtered.filter((s) => (!activeTag || s.tags.includes(activeTag)) && matchesQuery(s, query)), sort), drive !== null),
+    [filtered, activeTag, query, sort, drive],
   );
+  /** Each skin as it would look on the drive picked; its own thumbnail while a folder is. */
+  const pictureOf = useDrivePictures(drive);
 
   const chooseSort = useCallback((next: Sort) => {
     setSort(next);
@@ -426,14 +432,17 @@ export default function App() {
     async (path: string) => {
       try {
         const info = await api.inspectPath(path);
-        if (info.kind === "folder") {
+        if (info.kind === "folder" || info.kind === "drive") {
+          const drive = info.drive ?? null;
           setFolderIcon(null);
-          dispatch({ type: "folderDropped", folder: { path: info.path, name: info.name } });
+          dispatch({ type: "folderDropped", folder: { path: info.path, name: drive ? driveName(drive) : info.name, drive } });
           refreshFolderIcon(info.path);
           // How many folders are inside, for "Include subfolders": counted in the background for
           // this folder alone, the count before it abandoned. A small folder is counted by the
-          // time this answers, and a big one goes on growing (the listener above).
+          // time this answers, and a big one goes on growing (the listener above). A drive whose
+          // icon can't be changed offers no run over its folders.
           const at = info.path;
+          if (drive?.locked) return;
           api
             .subfolderCount(at)
             .then((count) => dispatch({ type: "subfoldersCounted", path: at, subfolders: { count: count.count, done: count.done } }))
@@ -1265,10 +1274,13 @@ export default function App() {
             >
               <Gallery
                 skins={visible}
+                pictureOf={drive ? pictureOf : undefined}
+                under={drive?.plain}
                 selectedId={state.skinId}
                 favorites={favorites}
                 empty={empty}
-                animationKey={`${view}:${activeTag}:${q}:${JSON.stringify(filters)}:${sort}`}
+                // Picking a drive puts drive skins first, and the cards come in again in that order.
+                animationKey={`${view}:${activeTag}:${q}:${JSON.stringify(filters)}:${sort}:${drive ? "drive" : "folder"}`}
                 onAdd={view === "yours" && !q && !activeTag && !filtering ? pickPhoto : undefined}
                 onSelect={(id) => dispatch({ type: "skinSelected", skinId: id })}
                 onToggleFavorite={onToggleFavorite}
@@ -1360,6 +1372,7 @@ export default function App() {
       <FolderStage
         state={state}
         skin={selected}
+        skinPicture={selected && drive ? pictureOf(selected) : null}
         folderIcon={stageIcon}
         customIcon={customIcon}
         defaultThumb={defaultThumb}

@@ -103,5 +103,19 @@
     "mac": "Mac",
     "windows": "Windows",
     "linux": "Linux"
+  },
+  "drives": {
+    "startup": "启动磁盘",
+    "system": "系统盘",
+    "internal": "内置磁盘",
+    "solid-state": "固态硬盘",
+    "external": "外置磁盘",
+    "removable": "U 盘",
+    "card": "存储卡",
+    "optical": "光盘",
+    "disk-image": "磁盘映像",
+    "network": "网络驱动器",
+    "time-machine": "时间机器磁盘",
+    "multi-disk": "RAID 阵列"
   }
 }

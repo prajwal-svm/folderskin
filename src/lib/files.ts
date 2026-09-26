@@ -16,13 +16,24 @@ export function isImagePath(path: string): boolean {
 }
 
 /**
+ * True for a path that looks like a drive's root: `/`, a volume in /Volumes, a mount under /media
+ * or /run/media, or a Windows drive letter. Only a guess, for what a drag says before it lands.
+ */
+export function looksLikeDrive(path: string): boolean {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  if (trimmed === "" || /^[A-Za-z]:$/.test(trimmed)) return true;
+  return /^\/Volumes\/[^/]+$/.test(trimmed) || /^\/(?:run\/)?media\/[^/]+\/[^/]+$/.test(trimmed);
+}
+
+/**
  * What a drag is carrying, judged from its first path before anything lands. Only a guess:
  * the drop handler still asks the backend what the path really is.
  */
 export function dragInfoFor(paths: string[]): DragInfo | null {
   const first = paths[0];
   if (!first) return null;
-  return { kind: isImagePath(first) ? "image" : "folder", name: baseName(first) };
+  const kind = isImagePath(first) ? "image" : looksLikeDrive(first) ? "drive" : "folder";
+  return { kind, name: baseName(first) };
 }
 
 /** A path for display: the home folder shown as ~ (macOS and Linux). */

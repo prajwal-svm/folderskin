@@ -4,6 +4,7 @@
 
 use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinSource, Store, THUMB_SIZE};
 use folderskin_core::compositor::Style;
+use folderskin_core::drive::DriveShape;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -70,6 +71,8 @@ pub struct Inner {
     /// The plain folder's thumbnail as a PNG data URL, once it has been drawn, for each folder
     /// skins can go on, in the order of [`Style::ALL`].
     default_thumb: [OnceLock<String>; 3],
+    /// Each plain drive's picture as a PNG data URL, once it has been drawn.
+    plain_drives: Mutex<HashMap<DriveShape, String>>,
 }
 
 /// Cheap to clone; every command clones it before moving work to a blocking thread.
@@ -120,6 +123,22 @@ impl AppState {
             return Some(u.entry.clone());
         }
         self.store()?.get(id)
+    }
+
+    /// A skin's thumbnail on the drive of `shape`: kept on disk for a saved skin
+    /// ([`Store::drive_thumbnail_png`]), drawn each time for one kept for this session.
+    pub fn drive_thumbnail(&self, id: &str, shape: DriveShape) -> Result<Vec<u8>, String> {
+        let unsaved = lock(&self.0.unsaved).get(id).map(|u| u.image.clone());
+        if let Some(image) = unsaved {
+            return Ok(image.drive_preview_png(THUMB_SIZE, shape));
+        }
+        let store = self
+            .store()
+            .ok_or_else(|| "that skin isn't available any more".to_string())?;
+        let entry = store
+            .get(id)
+            .ok_or_else(|| "that skin isn't available any more".to_string())?;
+        store.drive_thumbnail_png(&entry, shape)
     }
 
     /// A skin already saved (or kept for this session) under `id`, with its thumbnail PNG.
@@ -408,6 +427,17 @@ impl AppState {
             None if was_unsaved => Ok(()),
             None => Err("FolderSkin doesn't know that skin".into()),
         }
+    }
+
+    /// The plain drive of `shape`: `draw()`'s data URL the first time, kept after that.
+    pub fn plain_drive(&self, shape: DriveShape, draw: impl FnOnce() -> String) -> String {
+        if let Some(url) = lock(&self.0.plain_drives).get(&shape) {
+            return url.clone();
+        }
+        // Drawn without the lock held: two drives at once may both draw, and that's all.
+        let url = draw();
+        lock(&self.0.plain_drives).insert(shape, url.clone());
+        url
     }
 
     /// The plain default folder's thumbnail on the folder of `style`: `draw()`'s data URL the

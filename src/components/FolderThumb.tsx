@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import type { Skin } from "../lib/tauri";
 import { isYours } from "../lib/tags";
 import { reducesMotion } from "../state/prefs";
@@ -26,6 +26,8 @@ const FOLLOW = 0.16;
  */
 export function FolderThumb({
   skin,
+  picture,
+  under,
   index,
   selected,
   favorite,
@@ -36,6 +38,10 @@ export function FolderThumb({
   menuOpen = false,
 }: {
   skin: Skin;
+  /** What it shows in place of its own thumbnail: the skin on the drive picked. */
+  picture?: string;
+  /** What shows until `picture` has loaded: the plain drive it's being drawn on. */
+  under?: string;
   index: number;
   selected: boolean;
   favorite: boolean;
@@ -103,6 +109,12 @@ export function FolderThumb({
 
   const release = useCallback(() => aim(0, 0, 1), [aim]);
 
+  // The picture on a drive is drawn when it's first loaded, which takes a moment: the plain drive
+  // stands in for it until then.
+  const src = picture ?? skin.thumbnail;
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const waiting = under !== undefined && loaded !== src;
+
   const keys = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (onMenu && (e.key === "F2" || (e.key === "Enter" && selected))) {
       e.preventDefault();
@@ -134,7 +146,16 @@ export function FolderThumb({
         onKeyDown={keys}
       >
         <span className="tile-art" ref={art}>
-          <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+          {waiting && <img className="tile-img is-under" src={under} alt="" draggable={false} decoding="async" />}
+          <img
+            className={waiting ? "tile-img is-coming" : "tile-img"}
+            src={src}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setLoaded(src)}
+          />
         </span>
         <span
           className="tile-name"

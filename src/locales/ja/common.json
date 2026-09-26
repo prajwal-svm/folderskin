@@ -103,5 +103,19 @@
     "mac": "Mac",
     "windows": "Windows",
     "linux": "Linux"
+  },
+  "drives": {
+    "startup": "起動ディスク",
+    "system": "システムドライブ",
+    "internal": "内蔵ディスク",
+    "solid-state": "SSD",
+    "external": "外部ディスク",
+    "removable": "USBドライブ",
+    "card": "メモリーカード",
+    "optical": "光学ディスク",
+    "disk-image": "ディスクイメージ",
+    "network": "ネットワークドライブ",
+    "time-machine": "Time Machine ディスク",
+    "multi-disk": "RAIDセット"
   }
 }

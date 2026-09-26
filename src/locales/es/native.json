@@ -178,5 +178,10 @@
       "noGpu": "No se encontró ninguna tarjeta gráfica que pueda usar, así que las imágenes se pintan con el procesador: cuenta con unos minutos por imagen.",
       "lowMemory": "Con {{memory}} GB de memoria, este Mac pinta despacio, y las demás apps van más lentas mientras tanto: el modelo necesita unos 8 GB. Un proveedor con tu propia clave es más rápido."
     }
+  },
+  "drive": {
+    "startupSealed": "macOS mantiene sellado el disco de arranque, así que su icono no se puede cambiar",
+    "startupSystem": "solo el sistema puede escribir en el disco de arranque, así que su icono no se puede cambiar",
+    "readOnly": "esta unidad es de solo lectura, así que su icono no se puede cambiar"
   }
 }

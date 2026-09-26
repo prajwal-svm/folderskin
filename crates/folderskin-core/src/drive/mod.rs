@@ -15,6 +15,7 @@
 //! Lanczos3 downsample of it ([`crate::compositor`]), and [`layers`] splits the same drawing into
 //! the layers the composer stacks a design between, so its canvas shows the icon that is saved.
 
+pub mod detect;
 pub(crate) mod draw;
 mod linux;
 mod mac;

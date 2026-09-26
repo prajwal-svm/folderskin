@@ -8,6 +8,7 @@ import type { SubfolderCount, SubfolderCounts, SubfolderList, TreeRunEvent } fro
 import { askToNotify, notify, windowFocused } from "./notify";
 import type { AiEvent } from "../state/chats";
 import type { ShapeInfo } from "./shapes";
+import type { Drive } from "./drives";
 import { t } from "../i18n";
 import { explain } from "./sentences";
 
@@ -142,7 +143,8 @@ export type ScaledPicture = { name: string; side: number };
 /** A pack saved as a folder: where it is, and the pictures made smaller to fit. */
 export type ExportedPack = { folder: string; scaled: ScaledPicture[] };
 
-export type PathInfo = { kind: "folder" | "image" | "other"; name: string; path: string };
+/** What a picked path is, and for a drive, what kind of drive (lib/drives.ts). */
+export type PathInfo = { kind: "folder" | "drive" | "image" | "other"; name: string; path: string; drive: Drive | null };
 
 /** A folder's icon as it looks now (a data URL), and whether it's a custom one a revert would take off. */
 export type FolderIcon = { url: string; custom: boolean };
@@ -475,6 +477,14 @@ const tauriApi = {
   notify,
   /** The folder's current icon (the real OS icon where available), and whether it's a custom one. */
   folderIcon: (folder: string) => invoke<FolderIcon>("folder_icon", { folder }),
+  /**
+   * Where skin `skinId`'s picture on `drive` is. The app draws it when the picture is first
+   * loaded, and keeps it; the browser preview has no drawing to hand back until it has made one,
+   * and says so with null.
+   */
+  driveThumbnail: (drive: Drive, skinId: string): string | null => drive.thumbnails + skinId,
+  /** Calls `onDrawn` whenever a picture `driveThumbnail` had none for yet is ready. Only the browser preview draws them late. */
+  watchDriveThumbnails: (_onDrawn: () => void): (() => void) => () => {},
   /** The folder the skins are saved in. */
   skinsFolder: () => invoke<string>("skins_folder"),
   /** Deletes one of the user's saved skins from disk. */

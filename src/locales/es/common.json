@@ -107,5 +107,19 @@
     "mac": "Mac",
     "windows": "Windows",
     "linux": "Linux"
+  },
+  "drives": {
+    "startup": "Disco de arranque",
+    "system": "Unidad del sistema",
+    "internal": "Disco interno",
+    "solid-state": "Disco SSD",
+    "external": "Disco externo",
+    "removable": "Memoria USB",
+    "card": "Tarjeta de memoria",
+    "optical": "Disco óptico",
+    "disk-image": "Imagen de disco",
+    "network": "Unidad de red",
+    "time-machine": "Disco de Time Machine",
+    "multi-disk": "Conjunto RAID"
   }
 }

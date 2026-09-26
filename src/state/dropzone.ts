@@ -4,8 +4,10 @@
  */
 import type { Subfolders } from "../lib/tree";
 import { isNothing, type Choice } from "../lib/folderChoice";
+import type { Drive } from "../lib/drives";
 
-export type Folder = { path: string; name: string };
+/** The folder picked, or the drive: a drive's name is the one its system shows (lib/drives.ts). */
+export type Folder = { path: string; name: string; drive?: Drive | null };
 
 /**
  * The folders inside the chosen one that a run over the tree takes when they aren't all of them,
@@ -21,7 +23,7 @@ export type SubfolderChoice = {
 };
 
 /** What is being dragged over the window, guessed from its path before it lands. */
-export type DragInfo = { kind: "folder" | "image"; name: string };
+export type DragInfo = { kind: "folder" | "drive" | "image"; name: string };
 
 export type Phase = "idle" | "folder" | "ready" | "applying" | "applied" | "reverting";
 

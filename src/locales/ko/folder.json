@@ -60,13 +60,14 @@
       "imageNamed": "{{name}} 이미지가 스킨이 되어 내 스킨에 들어가요.",
       "image": "스킨이 되어 내 스킨에 들어가요.",
       "folderNamed": "{{name}} 폴더가 여기에 나타나고, 스킨을 입힐 준비가 돼요.",
-      "folder": "여기에 나타나고, 스킨을 입힐 준비가 돼요."
+      "folder": "여기에 나타나고, 스킨을 입힐 준비가 돼요.",
+      "driveTitle": "놓으면 이 드라이브를 골라요"
     },
     "empty": {
       "titleWithSkin": "이제 폴더를 끌어다 놓으세요",
       "title": "여기에 폴더를 끌어다 놓으세요",
       "subWithSkin": "{{name}} 스킨이 준비됐어요. 여기에 아무 폴더나 끌어다 놓거나, 클릭해서 {{place}}에서 고르세요.",
-      "sub": "또는 클릭해서 {{place}}에서 고르세요."
+      "sub": "드라이브도 돼요. 또는 클릭해서 {{place}}에서 고르세요."
     },
     "applied": "적용됨",
     "tryingOn": "{{name}} 입혀 보는 중",
@@ -119,9 +120,15 @@
         "windows": "파일 탐색기에 반영되기까지 잠깐 걸릴 수 있어요.",
         "linux": "'파일'에 반영되기까지 잠깐 걸릴 수 있어요."
       },
-      "puttingIconBack": "기본 아이콘으로 되돌리는 중"
+      "puttingIconBack": "기본 아이콘으로 되돌리는 중",
+      "driveLetter": "파일 탐색기는 드라이브 문자가 {{letter}}인 모든 드라이브에 이 아이콘을 보여 줘요."
     },
-    "pickHintChat": "채팅의 이미지 미리 보기"
+    "pickHintChat": "채팅의 이미지 미리 보기",
+    "locked": {
+      "startup-sealed": "macOS가 시동 디스크를 봉인해 두어서 FolderSkin으로 아이콘을 바꿀 수 없어요.",
+      "startup-system": "시동 디스크에는 시스템만 쓸 수 있어서 FolderSkin으로 아이콘을 바꿀 수 없어요.",
+      "read-only": "이 드라이브는 읽기 전용이라 FolderSkin으로 아이콘을 바꿀 수 없어요."
+    }
   },
   "choose": {
     "title": "하위 폴더 선택",

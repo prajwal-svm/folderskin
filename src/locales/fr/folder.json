@@ -96,13 +96,14 @@
       "imageNamed": "{{name}} devient un habillage dans Mes habillages.",
       "image": "Elle devient un habillage dans Mes habillages.",
       "folderNamed": "{{name}} apparaîtra ici, prêt pour un habillage.",
-      "folder": "Il apparaîtra ici, prêt pour un habillage."
+      "folder": "Il apparaîtra ici, prêt pour un habillage.",
+      "driveTitle": "Relâchez pour choisir ce disque"
     },
     "empty": {
       "titleWithSkin": "Déposez maintenant un dossier",
       "title": "Déposez un dossier ici",
       "subWithSkin": "{{name}} est prêt. Déposez un dossier ici, ou cliquez pour en choisir un sur {{place}}.",
-      "sub": "Ou cliquez pour en choisir un sur {{place}}."
+      "sub": "Un disque marche aussi. Ou cliquez pour en choisir un sur {{place}}."
     },
     "applied": "Appliqué",
     "tryingOn": "À l'essai : {{name}}",
@@ -175,9 +176,15 @@
         "windows": "L'Explorateur de fichiers peut mettre une seconde à suivre.",
         "linux": "Fichiers peut mettre une seconde à suivre."
       },
-      "puttingIconBack": "Rétablissement de l'icône par défaut"
+      "puttingIconBack": "Rétablissement de l'icône par défaut",
+      "driveLetter": "L'Explorateur de fichiers montre cette icône pour tout lecteur qui reçoit la lettre {{letter}}."
     },
-    "pickHintChat": "Prévisualiser une image du chat"
+    "pickHintChat": "Prévisualiser une image du chat",
+    "locked": {
+      "startup-sealed": "macOS garde le disque de démarrage scellé, FolderSkin ne peut donc pas changer son icône.",
+      "startup-system": "Seul le système peut écrire sur le disque de démarrage, FolderSkin ne peut donc pas changer son icône.",
+      "read-only": "Ce disque est en lecture seule, FolderSkin ne peut donc pas changer son icône."
+    }
   },
   "choose": {
     "title": "Choisir les sous-dossiers",
