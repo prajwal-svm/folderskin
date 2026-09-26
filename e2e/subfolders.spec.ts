@@ -46,13 +46,14 @@ test.describe("choosing subfolders", () => {
     await expect(apply(page)).toHaveText("Apply to 29 folders");
     await openChooser(page);
     await expect(chooser(page)).toContainText("Tick the folders inside Projects to include.");
-    expect(await names(page, "Projects")).toEqual(["Clients", "Design", "Invoices", "Notes", "Photos", "Research", "Templates", "Videos"]);
+    await expect.poll(() => names(page, "Projects")).toEqual(["Clients", "Design", "Invoices", "Notes", "Photos", "Research", "Templates", "Videos"]);
     await expect(tree(page).getByRole("treeitem", { checked: false })).toHaveCount(0);
     await expect(count(page)).toHaveText("28 of 28 folders chosen");
     // The first folder is highlighted, and the next column shows what's inside it.
     await current(page, "Clients");
     await expect(item(page, "Clients")).toHaveAttribute("aria-expanded", "true");
-    expect(await names(page, "Clients")).toEqual(["Acme", "Globex", "Initech"]);
+    // The column comes in a moment after the folder opens: wait for it rather than read it once.
+    await expect.poll(() => names(page, "Clients")).toEqual(["Acme", "Globex", "Initech"]);
     await expect(item(page, "Notes")).not.toHaveAttribute("aria-expanded");
     await expect(chooser(page).getByRole("button", { name: "Select all" })).toBeDisabled();
   });
@@ -314,7 +315,7 @@ test.describe("choosing among folders still being counted", () => {
     await includeSwitch(page).click();
     await openChooser(page);
     await expect(column(page, "Photo archive").getByRole("treeitem").first()).toHaveAttribute("aria-setsize", "30");
-    expect((await names(page, "Photo archive")).slice(0, 2)).toEqual(["1997", "1998"]);
+    await expect.poll(async () => (await names(page, "Photo archive")).slice(0, 2)).toEqual(["1997", "1998"]);
     await expect(count(page)).toHaveText(/^[\d,]+ of [\d,]+ folders chosen so far$/);
     // A year is its twelve months and their days: 1,609 folders, all counted by now.
     await box(page, "1997").click();

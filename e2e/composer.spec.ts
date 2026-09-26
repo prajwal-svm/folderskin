@@ -200,7 +200,11 @@ test.describe("designing on a drive", () => {
   test("a drive's template starts on this system's own drive", async ({ page }) => {
     await openApp(page);
     await startFrom(page, "Labelled drive");
-    await expect(composer(page).getByRole("button", { name: /^which drive:/ })).toHaveAccessibleName("which drive: External drive · Mac");
+    // The drive the system the preview runs on shows first (drives.ts `defaultDrive`): the Mac's
+    // external drive, Windows' local disk, or Linux's USB hard disk, as on CI.
+    const platform = await page.evaluate(() => `${navigator.platform} ${navigator.userAgent}`.toLowerCase());
+    const own = platform.includes("mac") ? "External drive · Mac" : platform.includes("win") ? "Local disk · Windows" : "USB hard disk · Linux";
+    await expect(composer(page).getByRole("button", { name: /^which drive:/ })).toHaveAccessibleName(`which drive: ${own}`);
     await expect(layerNames(page)).toHaveText(["Backups", "Background"]);
   });
 });

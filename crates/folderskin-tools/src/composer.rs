@@ -113,6 +113,38 @@ pub fn same_pixels(a: &RgbaImage, b: &RgbaImage) -> bool {
             .all(|(p, q)| p.0[3] == q.0[3] && (p.0[3] == 0 || p.0 == q.0))
 }
 
+/// Whether `a` and `b` are one picture, give or take the rounding another processor draws it
+/// with. The same drives drawn on an x86 computer and an Arm Mac came out a few pixels apart in each
+/// picture, by one colour level mostly and four at the most. So coverage within [`NEAR_ALPHA`]
+/// levels and colour within [`NEAR_COLOUR`] where it shows, and no more than one pixel in
+/// [`NEAR_SHARE`] off at all: a change to a drawing moves thousands.
+pub fn near_pixels(a: &RgbaImage, b: &RgbaImage) -> bool {
+    if a.dimensions() != b.dimensions() {
+        return false;
+    }
+    let mut off = 0usize;
+    for (p, q) in a.pixels().zip(b.pixels()) {
+        // A pixel nobody sees may keep any colour: WebP keeps what it likes under no coverage.
+        if p == q || (p.0[3] == 0 && q.0[3] == 0) {
+            continue;
+        }
+        off += 1;
+        let coverage = p.0[3].abs_diff(q.0[3]);
+        let colour = (0..3).map(|c| p.0[c].abs_diff(q.0[c])).max().unwrap_or(0);
+        if coverage > NEAR_ALPHA || (p.0[3].min(q.0[3]) >= 16 && colour > NEAR_COLOUR) {
+            return false;
+        }
+    }
+    off <= (a.width() as usize * a.height() as usize / NEAR_SHARE).max(1)
+}
+
+/// How far a pixel's coverage may be from the other picture's in [`near_pixels`].
+const NEAR_ALPHA: u8 = 4;
+/// How far a pixel's colour may be from the other picture's in [`near_pixels`].
+const NEAR_COLOUR: u8 = 8;
+/// One pixel in this many may differ at all in [`near_pixels`].
+const NEAR_SHARE: usize = 200;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,21 +194,46 @@ mod tests {
         for shape in DriveShape::all() {
             for (file, want) in drive_layer_files(shape, 512) {
                 let path = format!("{dir}/drives/{}/{file}", shape.id());
-                assert!(same_pixels(&read(&path), &want), "{path} differs; {again}");
+                assert!(near_pixels(&read(&path), &want), "{path} differs; {again}");
             }
         }
         let parts: serde_json::Value =
             serde_json::from_slice(&std::fs::read(format!("{dir}/drives/parts.json")).unwrap())
                 .unwrap();
-        assert_eq!(parts, drive_parts(), "drives/parts.json differs; {again}");
+        assert!(
+            near_json(&parts, &drive_parts()),
+            "drives/parts.json differs; {again}"
+        );
         for (id, want) in base_pictures(256) {
             let path = format!("{dir}/bases/{id}.webp");
-            assert!(same_pixels(&read(&path), &want), "{path} differs; {again}");
+            assert!(near_pixels(&read(&path), &want), "{path} differs; {again}");
         }
         let strip = format!("{dir}/drives/strip.webp");
         assert!(
-            same_pixels(&read(&strip), &drive_strip()),
+            near_pixels(&read(&strip), &drive_strip()),
             "{strip} differs; {again}"
         );
+    }
+
+    /// Whether two JSON values say the same, numbers within a hundredth of a unit: the drives'
+    /// parts come from their drawings' `f32` geometry, which an x86 computer rounds differently in
+    /// the last digits (93.2515335 there, 93.2515182 on an Arm Mac).
+    fn near_json(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+        use serde_json::Value;
+        match (a, b) {
+            (Value::Number(x), Value::Number(y)) => match (x.as_f64(), y.as_f64()) {
+                (Some(x), Some(y)) => (x - y).abs() <= 0.01,
+                _ => x == y,
+            },
+            (Value::Array(x), Value::Array(y)) => {
+                x.len() == y.len() && x.iter().zip(y).all(|(p, q)| near_json(p, q))
+            }
+            (Value::Object(x), Value::Object(y)) => {
+                x.len() == y.len()
+                    && x.iter()
+                        .all(|(k, v)| y.get(k).is_some_and(|w| near_json(v, w)))
+            }
+            _ => a == b,
+        }
     }
 }

@@ -80,7 +80,7 @@ test.describe("a drive picked instead of a folder", () => {
     await openApp(page, { query: "driveskins=2&drive=external" });
     const drives = ["Plain mac external", "Plain mac removable"];
     await expect(tiles(page)).toHaveCount(10);
-    expect((await names(page)).slice(-2)).toEqual(drives);
+    await expect.poll(async () => (await names(page)).slice(-2)).toEqual(drives);
 
     await panel(page).getByRole("button", { name: /^choose a folder from/ }).click();
     await expect(title(page)).toHaveText("Backup Disk");
@@ -230,7 +230,7 @@ test.describe("packs of drives", () => {
     // Newest though they are, they come after the folder skins while no drive is picked.
     await openView(page, /all skins/i);
     await expect(tiles(page)).toHaveCount(14);
-    expect((await names(page)).slice(-6).every((n) => n.startsWith("Plain "))).toBe(true);
+    await expect.poll(async () => (await names(page)).slice(-6).every((n) => n.startsWith("Plain "))).toBe(true);
     await panel(page).getByRole("button", { name: /^choose a folder from/ }).click();
     await expect(title(page)).toHaveText("Backup Disk");
     await expect.poll(async () => (await names(page)).slice(0, 6).every((n) => n.startsWith("Plain "))).toBe(true);
