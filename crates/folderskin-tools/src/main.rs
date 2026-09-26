@@ -918,7 +918,10 @@ fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
         println!("wrote {} ({quarter}×{quarter})", path.display());
     }
     let strip = out.join("drives/strip.webp");
-    write(&strip, &raster::encode_webp_lossless(&composer::drive_strip()))?;
+    write(
+        &strip,
+        &raster::encode_webp_lossless(&composer::drive_strip()),
+    )?;
     println!("wrote {}", strip.display());
     Ok(())
 }
