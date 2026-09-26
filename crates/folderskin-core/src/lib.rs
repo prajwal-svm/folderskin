@@ -8,6 +8,7 @@ pub mod apply;
 pub mod backdrop;
 pub mod base;
 pub mod compositor;
+pub mod drive;
 pub mod fit;
 pub mod geometry;
 pub mod geometry_windows;

@@ -509,6 +509,40 @@ pub fn render_placed_icon_set_in(
     downsampled(&render_master_placed_in(design, style), sizes)
 }
 
+/// A skin on the drive of `shape` at every requested size, downsampling one master render
+/// ([`crate::drive`]): `art` wrapped onto its face, or the plain drive when there is none.
+pub fn render_drive_icon_set(
+    art: Option<&Artwork>,
+    sizes: &[u32],
+    shape: crate::drive::DriveShape,
+) -> IconSet {
+    let master = match art {
+        Some(art) => crate::drive::render_master(shape, art),
+        None => crate::drive::render_master_plain(shape),
+    };
+    downsampled(&master, sizes)
+}
+
+/// A design placed on the icon canvas, on the drive of `shape`, at every requested size.
+pub fn render_drive_placed_icon_set(
+    design: &image::RgbaImage,
+    sizes: &[u32],
+    shape: crate::drive::DriveShape,
+) -> IconSet {
+    downsampled(&crate::drive::render_master_placed(shape, design), sizes)
+}
+
+/// [`render_drive_icon_set`] at one size, as PNG bytes, for previews.
+pub fn render_drive_preview_png(
+    art: Option<&Artwork>,
+    size: u32,
+    shape: crate::drive::DriveShape,
+) -> Vec<u8> {
+    render_drive_icon_set(art, &[size], shape)
+        .png(size)
+        .expect("the size that was just rendered")
+}
+
 /// The folder template in the layers the composer stacks a design between, each straight-alpha
 /// RGBA and `size` px square.
 ///
