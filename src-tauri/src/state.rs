@@ -222,7 +222,7 @@ impl AppState {
         created_at: u64,
     ) -> (SavedSkin, Vec<u8>) {
         let entry = new.entry(&image, created_at);
-        let thumbnail_png = image.preview_png(THUMB_SIZE);
+        let thumbnail_png = image.preview_png_on(THUMB_SIZE, entry.base.as_deref());
         lock(&self.0.unsaved).insert(
             entry.id.clone(),
             Unsaved {

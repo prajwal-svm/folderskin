@@ -315,6 +315,18 @@ impl SkinImage {
         }
     }
 
+    /// [`SkinImage::preview_png`] on the drive the skin was made for, when its `base` names one
+    /// ([`folderskin_core::base`]): artwork painted for a USB stick is shown on the stick.
+    pub fn preview_png_on(&self, size: u32, base: Option<&str>) -> Vec<u8> {
+        let drive = base
+            .and_then(folderskin_core::base::find)
+            .and_then(|b| b.drive());
+        match (self, drive) {
+            (SkinImage::DriveArt(_), Some(shape)) => self.drive_preview_png(size, shape),
+            _ => self.preview_png(size),
+        }
+    }
+
     /// PNG preview at `size` px on a drive of `shape`, as it would be applied to one: artwork
     /// wrapped onto the drive, a finished drive or folder as it is.
     pub fn drive_preview_png(&self, size: u32, shape: DriveShape) -> Vec<u8> {
@@ -590,7 +602,7 @@ impl Store {
         }
         let image = image.bounded();
         let picture = encode_stored_picture(image.rgba());
-        let thumb = image.preview_png(THUMB_SIZE);
+        let thumb = image.preview_png_on(THUMB_SIZE, new.base.as_deref());
 
         let mut index = self.lock();
         if let Some(existing) = index.iter().find(|s| s.id == new.id) {
@@ -640,7 +652,7 @@ impl Store {
         design_at(&self.lock(), old_id)?;
         let image = image.bounded();
         let picture = encode_stored_picture(image.rgba());
-        let thumb = image.preview_png(THUMB_SIZE);
+        let thumb = image.preview_png_on(THUMB_SIZE, new.base.as_deref());
 
         let mut index = self.lock();
         let pos = design_at(&index, old_id)?;
@@ -897,7 +909,7 @@ impl Store {
     pub fn thumbnail_png(&self, entry: &SavedSkin) -> Result<Vec<u8>, String> {
         let stem = stem(&entry.id).ok_or_else(|| "that skin isn't saved".to_string())?;
         self.cached_png(&entry.id, &self.dir.join(thumb_file(stem)), |image| {
-            image.preview_png(THUMB_SIZE)
+            image.preview_png_on(THUMB_SIZE, entry.base.as_deref())
         })
     }
 
