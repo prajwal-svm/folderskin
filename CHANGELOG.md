@@ -8,6 +8,22 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Added
 
+- **Skin a drive.** Drop a drive on the window, or pick one, and the folder panel says what it is
+  ("External drive", "USB drive (F:)", "Network drive") and shows every skin drawn on that kind
+  of drive, with the skins made for drives first. **Apply skin** gives the drive its own icon: on
+  the drive itself on a Mac and on Linux, and for its letter in Windows' own settings, so nothing
+  is written to the drive there. **Include subfolders** gives the folders on it the skin as
+  folders. The startup disk on a Mac and on Linux, and a drive that's read-only, can't have an
+  icon of their own, and the panel says so before anything is tried.
+- **A drive shape for every kind of drive each system shows**, drawn by FolderSkin: nine on the
+  Mac, from the startup disk to Time Machine, six on Windows, and ten on Linux, from a USB stick
+  and a memory card to a server and a RAID set. Each one still reads at 16 px.
+- **Design your own on a drive.** Start a new design on any of those shapes, with the drive you
+  chose first, and words, shapes and pictures land on its face in a colour that reads there. The
+  Linux folder is there too, beside the Mac's and Windows'.
+- **Packs of drives.** `folderskin-tools packs make --drives` makes one and `packs check` checks
+  it, and Community marks it **Drives**. Its skins wait behind the folder skins until a drive is
+  chosen. FolderSkin 0.1.9 doesn't see packs of drives at all, so it never puts one on a folder.
 - **Runs over subfolders go on in the background.** Applying a skin to a folder and the folders
   inside it, or removing their custom icons, no longer holds the app up: pick another folder,
   look through Community or make a skin while it goes. The foot of the sidebar shows the run on
@@ -98,6 +114,8 @@ All notable changes to FolderSkin are recorded here. The format follows
   folder, with your own pictures after it, and cut out along the template's own edge, with any
   provider that can work from a picture. Pink or violet art is painted on green too, like
   Gemini's, so the cut-out doesn't eat it.
+- **A pack is all folders or all drives.** Share your skins says so when both are ticked, and for
+  now a pack of drives is saved as a folder rather than sent.
 
 ### Fixed
 
@@ -134,6 +152,8 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **The AI chat stays as you left it.** Going to another view and coming back started a new chat,
   and the one you were in, with any picture still being made, went to the chat list. The chat,
   its scroll and anything still painting now wait for you, until FolderSkin is opened again.
+- **Share your skins with none of your own to pick** says so on one line. It used to break the
+  sentence over three.
 
 ## 0.1.9 - 2026-09-25
 
