@@ -105,6 +105,12 @@ All notable changes to FolderSkin are recorded here. The format follows
   folder's custom icon but refuse the way macOS sets one, so every folder on them failed, and
   Remove custom icons left them half done. FolderSkin now writes the icon in itself there, and
   takes it off itself.
+- **A whole folder is cut out when the model's backdrop drifts.** The Local Model turns the
+  magenta around the folder into a dusty pink that brightens towards a corner, or a dark grey
+  behind a night scene, and a painting that shared those colours, such as a sunset's clouds or a
+  street at night, was taken for a reshaped folder and left on its backdrop. The backdrop is now
+  measured where it is, the cut keeps FolderSkin's outline exactly, and backdrop showing inside
+  it is painted over with the art beside it, with no pink rim.
 - **Grok works from pictures.** Every whole folder, and every picture of your own, went to xAI in
   a form it doesn't take.
 - **Ideogram gets the form its reference documents**, and a Recraft whole folder keeps the style

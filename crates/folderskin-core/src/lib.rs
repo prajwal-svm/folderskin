@@ -5,6 +5,7 @@
 
 pub mod adjust;
 pub mod apply;
+pub mod backdrop;
 pub mod base;
 pub mod compositor;
 pub mod fit;

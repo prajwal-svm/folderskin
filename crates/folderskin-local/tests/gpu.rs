@@ -91,7 +91,7 @@ fn klein_repaints_the_blank_folder_and_it_is_cut_out() {
         ))
         .unwrap();
     let fit = picture.provenance.silhouette_fit.unwrap();
-    if fit >= folderskin_core::painted::MIN_SILHOUETTE_FIT {
+    if fit >= folderskin_core::painted::MIN_PAINTED_FIT {
         let img = image::open(&picture.path).unwrap().to_rgba8();
         assert_eq!(img.get_pixel(0, 0).0[3], 0, "cut out: {fit}");
         assert!(dir

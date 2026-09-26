@@ -89,7 +89,16 @@ folder, keeping its outline, its tab, the parts that make it that folder, its si
 position, and to leave the backdrop as it is. The key colour is never named, because a model
 told about magenta paints with it. FolderSkin then cuts the painting out along the folder's own
 outline, so the result keeps FolderSkin's silhouette and keeps the painting's colours right up
-to its edge. A painting that moved or reshaped the folder is cut out by its key colour instead.
+to its edge. Models rarely keep the backdrop flat: it drifts to a dusty pink that brightens
+towards a corner, or to a dark grey behind a night scene. So the backdrop is measured as the
+colour it has at every pixel, from the edge of the frame inward (`backdrop.rs`), and the painted
+folder is found against it. The outline counts as kept when paint spills past it, or backdrop
+shows inside it (which counts twice), on less than half a percent of the folder. Only backdrop as
+plain as the backdrop itself, reaching in from outside, counts as showing, so a painting that
+shares the backdrop's colours, like a sunset's clouds, isn't mistaken for it. Where the model's
+edge sits a few pixels inside FolderSkin's, the backdrop between the two is painted over with the
+paint beside it. A painting that moved or reshaped the folder is cut out by its key colour
+instead.
 Reference pictures you add go after the template, each with the job you gave it, as many as the
 model takes.
 

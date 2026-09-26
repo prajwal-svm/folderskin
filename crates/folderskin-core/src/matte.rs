@@ -61,7 +61,7 @@ impl Default for KeyOptions {
 /// A flat magenta backdrop that the model rendered slightly unevenly still keys out, while
 /// genuinely magenta *subject* pixels (a pink balloon, a neon sign) survive because their
 /// green channel differs.
-fn distance(px: &[u8; 3], key: &[u8; 3]) -> f32 {
+pub(crate) fn distance(px: &[u8; 3], key: &[u8; 3]) -> f32 {
     let d = |a: u8, b: u8| (a as f32 - b as f32) / 255.0;
     let (dr, dg, db) = (d(px[0], key[0]), d(px[1], key[1]), d(px[2], key[2]));
     // Green carries the most information for a magenta key (and red for a green key), so weight

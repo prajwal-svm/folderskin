@@ -104,8 +104,12 @@ The ways to paint:
 `--look windows` paints for Windows' folder instead of the Mac's. klein paints all of them. It follows the idea closely and letters short words ("POW") correctly,
 but counts loosely: "three koi" can come back as two, so another seed or a different phrasing
 helps. Whole-folder pictures are cut out along FolderSkin's own silhouette, not by colour: the model repaints the app's blank folder, the command line finds the painted folder, fits
-the silhouette to it and uses that as the edge. The report line gives the fit; below 0.95 the
-model changed the folder's shape, and the picture is left on its backdrop for you to look at.
+the silhouette to it and uses that as the edge. The backdrop is measured where it is, so a pink
+that drifted towards a corner, or a painting that shares its colours (a sunset's clouds, a night
+street on dark grey), is still told apart from it, and backdrop showing inside the edge is painted
+over with the paint beside it. The report line gives the fit: 1 less the share of the folder that
+disagrees with FolderSkin's. Below 0.995 the model changed the folder's shape (no tab, the tab
+moved, a plain card), and the picture is left on its backdrop for you to look at.
 
 `--provider openai` (or xai, google, bfl, recraft, stability, ideogram) paints the same idea with
 your own key instead (`folderskin ai key set openai`, or `FOLDERSKIN_OPENAI_KEY`), processed the
@@ -159,7 +163,7 @@ Open `previews/_sheet.png`, then any picture that looks doubtful at full size in
 |---|---|
 | the subject cut by the paper strip, or high on the folder | another seed; or say where it is: "…, standing low in the frame" |
 | a blank band or a frame along the folder's edges | paper margins are cut already (the `.json` says `border_trimmed`); `folderskin image trim <picture>` does it for any picture; a frame drawn inside the art is the model's, so try another seed |
-| a whole folder whose fit was below 0.95 | another seed; the model moved or reshaped the folder (`folderskin image clip` cuts one that fits) |
+| a whole folder whose fit was below 0.995 | another seed; the model moved or reshaped the folder (`folderskin image clip` cuts one that fits) |
 | the style is weak | put more of the style into words, or try another preset |
 | the colours are a little off | `folderskin image saturate <picture> 20`, `brightness`, `contrast`, or `image adjust --hue …`: the composer's own adjustments |
 | text or a signature in the art | another seed; small models write when a style suggests posters |

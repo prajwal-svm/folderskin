@@ -6,15 +6,20 @@
 //!   [`trim_paper`] also cuts bands of paper down just two opposite sides, which klein paints too.
 //! * [`cut_along_silhouette`] cuts a whole-folder picture out along FolderSkin's own silhouette.
 //!   The model repaints the app's blank folder and keeps its shape, but not always its exact scale
-//!   (it came back ~2% smaller in testing), and its backdrop drifts from magenta to purple. So the
-//!   painted folder is found against whatever backdrop it has, the silhouette is fitted to it, and
-//!   the silhouette becomes the edge: no colour keying, so no pink fringe, and the edge is ours.
+//!   (it came back ~2% smaller in testing), and its backdrop drifts from magenta to a dusty pink,
+//!   a purple or a dark grey, often brighter in one corner. So the backdrop is measured as the
+//!   colour it has at every pixel ([`Backdrop`]), the painted folder is found against it, the
+//!   silhouette is fitted to it, and the silhouette becomes the edge: no colour keying, so no pink
+//!   fringe, and the edge is ours.
 //! * [`is_blank`] spots the flat white or black picture a backend writes when it fails quietly
 //!   (stable-diffusion.cpp's Metal backend does on some Macs).
 //!
-//! All three are pure, pixels in and pixels out, and follow the reference implementation the
-//! local-generation skill used (`fsgen.py`) step for step; the tests hold them to its results.
+//! All three are pure, pixels in and pixels out. The paper and blank checks follow the reference
+//! implementation the local-generation skill used (`fsgen.py`) step for step, and the tests hold
+//! them to its results; the whole-folder cut outgrew it, and is held to klein's own paintings.
 
+use crate::backdrop::Backdrop;
+use crate::matte::distance;
 use image::imageops::{self, FilterType};
 use image::{GrayImage, Luma, RgbaImage};
 
@@ -317,58 +322,109 @@ fn cut_and_fill(img: &RgbaImage, border: Border) -> RgbaImage {
 
 // ---------- whole folders ----------
 
-/// Below this overlap between the painted folder and FolderSkin's silhouette, the model changed
-/// the folder's shape, and cutting along ours would cut into its painting.
+/// Below this overlap between a cut-out folder's outline and FolderSkin's (intersection over
+/// union), it is a folder of another shape: what `image check` holds a finished cut-out to.
 pub const MIN_SILHOUETTE_FIT: f64 = 0.95;
+
+/// Below this [`SilhouetteCut::fit`], the model changed the folder's shape, and cutting along
+/// ours would cut into its painting or keep some of its backdrop. On klein's paintings a folder
+/// that kept its shape disagrees with ours on well under a tenth of a percent of its area; one
+/// that lost its tab, moved it, or had a corner cut off, on 0.8% or more.
+pub const MIN_PAINTED_FIT: f64 = 0.995;
 
 /// What [`cut_along_silhouette`] made of a picture.
 #[derive(Clone, Debug)]
 pub struct SilhouetteCut {
-    /// How well FolderSkin's silhouette covers the painted folder: intersection over union, 0 to 1.
+    /// How well the painted folder keeps FolderSkin's outline: 1 less the share of the
+    /// silhouette's area painted outside it, less twice the share left bare inside it (backdrop
+    /// where the folder should be is the worse mistake: the cut would keep it). 1 fits exactly,
+    /// and 0 is nothing painted at all.
     pub fit: f64,
     /// The folder cut out, the same size as the picture; `None` when `fit` was below
-    /// [`MIN_SILHOUETTE_FIT`] and the picture is better left on its backdrop.
+    /// [`MIN_PAINTED_FIT`] and the picture is better left on its backdrop.
     pub image: Option<RgbaImage>,
 }
 
-/// How far from the backdrop, in its most different channel, a pixel is painted.
-const PAINTED: f32 = 60.0;
-/// A pixel pointing this closely the backdrop's way in RGB is the backdrop in shadow.
-const SHADOW_COSINE: f32 = 0.985;
-/// A row or column is part of the folder when more than this share of it is painted.
-const PAINTED_SHARE: f64 = 0.02;
-/// How far in from the silhouette's edge the backdrop is keyed and unmixed.
+/// The least a pixel differs from the backdrop, on [`matte`](crate::matte)'s 0 to 1 scale, to
+/// count as paint (in the folder's box, or spilled past our outline), and the most it differs to
+/// count as bare backdrop; twice the backdrop's own noise when that is more. klein leaves a
+/// folder's back panel a pale grey this close to the pink around it.
+const FAINT: f32 = 0.035;
+/// The most a pixel just inside our outline differs from the backdrop to be painted over where
+/// the backdrop reaches in past it; three times the backdrop's noise when that is more.
+const CLEAR: f32 = 0.06;
+/// The darkest a shadow the model casts on its backdrop is, as a share of the backdrop's colour.
+const SHADOW_DEPTH: f32 = 0.3;
+/// The lightest the backdrop's own colour is taken to be, as a share of the colour measured
+/// there: a glow the model painted where [`Backdrop`] didn't see one.
+const SHADOW_LIGHT: f32 = 1.1;
+/// How far from the backdrop's colour scaled a pixel of shadow strays, per channel.
+const SHADOW_NOISE: f32 = 10.0;
+/// A row or column is part of the folder when more than this share of it is painted: enough
+/// that a sparkle or the edge of a shadow in the margin doesn't stretch the folder's box, while
+/// even the tab's rows are a third painted.
+const PAINTED_SHARE: f64 = 0.1;
+/// How far the model's edge may wander from ours without disagreeing, as a share of the folder's
+/// shorter side (at least 3 px): klein's stays within about 8 px of it at 1024 px.
+const OUTLINE_SLACK: f64 = 0.008;
+/// How deep into the silhouette bare backdrop is followed from outside it, as a share of the
+/// folder's shorter side: deep enough to cover a missing tab, not so deep that a pink sky which
+/// touches the edge is taken for backdrop all the way in.
+const BARE_REACH: f64 = 0.04;
+/// How far in from the silhouette's edge backdrop that reaches in past it is painted over:
+/// klein's edge stays within about 8 px of ours at 1024 px.
 const EDGE_BAND: u32 = 10;
+/// How many pixels of the model's own edge, beside backdrop that reaches in past ours, are split
+/// into paint and backdrop: klein's edge fades from paint to backdrop over about four.
+const EDGE_RINGS: u8 = 4;
+/// How far around a pixel on the model's edge the paint just inside it is looked for.
+const EDGE_REACH: u32 = 5;
 
 /// Cuts a whole-folder picture out along FolderSkin's own `silhouette` (white inside the folder,
 /// black around it, lined up with the frame the model was shown).
+///
+/// The backdrop is measured as the colour it has at every pixel ([`Backdrop`]), so a pink that
+/// brightens towards a corner or a dark grey behind a night scene is told from the folder as
+/// well as flat magenta is. The painted folder's box is where anything differs from it, and our
+/// silhouette is stretched over that box. Whether the model kept the shape is read only where
+/// it can be: paint outside our outline differs from the backdrop by definition, and backdrop
+/// inside it has to be as plain as the backdrop and reach in from outside. A painting that
+/// shares the backdrop's colours (a sunset's pink clouds, a dark street at night) is not taken
+/// for backdrop, since it is neither.
 pub fn cut_along_silhouette(img: &RgbaImage, silhouette: &GrayImage) -> SilhouetteCut {
+    let nothing = SilhouetteCut {
+        fit: 0.0,
+        image: None,
+    };
     let (w, h) = img.dimensions();
-    let backdrop = ring_median(img);
+    let Some(backdrop) = Backdrop::measure(img) else {
+        return nothing;
+    };
+    let at = |x: u32, y: u32| (y * w + x) as usize;
     let px = |x: u32, y: u32| {
         let p = img.get_pixel(x, y).0;
-        [p[0] as f32, p[1] as f32, p[2] as f32]
+        [p[0], p[1], p[2]]
     };
-    let distance = |p: &[f32; 3]| {
-        (0..3)
-            .map(|c| (p[c] - backdrop[c]).abs())
-            .fold(0.0f32, f32::max)
-    };
-    let backdrop_len = backdrop.iter().map(|v| v * v).sum::<f32>().sqrt();
-    // A shadow the model casts on the backdrop is the backdrop's own colour, darker: the same
-    // direction in RGB. It must not count when finding the folder's box, or the box grows by the
-    // shadow's width. Only there: inside the folder a red lantern can point the same way.
-    let shadow = |p: &[f32; 3]| {
-        let len = p.iter().map(|v| v * v).sum::<f32>().sqrt() * backdrop_len + 1e-6;
-        (p[0] * backdrop[0] + p[1] * backdrop[1] + p[2] * backdrop[2]) / len > SHADOW_COSINE
-    };
+    let faint = (backdrop.noise * 2.0).max(FAINT);
+    let clear = (backdrop.noise * 3.0).max(CLEAR);
+    // How far each pixel is from the backdrop there, and whether it is the backdrop in shade: a
+    // shadow the model casts must not count as paint around the folder, or its box grows by the
+    // shadow's width.
+    let mut off = vec![0f32; (w * h) as usize];
+    let mut shade = vec![false; (w * h) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let (p, k) = (px(x, y), backdrop.at(x, y));
+            off[at(x, y)] = distance(&p, &k);
+            shade[at(x, y)] = in_shadow(p, k);
+        }
+    }
 
     let mut rows = vec![0u32; h as usize];
     let mut cols = vec![0u32; w as usize];
     for y in 0..h {
         for x in 0..w {
-            let p = px(x, y);
-            if distance(&p) > PAINTED && !shadow(&p) {
+            if off[at(x, y)] > faint && !shade[at(x, y)] {
                 rows[y as usize] += 1;
                 cols[x as usize] += 1;
             }
@@ -381,54 +437,168 @@ pub fn cut_along_silhouette(img: &RgbaImage, silhouette: &GrayImage) -> Silhouet
         Some((first as u32, last as u32 + 1))
     };
     let (Some((y0, y1)), Some((x0, x1))) = (busy(&rows, w), busy(&cols, h)) else {
-        return SilhouetteCut {
-            fit: 0.0,
-            image: None,
-        };
+        return nothing;
     };
 
-    // Our silhouette, trimmed to itself and stretched over the painted folder's box, then a
+    // Our silhouette, moved and stretched so its body spans the painted folder's box, then a
     // pixel in from its own edge, where the model's painting blends into the backdrop.
     let fitted = erode(&place_silhouette(silhouette, (w, h), (x0, y0, x1, y1)), 1);
-
-    let (mut both, mut either) = (0u64, 0u64);
-    for (x, y, f) in fitted.enumerate_pixels() {
-        let p = px(x, y);
-        let inside = f.0[0] > 127;
-        let solid = distance(&p) > PAINTED && !(shadow(&p) && !inside);
-        both += u64::from(inside && solid);
-        either += u64::from(inside || solid);
+    let inside: Vec<bool> = fitted.pixels().map(|p| p.0[0] > 127).collect();
+    let area = inside.iter().filter(|&&i| i).count();
+    if area == 0 {
+        return nothing;
     }
-    let fit = both as f64 / either.max(1) as f64;
-    if fit < MIN_SILHOUETTE_FIT {
+    // Every pixel's distance to the other side of our outline, in thirds of a pixel.
+    let depth_in = chamfer(&inside, w, h);
+    let depth_out = chamfer(&inside.iter().map(|i| !i).collect::<Vec<_>>(), w, h);
+    let side = f64::from((x1 - x0).min(y1 - y0));
+    let slack = 3 * (side * OUTLINE_SLACK).round().max(3.0) as u32;
+    let reach = 3 * (side * BARE_REACH).round() as u32;
+
+    // Paint that spilled outside our outline: as little of it as found the box.
+    let spilled = (0..inside.len())
+        .filter(|&i| !inside[i] && depth_out[i] > slack && off[i] > faint && !shade[i])
+        .count();
+    // Bare backdrop inside it: as close to the backdrop as the backdrop itself is and as smooth,
+    // grown in from outside our outline no deeper than `reach`. Outside our outline the backdrop
+    // in shade counts too, so backdrop behind a drop shadow is still reached.
+    let smooth = (backdrop.noise * 255.0 * 1.5).max(4.0);
+    let bare_px = |x: u32, y: u32| off[at(x, y)] <= faint && roughness(img, x, y) <= smooth;
+    let passes = |x: u32, y: u32| (!inside[at(x, y)] && shade[at(x, y)]) || bare_px(x, y);
+    let mut reached = vec![false; inside.len()];
+    let mut queue = std::collections::VecDeque::new();
+    for y in 0..h {
+        for x in 0..w {
+            if !inside[at(x, y)] && passes(x, y) {
+                reached[at(x, y)] = true;
+                queue.push_back((x, y));
+            }
+        }
+    }
+    while let Some((x, y)) = queue.pop_front() {
+        for (nx, ny) in [
+            (x.wrapping_sub(1), y),
+            (x + 1, y),
+            (x, y.wrapping_sub(1)),
+            (x, y + 1),
+        ] {
+            if nx < w && ny < h {
+                let i = at(nx, ny);
+                if !reached[i] && depth_in[i] <= reach && passes(nx, ny) {
+                    reached[i] = true;
+                    queue.push_back((nx, ny));
+                }
+            }
+        }
+    }
+    let bare = (0..inside.len())
+        .filter(|&i| reached[i] && inside[i] && depth_in[i] > slack)
+        .count();
+    let fit = (1.0 - (spilled as f64 + 2.0 * bare as f64) / area as f64).max(0.0);
+    if fit < MIN_PAINTED_FIT {
         return SilhouetteCut { fit, image: None };
     }
 
-    // The model's edge wanders a few pixels either side of ours. In a band just inside our edge,
-    // backdrop-coloured pixels go too, and a pixel that is part backdrop gets the backdrop taken
-    // out of its colour, so the edge carries the painting's colours instead of a pink rim. Deeper
-    // in, a pink lantern stays a pink lantern.
-    let deep = erode(&fitted, EDGE_BAND);
-    let magenta_backdrop = backdrop[0].min(backdrop[2]) - backdrop[1] > 100.0;
+    // The cut is our silhouette's own edge, and the painting inside it stays as painted: a pale
+    // rim the model gave its folder, or a pink cloud that reaches the edge, is not the backdrop.
+    // Where the model's edge sits a few pixels inside ours, the backdrop between the two edges
+    // (and the model's own edge pixels, half backdrop) is painted over with the paint beside it,
+    // as a designer bleeds art to a die line: the icon keeps FolderSkin's outline and shows no
+    // backdrop. A pixel of paint taken for backdrop there costs nothing, since paint replaces it.
+    let band = 3 * EDGE_BAND;
+    let alpha_of = |i: usize| fitted.as_raw()[i];
+    let backdropish = |x: u32, y: u32| off[at(x, y)] <= clear;
+    let mut bled = vec![false; inside.len()];
+    let mut queue = std::collections::VecDeque::new();
+    for y in 0..h {
+        for x in 0..w {
+            let i = at(x, y);
+            if !inside[i] && (shade[i] || backdropish(x, y)) {
+                bled[i] = true;
+                queue.push_back((x, y));
+            }
+        }
+    }
+    while let Some((x, y)) = queue.pop_front() {
+        for (nx, ny) in [
+            (x.wrapping_sub(1), y),
+            (x + 1, y),
+            (x, y.wrapping_sub(1)),
+            (x, y + 1),
+        ] {
+            if nx < w && ny < h {
+                let i = at(nx, ny);
+                if !bled[i] && depth_in[i] <= band && backdropish(nx, ny) {
+                    bled[i] = true;
+                    queue.push_back((nx, ny));
+                }
+            }
+        }
+    }
+    // Only what shows is painted over.
+    let over: Vec<bool> = (0..inside.len())
+        .map(|i| bled[i] && alpha_of(i) > 0)
+        .collect();
+    // How many pixels (8-connected) each other pixel is from one painted over, up to
+    // EDGE_RINGS + 1: the model's own edge, a blend of paint and backdrop a few pixels wide.
+    let mut ring: Vec<u8> = over.iter().map(|&o| if o { 0 } else { u8::MAX }).collect();
+    for r in 1..=EDGE_RINGS + 1 {
+        let previous = ring.clone();
+        for y in 0..h {
+            for x in 0..w {
+                if previous[at(x, y)] != u8::MAX {
+                    continue;
+                }
+                let touches = (y.saturating_sub(1)..=(y + 1).min(h - 1)).any(|ny| {
+                    (x.saturating_sub(1)..=(x + 1).min(w - 1))
+                        .any(|nx| previous[at(nx, ny)] == r - 1)
+                });
+                if touches {
+                    ring[at(x, y)] = r;
+                }
+            }
+        }
+    }
     let mut out = RgbaImage::new(w, h);
     for (x, y, o) in out.enumerate_pixels_mut() {
+        let i = at(x, y);
         let p = px(x, y);
-        let f = fitted.get_pixel(x, y).0[0] as f32 / 255.0;
-        let band = f > 0.0 && deep.get_pixel(x, y).0[0] == 0;
-        let (mut colour, mut alpha) = (p, f);
-        if band {
-            let keep = ((distance(&p) - 40.0) / 80.0).clamp(0.0, 1.0);
-            alpha = f * keep;
-            for c in 0..3 {
-                let unmixed = (p[c] - (1.0 - keep) * backdrop[c]) / keep.max(0.05);
-                colour[c] = unmixed.clamp(0.0, 255.0);
+        let mut colour = p.map(f32::from);
+        if (1..=EDGE_RINGS).contains(&ring[i]) && alpha_of(i) > 0 {
+            // Split the model's edge into paint and backdrop: how far the pixel is from the
+            // backdrop there towards the paint just inside it.
+            let (mut fore, mut n) = ([0f32; 3], 0f32);
+            for ny in y.saturating_sub(EDGE_REACH)..=(y + EDGE_REACH).min(h - 1) {
+                for nx in x.saturating_sub(EDGE_REACH)..=(x + EDGE_REACH).min(w - 1) {
+                    let j = at(nx, ny);
+                    if ring[j] > EDGE_RINGS && alpha_of(j) == 255 {
+                        let q = px(nx, ny);
+                        (0..3).for_each(|c| fore[c] += f32::from(q[c]));
+                        n += 1.0;
+                    }
+                }
             }
-            if magenta_backdrop {
-                // The model shades the folder's rim with the magenta around it; take that cast
-                // back out.
-                let spill = (colour[0].min(colour[2]) - colour[1]).max(0.0);
-                colour[0] -= spill;
-                colour[2] -= spill;
+            let k = backdrop.at(x, y).map(f32::from);
+            let fore = fore.map(|v| v / n.max(1.0));
+            let v = [fore[0] - k[0], fore[1] - k[1], fore[2] - k[2]];
+            let vv = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+            // Paint too close to the backdrop's colour to tell apart stays as it is.
+            if n > 0.0 && vv >= 25.0 * 25.0 {
+                let c = colour;
+                let a = (((c[0] - k[0]) * v[0] + (c[1] - k[1]) * v[1] + (c[2] - k[2]) * v[2]) / vv)
+                    .clamp(0.0, 1.0);
+                // Mostly paint: take the backdrop's share out, which keeps the pixel's detail, but
+                // no further from the paint beside it than the pixel was (dividing by `a` also
+                // magnifies noise, and a magenta cast would come out green). Mostly backdrop:
+                // take the paint's colour.
+                colour = if a >= 0.75 {
+                    [0, 1, 2].map(|j| {
+                        let (lo, hi) = (c[j].min(fore[j]), c[j].max(fore[j]));
+                        (k[j] + (c[j] - k[j]) / a).clamp(lo, hi)
+                    })
+                } else {
+                    fore
+                };
             }
         }
         let byte = |v: f32| v.round_ties_even().clamp(0.0, 255.0) as u8;
@@ -436,8 +606,20 @@ pub fn cut_along_silhouette(img: &RgbaImage, silhouette: &GrayImage) -> Silhouet
             byte(colour[0]),
             byte(colour[1]),
             byte(colour[2]),
-            byte(alpha * 255.0),
+            alpha_of(i),
         ];
+    }
+    bleed(&mut out, &over);
+    // The model shades the folder's rim with the magenta around it; take that cast back out of
+    // what is left of it.
+    for (x, y, o) in out.enumerate_pixels_mut() {
+        let k = backdrop.at(x, y).map(f32::from);
+        if o.0[3] > 0 && o.0[3] < 255 && k[0].min(k[2]) - k[1] > 100.0 {
+            let c = [o.0[0], o.0[1], o.0[2]].map(f32::from);
+            let spill = (c[0].min(c[2]) - c[1]).max(0.0);
+            o.0[0] = (c[0] - spill).round() as u8;
+            o.0[2] = (c[2] - spill).round() as u8;
+        }
     }
     SilhouetteCut {
         fit,
@@ -445,30 +627,151 @@ pub fn cut_along_silhouette(img: &RgbaImage, silhouette: &GrayImage) -> Silhouet
     }
 }
 
-/// The backdrop's colour: each channel's median over a ring four pixels deep around the frame.
-fn ring_median(img: &RgbaImage) -> [f32; 3] {
+/// Paints every pixel of `img` marked in `over` with the colours of the pixels around it that
+/// aren't, ring by ring inwards from them: each takes the mean of its neighbours already painted.
+/// Alpha stays as it is.
+fn bleed(img: &mut RgbaImage, over: &[bool]) {
     let (w, h) = img.dimensions();
-    let depth = 4.min(w).min(h);
-    let mut ring: Vec<[u8; 4]> = Vec::new();
-    // Rows first, then columns, corners in both, as the reference reads them.
-    for y in (0..depth).chain(h - depth..h) {
-        ring.extend((0..w).map(|x| img.get_pixel(x, y).0));
-    }
-    for y in 0..h {
-        for x in (0..depth).chain(w - depth..w) {
-            ring.push(img.get_pixel(x, y).0);
+    let at = |x: u32, y: u32| (y * w + x) as usize;
+    let mut done: Vec<bool> = over.iter().map(|o| !o).collect();
+    let mut front: Vec<(u32, u32)> = (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .filter(|&(x, y)| over[at(x, y)])
+        .collect();
+    while !front.is_empty() {
+        let mut painted = Vec::new();
+        let mut waiting = Vec::new();
+        for &(x, y) in &front {
+            let (mut sum, mut n) = ([0u32; 3], 0u32);
+            for ny in y.saturating_sub(1)..=(y + 1).min(h - 1) {
+                for nx in x.saturating_sub(1)..=(x + 1).min(w - 1) {
+                    if done[at(nx, ny)] && img.get_pixel(nx, ny).0[3] > 0 {
+                        let q = img.get_pixel(nx, ny).0;
+                        (0..3).for_each(|c| sum[c] += u32::from(q[c]));
+                        n += 1;
+                    }
+                }
+            }
+            if n > 0 {
+                painted.push((x, y, sum.map(|v| ((v + n / 2) / n) as u8)));
+            } else {
+                waiting.push((x, y));
+            }
         }
+        if painted.is_empty() {
+            break;
+        }
+        for (x, y, c) in painted {
+            let p = img.get_pixel_mut(x, y);
+            p.0 = [c[0], c[1], c[2], p.0[3]];
+            done[at(x, y)] = true;
+        }
+        front = waiting;
     }
-    let mut out = [0.0; 3];
-    for (c, slot) in out.iter_mut().enumerate() {
-        let mut values: Vec<f64> = ring.iter().map(|p| p[c] as f64).collect();
-        *slot = median(&mut values) as f32;
-    }
-    out
 }
 
-/// `silhouette` trimmed to its own non-black pixels, resized (Lanczos) to the box
-/// `(x0, y0, x1, y1)` and placed there on a black frame of `size`.
+/// True when `p` is the backdrop `k` in shade, or lit a little brighter than it was measured:
+/// `k` scaled, give or take JPEG noise. Only on that line from black: a dusty pink backdrop points
+/// nearly the same way in RGB as grey paint does, and a shadow is darker pink, not grey.
+fn in_shadow(p: [u8; 3], k: [u8; 3]) -> bool {
+    let (p, k) = (p.map(f32::from), k.map(f32::from));
+    let kk = k[0] * k[0] + k[1] * k[1] + k[2] * k[2];
+    if kk < 1.0 {
+        return false;
+    }
+    let s = (p[0] * k[0] + p[1] * k[1] + p[2] * k[2]) / kk;
+    let off = [p[0] - s * k[0], p[1] - s * k[1], p[2] - s * k[2]];
+    let rms = ((off[0] * off[0] + off[1] * off[1] + off[2] * off[2]) / 3.0).sqrt();
+    (SHADOW_DEPTH..=SHADOW_LIGHT).contains(&s) && rms <= SHADOW_NOISE
+}
+
+/// How busy the picture is around `(x, y)`: the largest channel's standard deviation over the
+/// 5 x 5 pixels around it. The backdrop is smooth; paint rarely is.
+fn roughness(img: &RgbaImage, x: u32, y: u32) -> f32 {
+    let (w, h) = img.dimensions();
+    let (xs, ys) = (
+        x.saturating_sub(2)..(x + 3).min(w),
+        y.saturating_sub(2)..(y + 3).min(h),
+    );
+    let (mut sum, mut squares, mut n) = ([0f32; 3], [0f32; 3], 0f32);
+    for yy in ys {
+        for xx in xs.clone() {
+            let p = img.get_pixel(xx, yy).0;
+            for c in 0..3 {
+                let v = f32::from(p[c]);
+                sum[c] += v;
+                squares[c] += v * v;
+            }
+            n += 1.0;
+        }
+    }
+    (0..3)
+        .map(|c| {
+            (squares[c] / n - (sum[c] / n) * (sum[c] / n))
+                .max(0.0)
+                .sqrt()
+        })
+        .fold(0.0, f32::max)
+}
+
+/// Each pixel's distance to the nearest pixel outside `set`, in thirds of a pixel (the 3-4
+/// chamfer: 3 along a row or column, 4 diagonally); 0 outside it. Pixels beyond the frame count
+/// as inside, so the frame's edge doesn't stop a set that reaches it.
+fn chamfer(set: &[bool], w: u32, h: u32) -> Vec<u32> {
+    let (w, h) = (w as usize, h as usize);
+    let far = u32::MAX / 2;
+    let mut d: Vec<u32> = set.iter().map(|&s| if s { far } else { 0 }).collect();
+    for y in 0..h {
+        for x in 0..w {
+            let i = y * w + x;
+            if d[i] == 0 {
+                continue;
+            }
+            let mut best = d[i];
+            if x > 0 {
+                best = best.min(d[i - 1] + 3);
+            }
+            if y > 0 {
+                best = best.min(d[i - w] + 3);
+                if x > 0 {
+                    best = best.min(d[i - w - 1] + 4);
+                }
+                if x + 1 < w {
+                    best = best.min(d[i - w + 1] + 4);
+                }
+            }
+            d[i] = best;
+        }
+    }
+    for y in (0..h).rev() {
+        for x in (0..w).rev() {
+            let i = y * w + x;
+            if d[i] == 0 {
+                continue;
+            }
+            let mut best = d[i];
+            if x + 1 < w {
+                best = best.min(d[i + 1] + 3);
+            }
+            if y + 1 < h {
+                best = best.min(d[i + w] + 3);
+                if x + 1 < w {
+                    best = best.min(d[i + w + 1] + 4);
+                }
+                if x > 0 {
+                    best = best.min(d[i + w - 1] + 4);
+                }
+            }
+            d[i] = best;
+        }
+    }
+    d
+}
+
+/// `silhouette` moved and stretched so that its body, where it is at least half opaque, spans the
+/// box `(x0, y0, x1, y1)`, on a black frame of `size`. The box is where the painted folder's
+/// edge pixels are half paint, so the body lines up with it, and the silhouette's soft rim goes
+/// with it, just outside the box.
 fn place_silhouette(
     silhouette: &GrayImage,
     size: (u32, u32),
@@ -477,7 +780,7 @@ fn place_silhouette(
     let mut frame = GrayImage::new(size.0, size.1);
     let (mut sx0, mut sy0, mut sx1, mut sy1) = (u32::MAX, u32::MAX, 0, 0);
     for (x, y, p) in silhouette.enumerate_pixels() {
-        if p.0[0] > 0 {
+        if p.0[0] > 127 {
             (sx0, sy0) = (sx0.min(x), sy0.min(y));
             (sx1, sy1) = (sx1.max(x + 1), sy1.max(y + 1));
         }
@@ -485,9 +788,22 @@ fn place_silhouette(
     if sx0 >= sx1 || x1 <= x0 || y1 <= y0 {
         return frame;
     }
-    let trimmed = imageops::crop_imm(silhouette, sx0, sy0, sx1 - sx0, sy1 - sy0).to_image();
-    let resized = imageops::resize(&trimmed, x1 - x0, y1 - y0, FilterType::Lanczos3);
-    imageops::replace(&mut frame, &resized, i64::from(x0), i64::from(y0));
+    let scale = (
+        f64::from(x1 - x0) / f64::from(sx1 - sx0),
+        f64::from(y1 - y0) / f64::from(sy1 - sy0),
+    );
+    let (sw, sh) = silhouette.dimensions();
+    let resized = imageops::resize(
+        silhouette,
+        (f64::from(sw) * scale.0).round().max(1.0) as u32,
+        (f64::from(sh) * scale.1).round().max(1.0) as u32,
+        FilterType::Lanczos3,
+    );
+    let offset = (
+        (f64::from(x0) - f64::from(sx0) * scale.0).round() as i64,
+        (f64::from(y0) - f64::from(sy0) * scale.1).round() as i64,
+    );
+    imageops::replace(&mut frame, &resized, offset.0, offset.1);
     frame
 }
 
@@ -741,7 +1057,7 @@ mod tests {
     fn a_repainted_folder_is_cut_out_along_our_silhouette() {
         let (w, h) = (320, 300);
         let cut = cut_along_silhouette(&painted_folder(w, h, 0.98), &silhouette(w, h));
-        assert!(cut.fit >= MIN_SILHOUETTE_FIT, "fit {}", cut.fit);
+        assert!(cut.fit >= MIN_PAINTED_FIT, "fit {}", cut.fit);
         let img = cut.image.expect("cut out");
         assert_eq!(img.dimensions(), (w, h));
         assert_eq!(img.get_pixel(2, 2).0[3], 0, "the backdrop is gone");
@@ -773,7 +1089,7 @@ mod tests {
             }
         });
         let cut = cut_along_silhouette(&rect, &silhouette(w, h));
-        assert!(cut.fit < MIN_SILHOUETTE_FIT, "fit {}", cut.fit);
+        assert!(cut.fit < MIN_PAINTED_FIT, "fit {}", cut.fit);
         assert!(cut.image.is_none());
         // And nothing painted at all fits nothing.
         let empty = RgbaImage::from_pixel(w, h, Rgba([255, 0, 255, 255]));

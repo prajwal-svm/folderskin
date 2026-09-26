@@ -449,9 +449,10 @@ fn clip(args: &OneImage, out: &Arc<Out>) -> Result<(), CliError> {
                 "Nothing in it stands out from its backdrop.".to_string()
             } else {
                 format!(
-                    "Only {:.0}% of it lines up with FolderSkin's silhouette; below 95% a cut along \
-                     ours would cut into the painting.",
-                    cut.fit * 100.0
+                    "{:.1}% of it disagrees with FolderSkin's silhouette; past {:.1}% a cut along \
+                     ours would cut into the painting or keep some of its backdrop.",
+                    (1.0 - cut.fit) * 100.0,
+                    (1.0 - painted::MIN_PAINTED_FIT) * 100.0
                 )
             };
             let input = shell_path(&args.input);
