@@ -137,14 +137,24 @@ pub fn contact_sheet(previews: &[PathBuf], dest: &Path) -> Result<(), CliError> 
 }
 
 /// Puts `picture` on `folder`, as the app does, and says what it became. `-` reads the picture
-/// from standard input, as every image command does.
+/// from standard input, as every image command does. A drive's root gets the picture as the
+/// drive's own icon, drawn on its shape as the app draws it (docs/DRIVES.md).
 pub fn apply(folder: &Path, picture: &Path, focus: (f32, f32)) -> Result<&'static str, CliError> {
     let (img, _) = crate::images::load(picture)?;
     let skin = skin(img, focus, picture)?;
-    apply_icon(folder, &skin.icon_set_in(&ICON_SIZES, look()))
-        .map_err(|e| apply_error(folder, e))?;
+    let (icons, what) = match folderskin_core::drive::detect::drive_at(folder) {
+        Some(drive) => (
+            skin.icon_set_on_drive(&ICON_SIZES, drive.shape),
+            skin.describe_on_drive(),
+        ),
+        None => (
+            skin.icon_set_in(&ICON_SIZES, look()),
+            becomes(&skin, look()),
+        ),
+    };
+    apply_icon(folder, &icons).map_err(|e| apply_error(folder, e))?;
     refresh_shell_icons();
-    Ok(becomes(&skin, look()))
+    Ok(what)
 }
 
 pub fn apply_error(folder: &Path, e: ApplyError) -> CliError {

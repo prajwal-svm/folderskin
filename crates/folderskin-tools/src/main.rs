@@ -99,9 +99,17 @@ fn run(cli: Cli) -> Result<(), String> {
             focus,
         } => {
             let skin = load_skin(&image, focus.unwrap_or((0.5, 0.5)))?;
-            apply_icon(&folder, &skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
+            // A drive's root gets the picture as the drive's own icon, drawn on its shape.
+            let (icons, what) = match folderskin_core::drive::detect::drive_at(&folder) {
+                Some(drive) => (
+                    skin.icon_set_on_drive(&ICON_SIZES, drive.shape),
+                    skin.describe_on_drive(),
+                ),
+                None => (skin.icon_set(&ICON_SIZES), skin.describe()),
+            };
+            apply_icon(&folder, &icons).map_err(|e| e.to_string())?;
             refresh_shell_icons();
-            println!("applied to {}: {}", folder.display(), skin.describe());
+            println!("applied to {}: {what}", folder.display());
             Ok(())
         }
         Command::Revert { folder } => {

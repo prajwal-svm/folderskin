@@ -82,6 +82,23 @@ impl Skin {
             Skin::Artwork(_) => "artwork on FolderSkin's folder",
         }
     }
+
+    /// The icon at every size in `sizes` as a drive's own, the way the app gives one to the drive
+    /// picked: artwork on the drive's `shape`, and a finished picture as it is.
+    pub fn icon_set_on_drive(&self, sizes: &[u32], shape: DriveShape) -> IconSet {
+        match self {
+            Skin::Folder(cut) => compositor::icon_set_from_image(cut, sizes),
+            Skin::Artwork(art) => compositor::render_drive_icon_set(Some(art), sizes, shape),
+        }
+    }
+
+    /// What the app does with it on a drive, for a report line.
+    pub fn describe_on_drive(&self) -> &'static str {
+        match self {
+            Skin::Folder(_) => "a finished picture, used as it is",
+            Skin::Artwork(_) => "artwork on the drive's own shape",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -98,6 +115,27 @@ mod tests {
                 Rgba(around)
             }
         })
+    }
+
+    /// Artwork on a drive takes the drive's shape, as the app draws it for the drive picked: a
+    /// USB stick is narrow where the folder is wide. A finished picture is used as it is.
+    #[test]
+    fn artwork_on_a_drive_takes_the_drives_shape() {
+        let photo = RgbaImage::from_fn(320, 300, |x, y| Rgba([x as u8, y as u8, 90, 255]));
+        let art = Skin::from_picture(photo, (0.5, 0.5)).unwrap();
+        let stick = DriveShape::from_id("linux-removable").unwrap();
+        let on_drive = art.icon_set_on_drive(&[256], stick);
+        let on_folder = art.icon_set(&[256]);
+        let alpha = |set: &IconSet| set.sizes[0].1.get_pixel(40, 128).0[3];
+        assert_eq!(alpha(&on_drive), 0, "left of the stick is clear");
+        assert!(alpha(&on_folder) > 0, "the folder reaches there");
+        assert_eq!(art.describe_on_drive(), "artwork on the drive's own shape");
+
+        let finished = Skin::from_picture(block([0, 0, 0, 0]), (0.5, 0.5)).unwrap();
+        assert_eq!(
+            finished.icon_set_on_drive(&[64], stick).sizes[0].1,
+            finished.icon_set(&[64]).sizes[0].1
+        );
     }
 
     #[test]
