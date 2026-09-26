@@ -2781,6 +2781,8 @@ pub(crate) mod tests {
                     author: None,
                     license: None,
                     pack_hash: None,
+                    base: None,
+                    recipe: None,
                 },
                 image,
             )
