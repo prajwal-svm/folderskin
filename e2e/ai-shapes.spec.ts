@@ -325,4 +325,20 @@ test.describe("the folder panel", () => {
     await page.getByRole("button", { name: "open the folder panel" }).click();
     await expect(app(page)).not.toHaveClass(/is-right-off/);
   });
+
+  test("opens again when the run in the sidebar is asked to show its folder", async ({ page }) => {
+    await openApp(page, { query: "holdrun" });
+    const panel = page.locator(".right-slot");
+    await panel.getByRole("button", { name: /^choose a folder from/ }).click();
+    await page.locator(".tile-hit").first().click();
+    await panel.getByRole("switch", { name: /Include subfolders/ }).click();
+    await panel.getByRole("button", { name: /^Apply to [\d,]+ folders$/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^Apply to/ }).click();
+    const dock = page.getByRole("region", { name: "run over a folder and the folders inside it" });
+    await expect(dock).toBeVisible();
+    await page.getByRole("button", { name: "close the folder panel" }).click();
+    await expect(app(page)).toHaveClass(/is-right-off/);
+    await dock.getByRole("button", { name: /^show .+ in the folder panel$/ }).click();
+    await expect(app(page)).not.toHaveClass(/is-right-off/);
+  });
 });
