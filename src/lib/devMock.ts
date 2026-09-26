@@ -1835,6 +1835,15 @@ const mockModel = (id: string, label: string, max_references: number, price_hint
   price_hint,
 });
 
+/** The models taken out, and the ones that took their places (catalogue.rs's RETIRED). */
+const MOCK_RETIRED: Record<string, { id: string; successor: string }[]> = {
+  local: [{ id: "zimage", successor: "klein" }],
+  openai: [{ id: "gpt-image-1", successor: "gpt-image-2" }],
+  google: [{ id: "gemini-2.5-flash-image", successor: "gemini-3.1-flash-image" }],
+  bfl: [{ id: "flux-pro-1.1", successor: "flux-2-pro" }],
+  recraft: [{ id: "recraftv3", successor: "recraftv4_1" }],
+};
+
 /** The providers and models, as ai_catalogue lists them (crates/folderskin-ai/src/catalogue.rs), with the keys saved in this preview. */
 function mockProviders(): AiCatalogue {
   const provider = (id: string, label: string, models: AiModel[], keys_url: string, docs_url: string, key_hint: string): AiProvider => ({
@@ -1846,6 +1855,7 @@ function mockProviders(): AiCatalogue {
     docs_url,
     key_hint,
     has_key: mockKeys.has(id),
+    retired: MOCK_RETIRED[id] ?? [],
   });
   return {
     providers: [
@@ -1858,6 +1868,7 @@ function mockProviders(): AiCatalogue {
         docs_url: "",
         key_hint: "",
         has_key: mockLocal.ready,
+        retired: MOCK_RETIRED.local,
       },
       provider(
         "openai",

@@ -172,6 +172,8 @@ export type AiProvider = {
   key_hint: string;
   /** True when a key for this provider is already saved (keys never come back to the webview). */
   has_key: boolean;
+  /** Models it no longer offers, each with the one that took its place (see providerNames.ts's currentModel). */
+  retired?: { id: string; successor: string }[];
 };
 
 export type AiPreset = { id: string; label: string; idea: string };

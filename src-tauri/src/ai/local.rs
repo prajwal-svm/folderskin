@@ -4,7 +4,7 @@
 
 use super::events::AiEvent;
 use super::failure::{self, AiFailure, Doing};
-use super::{AiModelDto, AiProviderDto};
+use super::{AiModelDto, AiProviderDto, AiRetiredDto};
 use crate::store::SkinImage;
 use folderskin_ai::recipe::{Key, PictureRecord, Record, Role, Treatment};
 use folderskin_core::base::Base;
@@ -293,6 +293,14 @@ pub fn provider(ready: bool) -> AiProviderDto {
         docs_url: String::new(),
         key_hint: String::new(),
         has_key: ready,
+        // The models an earlier build offered paint with klein now.
+        retired: RETIRED_LABELS
+            .iter()
+            .map(|(id, _)| AiRetiredDto {
+                id: id.to_string(),
+                successor: MODELS[0].0.to_string(),
+            })
+            .collect(),
     }
 }
 

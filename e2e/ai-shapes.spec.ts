@@ -289,6 +289,18 @@ test.describe("the chat", () => {
   });
 });
 
+test.describe("a model no longer offered", () => {
+  test("a choice of it moves on to the model that took its place", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("folderskin.ai.choice", JSON.stringify({ provider: "openai", model: "gpt-image-1", shape: "folder" }));
+    });
+    await openApp(page);
+    await openView(page, /generate with ai/i);
+    await expect(chat(page).locator(".model-pill")).toContainText("GPT Image 2");
+    await expect(chat(page).locator(".model-pill")).not.toContainText("2.5");
+  });
+});
+
 test.describe("the folder panel", () => {
   test("closes and opens again from its button or keys, and stays as it was left", async ({ page }) => {
     await openApp(page);

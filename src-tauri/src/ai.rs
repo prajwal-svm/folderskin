@@ -59,6 +59,15 @@ pub struct AiProviderDto {
     pub key_hint: String,
     /// A key is saved; for this computer, it is set up and ready.
     pub has_key: bool,
+    /// Models it no longer offers, each with the one that took its place, so a choice or a chat
+    /// from when one was offered moves on to it.
+    pub retired: Vec<AiRetiredDto>,
+}
+
+#[derive(Serialize)]
+pub struct AiRetiredDto {
+    pub id: String,
+    pub successor: String,
 }
 
 #[derive(Serialize)]
@@ -265,6 +274,14 @@ fn key_provider(p: &ProviderInfo, has_key: bool) -> AiProviderDto {
         docs_url: p.docs_url.to_string(),
         key_hint: p.key_hint.to_string(),
         has_key,
+        retired: folderskin_ai::catalogue::RETIRED
+            .iter()
+            .filter(|r| r.provider == p.id)
+            .map(|r| AiRetiredDto {
+                id: r.id.to_string(),
+                successor: r.successor.to_string(),
+            })
+            .collect(),
     }
 }
 

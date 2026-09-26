@@ -6,6 +6,7 @@
  * before a change of language reads right after it.
  */
 import { t } from "../i18n";
+import type { AiProvider } from "./tauri";
 
 /** What the Rust side calls the Local Model (src-tauri/src/ai/local.rs). */
 export const LOCAL_MODEL = "Local Model";
@@ -19,4 +20,13 @@ export function providerName(label: string): string {
 export function madeWith(text: string): string {
   const [provider, ...rest] = text.split(" · ");
   return [providerName(provider), ...rest].join(" · ");
+}
+
+/**
+ * The model `id` names at `provider`: one it offers, or the one that took the place of a model
+ * it no longer offers, so a choice or a chat from before goes on with its successor.
+ */
+export function currentModel(provider: AiProvider | undefined, id: string): string {
+  if (!provider || provider.models.some((m) => m.id === id)) return id;
+  return provider.retired?.find((r) => r.id === id)?.successor ?? id;
 }

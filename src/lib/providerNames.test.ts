@@ -23,3 +23,29 @@ describe("the Local Model's name", () => {
     expect(madeWith("Local Model")).toBe("Modèle local");
   });
 });
+
+describe("a model no longer offered", () => {
+  it("moves on to the one that took its place, and a model on offer stays as it is", async () => {
+    const { currentModel } = await import("./providerNames");
+    const model = (id: string, label: string) => ({ id, label, native_alpha: false, accepts_reference: true, max_references: 16, sizes: ["1024x1024"], price_hint: "" });
+    const openai = {
+      id: "openai",
+      label: "OpenAI",
+      models: [model("gpt-image-2.5-flare", "GPT Image 2.5 Flare"), model("gpt-image-2", "GPT Image 2")],
+      keys_url: "",
+      docs_url: "",
+      key_hint: "",
+      has_key: true,
+      retired: [{ id: "gpt-image-1", successor: "gpt-image-2" }],
+    };
+    expect(currentModel(openai, "gpt-image-1")).toBe("gpt-image-2");
+    expect(currentModel(openai, "gpt-image-2.5-flare")).toBe("gpt-image-2.5-flare");
+    expect(currentModel(openai, "nope")).toBe("nope");
+    expect(currentModel(undefined, "gpt-image-1")).toBe("gpt-image-1");
+  });
+
+  it("is listed by the Rust side, for every model the catalogue took out", () => {
+    const rust = readFileSync(new URL("../../src-tauri/src/ai.rs", import.meta.url), "utf8");
+    expect(rust).toContain("folderskin_ai::catalogue::RETIRED");
+  });
+});

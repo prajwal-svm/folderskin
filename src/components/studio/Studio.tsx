@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type AiCatalogue, type SavedPrompt, type Skin } from "../../lib/tauri";
+import { currentModel } from "../../lib/providerNames";
 import { explain } from "../../lib/sentences";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
@@ -155,10 +156,11 @@ export const Studio = forwardRef<
   useEffect(() => load(), [load, props.keysVersion]);
 
   const provider = catalogue?.providers.find((p) => p.id === providerId);
-  const model = provider?.models.find((m) => m.id === modelId) ?? provider?.models[0];
+  const model = provider?.models.find((m) => m.id === currentModel(provider, modelId)) ?? provider?.models[0];
+  // A model no longer offered moves to the one that took its place, or else the provider's first.
   useEffect(() => {
-    if (provider && !provider.models.some((m) => m.id === modelId)) setModelId(provider.models[0]?.id ?? "");
-  }, [provider, modelId]);
+    if (provider && !provider.models.some((m) => m.id === modelId)) setModelId(model?.id ?? "");
+  }, [provider, modelId, model]);
   useEffect(() => {
     try {
       localStorage.setItem(CHOICE_KEY, JSON.stringify({ provider: providerId, model: modelId, shape: make }));
@@ -288,7 +290,8 @@ export const Studio = forwardRef<
   const act: TurnActions = {
     again: (turn: Turn) => {
       const p = catalogue?.providers.find((x) => x.id === turn.provider);
-      const m = p?.models.find((x) => x.id === turn.model);
+      // Made again with the model that took the place of one no longer offered, and named so.
+      const m = p?.models.find((x) => x.id === currentModel(p, turn.model));
       if (p && !p.has_key) return openSettings(p.id);
       const local = p?.kind === "local";
       const sent = ask(
@@ -299,7 +302,7 @@ export const Studio = forwardRef<
           base: turn.base ?? shapeOf(shapes, undefined, folderLook)?.id ?? `${folderLook}-folder`,
           look: turn.skill ? { kind: "skill", ...turn.skill } : turn.style ? { kind: "style", id: turn.style } : null,
           provider: turn.provider,
-          model: turn.model,
+          model: m?.id ?? turn.model,
           where: p && m ? `${p.label} · ${m.label}` : turn.where,
           local,
           refs: turn.refs,
