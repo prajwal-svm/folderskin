@@ -747,8 +747,16 @@ pub fn silhouette_of(base: &Base, width: u32, height: u32) -> Option<GrayImage> 
 
 /// A free icon cut out of the flat backdrop it was painted on: the canvas's `key`, or whatever
 /// flat colour the model drifted to. `None` when there is no flat backdrop around it.
+///
+/// Magenta almost never belongs to the art, so it goes wherever it is. Green does, in every leaf
+/// and stem, so a green backdrop only goes where it reaches the edge of the picture, from the
+/// shade actually painted, as a drifted backdrop of any colour does.
 pub fn cut_icon(img: &RgbaImage, key: Key) -> Option<RgbaImage> {
-    matte::finished_cutout(img, key.rgb()).or_else(|| {
+    let keyed = match key {
+        Key::Magenta => matte::finished_cutout(img, key.rgb()),
+        Key::Green => None,
+    };
+    keyed.or_else(|| {
         let key = matte::flat_backdrop(img)?;
         let cut = matte::cutout_connected(img, key);
         // Something substantial is left, or the backdrop took the subject with it.
@@ -1169,5 +1177,30 @@ mod tests {
             image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
         });
         assert!(cut_icon(&scene, Key::Magenta).is_none());
+    }
+
+    #[test]
+    fn a_green_leaf_on_an_icon_cut_out_of_green_stays() {
+        // An orange fruit with a leaf of the backdrop's own green in its middle.
+        let mut img = RgbaImage::from_pixel(300, 280, image::Rgba([0, 255, 0, 255]));
+        for y in 60..220 {
+            for x in 90..210 {
+                let leaf = (130..170).contains(&x) && (120..160).contains(&y);
+                let p = if leaf {
+                    [0, 255, 0, 255]
+                } else {
+                    [230, 160, 40, 255]
+                };
+                img.put_pixel(x, y, image::Rgba(p));
+            }
+        }
+        let cut = cut_icon(&img, Key::Green).unwrap();
+        assert_eq!(cut.dimensions(), (120, 160));
+        assert_eq!(
+            cut.get_pixel(60, 80).0,
+            [0, 255, 0, 255],
+            "the leaf is kept"
+        );
+        assert_eq!(cut.get_pixel(5, 5).0, [230, 160, 40, 255]);
     }
 }

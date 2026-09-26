@@ -697,9 +697,15 @@ pub fn skin_image(
             focus: (0.5, 0.5),
         }))
     };
+    // Magenta almost never belongs to the art, so it's keyed wherever it is. Green does, in every
+    // leaf, so a green backdrop only goes where it reaches the edge, as the runtime's own cut does.
+    let cut_out = |rgba: &image::RgbaImage| match (key, matte::surround(rgba, key.rgb())) {
+        (Key::Green, matte::Surround::Keyed) => folderskin_local::generate::cut_icon(rgba, key),
+        _ => matte::finished_cutout(rgba, key.rgb()),
+    };
     match shape.on(base) {
         Shape::Artwork => (artwork(&rgba), None),
-        Shape::Folder => match matte::finished_cutout(&rgba, key.rgb()) {
+        Shape::Folder => match cut_out(&rgba) {
             Some(cut) => (SkinImage::Folder(Arc::new(cut)), None),
             None => (
                 artwork(&rgba),
@@ -710,7 +716,7 @@ pub fn skin_image(
                 ),
             ),
         },
-        Shape::Icon => match matte::finished_cutout(&rgba, key.rgb()) {
+        Shape::Icon => match cut_out(&rgba) {
             Some(cut) => (SkinImage::Folder(Arc::new(cut)), None),
             None => (
                 SkinImage::Folder(Arc::new(rgba)),
@@ -1150,15 +1156,28 @@ mod tests {
         let (image, warning) = skin_image(scene, &FREE, Shape::Icon, Key::Magenta);
         assert!(matches!(&image, SkinImage::Folder(f) if f.dimensions() == (1024, 960)));
         assert!(warning.unwrap().contains("square picture"));
-        // One left on the green canvas it was painted on is cut out of the green.
+        // One left on the green canvas it was painted on is cut out of the green, and a leaf of
+        // the same green painted on it stays.
         let mut green = RgbaImage::from_pixel(1024, 960, Rgba([0, 255, 0, 255]));
         for y in 300..700 {
             for x in 350..650 {
-                green.put_pixel(x, y, Rgba([240, 170, 30, 255]));
+                let leaf = (450..550).contains(&x) && (450..550).contains(&y);
+                let p = if leaf {
+                    [0, 255, 0, 255]
+                } else {
+                    [240, 170, 30, 255]
+                };
+                green.put_pixel(x, y, Rgba(p));
             }
         }
         let (image, warning) = skin_image(green, &FREE, Shape::Icon, Key::Green);
-        assert!(matches!(&image, SkinImage::Folder(f) if f.dimensions() == (300, 400)));
+        match &image {
+            SkinImage::Folder(f) => {
+                assert_eq!(f.dimensions(), (300, 400));
+                assert_eq!(f.get_pixel(150, 200).0, [0, 255, 0, 255], "the leaf stays");
+            }
+            SkinImage::Artwork(_) => panic!("an icon became artwork"),
+        }
         assert!(warning.is_none());
     }
 
