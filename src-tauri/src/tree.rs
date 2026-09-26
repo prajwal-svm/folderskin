@@ -1,32 +1,46 @@
 //! "Include subfolders": a skin put on a folder and every folder inside it, and taken off
-//! them again.
+//! them again, however many there are.
 //!
-//! The folders come from [`subfolders`], which leaves out anything that isn't the user's own
-//! folder, nearest first. A run goes through them in order on one blocking thread, telling the
-//! webview about each on a channel, and can be stopped between two folders. A folder that fails
-//! doesn't end the run: it is reported with the reason, so the webview can offer to try it
-//! again, and a run can be carried on, retried or undone by naming exactly its folders.
-//!
-//! The same folders, laid out as the tree they are ([`subfolder_tree`]), are what the webview
-//! offers to choose from, so a run over the ones chosen names only folders a whole run would
-//! have taken.
+//! Three parts, all reading the tree through [`folderskin_core::apply::tree`], which leaves out
+//! anything that isn't the user's own folder and never crosses into another volume:
+//! - Counting ([`count`]): picking a folder starts a count of everything inside it in the
+//!   background, which the webview hears grow ([`COUNT_EVENT`]) and asks for the counts of the
+//!   folders it needs ([`subfolder_counts`]). Picking another folder abandons it.
+//! - Choosing ([`subfolder_list`]): "Choose subfolders" reads one folder's own folders at a time,
+//!   as each column opens, so a folder with a million folders inside opens at once. What's chosen
+//!   comes back as rules ([`ChoiceDto`]), never a list of folders.
+//! - The run ([`job`]): one at a time, in the background, going on while the webview is
+//!   elsewhere, and kept after it ends so it can be carried on, tried again or undone by its id.
+
+mod count;
+mod job;
+
+pub use count::Counts;
+pub use job::{Runs, TreeRunEventDto};
 
 use crate::state::AppState;
-use folderskin_core::apply::tree::{subfolders, MAX_TREE};
+use count::Count;
+use folderskin_core::apply::tree::{folders_in, has_folders, is_in_package, Choice};
 use folderskin_core::apply::{
-    apply_prepared, bytes_per_folder, has_custom_icon, prepare_icon, refresh_shell_icons,
-    revert_icon, validate_folder, ApplyError,
+    apply_prepared, bytes_per_folder, has_custom_icon, prepare_icon, revert_icon, validate_folder,
+    ApplyError,
 };
 use folderskin_core::compositor::ICON_SIZES;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::path::{Component, Path, PathBuf, MAIN_SEPARATOR_STR};
-use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::ipc::Channel;
-use tauri::State;
+use job::{Emit, Job, Kind};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf, MAIN_SEPARATOR_STR};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
-/// Set by [`stop_tree_run`]; cleared as every run starts and checked before each folder.
-static STOP: AtomicBool = AtomicBool::new(false);
+/// What the webview is told as a count grows: a [`SubfolderCountDto`].
+pub const COUNT_EVENT: &str = "subfolder-count";
+/// How long `subfolder_count` waits for a count to finish, so a folder with a few hundred folders
+/// inside is counted by the time it answers, and "Counting" never flashes up for it.
+const COUNT_WAIT: Duration = Duration::from_millis(80);
+/// How long listing a column may spend looking inside its folders for folders of their own. The
+/// rest are shown as maybe having some, and are read when they're opened.
+const PEEK_FOR: Duration = Duration::from_millis(250);
 
 /// Shown for a folder that was deleted or moved while a run was on its way to it.
 const GONE: &str = "it isn't there any more";
@@ -36,102 +50,235 @@ const READ_ONLY: &str = "its disk is read-only";
 #[cfg(unix)]
 const EROFS: i32 = 30;
 
-/// How many folders are inside one: `{"count": 12, "more": false}`. `more` is true when there
-/// are more than [`MAX_TREE`], too many for a run, and `count` then stops at that.
-#[derive(Serialize, Debug, PartialEq, Eq)]
+/// How far a count of the folders inside one has got: `{"folder": "/Users/me/Projects",
+/// "count": 12400, "done": false}`. `folder` is as the webview named it; `count` is the folders
+/// found inside so far, and all of them once `done`.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct SubfolderCountDto {
-    pub count: usize,
-    pub more: bool,
+    pub folder: String,
+    pub count: u64,
+    pub done: bool,
 }
 
-/// Every folder inside one, as the tree they make, for choosing which of them a run takes:
+/// The count of the folders inside one, and of the folders inside each of some folders in it,
+/// numbered alike: `paths[i]` is for the `i`th path asked about.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+pub struct SubfolderCountsDto {
+    pub folder: String,
+    pub count: u64,
+    pub done: bool,
+    pub paths: Vec<PathCountDto>,
+}
+
+/// One folder as far as a count has got: whether it has come to the folder, the folders found
+/// inside it so far, and whether that's all of them.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PathCountDto {
+    pub found: bool,
+    pub inside: u64,
+    pub done: bool,
+}
+
+impl PathCountDto {
+    /// A folder the count hasn't come to.
+    pub const NOT_YET: PathCountDto = PathCountDto {
+        found: false,
+        inside: 0,
+        done: false,
+    };
+}
+
+/// One folder's own folders, for a column of "Choose subfolders":
 ///
 /// ```json
-/// {"root": "/Users/me/Projects", "separator": "/", "names": ["Clients", "Design", "Acme"],
-///  "parents": [0, 0, 1], "more": false}
+/// {"path": "/Users/me/Projects", "separator": "/", "names": ["Clients", "Notes"],
+///  "nested": [true, null]}
 /// ```
 ///
-/// `names` are exactly the folders a run finds ([`subfolders`]), in the order it goes through
-/// them: nearest first, and the folders inside one folder in name order, next to each other.
-/// `parents[i]` is the folder `names[i]` is in: 0 for `root`, `j + 1` for `names[j]`, which
-/// always comes before it. A folder's path is its parent's, `separator`, and its name, which is
-/// what a run over some of them names in `only`. `root` is the folder itself as a run names it
-/// (canonical). `more` is true when there are more than [`MAX_TREE`], too many for a run, and
-/// `names` then stops there.
+/// `path` is the folder as a run names it (canonical), and a folder inside it is `path`,
+/// `separator` and its name. `names` are exactly the folders a run finds there, and `nested[i]`
+/// says whether `names[i]` has folders of its own: null when there wasn't time to look.
 #[derive(Serialize, Debug, PartialEq, Eq)]
-pub struct SubfolderTreeDto {
-    pub root: String,
+pub struct SubfolderListDto {
+    pub path: String,
     pub separator: String,
     pub names: Vec<String>,
-    pub parents: Vec<usize>,
-    pub more: bool,
+    pub nested: Vec<Option<bool>>,
 }
 
-/// How far a run has got: `{"done": 3, "total": 12, "name": "Invoices"}`, `name` being the folder
-/// just finished (the folder the run started from while `done` is 0).
+/// Which folders inside one a run takes, as "Choose subfolders" left them: every folder inside
+/// is taken or not as `all` says, unless a rule on it or a folder it's in says otherwise, the
+/// nearest rule winning. `{"all": true, "rules": [{"path": "/Users/me/Projects/Photos", "on":
+/// false}]}` is everything but Photos and whatever is inside it.
+#[derive(Deserialize, Debug, Clone)]
+pub struct ChoiceDto {
+    pub all: bool,
+    pub rules: Vec<RuleDto>,
+}
+
+/// A folder ticked (`on`) or cleared, with everything inside it.
+#[derive(Deserialize, Debug, Clone)]
+pub struct RuleDto {
+    pub path: String,
+    pub on: bool,
+}
+
+/// The run's [`Choice`] from what the webview sent: every folder inside without one.
+fn choice_of(choice: Option<ChoiceDto>) -> Choice {
+    match choice {
+        None => Choice::everything(),
+        Some(choice) => Choice::new(
+            choice.all,
+            choice
+                .rules
+                .into_iter()
+                .map(|rule| (PathBuf::from(rule.path), rule.on)),
+        ),
+    }
+}
+
+/// A run over a tree, as the webview sees it. `done` of `total` folders are finished, `total`
+/// being the folders the run takes found so far, and every one of them once `counted`. `changed`,
+/// `failed` and `skipped` (a revert leaving alone a folder with no icon of its own) add up to
+/// `done`. `current` is the folder just finished, or the folder itself's name before any. A run
+/// that ended with Stop and folders left is `stopped`. `failures` are the first of the folders
+/// that failed, and `error` why a run couldn't go at all.
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-pub struct TreeProgressDto {
-    pub done: usize,
-    pub total: usize,
+pub struct TreeRunDto {
+    pub id: u64,
+    /// "apply" or "revert".
+    pub kind: &'static str,
+    /// A revert that takes off exactly what an apply put on.
+    pub undoing: bool,
+    /// A revert that leaves alone the folders with no icon of their own.
+    pub leaves_plain: bool,
+    /// The folder as the webview named it, and as the run names it (canonical).
+    pub folder: String,
+    pub root: String,
     pub name: String,
+    pub skin_id: Option<String>,
+    pub running: bool,
+    pub stopping: bool,
+    pub stopped: bool,
+    pub done: u64,
+    pub total: u64,
+    pub counted: bool,
+    pub current: String,
+    pub changed: u64,
+    pub failed: u64,
+    pub skipped: u64,
+    pub failures: Vec<TreeFailureDto>,
+    pub error: Option<String>,
 }
 
 /// A folder a run couldn't change, and why, as a sentence to show after its name.
-#[derive(Serialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct TreeFailureDto {
     pub path: String,
     pub name: String,
     pub reason: String,
 }
 
-/// How a run went. Every folder it was given is in exactly one of `changed`, `failed`,
-/// `skipped` (a count) or `remaining` (not reached because it was stopped), so they add up to
-/// `total`. Paths are the canonical ones the run used, ready to hand back as `only`.
-#[derive(Serialize, Debug, Default, PartialEq, Eq)]
-pub struct TreeRunDto {
-    pub total: usize,
-    pub changed: Vec<String>,
-    pub failed: Vec<TreeFailureDto>,
-    /// Folders left alone: those with no icon to take off, when reverting a whole tree.
-    pub skipped: usize,
-    pub remaining: Vec<String>,
-    pub stopped: bool,
-}
-
 /// What became of one folder that didn't fail.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Outcome {
+pub enum Outcome {
     Changed,
     Skipped,
 }
 
-// ---------- commands ----------
+// ---------- counting ----------
 
-/// How many folders `folder` has inside it, not counting itself, as a run would find them.
+/// Starts counting the folders inside `folder` in the background, and stops counting whatever
+/// was picked before. Answers with how far it has got once it's done, or after a moment, and the
+/// rest comes as [`COUNT_EVENT`]s.
 #[tauri::command]
-pub async fn subfolder_count(folder: String) -> Result<SubfolderCountDto, String> {
+pub async fn subfolder_count<R: Runtime>(
+    app: AppHandle<R>,
+    folder: String,
+) -> Result<SubfolderCountDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-        let found = subfolders(&root, MAX_TREE);
-        Ok(SubfolderCountDto {
-            count: found.folders.len(),
-            more: found.more,
-        })
+        let count = Arc::new(Count::new(folder, root));
+        app.state::<Counts>().start(count.clone());
+        let counting = count.clone();
+        std::thread::Builder::new()
+            .name("folderskin-tree-count".into())
+            .spawn(move || {
+                counting.run(|dto| {
+                    let _ = app.emit(COUNT_EVENT, dto);
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(count.wait(COUNT_WAIT))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Every folder inside `folder` as a run would find them, and where each one is (see
-/// [`SubfolderTreeDto`]), read once so the webview can offer any of them to choose from.
+/// The count of the folders inside `folder` so far, and inside each of `paths` (folders in it),
+/// from the count `subfolder_count` started. Nothing is read from disk: a folder picked since,
+/// or not counted at all, is 0 and not done.
 #[tauri::command]
-pub async fn subfolder_tree(folder: String) -> Result<SubfolderTreeDto, String> {
+pub fn subfolder_counts(
+    counts: State<'_, Counts>,
+    folder: String,
+    paths: Vec<String>,
+) -> SubfolderCountsDto {
+    match counts.of(&folder) {
+        Some(count) => {
+            let now = count.now();
+            SubfolderCountsDto {
+                folder,
+                count: now.count,
+                done: now.done,
+                paths: count.counts(&paths),
+            }
+        }
+        None => SubfolderCountsDto {
+            folder,
+            count: 0,
+            done: false,
+            paths: vec![PathCountDto::NOT_YET; paths.len()],
+        },
+    }
+}
+
+// ---------- choosing ----------
+
+/// The folders directly inside `folder` a run would take, for one column of "Choose
+/// subfolders", and whether each has folders inside it (see [`SubfolderListDto`]).
+#[tauri::command]
+pub async fn subfolder_list(folder: String) -> Result<SubfolderListDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-        Ok(tree_of(&root, MAX_TREE))
+        let dir = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
+        Ok(list(&dir, PEEK_FOR))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// [`subfolder_list`] for `dir` (canonical), spending at most `peek_for` looking inside the
+/// folders it finds.
+pub(crate) fn list(dir: &Path, peek_for: Duration) -> SubfolderListDto {
+    let names = if is_in_package(dir) {
+        Vec::new()
+    } else {
+        folders_in(dir)
+    };
+    let until = Instant::now() + peek_for;
+    let nested = names
+        .iter()
+        .map(|name| (Instant::now() < until).then(|| has_folders(&dir.join(name))))
+        .collect();
+    SubfolderListDto {
+        path: path_string(dir),
+        separator: MAIN_SEPARATOR_STR.into(),
+        names: names
+            .iter()
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect(),
+        nested,
+    }
 }
 
 /// How many bytes of disk each folder's copy of a skin's icon takes (see
@@ -150,258 +297,202 @@ pub async fn tree_bytes(state: State<'_, AppState>, skin_id: String) -> Result<u
     .map_err(|e| e.to_string())?
 }
 
-/// Puts a skin on `folder` and every folder inside it, or with `only` on exactly those folders
-/// (each the folder itself or inside it), in the order given: how a stopped run carries on and
-/// failed folders are tried again. `on_progress` hears `done: 0` once the folders are known and
-/// then each folder as it is finished.
+// ---------- the run ----------
+
+/// Starts putting a skin on `folder` and the folders inside it `choice` takes (all of them
+/// without one), in the background. Refused while another run is going. Answers as it starts, and
+/// the rest comes as [`job::EVENT`]s.
 #[tauri::command]
-pub async fn apply_skin_tree(
-    state: State<'_, AppState>,
+pub async fn start_tree_apply<R: Runtime>(
+    app: AppHandle<R>,
     folder: String,
     skin_id: String,
-    only: Option<Vec<String>>,
-    on_progress: Channel<TreeProgressDto>,
-) -> Result<TreeRunDto, String> {
-    STOP.store(false, Ordering::SeqCst);
-    let state = state.inner().clone();
+    choice: Option<ChoiceDto>,
+) -> Result<TreeRunEventDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-        let skin = state.resolve(&skin_id)?;
-        let folders = plan(&root, only.as_deref(), MAX_TREE)?;
-        // The window may have gone, and the run goes on all the same.
-        let progress = |p: TreeProgressDto| {
-            let _ = on_progress.send(p);
+        // Refused before the run is anything: the skin has to be there.
+        app.state::<AppState>().resolve(&skin_id)?;
+        let runs = app.state::<Runs>();
+        let kind = Kind::Apply {
+            skin_id: skin_id.clone(),
         };
-        run_tree(&root, &folders, &STOP, progress, || {
-            // Rendered and encoded once for every folder, on this thread: on macOS the prepared
-            // icon is an AppKit image, which can't move to another.
-            let icon = prepare_icon(&skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
-            Ok(move |folder: &Path| {
-                apply_prepared(folder, &icon)
-                    .map(|()| Outcome::Changed)
-                    .map_err(|e| reason(&e))
-            })
-        })
+        let job = Job::new(runs.next_id(), kind, folder, root, choice_of(choice));
+        runs.start(job, applying(&app, skin_id))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Takes the custom icon off `folder` and every folder inside it that has one (the others are
-/// `skipped`), or with `only` off exactly those folders, as undoing a run does. Planned,
-/// reported and stopped like [`apply_skin_tree`].
-///
-/// `skip_plain` says whether a folder without an icon of its own is left alone (`skipped`)
-/// rather than written to: yes for a whole tree, no for `only`, unless it says otherwise. The
-/// folders chosen out of a tree are taken as a whole tree's are.
+/// Starts taking the custom icons off `folder` and the folders inside it `choice` takes, in the
+/// background, as [`start_tree_apply`] starts a run. `skip_plain` (yes unless it says otherwise)
+/// leaves the folders with no icon of their own alone rather than writing to them.
 #[tauri::command]
-pub async fn revert_skin_tree(
+pub async fn start_tree_revert<R: Runtime>(
+    app: AppHandle<R>,
     folder: String,
-    only: Option<Vec<String>>,
+    choice: Option<ChoiceDto>,
     skip_plain: Option<bool>,
-    on_progress: Channel<TreeProgressDto>,
-) -> Result<TreeRunDto, String> {
-    STOP.store(false, Ordering::SeqCst);
+) -> Result<TreeRunEventDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = validate_folder(Path::new(&folder)).map_err(|e| e.to_string())?;
-        // Undoing a run takes off what it put on. A whole tree has folders that never had an
-        // icon, and those are left alone rather than written to.
-        let skip_plain = skip_plain.unwrap_or(only.is_none());
-        let folders = plan(&root, only.as_deref(), MAX_TREE)?;
-        let progress = |p: TreeProgressDto| {
-            let _ = on_progress.send(p);
+        let runs = app.state::<Runs>();
+        let kind = Kind::Revert {
+            skip_plain: skip_plain.unwrap_or(true),
+            undoing: false,
         };
-        run_tree(&root, &folders, &STOP, progress, || {
-            Ok(move |folder: &Path| {
-                if skip_plain && !has_custom_icon(folder) {
-                    return Ok(Outcome::Skipped);
-                }
-                revert_icon(folder)
-                    .map(|()| Outcome::Changed)
-                    .map_err(|e| reason(&e))
-            })
-        })
+        let job = Job::new(
+            runs.next_id(),
+            kind.clone(),
+            folder,
+            root,
+            choice_of(choice),
+        );
+        runs.start(job, working(&app, &kind))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Stops the run in progress before its next folder. The folder being changed is finished.
+/// Stops run `id` before its next folder. The folder being changed is finished.
 #[tauri::command]
-pub fn stop_tree_run() {
-    STOP.store(true, Ordering::SeqCst);
+pub fn stop_tree_run<R: Runtime>(app: AppHandle<R>, id: u64) {
+    app.state::<Runs>().stop(id, &emitter(&app));
 }
 
-// ---------- the run (unit-tested below) ----------
-
-/// Every folder inside `root`, at most `limit` of them, as the tree [`subfolder_tree`] sends:
-/// the folders [`subfolders`] finds, in its order, each with the index of the folder it's in.
-///
-/// `root` is canonical, as [`validate_folder`] returns it.
-pub(crate) fn tree_of(root: &Path, limit: usize) -> SubfolderTreeDto {
-    let found = subfolders(root, limit);
-    // Where each folder is in the list, `root` being 0, to find each one's parent by its path.
-    let mut index: HashMap<&Path, usize> = HashMap::with_capacity(found.folders.len() + 1);
-    index.insert(root, 0);
-    let mut names = Vec::with_capacity(found.folders.len());
-    let mut parents = Vec::with_capacity(found.folders.len());
-    for (i, folder) in found.folders.iter().enumerate() {
-        // The walk found each folder by reading the one it's in, which it had found before it.
-        let parent = folder
-            .parent()
-            .and_then(|dir| index.get(dir))
-            .copied()
-            .unwrap_or(0);
-        parents.push(parent);
-        names.push(folder_name(folder));
-        index.insert(folder, i + 1);
-    }
-    SubfolderTreeDto {
-        root: path_string(root),
-        separator: MAIN_SEPARATOR_STR.into(),
-        names,
-        parents,
-        more: found.more,
-    }
+/// Carries run `id` on from where it stopped, with the folders it didn't reach.
+#[tauri::command]
+pub fn carry_on_tree_run<R: Runtime>(
+    app: AppHandle<R>,
+    id: u64,
+) -> Result<TreeRunEventDto, String> {
+    resume(&app, id, false)
 }
 
-/// The folders a run in `root` goes through: without `only`, `root` and then every folder
-/// inside it, nearest first, refused when there are more than `limit` of those; with `only`,
-/// exactly those, in the order given, each of which must be `root` or inside it.
-///
-/// `root` is canonical, as [`validate_folder`] returns it.
-pub(crate) fn plan(
-    root: &Path,
-    only: Option<&[String]>,
-    limit: usize,
-) -> Result<Vec<PathBuf>, String> {
-    let Some(only) = only else {
-        let found = subfolders(root, limit);
-        if found.more {
-            return Err(format!(
-                "{} has more than {} folders inside it, too many to change at once. Pick a folder \
-                 further down.",
-                folder_name(root),
-                thousands(limit)
-            ));
-        }
-        return Ok(std::iter::once(root.to_path_buf())
-            .chain(found.folders)
-            .collect());
+/// Tries the folders run `id` couldn't change once more.
+#[tauri::command]
+pub fn retry_tree_run<R: Runtime>(app: AppHandle<R>, id: u64) -> Result<TreeRunEventDto, String> {
+    resume(&app, id, true)
+}
+
+/// Takes off exactly what apply run `id` put on, as a run of its own.
+#[tauri::command]
+pub fn undo_tree_run<R: Runtime>(app: AppHandle<R>, id: u64) -> Result<TreeRunEventDto, String> {
+    let kind = Kind::Revert {
+        skip_plain: false,
+        undoing: true,
     };
-    only.iter()
-        .map(|path| within(root, Path::new(path)))
-        .collect()
+    app.state::<Runs>().undo(id, working(&app, &kind))
 }
 
-/// `path` as one of the folders of a run in `root`: canonical, and `root` or inside it.
-///
-/// A path that can't be used as it is, most likely a folder deleted since the run that named it,
-/// is kept as given when it is still plainly under `root`, so that folder fails on its own with
-/// a reason rather than the whole run being refused. Like every folder, it is checked again when
-/// the run reaches it.
-fn within(root: &Path, path: &Path) -> Result<PathBuf, String> {
-    match validate_folder(path) {
-        Ok(canonical) if canonical.starts_with(root) => Ok(canonical),
-        Ok(_) => Err(outside(root, path)),
-        Err(_) if is_plain_absolute(path) && path.starts_with(root) && leads_into(root, path) => {
-            Ok(path.to_path_buf())
-        }
-        Err(_) => Err(outside(root, path)),
-    }
+/// Forgets run `id` once it has ended: its summary was put away.
+#[tauri::command]
+pub fn dismiss_tree_run<R: Runtime>(app: AppHandle<R>, id: u64) {
+    app.state::<Runs>().dismiss(id, &emitter(&app));
 }
 
-/// True for an absolute path without `.` or `..` in it, which can't climb out of a folder it
-/// starts with.
-fn is_plain_absolute(path: &Path) -> bool {
-    path.is_absolute()
-        && path.components().all(|part| {
-            matches!(
-                part,
-                Component::Prefix(_) | Component::RootDir | Component::Normal(_)
-            )
-        })
+/// The latest run, going or ended, for a webview that has just loaded.
+#[tauri::command]
+pub fn tree_run(runs: State<'_, Runs>) -> TreeRunEventDto {
+    runs.event()
 }
 
-/// True when the nearest folder along `path` that is still there is `root` or inside it once
-/// resolved, so no link on the way leads out of `root`.
-fn leads_into(root: &Path, path: &Path) -> bool {
-    path.ancestors()
-        .find_map(|dir| validate_folder(dir).ok())
-        .is_some_and(|real| real.starts_with(root))
-}
-
-/// The refusal for a folder that isn't in the run's folder.
-fn outside(root: &Path, path: &Path) -> String {
-    format!(
-        "{} isn't inside {}, so it can't be changed along with it",
-        folder_name(path),
-        folder_name(root)
-    )
-}
-
-/// Goes through `folders` in order, doing to each what `prepare` returns, and says how it went.
-///
-/// `progress` hears `done: 0` with `root`'s name first, then `done: i + 1` with each folder's
-/// name as it is finished, whether it changed, was skipped or failed. `prepare` is called once,
-/// just before the first folder, so its slow part (rendering the icon) starts after the webview
-/// knows the total, and never when the run is stopped first or has nothing to do; an error from
-/// it is the run's, and no folder has been touched. `stop` is checked before each folder: once
-/// it is set, the folders not reached are `remaining` and the run is `stopped`.
-pub(crate) fn run_tree<P, A>(
-    root: &Path,
-    folders: &[PathBuf],
-    stop: &AtomicBool,
-    mut progress: impl FnMut(TreeProgressDto),
-    prepare: P,
-) -> Result<TreeRunDto, String>
-where
-    P: FnOnce() -> Result<A, String>,
-    A: FnMut(&Path) -> Result<Outcome, String>,
-{
-    let total = folders.len();
-    progress(TreeProgressDto {
-        done: 0,
-        total,
-        name: folder_name(root),
-    });
-    let mut run = TreeRunDto {
-        total,
-        ..TreeRunDto::default()
+/// Carries run `id` on, or with `retry` tries its failures again, doing what it did before.
+fn resume<R: Runtime>(app: &AppHandle<R>, id: u64, retry: bool) -> Result<TreeRunEventDto, String> {
+    let runs = app.state::<Runs>();
+    let Some(kind) = runs.kind_of(id) else {
+        return Err("that run isn't there any more".into());
     };
-    let mut prepare = Some(prepare);
-    let mut act: Option<A> = None;
-    for (i, folder) in folders.iter().enumerate() {
-        if stop.load(Ordering::SeqCst) {
-            run.stopped = true;
-            run.remaining = folders[i..].iter().map(|f| path_string(f)).collect();
-            break;
+    runs.resume(id, retry, working(app, &kind))
+}
+
+/// What a run of `kind` does, as the work a run's thread is given.
+fn working<R: Runtime>(
+    app: &AppHandle<R>,
+    kind: &Kind,
+) -> Box<dyn FnOnce(Arc<Job>) + Send + 'static> {
+    match kind {
+        Kind::Apply { skin_id } => Box::new(applying(app, skin_id.clone())),
+        Kind::Revert { skip_plain, .. } => {
+            let (emit, skip_plain) = (emitter(app), *skip_plain);
+            Box::new(move |job: Arc<Job>| {
+                job.work(
+                    || {
+                        Ok(move |folder: &Path| {
+                            if skip_plain && !has_custom_icon(folder) {
+                                return Ok(Outcome::Skipped);
+                            }
+                            revert_icon(folder)
+                                .map(|()| Outcome::Changed)
+                                .map_err(|e| reason(&e))
+                        })
+                    },
+                    &emit,
+                )
+            })
         }
-        let act = match &mut act {
-            Some(act) => act,
-            none => none.insert(prepare.take().expect("the action is made once")()?),
-        };
-        let name = folder_name(folder);
-        match act(folder) {
-            Ok(Outcome::Changed) => run.changed.push(path_string(folder)),
-            Ok(Outcome::Skipped) => run.skipped += 1,
-            Err(reason) => run.failed.push(TreeFailureDto {
-                path: path_string(folder),
-                name: name.clone(),
-                reason,
-            }),
+    }
+}
+
+/// The work of a run that puts skin `skin_id` on its folders.
+fn applying<R: Runtime>(
+    app: &AppHandle<R>,
+    skin_id: String,
+) -> impl FnOnce(Arc<Job>) + Send + 'static {
+    let (emit, state) = (emitter(app), app.state::<AppState>().inner().clone());
+    move |job: Arc<Job>| {
+        job.work(
+            || {
+                // Rendered and encoded once for every folder, on this thread: on macOS the
+                // prepared icon is an AppKit image, which can't move to another.
+                let skin = state.resolve(&skin_id)?;
+                let icon = prepare_icon(&skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
+                Ok(move |folder: &Path| {
+                    apply_prepared(folder, &icon)
+                        .map(|()| Outcome::Changed)
+                        .map_err(|e| reason(&e))
+                })
+            },
+            &emit,
+        )
+    }
+}
+
+/// Where a run's messages go: every webview, as [`job::EVENT`]s. The window may have gone, and
+/// the run goes on all the same.
+fn emitter<R: Runtime>(app: &AppHandle<R>) -> Emit {
+    let app = app.clone();
+    Arc::new(move |event| {
+        let _ = app.emit(job::EVENT, event);
+    })
+}
+
+// ---------- shared ----------
+
+/// Lets a message through now and then: the first straight away, then none sooner than `every`
+/// after the last. A revert gets through about a thousand folders a second, far more than anyone
+/// can read, and every message is a render in the webview.
+pub(crate) struct Throttle {
+    every: Duration,
+    last: Option<Instant>,
+}
+
+impl Throttle {
+    pub fn new(every: Duration) -> Throttle {
+        Throttle { every, last: None }
+    }
+
+    /// Whether a message may go at `now`. When it may, it's counted as sent.
+    pub fn ready(&mut self, now: Instant) -> bool {
+        if self
+            .last
+            .is_some_and(|last| now.saturating_duration_since(last) < self.every)
+        {
+            return false;
         }
-        progress(TreeProgressDto {
-            done: i + 1,
-            total,
-            name,
-        });
+        self.last = Some(now);
+        true
     }
-    if !run.changed.is_empty() {
-        // Once for the whole run, not once per folder: on Windows this refreshes every view.
-        refresh_shell_icons();
-    }
-    Ok(run)
 }
 
 /// Why one folder of a run couldn't be changed, as the sentence the webview shows after its
@@ -443,31 +534,18 @@ fn path_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// `n` with its thousands marked, as the sentences write numbers: 5,000.
-fn thousands(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, digit) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
-}
-
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A scratch folder for one test, removed when it drops.
-    struct Scratch(PathBuf);
+    pub(crate) struct Scratch(pub PathBuf);
 
     impl Scratch {
         /// `<temp>/folderskin-tree-<process>-<n>`, with `dirs` (`/`-separated) made inside.
-        fn with(dirs: &[&str]) -> Scratch {
+        pub(crate) fn with(dirs: &[&str]) -> Scratch {
             static SEQ: AtomicUsize = AtomicUsize::new(0);
             let path = std::env::temp_dir().join(format!(
                 "folderskin-tree-{}-{}",
@@ -483,7 +561,7 @@ mod tests {
         }
 
         /// The folder as a run sees it: canonical.
-        fn root(&self) -> PathBuf {
+        pub(crate) fn root(&self) -> PathBuf {
             validate_folder(&self.0).unwrap()
         }
     }
@@ -494,419 +572,59 @@ mod tests {
         }
     }
 
-    /// A per-folder action that captures nothing.
-    type Act = fn(&Path) -> Result<Outcome, String>;
-
-    fn paths(names: &[&str]) -> Vec<PathBuf> {
-        names
-            .iter()
-            .map(|n| Path::new("/work/Projects").join(n))
-            .collect()
+    #[test]
+    fn a_throttle_lets_one_message_through_in_each_stretch_of_time() {
+        let mut throttle = Throttle::new(Duration::from_millis(80));
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        assert!(throttle.ready(at(0)), "the first goes at once");
+        assert!(!throttle.ready(at(1)));
+        assert!(!throttle.ready(at(79)));
+        assert!(throttle.ready(at(80)));
+        assert!(!throttle.ready(at(150)));
+        assert!(
+            throttle.ready(at(400)),
+            "after a quiet stretch, straight away"
+        );
+        // A clock that seems to go back never lets a burst through.
+        assert!(!throttle.ready(at(300)));
+        // A thousand folders a second for two seconds: 25 messages, not 2,000.
+        let mut throttle = Throttle::new(Duration::from_millis(80));
+        let sent = (0..2000).filter(|&ms| throttle.ready(at(ms))).count();
+        assert_eq!(sent, 25);
     }
 
-    fn step(done: usize, total: usize, name: &str) -> TreeProgressDto {
-        TreeProgressDto {
-            done,
-            total,
-            name: name.into(),
-        }
+    #[test]
+    fn a_column_lists_one_folders_own_folders_and_which_have_more_inside() {
+        let scratch = Scratch::with(&["b/inner", "a", ".git/objects", "Thing.app/Contents", "C"]);
+        std::fs::write(scratch.0.join("a").join("notes.txt"), b"x").unwrap();
+        let root = scratch.root();
+        let listed = list(&root, PEEK_FOR);
+        assert_eq!(listed.path, path_string(&root));
+        assert_eq!(listed.separator, MAIN_SEPARATOR_STR);
+        assert_eq!(listed.names, ["a", "b", "C"]);
+        assert_eq!(listed.nested, [Some(false), Some(true), Some(false)]);
+        // With no time to look, the folders are there all the same, maybe with folders inside.
+        let quick = list(&root, Duration::ZERO);
+        assert_eq!(quick.names, ["a", "b", "C"]);
+        assert_eq!(quick.nested, [None, None, None]);
+        // A package has nothing inside, as far as a run goes.
+        assert!(list(&root.join("Thing.app"), PEEK_FOR).names.is_empty());
     }
 
-    /// Runs `folders` in `/work/Projects` with `act`, returning the run and every progress
-    /// message.
-    fn run_with(
-        folders: &[PathBuf],
-        stop: &AtomicBool,
-        act: impl FnMut(&Path) -> Result<Outcome, String>,
-    ) -> (TreeRunDto, Vec<TreeProgressDto>) {
-        let mut heard = Vec::new();
-        let run = run_tree(
-            Path::new("/work/Projects"),
-            folders,
-            stop,
-            |p| heard.push(p),
-            || Ok(act),
-        )
+    #[test]
+    fn a_choice_from_the_webview_is_rules_by_path() {
+        let dto: ChoiceDto = serde_json::from_value(json!({
+            "all": false,
+            "rules": [{"path": "/r/Photos", "on": true}, {"path": "/r/Photos/Raw", "on": false}]
+        }))
         .unwrap();
-        (run, heard)
-    }
-
-    #[test]
-    fn a_run_goes_in_order_and_reports_each_folder_as_it_finishes() {
-        let folders = paths(&["", "a", "b", "a/deep"]);
-        let mut seen = Vec::new();
-        let (run, heard) = run_with(&folders, &AtomicBool::new(false), |f| {
-            seen.push(f.to_path_buf());
-            Ok(Outcome::Changed)
-        });
-        assert_eq!(seen, folders);
-        assert_eq!(
-            heard,
-            [
-                step(0, 4, "Projects"),
-                step(1, 4, "Projects"),
-                step(2, 4, "a"),
-                step(3, 4, "b"),
-                step(4, 4, "deep"),
-            ]
-        );
-        assert_eq!(
-            run,
-            TreeRunDto {
-                total: 4,
-                changed: folders.iter().map(|f| path_string(f)).collect(),
-                ..TreeRunDto::default()
-            }
-        );
-    }
-
-    #[test]
-    fn a_folder_that_fails_is_reported_and_the_run_goes_on() {
-        let folders = paths(&["", "locked", "open", "gone"]);
-        let (run, heard) = run_with(&folders, &AtomicBool::new(false), |f| {
-            match f.file_name().and_then(|n| n.to_str()) {
-                Some("locked") => Err("you don't have permission to change it".into()),
-                Some("open") => Ok(Outcome::Skipped),
-                Some("gone") => Err(GONE.into()),
-                _ => Ok(Outcome::Changed),
-            }
-        });
-        assert_eq!(run.changed, [path_string(&folders[0])]);
-        assert_eq!(run.skipped, 1);
-        assert_eq!(
-            run.failed,
-            [
-                TreeFailureDto {
-                    path: path_string(&folders[1]),
-                    name: "locked".into(),
-                    reason: "you don't have permission to change it".into(),
-                },
-                TreeFailureDto {
-                    path: path_string(&folders[3]),
-                    name: "gone".into(),
-                    reason: GONE.into(),
-                },
-            ]
-        );
-        assert!(run.remaining.is_empty() && !run.stopped);
-        assert_eq!(heard.len(), 5, "every folder is reported, failed or not");
-        assert_eq!(heard[4], step(4, 4, "gone"));
-    }
-
-    #[test]
-    fn a_stopped_run_says_which_folders_it_did_not_reach() {
-        let folders = paths(&["", "a", "b", "c"]);
-        let stop = AtomicBool::new(false);
-        let mut calls = 0;
-        let (run, heard) = run_with(&folders, &stop, |_| {
-            calls += 1;
-            if calls == 2 {
-                // Stop is pressed while the second folder is being changed; it is finished.
-                stop.store(true, Ordering::SeqCst);
-            }
-            Ok(Outcome::Changed)
-        });
-        assert_eq!(calls, 2);
-        assert!(run.stopped);
-        assert_eq!(run.changed.len(), 2);
-        assert_eq!(
-            run.remaining,
-            [path_string(&folders[2]), path_string(&folders[3])]
-        );
-        assert_eq!(heard.last(), Some(&step(2, 4, "a")));
-        assert_eq!(
-            run.changed.len() + run.failed.len() + run.skipped + run.remaining.len(),
-            run.total
-        );
-    }
-
-    #[test]
-    fn the_action_is_made_once_just_before_the_first_folder() {
-        let folders = paths(&["", "a"]);
-        let made = AtomicUsize::new(0);
-        let heard = std::cell::Cell::new(0);
-        let run = run_tree(
-            Path::new("/work/Projects"),
-            &folders,
-            &AtomicBool::new(false),
-            |_| heard.set(heard.get() + 1),
-            || {
-                made.fetch_add(1, Ordering::SeqCst);
-                // The webview already knows the total when the slow part starts.
-                assert_eq!(heard.get(), 1);
-                Ok(|_: &Path| Ok(Outcome::Changed))
-            },
-        )
-        .unwrap();
-        assert_eq!(made.load(Ordering::SeqCst), 1);
-        assert_eq!(heard.get(), 3);
-        assert_eq!(run.changed.len(), 2);
-
-        // Stopped before it began, or nothing to do: nothing is rendered at all.
-        let never = || -> Result<Act, String> { panic!("prepared for no folder") };
-        let stopped = run_tree(
-            Path::new("/work/Projects"),
-            &folders,
-            &AtomicBool::new(true),
-            |_| {},
-            never,
-        )
-        .unwrap();
-        assert!(stopped.stopped);
-        assert_eq!(stopped.remaining.len(), 2);
-        let empty = run_tree(
-            Path::new("/work/Projects"),
-            &[],
-            &AtomicBool::new(false),
-            |_| {},
-            never,
-        )
-        .unwrap();
-        assert_eq!(empty, TreeRunDto::default());
-
-        // A failure to prepare is the run's, before any folder is touched.
-        let failed = run_tree(
-            Path::new("/work/Projects"),
-            &folders,
-            &AtomicBool::new(false),
-            |_| {},
-            || -> Result<Act, String> { Err("macOS could not read the 16 px icon".into()) },
-        );
-        assert_eq!(failed.unwrap_err(), "macOS could not read the 16 px icon");
-    }
-
-    #[test]
-    fn a_whole_tree_is_the_folder_then_everything_inside_it() {
-        let scratch = Scratch::with(&["b", "a/deep", ".git/objects"]);
-        let root = scratch.root();
-        let planned = plan(&root, None, MAX_TREE).unwrap();
-        assert_eq!(
-            planned,
-            [
-                root.clone(),
-                root.join("a"),
-                root.join("b"),
-                root.join("a").join("deep")
-            ]
-        );
-
-        let refused = plan(&root, None, 2).unwrap_err();
-        let name = folder_name(&root);
-        assert_eq!(
-            refused,
-            format!(
-                "{name} has more than 2 folders inside it, too many to change at once. Pick a \
-                 folder further down."
-            )
-        );
-        assert!(plan(&root, None, 3).is_ok(), "exactly the limit is fine");
-    }
-
-    /// Every folder's path in `tree`, `root` first, built the way the webview builds them: the
-    /// parent's path, the separator and the name.
-    fn paths_of(tree: &SubfolderTreeDto) -> Vec<String> {
-        let mut paths = vec![tree.root.clone()];
-        for (name, &parent) in tree.names.iter().zip(&tree.parents) {
-            assert!(parent < paths.len(), "{name}'s folder comes before it");
-            paths.push(format!("{}{}{name}", paths[parent], tree.separator));
-        }
-        paths
-    }
-
-    #[test]
-    fn a_tree_is_the_folders_a_whole_run_takes_each_with_the_one_it_is_in() {
-        let scratch = Scratch::with(&["b/z", "b/A", "a/y/deep", "C"]);
-        let root = scratch.root();
-        let tree = tree_of(&root, MAX_TREE);
-        assert_eq!(tree.root, path_string(&root));
-        assert_eq!(tree.separator, MAIN_SEPARATOR_STR);
-        assert_eq!(tree.names, ["a", "b", "C", "y", "A", "z", "deep"]);
-        assert_eq!(tree.parents, [0, 0, 0, 1, 2, 2, 4]);
-        assert!(!tree.more);
-        // Exactly what a run over the whole tree goes through, in its order: the paths the
-        // webview builds are the ones a run over some of them names.
-        let planned: Vec<String> = plan(&root, None, MAX_TREE)
-            .unwrap()
-            .iter()
-            .map(|p| path_string(p))
-            .collect();
-        assert_eq!(paths_of(&tree), planned);
-        assert_eq!(
-            plan(&root, Some(&paths_of(&tree)), MAX_TREE).unwrap(),
-            plan(&root, None, MAX_TREE).unwrap(),
-            "a run over every one of them is the whole run"
-        );
-    }
-
-    #[test]
-    fn a_tree_leaves_out_what_a_run_leaves_out() {
-        let scratch = Scratch::with(&[
-            "Photos/2024",
-            ".git/objects",
-            "Thing.app/Contents",
-            "Kit.FRAMEWORK/Versions",
-            "Mine",
-        ]);
-        std::fs::write(scratch.0.join("notes.txt"), b"x").unwrap();
-        std::fs::write(scratch.0.join("Photos").join("Report"), b"x").unwrap();
-        let root = scratch.root();
-        // Links to folders, in and out of the tree, are never followed.
-        #[cfg(unix)]
-        let _elsewhere = {
-            let elsewhere = Scratch::with(&["Theirs/inside"]);
-            std::os::unix::fs::symlink(elsewhere.root(), root.join("Link")).unwrap();
-            std::os::unix::fs::symlink(root.join("Mine"), root.join("Photos").join("Mine too"))
-                .unwrap();
-            elsewhere
-        };
-        let tree = tree_of(&root, MAX_TREE);
-        assert_eq!(tree.names, ["Mine", "Photos", "2024"]);
-        assert_eq!(tree.parents, [0, 0, 2]);
-        assert_eq!(tree_of(&root.join("Thing.app"), MAX_TREE).names.len(), 0);
-    }
-
-    #[test]
-    fn the_folders_inside_each_folder_come_together_in_name_order() {
-        let scratch = Scratch::with(&[
-            "Music/Zebra",
-            "Music/apple",
-            "Music/Banana/Live",
-            "Photos/Photos 10",
-            "Photos/Photos 2",
-            "Photos/Photos 1/Raw",
-            "Notes",
-        ]);
-        let root = scratch.root();
-        let tree = tree_of(&root, MAX_TREE);
-        assert_eq!(
-            tree.names,
-            [
-                "Music",
-                "Notes",
-                "Photos",
-                "apple",
-                "Banana",
-                "Zebra",
-                "Photos 1",
-                "Photos 10",
-                "Photos 2",
-                "Live",
-                "Raw"
-            ]
-        );
-        assert_eq!(tree.parents, [0, 0, 0, 1, 1, 1, 3, 3, 3, 5, 7]);
-        // Each folder's insides are one run of the list, in the order the folders came.
-        assert!(tree.parents.windows(2).all(|w| w[0] <= w[1]));
-        for (i, &parent) in tree.parents.iter().enumerate() {
-            assert!(
-                parent <= i,
-                "{} comes after the folder it's in",
-                tree.names[i]
-            );
-        }
-    }
-
-    #[test]
-    fn a_deep_tree_is_read_to_the_bottom() {
-        let deep = ["d"; 40].join("/");
-        let scratch = Scratch::with(&[&deep, "top"]);
-        let root = scratch.root();
-        let tree = tree_of(&root, MAX_TREE);
-        assert_eq!(tree.names.len(), 41);
-        assert_eq!(&tree.names[..2], ["d", "top"]);
-        // After the first level, each folder is inside the one before it.
-        assert_eq!(&tree.parents[..2], [0, 0]);
-        assert!((2..41).all(|i| tree.parents[i] == if i == 2 { 1 } else { i }));
-        assert_eq!(
-            paths_of(&tree).last().unwrap(),
-            &path_string(&root.join(deep.replace('/', MAIN_SEPARATOR_STR)))
-        );
-    }
-
-    #[test]
-    fn a_tree_stops_at_the_limit_and_says_there_are_more() {
-        let scratch = Scratch::with(&["a/deep", "b", "c"]);
-        let root = scratch.root();
-
-        let all = tree_of(&root, 4);
-        assert_eq!(all.names, ["a", "b", "c", "deep"]);
-        assert_eq!(all.parents, [0, 0, 0, 1]);
-        assert!(!all.more, "exactly the limit is not more");
-
-        let some = tree_of(&root, 3);
-        assert_eq!(some.names, ["a", "b", "c"]);
-        assert_eq!(some.parents, [0, 0, 0]);
-        assert!(some.more, "a/deep was left out");
-
-        let none = tree_of(&root, 0);
-        assert!(none.names.is_empty() && none.parents.is_empty() && none.more);
-        assert_eq!(none.root, path_string(&root));
-
-        let empty = tree_of(&root.join("b"), MAX_TREE);
-        assert!(empty.names.is_empty() && !empty.more);
-    }
-
-    #[test]
-    fn only_names_folders_of_the_run_and_nothing_outside_it() {
-        let scratch = Scratch::with(&["a/deep", "b"]);
-        let root = scratch.root();
-        let elsewhere = Scratch::with(&["theirs"]);
-        let s = |p: &Path| path_string(p);
-
-        // Exactly those, in the order given, canonical.
-        let given = [s(&root.join("b")), s(&root), s(&root.join("a/./deep"))];
-        assert_eq!(
-            plan(&root, Some(&given), MAX_TREE).unwrap(),
-            [root.join("b"), root.clone(), root.join("a").join("deep")]
-        );
-        assert_eq!(
-            plan(&root, Some(&[]), MAX_TREE).unwrap(),
-            Vec::<PathBuf>::new()
-        );
-
-        // A folder deleted since is kept, to fail on its own.
-        let gone = root.join("a").join("gone");
-        assert_eq!(
-            plan(&root, Some(&[s(&gone)]), MAX_TREE).unwrap(),
-            std::slice::from_ref(&gone)
-        );
-
-        let root_name = folder_name(&root);
-        for path in [
-            elsewhere.root().join("theirs"),
-            elsewhere.root(),
-            root.join("..")
-                .join(root.file_name().unwrap())
-                .join("..")
-                .join("x"),
-            root.parent().unwrap().to_path_buf(),
-            PathBuf::from("relative/a"),
-        ] {
-            let refused = plan(&root, Some(&[s(&root.join("b")), s(&path)]), MAX_TREE)
-                .expect_err("outside the run's folder");
-            assert!(
-                refused.ends_with(&format!(
-                    " isn't inside {root_name}, so it can't be changed along with it"
-                )),
-                "{refused}"
-            );
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_link_inside_the_folder_to_one_outside_it_is_refused() {
-        let scratch = Scratch::with(&["a"]);
-        let root = scratch.root();
-        let elsewhere = Scratch::with(&["theirs"]);
-        std::os::unix::fs::symlink(elsewhere.root(), root.join("link")).unwrap();
-        for past_the_link in ["theirs", "not there"] {
-            let through = path_string(&root.join("link").join(past_the_link));
-            assert!(
-                plan(&root, Some(&[through]), MAX_TREE).is_err(),
-                "{past_the_link}"
-            );
-        }
+        let choice = choice_of(Some(dto));
+        assert!(!choice.all());
+        assert!(choice.takes(Path::new("/r/Photos"), false));
+        assert!(!choice.takes(Path::new("/r/Photos/Raw"), true));
+        assert!(!choice.takes(Path::new("/r/Notes"), false));
+        assert!(choice_of(None).takes(Path::new("/r/Notes"), true));
     }
 
     #[test]
@@ -946,62 +664,73 @@ mod tests {
     }
 
     #[test]
-    fn numbers_in_sentences_have_their_thousands_marked() {
-        assert_eq!(thousands(0), "0");
-        assert_eq!(thousands(999), "999");
-        assert_eq!(thousands(5_000), "5,000");
-        assert_eq!(thousands(12_345), "12,345");
-        assert_eq!(thousands(1_234_567), "1,234,567");
-    }
-
-    #[test]
-    fn the_run_serialises_the_shape_the_webview_expects() {
+    fn what_the_webview_hears_has_the_shape_it_expects() {
         let run = TreeRunDto {
-            total: 3,
-            changed: vec!["/a".into()],
-            failed: vec![TreeFailureDto {
+            id: 3,
+            kind: "apply",
+            undoing: false,
+            leaves_plain: false,
+            folder: "/a".into(),
+            root: "/a".into(),
+            name: "a".into(),
+            skin_id: Some("user:1".into()),
+            running: true,
+            stopping: false,
+            stopped: false,
+            done: 2,
+            total: 9,
+            counted: false,
+            current: "b".into(),
+            changed: 1,
+            failed: 1,
+            skipped: 0,
+            failures: vec![TreeFailureDto {
                 path: "/a/b".into(),
                 name: "b".into(),
                 reason: GONE.into(),
             }],
-            skipped: 0,
-            remaining: vec!["/a/c".into()],
-            stopped: true,
+            error: None,
         };
         assert_eq!(
-            serde_json::to_value(&run).unwrap(),
-            json!({
-                "total": 3,
-                "changed": ["/a"],
-                "failed": [{"path": "/a/b", "name": "b", "reason": "it isn't there any more"}],
-                "skipped": 0,
-                "remaining": ["/a/c"],
-                "stopped": true,
+            serde_json::to_value(TreeRunEventDto {
+                seq: 7,
+                run: Some(run)
             })
+            .unwrap(),
+            json!({"seq": 7, "run": {
+                "id": 3, "kind": "apply", "undoing": false, "leaves_plain": false,
+                "folder": "/a", "root": "/a", "name": "a", "skin_id": "user:1",
+                "running": true, "stopping": false, "stopped": false,
+                "done": 2, "total": 9, "counted": false, "current": "b",
+                "changed": 1, "failed": 1, "skipped": 0,
+                "failures": [{"path": "/a/b", "name": "b", "reason": "it isn't there any more"}],
+                "error": null,
+            }})
         );
         assert_eq!(
-            serde_json::to_value(step(2, 9, "Invoices")).unwrap(),
-            json!({"done": 2, "total": 9, "name": "Invoices"})
-        );
-        assert_eq!(
-            serde_json::to_value(SubfolderCountDto {
+            serde_json::to_value(SubfolderCountsDto {
+                folder: "/a".into(),
                 count: 12,
-                more: false
+                done: false,
+                paths: vec![PathCountDto {
+                    found: true,
+                    inside: 3,
+                    done: true
+                }],
             })
             .unwrap(),
-            json!({"count": 12, "more": false})
+            json!({"folder": "/a", "count": 12, "done": false,
+                   "paths": [{"found": true, "inside": 3, "done": true}]})
         );
         assert_eq!(
-            serde_json::to_value(SubfolderTreeDto {
-                root: "/work/Projects".into(),
+            serde_json::to_value(SubfolderListDto {
+                path: "/a".into(),
                 separator: "/".into(),
-                names: vec!["Clients".into(), "Design".into(), "Acme".into()],
-                parents: vec![0, 0, 1],
-                more: false,
+                names: vec!["b".into()],
+                nested: vec![None],
             })
             .unwrap(),
-            json!({"root": "/work/Projects", "separator": "/", "names": ["Clients", "Design", "Acme"],
-                   "parents": [0, 0, 1], "more": false})
+            json!({"path": "/a", "separator": "/", "names": ["b"], "nested": [null]})
         );
     }
 
@@ -1014,62 +743,41 @@ mod tests {
         use super::*;
         use crate::store::{self, NewSkin, SkinImage, SkinSource};
         use serde_json::Value;
-        use std::sync::{Arc, Mutex};
-        // ---------- through the IPC ----------
+        use std::sync::Mutex;
 
-        /// Tests that start or stop runs take turns: the stop flag belongs to the whole process.
+        /// Tests that start runs take turns: a mock app's runs are its own, but the icons they
+        /// write aren't.
         static ONE_RUN_AT_A_TIME: Mutex<()> = Mutex::new(());
 
-        /// What a mock app's progress channels were sent, and when to press Stop.
-        #[derive(Default)]
-        struct Heard {
-            messages: Mutex<Vec<Value>>,
-            /// Stop the run once the message with this `done` arrives; 0 never does.
-            stop_at: AtomicUsize,
-        }
-
-        impl Heard {
-            fn take(&self) -> Vec<Value> {
-                std::mem::take(&mut *self.messages.lock().unwrap())
-            }
-        }
-
-        /// A mock app with the tree commands, and what its channels hear.
+        /// A mock app with the subfolder commands.
         fn app() -> (
             tauri::App<tauri::test::MockRuntime>,
             tauri::WebviewWindow<tauri::test::MockRuntime>,
-            Arc<Heard>,
         ) {
-            let heard = Arc::new(Heard::default());
-            let sink = heard.clone();
             let app = tauri::test::mock_builder()
-                .channel_interceptor(move |_, _, _, body| {
-                    if let tauri::ipc::InvokeResponseBody::Json(json) = body {
-                        let message: Value = serde_json::from_str(json).unwrap();
-                        let stop_at = sink.stop_at.load(Ordering::SeqCst);
-                        if stop_at > 0 && message["done"] == stop_at {
-                            // As the user pressing Stop while that folder was being changed.
-                            stop_tree_run();
-                        }
-                        sink.messages.lock().unwrap().push(message);
-                    }
-                    true
-                })
                 .manage(AppState::default())
+                .manage(Counts::default())
+                .manage(Runs::default())
                 .invoke_handler(tauri::generate_handler![
                     subfolder_count,
-                    subfolder_tree,
+                    subfolder_counts,
+                    subfolder_list,
                     tree_bytes,
-                    apply_skin_tree,
-                    revert_skin_tree,
-                    stop_tree_run
+                    start_tree_apply,
+                    start_tree_revert,
+                    stop_tree_run,
+                    carry_on_tree_run,
+                    retry_tree_run,
+                    undo_tree_run,
+                    dismiss_tree_run,
+                    tree_run
                 ])
                 .build(tauri::test::mock_context(tauri::test::noop_assets()))
                 .unwrap();
             let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
                 .build()
                 .unwrap();
-            (app, webview, heard)
+            (app, webview)
         }
 
         /// The command as the webview calls it, with its arguments named the webview's way.
@@ -1093,9 +801,24 @@ mod tests {
             .map(|b| b.deserialize::<Value>().unwrap())
         }
 
+        /// Asks for the latest run until it has ended, and returns it.
+        fn ended(webview: &tauri::WebviewWindow<tauri::test::MockRuntime>) -> Value {
+            let started = Instant::now();
+            loop {
+                let run = invoke(webview, "tree_run", json!({})).unwrap()["run"].clone();
+                if run["running"] == false {
+                    return run;
+                }
+                assert!(
+                    started.elapsed() < Duration::from_secs(60),
+                    "the run never ended"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+
         /// A skin kept for the session, as the library has it, and its id.
         fn keep_skin(app: &tauri::App<tauri::test::MockRuntime>) -> String {
-            use tauri::Manager;
             let id = store::skin_id(b"tree");
             let skin = SkinImage::Folder(Arc::new(image::RgbaImage::from_pixel(
                 96,
@@ -1120,140 +843,128 @@ mod tests {
             id
         }
 
-        const CHANNEL: &str = "__CHANNEL__:7";
-
         #[test]
-        fn a_tree_is_counted_planned_reported_and_stopped_through_the_ipc() {
-            let _turn = ONE_RUN_AT_A_TIME
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        fn a_tree_is_counted_listed_and_counted_by_folder_through_the_ipc() {
             let scratch = Scratch::with(&["a/a1", "b", ".git/objects"]);
             std::fs::write(scratch.0.join("notes.txt"), b"x").unwrap();
             let root = scratch.root();
             let s = |p: &Path| path_string(p);
-            let (app, webview, heard) = app();
+            let (_app, webview) = app();
+            let folder = scratch.0.to_string_lossy().into_owned();
 
-            let count = invoke(&webview, "subfolder_count", json!({"folder": s(&root)})).unwrap();
-            assert_eq!(count, json!({"count": 3, "more": false}));
+            // A small tree is counted by the time the command answers.
+            let count = invoke(&webview, "subfolder_count", json!({"folder": folder})).unwrap();
+            assert_eq!(count, json!({"folder": folder, "count": 3, "done": true}));
             let refused = invoke(&webview, "subfolder_count", json!({"folder": "/"})).unwrap_err();
             assert_eq!(
                 refused,
                 "this is the root of a drive, not a folder FolderSkin can skin"
             );
 
-            // Nothing in the tree wears an icon, so a whole-tree revert writes nothing anywhere.
-            let args = json!({"folder": s(&root), "onProgress": CHANNEL});
-            let run = invoke(&webview, "revert_skin_tree", args.clone()).unwrap();
+            let paths = [
+                s(&root.join("a")),
+                s(&root.join("b")),
+                s(&root.join("gone")),
+            ];
+            let counts = invoke(
+                &webview,
+                "subfolder_counts",
+                json!({"folder": folder, "paths": paths}),
+            )
+            .unwrap();
             assert_eq!(
-                run,
-                json!({"total": 4, "changed": [], "failed": [], "skipped": 4, "remaining": [],
-                   "stopped": false})
+                counts,
+                json!({"folder": folder, "count": 3, "done": true, "paths": [
+                    {"found": true, "inside": 1, "done": true},
+                    {"found": true, "inside": 0, "done": true},
+                    {"found": false, "inside": 0, "done": true}
+                ]})
             );
-            let root_name = folder_name(&root);
+            let elsewhere = invoke(
+                &webview,
+                "subfolder_counts",
+                json!({"folder": "/not/counted", "paths": [s(&root)]}),
+            )
+            .unwrap();
             assert_eq!(
-                heard.take(),
-                [
-                    json!({"done": 0, "total": 4, "name": root_name}),
-                    json!({"done": 1, "total": 4, "name": root_name}),
-                    json!({"done": 2, "total": 4, "name": "a"}),
-                    json!({"done": 3, "total": 4, "name": "b"}),
-                    json!({"done": 4, "total": 4, "name": "a1"}),
-                ]
-            );
-
-            // Stop pressed during the second folder: the rest are left for later.
-            heard.stop_at.store(2, Ordering::SeqCst);
-            let stopped = invoke(&webview, "revert_skin_tree", args).unwrap();
-            heard.stop_at.store(0, Ordering::SeqCst);
-            assert_eq!(stopped["stopped"], true);
-            assert_eq!(stopped["skipped"], 2);
-            assert_eq!(
-                stopped["remaining"],
-                json!([s(&root.join("b")), s(&root.join("a").join("a1"))])
-            );
-            assert_eq!(heard.take().len(), 3, "done 0, 1 and 2");
-
-            // A stop between runs doesn't carry over into the next one.
-            invoke(&webview, "stop_tree_run", json!({})).unwrap();
-            assert!(STOP.load(Ordering::SeqCst));
-            let none = json!({"folder": s(&root), "only": [], "onProgress": CHANNEL});
-            let run = invoke(&webview, "revert_skin_tree", none).unwrap();
-            assert_eq!(run["total"], 0);
-            assert!(!STOP.load(Ordering::SeqCst));
-            heard.take();
-
-            // Applying: the skin must exist, and `only` must stay inside the folder.
-            let skin_id = keep_skin(&app);
-            let unknown = json!({"folder": s(&root), "skinId": "user:000000000000",
-                             "onProgress": CHANNEL});
-            assert_eq!(
-                invoke(&webview, "apply_skin_tree", unknown).unwrap_err(),
-                "that skin isn't available any more"
-            );
-            let elsewhere = Scratch::with(&[]);
-            let outside = json!({"folder": s(&root.join("a")), "skinId": skin_id,
-                             "only": [s(&root.join("b"))], "onProgress": CHANNEL});
-            assert_eq!(
-                invoke(&webview, "apply_skin_tree", outside).unwrap_err(),
-                "b isn't inside a, so it can't be changed along with it"
-            );
-            let outside = json!({"folder": s(&root), "skinId": skin_id,
-                             "only": [s(&elsewhere.root())], "onProgress": CHANNEL});
-            assert!(invoke(&webview, "apply_skin_tree", outside).is_err());
-            assert!(
-                heard.take().is_empty(),
-                "refused before anything was planned"
+                elsewhere["paths"],
+                json!([{"found": false, "inside": 0, "done": false}])
             );
 
-            let nothing = json!({"folder": s(&root), "skinId": skin_id, "only": [],
-                             "onProgress": CHANNEL});
-            let run = invoke(&webview, "apply_skin_tree", nothing).unwrap();
+            let listed = invoke(&webview, "subfolder_list", json!({"folder": folder})).unwrap();
             assert_eq!(
-                run,
-                json!({"total": 0, "changed": [], "failed": [], "skipped": 0, "remaining": [],
-                   "stopped": false})
-            );
-            assert_eq!(
-                heard.take(),
-                [json!({"done": 0, "total": 0, "name": root_name})]
+                listed,
+                json!({"path": s(&root), "separator": MAIN_SEPARATOR_STR, "names": ["a", "b"],
+                       "nested": [true, false]})
             );
         }
 
         #[test]
-        fn a_tree_is_read_whole_and_some_of_it_reverted_through_the_ipc() {
+        fn a_revert_runs_in_the_background_and_is_put_away_after() {
             let _turn = ONE_RUN_AT_A_TIME
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let scratch = Scratch::with(&["a/a1", "b", ".git/objects"]);
-            std::fs::write(scratch.0.join("notes.txt"), b"x").unwrap();
             let root = scratch.root();
-            let s = |p: &Path| path_string(p);
-            let (_app, webview, heard) = app();
+            let (_app, webview) = app();
+            let folder = scratch.0.to_string_lossy().into_owned();
 
-            let tree = invoke(&webview, "subfolder_tree", json!({"folder": s(&root)})).unwrap();
             assert_eq!(
-                tree,
-                json!({"root": s(&root), "separator": MAIN_SEPARATOR_STR, "names": ["a", "b", "a1"],
-                   "parents": [0, 0, 1], "more": false})
+                invoke(&webview, "tree_run", json!({})).unwrap()["run"],
+                Value::Null,
+                "no run yet"
             );
-            let refused = invoke(&webview, "subfolder_tree", json!({"folder": "/"})).unwrap_err();
+            // Nothing in the tree wears an icon, so taking them off writes nothing anywhere.
+            let started = invoke(&webview, "start_tree_revert", json!({"folder": folder})).unwrap();
+            let id = started["run"]["id"].clone();
+            assert_eq!(started["run"]["kind"], "revert");
+            assert_eq!(started["run"]["leaves_plain"], true);
+            let run = ended(&webview);
+            assert_eq!(run["id"], id);
             assert_eq!(
-                refused,
-                "this is the root of a drive, not a folder FolderSkin can skin"
+                (
+                    &run["done"],
+                    &run["total"],
+                    &run["skipped"],
+                    &run["changed"]
+                ),
+                (&json!(4), &json!(4), &json!(4), &json!(0))
+            );
+            assert_eq!(run["counted"], true);
+            assert_eq!(run["root"], path_string(&root));
+            assert_eq!(run["folder"], folder);
+
+            // Carrying on a run that finished does nothing more, and an unknown one is refused.
+            assert_eq!(
+                invoke(&webview, "carry_on_tree_run", json!({"id": 999})).unwrap_err(),
+                "that run isn't there any more"
             );
 
-            // Folders chosen out of the tree are taken as the whole tree is: the ones without an
-            // icon of their own are left alone, not written to.
-            let chosen = [s(&root), s(&root.join("a").join("a1"))];
-            let args = json!({"folder": s(&root), "only": chosen, "skipPlain": true,
-                             "onProgress": CHANNEL});
-            let run = invoke(&webview, "revert_skin_tree", args).unwrap();
+            // The chosen ones only: nothing inside but a1.
+            let chosen = json!({"all": false, "rules": [{"path": path_string(&root.join("a").join("a1")), "on": true}]});
+            invoke(
+                &webview,
+                "start_tree_revert",
+                json!({"folder": folder, "choice": chosen, "skipPlain": true}),
+            )
+            .unwrap();
+            let run = ended(&webview);
+            assert_eq!((&run["total"], &run["skipped"]), (&json!(2), &json!(2)));
+
+            // Applying needs a skin that's there.
+            let unknown = json!({"folder": folder, "skinId": "user:000000000000"});
             assert_eq!(
-                run,
-                json!({"total": 2, "changed": [], "failed": [], "skipped": 2, "remaining": [],
-                   "stopped": false})
+                invoke(&webview, "start_tree_apply", unknown).unwrap_err(),
+                "that skin isn't available any more"
             );
-            assert_eq!(heard.take().len(), 3, "done 0, 1 and 2");
+
+            // Put away once it has ended, there's no run to show.
+            let id = run["id"].as_u64().unwrap();
+            invoke(&webview, "dismiss_tree_run", json!({"id": id})).unwrap();
+            assert_eq!(
+                invoke(&webview, "tree_run", json!({})).unwrap()["run"],
+                Value::Null
+            );
         }
 
         #[test]
@@ -1267,8 +978,7 @@ mod tests {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let scratch = Scratch::with(&["a/a1", "b"]);
             let root = scratch.root();
-            let s = |p: &Path| path_string(p);
-            let (app, webview, heard) = app();
+            let (app, webview) = app();
             let skin_id = keep_skin(&app);
             let folders = [
                 root.clone(),
@@ -1276,27 +986,28 @@ mod tests {
                 root.join("b"),
                 root.join("a").join("a1"),
             ];
+            let folder = path_string(&root);
 
             let bytes = invoke(&webview, "tree_bytes", json!({"skinId": skin_id})).unwrap();
             assert!(bytes.as_u64().unwrap() > 0, "{bytes}");
 
-            let started = std::time::Instant::now();
-            let args = json!({"folder": s(&root), "skinId": skin_id, "onProgress": CHANNEL});
-            let run = invoke(&webview, "apply_skin_tree", args).unwrap();
+            let started = Instant::now();
+            let args = json!({"folder": folder, "skinId": skin_id});
+            invoke(&webview, "start_tree_apply", args).unwrap();
+            let run = ended(&webview);
             let took = started.elapsed();
-            let changed: Vec<String> = folders.iter().map(|f| s(f)).collect();
             assert_eq!(
-                run,
-                json!({"total": 4, "changed": changed, "failed": [], "skipped": 0,
-                   "remaining": [], "stopped": false})
+                (&run["changed"], &run["failed"], &run["total"]),
+                (&json!(4), &json!(0), &json!(4))
             );
-            assert_eq!(heard.take().len(), 5);
             assert!(folders.iter().all(|f| has_custom_icon(f)));
 
             // Undo: exactly the folders the run changed.
-            let undo = json!({"folder": s(&root), "only": changed, "onProgress": CHANNEL});
-            let run = invoke(&webview, "revert_skin_tree", undo).unwrap();
-            assert_eq!(run["changed"].as_array().unwrap().len(), 4);
+            let id = run["id"].clone();
+            invoke(&webview, "undo_tree_run", json!({"id": id})).unwrap();
+            let undone = ended(&webview);
+            assert_eq!(undone["undoing"], true);
+            assert_eq!(undone["changed"], 4);
             assert!(folders.iter().all(|f| !has_custom_icon(f)));
             println!("4 folders in {took:?}; {bytes} bytes each");
         }

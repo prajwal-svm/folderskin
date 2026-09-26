@@ -94,6 +94,10 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
         .manage(share::Waiting::default())
         .manage(deep_link::InstallLinks::default())
+        // The folders inside the folder on show, counted in the background, and the latest run
+        // over a tree (tree.rs).
+        .manage(tree::Counts::default())
+        .manage(tree::Runs::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_skins,
             commands::inspect_path,
@@ -119,11 +123,17 @@ pub fn run() {
             commands::folder_icon,
             commands::platform_info,
             tree::subfolder_count,
-            tree::subfolder_tree,
+            tree::subfolder_counts,
+            tree::subfolder_list,
             tree::tree_bytes,
-            tree::apply_skin_tree,
-            tree::revert_skin_tree,
+            tree::start_tree_apply,
+            tree::start_tree_revert,
             tree::stop_tree_run,
+            tree::carry_on_tree_run,
+            tree::retry_tree_run,
+            tree::undo_tree_run,
+            tree::dismiss_tree_run,
+            tree::tree_run,
             onboarding::onboarding_needed,
             onboarding::finish_onboarding,
             ai::ai_catalogue,
