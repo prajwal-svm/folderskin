@@ -198,7 +198,9 @@ mod tests {
             }
         );
         let heard = Mutex::new(Vec::new());
+        let started = std::time::Instant::now();
         count.run(|dto| lock(&heard).push(dto));
+        let took = started.elapsed();
         let heard = heard.into_inner().unwrap();
         assert_eq!(
             heard.last(),
@@ -208,9 +210,13 @@ mod tests {
                 done: true
             })
         );
+        // The first folder's count, one more for each EVERY that passed, and the end: twice on
+        // a quick disk, and a little more on a slow one (a Windows runner with its scanner on).
+        let most = 2 + (took.as_millis() / EVERY.as_millis()) as usize;
         assert!(
-            heard.len() <= 2,
-            "a small count is heard once or twice: {heard:?}"
+            heard.len() <= most,
+            "{} heard in {took:?}, at most {most}: {heard:?}",
+            heard.len()
         );
         assert_eq!(count.wait(Duration::ZERO), count.now());
     }
