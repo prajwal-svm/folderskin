@@ -102,6 +102,51 @@ fn klein_repaints_the_blank_folder_and_it_is_cut_out() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// A whole drive, painted on its own blank template and cut out along its outline: a Mac's
+/// external drive, and a Linux USB stick, whose plug and ring hole are the finest parts of any
+/// template. `FOLDERSKIN_GPU_OUT` keeps each painting, as painted and as cut out, in that folder.
+#[test]
+fn klein_repaints_a_blank_drive_and_it_is_cut_out() {
+    if !wanted() {
+        return;
+    }
+    let settings = Settings::for_machine(&detect());
+    let keep = std::env::var_os("FOLDERSKIN_GPU_OUT").map(PathBuf::from);
+    for id in ["mac-external", "linux-removable"] {
+        let dir = out_dir(id);
+        let mut job = Job::new("a koi pond at night with paper lanterns");
+        job.style = "woodblock".into();
+        job.shape = Shape::Folder;
+        job.base = folderskin_core::base::find(id).unwrap();
+        job.seed = 7;
+        let picture = runtime()
+            .block_on(generate(
+                &job,
+                &settings,
+                &dir,
+                &Reporter::silent(),
+                &CancelToken::new(),
+            ))
+            .unwrap();
+        let fit = picture.provenance.silhouette_fit.unwrap();
+        eprintln!("{id}: fit {fit}");
+        let raw = dir.join("raw").join(picture.path.file_name().unwrap());
+        if let Some(keep) = &keep {
+            std::fs::create_dir_all(keep).unwrap();
+            std::fs::copy(&picture.path, keep.join(format!("{id}.png"))).unwrap();
+            if raw.is_file() {
+                std::fs::copy(&raw, keep.join(format!("{id}-painted.png"))).unwrap();
+            }
+        }
+        if fit >= folderskin_core::painted::MIN_PAINTED_FIT {
+            let img = image::open(&picture.path).unwrap().to_rgba8();
+            assert_eq!(img.get_pixel(0, 0).0[3], 0, "{id} cut out: {fit}");
+            assert!(raw.is_file(), "{id}: the painting is kept as painted");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
 #[test]
 fn a_cancelled_painting_ends_the_runtime() {
     if !wanted() {
