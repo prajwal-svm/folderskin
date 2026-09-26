@@ -734,6 +734,191 @@ pub(crate) mod tests {
         );
     }
 
+    /// How long the parts of a big run take, on 30,110 folders made in a scratch folder: counting
+    /// them, opening "Choose subfolders" on them, a run going through all of them without
+    /// writing anything, applying a skin to 302 of them and undoing it, and taking the custom icons
+    /// off the whole tree. Writes real icons, to its own folders only, and removes them all.
+    ///
+    /// `cargo test -p folderskin --release --lib -- --ignored thirty_thousand --nocapture`
+    #[test]
+    #[ignore = "a measurement that writes 30,110 folders: run it by name, in release"]
+    fn thirty_thousand_folders() {
+        use crate::store::SkinImage;
+        use std::sync::Mutex;
+
+        // Ten folders, each with ten, each with ten, each with twenty-nine: 30,110 in all.
+        let scratch = Scratch::with(&[]);
+        let started = Instant::now();
+        for a in 0..10 {
+            for b in 0..10 {
+                for c in 0..10 {
+                    for d in 0..29 {
+                        let path = scratch.0.join(format!("a{a}/b{b}/c{c}/d{d}"));
+                        std::fs::create_dir_all(path).unwrap();
+                    }
+                }
+            }
+        }
+        let root = scratch.root();
+        println!("made 30,110 folders in {:?}", started.elapsed());
+
+        let count = Count::new("bench".into(), root.clone());
+        let started = Instant::now();
+        count.run(|_| {});
+        println!(
+            "counted {} folders in {:?}",
+            count.now().count,
+            started.elapsed()
+        );
+        assert_eq!(count.now().count, 30_110);
+
+        let started = Instant::now();
+        let top = list(&root, PEEK_FOR);
+        println!(
+            "listed the folder's own {} folders in {:?}",
+            top.names.len(),
+            started.elapsed()
+        );
+        let started = Instant::now();
+        let deep = list(&root.join("a3/b4/c5"), PEEK_FOR);
+        println!(
+            "listed a column of {} folders in {:?}",
+            deep.names.len(),
+            started.elapsed()
+        );
+
+        // Every message a run sends, counted.
+        let heard = Arc::new(Mutex::new(0usize));
+        let emit: Emit = {
+            let heard = heard.clone();
+            Arc::new(move |_| *heard.lock().unwrap() += 1)
+        };
+        let wait = |runs: &Runs| loop {
+            let run = runs.event().run.unwrap();
+            if !run.running {
+                return run;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+
+        // The run itself, walking and going through every folder with nothing to do to them.
+        let runs = Runs::default();
+        let kind = Kind::Revert {
+            skip_plain: true,
+            undoing: false,
+        };
+        let job = Job::new(
+            runs.next_id(),
+            kind,
+            "bench".into(),
+            root.clone(),
+            Choice::everything(),
+        );
+        let started = Instant::now();
+        let emit_ = emit.clone();
+        runs.start(job, move |job| {
+            job.work(|| Ok(|_: &Path| Ok(Outcome::Skipped)), &emit_)
+        })
+        .unwrap();
+        let run = wait(&runs);
+        println!(
+            "went through {} folders, doing nothing to them, in {:?}, telling the webview {} times",
+            run.done,
+            started.elapsed(),
+            heard.lock().unwrap()
+        );
+
+        // A skin on a0/b0 and everything inside it, and the folder itself, which a run always
+        // takes, and then undone.
+        let skin = SkinImage::Folder(Arc::new(image::RgbaImage::from_pixel(
+            96,
+            80,
+            image::Rgba([0x2E, 0x7D, 0x5B, 0xFF]),
+        )));
+        let choice = Choice::new(false, [(root.join("a0").join("b0"), true)]);
+        let kind = Kind::Apply {
+            skin_id: "bench".into(),
+        };
+        let job = Job::new(runs.next_id(), kind, "bench".into(), root.clone(), choice);
+        let started = Instant::now();
+        let emit_ = emit.clone();
+        runs.start(job, move |job| {
+            job.work(
+                move || {
+                    let icon =
+                        prepare_icon(&skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
+                    Ok(move |folder: &Path| {
+                        apply_prepared(folder, &icon)
+                            .map(|()| Outcome::Changed)
+                            .map_err(|e| reason(&e))
+                    })
+                },
+                &emit_,
+            )
+        })
+        .unwrap();
+        let applied = wait(&runs);
+        let took = started.elapsed();
+        println!(
+            "applied a skin to {} folders in {took:?}, {:?} a folder",
+            applied.changed,
+            took / applied.changed.max(1) as u32
+        );
+        // The folder itself, b0, its ten folders and their 290.
+        assert_eq!((applied.changed, applied.failed), (302, 0));
+
+        let revert = |job: Arc<Job>, skip_plain: bool, emit: Emit| {
+            job.work(
+                move || {
+                    Ok(move |folder: &Path| {
+                        if skip_plain && !has_custom_icon(folder) {
+                            return Ok(Outcome::Skipped);
+                        }
+                        revert_icon(folder)
+                            .map(|()| Outcome::Changed)
+                            .map_err(|e| reason(&e))
+                    })
+                },
+                &emit,
+            )
+        };
+        let started = Instant::now();
+        let emit_ = emit.clone();
+        runs.undo(applied.id, move |job| revert(job, false, emit_))
+            .unwrap();
+        let undone = wait(&runs);
+        println!(
+            "undid it on {} folders in {:?}",
+            undone.changed,
+            started.elapsed()
+        );
+
+        // Taking the custom icons off the whole tree: every folder looked at, none written to.
+        let kind = Kind::Revert {
+            skip_plain: true,
+            undoing: false,
+        };
+        let job = Job::new(
+            runs.next_id(),
+            kind,
+            "bench".into(),
+            root.clone(),
+            Choice::everything(),
+        );
+        let started = Instant::now();
+        let emit_ = emit.clone();
+        runs.start(job, move |job| revert(job, true, emit_))
+            .unwrap();
+        let removed = wait(&runs);
+        println!(
+            "took the custom icons off {} folders ({} had none) in {:?}",
+            removed.done,
+            removed.skipped,
+            started.elapsed()
+        );
+        assert_eq!(removed.skipped, 30_111);
+    }
+
     // Not on Windows: with tauri's `test` feature the lib's test binary imports a WebView2 entry
     // point the runner's loader can't resolve, so it dies with STATUS_ENTRYPOINT_NOT_FOUND before
     // a single test runs. The commands themselves are checked on macOS and Linux, and the Windows

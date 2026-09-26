@@ -934,6 +934,35 @@ mod tests {
     }
 
     #[test]
+    fn a_million_folders_take_tens_of_megabytes_not_hundreds() {
+        let tmp = tempfile_dir();
+        let root = validate_folder(&tmp).unwrap();
+        let mut walk = Walk::new(root, Order::Nearest);
+        // A hundred folders in the folder, a hundred in each of those and a hundred in each of
+        // theirs, named a dozen letters long ("Project 0042"), made up rather than read.
+        while let Some((folder, _)) = walk.next_folder() {
+            let tree = walk.tree();
+            let depth = std::iter::successors(Some(folder), |&k| tree.parent(k)).count();
+            let inside = (0..100)
+                .map(|k| (OsString::from(format!("Project {k:04}")), depth < 3))
+                .collect();
+            walk.found(folder, inside);
+        }
+        assert!(walk.is_done());
+        let tree = walk.tree();
+        assert_eq!(tree.len(), 1 + 100 + 10_000 + 1_000_000);
+        let words = tree.parents.capacity() + tree.firsts.capacity() + tree.counts.capacity();
+        let bytes = tree.names.capacity()
+            + tree.ends.capacity() * size_of::<usize>()
+            + words * size_of::<u32>()
+            + walk.look.capacity()
+            + walk.stack.capacity() * size_of::<u32>();
+        // About 35 MB.
+        let megabytes = bytes as f64 / 1e6;
+        assert!(megabytes < 48.0, "{megabytes:.1} MB");
+    }
+
+    #[test]
     fn a_choice_takes_a_folder_by_its_own_rule_or_the_one_above() {
         let p = |s: &str| PathBuf::from("/r").join(s);
         let choice = Choice::new(
