@@ -1063,7 +1063,7 @@ const STABILITY_RATIOS: &[&str] = &[
 ];
 
 /// Stable Image's style presets, for Ultra and Core alike.
-const STABILITY_PRESETS: &[&str] = &[
+pub(crate) const STABILITY_PRESETS: &[&str] = &[
     "enhance",
     "anime",
     "photographic",
@@ -1200,10 +1200,11 @@ const IDEOGRAM_RESOLUTIONS: &[&str] = &[
 ];
 
 /// Ideogram 3.0's style types. One of these as the style preset sets the type.
-const IDEOGRAM_STYLE_TYPES: &[&str] = &["AUTO", "GENERAL", "REALISTIC", "DESIGN", "FICTION"];
+pub(crate) const IDEOGRAM_STYLE_TYPES: &[&str] =
+    &["AUTO", "GENERAL", "REALISTIC", "DESIGN", "FICTION"];
 
 /// Ideogram 3.0's style presets.
-const IDEOGRAM_STYLE_PRESETS: &[&str] = &[
+pub(crate) const IDEOGRAM_STYLE_PRESETS: &[&str] = &[
     "80S_ILLUSTRATION",
     "90S_NOSTALGIA",
     "ABSTRACT_ORGANIC",

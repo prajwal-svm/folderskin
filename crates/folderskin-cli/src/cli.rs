@@ -152,6 +152,8 @@ pub enum ShapeArg {
     Artwork,
     /// The whole folder painted as one object, cut out along FolderSkin's silhouette
     Folder,
+    /// A free icon: one subject standing on its own, cut out of its backdrop and used as it is
+    Icon,
 }
 
 #[derive(Args, Debug)]

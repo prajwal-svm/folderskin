@@ -1,9 +1,10 @@
 //! Painting one picture: the prompt, the runtime, and the clean-up afterwards.
 //!
-//! What comes out is a picture, not an icon. Artwork is wrapped onto FolderSkin's folder by the
-//! app's own compositor, so its geometry is always exact; a whole folder is FolderSkin's blank
-//! folder repainted and cut out along the app's own silhouette. Beside each picture goes a `.json`
-//! with everything needed to paint it again and to say where it came from when it is shared.
+//! What comes out is a picture, not an icon. Artwork is wrapped onto a folder by the app's own
+//! compositor, so its geometry is always exact; a whole folder is the base's blank template
+//! repainted and cut out along the app's own silhouette; a free icon is cut out of the flat
+//! backdrop it was painted on. Beside each picture goes a `.json` with everything needed to paint
+//! it again and to say where it came from when it is shared.
 
 use crate::command::{self, HEIGHT, WIDTH};
 use crate::event::{Level, Reporter, Stage};
@@ -11,6 +12,8 @@ use crate::machine::{pick_backend, pick_tier, Arch, Backend, Machine, Os, Tier};
 use crate::manifest::{sdcpp_assets, Model, ModelId, SDCPP_TAG};
 use crate::prompts::{self, Shape};
 use crate::{paths, CancelToken, Error};
+use folderskin_ai::recipe::{self, Key, Lettering, Role, Treatment, RECIPE_VERSION};
+use folderskin_core::base::{Base, MAC_FOLDER, TEMPLATE_VERSION};
 use folderskin_core::{compositor, matte, painted};
 use image::{GrayImage, Luma, RgbaImage};
 use serde::Serialize;
@@ -41,13 +44,22 @@ impl Settings {
 /// One picture to paint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Job {
-    /// The subject and the scene in plain words.
+    /// The subject and the scene in plain words. Words it quotes are lettered on the picture.
     pub idea: String,
-    /// A style preset's key ([`prompts::STYLES`]), someone's own words, or "none".
+    /// A style preset's key ([`prompts::styles`]), someone's own words, or "none".
     pub style: String,
+    /// The look, when the app chose it: a built-in style's or a saved prompt's. Used in place
+    /// of `style`.
+    pub treatment: Option<Treatment>,
     pub shape: Shape,
+    /// What it is for: FolderSkin's own folder unless another base is asked for. A free icon
+    /// always paints [`Shape::Icon`] ([`Job::painted`]).
+    pub base: &'static Base,
     /// Reference pictures to paint from.
     pub refs: Vec<PathBuf>,
+    /// What each reference picture is for, in the order of `refs`: a picture with none is a
+    /// subject.
+    pub roles: Vec<Role>,
     pub seed: u64,
     /// The file name without its extension; `None` names it from the idea, style and seed.
     pub name: Option<String>,
@@ -62,8 +74,11 @@ impl Job {
         Job {
             idea: idea.into(),
             style: "none".into(),
+            treatment: None,
             shape: Shape::Artwork,
+            base: &MAC_FOLDER,
             refs: Vec::new(),
+            roles: Vec::new(),
             seed: 0,
             name: None,
             model: None,
@@ -77,13 +92,71 @@ impl Job {
         self.model.unwrap_or(ModelId::Klein).info()
     }
 
+    /// What is painted: the shape asked for, on its base ([`Shape::on`]).
+    pub fn painted(&self) -> Shape {
+        self.shape.on(self.base)
+    }
+
+    /// How it looks: the treatment the app chose, or the style named.
+    pub fn look(&self) -> Option<Treatment> {
+        self.treatment
+            .clone()
+            .or_else(|| Treatment::named(&self.style))
+    }
+
+    /// The look by name, for the file name and the record: a style's or a saved prompt's id,
+    /// someone's own words, or "none".
+    pub fn style_name(&self) -> String {
+        match &self.treatment {
+            Some(t) if !t.id.is_empty() => t.id.clone(),
+            Some(t) => t.words.clone(),
+            None => self.style.trim().to_string(),
+        }
+    }
+
+    /// Each reference picture's role, in the order of `refs`.
+    pub fn ref_roles(&self) -> Vec<Role> {
+        (0..self.refs.len())
+            .map(|i| match self.roles.get(i) {
+                Some(r) if !r.is_made() => *r,
+                _ => Role::Subject,
+            })
+            .collect()
+    }
+
+    /// The colour a whole shape's template or a free icon's canvas is drawn on: green for a look
+    /// or an idea full of pink or violet, which a magenta backdrop would bleed into.
+    pub fn key(&self) -> Key {
+        recipe::key_for("local", &self.idea, self.look().as_ref())
+    }
+
     /// The prompt the model gets.
     pub fn prompt(&self) -> String {
         if self.raw {
             self.idea.trim().to_string()
         } else {
-            prompts::compose(&self.idea, &self.style, self.shape, self.refs.len())
+            let look = self.look();
+            prompts::compose_slots(&prompts::Slots {
+                idea: &self.idea,
+                treatment: look.as_ref(),
+                shape: self.painted(),
+                base: self.base,
+                refs: &self.ref_roles(),
+            })
         }
+    }
+
+    /// The words the idea asks to be lettered.
+    pub fn lettering(&self) -> Vec<String> {
+        let look = self.look();
+        Lettering::of(
+            &self.idea,
+            look.as_ref(),
+            self.base,
+            self.painted().recipe(),
+        )
+        .map(|l| l.words)
+        .unwrap_or_default()
     }
 
     /// The file name, without extension, the picture is saved under.
@@ -93,7 +166,7 @@ impl Job {
             _ => format!(
                 "{}-{}-{}",
                 slug(&self.idea, 40),
-                slug(&self.style, 16),
+                slug(&self.style_name(), 16),
                 self.seed
             ),
         }
@@ -126,7 +199,20 @@ pub struct Provenance {
     pub idea: String,
     pub style: String,
     pub shape: Shape,
+    /// The base it was made for, by id ([`folderskin_core::base`]).
+    pub base: String,
+    /// The prompt templates' version ([`RECIPE_VERSION`]).
+    pub recipe: u32,
     pub prompt: String,
+    /// The words it was asked to letter.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub lettering: Vec<String>,
+    /// The template repainted and the version it was drawn in ("mac-folder/1"), when one was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+    /// The colour the template or canvas was drawn on, for a whole shape or a free icon.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<Key>,
     pub model: String,
     pub model_licence: String,
     pub tier: Tier,
@@ -143,11 +229,12 @@ pub struct Provenance {
     pub digital_source_type: String,
 }
 
-/// A reference picture, by name and content.
+/// A reference picture, by name, content and what it was for.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Reference {
     pub file: String,
     pub sha256: String,
+    pub role: Role,
 }
 
 /// IPTC's term for a picture a model made, for anyone reading the provenance.
@@ -159,7 +246,8 @@ pub const TRAINED_ALGORITHMIC_MEDIA: &str =
 pub struct Picture {
     /// The PNG, ready for FolderSkin.
     pub path: PathBuf,
-    /// Artwork, or a whole folder; a folder whose shape the model changed stays on its backdrop.
+    /// Artwork, a whole folder or a free icon; a folder whose shape the model changed, or an icon
+    /// with no flat backdrop to cut it out of, stays on its backdrop.
     pub shape: Shape,
     pub provenance: Provenance,
 }
@@ -325,20 +413,11 @@ fn generate_blocking(
     let out = out_dir.join(format!("{name}.png"));
     let model = job.model();
 
-    // A whole folder repaints FolderSkin's blank folder, handed in as the first picture. It is
-    // named by its size, which depends on the runtime (command::template_size).
-    let mut pictures = job.refs.clone();
-    let silhouette = (job.shape == Shape::Folder).then(|| folder_silhouette(WIDTH, HEIGHT));
-    if job.shape == Shape::Folder {
-        let (w, h) = command::template_size(settings.backend);
-        let template = out_dir.join(format!(".template-{w}x{h}.png"));
-        if !template.is_file() {
-            let img = compositor::blank_template(w, h, matte::MAGENTA);
-            std::fs::write(&template, folderskin_core::raster::encode_png(&img))
-                .map_err(|e| Error::io("write the blank folder", &template, &e))?;
-        }
-        pictures.insert(0, template);
-    }
+    let shape = job.painted();
+    let pictures = pictures(job, settings.backend, out_dir)?;
+    let silhouette = (shape == Shape::Folder)
+        .then(|| silhouette_of(job.base, WIDTH, HEIGHT))
+        .flatten();
     let prompt = job.prompt();
     let steps = model.steps;
 
@@ -488,7 +567,23 @@ fn generate_blocking(
     };
     let mut border_trimmed = false;
     let mut silhouette_fit = None;
+    let key = job.key();
     match &silhouette {
+        None if shape == Shape::Icon => match cut_icon(&img, key) {
+            Some(cutout) => {
+                keep_raw()?;
+                std::fs::write(&out, folderskin_core::raster::encode_png(&cutout))
+                    .map_err(|e| Error::io("save the picture", &out, &e))?;
+                reporter.log(Level::Info, format!("{name}: cut out of its backdrop"));
+            }
+            None => reporter.log(
+                Level::Warn,
+                format!(
+                    "{name}: the model painted no plain backdrop to cut it out of, so it's left as \
+                     painted"
+                ),
+            ),
+        },
         None => {
             // A paper margin, or paper down two opposite sides (klein painted a pop-art fox that
             // way): on a folder either becomes blank bands.
@@ -535,7 +630,8 @@ fn generate_blocking(
     let references = job
         .refs
         .iter()
-        .map(|p| {
+        .zip(job.ref_roles())
+        .map(|(p, role)| {
             Ok(Reference {
                 file: p
                     .file_name()
@@ -543,14 +639,20 @@ fn generate_blocking(
                     .unwrap_or_default(),
                 sha256: crate::download::sha256_file(p, &CancelToken::new())
                     .map_err(|e| Error::io("read a reference picture", p, &e))?,
+                role,
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
     let provenance = Provenance {
         idea: job.idea.clone(),
-        style: job.style.clone(),
-        shape: job.shape,
+        style: job.style_name(),
+        shape,
+        base: job.base.id.to_string(),
+        recipe: RECIPE_VERSION,
         prompt,
+        lettering: job.lettering(),
+        template: (shape == Shape::Folder).then(|| format!("{}/{TEMPLATE_VERSION}", job.base.id)),
+        key: (shape != Shape::Artwork).then_some(key),
         model: model.label.to_string(),
         model_licence: model.licence.to_string(),
         tier: settings.tier,
@@ -573,9 +675,46 @@ fn generate_blocking(
         .map_err(|e| Error::io("save the picture's record", &json, &e))?;
     Ok(Picture {
         path: out,
-        shape: job.shape,
+        shape,
         provenance,
     })
+}
+
+/// The pictures `job` is painted from, in the order the runtime is given them
+/// ([`prompts::roles`]): for a whole base, its blank template first, and for a free icon a flat
+/// canvas, each in the key colour, written into `out_dir` under their names and the size the
+/// runtime takes them at ([`command::template_size`]); then the reference pictures.
+pub fn pictures(job: &Job, backend: Backend, out_dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut pictures = job.refs.clone();
+    let (w, h) = command::template_size(backend);
+    let key = job.key();
+    let (name, img) = match job.painted() {
+        Shape::Artwork => return Ok(pictures),
+        Shape::Folder => (
+            format!(".template-{}-{}-{w}x{h}.png", job.base.id, key.name()),
+            job.base
+                .blank(w, h, key.rgb())
+                .unwrap_or_else(|| compositor::blank_template(w, h, key.rgb())),
+        ),
+        Shape::Icon => (
+            format!(".canvas-{}-{w}x{h}.png", key.name()),
+            canvas(w, h, key),
+        ),
+    };
+    let first = out_dir.join(name);
+    if !first.is_file() {
+        std::fs::write(&first, folderskin_core::raster::encode_png(&img))
+            .map_err(|e| Error::io("write the picture it is painted on", &first, &e))?;
+    }
+    pictures.insert(0, first);
+    Ok(pictures)
+}
+
+/// A flat `width` x `height` picture in the key colour: what a free icon is painted in the
+/// middle of.
+pub fn canvas(width: u32, height: u32, key: Key) -> RgbaImage {
+    let [r, g, b] = key.rgb();
+    RgbaImage::from_pixel(width, height, image::Rgba([r, g, b, 255]))
 }
 
 /// Where the runtime writes its picture: its own name, or a plain stand-in that is renamed to it.
@@ -598,6 +737,25 @@ impl Drop for Painting {
 pub fn folder_silhouette(width: u32, height: u32) -> GrayImage {
     let cut = compositor::blank_template_cutout(width, height);
     GrayImage::from_fn(width, height, |x, y| Luma([cut.get_pixel(x, y).0[3]]))
+}
+
+/// `base`'s silhouette in a `width` x `height` frame, as its blank template has it; `None` for a
+/// free icon, which has no template.
+pub fn silhouette_of(base: &Base, width: u32, height: u32) -> Option<GrayImage> {
+    folderskin_ai::finish::silhouette_of(base, width, height)
+}
+
+/// A free icon cut out of the flat backdrop it was painted on: the canvas's `key`, or whatever
+/// flat colour the model drifted to. `None` when there is no flat backdrop around it.
+pub fn cut_icon(img: &RgbaImage, key: Key) -> Option<RgbaImage> {
+    matte::finished_cutout(img, key.rgb()).or_else(|| {
+        let key = matte::flat_backdrop(img)?;
+        let cut = matte::cutout_connected(img, key);
+        // Something substantial is left, or the backdrop took the subject with it.
+        let solid = cut.pixels().filter(|p| p.0[3] >= 128).count();
+        (solid as f32 >= matte::MIN_SUBJECT_SHARE * (img.width() * img.height()) as f32)
+            .then_some(cut)
+    })
 }
 
 fn save_rgb(img: &RgbaImage, path: &Path) -> Result<(), Error> {
@@ -865,5 +1023,151 @@ mod tests {
         assert_eq!(s.dimensions(), (256, 240));
         assert_eq!(s.get_pixel(0, 0).0[0], 0);
         assert_eq!(s.get_pixel(128, 160).0[0], 255);
+        // The same as the Mac folder's own, and Windows' is its own shape.
+        assert_eq!(silhouette_of(&MAC_FOLDER, 256, 240), Some(s.clone()));
+        let windows = silhouette_of(&folderskin_core::base::WINDOWS_FOLDER, 256, 240).unwrap();
+        assert_ne!(windows, s);
+        assert!(silhouette_of(&folderskin_core::base::FREE, 256, 240).is_none());
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fs-local-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_whole_folder_is_painted_from_its_own_bases_template() {
+        use folderskin_core::base::{FREE, WINDOWS_FOLDER};
+        let dir = temp_dir("pictures");
+        let mut job = Job::new("a koi pond");
+        job.shape = Shape::Folder;
+        job.refs = vec![PathBuf::from("dog.jpg")];
+        for (base, backend) in [
+            (&MAC_FOLDER, Backend::Cuda),
+            (&WINDOWS_FOLDER, Backend::Cuda),
+            (&WINDOWS_FOLDER, Backend::Mlx),
+        ] {
+            job.base = base;
+            let pictures = pictures(&job, backend, &dir).unwrap();
+            assert_eq!(pictures.len(), 2, "the template, then the reference");
+            assert_eq!(pictures[1], PathBuf::from("dog.jpg"));
+            let (w, h) = command::template_size(backend);
+            let written = image::open(&pictures[0]).unwrap().to_rgba8();
+            assert_eq!(
+                written,
+                base.blank(w, h, matte::MAGENTA).unwrap(),
+                "{}",
+                base.id
+            );
+            assert!(
+                pictures[0].to_string_lossy().contains(base.id),
+                "each base keeps its own template: {}",
+                pictures[0].display()
+            );
+        }
+        // A pink idea is painted on green, which it can't bleed into.
+        job.idea = "a pink flamingo".into();
+        job.base = &MAC_FOLDER;
+        assert_eq!(job.key(), Key::Green);
+        let green = pictures(&job, Backend::Cuda, &dir).unwrap();
+        let (w, h) = command::template_size(Backend::Cuda);
+        assert_eq!(
+            image::open(&green[0]).unwrap().to_rgba8(),
+            MAC_FOLDER.blank(w, h, Key::Green.rgb()).unwrap()
+        );
+        // Artwork is painted from the references alone, and a free icon on a flat canvas.
+        job.shape = Shape::Artwork;
+        assert_eq!(pictures(&job, Backend::Cuda, &dir).unwrap(), job.refs);
+        job.idea = "a fox".into();
+        job.shape = Shape::Folder;
+        job.base = &FREE;
+        assert_eq!(job.painted(), Shape::Icon);
+        let icon = pictures(&job, Backend::Cuda, &dir).unwrap();
+        assert_eq!(icon[1..], job.refs[..]);
+        assert_eq!(
+            image::open(&icon[0]).unwrap().to_rgba8(),
+            canvas(w, h, Key::Magenta)
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_prompt_honours_the_base_the_style_and_the_lettering() {
+        use folderskin_core::base::{FREE, WINDOWS_FOLDER};
+        let mut job = Job::new("a lighthouse that says \"GO\"");
+        job.base = &WINDOWS_FOLDER;
+        job.shape = Shape::Folder;
+        assert!(
+            job.prompt()
+                .contains("the curved step where the front panel rises to meet it"),
+            "{}",
+            job.prompt()
+        );
+        job.base = &FREE;
+        job.style = "a woodblock print with bold outlines".into();
+        let p = job.prompt();
+        assert!(
+            p.starts_with("A lighthouse that says \"GO\", as a woodblock print with bold outlines. It is one single, complete object in the middle of image 1"),
+            "{p}"
+        );
+        assert!(
+            p.contains("The words \"GO\" are written once in bold, clean letters"),
+            "{p}"
+        );
+        assert_eq!(job.lettering(), ["GO"]);
+        // A look the app chose wins over the style named, and letters its own way.
+        job.treatment = Treatment::named("pixel");
+        let p = job.prompt();
+        assert!(
+            p.contains(", as detailed 16-bit pixel art:") && p.contains("in a chunky pixel font"),
+            "{p}"
+        );
+        assert_eq!(job.style_name(), "pixel");
+        job.refs = vec![PathBuf::from("dog.png"), PathBuf::from("style.png")];
+        job.roles = vec![Role::Subject, Role::Style];
+        assert_eq!(job.ref_roles(), [Role::Subject, Role::Style]);
+        assert!(
+            job.prompt().contains("Image 3 is a style reference only"),
+            "{}",
+            job.prompt()
+        );
+        job.roles = vec![Role::Template];
+        assert_eq!(
+            job.ref_roles(),
+            [Role::Subject, Role::Subject],
+            "only FolderSkin makes templates"
+        );
+    }
+
+    #[test]
+    fn a_free_icon_is_cut_out_of_its_backdrop_whatever_its_colour() {
+        let on = |backdrop: [u8; 3]| {
+            let mut img = RgbaImage::from_pixel(
+                300,
+                280,
+                image::Rgba([backdrop[0], backdrop[1], backdrop[2], 255]),
+            );
+            for y in 60..220 {
+                for x in 90..210 {
+                    img.put_pixel(x, y, image::Rgba([230, 160, 40, 255]));
+                }
+            }
+            img
+        };
+        // Magenta as asked, the purple klein drifts to, a plain white, and a green canvas.
+        for backdrop in [[255, 0, 255], [150, 40, 170], [250, 250, 248], [0, 255, 0]] {
+            for key in [Key::Magenta, Key::Green] {
+                let cut = cut_icon(&on(backdrop), key).unwrap_or_else(|| panic!("{backdrop:?}"));
+                assert_eq!(cut.dimensions(), (120, 160), "{backdrop:?}");
+                assert_eq!(cut.get_pixel(60, 80).0, [230, 160, 40, 255]);
+            }
+        }
+        // A painting that fills the frame has nothing to cut it out of.
+        let scene = RgbaImage::from_fn(300, 280, |x, y| {
+            image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
+        });
+        assert!(cut_icon(&scene, Key::Magenta).is_none());
     }
 }

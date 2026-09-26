@@ -62,6 +62,16 @@
     "gone": "ese chat ya no está en este equipo",
     "damaged": "el archivo de ese chat está dañado y no se puede abrir"
   },
+  "prompts": {
+    "noDataFolder": "no se pueden guardar prompts en este equipo: FolderSkin no tiene carpeta de datos aquí",
+    "noName": "ponle un nombre al prompt",
+    "nothing": "todavía no hay nada que guardar. Escribe primero el prompt",
+    "nameTooLong": "ese nombre es demasiado largo. Usa como máximo {{max}} caracteres",
+    "textTooLong": "ese prompt es demasiado largo para guardarlo. Hazlo más corto",
+    "full": "ya tienes {{max}} prompts. Quita uno para guardar otro",
+    "notSaved": "no se pudieron guardar tus prompts: {{reason}}",
+    "noStyle": "FolderSkin no tiene ningún estilo llamado {{style}}"
+  },
   "composer": {
     "transparent": "ese diseño es totalmente transparente",
     "damaged": "ese diseño está dañado, así que no se puede volver a abrir"

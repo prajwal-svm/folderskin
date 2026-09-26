@@ -20,7 +20,10 @@ use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use events::AiEvent;
 use failure::{AiFailure, Doing};
 use folderskin_ai::prompts::{self, Shape};
-use folderskin_ai::{AiError, Finished, ProviderInfo};
+use folderskin_ai::recipe::{Record, Treatment};
+use folderskin_ai::skill::Skill;
+use folderskin_ai::{AiError, Cut, Finished, ProviderInfo, Reference, Role};
+use folderskin_core::base::{self, Base};
 use folderskin_core::compositor::Artwork;
 use jobs::Jobs;
 use local::{Local, LocalStatusDto};
@@ -76,8 +79,20 @@ pub struct AiGenerateRequest {
     pub provider: String,
     pub model: String,
     pub idea: String,
-    /// "skin" (flat artwork for our compositor) or "folder" (the model draws the whole folder).
+    /// "skin" (flat artwork for our compositor) or "folder" (the model draws the whole base). A
+    /// free icon is painted as one whatever this says.
     pub shape: String,
+    /// The shape it is for, by [`folderskin_core::base`] id: "mac-folder", "windows-folder",
+    /// "free". FolderSkin's own folder when it is left out, as a window from before shapes does.
+    #[serde(default)]
+    pub base: Option<String>,
+    /// A built-in style to paint it in, by [`folderskin_ai::styles`] id.
+    #[serde(default)]
+    pub style: Option<String>,
+    /// A saved prompt whose look to paint it in, by id ([`crate::prompts`]). Its look is used in
+    /// place of `style`'s.
+    #[serde(default)]
+    pub skill: Option<String>,
     /// The model's first size, as the window sends it. The shape decides the size a picture is
     /// asked for ([`folderskin_ai::plan`]), so this isn't used.
     pub size: Option<String>,
@@ -85,6 +100,10 @@ pub struct AiGenerateRequest {
     /// Every reference picture, for the models that take more than one.
     #[serde(default)]
     pub reference_paths: Vec<String>,
+    /// What each of `reference_paths` is for: "subject", "style" or "palette". A picture with
+    /// none is a subject.
+    #[serde(default)]
+    pub reference_roles: Vec<String>,
     /// Tags for the result, such as the style the idea asks for. Cleaned before saving.
     #[serde(default)]
     pub tags: Vec<String>,
@@ -94,17 +113,62 @@ pub struct AiGenerateRequest {
 }
 
 impl AiGenerateRequest {
-    /// Every reference picture given, the one-picture field included.
-    fn references(&self) -> Vec<PathBuf> {
-        let mut refs: Vec<&String> = self
+    /// The base it is for: the one named, or FolderSkin's own folder.
+    fn base(&self) -> &'static Base {
+        base::of_skin(self.base.as_deref())
+    }
+
+    /// The built-in style it asks for, when it names one this build has.
+    fn style(&self) -> Option<&'static folderskin_ai::styles::Style> {
+        self.style.as_deref().and_then(folderskin_ai::styles::style)
+    }
+
+    /// How it looks, for `provider`: the saved prompt's look when it names one that has a look
+    /// (`skill`, read from `skills`), otherwise the built-in style's.
+    fn treatment(&self, skill: Option<&Skill>, provider: &str) -> Option<Treatment> {
+        skill
+            .and_then(|s| s.treatment_for(provider))
+            .or_else(|| self.style().map(Treatment::of))
+    }
+
+    /// Its tags: the ones it came with and its style's, or the style its saved prompt uses.
+    fn tags(&self, skill: Option<&Skill>) -> Vec<String> {
+        let mut tags = self.tags.clone();
+        tags.extend(
+            skill
+                .and_then(Skill::style)
+                .or_else(|| self.style())
+                .map(|s| s.tag.clone()),
+        );
+        tags
+    }
+
+    /// Every reference picture given, the one-picture field included, each with its role.
+    fn references(&self) -> Vec<(PathBuf, Role)> {
+        let mut refs: Vec<(&String, Role)> = self
             .reference_paths
             .iter()
-            .filter(|p| !p.trim().is_empty())
+            .enumerate()
+            .map(|(i, p)| {
+                let role = self
+                    .reference_roles
+                    .get(i)
+                    .map_or(Role::Subject, |r| Role::of_picture(r));
+                (p, role)
+            })
+            .filter(|(p, _)| !p.trim().is_empty())
             .collect();
         if refs.is_empty() {
-            refs.extend(self.reference_path.iter().filter(|p| !p.trim().is_empty()));
+            refs.extend(
+                self.reference_path
+                    .iter()
+                    .filter(|p| !p.trim().is_empty())
+                    .map(|p| (p, Role::Subject)),
+            );
         }
-        refs.into_iter().map(PathBuf::from).collect()
+        refs.into_iter()
+            .map(|(p, role)| (PathBuf::from(p), role))
+            .collect()
     }
 }
 
@@ -135,6 +199,48 @@ pub async fn ai_catalogue(
         })
         .collect();
     Ok(AiCatalogueDto { providers, presets })
+}
+
+/// A shape the chat can paint on, as the prompt's picker shows it (src/lib/shapes.ts).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct AiShapeDto {
+    pub id: &'static str,
+    /// Its name in English; the window names it in the language on show, by `id`.
+    pub label: &'static str,
+    /// "mac", "windows" or "linux", or "any" for a free icon.
+    pub system: &'static str,
+    /// "folder", "drive" or "free": where its skins go in the library.
+    pub family: &'static str,
+    /// Whether it can be painted whole, from its own template, as well as as artwork.
+    pub whole: bool,
+    /// The shape bare, as its system draws it, as a PNG data URL; none for a free icon.
+    pub thumbnail: Option<String>,
+}
+
+/// Edge of a shape's picture in the picker, in pixels: sharp at twice the size it's shown at.
+const SHAPE_THUMB: u32 = 96;
+
+/// Every shape the chat can paint on, in the order the picker lists them
+/// ([`folderskin_core::base::BASES`]), each with its bare picture. The pictures are drawn once.
+#[tauri::command(async)]
+pub fn ai_shapes() -> Vec<AiShapeDto> {
+    static SHAPES: std::sync::OnceLock<Vec<AiShapeDto>> = std::sync::OnceLock::new();
+    SHAPES
+        .get_or_init(|| base::BASES.iter().map(shape_dto).collect())
+        .clone()
+}
+
+fn shape_dto(b: &'static Base) -> AiShapeDto {
+    AiShapeDto {
+        id: b.id,
+        label: b.label,
+        system: b.system.id(),
+        family: b.family.id(),
+        whole: !b.is_free(),
+        thumbnail: b
+            .bare(SHAPE_THUMB)
+            .map(|img| crate::commands::data_url(&folderskin_core::raster::encode_png(&img))),
+    }
 }
 
 fn key_provider(p: &ProviderInfo, has_key: bool) -> AiProviderDto {
@@ -384,11 +490,13 @@ fn runtime_wont_start(
 /// Makes one picture and saves it as a skin, like an imported picture, telling `on_event` how
 /// it's going. Stopped with `ai_cancel(req.job)`, it fails with the code "stopped".
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn ai_generate(
     state: State<'_, AppState>,
     keys: State<'_, Keys>,
     local: State<'_, Local>,
     jobs: State<'_, Jobs>,
+    saved: State<'_, crate::prompts::Prompts>,
     req: AiGenerateRequest,
     on_event: Channel<AiEvent>,
 ) -> Result<SkinDto, AiFailure> {
@@ -407,10 +515,30 @@ pub async fn ai_generate(
             "Describe what the skin should look like first.",
         ));
     }
+    // The saved prompt whose look it's painted in, read as it is now. One removed since it was
+    // picked leaves the look of the style it used, or none.
+    let skill = match req.skill.clone().filter(|s| !s.trim().is_empty()) {
+        Some(id) => {
+            let saved = saved.inner().clone();
+            tauri::async_runtime::spawn_blocking(move || saved.find(&id))
+                .await
+                .ok()
+                .flatten()
+        }
+        None => None,
+    };
     let made = if req.provider == local::PROVIDER_ID {
-        paint_here(local.inner(), &req, &job, send.clone(), &cancel).await?
+        paint_here(
+            local.inner(),
+            &req,
+            skill.as_ref(),
+            &job,
+            send.clone(),
+            &cancel,
+        )
+        .await?
     } else {
-        ask_provider(&keys, &req, send.clone(), &cancel).await?
+        ask_provider(&keys, &req, skill.as_ref(), send.clone(), &cancel).await?
     };
     // Stopped as it arrived: it isn't wanted.
     if cancel.is_cancelled() {
@@ -424,12 +552,16 @@ pub async fn ai_generate(
         provider: Some(req.provider.clone()),
         model: Some(made.model),
         idea: Some(req.idea.trim().to_string()),
-        tags: req.tags.clone(),
+        tags: req.tags(skill.as_ref()),
         pack: None,
         pack_name: None,
         author: None,
         license: None,
         pack_hash: None,
+        // Where it goes in the library: with the folders, or anywhere for a free icon.
+        base: Some(req.base().id.to_string()),
+        // What it was made from: the prompt as sent, its style and the pictures by role.
+        recipe: Some(made.record),
     };
     let state = state.inner().clone();
     let image = made.image;
@@ -453,6 +585,8 @@ struct Made {
     bytes: Vec<u8>,
     /// The model that made it, by id.
     model: String,
+    /// What it was made from.
+    record: Record,
 }
 
 type Sender = Arc<dyn Fn(AiEvent) + Send + Sync>;
@@ -477,6 +611,7 @@ fn reporter(send: Sender) -> folderskin_local::Reporter {
 async fn paint_here(
     local: &Local,
     req: &AiGenerateRequest,
+    skill: Option<&Skill>,
     job: &str,
     send: Sender,
     cancel: &folderskin_local::CancelToken,
@@ -484,6 +619,7 @@ async fn paint_here(
     let shape = match req.shape.as_str() {
         "folder" => folderskin_local::Shape::Folder,
         "skin" => folderskin_local::Shape::Artwork,
+        "icon" => folderskin_local::Shape::Icon,
         other => return Err(AiFailure::failed(format!("Unknown shape {other:?}."))),
     };
     let model = local::model_choice(&req.model)?;
@@ -494,14 +630,17 @@ async fn paint_here(
             .map_err(|e| AiFailure::bug(format!("Looking at your machine stopped: {e}.")))?;
     // One painting at a time: two would share a graphics card that has room for one.
     let _turn = local.wait_turn(&*send, cancel).await?;
-    let refs = req.references();
+    let (refs, roles): (Vec<PathBuf>, Vec<Role>) = req.references().into_iter().unzip();
     let painted = local::paint(
         local::Order {
             job,
             idea: &req.idea,
             shape,
+            base: req.base(),
+            treatment: req.treatment(skill, local::PROVIDER_ID),
             model,
             refs: &refs,
+            roles: &roles,
         },
         &machine,
         &settings,
@@ -513,17 +652,21 @@ async fn paint_here(
         image: painted.image,
         bytes: painted.bytes,
         model: painted.model.id().to_string(),
+        record: painted.record,
     })
 }
 
 async fn ask_provider(
     keys: &Keys,
     req: &AiGenerateRequest,
+    skill: Option<&Skill>,
     send: Sender,
     cancel: &folderskin_local::CancelToken,
 ) -> Result<Made, AiFailure> {
+    let base = req.base();
     let shape = Shape::from_id(&req.shape)
-        .ok_or_else(|| AiFailure::failed(format!("Unknown shape {:?}.", req.shape)))?;
+        .ok_or_else(|| AiFailure::failed(format!("Unknown shape {:?}.", req.shape)))?
+        .on(base);
     let info = known_provider(&req.provider)?;
     let label = info.label;
     let model = folderskin_ai::model(info.id, &req.model).ok_or_else(|| {
@@ -538,37 +681,47 @@ async fn ask_provider(
         "asking {label} ({}) for {}",
         model.label,
         match shape {
-            Shape::Folder => "a whole folder picture",
-            Shape::Skin => "folder artwork",
+            Shape::Folder => format!("a whole picture of the {}", base.label.to_lowercase()),
+            Shape::Skin => format!("artwork for the {}", base.label.to_lowercase()),
+            Shape::Icon => "a free icon".to_string(),
         }
     );
     let fail = |e: AiError| failure::from_provider(e, label, &doing).without(&key);
 
-    // The first reference picture, for a model that takes one.
-    let reference = req
-        .references()
-        .into_iter()
-        .next()
-        .filter(|_| model.accepts_reference);
-    let reference_png = match reference {
-        Some(path) => Some(
-            tauri::async_runtime::spawn_blocking(move || load_reference(path))
-                .await
-                .map_err(|e| AiFailure::bug(format!("Reading the picture stopped: {e}.")))??,
-        ),
-        None => None,
+    // Every reference picture, with its role, for a model that takes pictures.
+    let references: Vec<(PathBuf, Role)> = if model.accepts_reference {
+        req.references()
+    } else {
+        Vec::new()
     };
-    // The prompt, the shape's size, and our blank template when a whole folder should repaint
-    // it; shared with the command line (folderskin_ai::finish).
+    let pictures = tauri::async_runtime::spawn_blocking(move || {
+        references
+            .into_iter()
+            .map(|(path, role)| load_reference(path).map(|png| Reference::new(role, png)))
+            .collect::<Result<Vec<_>, _>>()
+    })
+    .await
+    .map_err(|e| AiFailure::bug(format!("Reading the pictures stopped: {e}.")))??;
+    // The prompt, the shape's size, and the base's blank template when a whole base should
+    // repaint it; shared with the command line (folderskin_ai::finish).
     let (provider, idea) = (info.id.to_string(), req.idea.clone());
-    let request = tauri::async_runtime::spawn_blocking(move || {
-        folderskin_ai::plan(&provider, model, shape, &idea, None, reference_png)
+    let treatment = req.treatment(skill, info.id);
+    let planned = tauri::async_runtime::spawn_blocking(move || {
+        let brief = folderskin_ai::Brief {
+            idea: &idea,
+            base,
+            shape,
+            treatment: treatment.as_ref(),
+            pictures,
+        };
+        folderskin_ai::plan(&provider, model, &brief, None)
     })
     .await
     .map_err(|e| AiFailure::bug(format!("Preparing the request stopped: {e}.")))?;
     if cancel.is_cancelled() {
         return Err(AiFailure::stopped());
     }
+    let (request, cut, mut record) = (planned.request, planned.cut, planned.record);
 
     send(AiEvent::stage(
         "send",
@@ -618,14 +771,16 @@ async fn ask_provider(
     if let Some(usage) = &result.usage {
         send(AiEvent::info(usage.clone()));
     }
-    if shape == Shape::Folder {
+    record.revised_prompt = result.revised_prompt.clone();
+    if shape != Shape::Skin {
         send(AiEvent::stage("cut", "Cutting it out of the background"));
     }
     let bytes = result.image.clone();
-    let (image, warning) = tauri::async_runtime::spawn_blocking(move || finish(&result, shape))
-        .await
-        .map_err(|e| AiFailure::bug(format!("Finishing the picture stopped: {e}.")))?
-        .map_err(fail)?;
+    let (image, warning) =
+        tauri::async_runtime::spawn_blocking(move || finish(&result, base, shape, cut))
+            .await
+            .map_err(|e| AiFailure::bug(format!("Finishing the picture stopped: {e}.")))?
+            .map_err(fail)?;
     if let Some(warning) = warning {
         send(AiEvent::warn(warning));
     }
@@ -633,19 +788,32 @@ async fn ask_provider(
         image,
         bytes,
         model: model.id.to_string(),
+        record,
     })
 }
 
-/// A provider's picture as the library keeps it. A whole folder that came back as a scene, with
-/// no backdrop to cut it out of, is kept as artwork for FolderSkin's folder rather than thrown
-/// away: it was paid for. The warning says so.
+/// A provider's picture as the library keeps it, for `base`, cut as `cut` says. A whole folder
+/// that came back as a scene, with no backdrop to cut it out of, is kept as artwork for the
+/// folder rather than thrown away: it was paid for. A free icon that did is kept as the square
+/// picture it is, which is still an icon. The warning says which.
 fn finish(
     result: &folderskin_ai::GenerateResult,
+    base: &Base,
     shape: Shape,
+    cut: Cut,
 ) -> Result<(SkinImage, Option<String>), AiError> {
-    let (finished, warning) = match folderskin_ai::finish(result, shape) {
+    let shape = shape.on(base);
+    let (finished, warning) = match folderskin_ai::finish(result, base, shape, cut) {
+        Err(AiError::NoBackdrop) if shape == Shape::Icon => (
+            folderskin_ai::finish::uncut(result)?,
+            Some(
+                "it came back without a plain background to cut it out of, so it's kept as the \
+                 square picture it is"
+                    .to_string(),
+            ),
+        ),
         Err(AiError::NoBackdrop) => (
-            folderskin_ai::finish(result, Shape::Skin)?,
+            folderskin_ai::finish(result, base, Shape::Skin, cut)?,
             Some(
                 "it came back as a scene rather than a folder on a plain backdrop, so it's kept \
                  as artwork for FolderSkin's folder"
@@ -835,27 +1003,42 @@ mod tests {
     }
 
     #[test]
-    fn every_reference_is_used_and_the_one_picture_field_is_the_fallback() {
-        let req = |one: Option<&str>, many: &[&str]| AiGenerateRequest {
+    fn every_reference_is_used_with_its_role_and_the_one_picture_field_is_the_fallback() {
+        let req = |one: Option<&str>, many: &[&str], roles: &[&str]| AiGenerateRequest {
             provider: "local".into(),
             model: "auto".into(),
             idea: "x".into(),
             shape: "folder".into(),
+            base: None,
+            style: None,
+            skill: None,
             size: None,
             reference_path: one.map(str::to_string),
             reference_paths: many.iter().map(|s| s.to_string()).collect(),
+            reference_roles: roles.iter().map(|s| s.to_string()).collect(),
             tags: Vec::new(),
             job: None,
         };
         assert_eq!(
-            req(Some("a.png"), &["a.png", "b.png"]).references(),
-            [PathBuf::from("a.png"), PathBuf::from("b.png")]
+            req(Some("a.png"), &["a.png", "b.png"], &["subject", "style"]).references(),
+            [
+                (PathBuf::from("a.png"), Role::Subject),
+                (PathBuf::from("b.png"), Role::Style)
+            ]
+        );
+        // A picture with no role, or one only FolderSkin gives, is a subject.
+        assert_eq!(
+            req(None, &["a.png", "b.png"], &["template"]).references(),
+            [
+                (PathBuf::from("a.png"), Role::Subject),
+                (PathBuf::from("b.png"), Role::Subject)
+            ]
         );
         assert_eq!(
-            req(Some("a.png"), &[]).references(),
-            [PathBuf::from("a.png")]
+            req(Some("a.png"), &[], &[]).references(),
+            [(PathBuf::from("a.png"), Role::Subject)]
         );
-        assert!(req(Some(" "), &[""]).references().is_empty());
+        assert!(req(Some(" "), &[""], &[]).references().is_empty());
     }
 
     #[test]
@@ -866,6 +1049,84 @@ mod tests {
         }))
         .unwrap();
         assert!(req.job.is_none() && req.reference_paths.is_empty() && req.tags.is_empty());
+        // Made before there were shapes: for FolderSkin's own folder, in no style.
+        assert_eq!(req.base(), &base::MAC_FOLDER);
+        assert!(req.style().is_none() && req.skill.is_none());
+        assert!(req.treatment(None, "openai").is_none());
+    }
+
+    #[test]
+    fn a_request_names_its_shape_and_style_and_is_tagged_with_the_style() {
+        let req: AiGenerateRequest = serde_json::from_value(serde_json::json!({
+            "provider": "local", "model": "klein", "idea": "a fox", "shape": "folder",
+            "base": "windows-folder", "style": "ukiyoe", "tags": ["fox"],
+            "size": null, "reference_path": null
+        }))
+        .unwrap();
+        assert_eq!(req.base(), &base::WINDOWS_FOLDER);
+        assert_eq!(req.style().map(|s| s.id.as_str()), Some("woodblock"));
+        assert_eq!(req.tags(None), ["fox", "woodblock"]);
+        assert_eq!(
+            req.treatment(None, "local").map(|t| t.id),
+            Some("woodblock".to_string())
+        );
+        // A shape or a style this build doesn't know is left out, not refused.
+        let unknown: AiGenerateRequest = serde_json::from_value(serde_json::json!({
+            "provider": "local", "model": "klein", "idea": "a fox", "shape": "folder",
+            "base": "a-drive-from-later", "style": "nope",
+            "size": null, "reference_path": null
+        }))
+        .unwrap();
+        assert_eq!(unknown.base(), &base::MAC_FOLDER);
+        assert!(unknown.style().is_none() && unknown.tags(None).is_empty());
+    }
+
+    #[test]
+    fn a_saved_prompts_look_wins_over_the_style_and_tags_with_its_own() {
+        let req: AiGenerateRequest = serde_json::from_value(serde_json::json!({
+            "provider": "openai", "model": "gpt-image-2.5-flare", "idea": "a fox",
+            "shape": "skin", "style": "oil", "skill": "night-prints-7k2q",
+            "size": null, "reference_path": null
+        }))
+        .unwrap();
+        let mut skill = Skill::saved("Night prints", "a koi pond", Some("woodblock"), "now");
+        skill.light = Some("cool moonlight".into());
+        let t = req.treatment(Some(&skill), "openai").unwrap();
+        assert_eq!(t.id, skill.id);
+        assert!(t.words.ends_with(", cool moonlight"), "{}", t.words);
+        assert_eq!(req.tags(Some(&skill)), ["woodblock"]);
+        // A saved prompt with words and no look leaves the style to the request.
+        let words_only = Skill::saved("Koi", "a koi pond", None, "now");
+        assert_eq!(
+            req.treatment(Some(&words_only), "openai").map(|t| t.id),
+            Some("oil".into())
+        );
+    }
+
+    #[test]
+    fn every_shape_is_listed_with_its_picture_and_where_it_goes() {
+        let shapes = ai_shapes();
+        let ids: Vec<&str> = shapes.iter().map(|s| s.id).collect();
+        assert_eq!(ids, ["mac-folder", "windows-folder", "free"]);
+        for s in &shapes {
+            assert_eq!(s.whole, s.family != "free", "{}", s.id);
+            assert_eq!(s.thumbnail.is_some(), s.family != "free", "{}", s.id);
+        }
+        let mac = &shapes[0];
+        assert_eq!(
+            (mac.label, mac.system, mac.family),
+            ("Mac folder", "mac", "folder")
+        );
+        assert!(mac
+            .thumbnail
+            .as_deref()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        assert_eq!((shapes[2].system, shapes[2].family), ("any", "free"));
+        let json = serde_json::to_value(&shapes[2]).unwrap();
+        assert!(json["thumbnail"].is_null(), "{json}");
+        // Drawn once: the second list is the same pictures.
+        assert_eq!(ai_shapes(), shapes);
     }
 
     fn keyed(img: &image::RgbaImage) -> folderskin_ai::GenerateResult {
@@ -880,25 +1141,67 @@ mod tests {
         }
     }
 
+    const MAGENTA_CUT: Cut = Cut {
+        key: folderskin_ai::recipe::Key::Magenta,
+        template: None,
+    };
+
     #[test]
     fn a_folder_without_its_backdrop_is_kept_as_artwork() {
         let scene = image::RgbaImage::from_fn(300, 280, |x, y| {
             image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
         });
-        let (image, warning) = finish(&keyed(&scene), Shape::Folder).unwrap();
+        let (image, warning) = finish(
+            &keyed(&scene),
+            &base::MAC_FOLDER,
+            Shape::Folder,
+            MAGENTA_CUT,
+        )
+        .unwrap();
         assert!(matches!(image, SkinImage::Artwork(_)));
         assert!(warning.unwrap().contains("kept as artwork"));
-        // Artwork asked for is artwork, with nothing to warn about.
-        let (image, warning) = finish(&keyed(&scene), Shape::Skin).unwrap();
+        // Artwork asked for is artwork, with nothing to warn about, at its folder's own size.
+        let (image, warning) =
+            finish(&keyed(&scene), &base::MAC_FOLDER, Shape::Skin, MAGENTA_CUT).unwrap();
         assert!(matches!(image, SkinImage::Artwork(_)) && warning.is_none());
+        let (image, _) = finish(
+            &keyed(&scene),
+            &base::WINDOWS_FOLDER,
+            Shape::Skin,
+            MAGENTA_CUT,
+        )
+        .unwrap();
+        assert_eq!(image.rgba().dimensions(), (1024, 805));
         // Something that isn't a picture still fails.
         let broken = folderskin_ai::GenerateResult {
             image: b"nope".to_vec(),
             ..keyed(&scene)
         };
         assert!(matches!(
-            finish(&broken, Shape::Folder),
+            finish(&broken, &base::MAC_FOLDER, Shape::Folder, MAGENTA_CUT),
             Err(AiError::NotAnImage)
         ));
+    }
+
+    #[test]
+    fn a_free_icon_is_cut_out_or_kept_whole_but_never_made_artwork() {
+        let mut icon = image::RgbaImage::from_pixel(200, 200, image::Rgba([255, 0, 255, 255]));
+        for y in 50..150 {
+            for x in 60..140 {
+                icon.put_pixel(x, y, image::Rgba([240, 170, 30, 255]));
+            }
+        }
+        // Whatever shape a free icon is asked as, it is an icon, cut out and used as it is.
+        let (image, warning) =
+            finish(&keyed(&icon), &base::FREE, Shape::Skin, MAGENTA_CUT).unwrap();
+        assert!(matches!(&image, SkinImage::Folder(cut) if cut.dimensions() == (80, 100)));
+        assert!(warning.is_none());
+        let scene = image::RgbaImage::from_fn(300, 280, |x, y| {
+            image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
+        });
+        let (image, warning) =
+            finish(&keyed(&scene), &base::FREE, Shape::Icon, MAGENTA_CUT).unwrap();
+        assert!(matches!(&image, SkinImage::Folder(whole) if whole.dimensions() == (300, 280)));
+        assert!(warning.unwrap().contains("square picture"));
     }
 }

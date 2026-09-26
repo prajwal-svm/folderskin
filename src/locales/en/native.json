@@ -62,6 +62,16 @@
     "gone": "that chat isn't on this computer any more",
     "damaged": "that chat's file is damaged and can't be opened"
   },
+  "prompts": {
+    "noDataFolder": "prompts can't be kept on this computer: FolderSkin has no data folder here",
+    "noName": "give the prompt a name",
+    "nothing": "there's nothing to save yet. Write the prompt first",
+    "nameTooLong": "that name is too long. Keep it to {{max}} characters",
+    "textTooLong": "that prompt is too long to keep. Make it shorter",
+    "full": "you have {{max}} prompts already. Remove one to save another",
+    "notSaved": "couldn't save your prompts: {{reason}}",
+    "noStyle": "FolderSkin has no style called {{style}}"
+  },
   "composer": {
     "transparent": "that design is completely transparent",
     "damaged": "that design is damaged, so it can't be opened again"

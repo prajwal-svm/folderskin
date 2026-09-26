@@ -5,19 +5,23 @@
 //! straight from the user's machine to the provider they chose.
 //!
 //! [`catalogue`] lists what is on offer, [`request`] describes each provider's request and reads
-//! its reply (pure, so every field is unit-tested), [`prompts`] composes the prompt, [`generate`]
-//! sends the request and follows the reply to the picture, and [`finish`] plans the request and
-//! makes the answer a skin.
+//! its reply (pure, so every field is unit-tested), [`recipe`] is what a picture is made from and
+//! [`prompts`] renders it for each provider family, [`styles`] is the table of built-in styles,
+//! [`skill`] the format saved prompts are kept in, [`generate`] sends the request and follows the
+//! reply to the picture, and [`finish`] plans the request and makes the answer a skin.
 
 pub mod catalogue;
 pub mod error;
 pub mod finish;
 pub mod prompts;
+pub mod recipe;
 pub mod request;
+pub mod skill;
+pub mod styles;
 
 pub use catalogue::{model, provider, providers, ModelInfo, ProviderInfo};
 pub use error::AiError;
-pub use finish::{finish, plan, Finished};
+pub use finish::{finish, plan, Brief, Cut, Finished, Planned};
 
 use request::{Auth, Body, FieldValue, Incoming, Method, Outgoing, Picture, Wait};
 use std::sync::OnceLock;
@@ -33,8 +37,8 @@ pub struct GenerateRequest {
     pub model: String,
     pub prompt: String,
     /// Pictures to work from, each with its role. They are sent in role order (FolderSkin's
-    /// template, then the subject pictures, then the style pictures), which is how the prompt
-    /// numbers them, and a model that takes fewer gets the first ones.
+    /// template, then the subject pictures, then the style and palette pictures), which is how
+    /// the prompt numbers them, and a model that takes fewer gets the first ones.
     pub references: Vec<Reference>,
     /// The exact size the shape wants, "1024x960". Each provider asks for it, or for the nearest
     /// size or aspect ratio it offers. `None` uses the model's first listed size.
@@ -60,7 +64,8 @@ pub struct GenerateRequest {
 
 impl GenerateRequest {
     /// The reference pictures in the order they are sent, at most `max` of them: the template
-    /// first, then the subject pictures, then the style pictures, each role in the order given.
+    /// first, then the subject pictures, then the style and palette pictures, each role in the
+    /// order given.
     pub fn references_in_order(&self, max: usize) -> Vec<&Reference> {
         let mut refs: Vec<&Reference> = self.references.iter().collect();
         refs.sort_by_key(|r| r.role);
@@ -83,16 +88,8 @@ impl Reference {
     }
 }
 
-/// What a reference picture is for. They are sent in this order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Role {
-    /// FolderSkin's blank template: the exact shape to paint on.
-    Template,
-    /// The person's own picture of what to paint.
-    Subject,
-    /// The person's own picture of how to paint it: its medium, palette and light.
-    Style,
-}
+/// What a reference picture is for, in the order they are sent: the recipe's own roles.
+pub use recipe::Role;
 
 /// One generated image.
 #[derive(Clone, Debug)]

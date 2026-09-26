@@ -71,6 +71,9 @@ pub struct SkinDto {
     pub pack_name: Option<String>,
     pub author: Option<String>,
     pub license: Option<String>,
+    /// The shape it was made for, by id ("windows-folder", "free"), when it names one: where it
+    /// goes in the library (folderskin_core::base).
+    pub base: Option<String>,
 }
 
 impl SkinDto {
@@ -92,6 +95,7 @@ impl SkinDto {
             pack_name: entry.pack_name.clone(),
             author: entry.author.clone(),
             license: entry.license.clone(),
+            base: entry.base.clone(),
         }
     }
 }
@@ -347,6 +351,8 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
             author: None,
             license: None,
             pack_hash: None,
+            base: None,
+            recipe: None,
         };
         let (entry, thumb) = state.save(new, image)?;
         Ok(SkinDto::saved(&entry, &thumb))
@@ -603,6 +609,8 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            base: None,
+            recipe: None,
         };
         let json = serde_json::to_value(SkinDto::saved(&entry, b"png")).unwrap();
         assert_eq!(json["collection"], "yours");
@@ -612,6 +620,10 @@ mod tests {
         assert_eq!(json["created_at"], 1_790_000_000_000u64);
         assert_eq!(json["tags"], serde_json::json!(["woodblock"]));
         assert!(json["pack"].is_null());
+        assert!(
+            json["base"].is_null(),
+            "a skin from before shapes names none"
+        );
         assert!(json["thumbnail"]
             .as_str()
             .unwrap()

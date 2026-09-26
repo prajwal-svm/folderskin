@@ -15,6 +15,7 @@ pub mod look;
 pub mod onboarding;
 pub mod pack_views;
 pub mod previews;
+pub mod prompts;
 pub mod share;
 pub mod state;
 pub mod store;
@@ -91,6 +92,7 @@ pub fn run() {
         .manage(ai::jobs::Jobs::default())
         .manage(ai::local::Local::default())
         .manage(chats::Chats::default())
+        .manage(prompts::Prompts::default())
         .manage(catalog::Community::default())
         // Community strips and thumbnails, fetched as the cards that show them scroll in.
         .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
@@ -139,6 +141,7 @@ pub fn run() {
             onboarding::onboarding_needed,
             onboarding::finish_onboarding,
             ai::ai_catalogue,
+            ai::ai_shapes,
             ai::ai_set_key,
             ai::ai_clear_key,
             ai::ai_test_key,
@@ -160,6 +163,10 @@ pub fn run() {
             chats::chat_save,
             chats::chat_delete,
             chats::chat_keep_reference,
+            prompts::prompts_list,
+            prompts::prompt_save,
+            prompts::prompt_restore,
+            prompts::prompt_delete,
             community::community_search,
             community::community_refresh,
             community::community_installed,
@@ -187,6 +194,7 @@ pub fn run() {
                     // Before the skins: their thumbnails are drawn on the folder chosen.
                     look::load(&dir);
                     app.state::<chats::Chats>().open(dir.join("chats"));
+                    app.state::<prompts::Prompts>().open(dir.clone());
                     app.state::<state::AppState>().open_store(dir.join("skins"))
                 }
                 Err(e) => eprintln!(

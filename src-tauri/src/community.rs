@@ -1279,6 +1279,8 @@ fn store_pack(
                 author: Some(pack.author.clone()),
                 license: Some(pack.license.clone()),
                 pack_hash: hash.clone(),
+                base: None,
+                recipe: None,
             };
             (new, image)
         })
@@ -2634,6 +2636,8 @@ pub(crate) mod tests {
                     author: None,
                     license: None,
                     pack_hash: None,
+                    base: None,
+                    recipe: None,
                 },
                 SkinImage::Artwork(Arc::new(folderskin_core::compositor::Artwork {
                     rgba: image::load_from_memory(&picture).unwrap().to_rgba8(),

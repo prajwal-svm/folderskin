@@ -6,7 +6,9 @@ use crate::config::{self, Config, KeySource, LOCAL};
 use crate::error::CliError;
 use crate::out::Out;
 use folderskin_ai::prompts::Shape as AiShape;
-use folderskin_ai::{AiError, Finished, ModelInfo, ProviderInfo};
+use folderskin_ai::recipe::{Key, Record, Treatment};
+use folderskin_ai::{AiError, Finished, ModelInfo, ProviderInfo, Reference, Role};
+use folderskin_core::base::{Base, FREE, MAC_FOLDER};
 use folderskin_local::machine::{Arch, Os};
 use folderskin_local::{
     generate, slug, Backend, CancelToken, Job, Machine, ModelId, Settings, Shape, Stage, Tier,
@@ -204,6 +206,17 @@ pub fn shape(arg: ShapeArg) -> Shape {
     match arg {
         ShapeArg::Artwork => Shape::Artwork,
         ShapeArg::Folder => Shape::Folder,
+        ShapeArg::Icon => Shape::Icon,
+    }
+}
+
+/// What a picture of `shape` is made for: a free icon has no base, anything else is for
+/// FolderSkin's own folder.
+pub fn base_for(shape: Shape) -> &'static Base {
+    if shape == Shape::Icon {
+        &FREE
+    } else {
+        &MAC_FOLDER
     }
 }
 
@@ -314,8 +327,11 @@ impl Painter {
         Job {
             idea: order.idea.clone(),
             style: order.style.clone(),
+            treatment: None,
             shape: order.shape,
+            base: base_for(order.shape),
             refs: order.refs.clone(),
+            roles: Vec::new(),
             seed: order.seed,
             name: order.name.clone(),
             model,
@@ -427,65 +443,63 @@ async fn byok(
             model.label
         ));
     }
-    let reference = match order.refs.as_slice() {
-        [] => None,
-        [first, rest @ ..] => {
-            if !model.accepts_reference {
-                out.warn(&format!(
-                    "{} can't work from a picture, so the reference is left out",
-                    model.label
-                ));
-                None
-            } else {
-                if !rest.is_empty() {
-                    out.warn(&format!(
-                        "{} takes one picture; only {} goes",
-                        provider.label,
-                        first.display()
-                    ));
-                }
-                let img = image::open(first)
-                    .map_err(|e| {
-                        CliError::fixable(
-                            "reference_unreadable",
-                            "The reference picture can't be read.",
-                            format!("{}: {e}.", first.display()),
-                        )
-                        .fix("Use a PNG, JPEG or WebP picture.")
-                    })?
-                    .to_rgba8();
-                Some(folderskin_ai::finish::reference_png(img))
-            }
-        }
-    };
-    let style = folderskin_local::prompts::style_text(&order.style).to_string();
-    let idea = if style.is_empty() {
-        order.idea.trim().to_string()
+    // Every reference is a picture of the subject, sent after the template when there is one.
+    let mut pictures = Vec::new();
+    if !order.refs.is_empty() && !model.accepts_reference {
+        out.warn(&format!(
+            "{} can't work from a picture, so the reference is left out",
+            model.label
+        ));
     } else {
-        format!("{}, as {style}", order.idea.trim().trim_end_matches('.'))
-    };
-    let ai_shape = match order.shape {
-        Shape::Artwork => AiShape::Skin,
-        Shape::Folder => AiShape::Folder,
-    };
-    let request = if order.raw {
-        folderskin_ai::GenerateRequest {
+        for r in &order.refs {
+            let img = image::open(r)
+                .map_err(|e| {
+                    CliError::fixable(
+                        "reference_unreadable",
+                        "The reference picture can't be read.",
+                        format!("{}: {e}.", r.display()),
+                    )
+                    .fix("Use a PNG, JPEG or WebP picture.")
+                })?
+                .to_rgba8();
+            pictures.push(Reference::new(
+                Role::Subject,
+                folderskin_ai::finish::reference_png(img),
+            ));
+        }
+    }
+    let ai_shape = order.shape.recipe();
+    let base = base_for(order.shape);
+    // The style goes in its own slot, after the idea: a preset's words, or the person's own.
+    let treatment = Treatment::named(&order.style);
+    let (request, cut, record) = if order.raw {
+        let request = folderskin_ai::GenerateRequest {
             provider: provider.id.to_string(),
             model: model.id.to_string(),
             prompt: order.idea.trim().to_string(),
-            references: reference
-                .into_iter()
-                .map(|png| folderskin_ai::Reference::new(folderskin_ai::Role::Subject, png))
-                .collect(),
+            references: pictures,
             ..folderskin_ai::GenerateRequest::default()
-        }
+        };
+        let cut = folderskin_ai::Cut {
+            key: Key::Magenta,
+            template: None,
+        };
+        (request, cut, None)
     } else {
-        let (p, i) = (provider.id.to_string(), idea.clone());
-        tokio::task::spawn_blocking(move || {
-            folderskin_ai::plan(&p, model, ai_shape, &i, None, reference)
+        let (p, i) = (provider.id.to_string(), order.idea.clone());
+        let planned = tokio::task::spawn_blocking(move || {
+            let brief = folderskin_ai::Brief {
+                idea: &i,
+                base,
+                shape: ai_shape,
+                treatment: treatment.as_ref(),
+                pictures,
+            };
+            folderskin_ai::plan(&p, model, &brief, None)
         })
         .await
-        .map_err(|e| CliError::bug("Planning the request stopped unexpectedly.", e.to_string()))?
+        .map_err(|e| CliError::bug("Planning the request stopped unexpectedly.", e.to_string()))?;
+        (planned.request, planned.cut, Some(planned.record))
     };
     cancel.check()?;
     out.event(&folderskin_local::Event::Stage {
@@ -512,13 +526,23 @@ async fn byok(
     let seconds = started.elapsed().as_secs_f64();
     let finished = {
         let result = result.clone();
-        tokio::task::spawn_blocking(move || folderskin_ai::finish(&result, ai_shape))
-            .await
-            .map_err(|e| {
-                CliError::bug("Finishing the picture stopped unexpectedly.", e.to_string())
-            })?
-            .map_err(|e| ai_error(provider, e))?
+        tokio::task::spawn_blocking(move || {
+            match folderskin_ai::finish(&result, base, ai_shape, cut) {
+                // A free icon with nothing to cut it out of is still an icon: the square picture.
+                Err(AiError::NoBackdrop) if ai_shape == AiShape::Icon => {
+                    folderskin_ai::finish::uncut(&result).map(|f| (f, true))
+                }
+                other => other.map(|f| (f, false)),
+            }
+        })
+        .await
+        .map_err(|e| CliError::bug("Finishing the picture stopped unexpectedly.", e.to_string()))?
+        .map_err(|e| ai_error(provider, e))?
     };
+    let (finished, uncut) = finished;
+    if uncut {
+        out.warn("it came back with no plain background to cut it out of, so it's kept as painted");
+    }
     std::fs::create_dir_all(out_dir)
         .map_err(|e| CliError::io("make the output folder", out_dir, &e))?;
     let name = match &order.name {
@@ -532,10 +556,17 @@ async fn byok(
     };
     let path = out_dir.join(format!("{name}.png"));
     let (png, shape) = match finished {
+        Finished::Folder(cut) if order.shape == Shape::Icon => {
+            (folderskin_core::raster::encode_png(&cut), Shape::Icon)
+        }
         Finished::Folder(cut) => (folderskin_core::raster::encode_png(&cut), Shape::Folder),
         Finished::Artwork(art) => (folderskin_core::raster::encode_png(&art), Shape::Artwork),
     };
     std::fs::write(&path, png).map_err(|e| CliError::io("save the picture", &path, &e))?;
+    let recipe = record.map(|r| Record {
+        revised_prompt: result.revised_prompt.clone(),
+        ..r
+    });
     let meta = json!({
         "idea": order.idea,
         "style": order.style,
@@ -546,7 +577,8 @@ async fn byok(
         "provider": provider.label,
         "model": model.label,
         "model_id": result.model_used,
-        "references": order.refs.iter().take(1).map(|r| r.file_name().map(|n| n.to_string_lossy().into_owned())).collect::<Vec<_>>(),
+        "references": order.refs.iter().map(|r| r.file_name().map(|n| n.to_string_lossy().into_owned())).collect::<Vec<_>>(),
+        "recipe": recipe,
         "seconds": (seconds * 10.0).round() / 10.0,
         "made": folderskin_local::generate::utc_now(),
         "digital_source_type": folderskin_local::generate::TRAINED_ALGORITHMIC_MEDIA,

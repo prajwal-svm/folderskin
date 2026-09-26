@@ -1,20 +1,37 @@
-//! What the local models are asked to paint.
+//! What the local model is asked to paint.
 //!
-//! Styles are written as what to paint, never as what to avoid: a distilled model runs without a
-//! negative prompt, and naming a thing ("no folder") tends to paint it. No living artist or studio
-//! is named, so what they make can go in a community pack (docs/PACK-TERMS.md, rule 3).
+//! The prompt is FolderSkin's recipe ([`folderskin_ai::recipe`]), rendered for FLUX the way a
+//! provider's FLUX model gets it ([`folderskin_ai::prompts::Family::Flux`]): the idea first and
+//! word for word, the style after it as treatment only, the words to letter in their own
+//! sentence, and nothing named that shouldn't be painted. Two things are this computer's own:
+//!
+//! * A whole shape and a free icon are both painted on a picture handed in as image 1: the
+//!   shape's blank template, or a flat canvas in the key colour. The key colour is never named: an
+//!   edit model told about magenta paints with it. The model is told to leave the backdrop as it
+//!   is, and the cut-out follows our silhouette or the backdrop it finds.
+//! * klein's text encoder reads 512 tokens and drops the rest, where the shape's words sit. A
+//!   prompt that would run past [`TOKEN_BUDGET`] keeps its style to the medium alone, and the
+//!   idea is never cut.
+//!
+//! No living artist or studio is named by a built-in style, so what they make can go in a
+//! community pack (docs/PACK-TERMS.md, rule 3).
 
+use folderskin_ai::prompts::{self as ai_prompts, Family, Shape as AiShape};
+use folderskin_ai::recipe::{Around, Lettering, Recipe, Role, Treatment};
+use folderskin_core::base::{Base, MAC_FOLDER};
 use serde::Serialize;
 
-/// What comes out: artwork FolderSkin wraps onto its folder, or the whole folder painted.
+/// What comes out: artwork FolderSkin wraps onto a base, the whole base painted, or a free icon.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Shape {
     /// A picture the app's compositor wraps onto its folder, so the geometry is always exact.
     #[default]
     Artwork,
-    /// FolderSkin's blank folder repainted, cut out along the app's own silhouette.
+    /// The base's blank template repainted, cut out along the app's own silhouette.
     Folder,
+    /// A free icon: one subject standing on its own, painted on a flat canvas and cut out of it.
+    Icon,
 }
 
 impl Shape {
@@ -22,13 +39,34 @@ impl Shape {
         match self {
             Shape::Artwork => "artwork",
             Shape::Folder => "folder",
+            Shape::Icon => "icon",
         }
     }
 
     pub fn parse(s: &str) -> Option<Shape> {
-        [Shape::Artwork, Shape::Folder]
+        [Shape::Artwork, Shape::Folder, Shape::Icon]
             .into_iter()
             .find(|shape| shape.id() == s)
+    }
+
+    /// What is painted for `base` when `self` is asked for: a free icon has no base to paint art
+    /// for or to repaint, so it is always an [`Shape::Icon`], and a base with a template never
+    /// paints one.
+    pub fn on(self, base: &Base) -> Shape {
+        match (base.is_free(), self) {
+            (true, _) => Shape::Icon,
+            (false, Shape::Icon) => Shape::Folder,
+            (false, shape) => shape,
+        }
+    }
+
+    /// The same, as the recipe names it.
+    pub fn recipe(self) -> AiShape {
+        match self {
+            Shape::Artwork => AiShape::Skin,
+            Shape::Folder => AiShape::Folder,
+            Shape::Icon => AiShape::Icon,
+        }
     }
 }
 
@@ -39,158 +77,114 @@ pub struct Style {
     pub text: &'static str,
 }
 
-const fn style(key: &'static str, text: &'static str) -> Style {
-    Style { key, text }
-}
-
-/// The style presets. `none` paints the idea as it is.
-pub const STYLES: &[Style] = &[
-    style(
-        "pop-art",
-        "a bold pop art illustration: thick black outlines, flat saturated primary colours, Ben-Day halftone dots",
-    ),
-    style(
-        "anime",
-        "a hand-painted anime film still: soft watercolour skies, lush greenery, gentle warm light, clean cel-shaded shapes, nostalgic and whimsical",
-    ),
-    // Not "on canvas" or "a museum masterpiece": those paint the painting in its frame, on a wall.
-    style(
-        "oil",
-        "a classical oil painting: thick oil paint with visible impasto brushstrokes, rich glazes, dramatic chiaroscuro light",
-    ),
-    style(
-        "sketch",
-        "a black and white graphite pencil sketch on textured paper: confident linework, fine hatching and cross-hatching, pure monochrome",
-    ),
-    style(
-        "woodblock",
-        "an ukiyo-e woodblock print: bold black outlines, flat indigo and vermilion colour blocks, washi paper grain",
-    ),
-    style(
-        "travel-poster",
-        "a vintage travel poster: flat colour shapes, a limited palette, grainy lithograph print texture",
-    ),
-    style(
-        "watercolour",
-        "a loose watercolour painting: soft wet edges, granulating pigment, white paper showing through",
-    ),
-    style(
-        "clay",
-        "a soft clay stop-motion diorama: rounded handmade shapes, pastel colours, fingerprints in the clay, warm studio light",
-    ),
-    style(
-        "risograph",
-        "a three-colour risograph print in teal, yellow and orange: coarse grain, slight misregistration",
-    ),
-    style(
-        "art-nouveau",
-        "an art nouveau poster: flowing organic lines, ornate floral borders, thin gold outlines, muted jewel colours",
-    ),
-    style(
-        "pixel",
-        "detailed 16-bit pixel art: crisp pixels, a limited retro palette, gentle dithering",
-    ),
-    style(
-        "synthwave",
-        "a 1980s airbrushed synthwave poster: glossy chrome, neon magenta and cyan glow, a sunset grid horizon",
-    ),
-    // Name only what should be in the picture: "softbox lighting" painted the softboxes.
-    style(
-        "photo",
-        "a close-up product photograph: soft diffused light, crisp focus, shallow depth of field, a plain seamless coloured backdrop, rich colour",
-    ),
-    style("none", ""),
-];
-
-/// The preset's words for `style`, or `style` itself when it is someone's own words.
-pub fn style_text(style: &str) -> &str {
-    STYLES
+/// The style presets `--style` takes: every built-in style ([`folderskin_ai::styles`]), then
+/// `none`, which paints the idea as it is. An id a style had before still finds it.
+pub fn styles() -> Vec<Style> {
+    folderskin_ai::styles::styles()
         .iter()
-        .find(|s| s.key == style)
-        .map_or(style, |s| s.text)
-        .trim()
+        .map(|s| Style {
+            key: s.id.as_str(),
+            text: s.fragment.as_str(),
+        })
+        .chain(std::iter::once(Style {
+            key: "none",
+            text: "",
+        }))
+        .collect()
 }
 
-/// Artwork lands on the folder's back panel whole, and on its front panel less a band at the top
-/// and bottom; the top eighth is the tab and the strip beside the paper (docs/SKINS.md). So: fill
-/// the frame, keep the subject in the middle, keep the top quiet.
-///
-/// The one negation stays on evidence. Against "the painted scene continues past all four edges",
-/// klein framed the same 1 picture in 6 (pop art and oil, three seeds each) either way, but the
-/// positive wording signed 2 of the 3 oils and this one none. `trim_border` catches the frames.
-const ARTWORK: &str = "{style_lead}{idea}. The painted scene bleeds off all four edges of the image: no white border, \
-no margin, no frame line and no paper edge anywhere around it. The main subject is large and sits \
-in the centre, fully visible, with open space above it; the top eighth of the picture is only sky \
-or plain background. Bold shapes and strong contrast that still read from across a room.";
-
-/// The picture handed in is FolderSkin's blank folder on magenta. The key colour is never named:
-/// an edit model told about magenta paints the folder magenta. It is told to leave the background
-/// alone instead, and the cut-out uses our silhouette, not the colour.
-const FOLDER: &str = "Turn the plain grey folder in image 1 into a folder painted all over as {idea}{style_tail}. The \
-painting covers the folder's entire surface edge to edge, the back panel, the tab and the front \
-panel, like a printed wrap rather than a picture placed on it, with the main subject in the middle \
-of the front panel. The thin paper strip between the panels stays pale cream. Keep the folder's \
-exact outline, tab, size and position, and leave the background around the folder exactly as it is.";
-
-const REFERENCES: &str = "Using {refs} as the reference, paint {idea}{style_tail}. Keep the subject recognisable from the \
-reference. One continuous full-bleed illustration that fills the entire frame edge to edge, the \
-subject large and centred with open space above it; the top eighth of the picture is only sky or \
-plain background.";
-
-/// "image 1", "image 1 and image 2", "image 2, image 3 and image 4".
-pub fn ref_names(n: usize, first: usize) -> String {
-    let names: Vec<String> = (first..first + n).map(|i| format!("image {i}")).collect();
-    match names.as_slice() {
-        [] => String::new(),
-        [one] => one.clone(),
-        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    }
+/// The words `style` paints with: a preset's fragment, someone's own words as they are, or
+/// nothing for `none`.
+pub fn style_text(style: &str) -> String {
+    Treatment::named(style).map(|t| t.words).unwrap_or_default()
 }
 
-/// The first letter in upper case.
-fn capitalised(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
+/// The most of klein's 512-token text encoder a prompt uses, leaving room for how its tokenizer
+/// counts what [`tokens`] only estimates.
+pub const TOKEN_BUDGET: usize = 400;
+
+/// About how many tokens `text` is: 1.3 a word, which errs long for English.
+pub fn tokens(text: &str) -> usize {
+    (text.split_whitespace().count() * 13).div_ceil(10)
 }
 
-/// The prompt for `idea` in `style` (a preset key or someone's own words), as `shape`, with
-/// `n_refs` reference pictures.
+/// Everything the local model's prompt is made of.
+#[derive(Clone, Copy, Debug)]
+pub struct Slots<'a> {
+    /// The subject and the scene in plain words.
+    pub idea: &'a str,
+    /// How it looks, or `None` to paint the idea as it is.
+    pub treatment: Option<&'a Treatment>,
+    /// What is painted ([`Shape::on`] the base).
+    pub shape: Shape,
+    /// What it is for: a folder in a system's look, or no base for a free icon.
+    pub base: &'a Base,
+    /// The reference pictures' roles, in the order they are handed in, after the template or
+    /// canvas when there is one.
+    pub refs: &'a [Role],
+}
+
+/// The prompt for `idea` in `style` (a preset key, someone's own words or "none"), as `shape` for
+/// FolderSkin's own folder, with `n_refs` pictures of the subject.
 pub fn compose(idea: &str, style: &str, shape: Shape, n_refs: usize) -> String {
-    let s = style_text(style);
-    let idea = idea.trim().trim_end_matches('.');
-    let style_tail = if s.is_empty() {
-        String::new()
-    } else {
-        format!(", as {s}")
+    let treatment = Treatment::named(style);
+    let refs = vec![Role::Subject; n_refs];
+    compose_slots(&Slots {
+        idea,
+        treatment: treatment.as_ref(),
+        shape,
+        base: &MAC_FOLDER,
+        refs: &refs,
+    })
+}
+
+/// The pictures the runtime is handed, by role, in order: the template or the canvas the shape
+/// is painted on, then the reference pictures.
+pub fn roles(shape: Shape, base: &Base, refs: &[Role]) -> Vec<Role> {
+    let mut roles = match shape.on(base) {
+        Shape::Artwork => Vec::new(),
+        Shape::Folder => vec![Role::Template],
+        Shape::Icon => vec![Role::Canvas],
     };
-    match shape {
-        Shape::Folder => {
-            let extra = if n_refs > 0 {
-                format!(", taking the subject from {}", ref_names(n_refs, 2))
-            } else {
-                String::new()
+    roles.extend(refs.iter().copied().filter(|r| !r.is_made()));
+    roles
+}
+
+/// The prompt, put together from its slots.
+pub fn compose_slots(slots: &Slots) -> String {
+    let shape = slots.shape.on(slots.base);
+    let roles = roles(shape, slots.base, slots.refs);
+    let around = if shape == Shape::Artwork {
+        Around::Nothing
+    } else {
+        Around::Kept
+    };
+    let render = |treatment: Option<&Treatment>| {
+        let lettering = Lettering::of(slots.idea, treatment, slots.base, shape.recipe());
+        ai_prompts::render(
+            &Recipe {
+                idea: slots.idea,
+                treatment,
+                lettering: lettering.as_ref(),
+                pictures: &roles,
+                base: slots.base,
+                shape: shape.recipe(),
+                around,
+            },
+            Family::Flux,
+        )
+    };
+    let full = render(slots.treatment);
+    match slots.treatment {
+        Some(t) if tokens(&full) > TOKEN_BUDGET => {
+            // The style gives way before the idea: its medium alone, "a classical oil painting".
+            let short = Treatment {
+                words: t.medium().to_string(),
+                ..t.clone()
             };
-            FOLDER
-                .replace("{idea}", &format!("{idea}{extra}"))
-                .replace("{style_tail}", &style_tail)
+            render(Some(&short))
         }
-        Shape::Artwork if n_refs > 0 => REFERENCES
-            .replace("{refs}", &ref_names(n_refs, 1))
-            .replace("{idea}", idea)
-            .replace("{style_tail}", &style_tail),
-        Shape::Artwork => {
-            let (lead, idea) = if s.is_empty() {
-                (String::new(), capitalised(idea))
-            } else {
-                (format!("{} of ", capitalised(s)), idea.to_string())
-            };
-            ARTWORK
-                .replace("{style_lead}", &lead)
-                .replace("{idea}", &idea)
-        }
+        _ => full,
     }
 }
 
@@ -203,16 +197,17 @@ pub fn theme_idea(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use folderskin_core::base::{FREE, WINDOWS_FOLDER};
 
     #[test]
-    fn artwork_leads_with_the_style() {
+    fn artwork_leads_with_the_idea_and_the_style_follows() {
         let p = compose("a retro film camera.", "pop-art", Shape::Artwork, 0);
         assert!(
-            p.starts_with("A bold pop art illustration: thick black outlines, flat saturated primary colours, Ben-Day halftone dots of a retro film camera. The painted scene bleeds off all four edges"),
+            p.starts_with("A retro film camera, as a pop-art comic illustration: thick black outlines, flat saturated primary colours, Ben-Day halftone dots, hard graphic shadows. The painted scene bleeds off all four edges"),
             "{p}"
         );
         assert!(p.ends_with("still read from across a room."));
-        // Without a style the idea leads, capitalised.
+        // Without a style the idea is all there is, capitalised.
         let bare = compose("  a koi pond at night ", "none", Shape::Artwork, 0);
         assert!(
             bare.starts_with("A koi pond at night. The painted scene"),
@@ -223,62 +218,172 @@ mod tests {
     #[test]
     fn someones_own_words_are_a_style_too() {
         let p = compose("a fox", "linocut in two inks", Shape::Artwork, 0);
-        assert!(p.starts_with("Linocut in two inks of a fox."), "{p}");
+        assert!(p.starts_with("A fox, as linocut in two inks."), "{p}");
     }
 
     #[test]
-    fn references_are_named_by_number() {
+    fn an_old_style_key_still_finds_its_style() {
+        for (old, words) in [
+            ("travel-poster", "a mid-century screen-printed illustration"),
+            ("sketch", "a detailed graphite pencil drawing"),
+            ("woodblock", "a traditional woodblock-printed illustration"),
+        ] {
+            assert!(style_text(old).starts_with(words), "{old}");
+        }
+        assert_eq!(style_text("none"), "");
+        let keys: Vec<&str> = styles().iter().map(|s| s.key).collect();
+        assert_eq!(keys.len(), 31, "thirty styles and none");
+        assert_eq!(keys.last(), Some(&"none"));
+        for s in styles() {
+            let text = s.text.to_lowercase();
+            for word in [" no ", "without", "avoid", "don't", "not "] {
+                assert!(!text.contains(word), "{} says {word:?}", s.key);
+            }
+        }
+    }
+
+    #[test]
+    fn references_are_named_by_number_and_role() {
         let p = compose("our dog Biscuit", "anime", Shape::Artwork, 2);
         assert!(
-            p.starts_with("Using image 1 and image 2 as the reference, paint our dog Biscuit, as a hand-painted anime film still"),
+            p.starts_with("Our dog Biscuit, as a cel-shaded anime illustration"),
             "{p}"
         );
-        assert_eq!(ref_names(3, 2), "image 2, image 3 and image 4");
-        assert_eq!(ref_names(1, 1), "image 1");
-        assert_eq!(ref_names(0, 1), "");
+        assert!(
+            p.contains("Images 1 and 2 show the subject: keep it recognisably the same"),
+            "{p}"
+        );
+        let styled = compose_slots(&Slots {
+            idea: "a fox",
+            treatment: None,
+            shape: Shape::Artwork,
+            base: &MAC_FOLDER,
+            refs: &[Role::Subject, Role::Style],
+        });
+        assert!(
+            styled.contains("Image 2 is a style reference only"),
+            "{styled}"
+        );
     }
 
     #[test]
     fn a_whole_folder_repaints_image_one_and_never_names_the_key_colour() {
         let p = compose("a koi pond at night", "woodblock", Shape::Folder, 0);
         assert!(
-            p.starts_with("Turn the plain grey folder in image 1 into a folder painted all over as a koi pond at night, as an ukiyo-e woodblock print"),
+            p.starts_with("Turn the plain grey folder in image 1 into a folder painted all over as a koi pond at night, as a traditional woodblock-printed illustration"),
             "{p}"
         );
-        for word in ["magenta", "#FF00FF", "pink"] {
-            assert!(
-                !p.to_lowercase().contains(&word.to_lowercase()),
-                "{word} in {p}"
-            );
+        assert!(p.contains("The thin paper strip between the panels stays pale cream. Keep the folder's exact outline"), "{p}");
+        for word in ["magenta", "#ff00ff", "pink", "green"] {
+            assert!(!p.to_lowercase().contains(word), "{word} in {p}");
         }
         let with_refs = compose("Biscuit", "none", Shape::Folder, 1);
         assert!(
             with_refs.contains("painted all over as Biscuit, taking the subject from image 2. The"),
             "{with_refs}"
         );
+        assert_eq!(
+            roles(Shape::Folder, &MAC_FOLDER, &[Role::Subject]),
+            [Role::Template, Role::Subject]
+        );
+    }
+
+    fn slots<'a>(base: &'a Base, shape: Shape, idea: &'a str) -> Slots<'a> {
+        Slots {
+            idea,
+            treatment: None,
+            shape,
+            base,
+            refs: &[],
+        }
     }
 
     #[test]
-    fn styles_paint_what_they_want_not_what_they_dont() {
-        // A distilled model has no negative prompt: naming a thing paints it.
-        for s in STYLES {
-            let text = s.text.to_lowercase();
-            for word in [" no ", "without", "avoid", "don't", "not "] {
-                assert!(!text.contains(word), "{} says {word:?}", s.key);
-            }
-        }
-        assert_eq!(STYLES.len(), 14, "13 presets and none");
-        assert_eq!(style_text("none"), "");
-        assert_eq!(style_text("oil"), STYLES[2].text);
+    fn a_windows_folder_repaints_its_own_parts_and_no_paper() {
+        let p = compose_slots(&slots(&WINDOWS_FOLDER, Shape::Folder, "a koi pond"));
+        assert!(
+            p.starts_with("Turn the plain grey folder in image 1 into a folder painted all over as a koi pond."),
+            "{p}"
+        );
+        assert!(
+            p.contains("the curved step where the front panel rises to meet it"),
+            "{p}"
+        );
+        assert!(
+            !p.contains("paper"),
+            "Windows' folder has no paper strip: {p}"
+        );
+        let art = compose_slots(&slots(&WINDOWS_FOLDER, Shape::Artwork, "a koi pond"));
+        assert!(
+            art.contains("the top sixth of the picture, and its upper-left corner,"),
+            "{art}"
+        );
+        assert!(compose("a koi pond", "none", Shape::Artwork, 0).contains("top eighth"));
     }
 
     #[test]
-    fn the_artwork_template_keeps_its_one_negation() {
-        // It stays on evidence (see ARTWORK); the others have none.
-        assert!(ARTWORK.contains("no white border"));
-        for template in [FOLDER, REFERENCES] {
-            assert!(!template.contains(" no "), "{template}");
+    fn a_free_icon_is_painted_on_a_canvas_it_is_never_told_the_colour_of() {
+        for asked in [Shape::Artwork, Shape::Folder, Shape::Icon] {
+            assert_eq!(asked.on(&FREE), Shape::Icon);
+            let p = compose_slots(&slots(&FREE, asked, "a cheerful fox mascot."));
+            assert!(
+                p.starts_with("A cheerful fox mascot. It is one single, complete object in the middle of image 1"),
+                "{p}"
+            );
+            assert!(
+                p.ends_with("Leave the flat background around it exactly as it is."),
+                "{p}"
+            );
+            assert!(!p.to_lowercase().contains("magenta"), "{p}");
         }
+        assert_eq!(
+            roles(Shape::Icon, &FREE, &[Role::Subject]),
+            [Role::Canvas, Role::Subject]
+        );
+        let referred = compose_slots(&Slots {
+            refs: &[Role::Subject, Role::Subject],
+            ..slots(&FREE, Shape::Icon, "our dog Biscuit")
+        });
+        assert!(
+            referred.starts_with(
+                "Our dog Biscuit, taking the subject from images 2 and 3. It is one single"
+            ),
+            "{referred}"
+        );
+        assert_eq!(Shape::Icon.on(&MAC_FOLDER), Shape::Folder);
+    }
+
+    #[test]
+    fn quoted_words_are_lettered_in_the_styles_own_lettering() {
+        for shape in [Shape::Artwork, Shape::Folder, Shape::Icon] {
+            let p = compose(
+                "a retro poster that says \"ESCAPE\"",
+                "screenprint",
+                shape,
+                0,
+            );
+            assert!(
+                p.contains(" The words \"ESCAPE\" are written once in bold retro sans-serif letters in one flat ink, large and centred"),
+                "{shape:?}: {p}"
+            );
+        }
+        let plain = compose("a fox", "none", Shape::Artwork, 0);
+        assert!(!plain.contains("written"), "{plain}");
+    }
+
+    #[test]
+    fn a_long_prompt_keeps_its_idea_and_shortens_its_style() {
+        let idea = "a lighthouse ".repeat(120);
+        let oil = Treatment::named("oil").unwrap();
+        let p = compose_slots(&Slots {
+            treatment: Some(&oil),
+            ..slots(&MAC_FOLDER, Shape::Artwork, &idea)
+        });
+        assert!(p.contains(", as a classical oil painting."), "{p}");
+        assert!(!p.contains("impasto"), "the technique gave way: {p}");
+        assert!(p.contains(&idea.trim()[1..]), "the idea is whole");
+        let short = compose("a lighthouse", "oil", Shape::Artwork, 0);
+        assert!(short.contains("impasto") && tokens(&short) <= TOKEN_BUDGET);
     }
 
     #[test]
@@ -288,6 +393,8 @@ mod tests {
         assert!(!idea.contains("folder"));
         assert!(!idea.contains('"'));
         assert_eq!(Shape::parse("folder"), Some(Shape::Folder));
+        assert_eq!(Shape::parse("icon"), Some(Shape::Icon));
         assert_eq!(Shape::parse("skin"), None);
+        assert_eq!(Shape::Artwork.recipe(), AiShape::Skin);
     }
 }

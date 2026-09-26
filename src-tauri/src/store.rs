@@ -120,6 +120,16 @@ pub struct SavedSkin {
     /// ([`folderskin_core::pack::pack_hash`]), to tell when it has an update.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack_hash: Option<String>,
+    /// The shape it was made for, by [`folderskin_core::base`] id: "windows-folder", or "free"
+    /// for a free icon, which goes on anything. `None` for a folder skin made before there were
+    /// other shapes, and for a picture brought in from elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+    /// AI results only: what it was made from (the prompt as sent, its style, the words it
+    /// letters, the pictures by role and hash, the template and the seed), so a result can be
+    /// traced to its prompt and made again. `None` for one made before FolderSkin kept it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<folderskin_ai::recipe::Record>,
 }
 
 /// What the caller knows about a skin it wants saved. The store adds the kind and focus (from
@@ -138,6 +148,10 @@ pub struct NewSkin {
     pub author: Option<String>,
     pub license: Option<String>,
     pub pack_hash: Option<String>,
+    /// The shape it was made for ([`SavedSkin::base`]).
+    pub base: Option<String>,
+    /// What an AI result was made from ([`SavedSkin::recipe`]).
+    pub recipe: Option<folderskin_ai::recipe::Record>,
 }
 
 impl NewSkin {
@@ -159,6 +173,8 @@ impl NewSkin {
             author: self.author,
             license: self.license,
             pack_hash: self.pack_hash,
+            base: self.base,
+            recipe: self.recipe,
         }
     }
 }
@@ -1137,6 +1153,8 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            base: None,
+            recipe: None,
         }
     }
 
@@ -1156,8 +1174,19 @@ mod tests {
         ai.provider = Some("openai".into());
         ai.model = Some("gpt-image-1".into());
         ai.idea = Some("a night sky with aurora".into());
+        ai.base = Some("free".into());
         let (b, _) = store.add(ai, &folder()).unwrap();
         drop(store);
+        // Only the skin made for a shape names it; one from before there were shapes names none.
+        let index: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join(INDEX_FILE)).unwrap()).unwrap();
+        let bases: Vec<Option<&str>> = index["skins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s.get("base").and_then(|b| b.as_str()))
+            .collect();
+        assert_eq!(bases, [None, Some("free")], "{index}");
 
         let store = Store::open(dir.clone());
         let list = store.list();

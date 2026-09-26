@@ -9,6 +9,9 @@ publish = false
 
 [dependencies]
 folderskin-core.workspace = true
+# The recipe and the prompts, shared with the providers': a picture is asked for the same way
+# whoever paints it.
+folderskin-ai = { path = "../folderskin-ai" }
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true

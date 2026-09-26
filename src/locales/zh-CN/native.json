@@ -62,6 +62,16 @@
     "gone": "这个聊天已经不在这台电脑上了",
     "damaged": "这个聊天的文件已损坏，无法打开"
   },
+  "prompts": {
+    "noDataFolder": "无法在这台电脑上保存提示词：FolderSkin 在这里没有数据文件夹",
+    "noName": "给提示词起个名字",
+    "nothing": "还没有可保存的内容。先写下提示词",
+    "nameTooLong": "这个名字太长了。请控制在 {{max}} 个字符以内",
+    "textTooLong": "这个提示词太长，无法保存。请缩短一些",
+    "full": "你已经有 {{max}} 个提示词了。移除一个才能再保存",
+    "notSaved": "无法保存你的提示词：{{reason}}",
+    "noStyle": "FolderSkin 没有名为 {{style}} 的风格"
+  },
   "composer": {
     "transparent": "这个设计完全透明",
     "damaged": "这个设计已损坏，无法再次打开"

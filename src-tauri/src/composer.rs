@@ -15,6 +15,7 @@ use crate::commands::{self, SkinDto};
 use crate::state::AppState;
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use base64::Engine;
+use folderskin_core::base;
 use folderskin_core::compositor::Style;
 use folderskin_core::{compositor, matte, raster};
 use folderskin_core::{geometry as g, geometry_windows as gw};
@@ -375,6 +376,15 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
         author: None,
         license: None,
         pack_hash: None,
+        // A design on a folder is that folder's; a free icon goes on anything.
+        base: Some(
+            match header.shape {
+                Shape::Folder => base::folder_of(style).id,
+                Shape::Free => base::FREE.id,
+            }
+            .into(),
+        ),
+        recipe: None,
     };
     let (entry, thumb, replaced) = match header.replaces {
         Some(old) => {
@@ -987,7 +997,15 @@ mod tests {
             assert_eq!(saved["skin"]["name"], "Taxes 2026");
             assert_eq!(saved["skin"]["source"], "composer");
             assert_eq!(saved["skin"]["kind"], "folder");
+            assert_eq!(
+                saved["skin"]["base"], "mac-folder",
+                "a design on a folder is its"
+            );
             assert!(saved["replaced"].is_null());
+            // A free icon goes on anything.
+            let free = frame(&save_header("Sticker", "free", None), &png);
+            let saved = invoke(&webview, "composer_save", InvokeBody::Raw(free)).unwrap();
+            assert_eq!(saved["skin"]["base"], "free");
 
             // A body that isn't bytes at all is refused with a sentence, not a crash.
             let refused = invoke(

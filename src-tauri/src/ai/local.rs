@@ -6,7 +6,9 @@ use super::events::AiEvent;
 use super::failure::{self, AiFailure, Doing};
 use super::{AiModelDto, AiProviderDto};
 use crate::store::SkinImage;
-use folderskin_core::compositor::{Artwork, SKIN_HEIGHT, SKIN_WIDTH};
+use folderskin_ai::recipe::{Key, PictureRecord, Record, Role, Treatment};
+use folderskin_core::base::Base;
+use folderskin_core::compositor::Artwork;
 use folderskin_core::matte;
 use folderskin_local::machine::Gpu;
 use folderskin_local::{
@@ -534,8 +536,14 @@ pub struct Order<'a> {
     pub job: &'a str,
     pub idea: &'a str,
     pub shape: Shape,
+    /// What it is for: a folder in a system's look, or a free icon ([`folderskin_core::base`]).
+    pub base: &'static Base,
+    /// How it looks, when a style or a saved prompt's look is chosen.
+    pub treatment: Option<Treatment>,
     pub model: Option<ModelId>,
     pub refs: &'a [PathBuf],
+    /// What each of `refs` is for.
+    pub roles: &'a [Role],
 }
 
 /// A painting, ready for the library.
@@ -545,6 +553,8 @@ pub struct Painted {
     pub bytes: Vec<u8>,
     /// The model that painted it.
     pub model: ModelId,
+    /// What it was painted from.
+    pub record: Record,
 }
 
 /// Paints `order` with `settings` on `machine`, telling `send` how it goes.
@@ -564,22 +574,28 @@ pub async fn paint(
     };
     let job = Job {
         idea: order.idea.trim().to_string(),
-        // The idea already says its style, in the chat's own words.
+        // A style chosen in the chat goes in its own slot. Without one, the idea says its style
+        // in the chat's own words, if it has one.
         style: "none".into(),
+        treatment: order.treatment,
         shape: order.shape,
+        base: order.base,
         refs: job_refs,
+        roles: order.roles.to_vec(),
         seed: folderskin_local::random_seed(),
         name: Some("picture".into()),
         model: order.model,
         raw: false,
     };
     let model = job.model().id;
+    let shape = job.painted();
     let doing = Doing {
         what: format!(
             "painting {} with the local model ({}, {})",
-            match order.shape {
-                Shape::Folder => "a whole folder",
-                Shape::Artwork => "folder artwork",
+            match shape {
+                Shape::Folder => format!("a whole {}", order.base.label.to_lowercase()),
+                Shape::Artwork => format!("artwork for the {}", order.base.label.to_lowercase()),
+                Shape::Icon => "a free icon".to_string(),
             },
             backend_name(settings.backend),
             device(machine, settings.backend)
@@ -608,8 +624,10 @@ pub async fn paint(
         .await
         .map_err(|e| failure::from_engine(e, &doing))?;
     Timing::record(settings, picture.provenance.seconds);
-    let shape = picture.shape;
-    if order.shape == Shape::Folder {
+    let (base, painted) = (order.base, picture.shape);
+    let key = picture.provenance.key.unwrap_or_default();
+    let record = record_of(&picture.provenance);
+    if shape != Shape::Artwork {
         send(AiEvent::stage("cut", "Cutting it out of the background"));
     }
     let (image, bytes, warning) = tokio::task::spawn_blocking(move || {
@@ -622,7 +640,7 @@ pub async fn paint(
                     .fix("Try again.")
             })?
             .to_rgba8();
-        let (image, warning) = skin_image(rgba, shape);
+        let (image, warning) = skin_image(rgba, base, painted, key);
         Ok::<_, AiFailure>((image, bytes, warning))
     })
     .await
@@ -634,29 +652,71 @@ pub async fn paint(
         image,
         bytes,
         model,
+        record,
     })
 }
 
-/// What the library keeps of a painting: artwork for FolderSkin's folder, cropped to the
-/// template's shape; or a whole folder, cut out. A folder that couldn't be cut out (the model
-/// changed its shape and no backdrop is left to key) is kept as artwork rather than lost, and
-/// the warning says so.
-pub fn skin_image(rgba: image::RgbaImage, shape: Shape) -> (SkinImage, Option<String>) {
+/// What a painting's provenance says it was made from, as a skin keeps it.
+fn record_of(p: &folderskin_local::Provenance) -> Record {
+    Record {
+        recipe: p.recipe,
+        prompt: p.prompt.clone(),
+        negative_prompt: None,
+        style: Some(p.style.clone()).filter(|s| !s.is_empty() && s != "none"),
+        lettering: p.lettering.clone(),
+        pictures: p
+            .references
+            .iter()
+            .map(|r| PictureRecord {
+                role: r.role,
+                sha256: r.sha256.clone(),
+            })
+            .collect(),
+        template: p.template.clone(),
+        key: p.key,
+        seed: Some(p.seed),
+        revised_prompt: None,
+    }
+}
+
+/// What the library keeps of a painting for `base`: artwork cropped to the base's artwork size;
+/// or a whole folder or a free icon, cut out (of the `key` it was painted on, when the runtime's
+/// own cut didn't take). A folder that couldn't be cut out (the model changed its shape and no
+/// backdrop is left to key) is kept as artwork rather than lost, and a free icon as the square
+/// picture it is, which is still an icon; the warning says which.
+pub fn skin_image(
+    rgba: image::RgbaImage,
+    base: &Base,
+    shape: Shape,
+    key: Key,
+) -> (SkinImage, Option<String>) {
     let artwork = |rgba: &image::RgbaImage| {
+        let (w, h) = base.artwork_size();
         SkinImage::Artwork(Arc::new(Artwork {
-            rgba: matte::crop_to_aspect(rgba, SKIN_WIDTH, SKIN_HEIGHT, (0.5, 0.5)),
+            rgba: matte::crop_to_aspect(rgba, w, h, (0.5, 0.5)),
             focus: (0.5, 0.5),
         }))
     };
-    match shape {
+    match shape.on(base) {
         Shape::Artwork => (artwork(&rgba), None),
-        Shape::Folder => match matte::finished_cutout(&rgba, matte::MAGENTA) {
+        Shape::Folder => match matte::finished_cutout(&rgba, key.rgb()) {
             Some(cut) => (SkinImage::Folder(Arc::new(cut)), None),
             None => (
                 artwork(&rgba),
                 Some(
                     "the folder couldn't be cut out of its picture, so it's kept as artwork for \
                      FolderSkin's folder"
+                        .into(),
+                ),
+            ),
+        },
+        Shape::Icon => match matte::finished_cutout(&rgba, key.rgb()) {
+            Some(cut) => (SkinImage::Folder(Arc::new(cut)), None),
+            None => (
+                SkinImage::Folder(Arc::new(rgba)),
+                Some(
+                    "the icon couldn't be cut out of its picture, so it's kept as the square \
+                     picture it is"
                         .into(),
                 ),
             ),
@@ -1012,9 +1072,14 @@ mod tests {
     #[test]
     fn artwork_is_cropped_to_the_template_and_a_cut_folder_kept_whole() {
         let painting = RgbaImage::from_pixel(1024, 960, Rgba([40, 90, 160, 255]));
-        match skin_image(painting.clone(), Shape::Artwork) {
+        match skin_image(
+            painting.clone(),
+            &folderskin_core::base::MAC_FOLDER,
+            Shape::Artwork,
+            Key::Magenta,
+        ) {
             (SkinImage::Artwork(art), None) => {
-                assert_eq!(art.rgba.dimensions(), (SKIN_WIDTH, SKIN_HEIGHT))
+                assert_eq!(art.rgba.dimensions(), (1024, 958))
             }
             _ => panic!("artwork stays artwork"),
         }
@@ -1025,7 +1090,12 @@ mod tests {
                 cut.put_pixel(x, y, Rgba([200, 120, 40, 255]));
             }
         }
-        match skin_image(cut, Shape::Folder) {
+        match skin_image(
+            cut,
+            &folderskin_core::base::MAC_FOLDER,
+            Shape::Folder,
+            Key::Magenta,
+        ) {
             (SkinImage::Folder(f), None) => assert_eq!(f.dimensions(), (800, 600)),
             _ => panic!("a cut-out folder is a folder"),
         }
@@ -1037,9 +1107,59 @@ mod tests {
         let scene = RgbaImage::from_fn(1024, 960, |x, y| {
             Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
         });
-        let (image, warning) = skin_image(scene, Shape::Folder);
+        let (image, warning) = skin_image(
+            scene.clone(),
+            &folderskin_core::base::MAC_FOLDER,
+            Shape::Folder,
+            Key::Magenta,
+        );
         assert!(matches!(image, SkinImage::Artwork(_)));
         assert!(warning.unwrap().contains("kept as artwork"));
+        // Artwork for Windows' folder is kept at its own size.
+        let (image, _) = skin_image(
+            scene,
+            &folderskin_core::base::WINDOWS_FOLDER,
+            Shape::Artwork,
+            Key::Magenta,
+        );
+        assert_eq!(image.rgba().dimensions(), (1024, 805));
+    }
+
+    #[test]
+    fn a_free_icon_is_kept_cut_out_or_as_the_square_picture_it_is() {
+        use folderskin_core::base::FREE;
+        // As the engine leaves it: cut out of its backdrop, on transparency.
+        let mut cut = RgbaImage::from_pixel(1024, 960, Rgba([0, 0, 0, 0]));
+        for y in 300..700 {
+            for x in 350..650 {
+                cut.put_pixel(x, y, Rgba([240, 170, 30, 255]));
+            }
+        }
+        for asked in [Shape::Artwork, Shape::Folder, Shape::Icon] {
+            let (image, warning) = skin_image(cut.clone(), &FREE, asked, Key::Magenta);
+            assert!(
+                matches!(&image, SkinImage::Folder(f) if f.dimensions() == (300, 400)),
+                "{asked:?}"
+            );
+            assert!(warning.is_none());
+        }
+        // Painted with no backdrop the engine could cut away: an icon still, whole.
+        let scene = RgbaImage::from_fn(1024, 960, |x, y| {
+            Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
+        });
+        let (image, warning) = skin_image(scene, &FREE, Shape::Icon, Key::Magenta);
+        assert!(matches!(&image, SkinImage::Folder(f) if f.dimensions() == (1024, 960)));
+        assert!(warning.unwrap().contains("square picture"));
+        // One left on the green canvas it was painted on is cut out of the green.
+        let mut green = RgbaImage::from_pixel(1024, 960, Rgba([0, 255, 0, 255]));
+        for y in 300..700 {
+            for x in 350..650 {
+                green.put_pixel(x, y, Rgba([240, 170, 30, 255]));
+            }
+        }
+        let (image, warning) = skin_image(green, &FREE, Shape::Icon, Key::Green);
+        assert!(matches!(&image, SkinImage::Folder(f) if f.dimensions() == (300, 400)));
+        assert!(warning.is_none());
     }
 
     #[test]
@@ -1094,8 +1214,11 @@ mod tests {
                 job: "c-test-folder",
                 idea: "a koi pond at night with paper lanterns",
                 shape: Shape::Folder,
+                base: &folderskin_core::base::MAC_FOLDER,
+                treatment: None,
                 model: None,
                 refs: &[],
+                roles: &[],
             },
             &CancelToken::new(),
         );
@@ -1142,8 +1265,11 @@ mod tests {
                 job: "c-test-stop",
                 idea: "a lighthouse at dusk",
                 shape: Shape::Artwork,
+                base: &folderskin_core::base::MAC_FOLDER,
+                treatment: None,
                 model: None,
                 refs: &[],
+                roles: &[],
             },
             &cancel,
         );

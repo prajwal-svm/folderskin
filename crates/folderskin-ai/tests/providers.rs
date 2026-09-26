@@ -37,10 +37,17 @@ fn unb64(text: &str) -> Vec<u8> {
         .unwrap()
 }
 
-/// The request the app makes for `shape` from `model`, with nothing attached.
+/// The request the app makes for `shape` of the Mac's folder from `model`, with nothing attached.
 fn planned(provider: &str, model: &str, shape: Shape) -> GenerateRequest {
     let info = folderskin_ai::model(provider, model).unwrap();
-    plan(provider, info, shape, "a lighthouse in fog", None, None)
+    let brief = folderskin_ai::Brief {
+        idea: "a lighthouse in fog",
+        base: &folderskin_core::base::MAC_FOLDER,
+        shape,
+        treatment: None,
+        pictures: Vec::new(),
+    };
+    plan(provider, info, &brief, None).request
 }
 
 fn seen(log: &Log) -> Vec<Seen> {
@@ -113,7 +120,8 @@ fn openai_generations_go_as_json_and_edits_as_a_form_of_image_parts() {
             "image[]"
         ]
     );
-    assert_eq!(edit.field("size").as_deref(), Some("1168x1088"));
+    // The Mac's whole folder, in its own shape.
+    assert_eq!(edit.field("size").as_deref(), Some("1152x1088"));
     let template = &parts[6];
     assert_eq!(template.file_name.as_deref(), Some("image-1.png"));
     assert_eq!(template.content_type.as_deref(), Some("image/png"));
@@ -183,7 +191,12 @@ fn gemini_gets_its_output_settings_and_a_template_on_green() {
     assert_eq!(asked.header("authorization"), None);
     let body = asked.json();
     let parts = body["contents"][0]["parts"].as_array().unwrap();
-    assert!(parts[0]["text"].as_str().unwrap().contains("#00FF00"));
+    // The template's backdrop is kept, never named: a model told a colour paints with it.
+    let prompt = parts[0]["text"].as_str().unwrap();
+    assert!(
+        !prompt.contains("#00FF00") && !prompt.contains("#FF00FF"),
+        "{prompt}"
+    );
     assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
     assert_eq!(
         corner(&unb64(parts[1]["inlineData"]["data"].as_str().unwrap())),
@@ -376,9 +389,11 @@ fn ideogram_goes_as_a_form_and_its_link_is_collected_without_the_key() {
     assert_eq!(asked.field("resolution").as_deref(), Some("1024x960"));
     assert_eq!(asked.field("rendering_speed").as_deref(), Some("DEFAULT"));
     assert_eq!(asked.field("num_images").as_deref(), Some("1"));
+    // The idea word for word, whatever the capital it starts a sentence with.
     assert!(asked
         .field("prompt")
         .unwrap()
+        .to_lowercase()
         .contains("a lighthouse in fog"));
     assert_eq!(download.header("api-key"), None);
 }

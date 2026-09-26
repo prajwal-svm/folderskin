@@ -62,6 +62,16 @@
     "gone": "ce chat n'est plus sur cet ordinateur",
     "damaged": "le fichier de ce chat est endommagé et ne peut pas être ouvert"
   },
+  "prompts": {
+    "noDataFolder": "impossible de garder les prompts sur cet ordinateur : FolderSkin n'y a pas de dossier de données",
+    "noName": "donnez un nom au prompt",
+    "nothing": "il n'y a encore rien à enregistrer. Écrivez d'abord le prompt",
+    "nameTooLong": "ce nom est trop long. Limitez-le à {{max}} caractères",
+    "textTooLong": "ce prompt est trop long pour être gardé. Raccourcissez-le",
+    "full": "vous avez déjà {{max}} prompts. Retirez-en un pour en enregistrer un autre",
+    "notSaved": "impossible d'enregistrer vos prompts : {{reason}}",
+    "noStyle": "FolderSkin n'a pas de style appelé {{style}}"
+  },
   "composer": {
     "transparent": "cette création est entièrement transparente",
     "damaged": "cette création est endommagée, elle ne peut donc pas être rouverte"

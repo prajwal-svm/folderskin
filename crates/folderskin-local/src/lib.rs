@@ -52,7 +52,7 @@ pub use generate::{
 pub use machine::{detect, pick_backend, pick_tier, Backend, Machine, Tier};
 pub use manifest::{Model, ModelId, MODELS};
 pub use paths::home;
-pub use prompts::{compose, Shape, Style, STYLES};
+pub use prompts::{compose, styles, Shape, Style};
 pub use remove::{kept_bytes, remove, remove_unused, unused, unused_bytes, Unused};
 pub use setup::{
     download_size, is_set_up, setup, space_needed, space_wanted, status, Runtime, Status,

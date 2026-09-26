@@ -11,6 +11,8 @@ folderskin-core.workspace = true
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# The pictures sent with a request are recorded with its skin by their hash (recipe::Record).
+sha2.workspace = true
 thiserror.workspace = true
 base64 = "0.22"
 # Its timer, for polling Black Forest Labs without holding a runtime thread; reqwest already runs

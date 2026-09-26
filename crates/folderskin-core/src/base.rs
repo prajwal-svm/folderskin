@@ -60,7 +60,8 @@ impl Family {
 
 /// How a base is built, in the words an image model is given: what it is, its parts, what a
 /// repaint of its template keeps and where artwork goes on it. It is written from the base's
-/// geometry (`geometry.rs`, `geometry_windows.rs`), part by part.
+/// geometry (`geometry.rs`, `geometry_windows.rs`), part by part, and every prompt that paints the
+/// base is made from it (folderskin_ai's recipe).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Anatomy {
     /// What it is, in a word: "folder".
@@ -70,17 +71,21 @@ pub struct Anatomy {
     /// Its parts from the back to the front, each as a model that draws it from words alone is
     /// told to build it.
     pub parts: &'static [&'static str],
-    /// What a repaint of its template keeps, besides its outline, size and position.
+    /// What a repaint of its template keeps, besides its outline, size and position: "its single
+    /// tab at the top left, …".
     pub keeps: &'static str,
-    /// The part that marks its shape, in a word, which a repaint keeps with its outline: "tab".
-    /// Empty when its outline says it all.
-    pub landmark: &'static str,
     /// What artwork is wrapped across.
     pub surface: &'static str,
     /// Where the main subject sits.
     pub middle: &'static str,
-    /// How a part the artwork doesn't cover stays, as a sentence; empty when every part is painted.
-    pub unpainted: &'static str,
+    /// How a part the painting doesn't cover stays, as a model that reads prose is told it; empty
+    /// when every part is painted.
+    pub paper: &'static str,
+    /// The same, as a model that follows instructions is told it.
+    pub paper_keep: &'static str,
+    /// A corner of the artwork its tab hides beyond the band along the top ("upper-left"), which
+    /// stays calm like the band; empty when the band hides it all.
+    pub corner: &'static str,
 }
 
 /// One shape a skin can be made for.
@@ -115,12 +120,13 @@ pub const MAC_FOLDER: Base = Base {
              between the panels",
             "a front panel covering the lower two thirds, nearest the viewer",
         ],
-        keeps: "the only tab (rounded, at the top left), the pale paper strip showing between the \
-                back and front panels",
-        landmark: "tab",
+        keeps: "its single tab at the top left, the pale paper strip between the back and front \
+                panels",
         surface: "the back panel, the tab and the front panel",
         middle: "the front panel",
-        unpainted: "The thin paper strip between the panels stays pale cream.",
+        paper: "The thin paper strip between the panels stays pale cream.",
+        paper_keep: "Keep the paper strip plain or faintly tinted.",
+        corner: "",
     }),
 };
 
@@ -141,13 +147,13 @@ pub const WINDOWS_FOLDER: Base = Base {
             "a front panel covering most of the back panel, nearest the viewer, whose top edge \
              dips lower under the tab and rises in a gentle curve to run straight across the rest",
         ],
-        keeps: "the only tab (at the top left), the gentle curve where the front panel's top edge \
-                dips under the tab",
-        landmark: "tab",
+        keeps: "its tab at the top left and the curved step where the front panel rises to meet it",
         surface: "the back panel, the tab and the front panel",
         middle: "the front panel",
-        unpainted: "Where the back panel shows above the front one it stays a shade darker than \
-                    the front.",
+        // Windows' folder has no paper sheet.
+        paper: "",
+        paper_keep: "",
+        corner: "upper-left",
     }),
 };
 
@@ -160,6 +166,10 @@ pub const FREE: Base = Base {
     template: None,
     anatomy: None,
 };
+
+/// The version of the blank templates a model is shown to repaint. Bumped when one is drawn
+/// differently, so a skin's record says which one its model saw.
+pub const TEMPLATE_VERSION: u32 = 1;
 
 /// Every base, in the order a picker lists them: the folders, then the free icon.
 pub const BASES: &[Base] = &[MAC_FOLDER, WINDOWS_FOLDER, FREE];
@@ -309,10 +319,12 @@ mod tests {
                 continue;
             };
             assert!(!a.parts.is_empty(), "{}", b.id);
+            let optional = [&a.paper, &a.paper_keep, &a.corner];
             for words in a
                 .parts
                 .iter()
                 .chain([&a.noun, &a.kind, &a.keeps, &a.surface, &a.middle])
+                .chain(optional.into_iter().filter(|w| !w.is_empty()))
             {
                 assert!(!words.trim().is_empty(), "{}", b.id);
                 // The local model has no negative prompt: naming a thing paints it.
@@ -320,11 +332,14 @@ mod tests {
                     assert!(!words.contains(no), "{}: {words:?} says {no:?}", b.id);
                 }
             }
-            assert!(
-                a.unpainted.is_empty() || a.unpainted.ends_with('.'),
-                "{}: a sentence",
-                b.id
-            );
+            for sentence in [a.paper, a.paper_keep] {
+                assert!(
+                    sentence.is_empty() || sentence.ends_with('.'),
+                    "{}: a sentence",
+                    b.id
+                );
+            }
+            assert_eq!(a.paper.is_empty(), a.paper_keep.is_empty(), "{}", b.id);
         }
         assert_eq!(MAC_FOLDER.anatomy.unwrap().parts.len(), 3);
         assert_eq!(WINDOWS_FOLDER.anatomy.unwrap().parts.len(), 2, "no paper");

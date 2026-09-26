@@ -62,6 +62,16 @@
     "gone": "그 채팅은 더 이상 이 컴퓨터에 없어요",
     "damaged": "그 채팅 파일이 손상되어 열 수 없어요"
   },
+  "prompts": {
+    "noDataFolder": "이 컴퓨터에는 프롬프트를 저장할 수 없어요: FolderSkin 데이터 폴더가 없어요",
+    "noName": "프롬프트 이름을 지어 주세요",
+    "nothing": "아직 저장할 내용이 없어요. 먼저 프롬프트를 써 주세요",
+    "nameTooLong": "이름이 너무 길어요. {{max}}자 이내로 해 주세요",
+    "textTooLong": "프롬프트가 너무 길어서 저장할 수 없어요. 더 짧게 줄여 주세요",
+    "full": "프롬프트가 이미 {{max}}개 있어요. 하나를 삭제해야 새로 저장할 수 있어요",
+    "notSaved": "프롬프트를 저장하지 못했어요: {{reason}}",
+    "noStyle": "FolderSkin에는 {{style}} 스타일이 없어요"
+  },
   "composer": {
     "transparent": "그 디자인은 완전히 투명해요",
     "damaged": "그 디자인이 손상되어 다시 열 수 없어요"

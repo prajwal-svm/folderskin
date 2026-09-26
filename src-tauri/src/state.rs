@@ -526,6 +526,8 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            base: None,
+            recipe: None,
         };
         let (entry, thumb) = state.save(new, folder(10)).unwrap();
         assert_eq!(entry.id, id);
@@ -559,6 +561,8 @@ mod tests {
                 author: None,
                 license: None,
                 pack_hash: None,
+                base: None,
+                recipe: None,
             };
             state.save(new, folder(20)).unwrap();
         }
@@ -585,6 +589,8 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            base: None,
+            recipe: None,
         }
     }
 

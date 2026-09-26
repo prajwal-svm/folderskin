@@ -1028,6 +1028,8 @@ pub(crate) mod tests {
                 author: None,
                 license: None,
                 pack_hash: None,
+                base: None,
+                recipe: None,
             };
             app.state::<AppState>().keep_unsaved(new, skin);
             id

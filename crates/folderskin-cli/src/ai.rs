@@ -10,7 +10,7 @@ use crate::out::Out;
 use crate::paint::{self, Order, Painted, Painter};
 use crate::{preview, runtime, terminal};
 use folderskin_local::{
-    detect, random_seed, CancelToken, Runtime, Settings, Shape, Tier, MODELS, STYLES,
+    detect, random_seed, styles as style_list, CancelToken, Runtime, Settings, Shape, Tier, MODELS,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -1003,7 +1003,8 @@ fn cancel_check(cancel: &CancelToken) -> Result<(), CliError> {
 // ---------- what is on offer ----------
 
 fn styles(out: &Arc<Out>) -> Result<(), CliError> {
-    let human = STYLES
+    let styles = style_list();
+    let human = styles
         .iter()
         .map(|s| {
             // `none` has no words of its own: it is the idea as it was written.
@@ -1016,7 +1017,7 @@ fn styles(out: &Arc<Out>) -> Result<(), CliError> {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    out.result(None, "styles", json!(STYLES), &human, false);
+    out.result(None, "styles", json!(styles), &human, false);
     Ok(())
 }
 
