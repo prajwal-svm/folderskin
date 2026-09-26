@@ -1114,10 +1114,16 @@ mod tests {
         assert_eq!(err.code, "busy", "{err:?}");
         assert!(err.fix[0].contains("run the command again"), "{err:?}");
         drop(first);
-        assert!(!setting_up_in(&home), "finished");
         // Other tests start programs meanwhile, and a program forked in the instant the lock was
         // held shares its file until it execs: give the lock a moment to be free everywhere.
         let started = std::time::Instant::now();
+        while setting_up_in(&home) {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(2),
+                "the first never let go"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         let again = loop {
             match lock(&home) {
                 Ok(file) => break file,
