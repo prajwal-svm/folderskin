@@ -257,11 +257,11 @@ struct Record {
     choice: Choice,
     /// Each folder's part in the run, by its number in the walk's tree.
     parts: Vec<u8>,
-    /// Every different reason a folder failed, and which one each failed folder's is.
+    /// Every different reason a folder failed, and each one's place in that list.
     reasons: Vec<String>,
-    reason_of: HashMap<u32, u16>,
-    /// The folders that failed, first to fail first.
-    failures: Vec<u32>,
+    reason_numbers: HashMap<String, u16>,
+    /// The folders that failed, first to fail first, each with which of the reasons is its.
+    failures: Vec<(u32, u16)>,
     /// Where the worker is: every folder before it is done or not in the run.
     next: usize,
     /// Folders the run takes that have been found so far, done or not.
@@ -299,13 +299,12 @@ impl Job {
             folder,
             root,
             Record {
-                walk,
                 choice,
                 parts: vec![TO_DO],
                 total: 1,
                 walked,
                 current: name,
-                ..Record::empty()
+                ..Record::of(walk)
             },
         )
     }
@@ -329,13 +328,11 @@ impl Job {
             undoing: true,
         };
         let record = Record {
-            walk,
-            choice: Choice::everything(),
             parts,
             total,
             walked: true,
             current: before.name.clone(),
-            ..Record::empty()
+            ..Record::of(walk)
         };
         let what = (kind, before.skin_id.clone());
         Job::with(id, what, before.folder.clone(), before.root.clone(), record)
@@ -523,13 +520,12 @@ impl Job {
                 .failures
                 .iter()
                 .take(FAILURES_SHOWN)
-                .map(|&folder| {
+                .map(|&(folder, reason)| {
                     let path = tree.path(folder);
-                    let reason = record.reason_of[&folder] as usize;
                     TreeFailureDto {
                         name: folder_name(&path),
                         path: path_string(&path),
-                        reason: record.reasons[reason].clone(),
+                        reason: record.reasons[reason as usize].clone(),
                     }
                 })
                 .collect(),
@@ -543,13 +539,15 @@ impl Job {
 }
 
 impl Record {
-    fn empty() -> Record {
+    /// A record of `walk` with nothing done yet. It takes the walk rather than making one, since
+    /// making one asks the system whether the folder is a package.
+    fn of(walk: Walk) -> Record {
         Record {
-            walk: Walk::new(PathBuf::new(), Order::Nearest),
+            walk,
             choice: Choice::everything(),
             parts: Vec::new(),
             reasons: Vec::new(),
-            reason_of: HashMap::new(),
+            reason_numbers: HashMap::new(),
             failures: Vec::new(),
             next: 0,
             total: 0,
@@ -624,31 +622,39 @@ impl Record {
             Err(reason) => {
                 self.parts[k] = FAILED;
                 self.failed += 1;
-                // Thousands of folders on a read-only disk fail for the same reason: kept once.
-                let known = self.reasons.iter().position(|r| *r == reason);
-                let at = known.unwrap_or_else(|| {
-                    self.reasons.push(reason);
-                    self.reasons.len() - 1
-                });
-                self.reason_of
-                    .insert(folder, u16::try_from(at).unwrap_or(u16::MAX));
-                self.failures.push(folder);
+                let number = self.reason_number(reason);
+                self.failures.push((folder, number));
             }
         }
     }
 
+    /// `reason`'s place in the list of reasons, put at the end if it's new. Thousands of folders
+    /// on a read-only disk fail for the same reason, and it's kept once.
+    fn reason_number(&mut self, reason: String) -> u16 {
+        if let Some(&number) = self.reason_numbers.get(&reason) {
+            return number;
+        }
+        // Past 65,536 different reasons, any more are put down to the last one kept.
+        let Ok(number) = u16::try_from(self.reasons.len()) else {
+            return u16::MAX;
+        };
+        self.reason_numbers.insert(reason.clone(), number);
+        self.reasons.push(reason);
+        number
+    }
+
     /// Puts the folders that failed back to do, for trying them again.
     fn retry(&mut self) {
-        let Some(&first) = self.failures.iter().min() else {
+        let Some(first) = self.failures.iter().map(|&(folder, _)| folder).min() else {
             return;
         };
-        for folder in self.failures.drain(..) {
+        for (folder, _) in self.failures.drain(..) {
             self.parts[folder as usize] = TO_DO;
         }
         self.done -= self.failed;
         self.failed = 0;
         self.reasons.clear();
-        self.reason_of.clear();
+        self.reason_numbers.clear();
         self.next = self.next.min(first as usize);
     }
 
@@ -861,6 +867,21 @@ mod tests {
         assert_eq!(run.failed, (FAILURES_SHOWN + 20) as u64);
         assert_eq!(run.failures.len(), FAILURES_SHOWN);
         assert_eq!(run.failures[0].name, "f000");
+    }
+
+    #[test]
+    fn each_reason_is_kept_once_and_past_the_last_room_new_ones_share_it() {
+        let scratch = Scratch::with(&[]);
+        let mut record = Record::of(Walk::new(scratch.root(), Order::Nearest));
+        assert_eq!(record.reason_number("its disk is full".into()), 0);
+        assert_eq!(record.reason_number("its disk is read-only".into()), 1);
+        assert_eq!(record.reason_number("its disk is full".into()), 0);
+        for k in 2..=u32::from(u16::MAX) {
+            record.reason_number(format!("reason {k}"));
+        }
+        assert_eq!(record.reasons.len(), 65_536);
+        assert_eq!(record.reason_number("one too many".into()), u16::MAX);
+        assert_eq!(record.reasons.len(), 65_536, "no more are kept");
     }
 
     #[test]
