@@ -76,9 +76,14 @@ folderskin ai gen "a retro film camera with a chrome lens" --style pop-art -n 4
 ```
 
 - The idea is the subject and the scene in plain words (`-` reads it from standard input).
-  `--style` is a preset (`folderskin ai styles` lists them: pop-art, anime, oil, sketch,
-  woodblock, travel-poster, watercolour, clay, risograph, art-nouveau, pixel, synthwave, photo) or
-  your own words. `--raw` sends the idea to the model word for word, without FolderSkin's prompt.
+  `--style` is one of the app's thirty styles or your own words. `folderskin ai styles` lists
+  them with the words each one paints with: photo, film, render, isometric, miniature, clay,
+  glass, neon, enamel, embroidery, papercut, stained-glass, oil, watercolour, gouache, pencil,
+  airbrush, woodblock, linocut, risograph, screenprint (the travel poster), pop-art, collage,
+  pixel, blueprint, lowpoly, anime, art-nouveau, art-deco and synthwave, plus `none` for the idea
+  as it is. The names styles had before (`travel-poster`, `sketch`, `ukiyoe`, `diorama`) still
+  find them. `--raw` sends the idea to the model word for word, without FolderSkin's prompt.
+  Words in quotes in the idea are lettered on the picture, and nothing else is.
 - `-n 4` paints four seeds in a row, and `--seed` fixes where they start, so a good one can be
   painted again exactly. `--name` names the file (with `-n 1`).
 - Results go to `folderskin-out/` (`--out` changes it): the picture, a `.json` beside it with the
@@ -87,15 +92,16 @@ folderskin ai gen "a retro film camera with a chrome lens" --style pop-art -n 4
   printed on its own line.
 - `--apply "<folder>"` puts the (first) picture on a folder straight away.
 
-The three ways to paint:
+The ways to paint:
 
 | you want | use |
 |---|---|
 | a picture wrapped onto FolderSkin's folder (the normal case) | `ai gen "idea" --style …` |
 | the same, from photos or pictures you have | `ai gen "idea" --ref a.jpg [--ref b.png]` |
 | the whole folder painted as one object | `ai gen "idea" --shape folder` (refs allowed) |
+| a free icon, one subject on its own with no folder | `ai gen "idea" --shape icon` |
 
-klein paints all three. It follows the idea closely and letters short words ("POW") correctly,
+`--look windows` paints for Windows' folder instead of the Mac's. klein paints all of them. It follows the idea closely and letters short words ("POW") correctly,
 but counts loosely: "three koi" can come back as two, so another seed or a different phrasing
 helps. Whole-folder pictures are cut out along FolderSkin's own silhouette, not by colour: the model repaints the app's blank folder, the command line finds the painted folder, fits
 the silhouette to it and uses that as the edge. The report line gives the fit; below 0.95 the

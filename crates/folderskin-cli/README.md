@@ -62,7 +62,8 @@ folderskin render photo.jpg --out folder.png
 
 Every command explains itself with `--help`. `--json` writes each result, progress update and
 error as one JSON object per line, for scripts. `--look mac` or `--look windows` picks the folder
-the artwork goes on. Without it you get the one chosen in the app.
+the artwork goes on, and the folder `ai gen --shape folder` paints. Without it you get the one
+chosen in the app. `ai gen --shape icon` paints a free icon, one subject on its own.
 
 ## Building it yourself
 

@@ -8,7 +8,7 @@ use crate::out::Out;
 use folderskin_ai::prompts::Shape as AiShape;
 use folderskin_ai::recipe::{Key, Record, Treatment};
 use folderskin_ai::{AiError, Finished, ModelInfo, ProviderInfo, Reference, Role};
-use folderskin_core::base::{Base, FREE, MAC_FOLDER};
+use folderskin_core::base::{self, Base, FREE};
 use folderskin_local::machine::{Arch, Os};
 use folderskin_local::{
     generate, slug, Backend, CancelToken, Job, Machine, ModelId, Settings, Shape, Stage, Tier,
@@ -210,13 +210,14 @@ pub fn shape(arg: ShapeArg) -> Shape {
     }
 }
 
-/// What a picture of `shape` is made for: a free icon has no base, anything else is for
-/// FolderSkin's own folder.
+/// What a picture of `shape` is made for: a free icon has no base, anything else is for the
+/// folder of this run's look (`--look`, or the one chosen in the app), as the app paints for
+/// the folder its panel shows.
 pub fn base_for(shape: Shape) -> &'static Base {
     if shape == Shape::Icon {
         &FREE
     } else {
-        &MAC_FOLDER
+        base::folder_of(crate::preview::look())
     }
 }
 

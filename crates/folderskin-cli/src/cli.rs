@@ -161,10 +161,11 @@ pub struct GenArgs {
     /// The subject and the scene in plain words, e.g. "a retro film camera on a desk"; `-` reads
     /// it from standard input
     pub idea: String,
-    /// A preset from `ai styles` (pop-art, anime, oil, sketch, woodblock…), or your own words
+    /// A preset from `ai styles` (clay, oil, pencil, woodblock, pop-art…), or your own words
     #[arg(long, default_value = "none")]
     pub style: String,
-    /// artwork: wrapped onto FolderSkin's folder; folder: the whole folder painted
+    /// artwork is wrapped onto FolderSkin's folder, folder paints the whole folder, and icon a
+    /// free icon on its own
     #[arg(long, value_enum, default_value_t = ShapeArg::Artwork)]
     pub shape: ShapeArg,
     /// A picture to paint from; repeat for several (local models take several, providers one)
