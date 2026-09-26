@@ -88,6 +88,8 @@
     "chooseOtherLabel": "choisir un autre dossier (actuellement {{name}})",
     "chooseFromLabel": "choisir un dossier sur {{place}}",
     "chooseOther": "Choisir un autre dossier",
+    "chooseOtherDrive": "Choisir un autre dossier ou disque",
+    "chooseOtherDriveLabel": "choisir un autre dossier ou disque (actuellement {{name}})",
     "backTip": "Ou appuyez sur Échap",
     "back": "Revenir au dossier vide",
     "drag": {

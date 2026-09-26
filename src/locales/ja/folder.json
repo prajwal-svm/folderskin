@@ -52,6 +52,8 @@
     "chooseOtherLabel": "{{name}}以外のフォルダを選ぶ",
     "chooseFromLabel": "{{place}}からフォルダを選ぶ",
     "chooseOther": "別のフォルダを選ぶ",
+    "chooseOtherDrive": "別のフォルダやドライブを選ぶ",
+    "chooseOtherDriveLabel": "{{name}}以外のフォルダやドライブを選ぶ",
     "backTip": "Escキーでも戻れます",
     "back": "空のフォルダに戻る",
     "drag": {

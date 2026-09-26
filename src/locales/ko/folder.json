@@ -52,6 +52,8 @@
     "chooseOtherLabel": "{{name}} 말고 다른 폴더 선택",
     "chooseFromLabel": "{{place}}에서 폴더 선택",
     "chooseOther": "다른 폴더 선택",
+    "chooseOtherDrive": "다른 폴더나 드라이브 선택",
+    "chooseOtherDriveLabel": "{{name}} 말고 다른 폴더나 드라이브 선택",
     "backTip": "Esc 키를 눌러도 돼요",
     "back": "빈 폴더로 돌아가기",
     "drag": {

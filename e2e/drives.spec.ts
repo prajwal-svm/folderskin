@@ -29,7 +29,7 @@ test.describe("a drive picked instead of a folder", () => {
     // With no icon of its own it shows as the plain drive.
     await expect(stageImage(page)).toHaveAttribute("src", /bases\/mac-external\.webp/);
 
-    await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
+    await panel(page).getByRole("button", { name: /^choose a different folder or drive than/ }).click();
     await expect(title(page)).toHaveText("Studio NAS");
     await expect(where(page)).toHaveText("Network drive · /Volumes/Studio NAS");
     await expect(stageImage(page)).toHaveAttribute("src", /bases\/mac-network\.webp/);
@@ -46,6 +46,7 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(panel(page).getByText(/^Trying on/)).toBeVisible();
     await expect(stageImage(page)).toHaveAttribute("src", await art.getAttribute("src") ?? "");
     await expect(status(page)).toHaveText("Nothing changes on disk until you apply.");
+    await expect(panel(page).getByRole("button", { name: "Choose a different folder or drive", exact: true })).toBeVisible();
 
     await panel(page).getByRole("button", { name: "Apply skin" }).click();
     await expect(panel(page).getByText("Applied", { exact: true })).toBeVisible();
@@ -89,7 +90,7 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(tiles(page).first().locator(".tile-img.is-under")).toHaveCount(0);
 
     // A folder puts them back after the folder skins.
-    await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
+    await panel(page).getByRole("button", { name: /^choose a different folder or drive than/ }).click();
     await expect(title(page)).toHaveText("Projects");
     await expect.poll(async () => (await names(page)).slice(-2)).toEqual(drives);
   });
@@ -106,7 +107,7 @@ test.describe("a drive picked instead of a folder", () => {
     // Nothing on it can be changed, so there's no run over its folders to offer.
     await expect(panel(page).getByRole("switch", { name: /Include subfolders/ })).toHaveCount(0);
 
-    await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
+    await panel(page).getByRole("button", { name: /^choose a different folder or drive than/ }).click();
     await expect(title(page)).toHaveText("Holiday 2019");
     await expect(where(page)).toHaveText("Disc · /Volumes/Holiday 2019");
     await expect(status(page)).toHaveText("This drive is read-only, so FolderSkin can't change its icon.");
@@ -167,13 +168,13 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(where(page)).toHaveText("External drive · E:\\");
 
     // One with no name of its own is called by its kind, which isn't said twice.
-    await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
+    await panel(page).getByRole("button", { name: /^choose a different folder or drive than/ }).click();
     await expect(title(page)).toHaveText("USB drive (F:)");
     await expect(where(page)).toHaveText("F:\\");
     await expect(stageImage(page)).toHaveAttribute("src", /bases\/windows-removable\.webp/);
 
     // Windows keeps a drive's icon in the registry, so even the system drive can have one.
-    await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
+    await panel(page).getByRole("button", { name: /^choose a different folder or drive than/ }).click();
     await expect(title(page)).toHaveText("System drive (C:)");
     await expect(where(page)).toHaveText("C:\\");
     await tiles(page).first().locator(".tile-hit").click();

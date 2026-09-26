@@ -52,6 +52,8 @@
     "chooseOtherLabel": "选择 {{name}} 以外的文件夹",
     "chooseFromLabel": "从{{place}}中选择文件夹",
     "chooseOther": "选择其他文件夹",
+    "chooseOtherDrive": "选择其他文件夹或驱动器",
+    "chooseOtherDriveLabel": "选择 {{name}} 以外的文件夹或驱动器",
     "backTip": "或者按 Esc 键",
     "back": "回到空文件夹",
     "drag": {

@@ -167,8 +167,12 @@ export function FolderStage({
           className={shaking ? "stage-art is-shaking" : "stage-art"}
           onClick={busy && !going ? undefined : onBrowse}
           onMouseDown={(e) => e.preventDefault()}
-          aria-label={folder ? t("folder.stage.chooseOtherLabel", { name: folder.name }) : t("folder.stage.chooseFromLabel", { place: browseLabel })}
-          data-tip={folder ? t("folder.stage.chooseOther") : undefined}
+          aria-label={
+            folder
+              ? t(folder.drive ? "folder.stage.chooseOtherDriveLabel" : "folder.stage.chooseOtherLabel", { name: folder.name })
+              : t("folder.stage.chooseFromLabel", { place: browseLabel })
+          }
+          data-tip={folder ? t(folder.drive ? "folder.stage.chooseOtherDrive" : "folder.stage.chooseOther") : undefined}
         >
           <span className="stage-halo" aria-hidden="true" />
           {stacked && state.includeSubfolders && !drag && (
@@ -491,7 +495,7 @@ function StageActions({
         {applying ? t("folder.stage.applying") : tree ? applyLabel(inside, insideCounted(state)) : t("folder.stage.applySkin")}
       </button>
       <button type="button" className="btn btn-ghost" disabled={applying} onMouseDown={noFocusSteal} onClick={onBrowse}>
-        {t("folder.stage.chooseOther")}
+        {t(state.folder?.drive ? "folder.stage.chooseOtherDrive" : "folder.stage.chooseOther")}
       </button>
     </div>
   );

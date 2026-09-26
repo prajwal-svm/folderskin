@@ -88,6 +88,8 @@
     "chooseOtherLabel": "elegir otra carpeta en lugar de {{name}}",
     "chooseFromLabel": "elegir una carpeta de {{place}}",
     "chooseOther": "Elegir otra carpeta",
+    "chooseOtherDrive": "Elegir otra carpeta o unidad",
+    "chooseOtherDriveLabel": "elegir otra carpeta o unidad en lugar de {{name}}",
     "backTip": "O presiona Esc",
     "back": "Volver a la carpeta vacía",
     "drag": {

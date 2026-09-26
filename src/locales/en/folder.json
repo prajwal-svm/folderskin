@@ -70,6 +70,8 @@
     "chooseOtherLabel": "choose a different folder than {{name}}",
     "chooseFromLabel": "choose a folder from {{place}}",
     "chooseOther": "Choose a different folder",
+    "chooseOtherDrive": "Choose a different folder or drive",
+    "chooseOtherDriveLabel": "choose a different folder or drive than {{name}}",
     "backTip": "Or press Escape",
     "back": "Back to the empty folder",
     "drag": {
