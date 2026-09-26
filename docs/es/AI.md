@@ -109,7 +109,9 @@ admita el modelo.
 Una unidad funciona igual. Su ilustración se pide con la forma de su cara frontal (la etiqueta de
 una memoria USB es alta, la parte de arriba de una unidad de Windows es ancha), y su plantilla es la
 unidad con su cara frontal en el gris de la plantilla y el resto (su conector, su franja o sus
-luces) tal como lo dibuja FolderSkin, así que una unidad entera los conserva.
+luces) tal como lo dibuja FolderSkin, así que una unidad entera los conserva. Su contorno solo se
+juzga cerca de donde la plantilla colocó la unidad, porque una unidad estrecha deja márgenes anchos
+en los que el fondo puede variar.
 
 Un **Icono libre** siempre se pinta entero: un solo motivo, completo, en el centro de un cuadrado,
 sobre un fondo transparente o sobre un color de recorte, y después se recorta.

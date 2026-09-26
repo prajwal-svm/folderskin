@@ -23,8 +23,8 @@ All notable changes to FolderSkin are recorded here. The format follows
   Linux folder is there too, beside the Mac's and Windows'.
 - **Paint for a drive, or the Linux folder.** Every drive shape is in the AI prompt's list of
   shapes and in @, beside the folders, and a new chat starts on the drive on show. **Whole
-  drive** paints the drive on FolderSkin's drawing of it, **Just the art** paints its face, and
-  the picture goes with the drive skins.
+  drive** paints the drive on FolderSkin's drawing of it and cuts it out along the drive's own
+  outline, **Just the art** paints its face, and the picture goes with the drive skins.
 - **Packs of drives.** `folderskin-tools packs make --drives` makes one and `packs check` checks
   it, and Community marks it **Drives**. Its skins wait behind the folder skins until a drive is
   chosen. FolderSkin 0.1.9 doesn't see packs of drives at all, so it never puts one on a folder.
@@ -138,7 +138,8 @@ All notable changes to FolderSkin are recorded here. The format follows
   behind a night scene, and a painting that shared those colours, such as a sunset's clouds or a
   street at night, was taken for a reshaped folder and left on its backdrop. The backdrop is now
   measured where it is, the cut keeps FolderSkin's outline exactly, and backdrop showing inside
-  it is painted over with the art beside it, with no pink rim.
+  it is painted over with the art beside it, with no pink rim. The faint line the Local Model
+  leaves down a picture's right edge no longer makes a folder that kept its shape look reshaped.
 - **Grok works from pictures.** Every whole folder, and every picture of your own, went to xAI in
   a form it doesn't take.
 - **Ideogram gets the form its reference documents**, and a Recraft whole folder keeps the style

@@ -109,7 +109,9 @@ que le modèle en accepte.
 Un disque fonctionne de la même façon. Son illustration est demandée à la forme de sa face avant
 (l'étiquette d'une clé USB est haute, le dessus d'un disque Windows est large), et son gabarit est
 le disque avec sa face avant dans le gris du gabarit et le reste (son connecteur, sa bande ou ses
-voyants) tel que FolderSkin le dessine, si bien qu'un disque entier les garde.
+voyants) tel que FolderSkin le dessine, si bien qu'un disque entier les garde. Son contour n'est
+jugé que près de l'endroit où le gabarit a placé le disque, car un disque étroit laisse de larges
+marges où le fond peut dériver.
 
 Une **Icône libre** est toujours peinte en entier, puis détourée : un seul sujet, complet, au milieu
 d'un carré, sur un fond transparent ou sur une couleur de détourage.

@@ -108,10 +108,11 @@ instead.
 Reference pictures you add go after the template, each with the job you gave it, as many as the
 model takes.
 
-A drive works the same way. Its art is asked for in the shape of its face (a USB stick's label
-is tall, a Windows drive's top is wide), and its template is the drive with its face in the
-template's grey and the rest of it, its connector, its strip or its lights, as FolderSkin draws
-it, so a whole drive keeps them.
+A drive works the same way. Its art is asked for in the shape of its face (a USB stick's label is
+tall, a Windows drive's top is wide), and its template is the drive with its face in the template's
+grey and the rest of it, its connector, its strip or its lights, as FolderSkin draws it, so a whole
+drive keeps them. Its outline is judged only near where the template put the drive, since a narrow
+drive leaves wide margins where the backdrop can drift.
 
 A **Free icon** is always painted whole: one subject, complete, in the middle of a square, on a
 transparent backdrop or on a key colour, and cut out.
