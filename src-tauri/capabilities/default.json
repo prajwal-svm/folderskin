@@ -12,6 +12,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-set-focus",
     "core:window:allow-set-theme",
+    "core:window:allow-set-cursor-icon",
     "core:window:allow-destroy",
     "updater:default",
     "process:allow-restart"

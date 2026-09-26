@@ -665,7 +665,7 @@ html[data-os="windows"] .cmp-side-head {
   color: var(--ink-2);
   font-weight: 650;
   font-size: 13.5px;
-  cursor: default;
+  cursor: pointer;
   transition:
     background-color var(--t-fast) ease,
     color var(--t-fast) ease;

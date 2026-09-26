@@ -45,15 +45,29 @@ button {
   margin: 0;
 }
 
-/* Anything that reacts to a click shows the hand; text fields show the text cursor. */
+/* Anything that reacts to a click shows the hand; text fields show the text cursor. On macOS the
+   window's own cursor follows this too (lib/cursor.ts). */
 button,
 [role="button"],
 [role="tab"],
 [role="radio"],
 [role="switch"],
+[role="checkbox"],
+[role="menuitem"],
+[role="menuitemradio"],
+[role="menuitemcheckbox"],
+[role="option"],
+[role="treeitem"],
+[role="link"],
 a[href],
 select,
-summary {
+summary,
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]),
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+input[type="color"] {
   cursor: pointer;
 }
 

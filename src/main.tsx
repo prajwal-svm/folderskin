@@ -6,6 +6,7 @@ import Root from "./Root";
 import { TipLayer } from "./components/Tooltip";
 import { lockDown } from "./lib/lockdown";
 import { watchAwake } from "./lib/awake";
+import { followCursor } from "./lib/cursor";
 import { applyTheme, loadThemePref, resolveTheme } from "./state/theme";
 import { applyPrefs, loadPrefs, usePrefs } from "./state/prefs";
 import { startLook } from "./state/look";
@@ -38,6 +39,9 @@ function Motion({ children }: { children: ReactNode }) {
 
 // Animations stop while the window is behind another (lib/awake.ts).
 watchAwake();
+
+// On macOS the window's own cursor follows the stylesheet's, so every button shows the hand (lib/cursor.ts).
+followCursor();
 
 // No right-click menu or browser shortcuts in a release build (lib/lockdown.ts).
 if (import.meta.env.PROD) lockDown();
