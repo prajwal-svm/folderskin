@@ -138,19 +138,29 @@ pub fn read_google(body: &Value) -> Result<Vec<u8>, AiError> {
         .and_then(|c| c.get("parts"))
         .and_then(|p| p.as_array())
         .ok_or_else(|| AiError::Decode("Gemini returned no image".into()))?;
-    for part in parts {
-        let data = part
-            .get("inline_data")
-            .or_else(|| part.get("inlineData"))
-            .and_then(|d| d.get("data"))
-            .and_then(|d| d.as_str());
-        if let Some(b64) = data {
-            return base64::engine::general_purpose::STANDARD
-                .decode(b64)
-                .map_err(|_| {
-                    AiError::Decode("Gemini returned an image FolderSkin could not read".into())
-                });
-        }
+    // Gemini 3 thinks before it answers, and a thought ("thought": true) can carry a draft
+    // picture. The picture to keep is the last one that isn't a thought.
+    let picture = parts
+        .iter()
+        .filter(|part| {
+            !part
+                .get("thought")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .filter_map(|part| {
+            part.get("inline_data")
+                .or_else(|| part.get("inlineData"))
+                .and_then(|d| d.get("data"))
+                .and_then(|d| d.as_str())
+        })
+        .next_back();
+    if let Some(b64) = picture {
+        return base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|_| {
+                AiError::Decode("Gemini returned an image FolderSkin could not read".into())
+            });
     }
     Err(AiError::Decode(
         "Gemini replied with text instead of an image. Try rewording the prompt.".into(),
@@ -299,6 +309,23 @@ mod tests {
         assert!(recraft_body(&req(), "1024x1024")
             .get("transparent_background")
             .is_none());
+    }
+
+    #[test]
+    fn google_keeps_the_last_picture_that_isnt_a_thought() {
+        let b64 = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let body = json!({ "candidates": [{ "content": { "parts": [
+            { "thought": true, "inline_data": { "data": b64(b"draft") } },
+            { "text": "Here it is." },
+            { "inline_data": { "data": b64(b"first") } },
+            { "inlineData": { "data": b64(b"final") }, "thoughtSignature": "sig" },
+            { "thought": true, "inline_data": { "data": b64(b"late draft") } },
+        ] } }] });
+        assert_eq!(read_google(&body).unwrap(), b"final");
+        let only_thoughts = json!({ "candidates": [{ "content": { "parts": [
+            { "thought": true, "inline_data": { "data": b64(b"draft") } },
+        ] } }] });
+        assert!(read_google(&only_thoughts).is_err());
     }
 
     #[test]

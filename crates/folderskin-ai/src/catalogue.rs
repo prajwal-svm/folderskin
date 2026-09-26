@@ -75,14 +75,26 @@ const RECRAFT_MODELS: &[ModelInfo] = &[ModelInfo {
     price_hint: "~$0.04 / image",
 }];
 
-const GOOGLE_MODELS: &[ModelInfo] = &[ModelInfo {
-    id: "gemini-2.5-flash-image",
-    label: "Gemini 2.5 Flash Image",
-    native_alpha: false,
-    accepts_reference: true,
-    sizes: &["1024x1024"],
-    price_hint: "~$0.04 / image",
-}];
+/// Gemini 2.5 Flash Image shuts down on 2 October 2026, and 3.1 Flash Image is Google's
+/// replacement. 3 Pro Image costs twice as much and letters best.
+const GOOGLE_MODELS: &[ModelInfo] = &[
+    ModelInfo {
+        id: "gemini-3.1-flash-image",
+        label: "Gemini 3.1 Flash Image",
+        native_alpha: false,
+        accepts_reference: true,
+        sizes: &["1024x1024"],
+        price_hint: "~$0.07 / image",
+    },
+    ModelInfo {
+        id: "gemini-3-pro-image",
+        label: "Gemini 3 Pro Image",
+        native_alpha: false,
+        accepts_reference: true,
+        sizes: &["1024x1024"],
+        price_hint: "~$0.13 / image",
+    },
+];
 
 const BFL_MODELS: &[ModelInfo] = &[ModelInfo {
     id: "flux-pro-1.1",

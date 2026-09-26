@@ -4,6 +4,14 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- **Google's picture model is now Gemini 3.1 Flash Image**, with Gemini 3 Pro Image beside it for
+  sharper lettering. Google shuts Gemini 2.5 Flash Image down on 2 October 2026, and FolderSkin
+  moves you to the new one on its own.
+
 ## 0.1.9 - 2026-09-25
 
 ### Added
