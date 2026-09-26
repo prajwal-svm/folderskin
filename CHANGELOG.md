@@ -15,7 +15,6 @@ All notable changes to FolderSkin are recorded here. The format follows
   how many go ("22 of 28 folders inside"), Apply says how many folders it changes, and **Remove
   custom icons** takes the icons off only those. It keeps up at the most a run takes, 5,000
   folders, however many are in one folder and however deep they go.
-
 - **Search everything instead.** When nothing in a tag matches a search, **Search all packs
   instead** (or **Search all skins instead**) looks in All with the same words.
 
