@@ -9,7 +9,7 @@ import { t as tNow, useT } from "../../i18n";
 import { formatNumber } from "../../i18n/format";
 import { cleanName, clip as clipName, MAX_NAME_CHARS } from "../../lib/names";
 import type { DragInfo, Folder, SubfolderChoice } from "../../state/dropzone";
-import { applyLabel, tooMany, type Subfolders, type TreeProgress } from "../../lib/tree";
+import { applyLabel, type Subfolders, type TreeProgress } from "../../lib/tree";
 import type { ToastTone } from "../../hooks/useToasts";
 import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
 import { canvasPng } from "../../composer/body";
@@ -1162,15 +1162,17 @@ export function Composer({
   const used = useMemo(() => colorsOf(doc), [doc]);
   const busy = saving !== null || applying;
 
-  const inside = folder && includeSubfolders && subfolders ? (chosen ? chosen.paths.length : subfolders.count) : 0;
+  const inside = folder && includeSubfolders && subfolders ? (chosen ? chosen.count : subfolders.count) : 0;
+  // While the folders inside are still being counted, how many isn't known yet.
+  const counted = chosen ? chosen.done : (subfolders?.done ?? true);
   const primary = folder
     ? {
         label:
           editing && !dirty
             ? inside
-              ? applyLabel(inside)
+              ? applyLabel(inside, counted)
               : t("ai.turn.applyTo", { name: clipName(folder.name, 20) })
-            : inside
+            : inside && counted
               ? t("composer.save.saveApplyTo", { count: inside + 1 })
               : t("composer.save.saveApply"),
         mode: "apply" as const,
@@ -1421,20 +1423,20 @@ export function Composer({
               <span className="cmp-target-name">{folder ? folder.name : t("common.dialog.chooseFolder")}</span>
             </span>
           </button>
-          {folder && subfolders && subfolders.count > 0 && (
+          {folder && subfolders && (subfolders.count > 0 || !subfolders.done) && (
             <button
               type="button"
               role="switch"
               aria-checked={includeSubfolders}
               className={includeSubfolders ? "cmp-subfolders is-on" : "cmp-subfolders"}
-              disabled={busy || subfolders.more}
+              disabled={busy}
               onClick={() => onIncludeSubfolders(!includeSubfolders)}
             >
               <span className="cmp-subfolders-text">
-                {subfolders.more
-                  ? tooMany("subfolders")
+                {!(includeSubfolders && chosen ? chosen.done : subfolders.done)
+                  ? t("folder.stage.includeSubfolders")
                   : includeSubfolders && chosen
-                    ? t("composer.includeSomeInside", { count: chosen.paths.length, total: chosen.total })
+                    ? t("composer.includeSomeInside", { count: chosen.count, total: chosen.total })
                     : t("composer.includeInside", { count: subfolders.count })}
               </span>
               <span className={includeSubfolders ? "switch is-on" : "switch"} aria-hidden="true">
@@ -1450,7 +1452,8 @@ export function Composer({
               </button>
               <button type="button" className="btn btn-primary cmp-progress-btn" disabled aria-busy="true" style={{ "--done": `${progress.total ? (progress.done / progress.total) * 100 : 0}%` } as CSSProperties}>
                 <LoaderIcon size={15} />
-                {t("composer.applying", { done: progress.done, total: progress.total })}
+                {/* "12,000+" until every folder has been found. */}
+                {t("composer.applying", { done: progress.done, total: progress.counted ? progress.total : `${formatNumber(progress.total)}+` })}
               </button>
             </div>
           ) : (

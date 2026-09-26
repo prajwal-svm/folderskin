@@ -10,11 +10,13 @@ import { browseLabel } from "./lib/platform";
 import { t as tNow, useT } from "./i18n";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
-import { applyLabel, CONFIRM_ABOVE, formatBytes, mergeRuns, runToast, type TreeProgress, type TreeRun } from "./lib/tree";
-import { throttle } from "./lib/throttle";
+import { applyLabel, both, canCarryOn, CONFIRM_ABOVE, formatBytes, isBig, runNotice, runToast, treeProgress, type TreeRun, type TreeRunEvent } from "./lib/tree";
+import { forRun } from "./lib/folderChoice";
+import { useChoiceCount } from "./hooks/useChoiceCount";
 import { community } from "./lib/communityStore";
 import { watchInstallLinks } from "./lib/installLinks";
-import { initialState, insideCount, reduce, treeOnly } from "./state/dropzone";
+import { initialState, insideCount, insideCounted, isTree, reduce, treeChoice, type RunInfo, type State } from "./state/dropzone";
+import { treeRuns, useTreeRun } from "./state/treeRun";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { flushChats } from "./state/chatStore";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
@@ -43,6 +45,7 @@ import { SharePack } from "./components/SharePack";
 import { Settings, type SettingsTab } from "./components/Settings";
 import { Toaster } from "./components/Toaster";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { RunDock } from "./components/RunDock";
 import { SearchIcon } from "./components/icons/search";
 import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
@@ -92,8 +95,10 @@ const Studio = lazy(() => import("./components/studio/Studio").then((m) => ({ de
 type TreeAsk = {
   kind: "apply" | "remove";
   folderName: string;
-  /** Folders inside the chosen one that the run takes. */
+  /** Folders inside the chosen one that the run takes, as counted so far. */
   inside: number;
+  /** That's all of them: the count is done. */
+  counted: boolean;
   /** They're the ones chosen in "Choose subfolders", not every folder inside. */
   chosen: boolean;
   skin: Pick<Skin, "id" | "name" | "thumbnail"> | null;
@@ -101,6 +106,47 @@ type TreeAsk = {
   bytes: number | null;
   resolve: (ok: boolean) => void;
 };
+
+/** A run as the folder panel's state machine needs it. */
+const runInfo = (run: TreeRun): RunInfo => ({ id: run.id, kind: run.kind, skinId: run.skin_id, changed: run.changed });
+
+/** The question before a run over a tree: how many folders, "12,401+" while they're still being counted. */
+function askTitle(ask: TreeAsk): string {
+  const count = ask.inside + 1;
+  if (ask.kind === "remove") return ask.counted ? tNow("folder.ask.removeTitle", { count }) : tNow("folder.ask.removeTitleCounting", { count });
+  const skin = ask.skin ? clip(ask.skin.name) : tNow("folder.ask.thisSkin");
+  return ask.counted ? tNow("folder.ask.applyTitle", { skin, count }) : tNow("folder.ask.applyTitleCounting", { skin, count });
+}
+
+/**
+ * What the question before a run over a tree says. A big run, past `BIG_RUN` folders or still
+ * being counted, says how many so far, the disk its icons take, and that it goes on in the
+ * background.
+ */
+function askText(ask: TreeAsk): string {
+  const folder = clip(ask.folderName);
+  const count = ask.inside;
+  const big = isBig(ask.inside, ask.counted);
+  const background = tNow("folder.ask.background");
+  if (ask.kind === "remove") {
+    const text = !ask.chosen
+      ? tNow("folder.ask.removeText", { folder })
+      : ask.counted
+        ? tNow("folder.ask.removeTextChosen", { folder, count })
+        : tNow("folder.ask.removeTextChosenCounting", { folder });
+    return big ? both(text, background) : text;
+  }
+  const sized = ask.bytes ? { size: formatBytes(ask.bytes), total: formatBytes(ask.bytes * (ask.inside + 1)) } : null;
+  if (!big) {
+    if (sized) return tNow(ask.chosen ? "folder.ask.applyTextChosenSized" : "folder.ask.applyTextSized", { folder, count, ...sized });
+    return tNow(ask.chosen ? "folder.ask.applyTextChosen" : "folder.ask.applyText", { folder, count });
+  }
+  const goes = ask.counted
+    ? tNow(ask.chosen ? "folder.ask.bigGoesChosen" : "folder.ask.bigGoes", { folder, count })
+    : tNow(ask.chosen ? "folder.ask.bigGoesChosenCounting" : "folder.ask.bigGoesCounting", { folder, count });
+  const size = sized ? tNow(ask.counted ? "folder.ask.bigSize" : "folder.ask.bigSizeCounting", sized) : null;
+  return both(size ? both(goes, size) : goes, background);
+}
 
 /** How long a folder that replaced another shows its own icon before the selected skin goes on. */
 const ARRIVAL_MS = 900;
@@ -190,9 +236,9 @@ export default function App() {
   /** The folder panel hidden from the AI chat by choice, though a folder is chosen. */
   const [aiPanelHidden, setAiPanelHidden] = useState(false);
   const composer = useRef<ComposerHandle>(null);
-  /** Stop was pressed on a run over a folder and its subfolders. */
-  const [stopping, setStopping] = useState(false);
   const [treeAsk, setTreeAsk] = useState<TreeAsk | null>(null);
+  /** The latest run over a folder's tree, going on in the background whatever the window shows. */
+  const run = useTreeRun();
   /** A skin the composer was asked to edit or remix. */
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null);
   const requestSeq = useRef(0);
@@ -221,6 +267,20 @@ export default function App() {
         setDefaultThumb(list.default_thumbnail);
       })
       .catch((e) => setLoadError(errorMessage(e)));
+  }, []);
+
+  // A run over a folder's tree goes on in the background, and so does counting the folders inside
+  // the one on show: the app says how they're going, heard here whatever the window shows.
+  useEffect(() => {
+    api.treeRun().then(treeRuns.take).catch(() => {});
+    const stopRuns = api.onTreeRun(treeRuns.take);
+    const stopCounts = api.onSubfolderCount((count) =>
+      dispatch({ type: "subfoldersCounted", path: count.folder, subfolders: { count: count.count, done: count.done } }),
+    );
+    return () => {
+      stopRuns();
+      stopCounts();
+    };
   }, []);
 
   // Skins go on the Mac's folder or Windows' (state/look.ts). After a switch the library's
@@ -363,11 +423,13 @@ export default function App() {
           setFolderIcon(null);
           dispatch({ type: "folderDropped", folder: { path: info.path, name: info.name } });
           refreshFolderIcon(info.path);
-          // How many folders are inside, for "Include subfolders"; counted for this folder alone.
+          // How many folders are inside, for "Include subfolders": counted in the background for
+          // this folder alone, the count before it abandoned. A small folder is counted by the
+          // time this answers, and a big one goes on growing (the listener above).
           const at = info.path;
           api
             .subfolderCount(at)
-            .then((subfolders) => dispatch({ type: "subfoldersCounted", path: at, subfolders }))
+            .then((count) => dispatch({ type: "subfoldersCounted", path: at, subfolders: { count: count.count, done: count.done } }))
             .catch(() => dispatch({ type: "subfoldersCounted", path: at, subfolders: null }));
         } else if (info.kind === "image") {
           const skin = await api.importImage(info.path);
@@ -482,81 +544,126 @@ export default function App() {
   };
 
   /**
-   * Applies a skin to the chosen folder and every folder inside it, or to `only` those (carrying on
-   * after a stop, or trying failures again, when `prev` is the run that left them). Resolves to
-   * the run, or to what went wrong when no folder could be changed.
+   * Whether another run is going, which a run over this folder's tree waits for (one at a time):
+   * the folder panel says so, and the sentence comes back for anywhere else to say it.
    */
-  const applyTree = useCallback(
-    async (skinId: string, only?: string[], prev?: TreeRun): Promise<TreeRun | { error: string }> => {
-      const folder = latestState.current.folder;
-      if (!folder) return { error: tNow("folder.errors.chooseFirst") };
-      setStopping(false);
-      dispatch({ type: "applyStarted" });
-      const progress = throttle<TreeProgress>((p) => dispatch({ type: "treeProgress", progress: p }));
-      try {
-        const result = await api.applySkinTree(folder.path, skinId, only ?? null, progress.push);
-        const run: TreeRun = prev ? mergeRuns(prev, { ...result, kind: "apply" }) : { ...result, kind: "apply" };
-        if (run.changed.length === 0 && !run.stopped) {
-          const error = tNow("folder.errors.apply", { reason: run.failed[0] ? explain(run.failed[0].reason) : tNow("folder.errors.noneChanged") });
-          dispatch({ type: "applyFailed", message: error });
-          return { error };
-        }
-        dispatch({ type: "applySucceeded", run });
-        refreshFolderIcon(folder.path);
-        return run;
-      } catch (e) {
-        const error = tNow("folder.errors.apply", { reason: errorMessage(e) });
-        dispatch({ type: "applyFailed", message: error });
-        return { error };
-      } finally {
-        progress.cancel();
-        setStopping(false);
-      }
+  const busySaid = useRef<string | null>(null);
+  const refusedFor = useCallback((): string | null => {
+    const going = treeRuns.now();
+    if (!going?.running) return null;
+    const message = tNow("folder.errors.busy", { folder: clip(going.name) });
+    busySaid.current = message;
+    dispatch({ type: "treeRefused", message });
+    return message;
+  }, []);
+  // Once that run has ended, what it said is no longer so.
+  useEffect(() => {
+    if (run?.running || busySaid.current === null) return;
+    if (latestState.current.error === busySaid.current) dispatch({ type: "clearError" });
+    busySaid.current = null;
+  }, [run?.running]);
+
+  /**
+   * Asks before a run over the tree that's big enough to ask about: an apply over more than a
+   * handful of folders, in the words for a big one past `BIG_RUN` or while they're still being
+   * counted, and every run that takes custom icons off. Resolves to the answer.
+   */
+  const confirmTree = useCallback(
+    async (s: State, kind: "apply" | "remove", skin: Skin | null): Promise<boolean> => {
+      const inside = insideCount(s);
+      const counted = insideCounted(s);
+      if (kind === "apply" && counted && inside + 1 <= CONFIRM_ABOVE) return true;
+      return askTree({ kind, folderName: s.folder?.name ?? "", inside, counted, chosen: s.chosen !== null, skin });
     },
-    [refreshFolderIcon],
+    [askTree],
   );
 
   /**
-   * Puts the default icon back on `only` those folders, or on every folder in the tree with an icon
-   * of its own. `leavePlain` leaves alone the folders in `only` with no icon of their own, as the
-   * whole tree does. Undoing an apply leaves nothing alone: it takes off exactly what it put on.
+   * Starts a run over the chosen folder's tree in the background: `skinId` on the folder and the
+   * folders inside it the choice takes, or without one their custom icons off. It goes on whatever
+   * the window shows, and the folder panel follows it while its folder is on show. Resolves to the
+   * run as it starts, or to why it couldn't.
    */
-  const revertTree = useCallback(
-    async (only: string[] | null, prev?: TreeRun, leavePlain?: boolean): Promise<TreeRun | null> => {
-      const folder = latestState.current.folder;
-      if (!folder) return null;
-      setStopping(false);
-      dispatch({ type: "revertStarted" });
-      const progress = throttle<TreeProgress>((p) => dispatch({ type: "treeProgress", progress: p }));
-      const leavesPlain = leavePlain ?? only === null;
-      try {
-        const result = await api.revertSkinTree(folder.path, only, progress.push, leavesPlain);
-        const next: TreeRun = { ...result, kind: "revert", leavesPlain };
-        const run: TreeRun = prev ? mergeRuns(prev, next) : next;
-        dispatch({ type: "revertSucceeded", run });
-        refreshFolderIcon(folder.path);
-        return run;
-      } catch (e) {
-        dispatch({ type: "revertFailed", message: tNow("folder.errors.revertTree", { reason: errorMessage(e) }) });
-        return null;
-      } finally {
-        progress.cancel();
-        setStopping(false);
-      }
-    },
-    [refreshFolderIcon],
+  const startTree = useCallback(async (s: State, skinId: string | null): Promise<TreeRun | { refused: string }> => {
+    const folder = s.folder;
+    if (!folder) return { refused: tNow("folder.errors.chooseFirst") };
+    // The first run that could end with nobody looking asks whether FolderSkin may say so.
+    void api.askToNotify().catch(() => false);
+    const choice = treeChoice(s);
+    const chosen = choice && forRun(choice);
+    // The folder itself and the ones inside it the count has found, once it has found them all.
+    const expected = insideCounted(s) ? insideCount(s) + 1 : null;
+    try {
+      const event = skinId ? await api.startTreeApply(folder.path, skinId, chosen) : await api.startTreeRevert(folder.path, chosen, true);
+      if (event.run && expected !== null) treeRuns.expect(event.run.id, expected);
+      treeRuns.take(event);
+      if (!event.run) return { refused: tNow("common.errors.somethingWrong") };
+      dispatch({ type: "treeRunning", path: folder.path, run: runInfo(event.run) });
+      return event.run;
+    } catch (e) {
+      const reason = errorMessage(e);
+      const error = skinId ? tNow("folder.errors.apply", { reason }) : tNow("folder.errors.revertTree", { reason });
+      dispatch({ type: "treeRefused", message: error });
+      return { refused: error };
+    }
+  }, []);
+
+  // The folder panel follows the run over its folder's tree: going, it shows how far the run has
+  // got, and ended, how it went. The run goes on when another folder is picked, and picking its
+  // folder again, or clicking it in the sidebar, brings it back to the panel.
+  useEffect(() => {
+    const s = latestState.current;
+    if (!run || !s.folder || run.folder !== s.folder.path) return;
+    const busy = s.phase === "applying" || s.phase === "reverting";
+    if (run.running) {
+      if (!(busy && s.runId === run.id)) dispatch({ type: "treeRunning", path: s.folder.path, run: runInfo(run) });
+      return;
+    }
+    if (!busy || s.runId !== run.id) return;
+    const reason = run.error === null ? null : explain(run.error);
+    const error = reason === null ? null : run.kind === "apply" ? tNow("folder.errors.apply", { reason }) : tNow("folder.errors.revertTree", { reason });
+    dispatch({ type: "treeEnded", run: runInfo(run), error });
+    refreshFolderIcon(s.folder.path);
+  }, [run, state.folder?.path, state.phase, state.runId, refreshFolderIcon]);
+
+  // A run that started before the count of its folder was done: once the count is, it says how
+  // many folders the run takes while the run's own walk is still finding them.
+  const counted = insideCounted(state);
+  useEffect(() => {
+    const s = latestState.current;
+    if (!run?.running || run.counted || !counted || s.runId !== run.id || s.folder?.path !== run.folder) return;
+    if (treeRuns.expected(run.id) === null) treeRuns.expect(run.id, insideCount(s) + 1);
+  }, [run, counted]);
+
+  // A summary put away, or a run that has gone (replaced, or put away from the sidebar), leaves
+  // the folder panel as it would be without one.
+  useEffect(() => {
+    if (state.runId !== null && (!run || run.id !== state.runId)) dispatch({ type: "runDismissed" });
+  }, [run, state.runId]);
+
+  // A run that ends while the window is behind others says so as a system notification.
+  useEffect(
+    () =>
+      treeRuns.onEnded((ended) => {
+        const notice = runNotice(ended, latestSkins.current.find((s) => s.id === ended.skin_id)?.name ?? null);
+        if (!notice) return;
+        void api
+          .windowFocused()
+          .then((focused) => (focused ? undefined : api.notify(notice.title, notice.body)))
+          .catch(() => {});
+      }),
+    [],
   );
 
   const apply = useCallback(async () => {
     const s = latestState.current;
     const { folder, skinId } = s;
     if (!folder || !skinId) return;
-    const inside = insideCount(s);
-    if (inside > 0) {
+    if (isTree(s)) {
+      if (refusedFor()) return;
       const skin = latestSkins.current.find((k) => k.id === skinId) ?? null;
-      const chosen = s.chosen !== null;
-      if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, chosen, skin }))) return;
-      await applyTree(skinId, treeOnly(s) ?? undefined);
+      if (!(await confirmTree(s, "apply", skin))) return;
+      await startTree(latestState.current, skinId);
       return;
     }
     dispatch({ type: "applyStarted" });
@@ -567,7 +674,7 @@ export default function App() {
     } catch (e) {
       dispatch({ type: "applyFailed", message: tNow("folder.errors.apply", { reason: errorMessage(e) }) });
     }
-  }, [askTree, applyTree, refreshFolderIcon]);
+  }, [refusedFor, confirmTree, startTree, refreshFolderIcon]);
 
   // Where the user is, for runs that finish after they may have moved on.
   const viewNow = useRef(view);
@@ -578,69 +685,89 @@ export default function App() {
    * An apply over the tree, said in a toast for when the folder panel that sums it up isn't in
    * view: a stopped run offers to carry on, one with failures to show which.
    */
-  const treeOutcome = useCallback((run: TreeRun, folderName: string, skinName: string): ApplyOutcome => {
-    const carry = run.stopped && run.remaining.length > 0 && run.changed.length > 0;
+  const treeOutcome = useCallback((ended: TreeRun, folderName: string, skinName: string): ApplyOutcome => {
+    const carry = canCarryOn(ended) && ended.changed > 0;
     return {
       ok: true,
-      message: runToast(run, folderName, skinName),
-      tone: carry || run.failed.length > 0 ? "info" : "ok",
+      message: runToast(ended, folderName, skinName),
+      tone: carry || ended.failed > 0 ? "info" : "ok",
       action: carry
         ? { label: tNow("folder.run.carryOn"), run: () => carryOnNow.current() }
-        : run.failed.length > 0
+        : ended.failed > 0
           ? { label: tNow("folder.run.seeWhich"), run: () => setView("yours") }
           : undefined,
     };
   }, []);
 
+  /**
+   * Carries on, tries again or undoes the latest run, as `action` does to it by id: the folder
+   * panel follows it again when its folder is on show. Resolves to the run as it starts again.
+   */
+  const resumeRun = useCallback(
+    async (action: (id: number) => Promise<TreeRunEvent>): Promise<TreeRun | null> => {
+      const last = treeRuns.now();
+      if (!last || last.running) return null;
+      try {
+        const event = await action(last.id);
+        treeRuns.take(event);
+        const at = latestState.current.folder?.path;
+        if (event.run && at === event.run.folder) dispatch({ type: "treeRunning", path: at, run: runInfo(event.run) });
+        return event.run;
+      } catch (e) {
+        toast(errorMessage(e), { tone: "danger" });
+        return null;
+      }
+    },
+    [toast],
+  );
+
   /** Carries a stopped run on to the folders it didn't reach. */
   const carryOn = useCallback(async () => {
-    const { run, skinId, folder } = latestState.current;
-    if (!run?.stopped || run.remaining.length === 0 || !folder) return;
-    if (run.kind === "revert") {
-      void revertTree(run.remaining, run, run.leavesPlain);
-      return;
-    }
-    if (!skinId) return;
-    const next = await applyTree(skinId, run.remaining, run);
+    const next = await resumeRun(api.carryOnTreeRun);
     // Carried on from the composer's toast: say how it ended there too.
-    if (viewNow.current !== "compose") return;
-    if ("error" in next) {
-      toast(next.error, { tone: "danger" });
-      return;
-    }
-    const said = treeOutcome(next, folder.name, latestSkins.current.find((s) => s.id === skinId)?.name ?? tNow("folder.run.theSkin"));
+    if (!next || viewNow.current !== "compose") return;
+    const ended = await treeRuns.whenEnded(next.id);
+    const said = treeOutcome(ended, ended.name, latestSkins.current.find((s) => s.id === ended.skin_id)?.name ?? tNow("folder.run.theSkin"));
     toast(said.message ?? "", { tone: said.tone, action: said.action });
-  }, [applyTree, revertTree, treeOutcome, toast]);
+  }, [resumeRun, treeOutcome, toast]);
   carryOnNow.current = () => void carryOn();
 
   /** Tries the folders the last run couldn't change once more. */
-  const tryAgain = useCallback(() => {
-    const { run, skinId } = latestState.current;
-    if (!run || run.failed.length === 0) return;
-    const paths = run.failed.map((f) => f.path);
-    if (run.kind === "apply" && skinId) void applyTree(skinId, paths, run);
-    else if (run.kind === "revert") void revertTree(paths, run, run.leavesPlain);
-  }, [applyTree, revertTree]);
+  const tryAgain = useCallback(() => void resumeRun(api.retryTreeRun), [resumeRun]);
+
+  /** Takes off exactly what the last apply over a tree put on. */
+  const undoRun = useCallback(() => void resumeRun(api.undoTreeRun), [resumeRun]);
 
   const stopRun = useCallback(() => {
-    setStopping(true);
-    api.stopTreeRun().catch(() => {});
+    const going = treeRuns.now();
+    if (going?.running) api.stopTreeRun(going.id).catch(() => {});
+  }, []);
+
+  /** Puts the last run's summary away, in the folder panel and the sidebar alike. */
+  const dismissRun = useCallback(() => {
+    const last = treeRuns.now();
+    if (last && !last.running) api.dismissTreeRun(last.id).catch(() => {});
+    dispatch({ type: "runDismissed" });
   }, []);
 
   // The composer's Save & apply: the same apply as the folder panel's, subfolders included when
-  // they are, for a skin it just saved. Resolves to what happened, for the composer to say.
+  // they are, for a skin it just saved. Resolves to what happened, for the composer to say: a run
+  // over the tree once it has ended, which it does in the background if the composer is left.
   const applyFromComposer = useCallback(
     async (skin: Skin): Promise<ApplyOutcome> => {
       const s = latestState.current;
       const { folder, phase } = s;
       if (!folder || phase === "applying" || phase === "reverting") return { ok: false };
       dispatch({ type: "skinSelected", skinId: skin.id });
-      const inside = insideCount(s);
-      if (inside > 0) {
-        const chosen = s.chosen !== null;
-        if (inside + 1 > CONFIRM_ABOVE && !(await askTree({ kind: "apply", folderName: folder.name, inside, chosen, skin }))) return { ok: false };
-        const run = await applyTree(skin.id, treeOnly(s) ?? undefined);
-        return "error" in run ? { ok: false, message: run.error, tone: "danger" } : treeOutcome(run, folder.name, skin.name);
+      if (isTree(s)) {
+        const busy = refusedFor();
+        if (busy) return { ok: false, message: busy, tone: "danger" };
+        if (!(await confirmTree(s, "apply", skin))) return { ok: false };
+        const started = await startTree(latestState.current, skin.id);
+        if ("refused" in started) return { ok: false, message: started.refused, tone: "danger" };
+        const ended = await treeRuns.whenEnded(started.id);
+        if (ended.error !== null) return { ok: false, message: tNow("folder.errors.apply", { reason: explain(ended.error) }), tone: "danger" };
+        return treeOutcome(ended, folder.name, skin.name);
       }
       dispatch({ type: "applyStarted" });
       try {
@@ -654,8 +781,39 @@ export default function App() {
         return { ok: false, message, tone: "danger" };
       }
     },
-    [askTree, applyTree, treeOutcome, refreshFolderIcon],
+    [refusedFor, confirmTree, startTree, treeOutcome, refreshFolderIcon],
   );
+
+  /** The run's folder back in the folder panel, from the sidebar, wherever the window is. */
+  const showing = useRef<number | null>(null);
+  const showRun = useCallback(() => {
+    const last = treeRuns.now();
+    if (!last) return;
+    if (viewNow.current === "compose") setView("skins");
+    setAiPanelHidden(false);
+    const s = latestState.current;
+    if (s.folder?.path === last.folder) {
+      if (!last.running && s.runId !== last.id) dispatch({ type: "treeShown", path: last.folder, run: runInfo(last) });
+      return;
+    }
+    // A run that's going is followed once its folder is in; an ended one shows its summary again.
+    showing.current = last.running ? null : last.id;
+    void takePath(last.folder);
+  }, [takePath]);
+  useEffect(() => {
+    const id = showing.current;
+    const last = treeRuns.now();
+    if (id === null || !last || last.id !== id || state.folder?.path !== last.folder) return;
+    showing.current = null;
+    dispatch({ type: "treeShown", path: last.folder, run: runInfo(last) });
+  }, [state.folder?.path]);
+
+  // How many folders the choice made in "Choose subfolders" takes, as the count finds them.
+  const choiceCount = useChoiceCount(state.folder?.path ?? null, state.chosen?.choice ?? null);
+  useEffect(() => {
+    const path = latestState.current.folder?.path;
+    if (choiceCount && path) dispatch({ type: "choiceCounted", path, ...choiceCount });
+  }, [choiceCount]);
 
   /** A design saved from the composer: a new skin, or one in place of the design it changed. */
   const onComposerSaved = useCallback((skin: Skin, replaced: string | null) => {
@@ -693,20 +851,22 @@ export default function App() {
 
   const revert = useCallback(async () => {
     const s = latestState.current;
-    const { folder, run, phase } = s;
+    const { folder, phase } = s;
     if (!folder) return;
-    const inside = insideCount(s);
-    if (inside > 0) {
-      // Undoing an apply over the tree takes off exactly what it put on. Anything else clears
-      // every icon in the tree, or in the folders chosen in it, which asks first.
-      // A run stopped before it changed anything leaves only the folder's own earlier apply.
-      const undo = phase === "applied" && run?.kind === "apply" ? (run.changed.length > 0 ? run.changed : [folder.path]) : null;
-      if (undo) {
-        await revertTree(undo, undefined, false);
-        return;
-      }
-      if (!(await askTree({ kind: "remove", folderName: folder.name, inside, chosen: s.chosen !== null, skin: null }))) return;
-      await revertTree(treeOnly(s), undefined, true);
+    const last = treeRuns.now();
+    const shown = last && last.id === s.runId && last.folder === folder.path && !last.running ? last : null;
+    // Undoing an apply over the tree takes off exactly what it put on. A run stopped before it
+    // changed anything leaves only the folder's own earlier apply, which goes as a single one does.
+    if (phase === "applied" && shown?.kind === "apply" && shown.changed > 0) {
+      undoRun();
+      return;
+    }
+    // Anything else over the tree clears every icon in it, or in the folders chosen in it, which
+    // asks first.
+    if (isTree(s) && !(phase === "applied" && shown?.kind === "apply")) {
+      if (refusedFor()) return;
+      if (!(await confirmTree(s, "remove", null))) return;
+      await startTree(latestState.current, null);
       return;
     }
     dispatch({ type: "revertStarted" });
@@ -718,7 +878,7 @@ export default function App() {
     } catch (e) {
       dispatch({ type: "revertFailed", message: tNow("folder.errors.revert", { reason: errorMessage(e) }) });
     }
-  }, [askTree, revertTree, refreshFolderIcon, toast]);
+  }, [undoRun, refusedFor, confirmTree, startTree, refreshFolderIcon, toast]);
 
   const reveal = useCallback(() => {
     if (!state.folder) return;
@@ -814,6 +974,13 @@ export default function App() {
   }, []);
 
   const selected = skins.find((s) => s.id === state.skinId) ?? null;
+  // The run the folder panel follows: the latest, while its folder is on show and the panel took it up.
+  const stageRun = run && state.folder && run.folder === state.folder.path && run.id === state.runId ? run : null;
+  /** The skin the latest run puts on or takes off, as the library has it. */
+  const runSkin = run?.skin_id ? (skins.find((s) => s.id === run.skin_id) ?? null) : null;
+  // The question before a run over the tree says how many folders there are as the count goes on,
+  // not only as it stood when the question was asked.
+  const liveAsk = treeAsk && { ...treeAsk, inside: insideCount(state), counted: insideCounted(state) };
   // The icon of the folder on show, never one that arrived late for a folder picked before it.
   const stageIcon = folderIcon && folderIcon.path === state.folder?.path ? (folderIcon.url ?? defaultThumb) : undefined;
   const q = query.trim();
@@ -974,6 +1141,22 @@ export default function App() {
         settingsOpen={settingsTab !== null}
         rail={layout.rail}
         onToggleRail={toggleRail}
+        dock={
+          run && (
+            <RunDock
+              run={run}
+              skin={runSkin}
+              folderIcon={defaultThumb}
+              rail={layout.rail}
+              onShow={showRun}
+              onStop={stopRun}
+              onCarryOn={() => void carryOn()}
+              onRetry={tryAgain}
+              onUndo={undoRun}
+              onDismiss={dismissRun}
+            />
+          )
+        }
       />
       <AboutMenu
         open={aboutOpen}
@@ -1107,8 +1290,8 @@ export default function App() {
           includeSubfolders={state.includeSubfolders}
           chosen={state.chosen}
           onIncludeSubfolders={(on) => dispatch({ type: "includeSubfolders", on })}
-          progress={state.progress}
-          stopping={stopping}
+          progress={stageRun?.running ? treeProgress(stageRun, treeRuns.expected(stageRun.id)) : null}
+          stopping={stageRun?.stopping ?? false}
           onStop={stopRun}
           onChooseFolder={browseFolder}
           onSaved={onComposerSaved}
@@ -1136,16 +1319,17 @@ export default function App() {
         onTryOn={() => dispatch({ type: "arrived" })}
         onRevert={revert}
         onReveal={reveal}
-        stopping={stopping}
+        run={stageRun}
+        runSkinName={runSkin?.name ?? null}
         onIncludeSubfolders={(on) => dispatch({ type: "includeSubfolders", on })}
-        onChooseSubfolders={(chosen, total) => {
+        onChooseSubfolders={(chosen) => {
           const path = latestState.current.folder?.path;
-          if (path) dispatch({ type: "subfoldersChosen", path, total, chosen });
+          if (path) dispatch({ type: "subfoldersChosen", path, chosen });
         }}
         onStop={stopRun}
-        onCarryOn={carryOn}
+        onCarryOn={() => void carryOn()}
         onTryAgain={tryAgain}
-        onDismissRun={() => dispatch({ type: "runDismissed" })}
+        onDismissRun={dismissRun}
         pickHint={aiView ? t("folder.stage.pickHintChat") : undefined}
         onLook={chooseFolderLook}
         onPutDown={putDown}
@@ -1190,30 +1374,13 @@ export default function App() {
           onClose={closeMenu}
         />
       )}
-      {treeAsk && (
+      {liveAsk && (
         <Confirm
-          title={
-            treeAsk.kind === "apply"
-              ? t("folder.ask.applyTitle", { skin: treeAsk.skin ? clip(treeAsk.skin.name) : t("folder.ask.thisSkin"), count: treeAsk.inside + 1 })
-              : t("folder.ask.removeTitle", { count: treeAsk.inside + 1 })
-          }
-          text={
-            treeAsk.kind === "apply"
-              ? treeAsk.bytes
-                ? t(treeAsk.chosen ? "folder.ask.applyTextChosenSized" : "folder.ask.applyTextSized", {
-                    folder: clip(treeAsk.folderName),
-                    count: treeAsk.inside,
-                    size: formatBytes(treeAsk.bytes),
-                    total: formatBytes(treeAsk.bytes * (treeAsk.inside + 1)),
-                  })
-                : t(treeAsk.chosen ? "folder.ask.applyTextChosen" : "folder.ask.applyText", { folder: clip(treeAsk.folderName), count: treeAsk.inside })
-              : treeAsk.chosen
-                ? t("folder.ask.removeTextChosen", { folder: clip(treeAsk.folderName), count: treeAsk.inside })
-                : t("folder.ask.removeText", { folder: clip(treeAsk.folderName) })
-          }
-          image={treeAsk.kind === "apply" ? treeAsk.skin?.thumbnail : undefined}
-          action={treeAsk.kind === "apply" ? applyLabel(treeAsk.inside) : t("folder.ask.removeAction")}
-          tone={treeAsk.kind === "apply" ? "primary" : "danger"}
+          title={askTitle(liveAsk)}
+          text={askText(liveAsk)}
+          image={liveAsk.kind === "apply" ? liveAsk.skin?.thumbnail : undefined}
+          action={liveAsk.kind === "apply" ? applyLabel(liveAsk.inside, liveAsk.counted) : t("folder.ask.removeAction")}
+          tone={liveAsk.kind === "apply" ? "primary" : "danger"}
           onCancel={() => answerTree(false)}
           onConfirm={() => answerTree(true)}
         />

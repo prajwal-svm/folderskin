@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Modal } from "./Modal";
 import { api, errorMessage } from "../lib/tauri";
-import { byName, FolderChoice, type Check } from "../lib/folderChoice";
+import { byName, check, everything, isEverything, isNothing, pathIn, setAll, takes, toggle, type Check, type Choice } from "../lib/folderChoice";
 import { visibleRange } from "../lib/virtual";
-import { tooMany } from "../lib/tree";
 import { clip } from "../lib/names";
+import { useChoiceCount } from "../hooks/useChoiceCount";
 import { INTL_LOCALES, useLocale, useT } from "../i18n";
 import { reducesMotion } from "../state/prefs";
 import type { Folder, SubfolderChoice } from "../state/dropzone";
@@ -23,7 +23,15 @@ const TYPE_AHEAD_MS = 900;
 /** How long the columns take to glide along to a new one. */
 const GLIDE_MS = 200;
 
-type Loaded = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; choice: FolderChoice };
+/** One folder's own folders, as a column shows them: in Finder's order, and where each name is. */
+type Ready = {
+  state: "ready";
+  names: string[];
+  /** Whether each has folders inside it: null when that wasn't looked at. */
+  nested: (boolean | null)[];
+  at: Map<string, number>;
+};
+type Listing = { state: "loading" } | { state: "failed"; message: string } | Ready;
 
 /**
  * "Choose subfolders": which folders inside the chosen one "Include subfolders" takes, laid out
@@ -37,9 +45,10 @@ type Loaded = { state: "loading" } | { state: "failed"; message: string } | { st
  * moves to it. The keys are Finder's: up and down within a column, right into a folder, left back
  * out, Home and End, and typing a name to jump to it. Space ticks, Return is Done, Escape cancels.
  *
- * The whole tree is read once, when the dialog opens: at most 5,000 folders, the most a run
- * takes. After that every column opens at once, and each draws only the rows in view, however
- * many folders it holds.
+ * Nothing reads the whole tree up front: each column reads only its own folder's folders as it
+ * opens, so a folder with a million folders inside opens at once, and each draws only the rows in
+ * view, however many it holds. The ticks are rules (lib/folderChoice.ts), and how many folders
+ * they come to fills in as the background count gets to the folders they're on.
  */
 export function SubfolderChooser({
   folder,
@@ -53,81 +62,135 @@ export function SubfolderChooser({
   chosen: SubfolderChoice | null;
   /** The plain folder the way the app draws it, for every folder in the list. */
   folderIcon: string | null;
-  /** Done: the folders ticked, or null when every one of the `total` inside is. */
-  onDone: (chosen: SubfolderChoice | null, total: number) => void;
+  /** Done: the folders ticked, or null when every one inside is. */
+  onDone: (chosen: SubfolderChoice | null) => void;
   onCancel: () => void;
 }) {
   const t = useT();
   const locale = useLocale();
   const id = useId();
-  const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
+  /** The folder the chooser is for, as a run names it, once its own folders have been read. */
+  const [top, setTop] = useState<{ path: string; separator: string } | null>(null);
+  const [topFailed, setTopFailed] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  /** Bumped by every tick, so the rows on screen draw their boxes again. */
-  const [version, setVersion] = useState(0);
+  const [lists, setLists] = useState<ReadonlyMap<string, Listing>>(new Map());
+  const [choice, setChoice] = useState<Choice | null>(null);
   /** The highlighted folders, one per column from the first: each is inside the one before. */
-  const [trail, setTrail] = useState<number[]>([]);
+  const [trail, setTrail] = useState<string[]>([]);
   const strip = useRef<HTMLDivElement>(null);
   const before = useRef(chosen);
   const typed = useRef({ text: "", at: 0 });
+  /** ArrowRight pressed on a folder whose folders were still being read: go in once they are. */
+  const goIn = useRef<{ from: string; times: number } | null>(null);
 
-  // The tree, read once. The locale sorts names the way the language on show does.
+  // A language chosen while the dialog is open sorts the columns read after it.
   const collator = useMemo(() => byName(INTL_LOCALES[locale]), [locale]);
+  const collatorNow = useRef(collator);
+  collatorNow.current = collator;
+
+  /** What reading `path`'s own folders found, in Finder's order. */
+  const ready = useCallback((names: string[], nested: (boolean | null)[]): Ready => {
+    const compare = collatorNow.current.compare;
+    const order = names.map((_, i) => i);
+    // The same name spelled differently only in ways the language ignores still has one order.
+    order.sort((a, b) => compare(names[a], names[b]) || (names[a] < names[b] ? -1 : names[a] > names[b] ? 1 : a - b));
+    const sorted = order.map((i) => names[i]);
+    return { state: "ready", names: sorted, nested: order.map((i) => nested[i] ?? null), at: new Map(sorted.map((name, i) => [name, i])) };
+  }, []);
+
+  const put = useCallback((path: string, listing: Listing) => setLists((lists) => new Map(lists).set(path, listing)), []);
+
+  /** The folders whose own folders have been asked for, so each column is read once. */
+  const asked = useRef(new Set<string>());
+
+  /** Reads the folders inside `path` for its column, unless they're read or on their way (`again` reads them anyway). */
+  const read = useCallback(
+    (path: string, again = false) => {
+      if (asked.current.has(path) && !again) return;
+      asked.current.add(path);
+      put(path, { state: "loading" });
+      api
+        .subfolderList(path)
+        .then((list) => put(path, ready(list.names, list.nested)))
+        .catch((e) => put(path, { state: "failed", message: errorMessage(e) }));
+    },
+    [put, ready],
+  );
+
+  // The folder's own folders, read as the dialog opens, and again when asked to try again.
   useEffect(() => {
     let live = true;
-    setLoaded({ state: "loading" });
+    setTopFailed(null);
     api
-      .subfolderTree(folder.path)
-      .then((tree) => {
+      .subfolderList(folder.path)
+      .then((list) => {
         if (!live) return;
-        if (tree.more) {
-          setLoaded({ state: "failed", message: tooMany("folders") });
-          return;
-        }
-        const choice = new FolderChoice(tree, collator);
         const earlier = before.current;
-        if (earlier && earlier.root === tree.root) choice.pick(earlier.paths);
-        const first = choice.children(0)[0];
-        setTrail(first === undefined ? [] : [first]);
-        setLoaded({ state: "ready", choice });
+        setChoice(earlier && earlier.choice.root === list.path ? earlier.choice : everything(list.path, list.separator));
+        const listing = ready(list.names, list.nested);
+        asked.current = new Set([list.path]);
+        setLists(new Map([[list.path, listing]]));
+        setTop({ path: list.path, separator: list.separator });
+        const first = listing.names[0];
+        setTrail(first === undefined ? [] : [list.path + list.separator + first]);
       })
-      .catch((e) => live && setLoaded({ state: "failed", message: t("folder.choose.failed", { reason: errorMessage(e) }) }));
+      .catch((e) => live && setTopFailed(t("folder.choose.failed", { reason: errorMessage(e) })));
     return () => {
       live = false;
     };
-    // Read again only when asked to try again. A language chosen meanwhile sorts the next time.
+    // Read again only when asked to try again.
   }, [folder.path, attempt]);
 
-  const choice = loaded.state === "ready" ? loaded.choice : null;
-  const latest = useRef(choice);
-  latest.current = choice;
+  // The highlighted folder's own folders, for the column after it.
+  const current = trail.length > 0 ? trail[trail.length - 1] : undefined;
+  useEffect(() => {
+    if (current !== undefined) read(current);
+  }, [current, read]);
+
+  // ArrowRight on a folder still being read goes in once it's read, if it's still the one
+  // highlighted, and so does each ArrowRight pressed while it waited, one level at a time.
+  useEffect(() => {
+    const waiting = goIn.current;
+    if (waiting === null || !top) return;
+    // The highlight has moved on meanwhile: that ArrowRight is forgotten.
+    if (waiting.from !== current) {
+      goIn.current = null;
+      return;
+    }
+    const listing = lists.get(waiting.from);
+    if (!listing || listing.state === "loading") return;
+    goIn.current = null;
+    if (listing.state !== "ready" || listing.names.length === 0) return;
+    const next = pathIn(top, waiting.from, listing.names[0]);
+    if (waiting.times > 1) goIn.current = { from: next, times: waiting.times - 1 };
+    setTrail((trail) => [...trail, next]);
+  }, [lists, current, top]);
+
+  const counted = useChoiceCount(top ? folder.path : null, choice);
 
   /** Each column: the folder whose insides it lists, and which of them is highlighted. */
   const columns = useMemo(() => {
-    if (!choice) return [];
-    const parents = [0, ...trail];
-    return parents.map((parent, i) => ({ parent, kids: choice.children(parent), open: trail[i] ?? -1 }));
-  }, [choice, trail]);
+    if (!top) return [];
+    const parents = [top.path, ...trail];
+    return parents.map((parent, i) => ({ parent, listing: lists.get(parent), open: trail[i] ?? null }));
+  }, [top, trail, lists]);
   const active = Math.max(0, trail.length - 1);
-  const current = trail.length > 0 ? trail[trail.length - 1] : undefined;
+  const topListing = top ? lists.get(top.path) : undefined;
+  const empty = topListing?.state === "ready" && topListing.names.length === 0;
 
-  const pick = useCallback((column: number, node: number) => setTrail((trail) => [...trail.slice(0, column), node]), []);
+  const pick = useCallback((column: number, path: string) => setTrail((trail) => [...trail.slice(0, column), path]), []);
   // A click on a column's empty space leaves nothing highlighted in it, as in Finder: the folder
   // it lists is where the keys are.
   const blank = useCallback((column: number) => setTrail((trail) => trail.slice(0, column)), []);
-  const rowId = useCallback((node: number) => `${id}-f${node}`, [id]);
-  const tick = useCallback((node: number) => {
-    if (latest.current?.toggle(node)) setVersion((v) => v + 1);
-  }, []);
-  const tickAll = (on: boolean) => {
-    if (!choice) return;
-    choice.setAll(on);
-    setVersion((v) => v + 1);
-  };
+  const rowId = useCallback((column: number, row: number) => `${id}-c${column}-r${row}`, [id]);
+  const tick = useCallback((path: string) => setChoice((choice) => (choice ? toggle(choice, path) : choice)), []);
+  const tickAll = (on: boolean) => setChoice((choice) => (choice ? setAll(choice, on) : choice));
 
   const done = () => {
     if (!choice) return;
-    const all = choice.chosen === choice.total;
-    onDone(all ? null : { root: choice.root, paths: choice.chosenPaths(), total: choice.total }, choice.total);
+    const count = counted ?? { count: 0, total: 0, done: false };
+    const all = isEverything(choice) || (count.done && count.count === count.total && !isNothing(choice));
+    onDone(all ? null : { choice, ...count });
   };
 
   // The newest column in view, whole, and the highlighted one too: going deeper than five columns
@@ -136,7 +199,7 @@ export function SubfolderChooser({
   const glide = useRef({ frame: 0, to: -1 });
   useLayoutEffect(() => {
     const el = strip.current;
-    if (!el || !choice) return;
+    if (!el || !top) return;
     const cols = el.querySelectorAll<HTMLElement>(":scope > .fsc-col");
     const last = cols[cols.length - 1];
     if (!last) return;
@@ -163,25 +226,27 @@ export function SubfolderChooser({
       else glide.current.to = -1;
     };
     glide.current.frame = requestAnimationFrame(step);
-  }, [choice, columns.length, active]);
+  }, [top, columns.length, active]);
   useEffect(() => () => cancelAnimationFrame(glide.current.frame), []);
 
   // Once the folders are in, the keyboard is in them too, unless it has gone elsewhere meanwhile.
   useEffect(() => {
-    if (!choice) return;
+    if (!top) return;
     const el = strip.current;
     if (el && (document.activeElement === document.body || el.contains(document.activeElement))) el.focus();
-  }, [choice]);
+  }, [top]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!choice || e.metaKey || e.ctrlKey || e.altKey) return;
-    const kids = columns[active]?.kids;
-    if (!kids) return;
-    const at = current === undefined ? -1 : choice.indexOf(current);
+    if (!top || !choice || e.metaKey || e.ctrlKey || e.altKey) return;
+    const column = columns[active];
+    const listing = column?.listing;
+    if (!column || listing?.state !== "ready") return;
+    const names = listing.names;
+    const at = current === undefined ? -1 : (listing.at.get(current.slice(column.parent.length + top.separator.length)) ?? -1);
     const page = Math.max(1, Math.floor(((strip.current?.clientHeight ?? 300) - PAD * 2) / ROW) - 1);
     const go = (i: number) => {
-      const node = kids[Math.min(kids.length - 1, Math.max(0, i))];
-      if (node !== undefined) pick(active, node);
+      const name = names[Math.min(names.length - 1, Math.max(0, i))];
+      if (name !== undefined) pick(active, pathIn(top, column.parent, name));
     };
     switch (e.key) {
       case "ArrowDown":
@@ -194,7 +259,7 @@ export function SubfolderChooser({
         go(0);
         break;
       case "End":
-        go(kids.length - 1);
+        go(names.length - 1);
         break;
       case "PageDown":
         go(at + page);
@@ -202,10 +267,23 @@ export function SubfolderChooser({
       case "PageUp":
         go(at - page);
         break;
-      case "ArrowRight":
-        if (current !== undefined && choice.hasChildren(current)) setTrail([...trail, choice.children(current)[0]]);
+      case "ArrowRight": {
+        if (current === undefined) break;
+        // Already waiting to go in: one more level once that's done.
+        if (goIn.current) {
+          goIn.current = { ...goIn.current, times: goIn.current.times + 1 };
+          break;
+        }
+        const inside = lists.get(current);
+        if (inside?.state === "ready") {
+          if (inside.names.length > 0) setTrail([...trail, pathIn(top, current, inside.names[0])]);
+        } else if (inside?.state !== "failed") {
+          goIn.current = { from: current, times: 1 };
+        }
         break;
+      }
       case "ArrowLeft":
+        goIn.current = null;
         if (trail.length > 1) setTrail(trail.slice(0, -1));
         break;
       case " ":
@@ -220,7 +298,7 @@ export function SubfolderChooser({
         const now = performance.now();
         const text = (now - typed.current.at < TYPE_AHEAD_MS ? typed.current.text : "") + e.key.toLocaleLowerCase();
         typed.current = { text, at: now };
-        const found = kids.findIndex((node) => choice.name(node).toLocaleLowerCase().startsWith(text));
+        const found = names.findIndex((name) => name.toLocaleLowerCase().startsWith(text));
         if (found >= 0) go(found);
         break;
       }
@@ -230,6 +308,8 @@ export function SubfolderChooser({
 
   const name = clip(folder.name);
   const keep = (e: MouseEvent) => e.preventDefault();
+  const loading = !top && topFailed === null;
+  const currentRow = current === undefined || !top ? undefined : rowOf(columns[active], current, top.separator);
 
   return (
     <Modal
@@ -240,12 +320,12 @@ export function SubfolderChooser({
       footer={
         <>
           <p className="fsc-count" aria-live="polite">
-            {choice ? t("folder.choose.count", { count: choice.chosen, total: choice.total }) : ""}
+            {choice && counted ? countLine(t, counted) : ""}
           </p>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!choice || choice.chosen === choice.total} onMouseDown={keep} onClick={() => tickAll(true)}>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!choice || isEverything(choice)} onMouseDown={keep} onClick={() => tickAll(true)}>
             {t("folder.choose.all")}
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!choice || choice.chosen === 0} onMouseDown={keep} onClick={() => tickAll(false)}>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!choice || isNothing(choice)} onMouseDown={keep} onClick={() => tickAll(false)}>
             {t("folder.choose.none")}
           </button>
           <span className="fsc-foot-gap" />
@@ -264,58 +344,65 @@ export function SubfolderChooser({
           className="fsc-strip"
           role="tree"
           aria-label={t("folder.choose.treeLabel", { name })}
-          aria-busy={loaded.state === "loading" || undefined}
-          aria-activedescendant={current !== undefined ? rowId(current) : undefined}
+          aria-busy={loading || undefined}
+          aria-activedescendant={currentRow !== undefined ? rowId(active, currentRow) : undefined}
           tabIndex={0}
           data-modal-focus
           onKeyDown={onKey}
         >
-          {loaded.state === "loading" && (
+          {loading && (
             <p className="fsc-status" role="status">
               <LoaderIcon size={16} />
               {t("folder.choose.loading")}
             </p>
           )}
-          {loaded.state === "failed" && (
+          {topFailed !== null && (
             <div className="fsc-status is-failed" role="alert">
-              <p>{loaded.message}</p>
+              <p>{topFailed}</p>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAttempt((a) => a + 1)}>
                 {t("folder.choose.tryAgain")}
               </button>
             </div>
           )}
-          {choice && choice.total === 0 && <p className="fsc-status">{t("folder.choose.empty")}</p>}
-          {choice &&
-            choice.total > 0 &&
-            columns.map((column, i) =>
-              column.kids.length > 0 ? (
+          {empty && <p className="fsc-status">{t("folder.choose.empty")}</p>}
+          {top &&
+            choice &&
+            !empty &&
+            columns.map((column, i) => {
+              const listing = column.listing;
+              if (!listing || listing.state === "loading") return <Pending key={column.parent} />;
+              if (listing.state === "failed") {
+                return <Failed key={column.parent} message={t("folder.choose.failed", { reason: listing.message })} onRetry={() => read(column.parent, true)} />;
+              }
+              if (listing.names.length === 0) return <Leaf key={column.parent} name={lastPart(column.parent, top.separator)} chosen={takes(choice, column.parent)} icon={folderIcon} />;
+              return (
                 <Column
                   key={column.parent}
                   choice={choice}
-                  version={version}
                   index={i}
                   parent={column.parent}
-                  kids={column.kids}
+                  name={lastPart(column.parent, top.separator)}
+                  listing={listing}
                   open={column.open}
                   current={i === active}
+                  level={i + 1}
                   icon={folderIcon}
                   rowId={rowId}
                   onPick={pick}
                   onBlank={blank}
                   onTick={tick}
                 />
-              ) : (
-                <Leaf key={column.parent} choice={choice} node={column.parent} icon={folderIcon} />
-              ),
-            )}
+              );
+            })}
         </div>
-        {choice && choice.total > 0 && (
+        {top && !empty && (
           <nav className="fsc-path" aria-label={t("folder.choose.pathLabel")}>
             <PathBar
-              choice={choice}
-              trail={trail}
+              steps={[top.path, ...trail]}
+              separator={top.separator}
               icon={folderIcon}
               onGo={(depth) => {
+                goIn.current = null;
                 setTrail(trail.slice(0, depth));
                 strip.current?.focus();
               }}
@@ -325,6 +412,22 @@ export function SubfolderChooser({
       </div>
     </Modal>
   );
+}
+
+/** The footer's count: "22 of 28 folders chosen", or how far the count has got while it's going. */
+function countLine(t: ReturnType<typeof useT>, counted: { count: number; total: number; done: boolean }): string {
+  if (counted.done) return t("folder.choose.count", { count: counted.count, total: counted.total });
+  if (counted.total === 0) return t("folder.stage.counting");
+  return t("folder.choose.countingSoFar", { count: counted.count, total: counted.total });
+}
+
+/** The last part of a folder's path: its name. */
+const lastPart = (path: string, separator: string) => path.slice(path.lastIndexOf(separator) + separator.length) || path;
+
+/** Where the folder at `path` is in `column`'s rows, when it's listed there. */
+function rowOf(column: { parent: string; listing?: Listing } | undefined, path: string, separator: string): number | undefined {
+  if (column?.listing?.state !== "ready" || !path.startsWith(column.parent + separator)) return undefined;
+  return column.listing.at.get(path.slice(column.parent.length + separator.length));
 }
 
 /** The folder's picture: the app's own plain folder, or its outline until that's drawn. */
@@ -363,34 +466,37 @@ function Box({ check }: { check: Check }) {
  */
 const Column = memo(function Column({
   choice,
-  version,
   index,
   parent,
-  kids,
+  name,
+  listing,
   open,
   current,
+  level,
   icon,
   rowId,
   onPick,
   onBlank,
   onTick,
 }: {
-  choice: FolderChoice;
-  /** Changes with every tick, so the boxes draw again. */
-  version: number;
+  choice: Choice;
   index: number;
-  parent: number;
-  kids: Int32Array;
-  /** The highlighted folder in it, or -1. */
-  open: number;
+  parent: string;
+  /** The folder it lists the folders of. */
+  name: string;
+  listing: Ready;
+  /** The highlighted folder in it, or null. */
+  open: string | null;
   /** It holds the folder the keys move from. */
   current: boolean;
+  /** How far down its folders are: 1 for the folders directly inside the chosen one. */
+  level: number;
   icon: string | null;
-  rowId: (node: number) => string;
-  onPick: (column: number, node: number) => void;
+  rowId: (column: number, row: number) => string;
+  onPick: (column: number, path: string) => void;
   /** Its empty space was clicked. */
   onBlank: (column: number) => void;
-  onTick: (node: number) => void;
+  onTick: (path: string) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
@@ -411,7 +517,7 @@ const Column = memo(function Column({
   }, []);
 
   // The highlighted folder in view when the keys move it: just far enough, as a list scrolls.
-  const openAt = open >= 0 ? choice.indexOf(open) : -1;
+  const openAt = open === null ? -1 : (listing.at.get(open.slice(parent.length + choice.separator.length)) ?? -1);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || openAt < 0) return;
@@ -430,48 +536,48 @@ const Column = memo(function Column({
     frame.current = requestAnimationFrame(() => setTop(scroller.current?.scrollTop ?? 0));
   };
 
-  const count = kids.length;
+  const count = listing.names.length;
   const { start, end } = visibleRange({ columns: 1, cellWidth: 0, rowHeight: ROW, gap: 0, rows: count, height: count * ROW }, count, top - PAD, height, OVERSCAN);
   const drawn: number[] = [];
   if (openAt >= 0 && (openAt < start || openAt >= end)) drawn.push(openAt);
   for (let i = start; i < end; i++) drawn.push(i);
-  const level = choice.depth(parent) + 1;
 
   return (
     <div
       ref={scroller}
       className="fsc-col"
       role="group"
-      aria-label={choice.name(parent)}
+      aria-label={name}
       onScroll={onScroll}
       onMouseDown={(e) => {
         // Not a row, and not the scroll bar beside them.
         const el = e.currentTarget;
         if (e.button === 0 && !(e.target as Element).closest(".fsc-row") && e.clientX < el.getBoundingClientRect().left + el.clientWidth) onBlank(index);
       }}
-      data-version={version}
     >
       <div className="fsc-space" style={{ height: count * ROW + PAD * 2 }}>
         {drawn.map((i) => {
-          const node = kids[i];
-          const check = choice.check(node);
-          const isOpen = node === open;
-          const hasKids = choice.hasChildren(node);
-          const cls = ["fsc-row", isOpen && (current ? "is-current" : "is-trail"), !choice.isChosen(node) && "is-out"].filter(Boolean).join(" ");
+          const folderName = listing.names[i];
+          const path = pathIn(choice, parent, folderName);
+          const box = check(choice, path);
+          const isOpen = path === open;
+          // Unknown until it's opened: maybe there are folders inside.
+          const hasKids = listing.nested[i] !== false;
+          const cls = ["fsc-row", isOpen && (current ? "is-current" : "is-trail"), !takes(choice, path) && "is-out"].filter(Boolean).join(" ");
           return (
             <div
-              key={node}
-              id={rowId(node)}
+              key={folderName}
+              id={rowId(index, i)}
               className={cls}
               role="treeitem"
               aria-level={level}
               aria-setsize={count}
               aria-posinset={i + 1}
-              aria-checked={check === "mixed" ? "mixed" : check === "on"}
+              aria-checked={box === "mixed" ? "mixed" : box === "on"}
               aria-expanded={hasKids ? isOpen : undefined}
               style={{ transform: `translateY(${PAD + i * ROW}px)` }}
               onMouseDown={(e) => {
-                if (e.button === 0) onPick(index, node);
+                if (e.button === 0) onPick(index, path);
               }}
             >
               <span
@@ -480,14 +586,14 @@ const Column = memo(function Column({
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onTick(node);
+                  onTick(path);
                 }}
               >
-                <Box check={check} />
+                <Box check={box} />
               </span>
               <Icon src={icon} className="fsc-icon" />
-              <span className="fsc-name" data-tip={choice.name(node)} data-tip-overflow>
-                {choice.name(node)}
+              <span className="fsc-name" data-tip={folderName} data-tip-overflow>
+                {folderName}
               </span>
               {hasKids && (
                 <span className="fsc-chev" aria-hidden="true">
@@ -503,57 +609,83 @@ const Column = memo(function Column({
 });
 
 /** The column after a folder with none inside it: the folder itself, large, as Finder previews a file. */
-function Leaf({ choice, node, icon }: { choice: FolderChoice; node: number; icon: string | null }) {
+function Leaf({ name, chosen, icon }: { name: string; chosen: boolean; icon: string | null }) {
   const t = useT();
   return (
     <div className="fsc-col fsc-leaf" aria-hidden="true">
-      <Icon src={icon} className={choice.isChosen(node) ? "fsc-leaf-icon" : "fsc-leaf-icon is-out"} />
-      <p className="fsc-leaf-name">{choice.name(node)}</p>
+      <Icon src={icon} className={chosen ? "fsc-leaf-icon" : "fsc-leaf-icon is-out"} />
+      <p className="fsc-leaf-name">{name}</p>
       <p className="fsc-leaf-note">{t("folder.choose.empty")}</p>
     </div>
   );
 }
 
+/** A column whose folders are being read: nothing at first, and a spinner if it takes a moment. */
+function Pending() {
+  const t = useT();
+  return (
+    <div className="fsc-col fsc-pending" role="status">
+      <LoaderIcon size={15} />
+      <span>{t("folder.choose.loading")}</span>
+    </div>
+  );
+}
+
+/** A column whose folders couldn't be read, and a way to try again. */
+function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useT();
+  return (
+    <div className="fsc-col fsc-pending is-failed" role="alert">
+      <p>{message}</p>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
+        {t("folder.choose.tryAgain")}
+      </button>
+    </div>
+  );
+}
+
 /** Where the highlighted folder is, from the folder the dialog is for: each step goes back to it. */
-function PathBar({ choice, trail, icon, onGo }: { choice: FolderChoice; trail: number[]; icon: string | null; onGo: (depth: number) => void }) {
+function PathBar({ steps, separator, icon, onGo }: { steps: string[]; separator: string; icon: string | null; onGo: (depth: number) => void }) {
   // A long way down shows the first folder, a gap, and the last few, as there's room for.
   const LAST = 4;
-  const steps = [0, ...trail];
   const cut = steps.length > LAST + 2 ? steps.length - LAST : 1;
-  const shown = steps.map((node, depth) => ({ node, depth })).filter(({ depth }) => depth === 0 || depth >= cut);
+  const shown = steps.map((path, depth) => ({ path, depth })).filter(({ depth }) => depth === 0 || depth >= cut);
   return (
     <ol className="fsc-path-list">
-      {shown.map(({ node, depth }, i) => (
-        <li key={node} className={depth === steps.length - 1 ? "fsc-step is-here" : "fsc-step"}>
-          {i > 0 && (
-            <span className="fsc-step-sep" aria-hidden="true">
-              <ChevronRightIcon size={12} />
-            </span>
-          )}
-          {i === 1 && cut > 1 && (
-            <>
-              <span className="fsc-step-gap" aria-hidden="true">
-                …
-              </span>
+      {shown.map(({ path, depth }, i) => {
+        const name = lastPart(path, separator);
+        return (
+          <li key={path} className={depth === steps.length - 1 ? "fsc-step is-here" : "fsc-step"}>
+            {i > 0 && (
               <span className="fsc-step-sep" aria-hidden="true">
                 <ChevronRightIcon size={12} />
               </span>
-            </>
-          )}
-          <button
-            type="button"
-            className="fsc-step-btn"
-            aria-current={depth === steps.length - 1 ? "location" : undefined}
-            data-tip={choice.name(node)}
-            data-tip-overflow
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onGo(depth)}
-          >
-            <Icon src={icon} className="fsc-step-icon" />
-            <span className="fsc-step-name">{choice.name(node)}</span>
-          </button>
-        </li>
-      ))}
+            )}
+            {i === 1 && cut > 1 && (
+              <>
+                <span className="fsc-step-gap" aria-hidden="true">
+                  …
+                </span>
+                <span className="fsc-step-sep" aria-hidden="true">
+                  <ChevronRightIcon size={12} />
+                </span>
+              </>
+            )}
+            <button
+              type="button"
+              className="fsc-step-btn"
+              aria-current={depth === steps.length - 1 ? "location" : undefined}
+              data-tip={name}
+              data-tip-overflow
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onGo(depth)}
+            >
+              <Icon src={icon} className="fsc-step-icon" />
+              <span className="fsc-step-name">{name}</span>
+            </button>
+          </li>
+        );
+      })}
     </ol>
   );
 }

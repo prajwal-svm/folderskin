@@ -1,10 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp } from "./app";
+import { letGo, openApp } from "./app";
 
 // The preview's first folder is Projects: 28 folders inside, one branch six levels down
 // (Research, Papers, 2026, Drafts, Figures, Final). The second is Wedding, which wears an icon of
-// its own, as does Guests inside it. `?bigtree` puts a made-up Studio first: 4,960 folders, 1,400
-// of them in Camera roll and a branch 37 levels deep (src/lib/devMock.ts).
+// its own, as does Guests inside it. The fourth is Photo archive: 48,210 folders, thirty years of
+// twelve months of days, whose count `?holdcount` holds at about 12,400 until `mockCountGo()`.
+// `?bigtree` puts a made-up Studio first: 4,960 folders, 1,400 of them in Camera roll and a branch
+// 37 levels deep (src/lib/devMock.ts).
 
 const panel = (page: Page) => page.locator(".right-slot");
 const chooser = (page: Page) => page.getByRole("dialog", { name: "Choose subfolders" });
@@ -297,5 +299,36 @@ test.describe("choosing among thousands of subfolders", () => {
     await page.keyboard.press("Space");
     await expect(item(page, "Level 35")).toHaveAttribute("aria-checked", "mixed");
     await expect(count(page)).toHaveText("4,959 of 4,960 folders chosen");
+  });
+});
+
+test.describe("choosing among folders still being counted", () => {
+  test("opens at once, and says how many are chosen as the count gets to them", async ({ page }) => {
+    await openApp(page, { query: "holdcount" });
+    for (let i = 0; i < 4; i++) await panel(page).getByRole("button", { name: /^choose a (folder from|different folder than)/ }).click();
+    await expect(panel(page).getByRole("heading", { name: "Photo archive" })).toBeVisible();
+    await page.locator(".tile-hit").first().click();
+    await expect(includeSwitch(page)).toContainText(/[\d,]+ folders inside so far/);
+    await includeSwitch(page).click();
+    await openChooser(page);
+    await expect(column(page, "Photo archive").getByRole("treeitem").first()).toHaveAttribute("aria-setsize", "30");
+    expect((await names(page, "Photo archive")).slice(0, 2)).toEqual(["1997", "1998"]);
+    await expect(count(page)).toHaveText(/^[\d,]+ of [\d,]+ folders chosen so far$/);
+    // A year is its twelve months and their days: 1,609 folders, all counted by now.
+    await box(page, "1997").click();
+    await expect(item(page, "1997")).toHaveAttribute("aria-checked", "false");
+    await expect(count(page)).toHaveText(/^[\d,]+ of [\d,]+ folders chosen so far$/);
+    // Each column is read as it opens, in Finder's order.
+    await item(page, "1998").click();
+    await expect(column(page, "1998").getByRole("treeitem").first()).toHaveText("April");
+    await chooser(page).getByRole("button", { name: "Done" }).click();
+    await expect(includeSwitch(page)).toContainText(/[\d,]+ of [\d,]+ folders inside so far/);
+
+    // Once every folder is counted, the numbers are whole, in the panel and on Apply.
+    await letGo(page, "mockCountGo");
+    await expect(includeSwitch(page)).toContainText("46,601 of 48,210 folders inside");
+    await expect(panel(page).getByRole("button", { name: "Apply to 46,602 folders" })).toBeVisible();
+    await openChooser(page);
+    await expect(count(page)).toHaveText("46,601 of 48,210 folders chosen");
   });
 });

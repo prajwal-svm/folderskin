@@ -496,6 +496,344 @@ html[data-os="windows"] .cmp-side-head {
   padding: 8px 0 2px;
 }
 
+/* ---------- the run over a folder's tree (RunDock.tsx) ---------- */
+
+/* Above the buttons at the foot, on every view, while a run is going and after it ends until
+   it's put away: a small island on the glass. */
+.dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--island-line);
+  background: var(--island);
+  animation: fade-up var(--t-base) var(--ease-out) both;
+}
+
+.dock-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+/* The skin, what it's doing and to which folder: all one button, back to that folder. */
+.dock-show {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: -4px;
+  padding: 4px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.dock-show:hover,
+.dock-show:focus-visible {
+  background: var(--well);
+}
+
+.dock-thumb {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 34px;
+}
+
+.dock-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+/* How it ended, on the corner of the skin. */
+.dock-thumb-mark,
+.dock-rail-mark {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: inline-flex;
+  border-radius: 50%;
+  background: var(--island);
+  color: var(--fave);
+}
+
+.dock-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* What it's doing is one line, and how it went two at most, so the dock stays short enough to
+   leave the whole of the sidebar's list in view in a window of the size FolderSkin opens at. A
+   title cut short says itself whole in a tooltip. */
+.dock-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 750;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.dock:not(.is-going) .dock-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.dock-folder {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.dock-folder svg {
+  flex: none;
+}
+
+.dock-folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hint);
+  transition:
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+}
+
+.dock-x:hover,
+.dock-x:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.dock-bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--well-2);
+  overflow: hidden;
+}
+
+.dock-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 220ms var(--ease-out);
+}
+
+.dock-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dock-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dock-stop {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-2);
+  font-weight: 750;
+  font-size: 11.5px;
+  transition:
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+}
+
+.dock-stop:hover:not(:disabled),
+.dock-stop:focus-visible {
+  background: var(--well-2);
+  color: var(--ink);
+}
+
+.dock-stop:disabled {
+  opacity: 0.7;
+}
+
+/* Read out rather than shown: the rest of how it went, which the title's tooltip shows the eye. */
+.dock-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dock .chip-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+.dock.is-ok .dock-thumb-mark,
+.dock-rail.is-ok .dock-rail-mark {
+  color: var(--ok);
+}
+
+/* In a short window, one row: the skin, what it's doing over how far it has got (or how it went
+   over where), and Stop or put away, with the bar a hairline along the foot. Short enough for the
+   whole of the sidebar's list to stay in view in the smallest window. */
+.dock.is-compact {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0;
+  padding: 5px 8px;
+}
+
+.dock.is-compact .dock-thumb {
+  width: 26px;
+  height: 26px;
+}
+
+.dock.is-compact .dock-text {
+  gap: 0;
+}
+
+.dock.is-compact .dock-title {
+  display: block;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.dock.is-compact .dock-count,
+.dock.is-compact .dock-folder {
+  line-height: 1.25;
+}
+
+.dock.is-compact .dock-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 3px;
+  height: 2px;
+}
+
+/* Folded to a rail: the skin in a ring that fills as the run goes, the rest in its tooltip. */
+.dock-rail {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin: 8px 0 0;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--t-fast) ease;
+}
+
+.dock-rail:hover,
+.dock-rail:focus-visible {
+  background: var(--nav-hover);
+}
+
+.dock-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.dock-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.dock-ring-track {
+  stroke: var(--well-2);
+}
+
+.dock-ring-done {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: calc(var(--done) * 100) 100;
+  transition: stroke-dasharray 220ms var(--ease-out);
+}
+
+/* Still counting: a stretch of the ring goes round instead. */
+.dock-ring.is-counting {
+  animation: spin 1.2s linear infinite;
+  animation-play-state: var(--loop-state);
+}
+
+.dock-rail.is-ok .dock-ring-done {
+  stroke: var(--ok);
+}
+
+.dock-rail.is-warn .dock-ring-done {
+  stroke: var(--fave);
+}
+
+.dock-rail-thumb {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.dock-rail-mark {
+  right: 1px;
+  bottom: 1px;
+}
+
 @keyframes bump {
   0% {
     transform: scale(1);

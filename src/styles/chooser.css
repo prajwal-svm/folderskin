@@ -236,6 +236,28 @@
   color: var(--muted);
 }
 
+/* A column whose folders are being read: nothing for a moment, then a spinner, so a quick read
+   doesn't flash one up. */
+.fsc-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 16px 16px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  animation: fade-in var(--t-base) ease 180ms both;
+}
+
+.fsc-pending.is-failed {
+  gap: 12px;
+  color: var(--ink-2);
+  animation: none;
+}
+
 /* Reading the folders, reading them failed, or there are none. */
 .fsc-status {
   margin: auto;

@@ -24,10 +24,10 @@ type Item = { id: View; label: string; icon: ReactNode; badge?: number };
 const FOLD_KEYS = keys("\\");
 
 /**
- * The app's sections, the photo button, dark mode, the language and Settings. Open, it sits
- * straight on the window's glass with names beside its icons. Folded to a rail, it becomes an
- * island of its own: the logo with no name or version, and the icons alone, each still a button,
- * named in a tooltip.
+ * The app's sections, the photo button, dark mode, the language and Settings, and above those,
+ * while there's one, the run over a folder's tree. Open, it sits straight on the window's glass
+ * with names beside its icons. Folded to a rail, it becomes an island of its own: the logo with no
+ * name or version, and the icons alone, each still a button, named in a tooltip.
  */
 export function Sidebar({
   view,
@@ -45,6 +45,7 @@ export function Sidebar({
   settingsOpen,
   rail,
   onToggleRail,
+  dock,
 }: {
   view: View;
   onView: (v: View) => void;
@@ -65,6 +66,8 @@ export function Sidebar({
   /** Folded to a rail of icons. */
   rail: boolean;
   onToggleRail: () => void;
+  /** The run over a folder's tree (RunDock.tsx), above the buttons at the foot, on every view. */
+  dock?: ReactNode;
 }) {
   const t = useT();
   const groups: { id: string; title: string; items: Item[] }[] = [
@@ -157,6 +160,7 @@ export function Sidebar({
           </div>
         ))}
       </div>
+      {dock}
       <div className="sidebar-bottom">
         <button
           type="button"

@@ -3,8 +3,9 @@ import type { Skin } from "../lib/tauri";
 import { prettyPath } from "../lib/files";
 import { osOf, type Os } from "../lib/platform";
 import { t as tNow, useT } from "../i18n";
-import { applyLabel, runSummary, tooMany } from "../lib/tree";
-import { insideCount, type State, type SubfolderChoice } from "../state/dropzone";
+import { applyLabel, both, canCarryOn, canRetry, doneOf, remaining, runDoing, runSummary, shareOf, type TreeRun } from "../lib/tree";
+import { insideCount, insideCounted, isTree, type State, type SubfolderChoice } from "../state/dropzone";
+import { treeRuns } from "../state/treeRun";
 import { FolderGhost } from "./FolderGhost";
 import { LookSwitch } from "./LookSwitch";
 import { useLook } from "../state/look";
@@ -53,7 +54,8 @@ export function FolderStage({
   onTryOn,
   onRevert,
   onReveal,
-  stopping,
+  run,
+  runSkinName,
   onIncludeSubfolders,
   onChooseSubfolders,
   onStop,
@@ -80,11 +82,13 @@ export function FolderStage({
   onTryOn: () => void;
   onRevert: () => void;
   onReveal: () => void;
-  /** Stop was pressed and the run is finishing the folder it's on. */
-  stopping: boolean;
+  /** The run over this folder's tree the panel follows: going, or ended until it's put away. */
+  run: TreeRun | null;
+  /** The name of the skin that run puts on or takes off, as the library has it. */
+  runSkinName: string | null;
   onIncludeSubfolders: (on: boolean) => void;
-  /** Done in "Choose subfolders": the ones ticked, or null for every one of the `total` inside. */
-  onChooseSubfolders: (chosen: SubfolderChoice | null, total: number) => void;
+  /** Done in "Choose subfolders": the ones ticked, or null for every one inside. */
+  onChooseSubfolders: (chosen: SubfolderChoice | null) => void;
   onStop: () => void;
   /** Carries on with the folders a stopped run didn't reach. */
   onCarryOn: () => void;
@@ -101,6 +105,8 @@ export function FolderStage({
   const t = useT();
   const { phase, folder, drag, error } = state;
   const busy = phase === "applying" || phase === "reverting";
+  // A run over the tree goes on in the background: another folder can be picked meanwhile.
+  const going = busy && run?.running === true;
   const system = osOf(os);
 
   // The folder's own icon. Nothing shows while it loads, so a stand-in never swaps for it in view,
@@ -131,7 +137,7 @@ export function FolderStage({
   const [choosing, setChoosing] = useState(false);
   useEffect(() => setChoosing(false), [folder?.path]);
 
-  const tree = state.includeSubfolders || state.run !== null;
+  const tree = state.includeSubfolders || run !== null;
   const cls = [
     "island",
     "stage-island",
@@ -149,7 +155,7 @@ export function FolderStage({
         <button
           type="button"
           className={shaking ? "stage-art is-shaking" : "stage-art"}
-          onClick={busy ? undefined : onBrowse}
+          onClick={busy && !going ? undefined : onBrowse}
           onMouseDown={(e) => e.preventDefault()}
           aria-label={folder ? t("folder.stage.chooseOtherLabel", { name: folder.name }) : t("folder.stage.chooseFromLabel", { place: browseLabel })}
           data-tip={folder ? t("folder.stage.chooseOther") : undefined}
@@ -184,7 +190,7 @@ export function FolderStage({
           )}
         </button>
 
-        <StageCopy state={state} skin={skin} browseLabel={browseLabel} />
+        <StageCopy state={state} skin={skin} browseLabel={browseLabel} doing={going && run ? runDoing(run, runSkinName) : null} />
 
         {/* Under the empty folder only: while a skin is previewed, the preview is what's shown,
             with the way back to the empty folder (Escape does the same). */}
@@ -204,23 +210,24 @@ export function FolderStage({
               chosen={state.chosen}
               folderIcon={defaultThumb}
               onCancel={() => setChoosing(false)}
-              onDone={(chosen, total) => {
+              onDone={(chosen) => {
                 setChoosing(false);
-                onChooseSubfolders(chosen, total);
+                onChooseSubfolders(chosen);
               }}
             />
           </Suspense>
         )}
 
-        {state.run && !busy && !drag && (
-          <RunResult state={state} skinName={skin?.name ?? null} onCarryOn={onCarryOn} onTryAgain={onTryAgain} onDismiss={onDismissRun} />
+        {run && !run.running && !busy && !drag && (
+          <RunResult run={run} skinName={runSkinName} onCarryOn={onCarryOn} onTryAgain={onTryAgain} onDismiss={onDismissRun} />
         )}
 
-        {busy && state.progress ? (
-          <RunProgress state={state} stopping={stopping} onStop={onStop} />
+        {going && run ? (
+          <RunProgress run={run} onStop={onStop} />
         ) : (
           <StageActions
             state={state}
+            run={run}
             skin={skin}
             customIcon={customIcon}
             os={system}
@@ -234,7 +241,7 @@ export function FolderStage({
         )}
 
         <p className={error ? "stage-status is-error" : "stage-status"} role={error ? "alert" : undefined} aria-live="polite">
-          {error ?? statusLine(state, skin, system, customIcon, stopping)}
+          {error ?? statusLine(state, run, skin, system, customIcon)}
         </p>
       </div>
     </aside>
@@ -265,7 +272,11 @@ function StageImage({ src }: { src: string }) {
   );
 }
 
-function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | null; browseLabel: string }) {
+/**
+ * The folder's name and path, with a word above them on what's become of it. `doing` is what a
+ * run over its tree that's going is doing, "Applying Dune", which says it while the run lasts.
+ */
+function StageCopy({ state, skin, browseLabel, doing }: { state: State; skin: Skin | null; browseLabel: string; doing: string | null }) {
   const t = useT();
   const { phase, folder, drag } = state;
 
@@ -301,8 +312,11 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
   }
 
   // The one place that says the skin is on the folder; the buttons below only offer what's next.
-  const eyebrow =
-    phase === "applied" || (phase === "reverting" && state.appliedSkinId !== null) ? (
+  const eyebrow = doing ? (
+    <span className="chip chip-accent stage-eyebrow" key="doing" data-tip={doing} data-tip-overflow>
+      <span className="chip-text">{doing}</span>
+    </span>
+  ) : phase === "applied" || (phase === "reverting" && state.appliedSkinId !== null) ? (
       <span className="chip chip-ok stage-eyebrow" key="applied">
         <OkBadge size={16} playOnMount /> {t("folder.stage.applied")}
       </span>
@@ -331,6 +345,7 @@ function StageCopy({ state, skin, browseLabel }: { state: State; skin: Skin | nu
 
 function StageActions({
   state,
+  run,
   skin,
   customIcon,
   os,
@@ -342,6 +357,7 @@ function StageActions({
   pickHint,
 }: {
   state: State;
+  run: TreeRun | null;
   skin: Skin | null;
   customIcon: boolean;
   os: Os;
@@ -358,9 +374,10 @@ function StageActions({
 
   const noFocusSteal = (e: MouseEvent) => e.preventDefault();
   const inside = insideCount(state);
+  const tree = isTree(state);
   // An apply over the tree has run: finished (some may have failed), or stopped, which its
   // summary offers to carry on. Either way what's next is showing or reverting it.
-  const treeDone = state.run?.kind === "apply";
+  const treeDone = run?.kind === "apply" && !run.running;
   const nudge = (
     <p className="nudge">
       <span className="nudge-arrow">
@@ -387,7 +404,7 @@ function StageActions({
         )}
         <button type="button" className="btn btn-ghost" disabled={removing} aria-busy={removing} onMouseDown={noFocusSteal} onClick={onRevert}>
           {removing ? <LoaderIcon size={15} /> : <RotateCcwIcon size={15} />}
-          {removing ? t("folder.stage.removing") : inside ? t("folder.stage.removeIcons") : t("folder.stage.removeIcon")}
+          {removing ? t("folder.stage.removing") : tree ? t("folder.stage.removeIcons") : t("folder.stage.removeIcon")}
         </button>
       </div>
     );
@@ -396,15 +413,13 @@ function StageActions({
   if (phase === "folder") return nudge;
 
   // Applied to the folder itself, but the folders inside it are now included too: offer those.
-  const moreToDo = phase === "applied" && inside > 0 && !treeDone;
+  const moreToDo = phase === "applied" && tree && !treeDone;
   if ((phase === "applied" || phase === "reverting") && !moreToDo) {
-    const reach = inside > 0 && state.run?.kind === "apply" ? state.run.changed.length : 0;
+    const reach = tree && treeDone ? run.changed : 0;
     return (
       <DoneActions
         reverting={phase === "reverting"}
-        revertLabel={
-          reach > 1 ? (state.run?.stopped ? t("folder.stage.revertThese", { count: reach }) : t("folder.stage.revertAll", { count: reach })) : t("folder.stage.revert")
-        }
+        revertLabel={reach > 1 ? (run?.stopped ? t("folder.stage.revertThese", { count: reach }) : t("folder.stage.revertAll", { count: reach })) : t("folder.stage.revert")}
         os={os}
         onReveal={onReveal}
         onRevert={onRevert}
@@ -424,7 +439,7 @@ function StageActions({
         onClick={onApply}
       >
         {applying ? <LoaderIcon /> : <ArrowDownIcon />}
-        {applying ? t("folder.stage.applying") : inside ? applyLabel(inside) : t("folder.stage.applySkin")}
+        {applying ? t("folder.stage.applying") : tree ? applyLabel(inside, insideCounted(state)) : t("folder.stage.applySkin")}
       </button>
       <button type="button" className="btn btn-ghost" disabled={applying} onMouseDown={noFocusSteal} onClick={onBrowse}>
         {t("folder.stage.chooseOther")}
@@ -479,14 +494,15 @@ function DoneActions({
 
 /**
  * "Include subfolders": the folder and the folders inside it get the skin, or lose their icons,
- * together. It shows only for a folder with folders inside, says how many, and can't be used on
- * more than a run can take. Switched on, "Choose" at the end of its second line picks which of
- * them go too: every one until some are chosen, and then it says how many of them.
+ * together. It shows only for a folder with folders inside, and says how many: as they're counted
+ * ("12,400 folders inside so far"), which never holds anything up, then all of them. Switched on,
+ * "Choose" at the end of its second line picks which of them go too: every one until some are
+ * chosen, and then it says how many of them.
  */
 function SubfolderSwitch({ state, onChange, onChoose }: { state: State; onChange: (on: boolean) => void; onChoose: () => void }) {
   const t = useT();
   const s = state.subfolders;
-  if (!s || s.count === 0 || !state.folder) return null;
+  if (!s || (s.done && s.count === 0) || !state.folder) return null;
   const on = state.includeSubfolders;
   const busy = state.phase === "applying" || state.phase === "reverting";
   const chosen = on ? state.chosen : null;
@@ -501,7 +517,7 @@ function SubfolderSwitch({ state, onChange, onChoose }: { state: State; onChange
   );
   return (
     <div className={on ? "stage-scope is-on" : "stage-scope"}>
-      <button type="button" role="switch" aria-checked={on} disabled={busy || s.more} className="stage-scope-switch" onMouseDown={keep} onClick={() => onChange(!on)}>
+      <button type="button" role="switch" aria-checked={on} disabled={busy} className="stage-scope-switch" onMouseDown={keep} onClick={() => onChange(!on)}>
         <span className="stage-scope-head">
           <span className="stage-scope-title">{t("folder.stage.includeSubfolders")}</span>
           <span className={on ? "switch is-on" : "switch"} aria-hidden="true">
@@ -509,13 +525,7 @@ function SubfolderSwitch({ state, onChange, onChoose }: { state: State; onChange
           </span>
         </span>
         <span className="stage-scope-line">
-          <span className="stage-scope-sub">
-            {s.more
-              ? tooMany("folders")
-              : chosen
-                ? t("folder.stage.insideChosen", { count: chosen.paths.length, total: chosen.total })
-                : t("folder.stage.inside", { count: s.count })}
-          </span>
+          <span className="stage-scope-sub">{insideLine(s, chosen)}</span>
           {/* The room "Choose" takes at the end of this line, whatever the language makes of it. */}
           {on && (
             <span className="stage-scope-room" aria-hidden="true">
@@ -544,28 +554,38 @@ function SubfolderSwitch({ state, onChange, onChoose }: { state: State; onChange
   );
 }
 
+/** How many folders inside go: "48,210 folders inside", "22 of 28 folders inside", or so far while they're counted. */
+function insideLine(s: NonNullable<State["subfolders"]>, chosen: SubfolderChoice | null): string {
+  const t = tNow;
+  if (chosen) {
+    if (chosen.done) return t("folder.stage.insideChosen", { count: chosen.count, total: chosen.total });
+    return chosen.total === 0 ? t("folder.stage.counting") : t("folder.stage.insideChosenSoFar", { count: chosen.count, total: chosen.total });
+  }
+  if (s.done) return t("folder.stage.inside", { count: s.count });
+  return s.count === 0 ? t("folder.stage.counting") : t("folder.stage.insideSoFar", { count: s.count });
+}
+
 /** A run over the folder and its subfolders, under way: how far, which folder, and Stop. */
-function RunProgress({ state, stopping, onStop }: { state: State; stopping: boolean; onStop: () => void }) {
+function RunProgress({ run, onStop }: { run: TreeRun; onStop: () => void }) {
   const t = useT();
-  const p = state.progress;
-  if (!p) return null;
-  const share = p.total > 0 ? Math.min(100, (p.done / p.total) * 100) : 0;
-  const verb = state.phase === "applying" ? t("folder.stage.applying") : t("folder.stage.reverting");
+  const expected = treeRuns.expected(run.id);
+  const share = shareOf(run, expected);
+  const verb = run.kind === "apply" ? t("folder.stage.applying") : t("folder.stage.reverting");
   return (
     <div className="stage-actions stage-progress" role="status" aria-live="polite">
       <p className="stage-progress-line">
-        <span className="stage-progress-title">{stopping ? t("folder.stage.stopping") : verb}</span>
-        <span className="stage-progress-count">{t("folder.stage.doneOf", { done: p.done, total: p.total })}</span>
+        <span className="stage-progress-title">{run.stopping ? t("folder.stage.stopping") : verb}</span>
+        <span className="stage-progress-count">{doneOf(run, expected)}</span>
       </p>
-      <span className="stage-progress-bar" aria-hidden="true">
-        <span style={{ width: `${share}%` }} />
+      <span className={share === null ? "stage-progress-bar is-counting" : "stage-progress-bar"} aria-hidden="true">
+        <span style={share === null ? undefined : { width: `${share * 100}%` }} />
       </span>
-      <p className="stage-progress-name" data-tip={p.name} data-tip-overflow>
-        {p.done === 0 ? t("folder.stage.startingWith", { name: clip(p.name) }) : p.name}
+      <p className="stage-progress-name" data-tip={run.current} data-tip-overflow>
+        {run.done === 0 ? t("folder.stage.startingWith", { name: clip(run.current) }) : run.current}
       </p>
-      <button type="button" className="btn btn-ghost" disabled={stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
-        {stopping ? <LoaderIcon size={15} /> : null}
-        {stopping ? t("folder.stage.finishingThis") : t("folder.stage.stop")}
+      <button type="button" className="btn btn-ghost" disabled={run.stopping} onMouseDown={(e) => e.preventDefault()} onClick={onStop}>
+        {run.stopping ? <LoaderIcon size={15} /> : null}
+        {run.stopping ? t("folder.stage.finishingThis") : t("folder.stage.stop")}
       </button>
     </div>
   );
@@ -576,25 +596,25 @@ function RunProgress({ state, stopping, onStop }: { state: State; stopping: bool
  * way to try them again), or where it stopped (and a way to carry on).
  */
 function RunResult({
-  state,
+  run,
   skinName,
   onCarryOn,
   onTryAgain,
   onDismiss,
 }: {
-  state: State;
+  run: TreeRun;
   skinName: string | null;
   onCarryOn: () => void;
   onTryAgain: () => void;
   onDismiss: () => void;
 }) {
   const t = useT();
-  const run = state.run;
-  if (!run) return null;
   const { title, detail, tone } = runSummary(run, skinName);
-  const failed = run.failed;
+  const failures = run.failures;
+  const left = remaining(run);
   // Stopped before anything changed, the Apply button below does the same.
-  const carryOn = run.stopped && run.remaining.length > 0 && run.changed.length > 0;
+  const carryOn = canCarryOn(run) && run.changed > 0;
+  const more = run.failed - failures.length;
   return (
     <div className={`stage-result is-${tone}`} role="status">
       <div className="stage-result-head">
@@ -607,30 +627,31 @@ function RunResult({
         </button>
       </div>
       {detail && <p className="stage-result-detail">{detail}</p>}
-      {failed.length > 0 && (
+      {failures.length > 0 && (
         <details className="stage-result-failed">
-          <summary>{t("folder.stage.which", { count: failed.length })}</summary>
+          <summary>{t("folder.stage.which", { count: run.failed })}</summary>
           <ul>
-            {failed.map((f) => (
+            {failures.map((f) => (
               <li key={f.path} data-tip={f.path} data-tip-overflow>
                 <span className="stage-result-name">{f.name}</span>
                 <span className="stage-result-reason">{explain(f.reason)}</span>
               </li>
             ))}
+            {more > 0 && <li className="stage-result-more">{t("folder.stage.andMore", { count: more })}</li>}
           </ul>
         </details>
       )}
-      {(carryOn || (!run.stopped && failed.length > 0)) && (
+      {(carryOn || canRetry(run)) && (
         <div className="stage-result-actions">
           {carryOn && (
             <button type="button" className="chip-btn" onClick={onCarryOn}>
-              {t("folder.stage.carryOnWith", { count: run.remaining.length })}
+              {left === null ? t("folder.run.carryOn") : t("folder.stage.carryOnWith", { count: left })}
             </button>
           )}
-          {!run.stopped && failed.length > 0 && (
+          {canRetry(run) && (
             <button type="button" className="chip-btn" onClick={onTryAgain}>
               <RotateCcwIcon size={13} />
-              {t("folder.stage.tryAgain", { count: failed.length })}
+              {t("folder.stage.tryAgain", { count: run.failed })}
             </button>
           )}
         </div>
@@ -640,14 +661,14 @@ function RunResult({
 }
 
 /** One quiet line under the buttons: what just happened or what happens next. */
-function statusLine(state: State, skin: Skin | null, os: Os, customIcon: boolean, stopping: boolean): string {
+function statusLine(state: State, run: TreeRun | null, skin: Skin | null, os: Os, customIcon: boolean): string {
   const t = tNow;
-  const inside = insideCount(state);
-  if (state.progress && (state.phase === "applying" || state.phase === "reverting")) {
-    if (stopping) return t("folder.stage.status.doneStay");
-    return state.phase === "applying" ? t(`folder.stage.status.catchesUp.${os}`) : t("folder.stage.status.puttingIconsBack");
+  if (run?.running && (state.phase === "applying" || state.phase === "reverting")) {
+    if (run.stopping) return t("folder.stage.status.doneStay");
+    const keepsGoing = t("folder.stage.status.keepsGoing");
+    return run.kind === "apply" ? both(t(`folder.stage.status.catchesUp.${os}`), keepsGoing) : keepsGoing;
   }
-  if (inside > 0 && (state.phase === "ready" || (state.phase === "applied" && state.run === null))) {
+  if (isTree(state) && (state.phase === "ready" || (state.phase === "applied" && run === null))) {
     return t("folder.stage.status.skipped");
   }
   switch (state.phase) {

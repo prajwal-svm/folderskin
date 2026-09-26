@@ -1,10 +1,11 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
 import { frame } from "../composer/body";
 import type { FolderStyle, Parts } from "../composer/parts";
-import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
-import type { SubfolderTree } from "./folderChoice";
+import type { SubfolderCount, SubfolderCounts, SubfolderList, TreeRunEvent } from "./tree";
+import { askToNotify, notify, windowFocused } from "./notify";
 import type { AiEvent } from "../state/chats";
 import { t } from "../i18n";
 import { explain } from "./sentences";
@@ -328,6 +329,28 @@ export type MySubmission = {
   note: string;
 };
 
+/**
+ * Which folders inside one a run takes: every folder inside as `all` says, unless a rule on it
+ * or a folder it's in says otherwise (lib/folderChoice.ts, `ChoiceDto` in src-tauri/src/tree.rs).
+ */
+export type RunChoice = { all: boolean; rules: { path: string; on: boolean }[] };
+
+/** Hears `event` from the app until the returned function is called, even if that's before listening has begun. */
+function hear<T>(event: string, listener: (payload: T) => void): () => void {
+  let stop: (() => void) | null = null;
+  let stopped = false;
+  listen<T>(event, (e) => listener(e.payload))
+    .then((unlisten) => {
+      if (stopped) unlisten();
+      else stop = unlisten;
+    })
+    .catch(() => {});
+  return () => {
+    stopped = true;
+    stop?.();
+  };
+}
+
 const tauriApi = {
   listSkins: () => invoke<SkinList>("list_skins"),
   /** Which folder artwork skins are drawn and applied on: "mac" unless the user chose Windows'. */
@@ -341,24 +364,51 @@ const tauriApi = {
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
 
   // ---- a folder and every folder inside it ----
-  /** How many folders are inside `folder` (hidden ones, packages and links aside), up to 5,000. */
-  subfolderCount: (folder: string) => invoke<Subfolders>("subfolder_count", { folder }),
-  /** The same folders as the tree they make, read once, for choosing which of them a run takes. */
-  subfolderTree: (folder: string) => invoke<SubfolderTree>("subfolder_tree", { folder }),
+  /**
+   * Starts counting the folders inside `folder` (hidden ones, packages, links and other volumes
+   * aside) in the background, however many, and stops counting the folder before. Answers with
+   * the count once it's done, or after a moment, and `onSubfolderCount` hears the rest.
+   */
+  subfolderCount: (folder: string) => invoke<SubfolderCount>("subfolder_count", { folder }),
+  /** How far the count has got inside `folder`, and inside each of `paths`, folders in it. */
+  subfolderCounts: (folder: string, paths: string[]) => invoke<SubfolderCounts>("subfolder_counts", { folder, paths }),
+  /** Hears every count grow. Returns what stops hearing it. */
+  onSubfolderCount: (listener: (count: SubfolderCount) => void) => hear<SubfolderCount>("subfolder-count", listener),
+  /** The folders directly inside `folder`, for one column of "Choose subfolders". */
+  subfolderList: (folder: string) => invoke<SubfolderList>("subfolder_list", { folder }),
   /** The disk space one folder's copy of this skin's icon takes. */
   treeBytes: (skinId: string) => invoke<number>("tree_bytes", { skinId }),
-  /** Applies a skin to `folder` and every folder inside it, or to `only` those; progress on `onProgress`. */
-  applySkinTree: (folder: string, skinId: string, only: string[] | null, onProgress: (p: TreeProgress) => void) =>
-    invoke<TreeRunResult>("apply_skin_tree", { folder, skinId, only, onProgress: new Channel<TreeProgress>(onProgress) }),
   /**
-   * Puts the default icon back on `only` those folders, or on every folder in the tree that has an
-   * icon of its own. `skipPlain` leaves alone the folders in `only` that have none, as the whole
-   * tree does.
+   * Starts applying a skin to `folder` and the folders inside it `choice` takes (every one without
+   * one), in the background. `onTreeRun` hears how it goes.
    */
-  revertSkinTree: (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void, skipPlain?: boolean) =>
-    invoke<TreeRunResult>("revert_skin_tree", { folder, only, skipPlain: skipPlain ?? null, onProgress: new Channel<TreeProgress>(onProgress) }),
-  /** Stops a run over a tree after the folder it's on. */
-  stopTreeRun: () => invoke<void>("stop_tree_run"),
+  startTreeApply: (folder: string, skinId: string, choice: RunChoice | null) => invoke<TreeRunEvent>("start_tree_apply", { folder, skinId, choice }),
+  /**
+   * Starts taking the custom icons off `folder` and the folders inside it `choice` takes, in the
+   * background. `skipPlain` leaves the ones without an icon of their own alone.
+   */
+  startTreeRevert: (folder: string, choice: RunChoice | null, skipPlain: boolean) =>
+    invoke<TreeRunEvent>("start_tree_revert", { folder, choice, skipPlain }),
+  /** Stops run `id` after the folder it's on. */
+  stopTreeRun: (id: number) => invoke<void>("stop_tree_run", { id }),
+  /** Carries stopped run `id` on with the folders it didn't reach. */
+  carryOnTreeRun: (id: number) => invoke<TreeRunEvent>("carry_on_tree_run", { id }),
+  /** Tries the folders run `id` couldn't change once more. */
+  retryTreeRun: (id: number) => invoke<TreeRunEvent>("retry_tree_run", { id }),
+  /** Takes off exactly what apply run `id` put on. */
+  undoTreeRun: (id: number) => invoke<TreeRunEvent>("undo_tree_run", { id }),
+  /** Forgets run `id` once it has ended. */
+  dismissTreeRun: (id: number) => invoke<void>("dismiss_tree_run", { id }),
+  /** The latest run, going or ended. */
+  treeRun: () => invoke<TreeRunEvent>("tree_run"),
+  /** Hears the latest run change. Returns what stops hearing it. */
+  onTreeRun: (listener: (event: TreeRunEvent) => void) => hear<TreeRunEvent>("tree-run", listener),
+  /** Whether FolderSkin's window is the one in front. */
+  windowFocused,
+  /** Whether notifications may be shown, asking the first time. */
+  askToNotify,
+  /** A system notification, if they may be shown. */
+  notify,
   /** The folder's current icon (the real OS icon where available), and whether it's a custom one. */
   folderIcon: (folder: string) => invoke<FolderIcon>("folder_icon", { folder }),
   /** The folder the skins are saved in. */

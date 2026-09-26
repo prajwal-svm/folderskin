@@ -2,27 +2,37 @@
  * The drop zone's state machine. Pure and synchronous: the React layer dispatches
  * actions around the async Tauri calls, so every transition here is unit-testable.
  */
-import type { Subfolders, TreeProgress, TreeRun } from "../lib/tree";
+import type { Subfolders } from "../lib/tree";
+import { isNothing, type Choice } from "../lib/folderChoice";
 
 export type Folder = { path: string; name: string };
 
 /**
  * The folders inside the chosen one that a run over the tree takes when they aren't all of them,
- * as ticked in the chooser (components/SubfolderChooser.tsx).
+ * as ticked in the chooser (components/SubfolderChooser.tsx), and how many that is.
  */
 export type SubfolderChoice = {
-  /** The folder itself, as a run names it. */
-  root: string;
-  /** The folders inside it that were ticked, nearest first as a run goes through them. */
-  paths: string[];
-  /** How many folders were inside it in all. */
+  /** The rules the chooser left (lib/folderChoice.ts). */
+  choice: Choice;
+  /** How many folders inside it they take, of how many there are, as counted so far: final once `done`. */
+  count: number;
   total: number;
+  done: boolean;
 };
 
 /** What is being dragged over the window, guessed from its path before it lands. */
 export type DragInfo = { kind: "folder" | "image"; name: string };
 
 export type Phase = "idle" | "folder" | "ready" | "applying" | "applied" | "reverting";
+
+/** A run over a tree as the folder panel needs to know of it (the whole of it is lib/tree.ts `TreeRun`). */
+export type RunInfo = {
+  id: number;
+  kind: "apply" | "revert";
+  /** The skin an apply puts on. */
+  skinId: string | null;
+  changed: number;
+};
 
 export type State = {
   phase: Phase;
@@ -41,16 +51,17 @@ export type State = {
    * goes on, so the switch to it can be seen.
    */
   arriving: boolean;
-  /** The folders inside the chosen one: null until they've been counted. */
+  /** The folders inside the chosen one, as counted so far: null until the count has begun. */
   subfolders: Subfolders | null;
   /** Apply and revert reach the folders inside the chosen one too. */
   includeSubfolders: boolean;
   /** Which folders inside it they reach when not all of them. Kept while the same folder is chosen. */
   chosen: SubfolderChoice | null;
-  /** How far an apply or revert over the folder and its subfolders has got. */
-  progress: TreeProgress | null;
-  /** What the last run over the folder and its subfolders did, until the skin or folder changes. */
-  run: TreeRun | null;
+  /**
+   * The run over the folder and its subfolders the panel shows (state/treeRun.ts has it): going
+   * on, or ended with its summary showing until it's put away or the skin or folder changes.
+   */
+  runId: number | null;
 };
 
 export type Action =
@@ -62,16 +73,24 @@ export type Action =
   | { type: "skinCleared" }
   | { type: "subfoldersCounted"; path: string; subfolders: Subfolders | null }
   | { type: "includeSubfolders"; on: boolean }
-  /** The chooser was closed with Done: `chosen` is null when every one of the `total` folders
-   *  inside `path` was ticked. */
-  | { type: "subfoldersChosen"; path: string; total: number; chosen: SubfolderChoice | null }
+  /** The chooser was closed with Done: `chosen` is null when every folder inside `path` was ticked. */
+  | { type: "subfoldersChosen"; path: string; chosen: SubfolderChoice | null }
+  /** The folders the choice takes, counted further. */
+  | { type: "choiceCounted"; path: string; count: number; total: number; done: boolean }
   | { type: "applyStarted" }
-  | { type: "treeProgress"; progress: TreeProgress }
-  | { type: "applySucceeded"; run?: TreeRun }
+  | { type: "applySucceeded" }
   | { type: "applyFailed"; message: string }
   | { type: "revertStarted" }
-  | { type: "revertSucceeded"; run?: TreeRun }
+  | { type: "revertSucceeded" }
   | { type: "revertFailed"; message: string }
+  /** A run over the tree of the folder at `path` is going: started here, or come back to. */
+  | { type: "treeRunning"; path: string; run: RunInfo }
+  /** The run the panel follows has ended: `error` when it couldn't go at all. */
+  | { type: "treeEnded"; run: RunInfo; error: string | null }
+  /** Back at the folder of a run that has ended, from the run indicator: its summary shows again. */
+  | { type: "treeShown"; path: string; run: RunInfo }
+  /** A run over the tree can't start now, and why. */
+  | { type: "treeRefused"; message: string }
   | { type: "runDismissed" }
   | { type: "invalidDrop"; message: string }
   | { type: "clearError" };
@@ -88,22 +107,35 @@ export const initialState: State = {
   subfolders: null,
   includeSubfolders: false,
   chosen: null,
-  progress: null,
-  run: null,
+  runId: null,
 };
 
 const busy = (state: State) => state.phase === "applying" || state.phase === "reverting";
 
-/** How many folders inside the chosen one a run over the tree takes: none unless they're included, then every one or the ones chosen. */
+/** How many folders inside the chosen one a run over the tree takes: none unless they're included, then every one or the ones chosen, as counted so far. */
 export function insideCount(state: State): number {
   if (!state.includeSubfolders || !state.subfolders) return 0;
-  return state.chosen ? state.chosen.paths.length : state.subfolders.count;
+  return state.chosen ? state.chosen.count : state.subfolders.count;
 }
 
-/** What a run over the tree names as `only`: the folder and the ones chosen inside it, or null for the whole tree. */
-export function treeOnly(state: State): string[] | null {
-  return state.includeSubfolders && state.chosen ? [state.chosen.root, ...state.chosen.paths] : null;
+/** Whether `insideCount` is final: the folders inside have all been counted. */
+export function insideCounted(state: State): boolean {
+  if (!state.subfolders) return false;
+  return state.chosen ? state.chosen.done : state.subfolders.done;
 }
+
+/** Whether Apply and revert are a run over the tree: subfolders are included, and there are some, or may be. */
+export function isTree(state: State): boolean {
+  return state.includeSubfolders && state.subfolders !== null && (insideCount(state) > 0 || !insideCounted(state));
+}
+
+/** Which folders inside a run over the tree takes: the choice, or null for every one. */
+export function treeChoice(state: State): Choice | null {
+  return state.includeSubfolders && state.chosen ? state.chosen.choice : null;
+}
+
+/** There are no folders inside, as far as the count knows: it's done and found none. */
+const noneInside = (s: Subfolders | null) => !s || (s.done && s.count === 0);
 
 function actionablePhase(state: State): Phase {
   if (!state.folder) return "idle";
@@ -120,7 +152,8 @@ export function reduce(state: State, action: Action): State {
       const arriving = state.folder !== null && state.skinId !== null;
       // A new folder starts with only itself in play: its subfolders are counted afresh and
       // including them is chosen again, so a whole tree is never changed by accident. The same
-      // folder picked again keeps the folders chosen inside it.
+      // folder picked again keeps the folders chosen inside it. A run over the folder before goes
+      // on without it.
       const next = {
         ...state,
         folder: action.folder,
@@ -132,22 +165,20 @@ export function reduce(state: State, action: Action): State {
         subfolders: null,
         includeSubfolders: false,
         chosen: state.folder?.path === action.folder.path ? state.chosen : null,
-        progress: null,
-        run: null,
+        runId: null,
       };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "subfoldersCounted": {
       if (state.folder?.path !== action.path) return state;
-      const none = !action.subfolders || action.subfolders.count === 0 || action.subfolders.more;
-      return { ...state, subfolders: action.subfolders, includeSubfolders: none ? false : state.includeSubfolders };
+      return { ...state, subfolders: action.subfolders, includeSubfolders: noneInside(action.subfolders) ? false : state.includeSubfolders };
     }
 
+    // On while the folders inside are still being counted too: the count never holds anything up.
     case "includeSubfolders": {
       if (busy(state)) return state;
-      const s = state.subfolders;
-      if (action.on && (!s || s.count === 0 || s.more)) return state;
+      if (action.on && noneInside(state.subfolders)) return state;
       return { ...state, includeSubfolders: action.on };
     }
 
@@ -155,57 +186,104 @@ export function reduce(state: State, action: Action): State {
     // was chosen, and none ticked is the folder on its own.
     case "subfoldersChosen": {
       if (busy(state) || state.folder?.path !== action.path) return state;
-      const some = action.chosen !== null && action.chosen.paths.length > 0;
+      const chosen = action.chosen;
+      const none = chosen !== null && (isNothing(chosen.choice) || (chosen.done && chosen.count === 0));
+      return { ...state, chosen: none ? null : chosen, includeSubfolders: !none && !noneInside(state.subfolders) };
+    }
+
+    case "choiceCounted": {
+      const chosen = state.chosen;
+      if (!chosen || state.folder?.path !== action.path) return state;
+      const { count, total, done } = action;
+      if (chosen.count === count && chosen.total === total && chosen.done === done) return state;
+      return { ...state, chosen: { ...chosen, count, total, done } };
+    }
+
+    case "treeRunning": {
+      if (state.folder?.path !== action.path) return state;
+      const { run } = action;
+      const apply = run.kind === "apply";
       return {
         ...state,
-        subfolders: { count: action.total, more: false },
-        chosen: some ? action.chosen : null,
-        includeSubfolders: some || (action.chosen === null && action.total > 0),
+        phase: apply ? "applying" : "reverting",
+        skinId: apply ? run.skinId : state.skinId,
+        inFlightSkinId: apply ? run.skinId : null,
+        includeSubfolders: true,
+        runId: run.id,
+        error: null,
+        arriving: false,
       };
     }
 
-    case "treeProgress":
-      return busy(state) ? { ...state, progress: action.progress } : state;
+    case "treeEnded": {
+      const { run, error } = action;
+      if (!busy(state) || state.runId !== run.id) return state;
+      if (error !== null) {
+        const next = { ...state, inFlightSkinId: null, error, runId: null };
+        return { ...next, phase: actionablePhase(next) };
+      }
+      if (run.kind === "apply") {
+        // A run that stopped before changing anything leaves the folder as it was.
+        const next = { ...state, appliedSkinId: run.changed > 0 ? state.inFlightSkinId : state.appliedSkinId, inFlightSkinId: null };
+        return { ...next, phase: actionablePhase(next) };
+      }
+      // The skin is put down too, as after taking a single folder's icon off.
+      const next = { ...state, appliedSkinId: null, skinId: null, arriving: false };
+      return { ...next, phase: actionablePhase(next) };
+    }
+
+    case "treeShown": {
+      if (busy(state) || state.folder?.path !== action.path) return state;
+      const { run } = action;
+      const worn = run.kind === "apply" && run.changed > 0 ? run.skinId : null;
+      const next = {
+        ...state,
+        skinId: worn ?? state.skinId,
+        appliedSkinId: worn,
+        includeSubfolders: true,
+        runId: run.id,
+        arriving: false,
+        error: null,
+      };
+      return { ...next, phase: actionablePhase(next) };
+    }
+
+    case "treeRefused":
+      return { ...state, error: action.message };
 
     case "runDismissed":
-      return state.run ? { ...state, run: null } : state;
+      return state.runId !== null && !busy(state) ? { ...state, runId: null } : state;
 
     case "arrived":
       return state.arriving ? { ...state, arriving: false } : state;
 
     case "skinSelected": {
-      const next = { ...state, skinId: action.skinId, error: null, arriving: false, run: state.skinId === action.skinId ? state.run : null };
-      if (state.phase === "applying" || state.phase === "reverting") return next;
+      // Another skin puts the last run's summary away, but not the run that's going.
+      const runId = busy(state) || state.skinId === action.skinId ? state.runId : null;
+      const next = { ...state, skinId: action.skinId, error: null, arriving: false, runId };
+      if (busy(state)) return next;
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "skinCleared": {
-      if (state.phase === "applying" || state.phase === "reverting") return state;
+      if (busy(state)) return state;
       const next = { ...state, skinId: null, error: null, arriving: false };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "applyStarted":
       if (!state.folder || !state.skinId || busy(state)) return state;
-      return { ...state, phase: "applying", inFlightSkinId: state.skinId, error: null, arriving: false, progress: null, run: null };
+      return { ...state, phase: "applying", inFlightSkinId: state.skinId, error: null, arriving: false, runId: null };
 
     case "applySucceeded": {
-      if (state.phase !== "applying") return state;
-      // A run that stopped before changing anything leaves the folder as it was.
-      const changedNothing = action.run !== undefined && action.run.changed.length === 0;
-      const next = {
-        ...state,
-        appliedSkinId: changedNothing ? state.appliedSkinId : state.inFlightSkinId,
-        inFlightSkinId: null,
-        progress: null,
-        run: action.run ?? null,
-      };
+      if (state.phase !== "applying" || state.runId !== null) return state;
+      const next = { ...state, appliedSkinId: state.inFlightSkinId, inFlightSkinId: null };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "applyFailed": {
-      if (state.phase !== "applying") return state;
-      const next = { ...state, inFlightSkinId: null, error: action.message, progress: null };
+      if (state.phase !== "applying" || state.runId !== null) return state;
+      const next = { ...state, inFlightSkinId: null, error: action.message };
       return { ...next, phase: actionablePhase(next) };
     }
 
@@ -213,19 +291,19 @@ export function reduce(state: State, action: Action): State {
     // show (on its own, or while it waits before a skin goes on).
     case "revertStarted":
       if (state.phase !== "applied" && state.phase !== "folder" && !(state.phase === "ready" && state.arriving)) return state;
-      return { ...state, phase: "reverting", error: null, progress: null };
+      return { ...state, phase: "reverting", error: null, runId: null };
 
     case "revertSucceeded": {
       // The skin is put down too, so the folder is seen wearing its default icon again
       // instead of jumping straight back into a preview of the skin just removed.
-      if (state.phase !== "reverting") return state;
-      const next = { ...state, appliedSkinId: null, skinId: null, arriving: false, progress: null, run: action.run ?? null };
+      if (state.phase !== "reverting" || state.runId !== null) return state;
+      const next = { ...state, appliedSkinId: null, skinId: null, arriving: false };
       return { ...next, phase: actionablePhase(next) };
     }
 
     case "revertFailed":
-      if (state.phase !== "reverting") return state;
-      return { ...state, phase: actionablePhase(state), error: action.message, progress: null };
+      if (state.phase !== "reverting" || state.runId !== null) return state;
+      return { ...state, phase: actionablePhase(state), error: action.message };
 
     case "invalidDrop":
       return { ...state, drag: null, error: action.message };

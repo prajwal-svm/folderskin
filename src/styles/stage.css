@@ -725,6 +725,24 @@
   transition: width 220ms var(--ease-out);
 }
 
+/* While the folders are still being found, how far it has got isn't a share of anything yet: a
+   stretch of the bar sweeps across instead (the run indicator in the sidebar does the same). */
+.stage-progress-bar.is-counting > span,
+.dock-bar.is-counting > span {
+  width: 32%;
+  animation: bar-sweep 1.4s ease-in-out infinite;
+  animation-play-state: var(--loop-state);
+}
+
+@keyframes bar-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
 .stage-progress-name {
   min-height: 18px;
   overflow: hidden;
@@ -866,6 +884,13 @@
   font-weight: 600;
   font-size: 11.5px;
   line-height: 1.35;
+  color: var(--muted);
+}
+
+/* After the first hundred that failed: how many more there are. */
+.stage-result-more {
+  font-weight: 700;
+  font-size: 11.5px;
   color: var(--muted);
 }
 

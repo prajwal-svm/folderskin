@@ -15,9 +15,10 @@
  *
  * `?yours=8` starts with eight skins of your own, for the parts that need a library to work on.
  *
- * `?bigtree` makes the first folder chosen a made-up Studio with 4,960 folders inside, nearly as
- * many as a run takes: one of them holds 1,400 and one branch goes 36 levels down, to see
- * choosing folders keep up at the size it's built for.
+ * `?bigtree` makes the first folder chosen a made-up Studio with 4,960 folders inside: one of them
+ * holds 1,400 and one branch goes 36 levels down, to see choosing folders keep up. `?rushes` makes
+ * it a folder of film rushes with 101,040 folders and long names, for runs at that size. The
+ * folders "choose a folder" hands out in turn end with a Photo archive of 48,210.
  *
  * `?packs=10000` adds that many made-up packs to Community (mockCommunity.ts), searched the way
  * the app searches its catalog, to see and test the view at the size it is built for. Classic Art
@@ -65,13 +66,14 @@ import type {
   PackUpdate,
   PathInfo,
   PlatformInfo,
+  RunChoice,
   Skin,
   SkinList,
 } from "./tauri";
 import type { AvailableUpdate } from "./updater";
 import type { AiEvent } from "../state/chats";
-import type { Subfolders, TreeProgress, TreeRunResult } from "./tree";
-import type { SubfolderTree } from "./folderChoice";
+import type { SubfolderCount, SubfolderCounts, SubfolderList, TreeRun, TreeRunEvent } from "./tree";
+import { takes, type Choice } from "./folderChoice";
 import { cleanName } from "./names";
 import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
@@ -364,33 +366,36 @@ function keep(skins: Skin[]) {
 
 const packAdded = (id: string) => library.some((s) => s.pack === id);
 
-/** Nearly as big a tree as a run takes, with `?bigtree`: see `bigTree`. */
+/** A folder of thousands with `?bigtree`: see `bigTree`. */
 const BIG_TREE = "/Users/you/Documents/Studio";
 /** Folders the preview's "choose a folder" hands out in turn, so switching folders can be tried.
  *  With `?bigtree`, the big one comes first. */
+/** A tree of over a hundred thousand folders with long names, with `?rushes`: see `rushes`. */
+const RUSHES = "/Users/you/Movies/Rushes from the lighthouse documentary, every camera and every day of the shoot";
 const SAMPLE_FOLDERS = [
   ...(new URLSearchParams(location.search).has("bigtree") ? [BIG_TREE] : []),
+  ...(new URLSearchParams(location.search).has("rushes") ? [RUSHES] : []),
   "/Users/you/Documents/Projects",
   "/Users/you/Pictures/Wedding",
   "/Users/you/Desktop/Taxes 2026",
   "/Users/you/Pictures/Photo archive",
 ];
-/** Too big for a run: its switch can't be turned on. */
+/** A tree as big as a network share: 48,210 folders, counted over a moment or two (`photoArchive`). */
 const HUGE_TREE = "/Users/you/Pictures/Photo archive";
 let nextSample = 0;
 /**
- * The icon each folder wears in the preview: Projects (and the big tree) start plain and the others
- * with a colour of their own, so a custom icon can be tried. Applying and reverting change it.
+ * The icon each folder wears in the preview: Projects, the rushes (and the big tree) start plain
+ * and the others with a colour of their own, so a custom icon can be tried. Applying and
+ * reverting change it.
  */
 const mockIcons = new Map<string, string | null>(
-  SAMPLE_FOLDERS.map((path, i) => [path, path === BIG_TREE || path.endsWith("/Projects") ? null : COLOUR_FOLDERS[i % COLOUR_FOLDERS.length]]),
+  SAMPLE_FOLDERS.map((path, i) => [path, path === BIG_TREE || path === RUSHES || path.endsWith("/Projects") ? null : COLOUR_FOLDERS[i % COLOUR_FOLDERS.length]]),
 );
 
 /**
  * The folders inside each sample folder, for trying "Include subfolders" and choosing some of them:
  * Projects has plenty, one branch six levels deep, Wedding has one the preview can't change (to show
- * a partial result), Taxes 2026 has none, and Photo archive has more than a run takes. Nearest first,
- * as the app's walk finds them.
+ * a partial result), Taxes 2026 has none, and Photo archive has 48,210 (`photoArchive`).
  */
 const SAMPLE_TREES: Record<string, string[]> = {
   "/Users/you/Documents/Projects": [
@@ -407,9 +412,9 @@ const SAMPLE_TREES: Record<string, string[]> = {
 };
 
 /**
- * `?bigtree`'s Studio: 4,960 folders, just under the 5,000 a run takes, to see the chooser keep up.
- * Camera roll holds 1,400 folders side by side, Deep dive goes 36 levels down, and Clients, Music,
- * Research and Scans are wide and bushy around them.
+ * `?bigtree`'s Studio: 4,960 folders, to see the chooser keep up. Camera roll holds 1,400 folders
+ * side by side, Deep dive goes 36 levels down, and Clients, Music, Research and Scans are wide and
+ * bushy around them.
  */
 function bigTree(): string[] {
   const paths: string[] = ["Camera roll", "Clients", "Deep dive", "Music", "Research", "Scans"];
@@ -444,44 +449,301 @@ function bigTree(): string[] {
   return paths.sort((a, b) => depth(a) - depth(b)).map((p) => `${BIG_TREE}/${p}`);
 }
 
-/** The folders inside a sample folder, the big tree's made the first time it's asked for. */
-function sampleTree(root: string): string[] {
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * Photo archive's folders, made up as they're asked for: thirty years, twelve months in each, and
+ * 132 or 133 days in each month, 48,210 folders in all.
+ */
+function photoArchive(path: string): string[] {
+  const rest = path.slice(HUGE_TREE.length).split("/").filter(Boolean);
+  if (rest.length === 0) return Array.from({ length: 30 }, (_, i) => String(1997 + i));
+  if (rest.length === 1) return MONTHS;
+  if (rest.length === 2) {
+    const month = (Number(rest[0]) - 1997) * 12 + MONTHS.indexOf(rest[1]);
+    return Array.from({ length: month < 300 ? 133 : 132 }, (_, i) => `Day ${i + 1}`);
+  }
+  return [];
+}
+
+const PLACES = ["the north headland", "the lamp room", "the keeper's cottage", "the harbour wall", "the supply boat", "the lighthouse gallery", "the old fog signal", "the village hall"];
+
+/**
+ * The rushes' folders, made up as they're asked for: forty days of the shoot, twenty-five camera
+ * rolls a day and a hundred clips a roll, 101,040 folders in all, most of them with long names.
+ * Day 17's are locked the first time a run gets to them, so a big run has failures to try again.
+ */
+function rushes(path: string): string[] {
+  const rest = path.slice(RUSHES.length).split("/").filter(Boolean);
+  const two = (n: number) => String(n).padStart(2, "0");
+  if (rest.length === 0) return Array.from({ length: 40 }, (_, i) => `Day ${two(i + 1)} at ${PLACES[i % PLACES.length]}, with the keeper's family and the whole crew`);
+  if (rest.length === 1) return [..."ABCDE"].flatMap((camera) => Array.from({ length: 5 }, (_, r) => `Camera ${camera} roll ${two(r + 1)}, interviews and cutaways before the storm came in`));
+  if (rest.length === 2) return Array.from({ length: 100 }, (_, i) => `Clip ${String(i + 1).padStart(4, "0")}`);
+  return [];
+}
+/** The rushes' folders that have failed once, and work the next time. */
+const lockedOnce = new Set<string>();
+
+/** Each explicit sample tree's folders by the folder they're in, made the first time it's asked for. */
+const insideOf = new Map<string, Map<string, string[]>>();
+
+/** The names of the folders directly inside `path`, in any of the preview's sample folders. */
+function mockChildren(path: string): string[] {
+  if (path === HUGE_TREE || path.startsWith(`${HUGE_TREE}/`)) return photoArchive(path);
+  if (path === RUSHES || path.startsWith(`${RUSHES}/`)) return rushes(path);
+  const root = SAMPLE_FOLDERS.find((r) => path === r || path.startsWith(`${r}/`));
+  if (!root) return [];
   if (root === BIG_TREE) SAMPLE_TREES[BIG_TREE] ??= bigTree();
-  return SAMPLE_TREES[root] ?? [];
+  let byParent = insideOf.get(root);
+  if (!byParent) {
+    byParent = new Map();
+    for (const p of SAMPLE_TREES[root] ?? []) {
+      const cut = p.lastIndexOf("/");
+      const list = byParent.get(p.slice(0, cut)) ?? [];
+      list.push(p.slice(cut + 1));
+      byParent.set(p.slice(0, cut), list);
+    }
+    insideOf.set(root, byParent);
+  }
+  return byParent.get(path) ?? [];
 }
 
 /** Folders in the sample trees that wear an icon of their own. */
 const mockTreeIcons = new Set<string>(["/Users/you/Pictures/Wedding/Guests"]);
-let mockStop = false;
 const lastPart = (path: string) => path.split("/").pop() || path;
+const ancestorsOf = (root: string, path: string) => {
+  const out: string[] = [];
+  for (let at = path; at.length > root.length; at = at.slice(0, at.lastIndexOf("/"))) out.push(at.slice(0, at.lastIndexOf("/")));
+  return out;
+};
 
-async function mockTreeRun(
-  root: string,
-  only: string[] | null,
-  onProgress: (p: TreeProgress) => void,
-  act: (path: string) => "changed" | "skipped" | string,
-): Promise<TreeRunResult> {
-  mockStop = false;
-  const plan = only ?? [root, ...sampleTree(root)];
-  const result: TreeRunResult = { total: plan.length, changed: [], failed: [], skipped: 0, remaining: [], stopped: false };
-  onProgress({ done: 0, total: plan.length, name: lastPart(root) });
-  // A moment per folder, and a few seconds at most for thousands of them.
-  const pause = Math.max(1, Math.min(140, 7000 / plan.length));
-  for (let i = 0; i < plan.length; i++) {
-    if (mockStop) {
-      result.stopped = true;
-      result.remaining = plan.slice(i);
-      break;
+/** Everyone listening for runs and counts, as `listen` has them in the app. */
+const runListeners = new Set<(event: TreeRunEvent) => void>();
+const countListeners = new Set<(count: SubfolderCount) => void>();
+let runSeq = 0;
+
+/**
+ * The count of the folder on show, depth first as the app counts: each folder's insides found,
+ * and how many in its tree are still to read. `?holdcount` holds a big count at 12,400 folders
+ * until the page calls `mockCountGo()`, so a test can see one going.
+ */
+type Counting = { folder: string; found: number; done: boolean; inside: Map<string, number>; open: Map<string, number>; read: Set<string>; stopped: boolean };
+let counting: Counting | null = null;
+
+function countNow(c: Counting): SubfolderCount {
+  return { folder: c.folder, count: c.found, done: c.done };
+}
+
+async function runCount(c: Counting) {
+  const stack = [c.folder];
+  c.open.set(c.folder, 1);
+  let since = 0;
+  let holding = new URLSearchParams(location.search).has("holdcount");
+  while (stack.length > 0) {
+    if (c.stopped) return;
+    const folder = stack.pop()!;
+    const kids = mockChildren(folder);
+    c.read.add(folder);
+    for (let i = kids.length - 1; i >= 0; i--) {
+      const kid = `${folder}/${kids[i]}`;
+      stack.push(kid);
+      c.inside.set(kid, 0);
+      c.open.set(kid, 1);
     }
-    await sleep(pause);
-    const path = plan[i];
-    const outcome = act(path);
-    if (outcome === "changed") result.changed.push(path);
-    else if (outcome === "skipped") result.skipped += 1;
-    else result.failed.push({ path, name: lastPart(path), reason: outcome });
-    onProgress({ done: i + 1, total: plan.length, name: lastPart(path) });
+    for (const at of [folder, ...ancestorsOf(c.folder, folder)]) {
+      c.inside.set(at, (c.inside.get(at) ?? 0) + kids.length);
+      c.open.set(at, (c.open.get(at) ?? 0) + kids.length - 1);
+    }
+    c.found += kids.length;
+    since += 1;
+    // A thousand or so folders at a time, and a word to whoever's listening after each.
+    if (since >= 700) {
+      since = 0;
+      for (const listener of countListeners) listener(countNow(c));
+      if (holding && c.found >= 12_400) {
+        holding = false;
+        try {
+          await held("holdcount", "mockCountGo", () => void (c.stopped && stop()));
+        } catch {
+          return;
+        }
+      }
+      await sleep(30);
+    }
   }
-  return result;
+  c.done = true;
+  for (const listener of countListeners) listener(countNow(c));
+}
+
+/** Throws to give up waiting. */
+function stop(): never {
+  throw new Error("stopped");
+}
+
+/**
+ * The preview's run over a tree: the same record the app keeps (src-tauri/src/tree/job.rs), the
+ * folders it takes found a stretch ahead of the ones it has done, so "3,120 of 12,000+" shows
+ * until they're all found. A small run takes a moment a folder, and a big one a few seconds in
+ * all. `?holdrun` holds the page's first run after its first few folders (3,120 of a big one)
+ * until the page calls `mockRunGo()`, and `?unfocused` has the window behind others when it ends.
+ */
+type MockJob = {
+  run: TreeRun;
+  /** Every folder the run takes, nearest first, as the walk would find them. */
+  plan: string[];
+  /** Each folder's part: "to do", "changed", "skipped", "failed". */
+  parts: Map<string, "to do" | "changed" | "skipped" | "failed">;
+  reasons: Map<string, string>;
+  act: (path: string) => "changed" | "skipped" | string;
+  thumb: string | null;
+  going: boolean;
+  stop: boolean;
+  held: boolean;
+};
+let job: MockJob | null = null;
+let jobIds = 0;
+
+function tellRun() {
+  const event: TreeRunEvent = { seq: ++runSeq, run: job ? { ...job.run, failures: [...job.run.failures] } : null };
+  for (const listener of runListeners) listener(event);
+  return event;
+}
+
+/** Which folders a run takes, by the rules `choice` gives: the same as `takes` in lib/folderChoice.ts. */
+function planOf(root: string, choice: RunChoice | null): string[] {
+  const rules: Choice = { root, separator: "/", all: choice?.all ?? true, rules: Object.fromEntries((choice?.rules ?? []).map((r) => [r.path, r.on])) };
+  const ticked = Object.entries(rules.rules).filter(([, on]) => on).map(([p]) => p);
+  const plan = [root];
+  let level = [root];
+  while (level.length > 0) {
+    const next: string[] = [];
+    for (const folder of level) {
+      for (const name of mockChildren(folder)) {
+        const path = `${folder}/${name}`;
+        const on = takes(rules, path);
+        if (on) plan.push(path);
+        if (on || ticked.some((p) => p.startsWith(`${path}/`))) next.push(path);
+      }
+    }
+    level = next;
+  }
+  return plan;
+}
+
+function newJob(kind: "apply" | "revert", folder: string, plan: string[], act: MockJob["act"], extra: Partial<TreeRun>, thumb: string | null): MockJob {
+  return {
+    run: {
+      id: ++jobIds,
+      kind,
+      undoing: false,
+      leaves_plain: false,
+      folder,
+      root: folder,
+      name: lastPart(folder),
+      skin_id: null,
+      running: true,
+      stopping: false,
+      stopped: false,
+      done: 0,
+      total: 1,
+      counted: plan.length === 1,
+      current: lastPart(folder),
+      changed: 0,
+      failed: 0,
+      skipped: 0,
+      failures: [],
+      error: null,
+      ...extra,
+    },
+    plan,
+    parts: new Map(plan.map((p) => [p, "to do"])),
+    reasons: new Map(),
+    act,
+    thumb,
+    going: false,
+    stop: false,
+    held: false,
+  };
+}
+
+/** Works through the job's folders still to do, found a stretch ahead, until they're done or it's stopped. */
+async function work(j: MockJob) {
+  j.going = true;
+  j.stop = false;
+  const r = j.run;
+  r.running = true;
+  r.stopping = false;
+  r.stopped = false;
+  tellRun();
+  const big = j.plan.length > 200;
+  // A small run a moment a folder, a big one in a few seconds.
+  const each = big ? Math.ceil(j.plan.length / 150) : 1;
+  const pause = big ? 40 : Math.max(1, Math.min(140, 7000 / j.plan.length));
+  const hold = new URLSearchParams(location.search).has("holdrun") && j.run.id === 1 ? (big ? 3120 : 3) : -1;
+  let i = 0;
+  while (true) {
+    if (j.stop) break;
+    await sleep(pause);
+    if (j.stop) break;
+    // The walk keeps well ahead of the work: a small tree is all found at once, and a big one a
+    // stretch at a time.
+    r.total = big ? Math.max(r.total, Math.min(j.plan.length, (r.done + each) * 4 + 1)) : j.plan.length;
+    r.counted = r.total === j.plan.length;
+    let did = 0;
+    for (; i < j.plan.length && did < each; i++) {
+      const path = j.plan[i];
+      if (j.parts.get(path) !== "to do") continue;
+      if (i >= r.total) break;
+      const outcome = j.act(path);
+      did += 1;
+      r.done += 1;
+      r.current = lastPart(path);
+      if (outcome === "changed" || outcome === "skipped") {
+        j.parts.set(path, outcome);
+        if (outcome === "changed") r.changed += 1;
+        else r.skipped += 1;
+      } else {
+        j.parts.set(path, "failed");
+        j.reasons.set(path, outcome);
+        r.failed += 1;
+        if (r.failures.length < 100) r.failures.push({ path, name: lastPart(path), reason: outcome });
+      }
+      if (r.done === hold && !j.held) break;
+    }
+    tellRun();
+    if (r.done === hold && !j.held) {
+      j.held = true;
+      try {
+        await held("holdrun", "mockRunGo", () => void (j.stop && stop()));
+      } catch {
+        break;
+      }
+    }
+    if (i >= j.plan.length) break;
+  }
+  const left = j.plan.some((p) => j.parts.get(p) === "to do");
+  r.running = false;
+  r.stopping = false;
+  r.stopped = j.stop && left;
+  r.total = left && !r.counted ? r.total : j.plan.length;
+  r.counted = !left || r.counted;
+  j.going = false;
+  if (r.kind === "apply" && j.parts.get(r.root) === "changed") mockIcons.set(r.root, j.thumb);
+  if (r.kind === "revert" && j.parts.get(r.root) === "changed") mockIcons.set(r.root, null);
+  tellRun();
+}
+
+function mockStart(kind: "apply" | "revert", folder: string, plan: string[], act: MockJob["act"], extra: Partial<TreeRun>, thumb: string | null): TreeRunEvent {
+  if (job?.run.running) throw new Error(`wait for the run in ${job.run.name} to finish, or stop it, before starting another`);
+  job = newJob(kind, folder, plan, act, extra, thumb);
+  void work(job);
+  return tellRun();
+}
+
+/** The latest job, as run `id`, or why it isn't there. */
+function jobOf(id: number): MockJob {
+  if (!job || job.run.id !== id) throw new Error("that run isn't there any more");
+  return job;
 }
 
 /** The next sample folder, for the preview's "choose a folder". */
@@ -789,52 +1051,116 @@ export const mockApi = {
     if (os === "linux") return { os, browse_label: "your computer", note: "browser preview: nothing is written to disk" };
     return { os: "macos", browse_label: "your Mac", note: "browser preview: nothing is written to disk" };
   },
-  subfolderCount: async (folder: string): Promise<Subfolders> => {
-    await sleep(260);
-    if (folder === HUGE_TREE) return { count: 5000, more: true };
-    return { count: sampleTree(folder).length, more: false };
+  subfolderCount: async (folder: string): Promise<SubfolderCount> => {
+    if (counting) counting.stopped = true;
+    const c: Counting = { folder, found: 0, done: false, inside: new Map([[folder, 0]]), open: new Map(), read: new Set(), stopped: false };
+    counting = c;
+    void runCount(c);
+    // A small folder is counted by the time the answer comes; a big one goes on.
+    for (let waited = 0; waited < 80 && !c.done; waited += 10) await sleep(10);
+    return countNow(c);
   },
-  subfolderTree: async (folder: string): Promise<SubfolderTree> => {
-    await sleep(folder === BIG_TREE ? 450 : 220);
-    if (folder === HUGE_TREE) return { root: folder, separator: "/", names: [], parents: [], more: true };
-    const index = new Map<string, number>([[folder, 0]]);
-    const names: string[] = [];
-    const parents: number[] = [];
-    sampleTree(folder).forEach((path, i) => {
-      const cut = path.lastIndexOf("/");
-      parents.push(index.get(path.slice(0, cut)) ?? 0);
-      names.push(path.slice(cut + 1));
-      index.set(path, i + 1);
-    });
-    return { root: folder, separator: "/", names, parents, more: false };
+  subfolderCounts: async (folder: string, paths: string[]): Promise<SubfolderCounts> => {
+    const c = counting?.folder === folder ? counting : null;
+    if (!c) return { folder, count: 0, done: false, paths: paths.map(() => ({ found: false, inside: 0, done: false })) };
+    return {
+      ...countNow(c),
+      paths: paths.map((path) => {
+        if (c.inside.has(path)) return { found: true, inside: c.inside.get(path) ?? 0, done: (c.open.get(path) ?? 1) === 0 };
+        // Not come to yet, or not there at all: the folder it would be in was read without it.
+        return { found: false, inside: 0, done: c.read.has(path.slice(0, path.lastIndexOf("/"))) || c.done };
+      }),
+    };
+  },
+  onSubfolderCount: (listener: (count: SubfolderCount) => void) => {
+    countListeners.add(listener);
+    return () => void countListeners.delete(listener);
+  },
+  subfolderList: async (folder: string): Promise<SubfolderList> => {
+    await sleep(folder === BIG_TREE || folder === HUGE_TREE || folder === RUSHES ? 180 : 90);
+    const names = mockChildren(folder);
+    return { path: folder, separator: "/", names, nested: names.map((name) => mockChildren(`${folder}/${name}`).length > 0) };
   },
   treeBytes: async (_skinId: string): Promise<number> => {
     await sleep(200);
     // What the app measured for a painted skin on macOS.
     return 2_670_631;
   },
-  applySkinTree: async (folder: string, skinId: string, only: string[] | null, onProgress: (p: TreeProgress) => void): Promise<TreeRunResult> => {
+  startTreeApply: async (folder: string, skinId: string, choice: RunChoice | null): Promise<TreeRunEvent> => {
+    await sleep(40);
     const thumb = library.find((s) => s.id === skinId)?.thumbnail ?? null;
-    const result = await mockTreeRun(folder, only, onProgress, (path) => {
+    const act = (path: string) => {
       if (path.endsWith("/Private")) return "you don't have permission to change it";
+      if (path.startsWith(`${RUSHES}/Day 17 `) && !lockedOnce.has(path)) {
+        lockedOnce.add(path);
+        return "you don't have permission to change it";
+      }
       mockTreeIcons.add(path);
       return "changed";
-    });
-    if (result.changed.includes(folder)) mockIcons.set(folder, thumb);
-    return result;
+    };
+    return mockStart("apply", folder, planOf(folder, choice), act, { skin_id: skinId }, thumb);
   },
-  revertSkinTree: async (folder: string, only: string[] | null, onProgress: (p: TreeProgress) => void, skipPlain?: boolean): Promise<TreeRunResult> => {
-    const result = await mockTreeRun(folder, only, onProgress, (path) => {
+  startTreeRevert: async (folder: string, choice: RunChoice | null, skipPlain: boolean): Promise<TreeRunEvent> => {
+    await sleep(40);
+    const act = (path: string) => {
       const has = mockTreeIcons.has(path) || (path === folder && mockIcons.get(folder) != null);
-      if ((skipPlain ?? !only) && !has) return "skipped";
+      if (skipPlain && !has) return "skipped";
       mockTreeIcons.delete(path);
       return "changed";
-    });
-    if (result.changed.includes(folder)) mockIcons.set(folder, null);
-    return result;
+    };
+    return mockStart("revert", folder, planOf(folder, choice), act, { leaves_plain: skipPlain }, null);
   },
-  stopTreeRun: async () => {
-    mockStop = true;
+  stopTreeRun: async (id: number) => {
+    if (job?.run.id !== id || !job.run.running) return;
+    job.stop = true;
+    job.run.stopping = true;
+    tellRun();
+  },
+  carryOnTreeRun: async (id: number): Promise<TreeRunEvent> => {
+    const j = jobOf(id);
+    if (j.run.running) throw new Error(`wait for the run in ${j.run.name} to finish, or stop it, before starting another`);
+    void work(j);
+    return tellRun();
+  },
+  retryTreeRun: async (id: number): Promise<TreeRunEvent> => {
+    const j = jobOf(id);
+    if (j.run.running) throw new Error(`wait for the run in ${j.run.name} to finish, or stop it, before starting another`);
+    for (const [path, part] of j.parts) if (part === "failed") j.parts.set(path, "to do");
+    j.run.done -= j.run.failed;
+    j.run.failed = 0;
+    j.run.failures = [];
+    void work(j);
+    return tellRun();
+  },
+  undoTreeRun: async (id: number): Promise<TreeRunEvent> => {
+    const j = jobOf(id);
+    if (j.run.kind !== "apply" || j.run.running) throw new Error("that run isn't there any more");
+    const plan = j.plan.filter((path) => j.parts.get(path) === "changed");
+    const act = (path: string) => {
+      mockTreeIcons.delete(path);
+      return "changed";
+    };
+    job = newJob("revert", j.run.folder, plan, act, { undoing: true, skin_id: j.run.skin_id, total: plan.length, counted: true }, null);
+    void work(job);
+    return tellRun();
+  },
+  dismissTreeRun: async (id: number) => {
+    if (job?.run.id !== id || job.run.running) return;
+    job = null;
+    tellRun();
+  },
+  treeRun: async (): Promise<TreeRunEvent> => ({ seq: ++runSeq, run: job ? { ...job.run } : null }),
+  onTreeRun: (listener: (event: TreeRunEvent) => void) => {
+    runListeners.add(listener);
+    return () => void runListeners.delete(listener);
+  },
+  // `?unfocused` has the window behind others, so a run that ends says so as a notification,
+  // which the page keeps in `window.mockNotifications` for a test to read.
+  windowFocused: async () => !new URLSearchParams(location.search).has("unfocused"),
+  askToNotify: async () => true,
+  notify: async (title: string, body: string) => {
+    const w = window as unknown as { mockNotifications?: { title: string; body: string }[] };
+    (w.mockNotifications ??= []).push({ title, body });
   },
   folderIcon: async (path: string): Promise<FolderIcon> => {
     await sleep(120);
