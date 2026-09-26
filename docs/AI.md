@@ -148,9 +148,22 @@ the key isn't clean, a free icon is lifted off its backdrop by the system instea
 on macOS 14 and later, with Vision's foreground instance mask, the lifting Preview and Photos do
 (`lift.rs`). It knows a subject by what it is rather than its colour, and it drops the shadow the
 model painted under it. Along the lifted edge, the backdrop's share of each pixel is taken back
-out of its colour (`matte::cut_by_mask`), so no lavender or pink rim is left. Where the system
-can't lift a subject (Windows and Linux, or a picture with none in it), a free icon on a flat
-colour is cut from the edge in, as a green one is.
+out of its colour (`matte::cut_by_mask`), so no lavender or pink rim is left.
+
+Where Vision isn't there (Windows, Linux and Macs before macOS 14), FolderSkin lifts the subject
+itself (`crates/folderskin-core/src/segment/`), with a graph cut as GrabCut makes one: every
+pixel is labelled subject or backdrop at the least total cost. Labelling a pixel backdrop is
+cheap where the backdrop measured from the frame's edge, or the colours learned from it, explain
+it, and where it is that backdrop darkened by a shadow the frame's edge reaches without crossing
+an edge. A black beak or a grey camera behind the subject's edge stays with the subject however
+dark it is. Labelling it subject is cheap where the subject's own colours explain it, and a
+change of label between neighbours costs what their likeness makes unlikely, so the cut follows
+the subject's edges. It is made at 384 px while the colours are learned, then the edge is cut
+again at full size and softened, and `matte::cut_by_mask` takes it from there. On 26 of the
+Local Model's pictures it agrees with Vision to within a few pixels of edge. A neon sign on a
+dark wall keeps the wall its glow lights inside its outline, and a watercolour wash sent as a
+heavily compressed JPEG can stay around the subject. Where no subject stands out from a plain
+backdrop, a free icon on a flat colour is cut from the edge in, as a green one is.
 
 A whole folder painted on FolderSkin's template takes neither route. It is cut along the
 template's own outline, as described above. When the model changed the folder's shape, it is

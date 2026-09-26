@@ -553,7 +553,9 @@ readers (pure functions, unit-tested without a network, and sent for real to a s
 on localhost by `tests/providers.rs`) and the prompt templates. The app crate
 keeps the keys, encrypted in a private file rather than in the keychain (`src-tauri/src/keys.rs`
 explains how and why). `crates/folderskin-core/src/matte.rs` turns a keyed render into a clean cutout for the
-providers that cannot return an alpha channel. [AI.md](AI.md) covers the feature itself.
+providers that cannot return an alpha channel, and when the key drifted, `lift.rs` lifts the
+subject off its backdrop: with Vision on macOS 14 and later, and with the graph cut in
+`segment/` everywhere else. [AI.md](AI.md) covers the feature itself.
 
 A finished folder image, generated whole or imported, is applied without going through the
 compositor: `compositor::icon_set_from_image` fits it into the icon canvas instead. That is the

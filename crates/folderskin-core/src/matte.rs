@@ -700,9 +700,9 @@ pub fn on_plain_backdrop(img: &RgbaImage) -> bool {
     Backdrop::measure(img).is_some_and(|b| b.plain >= 0.9)
 }
 
-/// The subject of `img` lifted off whatever it was painted on by the system ([`crate::lift`]),
-/// cut out and trimmed; `None` where the system can't lift subjects, finds none, or finds one too
-/// small to be the picture's ([`MIN_SUBJECT_SHARE`] of the frame).
+/// The subject of `img` lifted off whatever it was painted on ([`crate::lift`]), cut out and
+/// trimmed; `None` where no subject stands out, or the one that does is too small to be the
+/// picture's ([`MIN_SUBJECT_SHARE`] of the frame).
 pub fn lifted(img: &RgbaImage) -> Option<RgbaImage> {
     let mask = crate::lift::subject_mask(img)?;
     let solid = mask.pixels().filter(|p| p.0[0] >= 128).count();
@@ -763,8 +763,8 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_lifted_where_the_system_cant() {
-        // Off macOS there is no lifting to ask; on a Mac a flat picture has no subject.
+    fn a_flat_picture_has_nothing_to_lift() {
+        // Whatever lifts it, Vision or the graph cut, a flat picture has no subject.
         let flat = RgbaImage::from_pixel(64, 64, Rgba([90, 90, 200, 255]));
         assert!(lifted(&flat).is_none());
     }

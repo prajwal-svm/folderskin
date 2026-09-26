@@ -137,10 +137,12 @@ All notable changes to FolderSkin are recorded here. The format follows
   takes it off itself.
 - **Free icons come out on their own.** A free icon the model painted on a lavender or rose
   studio sweep instead of the flat colour it was asked for used to stay a square picture, and
-  one on a flat colour kept a smudge of its painted shadow. On macOS 14 and later FolderSkin now
-  lifts the subject off whatever it stands on, as Preview does, so a white robot, a grey camera
-  or a watercolour cactus comes out whole, with no rim and no shadow. A whole folder the model
-  reshaped is cut out along its own outline the same way.
+  one on a flat colour kept a smudge of its painted shadow. FolderSkin now lifts the subject off
+  whatever it stands on: on macOS 14 and later as Preview does, and on Windows, Linux and older
+  Macs with a cut of its own that follows the subject's edges and knows the backdrop's colours
+  and shadows. A white robot, a grey camera or a watercolour cactus comes out whole, with no rim
+  and no shadow. A whole folder the model reshaped is cut out along its own outline the same
+  way.
 - **A whole folder is cut out when the model's backdrop drifts.** The Local Model turns the
   magenta around the folder into a dusty pink that brightens towards a corner, or a dark grey
   behind a night scene, and a painting that shared those colours, such as a sunset's clouds or a

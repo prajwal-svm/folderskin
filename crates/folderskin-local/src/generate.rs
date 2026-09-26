@@ -759,9 +759,10 @@ pub fn silhouette_of(base: &Base, width: u32, height: u32) -> Option<GrayImage> 
 }
 
 /// A free icon cut out of what it was painted on: the canvas's `key` where the model kept it
-/// clean; otherwise the subject lifted off it by the system (on a Mac, Preview's own lifting,
-/// which tells a white robot lit lavender by its backdrop from the backdrop); otherwise any flat
-/// colour the model drifted to, cut from the edge in. `None` when none of that finds it.
+/// clean; otherwise the subject lifted off it ([`matte::lifted`]: Preview's own lifting on macOS
+/// 14 and later, FolderSkin's graph cut elsewhere, either of which tells a white robot lit
+/// lavender by its backdrop from the backdrop); otherwise any flat colour the model drifted to,
+/// cut from the edge in. `None` when none of that finds it.
 ///
 /// Magenta almost never belongs to the art, so it goes wherever it is. Green does, in every leaf
 /// and stem, so a green backdrop only goes where it reaches the edge of the picture, from the

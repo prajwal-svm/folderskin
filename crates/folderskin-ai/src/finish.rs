@@ -268,8 +268,9 @@ pub enum Finished {
 /// artwork size.
 ///
 /// A free icon on a backdrop that drifted from the key, and a whole folder the model reshaped, are
-/// lifted off it by the system where it can ([`matte::lifted`]: on a Mac, Preview's own lifting),
-/// which tells a subject from a backdrop by what it is rather than its colour. Failing that a free
+/// lifted off it where they can be ([`matte::lifted`]: Preview's own lifting on macOS 14 and
+/// later, FolderSkin's graph cut elsewhere), which tells a subject from a backdrop by more than
+/// its colour. Failing that a free
 /// icon comes out of a key that drifted a little, or a backdrop of another flat colour, since it
 /// has no template whose shape could be mistaken for one. A whole folder or a free icon with no
 /// such backdrop at all is [`AiError::NoBackdrop`]: the caller decides what to keep of it.
@@ -363,8 +364,8 @@ mod tests {
     use folderskin_core::base::{BASES, FREE, MAC_FOLDER, WINDOWS_FOLDER};
     use image::Rgba;
 
-    /// [`super::finish`] without the system's lifting, which a test machine may or may not have:
-    /// these hold the key and the silhouette to their own results.
+    /// [`super::finish`] without lifting, which differs by machine (Vision on a Mac, the graph
+    /// cut elsewhere): these hold the key and the silhouette to their own results.
     fn finish(
         result: &GenerateResult,
         base: &Base,

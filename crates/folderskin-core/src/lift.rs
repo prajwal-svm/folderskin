@@ -1,21 +1,22 @@
-//! A picture's subject lifted off whatever it was painted on, by the system's own model: on macOS
-//! 14 and later, Vision's foreground instance mask, the one Preview and Photos lift a subject
-//! with.
+//! A picture's subject lifted off whatever it was painted on: on macOS 14 and later by the
+//! system's own model, Vision's foreground instance mask, the one Preview and Photos lift a
+//! subject with; elsewhere by FolderSkin's own graph cut ([`crate::segment`]).
 //!
 //! A free icon is asked for on a flat key colour, and a model keeps it about half the time.
 //! klein turns magenta into a lavender or rose studio sweep with a glow and a soft floor, and a
 //! colour key can't then tell the sweep from a white robot lit lavender by it, a grey camera in a
 //! fox's paws, or the wash a watercolour cactus sits in. Vision tells them apart by what the
 //! subject is, not its colour: in testing it lifted all seven of klein's icons whole, in about a
-//! quarter of a second each.
+//! quarter of a second each. The graph cut tells them apart by the backdrop's own colours, its
+//! shadows and the subject's edges, and agrees with Vision on nearly all of them.
 //!
-//! Elsewhere, and on a picture where it finds no subject, [`subject_mask`] is `None`, and the
-//! caller keys the backdrop out instead.
+//! On a picture where no subject stands out, [`subject_mask`] is `None`, and the caller keys the
+//! backdrop out instead.
 
 use image::{GrayImage, RgbaImage};
 
 /// How much each pixel of `img` belongs to its subject: 255 on it, 0 around it, soft along its
-/// edge, the same size as `img`. `None` when the system can't lift subjects, or finds none.
+/// edge, the same size as `img`. `None` when no subject stands out from a plain backdrop.
 pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
     imp::subject_mask(img)
 }
@@ -36,8 +37,10 @@ mod imp {
     use objc2_vision::{VNGenerateForegroundInstanceMaskRequest, VNImageRequestHandler, VNRequest};
 
     pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
-        // New in macOS 14: before that the class isn't there to ask.
-        AnyClass::get(c"VNGenerateForegroundInstanceMaskRequest")?;
+        // New in macOS 14: before that the class isn't there to ask, and the graph cut lifts it.
+        if AnyClass::get(c"VNGenerateForegroundInstanceMaskRequest").is_none() {
+            return crate::segment::subject_mask(img);
+        }
         let png = crate::raster::encode_png(img);
         let mask = autoreleasepool(|_| {
             let data = NSData::with_bytes(&png);
@@ -119,8 +122,8 @@ mod imp {
 mod imp {
     use image::{GrayImage, RgbaImage};
 
-    pub fn subject_mask(_img: &RgbaImage) -> Option<GrayImage> {
-        None
+    pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
+        crate::segment::subject_mask(img)
     }
 }
 
