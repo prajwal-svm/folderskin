@@ -110,6 +110,9 @@ const SAMPLE = 48;
 export async function readPalette(src: string): Promise<Palette> {
   const image = new Image();
   image.decoding = "async";
+  // A thumbnail by its address (src-tauri/src/thumbs.rs) is another origin's: read only when it
+  // comes with leave to be, which the app's schemes give.
+  if (!src.startsWith("data:")) image.crossOrigin = "anonymous";
   image.src = src;
   await image.decode();
   const canvas = document.createElement("canvas");

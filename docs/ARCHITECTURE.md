@@ -30,6 +30,7 @@ folderskin/
 │   ├── src/composer.rs      the composer's commands: the template's layers, saving a design
 │   ├── src/bases.rs         every shape a skin is made for, drawn for the pickers
 │   ├── src/drive_thumbs.rs  skins drawn on the drive picked, under the fsdrive: scheme
+│   ├── src/thumbs.rs        the library's thumbnails on each folder, under the fsthumb: scheme
 │   ├── src/state.rs         what the commands share: the store and its caches
 │   └── src/store.rs         saved skins on disk
 ├── crates/
@@ -44,9 +45,18 @@ folderskin/
 
 Every pixel the user ever sees comes out of `folderskin_core::compositor::render_icon_set`: a
 gallery thumbnail, the drop-zone preview, the icon written to disk. The webview never draws
-folder geometry. It displays PNGs the Rust side rendered and handed over as data URLs. A
+folder geometry. It displays PNGs the Rust side rendered, handed over as data URLs or, for the
+library's thumbnails, by address under the `fsthumb:` scheme (`src-tauri/src/thumbs.rs`). A
 thumbnail is therefore a correct preview of the icon by construction, on every operating system,
 and there is no second implementation to keep in sync.
+
+The library lists every skin, and a thumbnail is a 512 px PNG of about 450 KB, so the list names
+each by address (`fsthumb://localhost/v3/<folder>/<skin id>`, `http://fsthumb.localhost/…` on
+Windows) rather than carrying it: 150 skins as data URLs were 90 MB of text, which every launch and
+every switch of folder waited for. The webview asks for the thumbnails it shows, which are read
+from where they're kept or drawn the first time, six at a time. After each list, a background task
+draws every thumbnail not kept yet on each of the three folders, three at a time, so choosing
+another folder never waits for them.
 
 The compositor:
 
@@ -117,7 +127,7 @@ frontend names them.
 
 | command | input | output |
 |---|---|---|
-| `list_skins` | – | the user's skins, newest first, each with a PNG data-URL thumbnail, and beside them the plain default folder |
+| `list_skins` | – | the user's skins, newest first, each with its thumbnail's `fsthumb:` address on the folder chosen, and beside them the plain default folder; then draws the thumbnails every folder lacks, in the background |
 | `inspect_path` | `path` | `{kind: "folder" \| "drive" \| "image" \| "other", name, path, drive}`. For a drive's root, `drive` is what the stage shows ([DRIVES.md](DRIVES.md#what-the-stage-shows-for-a-drive)): its kind and shape, its letter on Windows, whether it's the startup disk, read-only or a network share, why its icon can't be changed when it can't (`locked`), the plain drive, and where its skins' pictures on it are |
 | `import_image` | `path` | the picture saved as a skin, id `user:<hash>` (the saved one if it was imported before) |
 | `apply_skin` | `folder`, `skinId` | `{}` or an error string. On a drive's root, the skin goes on as the drive's own icon, drawn on its shape |
@@ -231,7 +241,8 @@ soon as it arrives, by `src-tauri/src/store.rs`, in a `skins` folder in the app 
 skins/
 ├── skins.json                 index: {"version": 1, "skins": [...]}
 ├── 3f2a9c0b1d4e.webp          the skin, a lossless WebP, longest side at most 2048 px
-├── 3f2a9c0b1d4e.thumb-v2.png  its 512 px gallery thumbnail
+├── 3f2a9c0b1d4e.thumb-v3.png  its 512 px gallery thumbnail on the Mac's folder
+├── 3f2a9c0b1d4e.thumb-v3-windows.png  on Windows' folder, and -linux on the Linux one
 └── 7c01e5a9b2d8.design.json   a design's document, beside a skin made in the composer
 ```
 

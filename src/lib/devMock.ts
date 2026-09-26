@@ -1254,9 +1254,6 @@ function mockShareStatus(): ShareStatus {
   };
 }
 
-/** Set when the folder look changes, so the next list of skins takes as long as a redraw would. */
-let mockRedraw = false;
-
 /**
  * For the `?hold…` switches, which keep something under way for a test to look at, however busy
  * the machine: whether `switch` is on, and if so, waits until the page calls `window[go]()`.
@@ -1280,12 +1277,6 @@ async function held(switchName: string, go: string, stop: () => void = () => {})
   return true;
 }
 
-/** How long a redraw takes: a moment, or with `?holdredraw` until the page calls `mockRedrawn()`,
- *  so a test can look at the library while it's drawn again, however busy the machine. */
-async function redrawTime(): Promise<void> {
-  if (!(await held("holdredraw", "mockRedrawn"))) await sleep(700);
-}
-
 export const mockApi = {
   folderLook: async (): Promise<FolderStyle> => {
     const look = localStorage.getItem(MOCK_LOOK_KEY);
@@ -1293,14 +1284,9 @@ export const mockApi = {
   },
   setFolderLook: async (look: FolderStyle): Promise<void> => {
     localStorage.setItem(MOCK_LOOK_KEY, look);
-    mockRedraw = true;
   },
+  // As the app lists them: each thumbnail by itself, never drawn while the list waits.
   listSkins: async (): Promise<SkinList> => {
-    // The app draws every thumbnail again on the other folder, which takes a moment.
-    if (mockRedraw) {
-      mockRedraw = false;
-      await redrawTime();
-    }
     return {
       skins: [...library].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)),
       default_thumbnail: COLOUR_FOLDERS[0],

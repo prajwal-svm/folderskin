@@ -21,6 +21,7 @@ pub mod prompts;
 pub mod share;
 pub mod state;
 pub mod store;
+pub mod thumbs;
 pub mod tree;
 pub mod window;
 
@@ -100,6 +101,9 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol(previews::SCHEME, previews::handle)
         // Skins on the drive picked, drawn as the cards that show them scroll in.
         .register_asynchronous_uri_scheme_protocol(drive_thumbs::SCHEME, drive_thumbs::handle)
+        // The library's thumbnails on the chosen folder, by address, so a list or a switch of
+        // folder never carries the pictures themselves (thumbs.rs).
+        .register_asynchronous_uri_scheme_protocol(thumbs::SCHEME, thumbs::handle)
         .manage(share::Waiting::default())
         .manage(deep_link::InstallLinks::default())
         // The folders inside the folder on show, counted in the background, and the latest run

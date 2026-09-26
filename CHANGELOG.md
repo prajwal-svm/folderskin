@@ -71,6 +71,11 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 - **An empty design's hint sits at the foot of the stage**, beside an info icon, where it never
   covers the folder or the drive.
+- **Switching folders is instant.** Choosing the Mac's, Windows' or the Linux folder used to
+  send every skin's thumbnail to the window again and say "Drawing your skins" while it did, for
+  seconds with a big library and over a minute the first time. The thumbnails for every folder are
+  now drawn ahead in the background, and the library shows each one as it's needed, so a switch
+  and a launch no longer wait for any of them.
 - **Runs over subfolders on a Mac are about 100 times faster, and take a fraction of the
   space.** On the Mac's own disks the folders share one copy of the icon, so each takes about
   30 KB instead of 2.5 MB. On network drives and other disks each folder gets a copy of about

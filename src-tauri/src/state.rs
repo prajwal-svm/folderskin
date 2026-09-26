@@ -7,7 +7,7 @@ use folderskin_core::compositor::Style;
 use folderskin_core::drive::DriveShape;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 /// How many decoded saved skins stay in memory (up to 16 MB each at 2048 px).
@@ -73,7 +73,17 @@ pub struct Inner {
     default_thumb: [OnceLock<String>; 3],
     /// Each plain drive's picture as a PNG data URL, once it has been drawn.
     plain_drives: Mutex<HashMap<DriveShape, String>>,
+    /// Whether thumbnails are being drawn ahead ([`AppState::predraw_thumbnails`]): idle,
+    /// running, or running and asked to look again.
+    predrawing: AtomicU8,
 }
+
+const PREDRAW_IDLE: u8 = 0;
+const PREDRAW_RUNNING: u8 = 1;
+const PREDRAW_AGAIN: u8 = 2;
+/// How many thumbnails are drawn ahead at once: each takes a core for a third of a second and 16
+/// MB while it's drawn, and this is background work.
+const PREDRAW_THREADS: usize = 3;
 
 /// Cheap to clone; every command clones it before moving work to a blocking thread.
 #[derive(Clone, Default)]
@@ -346,6 +356,99 @@ impl AppState {
                 .then_with(|| a.id.cmp(&b.id))
         });
         skins
+    }
+
+    /// Every saved skin, plus any kept for this session only, newest first: the library as the
+    /// webview lists it, which fetches each thumbnail by its address ([`crate::thumbs`]), so no
+    /// picture is read or drawn here.
+    pub fn saved_entries(&self) -> Vec<SavedSkin> {
+        let mut entries: Vec<SavedSkin> = lock(&self.0.unsaved)
+            .values()
+            .map(|u| u.entry.clone())
+            .collect();
+        if let Some(store) = self.store() {
+            entries.extend(store.list());
+        }
+        entries.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        entries
+    }
+
+    /// Skin `id`'s thumbnail on the folder of `style`: kept once drawn, drawn the first time.
+    pub fn thumbnail_in(&self, id: &str, style: Style) -> Result<Vec<u8>, String> {
+        let unsaved = lock(&self.0.unsaved)
+            .get(id)
+            .map(|u| (u.image.clone(), u.entry.base.clone()));
+        if let Some((image, base)) = unsaved {
+            return Ok(image.preview_png_on_in(THUMB_SIZE, base.as_deref(), style));
+        }
+        let store = self
+            .store()
+            .ok_or_else(|| "that skin isn't available any more".to_string())?;
+        let entry = store
+            .get(id)
+            .ok_or_else(|| "that skin isn't available any more".to_string())?;
+        store.thumbnail_png_in(&entry, style)
+    }
+
+    /// Draws, in the background, every saved skin's thumbnail that isn't kept yet on each of the
+    /// three folders, the one skins go on first, so choosing another folder never waits for them.
+    /// A few at a time, on threads of their own; a second call while it runs asks it to look again
+    /// once it's done, for the skins added meanwhile.
+    pub fn predraw_thumbnails(&self) {
+        if self.0.predrawing.swap(PREDRAW_RUNNING, Ordering::SeqCst) != PREDRAW_IDLE {
+            self.0.predrawing.store(PREDRAW_AGAIN, Ordering::SeqCst);
+            return;
+        }
+        let state = self.clone();
+        std::thread::spawn(move || loop {
+            state.predraw_once();
+            // Idle again unless another call asked for a second look meanwhile.
+            if state
+                .0
+                .predrawing
+                .compare_exchange(
+                    PREDRAW_RUNNING,
+                    PREDRAW_IDLE,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                )
+                .is_ok()
+            {
+                break;
+            }
+            state.0.predrawing.store(PREDRAW_RUNNING, Ordering::SeqCst);
+        });
+    }
+
+    fn predraw_once(&self) {
+        let Some(store) = self.store() else {
+            return;
+        };
+        let first = crate::look::current();
+        let mut styles = vec![first];
+        styles.extend(Style::ALL.iter().copied().filter(|s| *s != first));
+        let todo: Vec<(SavedSkin, Style)> = styles
+            .iter()
+            .flat_map(|&style| store.list().into_iter().map(move |entry| (entry, style)))
+            .filter(|(entry, style)| !store.has_thumbnail_in(entry, *style))
+            .collect();
+        let next = AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..PREDRAW_THREADS.min(todo.len()) {
+                scope.spawn(|| {
+                    while let Some((entry, style)) = todo.get(next.fetch_add(1, Ordering::Relaxed))
+                    {
+                        if let Err(e) = store.thumbnail_png_in(entry, *style) {
+                            eprintln!("folderskin: couldn't draw {}'s thumbnail: {e}", entry.id);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     /// Gives a saved or session-only skin a new name and tags and returns its entry.

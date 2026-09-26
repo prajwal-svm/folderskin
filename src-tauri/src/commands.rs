@@ -85,11 +85,21 @@ pub struct SkinDto {
 impl SkinDto {
     /// A saved skin, as the gallery's "yours" collection shows it.
     pub fn saved(entry: &SavedSkin, thumbnail_png: &[u8]) -> SkinDto {
+        SkinDto::with_thumbnail(entry, data_url(thumbnail_png))
+    }
+
+    /// A skin as the library lists it: its thumbnail on the folder of `look` by its address
+    /// ([`crate::thumbs`]), read or drawn when the webview shows it.
+    pub fn listed(entry: &SavedSkin, look: compositor::Style) -> SkinDto {
+        SkinDto::with_thumbnail(entry, crate::thumbs::url(look, &entry.id))
+    }
+
+    fn with_thumbnail(entry: &SavedSkin, thumbnail: String) -> SkinDto {
         SkinDto {
             id: entry.id.clone(),
             name: entry.name.clone(),
             collection: "yours".into(),
-            thumbnail: data_url(thumbnail_png),
+            thumbnail,
             custom: true,
             kind: entry.kind,
             shape: entry.shape,
@@ -346,13 +356,19 @@ fn heic_to_png(_path: &Path) -> Result<Vec<u8>, String> {
 #[tauri::command]
 pub async fn list_skins(app: AppHandle, state: State<'_, AppState>) -> Result<SkinListDto, String> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || SkinListDto {
-        skins: state
-            .saved_skins()
-            .iter()
-            .map(|(entry, png)| SkinDto::saved(entry, png))
-            .collect(),
-        default_thumbnail: default_thumbnail(&app, &state),
+    tauri::async_runtime::spawn_blocking(move || {
+        let look = crate::look::current();
+        let list = SkinListDto {
+            skins: state
+                .saved_entries()
+                .iter()
+                .map(|entry| SkinDto::listed(entry, look))
+                .collect(),
+            default_thumbnail: default_thumbnail(&app, &state),
+        };
+        // Every folder's thumbnails ready before anyone switches to it.
+        state.predraw_thumbnails();
+        list
     })
     .await
     .map_err(|e| e.to_string())

@@ -31,7 +31,7 @@
 //! rather than overwritten, and the store starts empty.
 
 use folderskin_core::apply::paths::write_atomic;
-use folderskin_core::compositor::{self, Artwork, IconSet};
+use folderskin_core::compositor::{self, Artwork, IconSet, Style};
 use folderskin_core::drive::{DriveShape, DriveStyle};
 use folderskin_core::pack::PackShape;
 use folderskin_core::{pack, raster};
@@ -301,10 +301,13 @@ impl SkinImage {
     /// PNG preview at `size` px, through the same render as the applied icon, on what the skin is
     /// for: artwork on the folder, drive artwork on this system's drive, a finished skin as it is.
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
+        self.preview_png_in(size, crate::look::current())
+    }
+
+    /// [`SkinImage::preview_png`] with artwork on the folder of `style`, whichever is chosen now.
+    pub fn preview_png_in(&self, size: u32, style: Style) -> Vec<u8> {
         match self {
-            SkinImage::Artwork(art) => {
-                compositor::render_preview_png_in(art, size, crate::look::current())
-            }
+            SkinImage::Artwork(art) => compositor::render_preview_png_in(art, size, style),
             SkinImage::DriveArt(art) => compositor::render_drive_preview_png(
                 Some(art),
                 size,
@@ -319,12 +322,17 @@ impl SkinImage {
     /// [`SkinImage::preview_png`] on the drive the skin was made for, when its `base` names one
     /// ([`folderskin_core::base`]): artwork painted for a USB stick is shown on the stick.
     pub fn preview_png_on(&self, size: u32, base: Option<&str>) -> Vec<u8> {
+        self.preview_png_on_in(size, base, crate::look::current())
+    }
+
+    /// [`SkinImage::preview_png_on`] with artwork on the folder of `style`.
+    pub fn preview_png_on_in(&self, size: u32, base: Option<&str>, style: Style) -> Vec<u8> {
         let drive = base
             .and_then(folderskin_core::base::find)
             .and_then(|b| b.drive());
         match (self, drive) {
             (SkinImage::DriveArt(_), Some(shape)) => self.drive_preview_png(size, shape),
-            _ => self.preview_png(size),
+            _ => self.preview_png_in(size, style),
         }
     }
 
@@ -440,7 +448,12 @@ fn picture_path(dir: &Path, stem: &str) -> Option<PathBuf> {
 }
 
 fn thumb_file(stem: &str) -> String {
-    format!("{stem}.thumb-{}.png", crate::commands::thumb_tag())
+    thumb_file_in(stem, crate::look::current())
+}
+
+/// A skin's thumbnail on the folder of `style`, each folder's kept apart.
+fn thumb_file_in(stem: &str, style: Style) -> String {
+    format!("{stem}.thumb-{}.png", crate::commands::thumb_tag_in(style))
 }
 
 /// A skin's thumbnail on the drive of `shape`, beside its folder thumbnails, so a delete takes
@@ -908,10 +921,24 @@ impl Store {
     /// A saved skin's thumbnail PNG: the cached file, or a fresh render (which is then cached)
     /// when the file is missing, damaged or from an older renderer.
     pub fn thumbnail_png(&self, entry: &SavedSkin) -> Result<Vec<u8>, String> {
+        self.thumbnail_png_in(entry, crate::look::current())
+    }
+
+    /// [`Store::thumbnail_png`] on the folder of `style`, which is cached apart from the other
+    /// folders' ([`crate::commands::thumb_tag_in`]).
+    pub fn thumbnail_png_in(&self, entry: &SavedSkin, style: Style) -> Result<Vec<u8>, String> {
         let stem = stem(&entry.id).ok_or_else(|| "that skin isn't saved".to_string())?;
-        self.cached_png(&entry.id, &self.dir.join(thumb_file(stem)), |image| {
-            image.preview_png_on(THUMB_SIZE, entry.base.as_deref())
-        })
+        self.cached_png(
+            &entry.id,
+            &self.dir.join(thumb_file_in(stem, style)),
+            |image| image.preview_png_on_in(THUMB_SIZE, entry.base.as_deref(), style),
+        )
+    }
+
+    /// True when a thumbnail of `entry` on the folder of `style` is kept already, so there is
+    /// nothing to draw. Only whether the file is there: [`Store::thumbnail_png_in`] reads it.
+    pub fn has_thumbnail_in(&self, entry: &SavedSkin, style: Style) -> bool {
+        stem(&entry.id).is_some_and(|stem| self.dir.join(thumb_file_in(stem, style)).is_file())
     }
 
     /// A saved skin's thumbnail on the drive of `shape` ([`SkinImage::drive_preview_png`]), kept

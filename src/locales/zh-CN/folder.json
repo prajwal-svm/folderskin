@@ -39,11 +39,6 @@
       "mac": "改用 Mac 文件夹作为底板",
       "windows": "改用 Windows 文件夹作为底板",
       "linux": "改用 Linux 文件夹作为底板"
-    },
-    "redrawing": {
-      "mac": "正在把你的皮肤画到 Mac 文件夹上",
-      "windows": "正在把你的皮肤画到 Windows 文件夹上",
-      "linux": "正在把你的皮肤画到 Linux 文件夹上"
     }
   },
   "stage": {

@@ -75,11 +75,6 @@
       "mac": "Utiliser le dossier du Mac comme base",
       "windows": "Utiliser le dossier de Windows comme base",
       "linux": "Utiliser le dossier de Linux comme base"
-    },
-    "redrawing": {
-      "mac": "Dessin de vos habillages sur le dossier du Mac",
-      "windows": "Dessin de vos habillages sur le dossier de Windows",
-      "linux": "Dessin de vos habillages sur le dossier de Linux"
     }
   },
   "stage": {

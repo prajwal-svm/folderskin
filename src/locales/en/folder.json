@@ -57,11 +57,6 @@
       "mac": "Switch to Mac folder as base",
       "windows": "Switch to Windows folder as base",
       "linux": "Switch to Linux folder as base"
-    },
-    "redrawing": {
-      "mac": "Drawing your skins on the Mac's folder",
-      "windows": "Drawing your skins on Windows' folder",
-      "linux": "Drawing your skins on the Linux folder"
     }
   },
   "stage": {

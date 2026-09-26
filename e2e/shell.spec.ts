@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { letGo, openApp, openView } from "./app";
+import { openApp, openView } from "./app";
 
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "sections" });
 const width = async (page: Page, selector: string) => (await page.locator(selector).first().boundingBox())!.width;
@@ -218,29 +218,20 @@ test.describe("the filters beside a search", () => {
 });
 
 test.describe("the folder skins go on", () => {
-  test("switching it says the library is being drawn again, and dims the old thumbnails until then", async ({ page }) => {
-    // Each redraw lasts until it's let through, so the note is looked at while it's there.
-    await openApp(page, { query: "holdredraw" });
-    const redrawn = () => letGo(page, "mockRedrawn");
+  test("switching it keeps the library on show: every folder's thumbnails are drawn ahead", async ({ page }) => {
+    await openApp(page);
     const look = page.getByRole("radiogroup", { name: "which folder skins go on" });
-    const note = page.getByRole("status").filter({ hasText: "Drawing your skins on Windows' folder" });
-    const gallery = page.locator(".gallery-scroll");
-    await look.getByRole("radio", { name: "Windows" }).click();
-    await expect(note).toBeVisible();
-    await expect(gallery).toHaveAttribute("aria-busy", "true");
-    // In the middle of the library, and all of it inside.
-    const [at, library] = await Promise.all([note.boundingBox(), page.locator(".island-main").boundingBox()]);
-    expect(Math.abs(at!.x + at!.width / 2 - (library!.x + library!.width / 2))).toBeLessThan(2);
-    expect(at!.x).toBeGreaterThan(library!.x);
-    expect(at!.x + at!.width).toBeLessThan(library!.x + library!.width);
-    await redrawn();
-    await expect(note).toBeHidden();
-    await expect(gallery).not.toHaveAttribute("aria-busy", "true");
-    // And back, which says so too.
-    await look.getByRole("radio", { name: "Mac" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Drawing your skins on the Mac's folder" })).toBeVisible();
-    await redrawn();
-    await expect(gallery).not.toHaveAttribute("aria-busy", "true");
+    const tiles = page.locator(".tile-img");
+    const count = await tiles.count();
+    expect(count).toBeGreaterThan(0);
+    for (const to of ["Windows", "Linux", "Mac"]) {
+      await look.getByRole("radio", { name: to }).click();
+      await expect(look.getByRole("radio", { name: to })).toHaveAttribute("aria-checked", "true");
+      // Nothing to wait for: no note, nothing dimmed, and every card still there.
+      await expect(page.getByRole("status").filter({ hasText: /Drawing your skins/ })).toHaveCount(0);
+      await expect(page.locator(".gallery-scroll")).not.toHaveAttribute("aria-busy", "true");
+      await expect(tiles).toHaveCount(count);
+    }
   });
 
   test("its switch comes back once the skin being tried is put down", async ({ page }) => {
