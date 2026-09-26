@@ -6,7 +6,7 @@ import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
 import { explain } from "./lib/sentences";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
-import { browseLabel } from "./lib/platform";
+import { browseLabel, keys, localOs } from "./lib/platform";
 import { t as tNow, useT } from "./i18n";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
@@ -50,6 +50,7 @@ import { SearchIcon } from "./components/icons/search";
 import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
 import { ListFilterIcon } from "./components/icons/list-filter";
+import { PanelRightCloseIcon, PanelRightOpenIcon } from "./components/icons/panel-right";
 import { clip } from "./lib/names";
 
 
@@ -185,6 +186,12 @@ function useLayout() {
   // A drag or an arrow key that folds or opens the sidebar animates too, rather than jumping.
   const latest = useRef(layout);
   latest.current = layout;
+  // A change made just before the window closes or reloads is kept too.
+  useEffect(() => {
+    const flush = () => saveLayout(latest.current);
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
   const moveSidebar = useCallback((next: Layout) => {
     if (next === latest.current) return;
     if (next.rail !== latest.current.rail) setFolding(true);
@@ -235,8 +242,6 @@ export default function App() {
   const [composerOpened, setComposerOpened] = useState(false);
   /** The AI chat likewise, so its scroll, words and pictures wait for the user to come back. */
   const [studioOpened, setStudioOpened] = useState(false);
-  /** The folder panel hidden from the AI chat by choice, though a folder is chosen. */
-  const [aiPanelHidden, setAiPanelHidden] = useState(false);
   const composer = useRef<ComposerHandle>(null);
   const [treeAsk, setTreeAsk] = useState<TreeAsk | null>(null);
   /** The latest run over a folder's tree, going on in the background whatever the window shows. */
@@ -792,7 +797,8 @@ export default function App() {
     const last = treeRuns.now();
     if (!last) return;
     if (viewNow.current === "compose") setView("skins");
-    setAiPanelHidden(false);
+    // The folder panel opens to show it, though it was closed.
+    setLayout((l) => (l.rightClosed ? { ...l, rightClosed: false } : l));
     const s = latestState.current;
     if (s.folder?.path === last.folder) {
       if (!last.running && s.runId !== last.id) dispatch({ type: "treeShown", path: last.folder, run: runInfo(last) });
@@ -801,7 +807,7 @@ export default function App() {
     // A run that's going is followed once its folder is in; an ended one shows its summary again.
     showing.current = last.running ? null : last.id;
     void takePath(last.folder);
-  }, [takePath]);
+  }, [takePath, setLayout]);
   useEffect(() => {
     const id = showing.current;
     const last = treeRuns.now();
@@ -1076,10 +1082,15 @@ export default function App() {
   // Windows has no system caption bar (window.rs builds the window undecorated), so the folder
   // island carries the window's controls and a strip to drag it by.
   const windowsChrome = platform.os === "windows";
-  // The AI chat has the window to itself until there's a folder to show: one chosen (and not hidden
-  // on purpose), or one being dragged in, which needs somewhere to land.
+  // The folder panel shows unless it's closed, which is remembered like the folded sidebar. The AI
+  // chat has the window to itself until there's a folder to show. A folder being dragged in opens
+  // it wherever it is, as it needs somewhere to land, and the composer's own panel is always there.
   const aiView = view === "generate";
-  const rightShown = !aiView || state.drag?.kind === "folder" || (state.folder !== null && !aiPanelHidden);
+  const rightShown =
+    composing || state.drag?.kind === "folder" || (aiView ? state.folder !== null && !layout.rightClosed : !layout.rightClosed);
+  // The panel's own button: wherever the panel shows, or would with a folder chosen.
+  const panelToggle = !composing && (!aiView || state.folder !== null);
+  const togglePanel = useCallback(() => setLayout((l) => ({ ...l, rightClosed: rightShown })), [rightShown, setLayout]);
   const cols = columns(layout, windowWidth, rightShown);
   // The panel slides in and out rather than jumping; dragging an edge or resizing the window doesn't wait.
   const [sliding, setSliding] = useState(false);
@@ -1091,13 +1102,46 @@ export default function App() {
     const t = window.setTimeout(() => setSliding(false), 460);
     return () => window.clearTimeout(t);
   }, [rightShown]);
-  // A newly chosen folder is shown, even in the AI chat after its panel was hidden.
-  useEffect(() => setAiPanelHidden(false), [state.folder?.path]);
+  // A folder chosen is shown, even after the panel was closed: not the one there at launch.
+  const lastFolder = useRef(state.folder?.path ?? null);
+  useEffect(() => {
+    const path = state.folder?.path ?? null;
+    if (path === lastFolder.current) return;
+    lastFolder.current = path;
+    if (path) setLayout((l) => (l.rightClosed ? { ...l, rightClosed: false } : l));
+  }, [state.folder?.path, setLayout]);
   const full = columns(layout, windowWidth, true);
+  // ⇧⌘\ (Ctrl+Shift+\ elsewhere) closes the folder panel and opens it again, as ⌘\ does the
+  // sidebar. With Shift the key is "|" on most keyboards, so it's matched by where it is.
+  useEffect(() => {
+    if (!panelToggle) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.code !== "Backslash" || document.querySelector(".modal-backdrop")) return;
+      e.preventDefault();
+      togglePanel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panelToggle, togglePanel]);
+  const panelButton = panelToggle && (
+    <button
+      type="button"
+      className={windowsChrome ? "winctl-btn panel-toggle" : "icon-btn panel-toggle"}
+      aria-label={rightShown ? t("folder.panel.closeLabel") : t("folder.panel.openLabel")}
+      aria-expanded={rightShown}
+      aria-keyshortcuts={localOs() === "macos" ? "Shift+Meta+Backslash" : "Shift+Control+Backslash"}
+      data-tip={rightShown ? t("folder.panel.closeTip") : t("folder.panel.openTip")}
+      data-tip-kbd={keys("\\", { shift: true })}
+      data-tip-side="bottom"
+      onClick={togglePanel}
+    >
+      {rightShown ? <PanelRightCloseIcon size={17} /> : <PanelRightOpenIcon size={17} />}
+    </button>
+  );
 
   return (
     <main
-      className={`app os-${platform.os}${layout.rail ? " is-rail" : ""}${folding || sliding ? " is-folding" : ""}${rightShown ? "" : " is-right-off"}`}
+      className={`app os-${platform.os} view-${view}${layout.rail ? " is-rail" : ""}${folding || sliding ? " is-folding" : ""}${rightShown ? "" : " is-right-off"}`}
       style={{ "--left-w": `${cols.left}px`, "--right-w": `${cols.right}px`, "--right-full": `${full.right}px` } as CSSProperties}
     >
       <IslandResizer
@@ -1173,9 +1217,13 @@ export default function App() {
           {/* A sibling of the buttons, never their parent: a drag region swallows the mousedown of
               anything inside it, which would leave the controls looking live but doing nothing. */}
           <span className="winbar-drag" data-tauri-drag-region />
+          {panelButton}
           <WindowControls />
         </div>
       )}
+      {/* On a Mac the panel's button sits in the window's top right corner, over whichever island is
+          there, as an inspector's does. */}
+      {!windowsChrome && panelButton}
 
       {/* Kept while the composer is on show, only hidden: the AI chat inside it lasts the session,
           with its words, its pictures and whatever is still being made. */}
@@ -1250,7 +1298,7 @@ export default function App() {
               shownId={state.skinId}
               appliedId={state.appliedSkinId}
               panelShown={rightShown}
-              onTogglePanel={() => setAiPanelHidden(rightShown)}
+              onTogglePanel={togglePanel}
               onChooseFolder={browseFolder}
               onUseFolder={(path) => {
                 if (path) void takePath(path);

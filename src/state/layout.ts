@@ -6,8 +6,11 @@
 
 const KEY = "folderskin.layout";
 
-/** What the user chose: the sidebar's width and whether it's folded, and the right island's width (null: the default). */
-export type Layout = { left: number; rail: boolean; right: number | null };
+/**
+ * What the user chose: the sidebar's width and whether it's folded, the right island's width
+ * (null: the default), and whether the folder panel on the right is closed.
+ */
+export type Layout = { left: number; rail: boolean; right: number | null; rightClosed: boolean };
 
 export const LEFT = { min: 196, max: 320, initial: 228 } as const;
 /** The folded sidebar: an island of icons. */
@@ -21,7 +24,7 @@ export const CENTRE_MIN = 440;
 /** The gap between islands and around the window's edge (--gap in tokens.css). */
 export const GAP = 10;
 
-export const DEFAULT_LAYOUT: Layout = { left: LEFT.initial, rail: false, right: null };
+export const DEFAULT_LAYOUT: Layout = { left: LEFT.initial, rail: false, right: null, rightClosed: false };
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), Math.max(min, max));
 
@@ -36,7 +39,7 @@ export function readLayout(raw: string | null): Layout {
     const v = JSON.parse(raw ?? "{}") as Partial<Record<keyof Layout, unknown>>;
     const left = typeof v.left === "number" && Number.isFinite(v.left) ? clamp(Math.round(v.left), LEFT.min, LEFT.max) : LEFT.initial;
     const right = typeof v.right === "number" && Number.isFinite(v.right) ? clamp(Math.round(v.right), RIGHT.min, RIGHT.max) : null;
-    return { left, rail: v.rail === true, right };
+    return { left, rail: v.rail === true, right, rightClosed: v.rightClosed === true };
   } catch {
     return DEFAULT_LAYOUT;
   }

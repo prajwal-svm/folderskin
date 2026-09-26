@@ -138,6 +138,81 @@
   display: none;
 }
 
+/* ---------- the folder panel's button ---------- */
+
+/* On a Mac it stays in the window's top right corner, as an inspector's button does: in the
+   folder panel's corner while the panel is open, and in the corner of the island beside it once
+   it's closed, lined up with that island's header. */
+.panel-toggle {
+  position: absolute;
+  z-index: 5;
+  top: calc(var(--gap) + 14px);
+  right: calc(var(--gap) + 16px);
+  width: 38px;
+  height: 38px;
+}
+
+/* Closed, it sits with the header's own buttons and looks like them. */
+.panel-toggle[aria-expanded="false"] {
+  background: var(--well);
+  color: var(--ink-2);
+}
+
+.panel-toggle[aria-expanded="false"]:hover,
+.panel-toggle[aria-expanded="false"]:focus-visible {
+  background: var(--well-2);
+}
+
+/* In line with the chat's header, and with the community's buttons. */
+.app.view-generate .panel-toggle {
+  top: calc(var(--gap) + 11px);
+  width: 34px;
+  height: 34px;
+}
+
+.app.view-community.is-right-off .panel-toggle {
+  top: calc(var(--gap) + 43px);
+}
+
+/* On Windows it's one of the caption buttons, left of the window's own. */
+.winbar .panel-toggle {
+  position: static;
+  width: 44px;
+  height: 32px;
+  border-radius: 0;
+  background: none;
+  pointer-events: auto;
+}
+
+.winbar .panel-toggle[aria-expanded="false"]:hover,
+.winbar .panel-toggle[aria-expanded="false"]:focus-visible {
+  background: var(--nav-hover);
+}
+
+.app.is-right-off .winbar:has(.panel-toggle) {
+  width: 176px;
+}
+
+/* Room for it at the end of the headers it sits over while the panel is closed, and on Windows
+   for the window's own buttons beside it. */
+.app.is-right-off:has(.panel-toggle) .island-main > .toolbar,
+.app.is-right-off:has(.panel-toggle) .community-head {
+  padding-right: 64px;
+}
+
+.app.is-right-off:has(.panel-toggle) .studio-head {
+  padding-right: 56px;
+}
+
+html[data-os="windows"] .app.is-right-off:has(.panel-toggle) .island-main > .toolbar,
+html[data-os="windows"] .app.is-right-off:has(.panel-toggle) .community-head {
+  padding-right: 192px;
+}
+
+html[data-os="windows"] .app.is-right-off:has(.panel-toggle) .studio-head {
+  padding-right: 188px;
+}
+
 /* ---------- sidebar ---------- */
 
 .sidebar {

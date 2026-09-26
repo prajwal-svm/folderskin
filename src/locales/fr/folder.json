@@ -267,5 +267,11 @@
     "showTip": "Afficher ce dossier",
     "undo": "Annuler",
     "tip": "{{what}} dans {{folder}}, {{progress}}"
+  },
+  "panel": {
+    "closeTip": "Fermer le panneau du dossier",
+    "closeLabel": "fermer le panneau du dossier",
+    "openTip": "Ouvrir le panneau du dossier",
+    "openLabel": "ouvrir le panneau du dossier"
   }
 }

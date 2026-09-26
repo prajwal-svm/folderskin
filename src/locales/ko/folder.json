@@ -181,5 +181,11 @@
     "showTip": "이 폴더 보기",
     "undo": "되돌리기",
     "tip": "{{folder}}: {{what}}, {{progress}}"
+  },
+  "panel": {
+    "closeTip": "폴더 패널 닫기",
+    "closeLabel": "폴더 패널 닫기",
+    "openTip": "폴더 패널 열기",
+    "openLabel": "폴더 패널 열기"
   }
 }

@@ -181,5 +181,11 @@
     "showTip": "显示这个文件夹",
     "undo": "撤销",
     "tip": "{{folder}}：{{what}}，{{progress}}"
+  },
+  "panel": {
+    "closeTip": "关闭文件夹面板",
+    "closeLabel": "关闭文件夹面板",
+    "openTip": "打开文件夹面板",
+    "openLabel": "打开文件夹面板"
   }
 }

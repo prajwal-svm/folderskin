@@ -9,6 +9,7 @@ const shapeChip = (page: Page) => chat(page).locator(".shape-chip");
 /** The "@" or "/" menu over the prompt. */
 const menu = (page: Page) => page.locator(".pm");
 const option = (page: Page, name: string | RegExp) => menu(page).getByRole("option", { name });
+const app = (page: Page) => page.locator("main.app");
 
 /** Opens the AI view with an OpenAI key saved (the preview keeps keys for the page's life). */
 async function withKey(page: Page, query = "") {
@@ -256,5 +257,43 @@ test.describe("the chat", () => {
     await expect(box(page)).toHaveValue("");
     await chat(page).getByRole("button", { name: "chats", exact: true }).click();
     await expect(page.getByRole("complementary", { name: "chats" }).locator(".chat-open", { hasText: "A paper boat" })).toBeVisible();
+  });
+});
+
+test.describe("the folder panel", () => {
+  test("closes and opens again from its button or keys, and stays as it was left", async ({ page }) => {
+    await openApp(page);
+    await expect(app(page)).not.toHaveClass(/is-right-off/);
+    await page.getByRole("button", { name: "close the folder panel" }).click();
+    await expect(app(page)).toHaveClass(/is-right-off/);
+    await expect(page.locator(".right-slot")).toHaveAttribute("aria-hidden", "true");
+    // Remembered, like the folded sidebar.
+    await page.reload();
+    await expect(page.getByRole("button", { name: "open the folder panel" })).toBeVisible();
+    await expect(app(page)).toHaveClass(/is-right-off/);
+    // Closed in one view, closed in the others.
+    await openView(page, /community/i);
+    await expect(app(page)).toHaveClass(/is-right-off/);
+    await page.keyboard.press("ControlOrMeta+Shift+Backslash");
+    await expect(app(page)).not.toHaveClass(/is-right-off/);
+    await page.keyboard.press("ControlOrMeta+Shift+Backslash");
+    await expect(app(page)).toHaveClass(/is-right-off/);
+    // The composer's own panel is always there, with no button to close it.
+    await openView(page, /design your own/i);
+    await expect(app(page)).not.toHaveClass(/is-right-off/);
+    await expect(page.locator("button.panel-toggle")).toHaveCount(0);
+  });
+
+  test("in the AI chat, has a button once there's a folder, and a folder chosen opens it", async ({ page }) => {
+    await openApp(page);
+    await page.getByRole("button", { name: "close the folder panel" }).click();
+    await openView(page, /generate with ai/i);
+    await expect(page.locator("button.panel-toggle")).toHaveCount(0);
+    await chat(page).getByRole("button", { name: "Choose a folder" }).click();
+    await expect(app(page)).not.toHaveClass(/is-right-off/);
+    await page.getByRole("button", { name: "close the folder panel" }).click();
+    await expect(app(page)).toHaveClass(/is-right-off/);
+    await page.getByRole("button", { name: "open the folder panel" }).click();
+    await expect(app(page)).not.toHaveClass(/is-right-off/);
   });
 });

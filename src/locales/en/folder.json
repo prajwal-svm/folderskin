@@ -224,5 +224,11 @@
     "showTip": "Show this folder",
     "undo": "Undo",
     "tip": "{{what}} in {{folder}}, {{progress}}"
+  },
+  "panel": {
+    "closeTip": "Close the folder panel",
+    "closeLabel": "close the folder panel",
+    "openTip": "Open the folder panel",
+    "openLabel": "open the folder panel"
   }
 }

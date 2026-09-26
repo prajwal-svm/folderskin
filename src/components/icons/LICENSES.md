@@ -12,7 +12,8 @@ paths. Each logo is its company's trademark and is shown only to name that provi
 
 `star`, `image`, `list`, `list-filter`, `loader`, `palette` and `languages` use the shapes of the
 [Lucide](https://lucide.dev) icons of the same names (`loader` is Lucide's `loader-circle`); their
-animations are FolderSkin's own. `pencil` and `badge-check` use Lucide's shapes too, and stay still. The composer's static icons in `composer.tsx` use the shapes of
+animations are FolderSkin's own. `pencil`, `badge-check`, `panel-left` (its `-open` and `-close`) and
+`panel-right` (the same) use Lucide's shapes too, and stay still. The composer's static icons in `composer.tsx` use the shapes of
 Lucide's `type`, `smile`, `shapes`, `waves`, `paint-bucket`, `undo-2`, `redo-2`, `layers`, `eye`,
 `eye-off`, `lock`, `lock-open`, `trash`, `flip-horizontal-2`, `flip-vertical-2`, `focus`, `plus`,
 `folder`, `shuffle`, `x`, `rotate-cw`, `layout-template`, `align-left`, `align-center`,

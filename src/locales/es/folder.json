@@ -267,5 +267,11 @@
     "showTip": "Mostrar esta carpeta",
     "undo": "Deshacer",
     "tip": "{{what}} en {{folder}}, {{progress}}"
+  },
+  "panel": {
+    "closeTip": "Cerrar el panel de la carpeta",
+    "closeLabel": "cerrar el panel de la carpeta",
+    "openTip": "Abrir el panel de la carpeta",
+    "openLabel": "abrir el panel de la carpeta"
   }
 }

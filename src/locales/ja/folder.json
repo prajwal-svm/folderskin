@@ -181,5 +181,11 @@
     "showTip": "このフォルダを表示",
     "undo": "元に戻す",
     "tip": "{{folder}}：{{what}}、{{progress}}"
+  },
+  "panel": {
+    "closeTip": "フォルダパネルを閉じる",
+    "closeLabel": "フォルダパネルを閉じる",
+    "openTip": "フォルダパネルを開く",
+    "openLabel": "フォルダパネルを開く"
   }
 }

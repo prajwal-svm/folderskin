@@ -9,7 +9,13 @@ describe("readLayout", () => {
   });
 
   it("keeps saved widths within their limits", () => {
-    expect(readLayout(JSON.stringify({ left: 5000, rail: true, right: 10 }))).toEqual({ left: LEFT.max, rail: true, right: RIGHT.min });
+    expect(readLayout(JSON.stringify({ left: 5000, rail: true, right: 10 }))).toEqual({ left: LEFT.max, rail: true, right: RIGHT.min, rightClosed: false });
+  });
+
+  it("remembers a closed folder panel, and a layout saved before it could close has it open", () => {
+    expect(readLayout(JSON.stringify({ ...DEFAULT_LAYOUT, rightClosed: true })).rightClosed).toBe(true);
+    expect(readLayout(JSON.stringify({ left: 240, rail: false, right: null })).rightClosed).toBe(false);
+    expect(readLayout(JSON.stringify({ ...DEFAULT_LAYOUT, rightClosed: "yes" })).rightClosed).toBe(false);
   });
 });
 
@@ -42,7 +48,7 @@ describe("dragging the sidebar", () => {
 
   it("folds to the rail when dragged narrow, keeping the width it had to open back to", () => {
     const folded = dragSidebar({ ...DEFAULT_LAYOUT, left: 250 }, FOLD_AT - 1);
-    expect(folded).toEqual({ left: 250, rail: true, right: null });
+    expect(folded).toEqual({ ...DEFAULT_LAYOUT, left: 250, rail: true });
   });
 
   it("opens a rail dragged wide again", () => {
