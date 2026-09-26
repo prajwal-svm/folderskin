@@ -69,9 +69,11 @@ import type {
   PathInfo,
   PlatformInfo,
   RunChoice,
+  SavedPrompt,
   Skin,
   SkinList,
 } from "./tauri";
+import type { ShapeInfo } from "./shapes";
 import type { AvailableUpdate } from "./updater";
 import type { AiEvent } from "../state/chats";
 import type { SubfolderCount, SubfolderCounts, SubfolderList, TreeRun, TreeRunEvent } from "./tree";
@@ -80,6 +82,7 @@ import { cleanName } from "./names";
 import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
 import { madeUpPacks, MockCatalog, type MockPack as CatalogPack } from "./mockCommunity";
+import { styleById } from "./styles";
 
 /** Icon packs "downloaded" in the browser preview, for this page's life. */
 const mockIconPacks = new Map<string, string>();
@@ -182,6 +185,79 @@ function mockChats(): MockChats {
 }
 function saveMockChats(store: MockChats) {
   localStorage.setItem(CHATS_KEY, JSON.stringify(store));
+}
+
+/** The preview's saved prompts, in this browser's storage like its chats, as the app keeps them. */
+const PROMPTS_KEY = "folderskin.mock.prompts";
+function mockPrompts(): SavedPrompt[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(PROMPTS_KEY) ?? "[]") as SavedPrompt[];
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function saveMockPrompts(list: SavedPrompt[]) {
+  localStorage.setItem(PROMPTS_KEY, JSON.stringify(list));
+}
+
+/** The shapes as ai_shapes lists them: each folder drawn bare on its own template, as the
+ *  compositor draws it, and the free icon with no picture. Drawn once. */
+let shapesDrawn: Promise<ShapeInfo[]> | null = null;
+function mockShapes(): Promise<ShapeInfo[]> {
+  shapesDrawn ??= (async () => {
+    const bare = async (style: FolderStyle, top: string, bottom: string) => {
+      const size = 96;
+      const art = document.createElement("canvas");
+      art.width = art.height = size;
+      const g = art.getContext("2d")!;
+      const fill = g.createLinearGradient(0, 0, 0, size);
+      fill.addColorStop(0, top);
+      fill.addColorStop(1, bottom);
+      g.fillStyle = fill;
+      g.fillRect(0, 0, size, size);
+      const c = document.createElement("canvas");
+      c.width = c.height = size;
+      drawOnFolder(c.getContext("2d")!, art, await templateImages(style), size, document.createElement("canvas"));
+      return c.toDataURL("image/png");
+    };
+    return [
+      { id: "mac-folder", label: "Mac folder", system: "mac", family: "folder", whole: true, thumbnail: await bare("mac", "#7cc8f5", "#4ea9e4") },
+      { id: "windows-folder", label: "Windows folder", system: "windows", family: "folder", whole: true, thumbnail: await bare("windows", "#ffe69a", "#ffcc48") },
+      { id: "free", label: "Free icon", system: "any", family: "free", whole: false, thumbnail: null },
+    ];
+  })();
+  return shapesDrawn;
+}
+
+/** A made-up free icon for the preview: a round character in a colour picked from its idea, on
+ *  transparency, as a cut-out free icon comes back. */
+function mockIconPicture(idea: string): string {
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d")!;
+  const hue = [...idea].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 17);
+  const body = g.createRadialGradient(size * 0.4, size * 0.35, size * 0.05, size / 2, size / 2, size * 0.42);
+  body.addColorStop(0, `hsl(${hue} 90% 72%)`);
+  body.addColorStop(1, `hsl(${hue} 70% 46%)`);
+  g.fillStyle = body;
+  g.beginPath();
+  g.ellipse(size / 2, size * 0.54, size * 0.36, size * 0.34, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#1c2230";
+  for (const x of [0.4, 0.6]) {
+    g.beginPath();
+    g.arc(size * x, size * 0.48, size * 0.035, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = "#1c2230";
+  g.lineWidth = size * 0.02;
+  g.lineCap = "round";
+  g.beginPath();
+  g.arc(size / 2, size * 0.56, size * 0.07, 0.15 * Math.PI, 0.85 * Math.PI);
+  g.stroke();
+  return c.toDataURL("image/png");
 }
 
 /** A pack as the preview lists it, before whether it's added (or changed) is worked out. Made-up
@@ -1425,24 +1501,31 @@ export const mockApi = {
       if (fail === "noimage") throw { code: "no_image", message: `${who} finished without painting a picture. Try again, or reword the idea.` };
       await painted();
     }
-    if (req.shape === "folder") {
+    // As ai.rs: a free icon is always cut out and used as it is, whatever the shape asked says.
+    const free = req.base === "free";
+    if (req.shape === "folder" || free) {
       onEvent({ type: "stage", stage: "cut", message: "Cutting it out of the background" });
       await wait(400);
     }
     onEvent({ type: "stage", stage: "save", message: "Saving it to Yours" });
     await wait(200);
+    // The look picked goes in its own slot, and the picture is tagged with its style as ai.rs tags
+    // it: a built-in style's, or the style a saved prompt's look uses.
+    const skill = req.skill ? mockPrompts().find((p) => p.id === req.skill) : undefined;
+    const style = styleById(skill?.base_style ?? req.style ?? null);
     const skin: Skin = {
       id: `user:ai${Date.now().toString(16)}`,
       name: mockShortName(req.idea),
       collection: "yours",
-      thumbnail: picture(library.length + 1),
+      thumbnail: free ? mockIconPicture(req.idea) : picture(library.length + 1),
       custom: true,
-      kind: req.shape === "folder" ? "folder" : "artwork",
+      kind: req.shape === "folder" || free ? "folder" : "artwork",
       source: "ai",
       created_at: Date.now(),
-      tags: cleanTags(req.tags),
+      tags: cleanTags([...req.tags, ...(style ? [style.tag] : [])]),
       made_with: local ? "Local Model · FLUX.2 klein 4B" : `${who} · ${req.model}`,
       idea: req.idea,
+      base: req.base ?? "mac-folder",
     };
     keep([skin]);
     return skin;
@@ -1566,6 +1649,54 @@ export const mockApi = {
     await sleep(150);
     const name = path.split(/[\\/]/).pop() || "picture.jpg";
     return { id: Math.random().toString(16).slice(2, 14), name, path, thumb: picture(3) };
+  },
+  aiShapes: async (): Promise<ShapeInfo[]> => mockShapes(),
+  promptsList: async (): Promise<SavedPrompt[]> => {
+    // `?promptsfail`: the list can't be read, as a damaged file or a missing data folder would.
+    if (new URLSearchParams(location.search).has("promptsfail")) throw "prompts can't be kept on this computer: FolderSkin has no data folder here";
+    await sleep(60);
+    return mockPrompts();
+  },
+  promptSave: async (name: string, text: string, style: string | null): Promise<SavedPrompt> => {
+    await sleep(120);
+    const clean = name.replace(/\s+/g, " ").trim();
+    if (!clean) throw "give the prompt a name";
+    if (clean.length > 60) throw "that name is too long. Keep it to 60 characters";
+    const list = mockPrompts();
+    // As prompts.rs saves it: a built-in style by id, or another saved prompt's look, whole.
+    const from = style ? list.find((p) => p.id === style) : undefined;
+    const look = from
+      ? { base_style: from.base_style, treatment: from.treatment, light: from.light, palette: from.palette, keep_out: from.keep_out, lettering: from.lettering }
+      : { base_style: style ? (styleById(style)?.id ?? style) : null };
+    if (!text.trim() && !look.base_style && !("treatment" in look && look.treatment)) throw "there's nothing to save yet. Write the prompt first";
+    const same = list.find((p) => p.name.toLowerCase() === clean.toLowerCase());
+    const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    const command = clean.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "prompt";
+    const saved: SavedPrompt = {
+      format: "folderskin.skill/1",
+      id: same?.id ?? `${command}-${Math.random().toString(36).slice(2, 6)}`,
+      name: clean,
+      command,
+      idea: text.trim() || null,
+      ...look,
+      created: same?.created ?? now,
+      updated: now,
+    };
+    saveMockPrompts(same ? list.map((p) => (p.id === same.id ? saved : p)) : [saved, ...list]);
+    return saved;
+  },
+  promptRestore: async (skill: SavedPrompt, at: number | null): Promise<SavedPrompt> => {
+    await sleep(80);
+    const list = mockPrompts();
+    const kept = list.find((p) => p.id === skill.id || p.name.toLowerCase() === skill.name.toLowerCase());
+    if (kept) return kept;
+    list.splice(Math.min(at ?? 0, list.length), 0, skill);
+    saveMockPrompts(list);
+    return skill;
+  },
+  promptDelete: async (id: string): Promise<void> => {
+    await sleep(80);
+    saveMockPrompts(mockPrompts().filter((p) => p.id !== id));
   },
   iconPackDownload: async (id: string, _release: string, _sha256: string, bytes: number, onProgress: (p: IconPackProgress) => void): Promise<void> => {
     if (offline()) {
@@ -1791,9 +1922,16 @@ function mockProviders(): AiCatalogue {
       ),
       provider("ideogram", "Ideogram", [mockModel("V_3", "Ideogram 3.0", 0, "~$0.06 / image")], "https://ideogram.ai/manage-api", "https://developer.ideogram.ai", "from your Ideogram account"),
     ],
+    // As folderskin_ai::prompts::PRESETS has them.
     presets: [
-      { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains" },
-      { id: "dunes", label: "Dunes", idea: "warm desert dunes at golden hour, long soft shadows" },
+      { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains, faint stars" },
+      { id: "dunes", label: "Dunes", idea: "warm desert dunes at golden hour, long soft shadows, fine sand grain" },
+      { id: "lighthouse", label: "Lighthouse", idea: "a lighthouse on a rocky point at dusk, its beam sweeping over a calm sea" },
+      { id: "terrazzo", label: "Terrazzo", idea: "pale terrazzo with scattered chips of teal, ochre and charcoal" },
+      { id: "wave", label: "Wave", idea: "a towering ocean wave with deep indigo troughs and white foam" },
+      { id: "circuit", label: "Circuit", idea: "an emerald circuit board macro, gold traces, soft bokeh highlights" },
+      { id: "linen", label: "Linen", idea: "undyed linen weave in raking light, visible slubs and thread texture" },
+      { id: "nebula", label: "Nebula", idea: "a violet and cyan nebula with dust lanes and scattered stars" },
     ],
   };
 }

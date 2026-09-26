@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { chatPrompt, STYLES } from "../lib/prompts";
+import { styleName } from "../lib/styles";
 import type { ToastTone } from "../hooks/useToasts";
 import { Modal } from "./Modal";
 import { CheckIcon } from "./icons/check";
@@ -71,7 +72,7 @@ export function ChatHelper({
                   aria-pressed={style === s.id}
                   onClick={() => setStyle((cur) => (cur === s.id ? null : s.id))}
                 >
-                  {t(`ai.styles.${s.id}`)}
+                  {styleName(s.id)}
                 </button>
               ))}
             </div>

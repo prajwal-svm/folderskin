@@ -31,6 +31,8 @@ const saved = (id: string, title: string, updated: number): Chat => {
 const request = (extra: Partial<Ask> = {}): Ask => ({
   idea: "a paper boat",
   shape: "folder",
+  base: "mac-folder",
+  look: null,
   provider: "openai",
   model: "gpt-image",
   where: "OpenAI · GPT Image",

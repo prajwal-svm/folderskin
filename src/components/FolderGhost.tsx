@@ -33,16 +33,20 @@ export function FolderGhost({
   className,
   tone = "neutral",
   layer = "both",
+  look,
 }: {
   className?: string;
   tone?: "mac" | "neutral";
   layer?: "fill" | "line" | "both";
+  /** The folder to draw, when it isn't the one skins go on now: a picture made for Windows' folder shows Windows' folder. */
+  look?: "mac" | "windows";
 }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const fill = layer !== "line";
   const line = layer !== "fill";
   const mac = tone === "mac";
-  const windows = useLook() === "windows";
+  const current = useLook();
+  const windows = (look ?? current) === "windows";
   const colours = COLOURS[windows ? "windows" : "mac"];
   const cls = ["ghost", `ghost-${tone}`, fill ? "ghost-fill" : "", line ? "ghost-line" : "", className]
     .filter(Boolean)
@@ -64,6 +68,19 @@ export function FolderGhost({
       <path className="ghost-back" d={windows ? WIN_BACK : BACK} fill={mac && fill ? `url(#${id}back)` : undefined} />
       {!windows && <path className="ghost-paper" d={PAPER} />}
       <path className="ghost-front" d={windows ? WIN_FRONT : FRONT} fill={mac && fill ? `url(#${id}front)` : undefined} />
+    </svg>
+  );
+}
+
+/** A free icon's placeholder, for a picture on its way that has no folder around it: a soft square, and the object in it. */
+const ICON_TILE = "M232 152L792 152C836.2 152 872 187.8 872 232L872 792C872 836.2 836.2 872 792 872L232 872C187.8 872 152 836.2 152 792L152 232C152 187.8 187.8 152 232 152Z";
+const ICON_OBJECT = "M512 312C622.5 312 712 401.5 712 512C712 622.5 622.5 712 512 712C401.5 712 312 622.5 312 512C312 401.5 401.5 312 512 312Z";
+
+export function IconGhost({ className }: { className?: string }) {
+  return (
+    <svg className={["ghost", "ghost-neutral", "ghost-fill", "ghost-line", className].filter(Boolean).join(" ")} viewBox="0 0 1024 1024" aria-hidden="true">
+      <path className="ghost-back" d={ICON_TILE} />
+      <path className="ghost-front" d={ICON_OBJECT} />
     </svg>
   );
 }

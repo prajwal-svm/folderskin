@@ -1177,10 +1177,12 @@ export default function App() {
         </div>
       )}
 
-      {!composing && (
+      {/* Kept while the composer is on show, only hidden: the AI chat inside it lasts the session,
+          with its words, its pictures and whatever is still being made. */}
       <section
         className={state.drag?.kind === "image" ? "island island-main is-drop-target" : "island island-main"}
         aria-label={t("library.label")}
+        hidden={composing}
       >
         <span className="drop-glow" aria-hidden="true" />
         {library && (
@@ -1267,7 +1269,6 @@ export default function App() {
           </Suspense>
         )}
       </section>
-      )}
 
       {(composerOpened || composing) && (
         <Suspense

@@ -57,5 +57,15 @@
   "errors": {
     "somethingWrong": "出了点问题",
     "templateLoad": "无法加载文件夹模板"
+  },
+  "shapes": {
+    "mac-folder": "Mac 文件夹",
+    "windows-folder": "Windows 文件夹",
+    "free": "自由图标"
+  },
+  "shapeNotes": {
+    "mac-folder": "FolderSkin 的文件夹，和 Finder 里显示的一样",
+    "windows-folder": "Windows 画出的文件夹",
+    "free": "独立的吉祥物、物品或角色"
   }
 }

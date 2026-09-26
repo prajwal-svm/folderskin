@@ -61,5 +61,15 @@
   "errors": {
     "somethingWrong": "un problème est survenu",
     "templateLoad": "impossible de charger le gabarit du dossier"
+  },
+  "shapes": {
+    "mac-folder": "Dossier Mac",
+    "windows-folder": "Dossier Windows",
+    "free": "Icône libre"
+  },
+  "shapeNotes": {
+    "mac-folder": "Le dossier de FolderSkin, tel que le Finder l'affiche",
+    "windows-folder": "Le dossier que dessine Windows",
+    "free": "Une mascotte, un objet ou un personnage, seul"
   }
 }

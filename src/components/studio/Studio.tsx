@@ -1,13 +1,17 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, errorMessage, type AiCatalogue, type Skin } from "../../lib/tauri";
+import { api, errorMessage, type AiCatalogue, type SavedPrompt, type Skin } from "../../lib/tauri";
 import { explain } from "../../lib/sentences";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
-import { STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
+import { CHIP_STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
+import { lookName, sameLook, styleById, styleDescription, styleName, type Look } from "../../lib/styles";
+import { shapeName, shapeOf, type ShapeInfo } from "../../lib/shapes";
 import { clip } from "../../lib/names";
 import type { ToastTone } from "../../hooks/useToasts";
-import { ask, deleteChat, dismissProblem, keepReference, openChat, renameChatTo, setChatFolder, startChats, startNewChat, stop, useChats } from "../../state/chatStore";
+import { ask, deleteChat, dismissProblem, keepReference, openChat, renameChatTo, setChatBase, setChatFolder, startChats, startNewChat, stop, useChats } from "../../state/chatStore";
+import { loadPrompts, removePrompt, restorePrompt, savePrompt, useSavedPrompts } from "../../state/savedPrompts";
+import { useLook } from "../../state/look";
 import type { ChatFolder, ChatRef, ChatSummary, Shape, Turn } from "../../state/chats";
 import type { ApplyOutcome } from "../composer/Composer";
 import { Confirm } from "../Confirm";
@@ -17,7 +21,7 @@ import { HistoryIcon, SquarePenIcon } from "../icons/composer";
 import { SparklesIcon } from "../icons/sparkles";
 import { ChatDrawer } from "./ChatDrawer";
 import { FolderTarget } from "./FolderTarget";
-import { PromptBox, refLimit } from "./PromptBox";
+import { paintsOnTemplate, PromptBox, refLimit } from "./PromptBox";
 import { TurnCard, type TurnActions } from "./TurnCard";
 import { branded } from "../Brand";
 import { t as tNow, useT } from "../../i18n";
@@ -25,7 +29,7 @@ import { chatTitle } from "../../state/chats";
 
 const CHOICE_KEY = "folderskin.ai.choice";
 
-/** The provider, model and shape last used, so the next visit starts where this one left off. */
+/** The provider, model and what to make (the whole shape or just the art) last used, so the next visit starts where this one left off. */
 function loadChoice(): { provider: string; model: string; shape: Shape } {
   try {
     const v = JSON.parse(localStorage.getItem(CHOICE_KEY) ?? "{}") as Partial<Record<"provider" | "model" | "shape", unknown>>;
@@ -41,11 +45,16 @@ export type StudioHandle = {
 };
 
 /**
- * The AI assistant, as a chat. Each request is a card that develops into a folder while it runs,
- * showing what's happening and how far it is, with the log a click away; the result can be
+ * The AI assistant, as a chat. Each request is a card that develops into its picture while it
+ * runs, showing what's happening and how far it is, with the log a click away; the result can be
  * previewed on the chosen folder and applied from the card. Chats are kept (chatStore.ts) and
  * listed in a drawer; a request carries on in its own chat while the user looks elsewhere.
  * Provider, model and key, or setting up this computer, live in a dialog behind the model pill.
+ *
+ * The chat on screen lasts as long as the app is open: this view stays mounted while another is
+ * on show, so the words in the box, the pictures and style with them, where the chat was scrolled
+ * to and whatever is still being made are all as they were on coming back. Only the next launch
+ * opens on a fresh chat.
  */
 export const Studio = forwardRef<
   StudioHandle,
@@ -79,15 +88,20 @@ export const Studio = forwardRef<
   const t = useT();
   const chats = useChats();
   const chat = chats.active;
+  const folderLook = useLook();
+  const saved = useSavedPrompts();
   const [catalogue, setCatalogue] = useState<AiCatalogue | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [shapes, setShapes] = useState<ShapeInfo[]>([]);
   const initial = useMemo(loadChoice, []);
   const [providerId, setProviderId] = useState(initial.provider);
   const [modelId, setModelId] = useState(initial.model);
-  const [shape, setShape] = useState<Shape>(initial.shape);
+  const [make, setMake] = useState<Shape>(initial.shape);
   const [idea, setIdea] = useState("");
-  /** The style chip whose brief is in the box, and which of its briefs (clicking again cycles). */
+  /** The style chip whose idea is in the box, and which of its ideas (clicking again cycles). */
   const [pick, setPick] = useState<{ styleId: string; index: number } | null>(null);
+  /** The look picked (a style from a chip or the "/" menu, or a saved prompt's), which goes to the model in a slot of its own. */
+  const [look, setLook] = useState<Look | null>(null);
   const [refs, setRefs] = useState<ChatRef[]>([]);
   const [adding, setAdding] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -98,17 +112,35 @@ export const Studio = forwardRef<
   const box = useRef<HTMLFormElement>(null);
   const thread = useRef<HTMLDivElement>(null);
 
-  // Every visit to the view starts a new chat, as every launch does, with the folder chosen in the
-  // library; earlier chats wait in the history. (A chat nothing was asked in yet is kept as it is.)
-  const shown = useRef(false);
+  // The first time the view is shown this session, a new chat opens with the folder chosen in
+  // the library, the earlier chats are read into the history, and so are the saved prompts. After
+  // that the chat on screen is the one to come back to.
   useEffect(() => {
-    if (active && !shown.current) {
-      startChats();
-      startNewChat(folder);
-    }
-    shown.current = active;
+    if (!active) return;
+    startChats(folder);
+    void loadPrompts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
+
+  // Hidden, the thread loses where it was scrolled to (a hidden element has no layout); it's put
+  // back before the view is painted again, or taken to the newest card when one arrived or
+  // finished meanwhile.
+  const scrolled = useRef(0);
+  const arrivedAway = useRef(false);
+  useLayoutEffect(() => {
+    const el = thread.current;
+    if (!active || !el) return;
+    el.scrollTop = arrivedAway.current ? el.scrollHeight : scrolled.current;
+    arrivedAway.current = false;
+  }, [active]);
+
+  // The shapes the chat can paint on, drawn once.
+  useEffect(() => {
+    api
+      .aiShapes()
+      .then(setShapes)
+      .catch(() => setShapes([]));
+  }, []);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -129,12 +161,17 @@ export const Studio = forwardRef<
   }, [provider, modelId]);
   useEffect(() => {
     try {
-      localStorage.setItem(CHOICE_KEY, JSON.stringify({ provider: providerId, model: modelId, shape }));
+      localStorage.setItem(CHOICE_KEY, JSON.stringify({ provider: providerId, model: modelId, shape: make }));
     } catch {
       // Only a preference.
     }
-  }, [providerId, modelId, shape]);
+  }, [providerId, modelId, make]);
 
+  // The shape is part of the chat: the one it was left on, or for a new chat, the folder the app
+  // puts skins on. Until the shapes are in, that folder by name.
+  const shape: ShapeInfo | undefined =
+    shapeOf(shapes, chat?.base, folderLook) ??
+    (shapes.length === 0 ? { id: `${folderLook}-folder`, label: "", family: "folder", system: folderLook, whole: true, thumbnail: null } : undefined);
   // The chat opened shows its own folder; a folder chosen while it's open becomes its folder.
   const chatId = chat?.id ?? null;
   const chatFolder = chat?.folder?.path ?? null;
@@ -152,17 +189,23 @@ export const Studio = forwardRef<
   }, [active, folder]);
 
   // A chat's reference pictures are copied into its own folder (chats.rs), so they're for that
-  // chat alone: another one starts with none.
+  // chat alone: another one starts with none, and without the style picked for this one.
   const openChatId = useRef(chatId);
   useEffect(() => {
     openChatId.current = chatId;
     setRefs([]);
+    setLook(null);
   }, [chatId]);
 
   // The newest card in view as it arrives and as it grows into its result.
   const last = chat?.turns.at(-1);
   useEffect(() => {
+    if (!active) {
+      arrivedAway.current = true;
+      return;
+    }
     thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat?.id, chat?.turns.length, last?.status]);
 
   const addReference = useCallback(
@@ -207,7 +250,7 @@ export const Studio = forwardRef<
       setQueued(true);
       return;
     }
-    if (!provider || !model) return;
+    if (!provider || !model || !shape) return;
     // Nothing set up for it yet: keep the words and open what fixes that.
     if (!provider.has_key) {
       openSettings(provider.id);
@@ -216,12 +259,14 @@ export const Studio = forwardRef<
     const sent = ask(
       {
         idea: text,
-        shape,
+        shape: make,
+        base: shape.id,
+        look,
         provider: provider.id,
         model: model.id,
         where: `${provider.label} · ${model.label}`,
         local: provider.kind === "local",
-        refs: refs.slice(0, refLimit(provider, model)),
+        refs: refs.slice(0, refLimit(model, paintsOnTemplate(shape, make))),
         tags: styleTags(text),
         size: model.sizes[0] ?? null,
       },
@@ -247,7 +292,20 @@ export const Studio = forwardRef<
       if (p && !p.has_key) return openSettings(p.id);
       const local = p?.kind === "local";
       const sent = ask(
-        { idea: turn.idea, shape: turn.shape, provider: turn.provider, model: turn.model, where: p && m ? `${p.label} · ${m.label}` : turn.where, local, refs: turn.refs, tags: styleTags(turn.idea), size: m?.sizes[0] ?? null },
+        {
+          idea: turn.idea,
+          shape: turn.shape,
+          // Made again on the shape it was made for, or, from before shapes, the folder it was.
+          base: turn.base ?? shapeOf(shapes, undefined, folderLook)?.id ?? `${folderLook}-folder`,
+          look: turn.skill ? { kind: "skill", ...turn.skill } : turn.style ? { kind: "style", id: turn.style } : null,
+          provider: turn.provider,
+          model: turn.model,
+          where: p && m ? `${p.label} · ${m.label}` : turn.where,
+          local,
+          refs: turn.refs,
+          tags: styleTags(turn.idea),
+          size: m?.sizes[0] ?? null,
+        },
         props.onGenerated,
       );
       if (!sent && local) toast(tNow("ai.studio.localBusyToast"));
@@ -280,6 +338,39 @@ export const Studio = forwardRef<
     },
   };
 
+  /** Keeps the words in the box as a prompt, with the look picked; resolves to whether they were. */
+  const keepPrompt = async (name: string, text: string, withLook: Look | null) => {
+    try {
+      const { saved: kept, replaced } = await savePrompt(name, text, withLook);
+      toast(tNow(replaced ? "ai.slash.replaced" : "ai.slash.saved", { name: clip(kept.name) }), { tone: "ok" });
+      return true;
+    } catch (e) {
+      toast(tNow("ai.slash.notSaved", { reason: explain(errorMessage(e)) }), { tone: "danger" });
+      return false;
+    }
+  };
+  /** Removes a saved prompt, with the chance to put it back where it was, as it was. */
+  const dropPrompt = (prompt: SavedPrompt) => {
+    removePrompt(prompt)
+      .then((at) =>
+        toast(tNow("ai.slash.removed", { name: clip(prompt.name) }), {
+          tone: "ok",
+          action: {
+            label: tNow("ai.slash.undo"),
+            run: () => void restorePrompt(prompt, at).catch((e) => toast(tNow("ai.slash.notSaved", { reason: explain(errorMessage(e)) }), { tone: "danger" })),
+          },
+        }),
+      )
+      .catch((e) => toast(tNow("ai.slash.notRemoved", { reason: explain(errorMessage(e)) }), { tone: "danger" }));
+  };
+  // The list that couldn't be read is said once, when the menu that shows it is first wanted.
+  const [savedProblemSaid, setSavedProblemSaid] = useState(false);
+  useEffect(() => {
+    if (!saved.problem || savedProblemSaid || !active) return;
+    setSavedProblemSaid(true);
+    toast(tNow("ai.slash.notRead", { reason: saved.problem }), { tone: "danger" });
+  }, [saved.problem, savedProblemSaid, active, toast]);
+
   /** Puts a brief in the box, flashes the box so the change is seen, and parks the caret at the end. */
   const fill = (text: string) => {
     setIdea(text);
@@ -300,18 +391,21 @@ export const Studio = forwardRef<
       );
     });
   };
-  const choose = (styleId: string) => {
-    const index = pick?.styleId === styleId ? pick.index + 1 : 0;
-    setPick({ styleId, index });
-    fill(suggestion(styleId, index));
+  /** A chip puts its style in the look's slot and one of its ideas in the box; clicking it again brings the next idea. */
+  const choose = (chipId: string) => {
+    const index = pick?.styleId === chipId && sameLook(look, { kind: "style", id: chipId }) ? pick.index + 1 : 0;
+    setPick({ styleId: chipId, index });
+    setLook({ kind: "style", id: chipId });
+    fill(suggestion(chipId, index));
   };
   const surprise = () => {
     const next = surprisePick();
     setPick({ styleId: next.styleId, index: next.index });
+    setLook({ kind: "style", id: next.styleId });
     fill(next.text);
   };
-  /** A chip reads as chosen while its brief is still in the box, untouched. */
-  const chosen = pick && idea === suggestion(pick.styleId, pick.index) ? pick.styleId : null;
+  /** A chip reads as chosen while its style is the one picked. */
+  const chosen = look?.kind === "style" ? (styleById(look.id)?.id ?? null) : null;
 
   if (loadError) {
     return (
@@ -333,7 +427,22 @@ export const Studio = forwardRef<
   const turns = chat?.turns ?? [];
   const hasThread = turns.length > 0;
   const local = provider?.kind === "local";
-  const placeholder = folder ? t("ai.studio.placeholderFor", { name: clip(folder.name) }) : t("ai.studio.placeholder");
+  // The box asks for what the shape is: a folder, a drive, or an icon of its own.
+  const family = shape?.family ?? "folder";
+  const placeholderFor =
+    family === "free"
+      ? folder
+        ? t("ai.studio.placeholderIconFor", { name: clip(folder.name) })
+        : t("ai.studio.placeholderIcon")
+      : family === "drive"
+        ? folder
+          ? t("ai.studio.placeholderDriveFor", { name: clip(folder.name) })
+          : t("ai.studio.placeholderDrive")
+        : folder
+          ? t("ai.studio.placeholderFor", { name: clip(folder.name) })
+          : t("ai.studio.placeholder");
+  // Before the chat starts, the box says "/" is there too.
+  const placeholder = hasThread ? placeholderFor : t("ai.studio.placeholderHint", { placeholder: placeholderFor });
   const foot = !provider
     ? null
     : local
@@ -389,15 +498,23 @@ export const Studio = forwardRef<
         </p>
       )}
 
-      <div className="studio-thread" ref={thread}>
-        {turns.map((t) => (
+      <div
+        className="studio-thread"
+        ref={thread}
+        onScroll={(e) => {
+          if (active) scrolled.current = e.currentTarget.scrollTop;
+        }}
+      >
+        {turns.map((turn) => (
           <TurnCard
-            key={t.id}
-            turn={t}
-            live={t.skinId ? skinOf(t.skinId) : undefined}
+            key={turn.id}
+            turn={turn}
+            live={turn.skinId ? skinOf(turn.skinId) : undefined}
+            shape={shapeOf(shapes, turn.base, folderLook)}
+            shapeLabel={turnShape(turn, shapes)}
             folderName={folder?.name ?? null}
-            onFolder={t.skinId !== undefined && t.skinId === shownId && panelShown}
-            applied={t.skinId !== undefined && t.skinId === appliedId}
+            onFolder={turn.skinId !== undefined && turn.skinId === shownId && panelShown}
+            applied={turn.skinId !== undefined && turn.skinId === appliedId}
             act={act}
           />
         ))}
@@ -432,8 +549,21 @@ export const Studio = forwardRef<
           adding={adding}
           onAddRef={() => void pickReference()}
           onRemoveRef={(id) => setRefs((rs) => rs.filter((r) => r.id !== id))}
+          onRefRole={(id, role) => setRefs((rs) => rs.map((r) => (r.id === id ? { ...r, role } : r)))}
+          shapes={shapes}
           shape={shape}
-          onShape={setShape}
+          onShape={setChatBase}
+          make={make}
+          onMake={setMake}
+          look={look}
+          onLook={(next) => {
+            setLook(next);
+            if (!next) setPick(null);
+          }}
+          prompts={saved.list}
+          ideas={catalogue?.presets ?? []}
+          onSavePrompt={keepPrompt}
+          onRemovePrompt={dropPrompt}
           provider={provider}
           model={model}
           onSettings={() => openSettings()}
@@ -446,17 +576,17 @@ export const Studio = forwardRef<
 
         {!hasThread && (
           <div className="style-chips" aria-label={t("ai.studio.stylesLabel")}>
-            {STYLES.map((s) => (
+            {CHIP_STYLES.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 aria-pressed={chosen === s.id}
                 className={chosen === s.id ? "style-chip is-active" : "style-chip"}
-                data-tip={chosen === s.id ? t("ai.studio.styleAgain") : t(`ai.styleTips.${s.id}`)}
+                data-tip={chosen === s.id ? t("ai.studio.styleAgain") : styleDescription(s.id)}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(s.id)}
               >
-                {t(`ai.styles.${s.id}`)}
+                {styleName(s.id)}
               </button>
             ))}
             <button type="button" className="style-chip is-surprise" onMouseDown={(e) => e.preventDefault()} onClick={surprise}>
@@ -523,7 +653,7 @@ export const Studio = forwardRef<
       {helperOpen && (
         <ChatHelper
           scene={idea}
-          styleId={pick?.styleId ?? null}
+          styleId={look?.kind === "style" ? look.id : null}
           onImport={() => {
             setHelperOpen(false);
             props.onImport();
@@ -535,3 +665,14 @@ export const Studio = forwardRef<
     </section>
   );
 });
+
+/**
+ * What a card says the picture was made for: its shape by name, with the look picked for it. A
+ * card from before shapes names none, as it was always a folder's.
+ */
+function turnShape(turn: Turn, shapes: ShapeInfo[]): string | null {
+  const shape = turn.base ? shapes.find((s) => s.id === turn.base) : undefined;
+  const look = turn.skill ? lookName({ kind: "skill", ...turn.skill }) : turn.style && styleById(turn.style) ? styleName(turn.style) : null;
+  const parts = [shape ? shapeName(shape) : null, look].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}

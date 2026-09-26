@@ -406,6 +406,409 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   color: var(--hint);
 }
 
+/* The look picked, first among what goes with the words: a palette where a picture's thumbnail
+   would be. */
+.composer-style {
+  padding-left: 3px;
+}
+
+.composer-style-glyph {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/* A reference picture opens what it's for; the chip's picture and name are that button. */
+.composer-ref-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 2px 0 0;
+  border-radius: 7px;
+  color: inherit;
+  font: inherit;
+  transition: color var(--t-fast) ease;
+}
+
+.composer-ref-pick:hover,
+.composer-ref-pick:focus-visible,
+.composer-ref-pick[aria-expanded="true"] {
+  color: var(--ink);
+}
+
+.composer-ref-role {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.ref-role-pop {
+  padding: 6px;
+}
+
+.ref-role-title {
+  margin: 4px 8px 6px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ref-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---------- the shape the pictures are for ---------- */
+
+/* Its picture and name, quiet like the model pill beside it until it's pointed at. */
+.shape-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+  max-width: 190px;
+  height: 30px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.shape-chip:hover,
+.shape-chip:focus-visible,
+.shape-chip[aria-expanded="true"] {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.shape-chip:disabled {
+  opacity: 0.5;
+}
+
+.shape-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shape-chip > svg {
+  flex: none;
+}
+
+.shape-thumb {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+}
+
+.shape-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.shape-thumb.is-free {
+  background: var(--well);
+  color: var(--muted);
+}
+
+/* Only the art is painted: a small picture on the shape's corner says so. */
+.shape-thumb-art {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--island);
+  color: var(--accent-ink);
+}
+
+.shape-pop {
+  padding: 6px;
+}
+
+.shape-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shape-group + .shape-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.shape-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 10px;
+  text-align: left;
+  color: var(--ink-2);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.shape-option:hover,
+.shape-option:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.shape-option.is-on {
+  color: var(--ink);
+}
+
+.shape-option .shape-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.shape-option-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.shape-option-name {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.shape-option-note {
+  font-weight: 550;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.shape-option > svg {
+  flex: none;
+  color: var(--accent-ink);
+}
+
+.shape-make {
+  margin-top: 6px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--line);
+}
+
+.shape-make .cmp-seg {
+  display: flex;
+  width: 100%;
+}
+
+/* ---------- the "@" and "/" menus over the prompt ---------- */
+
+.pm {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--island);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in var(--t-base) var(--ease-spring) both;
+  transform-origin: bottom;
+}
+
+.pm.is-below {
+  transform-origin: top;
+}
+
+.pm-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-group + .pm-group {
+  margin-top: 4px;
+}
+
+.pm-heading {
+  margin: 0;
+  padding: 7px 10px 4px;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--hint);
+}
+
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.pm-row.is-active {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.pm-glyph {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--well);
+  color: var(--muted);
+}
+
+.pm-glyph:has(.shape-thumb img) {
+  background: none;
+}
+
+.pm-glyph .shape-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.pm-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pm-name,
+.pm-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-name {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.pm-note {
+  font-weight: 550;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pm-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--accent-ink);
+}
+
+.pm-remove {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.pm-row:hover .pm-remove,
+.pm-row.is-active .pm-remove {
+  opacity: 1;
+}
+
+.pm-remove:hover {
+  background: var(--well-2);
+  color: var(--danger);
+}
+
+.pm-empty {
+  margin: 0;
+  padding: 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.pm-naming {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 6px 4px;
+}
+
+.pm-naming-title {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.pm-naming-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm-naming-input {
+  flex: 1;
+  height: 34px;
+}
+
+.pm-naming-row .btn {
+  flex: none;
+}
+
+.pm-naming-note {
+  margin: 0;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.pm-naming-note.is-warn {
+  color: var(--ink-2);
+}
+
 /* ---------- style chips ---------- */
 
 .style-chips,
@@ -496,6 +899,16 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* What the picture was made for and in, small under the words. */
+.turn-ask .turn-for {
+  padding: 0 4px;
+  border-radius: 0;
+  background: none;
+  font-weight: 650;
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 .turn-refs {
@@ -781,6 +1194,14 @@ html[data-os="windows"] .app.is-right-off .studio-head {
   -webkit-mask: url("/folder-mask.svg") center / contain no-repeat;
   animation: develop-light 1.8s linear infinite;
   animation-play-state: var(--loop-state);
+}
+
+/* A free icon has no folder to keep the light inside: its soft square does. */
+.develop.is-free .develop-light {
+  inset: 14.8%;
+  border-radius: 11%;
+  mask: none;
+  -webkit-mask: none;
 }
 
 @keyframes develop-light {

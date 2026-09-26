@@ -59,5 +59,15 @@
   "errors": {
     "somethingWrong": "something went wrong",
     "templateLoad": "couldn't load the folder template"
+  },
+  "shapes": {
+    "mac-folder": "Mac folder",
+    "windows-folder": "Windows folder",
+    "free": "Free icon"
+  },
+  "shapeNotes": {
+    "mac-folder": "FolderSkin's folder, as Finder shows it",
+    "windows-folder": "The folder Windows draws",
+    "free": "A mascot, an object or a character, on its own"
   }
 }

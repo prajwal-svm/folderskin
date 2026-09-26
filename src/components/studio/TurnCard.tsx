@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Skin } from "../../lib/tauri";
 import { clip } from "../../lib/names";
 import { worthRetrying } from "../../lib/aiError";
-import { progressOf, type Turn } from "../../state/chats";
-import { FolderGhost } from "../FolderGhost";
+import { progressOf, refRole, type Turn } from "../../state/chats";
+import type { ShapeInfo } from "../../lib/shapes";
+import { FolderGhost, IconGhost } from "../FolderGhost";
 import { OkBadge } from "../OkBadge";
 import { ChevronDownIcon, StopIcon, TerminalIcon } from "../icons/composer";
 import { CopyIcon } from "../icons/copy";
@@ -63,8 +64,25 @@ function Log({ lines, open, onToggle }: { lines: string[]; open: boolean; onTogg
   );
 }
 
-/** A picture on its way: the folder developing, what's happening now, how far it is, and Stop. */
-function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
+/**
+ * The picture developing: the shape it's made for, blank, with light running through it. A
+ * folder is drawn as its system draws it and the light kept inside its outline; a free icon,
+ * which has no folder, is a soft square.
+ */
+function Develop({ shape }: { shape: ShapeInfo | undefined }) {
+  const free = shape?.family === "free";
+  const look = shape?.system === "windows" ? "windows" : shape?.system === "mac" ? "mac" : undefined;
+  const mask = !free && shape?.thumbnail ? `url("${shape.thumbnail}")` : undefined;
+  return (
+    <div className={free ? "develop is-free" : "develop"}>
+      {free ? <IconGhost className="develop-ghost" /> : <FolderGhost className="develop-ghost" look={look} />}
+      <span className="develop-light" aria-hidden="true" style={mask ? ({ maskImage: mask, WebkitMaskImage: mask } as CSSProperties) : undefined} />
+    </div>
+  );
+}
+
+/** A picture on its way: the shape developing, what's happening now, how far it is, and Stop. */
+function Working({ turn, shape, onStop }: { turn: Turn; shape: ShapeInfo | undefined; onStop: () => void }) {
   const t = useT();
   const duration = useDuration();
   const [now, setNow] = useState(Date.now());
@@ -78,10 +96,7 @@ function Working({ turn, onStop }: { turn: Turn; onStop: () => void }) {
   const detail = turn.download ? `${turn.download.file}` : turn.step ? t("ai.turn.step", { done: turn.step.done, total: turn.step.total }) : null;
   return (
     <div className="turn-result is-developing" aria-live="polite">
-      <div className="develop">
-        <FolderGhost className="develop-ghost" />
-        <span className="develop-light" aria-hidden="true" />
-      </div>
+      <Develop shape={shape} />
       <div className="turn-meta">
         <p className="turn-name develop-step" key={turn.stage ?? "start"}>
           {stopping ? t("ai.turn.stopping") : turn.stage ? explain(turn.stage) : t("ai.turn.sending", { provider: providerName(turn.where.split(" · ")[0]) })}
@@ -165,6 +180,8 @@ function Failed({ turn, act }: { turn: Turn; act: TurnActions }) {
 export function TurnCard({
   turn,
   live,
+  shape,
+  shapeLabel,
   folderName,
   onFolder,
   applied,
@@ -173,6 +190,10 @@ export function TurnCard({
   turn: Turn;
   /** The picture as the library has it now; undefined once it has been deleted there. */
   live: Skin | undefined;
+  /** The shape it's made for, as the chat has it. */
+  shape: ShapeInfo | undefined;
+  /** What it was made for and in, in words: "Windows folder · Woodblock print"; null for a card from before shapes. */
+  shapeLabel: string | null;
   /** The folder the chat's pictures are for. */
   folderName: string | null;
   /** This picture is the one on show on the folder, on the right. */
@@ -188,15 +209,16 @@ export function TurnCard({
     <article className="turn" data-status={turn.status}>
       <div className="turn-ask">
         <p>{turn.idea}</p>
+        {shapeLabel && <p className="turn-for">{shapeLabel}</p>}
         {turn.refs.length > 0 && (
           <div className="turn-refs">
             {turn.refs.map((r) => (
-              <img key={r.id} src={r.thumb} alt="" data-tip={r.name} draggable={false} />
+              <img key={r.id} src={r.thumb} alt="" data-tip={refRole(r) === "subject" ? r.name : `${r.name} · ${t(`ai.refRole.${refRole(r)}`)}`} draggable={false} />
             ))}
           </div>
         )}
       </div>
-      {turn.status === "working" && <Working turn={turn} onStop={() => act.stop(turn)} />}
+      {turn.status === "working" && <Working turn={turn} shape={shape} onStop={() => act.stop(turn)} />}
       {turn.status === "error" && <Failed turn={turn} act={act} />}
       {turn.status === "stopped" && (
         <div className="turn-stopped">

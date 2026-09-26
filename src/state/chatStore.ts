@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { api, errorMessage, type Skin } from "../lib/tauri";
 import { aiFailure } from "../lib/aiError";
+import type { Look } from "../lib/styles";
 import { t } from "../i18n";
 import {
   addTurn,
@@ -10,6 +11,7 @@ import {
   patchTurn,
   persistable,
   readChat,
+  refRole,
   renameChat,
   settle,
   upsertSummary,
@@ -122,19 +124,24 @@ async function load(id: string): Promise<Chat> {
 }
 
 /**
- * Reads the history, once per session, and opens a new chat unless one is open already (the AI
- * view starts one each time it's shown): every launch starts fresh, and earlier chats wait in the
- * history. A chat is only saved once something has been asked in it, so this never fills the
- * history with empty ones.
+ * Opens a new chat, for `folder` when one is chosen, and reads the history: once a session, the
+ * first time the AI view is shown. The chat then stays open while the app does, whichever view is
+ * on show and whatever is still being made in it; only the next launch starts a fresh one, and
+ * the earlier chats wait in the history. A chat is only saved once something has been asked in
+ * it, so this never fills the history with empty ones.
  */
-export function startChats() {
+export function startChats(folder: ChatFolder | null = null) {
   if (started) return;
   started = true;
-  const fresh = () => state.active ?? newChat(chatId(Date.now()), Date.now());
+  if (!state.active) {
+    const chat = newChat(chatId(Date.now()), Date.now(), folder);
+    chats.set(chat.id, chat);
+    set({ active: chat });
+  }
   api
     .chatsList()
-    .then((list) => set({ list, active: fresh(), ready: true }))
-    .catch((e) => set({ ready: true, active: fresh(), problem: t("ai.chats.problems.notRead", { reason: errorMessage(e) }) }));
+    .then((list) => set({ list, ready: true }))
+    .catch((e) => set({ ready: true, problem: t("ai.chats.problems.notRead", { reason: errorMessage(e) }) }));
 }
 
 export async function openChat(id: string) {
@@ -202,6 +209,14 @@ export function setChatFolder(folder: ChatFolder | null) {
   if (chat.turns.length) saveSoon(chat.id);
 }
 
+/** The shape the open chat's pictures are made for, by id: it's part of the chat, and saved with it. */
+export function setChatBase(base: string) {
+  const chat = state.active;
+  if (!chat || chat.base === base) return;
+  put({ ...chat, base, updated: chat.turns.length ? Date.now() : chat.updated });
+  if (chat.turns.length) saveSoon(chat.id);
+}
+
 /** Copies a picture into the open chat, for its next request. */
 export async function keepReference(path: string): Promise<ChatRef> {
   const chat = state.active;
@@ -212,6 +227,10 @@ export async function keepReference(path: string): Promise<ChatRef> {
 export type Ask = {
   idea: string;
   shape: Shape;
+  /** The shape it's for, by id. */
+  base: string;
+  /** The look picked, a built-in style or a saved prompt's: its words go to the model in a slot of their own. */
+  look: Look | null;
   provider: string;
   model: string;
   /** "OpenAI · GPT Image 2.5", as the request is made. */
@@ -236,6 +255,9 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void): boolean {
     id: `t${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
     idea: req.idea,
     shape: req.shape,
+    base: req.base,
+    ...(req.look?.kind === "style" ? { style: req.look.id } : {}),
+    ...(req.look?.kind === "skill" ? { skill: { id: req.look.id, name: req.look.name } } : {}),
     provider: req.provider,
     model: req.model,
     where: req.where,
@@ -270,9 +292,13 @@ export function ask(req: Ask, onSkin: (skin: Skin) => void): boolean {
         model: req.model,
         idea: req.idea,
         shape: req.shape,
+        base: req.base,
+        style: req.look?.kind === "style" ? req.look.id : null,
+        skill: req.look?.kind === "skill" ? req.look.id : null,
         size: req.size,
         reference_path: req.refs[0]?.path ?? null,
         reference_paths: req.refs.map((r) => r.path),
+        reference_roles: req.refs.map(refRole),
         tags: req.tags,
         job,
       },

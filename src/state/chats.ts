@@ -5,10 +5,20 @@
  */
 import { t } from "../i18n";
 
+/** What's made on a shape that has a base: the whole of it ("folder"), or just the art ("skin"). */
 export type Shape = "folder" | "skin";
 
-/** A reference picture given to a chat, copied into the chat's own folder so it outlives the original. */
-export type ChatRef = { id: string; name: string; path: string; thumb: string };
+/** What a reference picture is for: who or what to paint, a look to match, or colours to use. */
+export type RefRole = "subject" | "style" | "palette";
+
+/**
+ * A reference picture given to a chat, copied into the chat's own folder so it outlives the
+ * original, with what it's for (a subject when it doesn't say).
+ */
+export type ChatRef = { id: string; name: string; path: string; thumb: string; role?: RefRole };
+
+/** A picture's role, a subject when it names none this build knows. */
+export const refRole = (r: Pick<ChatRef, "role">): RefRole => (r.role === "style" || r.role === "palette" ? r.role : "subject");
 
 /** What went wrong, in words, with a code the chat can offer the right next step for. */
 export type TurnError = { code: string; message: string; fix?: string[]; ask?: string };
@@ -18,6 +28,12 @@ export type Turn = {
   id: string;
   idea: string;
   shape: Shape;
+  /** The shape it was made for, by id (src/lib/shapes.ts); none in a chat from before shapes, which was a folder's. */
+  base?: string;
+  /** The built-in style it was made in, by id (src/lib/styles.ts), when one was picked. */
+  style?: string;
+  /** The saved prompt whose look it was made in, when one was picked, named as it was then. */
+  skill?: { id: string; name: string };
   provider: string;
   model: string;
   /** "OpenAI · GPT Image 2.5", as it was when asked. */
@@ -47,6 +63,8 @@ export type Chat = {
   updated: number;
   /** The folder its pictures are meant for. */
   folder: ChatFolder | null;
+  /** The shape its pictures are made for, by id, once one is picked; until then the folder the app puts skins on. */
+  base?: string;
   turns: Turn[];
 };
 
@@ -211,6 +229,7 @@ export function readChat(raw: unknown): Chat | null {
   const c = raw as Partial<Chat>;
   if (typeof c.id !== "string" || !Array.isArray(c.turns)) return null;
   const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+  const id = (v: unknown) => (typeof v === "string" && v ? v : undefined);
   const turns = c.turns.filter((t): t is Turn => !!t && typeof t === "object" && typeof (t as Turn).id === "string" && typeof (t as Turn).idea === "string");
   return {
     version: 1,
@@ -220,6 +239,14 @@ export function readChat(raw: unknown): Chat | null {
     created: num(c.created, 0),
     updated: num(c.updated, 0),
     folder: c.folder && typeof c.folder.path === "string" && typeof c.folder.name === "string" ? { path: c.folder.path, name: c.folder.name } : null,
-    turns: turns.map((t) => ({ ...t, refs: Array.isArray(t.refs) ? t.refs : [], shape: t.shape === "skin" ? "skin" : "folder" })),
+    base: id(c.base),
+    turns: turns.map((t) => ({
+      ...t,
+      refs: Array.isArray(t.refs) ? t.refs : [],
+      shape: t.shape === "skin" ? "skin" : "folder",
+      base: id(t.base),
+      style: id(t.style),
+      skill: t.skill && typeof t.skill === "object" && id(t.skill.id) && typeof t.skill.name === "string" ? { id: t.skill.id, name: t.skill.name } : undefined,
+    })),
   };
 }

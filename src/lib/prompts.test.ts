@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { chatPrompt, STYLES, styleTags, SUGGESTIONS, suggestion, surprise } from "./prompts";
+import { chatPrompt, CHIP_STYLES, STYLES, styleTags, SUGGESTIONS, suggestion, surprise } from "./prompts";
 
-describe("style briefs", () => {
-  it("gives every style at least two briefs that name a subject and a style", () => {
-    for (const s of STYLES) {
+describe("the ideas the chips fill in", () => {
+  it("gives every chip at least two ideas that say what the picture shows, and leave the style to its slot", () => {
+    for (const s of CHIP_STYLES) {
       const list = SUGGESTIONS[s.id];
-      expect(list, s.id).toBeDefined();
       expect(list.length, s.id).toBeGreaterThanOrEqual(2);
       for (const text of list) {
-        expect(text.length, text).toBeGreaterThan(60);
-        expect(text.length, text).toBeLessThan(240);
-        expect(text).toMatch(/\bas an? /i); // "…, as a woodblock print"
+        expect(text.length, text).toBeGreaterThan(40);
+        expect(text.length, text).toBeLessThan(200);
+        // The style goes in its own slot, after the idea: an idea that names one would say it twice.
+        expect(text).not.toMatch(/\bas an? /i);
+        expect(styleTags(text), text).toEqual([]);
       }
     }
+    for (const id of Object.keys(SUGGESTIONS)) expect(STYLES.some((s) => s.id === id), id).toBe(true);
   });
 
   it("never asks for colours the magenta cut-out would remove", () => {
@@ -21,26 +23,25 @@ describe("style briefs", () => {
     }
   });
 
-  it("cycles through a style's briefs on repeated clicks", () => {
-    const [first, second] = SUGGESTIONS.ukiyoe;
+  it("cycles through a chip's ideas on repeated clicks", () => {
+    const [first, second] = SUGGESTIONS.woodblock;
+    expect(suggestion("woodblock", 0)).toBe(first);
+    expect(suggestion("woodblock", 1)).toBe(second);
+    expect(suggestion("woodblock", 2)).toBe(first);
+    // A style named by the id it had before still finds its ideas.
     expect(suggestion("ukiyoe", 0)).toBe(first);
-    expect(suggestion("ukiyoe", 1)).toBe(second);
-    expect(suggestion("ukiyoe", 2)).toBe(first);
     expect(suggestion("nope", 0)).toBe("");
   });
 
-  it("surprises with a real brief and says which style it came from", () => {
+  it("surprises with a real idea and says which style it goes with", () => {
     const pick = surprise(() => 0.99);
     expect(SUGGESTIONS[pick.styleId]).toContain(pick.text);
     expect(pick.text).toBe(suggestion(pick.styleId, pick.index));
+    expect(CHIP_STYLES.some((s) => s.id === pick.styleId)).toBe(true);
   });
 });
 
 describe("style tags", () => {
-  it("tag every brief with its own style", () => {
-    for (const s of STYLES) for (const text of SUGGESTIONS[s.id]) expect(styleTags(text), text).toContain(s.tag);
-  });
-
   it("find styles in the user's own words, and nothing when there is none", () => {
     expect(styleTags("a fox, as an Ukiyo-e print")).toEqual(["woodblock"]);
     expect(styleTags("a fox in the snow")).toEqual([]);
@@ -54,15 +55,16 @@ describe("chat prompt", () => {
     expect(p).toContain("Style: DESCRIBE THE STYLE");
   });
 
-  it("uses the description alone when it already carries its style", () => {
+  it("uses the description alone when no style is picked", () => {
     const p = chatPrompt(SUGGESTIONS.clay[0], null);
     expect(p).toContain(`Scene: ${SUGGESTIONS.clay[0]}`);
     expect(p).not.toContain("Style:");
   });
 
-  it("adds the style picked in the helper", () => {
-    const p = chatPrompt("a whale over a harbour", "riso");
-    expect(p).toContain("Style: risograph print in three inks");
+  it("adds the style picked, in the words the models get", () => {
+    const p = chatPrompt("a whale over a harbour", "risograph");
+    expect(p).toContain("Style: a risograph-printed illustration: two or three flat spot colours");
+    expect(chatPrompt("a whale", "riso")).toContain("Style: a risograph-printed illustration");
   });
 
   it("always asks for the flat magenta background the importer cuts away", () => {

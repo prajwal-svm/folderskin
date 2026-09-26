@@ -61,5 +61,15 @@
   "errors": {
     "somethingWrong": "algo salió mal",
     "templateLoad": "no se pudo cargar la plantilla de la carpeta"
+  },
+  "shapes": {
+    "mac-folder": "Carpeta Mac",
+    "windows-folder": "Carpeta Windows",
+    "free": "Icono libre"
+  },
+  "shapeNotes": {
+    "mac-folder": "La carpeta de FolderSkin, tal como la muestra el Finder",
+    "windows-folder": "La carpeta que dibuja Windows",
+    "free": "Una mascota, un objeto o un personaje, por sí solo"
   }
 }

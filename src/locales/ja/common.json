@@ -57,5 +57,15 @@
   "errors": {
     "somethingWrong": "問題が発生しました",
     "templateLoad": "フォルダのテンプレートを読み込めませんでした"
+  },
+  "shapes": {
+    "mac-folder": "Macのフォルダ",
+    "windows-folder": "Windowsのフォルダ",
+    "free": "自由形アイコン"
+  },
+  "shapeNotes": {
+    "mac-folder": "Finderに表示されるままのFolderSkinのフォルダ",
+    "windows-folder": "Windowsが描くフォルダ",
+    "free": "単独のマスコットやキャラクター"
   }
 }

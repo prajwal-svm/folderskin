@@ -183,22 +183,28 @@ test.describe("the AI chat", () => {
     await expect(page.getByRole("tooltip")).toContainText("Local Model · FLUX.2 klein 4B");
   });
 
-  test("starts a new chat each time it's opened, with the last one in the history", async ({ page }) => {
+  test("keeps the chat it's on while the app is open, and starts a fresh one the next time", async ({ page }) => {
     await withKey(page);
     await sendIdea(page, "a paper boat");
     await expect(chat(page).locator(".turn-result:not(.is-developing)")).toHaveCount(1, { timeout: 10_000 });
     await openView(page, /all skins/i);
     await openView(page, /generate with ai/i);
+    await expect(chat(page).locator("article.turn")).toHaveCount(1);
+    await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toHaveCount(0);
+    // Going back and forth doesn't pile up chats.
+    await openView(page, /community/i);
+    await openView(page, /generate with ai/i);
+    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
+    const drawer = page.getByRole("complementary", { name: "chats" });
+    await expect(drawer.locator(".chat-open")).toHaveCount(1);
+    await drawer.getByRole("button", { name: "close the chats" }).click();
+    // The next launch opens on a fresh chat, with this one in the history.
+    await page.reload();
+    await openView(page, /generate with ai/i);
     await expect(chat(page).getByRole("heading", { name: /what should your folder look like/i })).toBeVisible();
     await expect(chat(page).locator("article.turn")).toHaveCount(0);
     await chat(page).getByRole("button", { name: "chats", exact: true }).click();
-    const drawer = page.getByRole("complementary", { name: "chats" });
-    await expect(drawer.getByRole("button", { name: "rename A paper boat" })).toBeVisible();
-    // Going back and forth without asking anything doesn't pile up empty chats.
-    await openView(page, /all skins/i);
-    await openView(page, /generate with ai/i);
-    await chat(page).getByRole("button", { name: "chats", exact: true }).click();
-    await expect(page.getByRole("complementary", { name: "chats" }).locator(".chat-open")).toHaveCount(1);
+    await expect(page.getByRole("complementary", { name: "chats" }).getByRole("button", { name: "rename A paper boat" })).toBeVisible();
   });
 
   test("the local model can be removed, after asking, and set up again", async ({ page }) => {

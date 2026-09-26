@@ -57,5 +57,15 @@
   "errors": {
     "somethingWrong": "문제가 생겼어요",
     "templateLoad": "폴더 템플릿을 불러오지 못했어요"
+  },
+  "shapes": {
+    "mac-folder": "Mac 폴더",
+    "windows-folder": "Windows 폴더",
+    "free": "자유형 아이콘"
+  },
+  "shapeNotes": {
+    "mac-folder": "Finder에 보이는 그대로의 FolderSkin 폴더",
+    "windows-folder": "Windows가 그리는 폴더",
+    "free": "단독 마스코트, 물건 또는 캐릭터"
   }
 }

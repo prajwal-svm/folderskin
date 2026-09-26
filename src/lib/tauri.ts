@@ -7,6 +7,7 @@ import type { FolderStyle, Parts } from "../composer/parts";
 import type { SubfolderCount, SubfolderCounts, SubfolderList, TreeRunEvent } from "./tree";
 import { askToNotify, notify, windowFocused } from "./notify";
 import type { AiEvent } from "../state/chats";
+import type { ShapeInfo } from "./shapes";
 import { t } from "../i18n";
 import { explain } from "./sentences";
 
@@ -36,6 +37,9 @@ export type Skin = {
   pack_name?: string | null;
   author?: string | null;
   license?: string | null;
+  /** The shape it was made for, by id ("windows-folder", or "free" for a free icon, which goes on
+   *  anything); none for a folder skin made before there were shapes (folderskin_core::base). */
+  base?: string | null;
 };
 
 /** One pack in the Community list. */
@@ -179,13 +183,22 @@ export type AiGenerateRequest = {
   model: string;
   /** The user's own words. */
   idea: string;
-  /** "skin" wraps flat art onto our folder; "folder" uses the model's whole folder as the icon. */
+  /** "skin" wraps flat art onto the shape; "folder" uses the model's whole shape as the icon. A free icon is painted as one either way. */
   shape: "skin" | "folder";
+  /** The shape it's for, by id (src/lib/shapes.ts). */
+  base?: string;
+  /** A built-in style to paint it in, by id (src/lib/styles.ts): its words go in a slot of their own. */
+  style?: string | null;
+  /** One of the user's saved prompts whose look to paint it in, by id; used in place of `style`. */
+  skill?: string | null;
+  /** One of the model's listed sizes; null picks the one closest to the shape. */
   size: string | null;
   /** Optional reference picture already on disk. */
   reference_path: string | null;
   /** Every reference picture, for the models that take more than one. */
   reference_paths?: string[];
+  /** What each of `reference_paths` is for: "subject", "style" or "palette". */
+  reference_roles?: string[];
   /** Tags for the result, such as the style the idea asks for. */
   tags: string[];
   /** Names this run, so aiCancel can stop it. */
@@ -235,6 +248,30 @@ export type ChatSummaryDto = { id: string; title: string; created: number; updat
 
 /** A reference picture kept for a chat: a shrunk copy in the chat's own folder, and a thumbnail. */
 export type ChatRefDto = { id: string; name: string; path: string; thumb: string };
+
+/**
+ * A prompt saved under a name, which the chat's "/" menu lists as Your prompts: a skill in
+ * FolderSkin's skill format (folderskin_ai::skill, prompts.rs). What it shows (`idea`, the words it
+ * puts in the box) is kept apart from how it looks (`base_style`, a built-in style, and what it
+ * adds to it). Fields this build doesn't use come and go as they are.
+ */
+export type SavedPrompt = {
+  format: string;
+  id: string;
+  name: string;
+  command: string;
+  summary?: string;
+  base_style?: string | null;
+  treatment?: string | null;
+  light?: string | null;
+  palette?: { hex: string; name: string }[];
+  idea?: string | null;
+  idea_template?: string | null;
+  lettering?: { text?: string | null; look?: string | null; placement?: string | null } | null;
+  keep_out?: string[];
+  created: string;
+  updated: string;
+};
 
 /** The folder template split into the layers the composer draws a design between, as PNG data URLs. */
 export type ComposerTemplate = {
@@ -469,6 +506,8 @@ const tauriApi = {
 
   // ---- AI assistant (bring your own key) ----
   aiCatalogue: () => invoke<AiCatalogue>("ai_catalogue"),
+  /** Every shape the chat can paint on, with its picture (folderskin_core::base). */
+  aiShapes: () => invoke<ShapeInfo[]>("ai_shapes"),
   aiSetKey: (provider: string, key: string) => invoke<void>("ai_set_key", { provider, key }),
   aiClearKey: (provider: string) => invoke<void>("ai_clear_key", { provider }),
   aiTestKey: (provider: string) => invoke<void>("ai_test_key", { provider }),
@@ -494,6 +533,17 @@ const tauriApi = {
   chatSave: (chat: unknown) => invoke<ChatSummaryDto>("chat_save", { chat }),
   chatDelete: (id: string) => invoke<void>("chat_delete", { id }),
   chatKeepReference: (id: string, path: string) => invoke<ChatRefDto>("chat_keep_reference", { id, path }),
+
+  // ---- the prompts people save from the chat (prompts.rs) ----
+  promptsList: () => invoke<SavedPrompt[]>("prompts_list"),
+  /**
+   * Saves `text` under `name` with its look: `style` is a built-in style's id, or the id of a saved
+   * prompt whose look it takes. A prompt already called that is replaced in its place.
+   */
+  promptSave: (name: string, text: string, style: string | null) => invoke<SavedPrompt>("prompt_save", { name, text, style }),
+  /** Puts a removed prompt back as it was, at `at` in the list. */
+  promptRestore: (skill: SavedPrompt, at: number | null) => invoke<SavedPrompt>("prompt_restore", { skill, at }),
+  promptDelete: (id: string) => invoke<void>("prompt_delete", { id }),
 
   // ---- icon packs ----
   /** Downloads a pack from its release and keeps it, if it is exactly `bytes` long with SHA-256 `sha256`. */

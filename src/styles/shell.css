@@ -132,6 +132,12 @@
   flex-direction: column;
 }
 
+/* The library's island while the composer is on show: kept, with the AI chat in it, but out of
+   the grid. */
+.island-main[hidden] {
+  display: none;
+}
+
 /* ---------- sidebar ---------- */
 
 .sidebar {
