@@ -71,5 +71,41 @@
     "mac-folder": "Le dossier de FolderSkin, tel que le Finder l'affiche",
     "windows-folder": "Le dossier que dessine Windows",
     "free": "Une mascotte, un objet ou un personnage, seul"
+  },
+  "bases": {
+    "folder-mac": "Dossier Mac",
+    "folder-windows": "Dossier Windows",
+    "folder-linux": "Dossier Linux",
+    "drive-mac-startup": "Disque de démarrage",
+    "drive-mac-internal": "Disque interne",
+    "drive-mac-external": "Disque externe",
+    "drive-mac-removable": "Clé USB",
+    "drive-mac-card": "Carte mémoire",
+    "drive-mac-optical": "Disque optique",
+    "drive-mac-disk-image": "Image disque",
+    "drive-mac-network": "Lecteur réseau",
+    "drive-mac-time-machine": "Disque Time Machine",
+    "drive-windows-startup": "Lecteur système",
+    "drive-windows-internal": "Disque local",
+    "drive-windows-removable": "Lecteur USB",
+    "drive-windows-card": "Carte SD",
+    "drive-windows-optical": "Lecteur optique",
+    "drive-windows-network": "Lecteur réseau",
+    "drive-linux-internal": "Disque dur",
+    "drive-linux-solid-state": "Disque SSD",
+    "drive-linux-external": "Disque dur USB",
+    "drive-linux-removable": "Clé USB",
+    "drive-linux-card": "Carte mémoire",
+    "drive-linux-optical-drive": "Lecteur optique",
+    "drive-linux-optical": "Disque optique",
+    "drive-linux-server": "Serveur réseau",
+    "drive-linux-network": "Dossier réseau",
+    "drive-linux-multi-disk": "Grappe RAID",
+    "free": "Icône libre"
+  },
+  "systems": {
+    "mac": "Mac",
+    "windows": "Windows",
+    "linux": "Linux"
   }
 }

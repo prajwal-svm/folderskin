@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { frame, unframe } from "./body";
-import { FALLBACK_PARTS, fallbackParts, parseDoc, WINDOWS_PARTS } from "./doc";
+import { FALLBACK_PARTS, fallbackParts, LINUX_PARTS, parseDoc, WINDOWS_PARTS } from "./doc";
+import { DRIVE_IDS, driveParts } from "./drives";
 import { EMOJI, searchEmoji } from "./emoji";
 import { confettiColors, grainPixels, seeded } from "./patterns";
 import { templateById, TEMPLATES } from "./templates";
@@ -30,11 +31,34 @@ describe("templates", () => {
   });
 });
 
-describe("the Mac's and Windows' own folders", () => {
+describe("the drives' templates", () => {
+  it("lay out on any drive's face, however narrow", () => {
+    const drives = TEMPLATES.filter((t) => t.drive);
+    expect(drives.map((t) => t.id)).toEqual(["drive-colour", "drive-label", "drive-emoji", "drive-photo"]);
+    for (const t of drives) {
+      for (const id of DRIVE_IDS) {
+        const parts = driveParts(id);
+        const [x0, y0, x1, y1] = parts.front;
+        for (const l of t.make(parts, { src: "data:image/png;base64,AAAA", width: 800, height: 600, alpha: false }).layers) {
+          if (!("x" in l)) continue;
+          expect(l.x, `${t.id} on ${id}`).toBeGreaterThanOrEqual(x0);
+          expect(l.x, `${t.id} on ${id}`).toBeLessThanOrEqual(x1);
+          expect(l.y, `${t.id} on ${id}`).toBeGreaterThanOrEqual(y0);
+          expect(l.y, `${t.id} on ${id}`).toBeLessThanOrEqual(y1);
+          // Words fit across the face.
+          if (l.kind === "text") expect(l.size * 4, `${t.id} on ${id}`).toBeLessThanOrEqual(x1 - x0 + 40);
+        }
+      }
+    }
+  });
+});
+
+describe("the Mac's, Windows' and Linux's own folders", () => {
   it("start on their own folder, back and front in their own colours", () => {
     for (const [id, parts, style] of [
       ["mac", FALLBACK_PARTS, "mac"],
       ["windows", WINDOWS_PARTS, "windows"],
+      ["linux", LINUX_PARTS, "linux"],
     ] as const) {
       const t = templateById(id)!;
       expect(t.style).toBe(style);

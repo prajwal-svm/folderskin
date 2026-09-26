@@ -181,9 +181,9 @@ export type View = {
 };
 
 /**
- * The stage's picture of a design: on the folder with the skeleton on, flat with the folder's
- * edges drawn over it with the skeleton off. A free icon is the design itself, with a faint
- * folder behind it for scale while the skeleton is on.
+ * The stage's picture of a design: on the folder (or the drive) with the skeleton on, flat with
+ * its edges drawn over it with the skeleton off. A free icon is the design itself, with a faint
+ * folder (or the drive it came from) behind it for scale while the skeleton is on.
  */
 export function drawView(ctx: Ctx, design: HTMLCanvasElement, t: TemplateImages | null, px: number, view: View, scratch: HTMLCanvasElement) {
   ctx.save();
@@ -197,7 +197,7 @@ export function drawView(ctx: Ctx, design: HTMLCanvasElement, t: TemplateImages 
     ctx.restore();
     return;
   }
-  if (view.shape === "folder") {
+  if (view.shape === "folder" || view.shape === "drive") {
     if (view.skeleton) drawFolderView(ctx, design, t, px, scratch);
     else {
       ctx.save();

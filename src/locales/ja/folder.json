@@ -32,15 +32,18 @@
     "appLabel": "スキンを載せるフォルダの種類",
     "name": {
       "mac": "Mac",
-      "windows": "Windows"
+      "windows": "Windows",
+      "linux": "Linux"
     },
     "tip": {
       "mac": "Macのフォルダを土台にする",
-      "windows": "Windowsのフォルダを土台にする"
+      "windows": "Windowsのフォルダを土台にする",
+      "linux": "Linuxのフォルダを土台にする"
     },
     "redrawing": {
       "mac": "スキンをMacのフォルダに描き直しています",
-      "windows": "スキンをWindowsのフォルダに描き直しています"
+      "windows": "スキンをWindowsのフォルダに描き直しています",
+      "linux": "スキンをLinuxのフォルダに描き直しています"
     }
   },
   "stage": {

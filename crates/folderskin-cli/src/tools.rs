@@ -117,6 +117,7 @@ fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), 
             let becomes = match style {
                 Style::Mac => "artwork on FolderSkin's folder",
                 Style::Windows => "artwork on Windows' folder",
+                Style::Linux => "artwork on the Linux folder",
             };
             (render_preview_png_in(&art, args.size, style), becomes)
         }

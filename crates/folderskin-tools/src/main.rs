@@ -872,19 +872,44 @@ fn packs_catalog(dir: &Path, out: PathBuf, mirrors: Vec<String>) -> Result<(), S
     Ok(())
 }
 
-/// Writes the layers the composer draws a design between into `out`, one PNG each.
+/// Writes the layers the composer draws a design between into `out`, one PNG each, and for the
+/// browser preview every drive's layers at half that size and every base's bare shape at a
+/// quarter, as lossless WebP.
 fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
     use folderskin_core::compositor::Style;
-    for style in [Style::Mac, Style::Windows] {
+    use folderskin_core::drive::DriveShape;
+    let write = |path: &Path, bytes: &[u8]| -> Result<(), String> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
+        }
+        std::fs::write(path, bytes).map_err(|e| format!("couldn't write {}: {e}", path.display()))
+    };
+    for style in Style::ALL {
         let dir = out.join(composer::style_dir(style));
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
         for (file, layer) in composer::layer_files(size, style) {
             let path = dir.join(file);
-            std::fs::write(&path, raster::encode_png(&layer))
-                .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+            write(&path, &raster::encode_png(&layer))?;
             println!("wrote {} ({size}×{size})", path.display());
         }
+    }
+    let half = (size / 2).max(16);
+    for shape in DriveShape::all() {
+        for (file, layer) in composer::drive_layer_files(shape, half) {
+            let path = out.join("drives").join(shape.id()).join(file);
+            write(&path, &raster::encode_webp_lossless(&layer))?;
+            println!("wrote {} ({half}×{half})", path.display());
+        }
+    }
+    let parts = out.join("drives/parts.json");
+    let json = serde_json::to_string_pretty(&composer::drive_parts()).map_err(|e| e.to_string())?;
+    write(&parts, format!("{json}\n").as_bytes())?;
+    println!("wrote {}", parts.display());
+    let quarter = (size / 4).max(16);
+    for (id, picture) in composer::base_pictures(quarter) {
+        let path = out.join("bases").join(format!("{id}.webp"));
+        write(&path, &raster::encode_webp_lossless(&picture))?;
+        println!("wrote {} ({quarter}×{quarter})", path.display());
     }
     Ok(())
 }

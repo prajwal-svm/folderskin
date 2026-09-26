@@ -3,7 +3,9 @@
 //! drop zone shows as-is.
 
 use crate::state::AppState;
-use crate::store::{self, NewSkin, SavedSkin, SkinImage, SkinKind, SkinSource, MAX_STORED_SIDE};
+use crate::store::{
+    self, NewSkin, SavedSkin, SkinImage, SkinKind, SkinShape, SkinSource, MAX_STORED_SIDE,
+};
 use base64::Engine;
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::apply::{
@@ -55,6 +57,8 @@ pub struct SkinDto {
     pub custom: bool,
     /// "artwork" (wrapped onto the folder template) or "folder" (a finished folder image).
     pub kind: SkinKind,
+    /// "folder", or "drive" for a drive skin: a finished drive, or artwork from a drive pack.
+    pub shape: SkinShape,
     /// "import", "ai", "community" or "composer".
     pub source: SkinSource,
     /// When the skin was added, in Unix milliseconds.
@@ -86,6 +90,7 @@ impl SkinDto {
             thumbnail: data_url(thumbnail_png),
             custom: true,
             kind: entry.kind,
+            shape: entry.shape,
             source: entry.source,
             created_at: entry.created_at,
             tags: entry.tags.clone(),
@@ -549,7 +554,7 @@ mod tests {
                 assert_eq!(art.rgba, photo, "artwork is kept whole");
                 assert_eq!(art.focus, (0.5, 0.5));
             }
-            SkinImage::Folder(_) => panic!("a photo must not be used as a finished folder"),
+            _ => panic!("a photo must not be used as a finished folder"),
         }
     }
 
@@ -557,7 +562,7 @@ mod tests {
     fn a_finished_folder_with_transparency_imports_trimmed() {
         match prepare_import(picture([0, 0, 0, 0])).unwrap() {
             SkinImage::Folder(img) => assert_eq!(img.dimensions(), (100, 82)),
-            SkinImage::Artwork(_) => panic!("a cut-out folder must be used as it is"),
+            _ => panic!("a cut-out folder must be used as it is"),
         }
     }
 
@@ -570,7 +575,7 @@ mod tests {
                 assert_eq!(img.get_pixel(w - 1, 0).0[3], 0, "the magenta is gone");
                 assert_eq!(img.get_pixel(50, 50).0[3], 255, "the folder stays");
             }
-            SkinImage::Artwork(_) => panic!("a keyed folder must be used as it is"),
+            _ => panic!("a keyed folder must be used as it is"),
         }
     }
 
@@ -597,6 +602,7 @@ mod tests {
             id: store::skin_id(b"x"),
             name: "Mine".into(),
             kind: SkinKind::Folder,
+            shape: SkinShape::Folder,
             source: SkinSource::Ai,
             created_at: 1_790_000_000_000,
             focus: None,
@@ -616,6 +622,7 @@ mod tests {
         assert_eq!(json["collection"], "yours");
         assert_eq!(json["custom"], true);
         assert_eq!(json["kind"], "folder");
+        assert_eq!(json["shape"], "folder");
         assert_eq!(json["source"], "ai");
         assert_eq!(json["created_at"], 1_790_000_000_000u64);
         assert_eq!(json["tags"], serde_json::json!(["woodblock"]));

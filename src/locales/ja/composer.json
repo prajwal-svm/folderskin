@@ -119,7 +119,11 @@
     "coversFront": "前面",
     "coversFrontTip": "前面パネルだけに塗るので、背面とタブを別の色にできます",
     "glow": "グローにする",
-    "shuffle": "シャッフル"
+    "shuffle": "シャッフル",
+    "textOnDrive": "ドライブの文字",
+    "toFaceTip": "ドライブの表面の中央に置く",
+    "coverDrive": "ドライブを覆う",
+    "coverDriveTip": "ドライブ全体を覆う"
   },
   "blends": {
     "normal": "通常",
@@ -251,11 +255,17 @@
     "neon": "ネオン",
     "badge": "バッジ",
     "photo": "写真",
-    "sticker": "ステッカー"
+    "sticker": "ステッカー",
+    "linux": "Linuxのフォルダ",
+    "drive-label": "ラベル付きドライブ",
+    "drive-colour": "カラードライブ",
+    "drive-emoji": "絵文字ドライブ",
+    "drive-photo": "写真ドライブ"
   },
   "templateNotes": {
     "mac": "Macの青",
-    "windows": "Windowsの黄色"
+    "windows": "Windowsの黄色",
+    "linux": "Linuxの青"
   },
   "templateLayers": {
     "back": "背面",
@@ -274,7 +284,8 @@
     "notes": "メモ",
     "night": "夜",
     "new": "新着",
-    "summer": "2026年の夏"
+    "summer": "2026年の夏",
+    "backups": "バックアップ"
   },
   "otherFont": "その他のフォント",
   "emoji": {
@@ -318,7 +329,12 @@
     },
     "templatesLabel": "テンプレートから始める",
     "templatesHeading": "またはテンプレートから始める",
-    "asksForPicture": "最初に画像を選びます"
+    "asksForPicture": "最初に画像を選びます",
+    "drives": {
+      "heading": "ドライブから始める",
+      "label": "ドライブから始める",
+      "sub": "それぞれのシステムが表示するあらゆる種類のドライブです。デザインはその表面に載ります。"
+    }
   },
   "layers": {
     "empty": "まだ何もありません。フォルダの上のバーから、色や文字、画像を追加しましょう。",
@@ -362,7 +378,8 @@
   },
   "stage": {
     "folderLoading": "フォルダを準備中",
-    "pictureLoading": "画像を準備中"
+    "pictureLoading": "画像を準備中",
+    "driveLoading": "ドライブを準備中"
   },
   "icons": {
     "icons_other": "{{count}}個のアイコン",
@@ -485,7 +502,11 @@
     "label": "フォルダの骨組み",
     "name": "フォルダの骨組み",
     "onTip": "オン：デザインをフォルダの形に切り抜き、タブとふちを付けます。オフ：デザインがそのままアイコン全体になり、どんな形にもできます。",
-    "offTip": "オフ：デザインがそのままアイコン全体になり、どんな形にもできます。オン：フォルダの形に切り抜き、タブとふちを付けます。"
+    "offTip": "オフ：デザインがそのままアイコン全体になり、どんな形にもできます。オン：フォルダの形に切り抜き、タブとふちを付けます。",
+    "driveLabel": "ドライブの骨組み",
+    "driveName": "ドライブの骨組み",
+    "driveOnTip": "オン：デザインをドライブの表面の形に切り抜き、まわりにドライブを描きます。オフ：デザインがそのままアイコン全体になり、どんな形にもできます。",
+    "driveOffTip": "オフ：デザインがそのままアイコン全体になり、どんな形にもできます。オン：ドライブの表面の形に切り抜き、まわりにドライブを描きます。"
   },
   "sideTabs": {
     "label": "サイドパネル",
@@ -506,5 +527,10 @@
     "chooseTip": "適用するフォルダを選ぶ",
     "applyTo": "適用先",
     "none": "フォルダが選ばれていません"
-  }
+  },
+  "drive": {
+    "label": "ドライブの種類",
+    "option": "{{drive}} · {{system}}"
+  },
+  "emptyHintDrive": "空のデザインではドライブはそのままです。上のバーから、色や文字、画像を追加しましょう。"
 }

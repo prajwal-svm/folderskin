@@ -69,5 +69,41 @@
     "mac-folder": "FolderSkin's folder, as Finder shows it",
     "windows-folder": "The folder Windows draws",
     "free": "A mascot, an object or a character, on its own"
+  },
+  "bases": {
+    "folder-mac": "Mac folder",
+    "folder-windows": "Windows folder",
+    "folder-linux": "Linux folder",
+    "drive-mac-startup": "Startup disk",
+    "drive-mac-internal": "Internal drive",
+    "drive-mac-external": "External drive",
+    "drive-mac-removable": "USB drive",
+    "drive-mac-card": "Memory card",
+    "drive-mac-optical": "Disc",
+    "drive-mac-disk-image": "Disk image",
+    "drive-mac-network": "Network drive",
+    "drive-mac-time-machine": "Time Machine disk",
+    "drive-windows-startup": "System drive",
+    "drive-windows-internal": "Local disk",
+    "drive-windows-removable": "USB drive",
+    "drive-windows-card": "SD card",
+    "drive-windows-optical": "Disc drive",
+    "drive-windows-network": "Network drive",
+    "drive-linux-internal": "Hard disk",
+    "drive-linux-solid-state": "Solid-state drive",
+    "drive-linux-external": "USB hard disk",
+    "drive-linux-removable": "USB stick",
+    "drive-linux-card": "Memory card",
+    "drive-linux-optical-drive": "Disc drive",
+    "drive-linux-optical": "Disc",
+    "drive-linux-server": "Network server",
+    "drive-linux-network": "Network folder",
+    "drive-linux-multi-disk": "RAID set",
+    "free": "Free icon"
+  },
+  "systems": {
+    "mac": "Mac",
+    "windows": "Windows",
+    "linux": "Linux"
   }
 }

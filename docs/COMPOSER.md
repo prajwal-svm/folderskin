@@ -19,6 +19,7 @@ any other skin, and **Save & apply** puts it straight on the folder you picked.
 | A patterned folder | **Stripes**, **Gingham**, **Polka** | **Pattern** adds ten kinds, from stripes to confetti and film grain |
 | A photo with a caption | **Photo** | It asks for the picture first. Drop or paste more later |
 | A sticker, a badge, anything that isn't folder-shaped | **Sticker** | *Free icon* makes the design the whole icon |
+| A drive of your own: *Backups* on an external disk, a photo on a USB stick | A drive under **Start on a drive**, or **Labelled drive**, **Coloured drive**, **Emoji drive** or **Photo drive** | The design goes on the drive's face. The menu under the canvas moves it to another drive |
 | A skin you already have, with your own touch | A skin's ⋯ menu → **Remix in the composer** | The skin becomes a picture layer to build on |
 | A change to something you designed before | Its ⋯ menu → **Edit design** | **Save changes** updates it in place, and **Save as new** keeps both |
 
@@ -26,6 +27,10 @@ any other skin, and **Save & apply** puts it straight on the folder you picked.
 
 **Starting.** The first visit, and **New**, show the starting points. Every one is an ordinary
 design: nothing on it is fixed. Picking one while your design has unsaved changes asks first.
+**Start empty** has the Mac's, Windows' and Linux's own folders beside the empty ones, and **Start
+on a drive** has every drive each system shows, the Mac's, Windows' and Linux's in a row each
+([DRIVES.md](DRIVES.md) lists them). A drive template starts on this system's own external drive,
+or on the drive the last design was on.
 
 **Adding.** The bar above the folder adds **Text**, an **Emoji**, a **Shape** (thirteen, from a
 rounded rectangle to a speech bubble), a **Picture** (a file, one of your skins, or one dropped or
@@ -66,6 +71,14 @@ buttons to restack, duplicate and delete it in that heading:
   that follows the outline like a die-cut sticker.
 
 With nothing selected, the settings choose **On the folder** or **Free icon**.
+
+**On a drive.** A design on a drive covers its face: the drive's front, a card's label, a disc
+between its hub and its rim. The rest of the drive (its base, its connector, the hole in a disc) is
+drawn around and over the face, and a see-through part of the design shows the drive's own face.
+The switch under the canvas reads **Drive skeleton**, and beside it a menu of every drive moves the
+design onto another, each layer keeping its place on the face and fitting it. There is no tab on a
+drive to move a layer to. Saved, a design on a drive is a drive skin, which the library puts first
+while a drive is picked.
 
 **Seeing it.** The **Folder skeleton** switch under the canvas shows the design on the folder
 (tab, paper sheet and edges), or flat with the folder's edges drawn over it, so you can see what
@@ -167,6 +180,8 @@ A remix reads the skin's own picture with `composer_skin_image`:
 | `composer_image` | `path` | `{url, width, height, name, alpha}`: a picture file, at most 2048 px, PNG if it has transparency and JPEG if not |
 | `composer_skin_image` | `skinId` | the same, for a saved skin's own picture |
 | `composer_design` | `skinId` | the design's document, or `null` for a skin not made here |
+| `composer_drive_template` | `drive` | a drive's layers in the folder's shape, as `composer_template` sends them: `back` empty, `middle` the plain drive, `front` its face's coverage, `top` what goes over the face, and `parts` with the face as the front (and, on a disc, `anchor`, where a new layer goes) |
+| `base_shapes` | `size` | every base a design or a picture can be drawn on, [below](#every-base-in-one-list) |
 
 ### The document
 
@@ -189,6 +204,27 @@ data URL. A document read from disk goes through `parseDoc` first:
 - A picture that isn't a PNG, JPEG, WebP or GIF data URL is dropped.
 - A document from a newer version is refused rather than misread.
 
+A design on a drive says which drive, as `"drive": "mac-external"`, and has `"version": 2`, so a
+FolderSkin from before drives says it's from a newer version rather than opening it on a folder. A
+design on a folder or a free icon is still version 1, exactly as before, and every document saved
+before drives opens as it was. A drive FolderSkin doesn't draw is read as a folder's design.
+
+### Every base in one list
+
+`base_shapes` (`src-tauri/src/bases.rs`, over `folderskin_core::base`) lists every base a picture
+can be drawn on: the three folders, every drive, then `free`, no base at all. Each entry is plain
+data that doesn't change from one version to the next, for anything that lets someone pick a base:
+
+```json
+{ "id": "drive-mac-external", "label": "common.bases.drive-mac-external", "base": "drive",
+  "style": "mac", "kind": "external", "picture": "data:image/png;base64,…" }
+```
+
+`id` is `folder-<style>`, `drive-<style>-<kind>` or `free`. `label` is the message that names it
+(`src/lib/bases.ts` turns it into words). `picture` is the bare shape at the size asked for (16 to
+512 px, 128 when not said): the folder in its own colour, the drive with nothing on its face, and
+for `free` an empty square. In Rust, `Base::render(size)` draws the same.
+
 ### Limits worth knowing
 
 - **Emoji** come from the system's emoji font. On macOS that font is a bitmap, sharp up to about
@@ -206,9 +242,13 @@ data URL. A document read from disk goes through `parseDoc` first:
 ### The browser preview
 
 `pnpm dev` in a plain browser shows the composer too. The folder layers are the PNGs in
-`docs/images/composer/`, written by `cargo run -p folderskin-tools -- composer-layers --out
-docs/images/composer`. A test in `folderskin-tools` checks they are the pixels the compositor
-draws, so they can't go stale.
+`docs/images/composer/` (Windows' in `windows/`, Linux's in `linux/`), written by `cargo run -p
+folderskin-tools -- composer-layers --out docs/images/composer`. The same command writes every
+drive's layers into `drives/<id>/` at half the size, with where each drive's face is in
+`drives/parts.json`, and every base's bare shape into `bases/`, as lossless WebP. A test in
+`folderskin-tools` checks they are the pixels the compositor draws, so they can't go stale, and one
+in the webview's checks that `src/composer/drives.ts` places things where the Rust drawing has each
+drive's face.
 
 ### Tests
 

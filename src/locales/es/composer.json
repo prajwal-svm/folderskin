@@ -119,7 +119,11 @@
     "coversFront": "Frente",
     "coversFrontTip": "Solo el panel delantero, para que la parte trasera y la pestaña puedan ser de otro color",
     "glow": "Convertir en resplandor",
-    "shuffle": "Mezclar"
+    "shuffle": "Mezclar",
+    "textOnDrive": "Texto en la unidad",
+    "toFaceTip": "Ponerlo en el centro de la cara frontal de la unidad",
+    "coverDrive": "Cubrir unidad",
+    "coverDriveTip": "Cubrir toda la unidad con ella"
   },
   "blends": {
     "normal": "Normal",
@@ -251,11 +255,17 @@
     "neon": "Neón",
     "badge": "Insignia",
     "photo": "Foto",
-    "sticker": "Sticker"
+    "sticker": "Sticker",
+    "linux": "Carpeta Linux",
+    "drive-label": "Unidad con etiqueta",
+    "drive-colour": "Unidad de color",
+    "drive-emoji": "Unidad con emoji",
+    "drive-photo": "Unidad con foto"
   },
   "templateNotes": {
     "mac": "El azul del Mac",
-    "windows": "El amarillo de Windows"
+    "windows": "El amarillo de Windows",
+    "linux": "El azul de Linux"
   },
   "templateLayers": {
     "back": "Trasera",
@@ -274,7 +284,8 @@
     "notes": "Notas",
     "night": "Noche",
     "new": "NUEVO",
-    "summer": "Verano 2026"
+    "summer": "Verano 2026",
+    "backups": "Copias"
   },
   "otherFont": "Otra fuente",
   "emoji": {
@@ -318,7 +329,12 @@
     },
     "templatesLabel": "empezar con una plantilla",
     "templatesHeading": "O empieza con una plantilla",
-    "asksForPicture": "Pide una imagen"
+    "asksForPicture": "Pide una imagen",
+    "drives": {
+      "heading": "Empezar en una unidad",
+      "label": "empezar en una unidad",
+      "sub": "Cada tipo de unidad que muestra cada sistema. Tu diseño va en su cara frontal."
+    }
   },
   "layers": {
     "empty": "Aún no hay nada. Añade un color, texto o una imagen desde la barra de encima de la carpeta.",
@@ -362,7 +378,8 @@
   },
   "stage": {
     "folderLoading": "Preparando la carpeta",
-    "pictureLoading": "Preparando la imagen"
+    "pictureLoading": "Preparando la imagen",
+    "driveLoading": "Preparando la unidad"
   },
   "icons": {
     "icons_one": "{{count}} icono",
@@ -499,7 +516,11 @@
     "label": "esqueleto de la carpeta",
     "name": "Esqueleto de la carpeta",
     "onTip": "Activado: tu diseño se recorta a la carpeta, con su pestaña y sus bordes. Desactivado: es el icono entero, con la forma que quieras.",
-    "offTip": "Desactivado: tu diseño es el icono entero, con la forma que quieras. Activado: se recorta a la carpeta, con su pestaña y sus bordes."
+    "offTip": "Desactivado: tu diseño es el icono entero, con la forma que quieras. Activado: se recorta a la carpeta, con su pestaña y sus bordes.",
+    "driveLabel": "esqueleto de la unidad",
+    "driveName": "Esqueleto de la unidad",
+    "driveOnTip": "Activado: tu diseño se recorta a la cara frontal de la unidad, con la unidad alrededor. Desactivado: es el icono entero, con la forma que quieras.",
+    "driveOffTip": "Desactivado: tu diseño es el icono entero, con la forma que quieras. Activado: se recorta a la cara frontal de la unidad, con la unidad alrededor."
   },
   "sideTabs": {
     "label": "panel lateral",
@@ -520,5 +541,10 @@
     "chooseTip": "Elegir la carpeta a la que aplicarlo",
     "applyTo": "Aplicar a",
     "none": "Ninguna carpeta elegida"
-  }
+  },
+  "drive": {
+    "label": "qué unidad",
+    "option": "{{drive}} · {{system}}"
+  },
+  "emptyHintDrive": "Un diseño vacío deja la unidad tal como está. Añade un color, texto o una imagen desde la barra de arriba."
 }

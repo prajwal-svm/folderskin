@@ -99,6 +99,59 @@ pub fn arc(pb: &mut PathBuilder, cx: f32, cy: f32, r: f32, start_deg: f32, end_d
     }
 }
 
+/// The corner at `p`, between the edge from `prev` and the edge to `next`, rounded by a circular
+/// arc of radius `r`: the arc starts where it touches the first edge and ends where it touches the
+/// second. A radius too big for either edge is made smaller, to at most half of the shorter one.
+pub fn fillet(pb: &mut PathBuilder, prev: (f32, f32), p: (f32, f32), next: (f32, f32), r: f32) {
+    let unit = |a: (f32, f32), b: (f32, f32)| {
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len = (dx * dx + dy * dy).sqrt();
+        ((dx / len.max(1e-6), dy / len.max(1e-6)), len)
+    };
+    let (u, len_in) = unit(prev, p);
+    let (v, len_out) = unit(p, next);
+    let turn = u.0 * v.1 - u.1 * v.0;
+    let to = |x: f32, y: f32, pb: &mut PathBuilder| {
+        if pb.is_empty() {
+            pb.move_to(x, y)
+        } else {
+            pb.line_to(x, y)
+        }
+    };
+    if r <= 0.0 || turn.abs() < 1e-4 {
+        to(p.0, p.1, pb);
+        return;
+    }
+    // The angle between the two edges, and how far from the corner the arc touches each.
+    let cos = (-(u.0 * v.0 + u.1 * v.1)).clamp(-1.0, 1.0);
+    let half = cos.acos() / 2.0;
+    let mut t = r / half.tan();
+    let limit = len_in.min(len_out) / 2.0;
+    let r = if t > limit {
+        t = limit;
+        limit * half.tan()
+    } else {
+        r
+    };
+    let a = (p.0 - u.0 * t, p.1 - u.1 * t);
+    let b = (p.0 + v.0 * t, p.1 + v.1 * t);
+    // The arc's centre is `r` in from where it touches the first edge, on the side the corner
+    // turns to.
+    let n = if turn > 0.0 { (-u.1, u.0) } else { (u.1, -u.0) };
+    let c = (a.0 + n.0 * r, a.1 + n.1 * r);
+    let start = (a.1 - c.1).atan2(a.0 - c.0).to_degrees();
+    let end = (b.1 - c.1).atan2(b.0 - c.0).to_degrees();
+    let mut sweep = end - start;
+    while sweep > 180.0 {
+        sweep -= 360.0;
+    }
+    while sweep < -180.0 {
+        sweep += 360.0;
+    }
+    to(a.0, a.1, pb);
+    arc(pb, c.0, c.1, r, start, start + sweep);
+}
+
 /// Angle in degrees of `p` as seen from `centre` (screen coordinates, y down).
 fn angle_deg(centre: (f32, f32), p: (f32, f32)) -> f32 {
     (p.1 - centre.1).atan2(p.0 - centre.0).to_degrees()

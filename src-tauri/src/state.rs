@@ -67,9 +67,9 @@ pub struct Inner {
     recent: Mutex<Recent>,
     /// Skins that could not be saved: no data folder, or a failed write of an AI result.
     unsaved: Mutex<HashMap<String, Unsaved>>,
-    /// The plain default folder's thumbnail, as a PNG data URL, once it has been drawn.
-    /// The plain folder's thumbnail, once for each folder skins can go on: the Mac's, Windows'.
-    default_thumb: [OnceLock<String>; 2],
+    /// The plain folder's thumbnail as a PNG data URL, once it has been drawn, for each folder
+    /// skins can go on, in the order of [`Style::ALL`].
+    default_thumb: [OnceLock<String>; 3],
 }
 
 /// Cheap to clone; every command clones it before moving work to a blocking thread.
@@ -413,7 +413,7 @@ impl AppState {
     /// The plain default folder's thumbnail on the folder of `style`: `draw()`'s data URL the
     /// first time, and the same one after that. Callers that ask while it is being drawn wait.
     pub fn default_thumbnail(&self, style: Style, draw: impl FnOnce() -> String) -> String {
-        let slot = usize::from(style == Style::Windows);
+        let slot = Style::ALL.iter().position(|s| *s == style).unwrap_or(0);
         self.0.default_thumb[slot].get_or_init(draw).clone()
     }
 }

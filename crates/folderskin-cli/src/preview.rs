@@ -8,27 +8,27 @@ use folderskin_core::matte;
 use folderskin_tools::skin::Skin;
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 /// The side of a preview, in pixels.
 pub const PREVIEW_SIZE: u32 = 512;
 
-/// Whether artwork goes on Windows' folder rather than the Mac's, for this run: `--look`, or
-/// the folder chosen in the app. Set once, before the command runs.
-static WINDOWS_LOOK: AtomicBool = AtomicBool::new(false);
+/// Which folder artwork goes on for this run, as its place in [`Style::ALL`]: `--look`, or the
+/// folder chosen in the app. Set once, before the command runs.
+static LOOK: AtomicU8 = AtomicU8::new(0);
 
 /// Puts artwork on the folder of `style` for the rest of the run.
 pub fn set_look(style: Style) {
-    WINDOWS_LOOK.store(style == Style::Windows, Ordering::Relaxed);
+    let at = Style::ALL.iter().position(|s| *s == style).unwrap_or(0);
+    LOOK.store(at as u8, Ordering::Relaxed);
 }
 
 /// The folder artwork goes on in this run, as the app would put it.
 pub fn look() -> Style {
-    if WINDOWS_LOOK.load(Ordering::Relaxed) {
-        Style::Windows
-    } else {
-        Style::Mac
-    }
+    Style::ALL
+        .get(usize::from(LOOK.load(Ordering::Relaxed)))
+        .copied()
+        .unwrap_or(Style::Mac)
 }
 
 /// What a picture becomes on the folder of `style`, in words: artwork on FolderSkin's folder or
@@ -38,6 +38,7 @@ pub fn becomes(skin: &Skin, style: Style) -> &'static str {
         (Skin::Folder(_), _) => skin.describe(),
         (Skin::Artwork(_), Style::Mac) => "artwork on FolderSkin's folder",
         (Skin::Artwork(_), Style::Windows) => "artwork on Windows' folder",
+        (Skin::Artwork(_), Style::Linux) => "artwork on the Linux folder",
     }
 }
 
@@ -204,6 +205,7 @@ mod tests {
         let skin = skin(art, (0.5, 0.5), Path::new("a.png")).unwrap();
         assert_eq!(becomes(&skin, Style::Mac), "artwork on FolderSkin's folder");
         assert_eq!(becomes(&skin, Style::Windows), "artwork on Windows' folder");
+        assert_eq!(becomes(&skin, Style::Linux), "artwork on the Linux folder");
     }
 
     #[test]

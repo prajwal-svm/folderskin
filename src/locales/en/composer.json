@@ -119,7 +119,11 @@
     "coversFront": "Front",
     "coversFrontTip": "Only the front panel, so the back and tab can be another colour",
     "glow": "Make it a glow",
-    "shuffle": "Shuffle"
+    "shuffle": "Shuffle",
+    "textOnDrive": "Text on the drive",
+    "toFaceTip": "Put it in the middle of the drive's face",
+    "coverDrive": "Cover drive",
+    "coverDriveTip": "Cover the whole drive with it"
   },
   "blends": {
     "normal": "Normal",
@@ -251,11 +255,17 @@
     "neon": "Neon",
     "badge": "Badge",
     "photo": "Photo",
-    "sticker": "Sticker"
+    "sticker": "Sticker",
+    "linux": "Linux folder",
+    "drive-label": "Labelled drive",
+    "drive-colour": "Coloured drive",
+    "drive-emoji": "Emoji drive",
+    "drive-photo": "Photo drive"
   },
   "templateNotes": {
     "mac": "The Mac's blue",
-    "windows": "Windows' yellow"
+    "windows": "Windows' yellow",
+    "linux": "Linux's blue"
   },
   "templateLayers": {
     "back": "Back",
@@ -274,7 +284,8 @@
     "notes": "Notes",
     "night": "Night",
     "new": "NEW",
-    "summer": "Summer 2026"
+    "summer": "Summer 2026",
+    "backups": "Backups"
   },
   "otherFont": "Other font",
   "emoji": {
@@ -318,7 +329,12 @@
     },
     "templatesLabel": "start from a template",
     "templatesHeading": "Or start from a template",
-    "asksForPicture": "Asks for a picture"
+    "asksForPicture": "Asks for a picture",
+    "drives": {
+      "heading": "Start on a drive",
+      "label": "start on a drive",
+      "sub": "Every kind of drive each system shows. Your design goes on its face."
+    }
   },
   "layers": {
     "empty": "Nothing here yet. Add a colour, words or a picture from the bar above the folder.",
@@ -362,7 +378,8 @@
   },
   "stage": {
     "folderLoading": "Getting the folder ready",
-    "pictureLoading": "Getting the picture ready"
+    "pictureLoading": "Getting the picture ready",
+    "driveLoading": "Getting the drive ready"
   },
   "icons": {
     "icons_one": "{{count}} icon",
@@ -492,7 +509,11 @@
     "label": "folder skeleton",
     "name": "Folder skeleton",
     "onTip": "On: your design is cut to the folder, with its tab and edges. Off: it's the whole icon, any shape you like.",
-    "offTip": "Off: your design is the whole icon, any shape you like. On: it's cut to the folder, with its tab and edges."
+    "offTip": "Off: your design is the whole icon, any shape you like. On: it's cut to the folder, with its tab and edges.",
+    "driveLabel": "drive skeleton",
+    "driveName": "Drive skeleton",
+    "driveOnTip": "On: your design is cut to the drive's face, with the drive around it. Off: it's the whole icon, any shape you like.",
+    "driveOffTip": "Off: your design is the whole icon, any shape you like. On: it's cut to the drive's face, with the drive around it."
   },
   "sideTabs": {
     "label": "side panel",
@@ -513,5 +534,10 @@
     "chooseTip": "Choose the folder to apply it to",
     "applyTo": "Apply to",
     "none": "No folder chosen"
-  }
+  },
+  "drive": {
+    "label": "which drive",
+    "option": "{{drive}} · {{system}}"
+  },
+  "emptyHintDrive": "An empty design leaves the drive as it is. Add a colour, words or a picture from the bar above."
 }

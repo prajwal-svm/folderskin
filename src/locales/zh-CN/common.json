@@ -67,5 +67,41 @@
     "mac-folder": "FolderSkin 的文件夹，和 Finder 里显示的一样",
     "windows-folder": "Windows 画出的文件夹",
     "free": "独立的吉祥物、物品或角色"
+  },
+  "bases": {
+    "folder-mac": "Mac 文件夹",
+    "folder-windows": "Windows 文件夹",
+    "folder-linux": "Linux 文件夹",
+    "drive-mac-startup": "启动磁盘",
+    "drive-mac-internal": "内置磁盘",
+    "drive-mac-external": "外置磁盘",
+    "drive-mac-removable": "U 盘",
+    "drive-mac-card": "存储卡",
+    "drive-mac-optical": "光盘",
+    "drive-mac-disk-image": "磁盘映像",
+    "drive-mac-network": "网络驱动器",
+    "drive-mac-time-machine": "时间机器磁盘",
+    "drive-windows-startup": "系统盘",
+    "drive-windows-internal": "本地磁盘",
+    "drive-windows-removable": "U 盘",
+    "drive-windows-card": "SD 卡",
+    "drive-windows-optical": "光驱",
+    "drive-windows-network": "网络驱动器",
+    "drive-linux-internal": "硬盘",
+    "drive-linux-solid-state": "固态硬盘",
+    "drive-linux-external": "USB 硬盘",
+    "drive-linux-removable": "U 盘",
+    "drive-linux-card": "存储卡",
+    "drive-linux-optical-drive": "光驱",
+    "drive-linux-optical": "光盘",
+    "drive-linux-server": "网络服务器",
+    "drive-linux-network": "网络文件夹",
+    "drive-linux-multi-disk": "RAID 阵列",
+    "free": "自由图标"
+  },
+  "systems": {
+    "mac": "Mac",
+    "windows": "Windows",
+    "linux": "Linux"
   }
 }

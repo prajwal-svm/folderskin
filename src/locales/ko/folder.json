@@ -32,15 +32,18 @@
     "appLabel": "스킨을 입힐 폴더 종류",
     "name": {
       "mac": "Mac",
-      "windows": "Windows"
+      "windows": "Windows",
+      "linux": "Linux"
     },
     "tip": {
       "mac": "Mac 폴더를 바탕으로 바꾸기",
-      "windows": "Windows 폴더를 바탕으로 바꾸기"
+      "windows": "Windows 폴더를 바탕으로 바꾸기",
+      "linux": "Linux 폴더를 바탕으로 바꾸기"
     },
     "redrawing": {
       "mac": "스킨을 Mac 폴더에 다시 그리는 중",
-      "windows": "스킨을 Windows 폴더에 다시 그리는 중"
+      "windows": "스킨을 Windows 폴더에 다시 그리는 중",
+      "linux": "스킨을 Linux 폴더에 다시 그리는 중"
     }
   },
   "stage": {

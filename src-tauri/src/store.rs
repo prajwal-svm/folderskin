@@ -32,6 +32,7 @@
 
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::compositor::{self, Artwork, IconSet};
+use folderskin_core::drive::{DriveShape, DriveStyle};
 use folderskin_core::{pack, raster};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,23 @@ pub enum SkinSource {
     Composer,
 }
 
+/// What a skin is for: a folder, or a drive. A finished drive is drawn as a drive, and artwork
+/// from a drive pack is shown on one; the library puts a drive's skins first while a drive is
+/// picked. Every skin still goes on either.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SkinShape {
+    #[default]
+    Folder,
+    Drive,
+}
+
+impl SkinShape {
+    fn is_folder(&self) -> bool {
+        *self == SkinShape::Folder
+    }
+}
+
 /// One saved skin, as the index records it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SavedSkin {
@@ -87,6 +105,10 @@ pub struct SavedSkin {
     pub id: String,
     pub name: String,
     pub kind: SkinKind,
+    /// A drive skin says so. Left out for a folder's, which every skin saved before drives is, so
+    /// an index an older FolderSkin reads back is the one it wrote.
+    #[serde(default, skip_serializing_if = "SkinShape::is_folder")]
+    pub shape: SkinShape,
     pub source: SkinSource,
     /// When the skin was added, in Unix milliseconds.
     pub created_at: u64,
@@ -161,6 +183,7 @@ impl NewSkin {
             id: self.id,
             name: self.name,
             kind: image.kind(),
+            shape: image.shape(),
             source: self.source,
             created_at,
             focus: image.focus(),
@@ -186,49 +209,100 @@ pub enum SkinImage {
     Artwork(Arc<Artwork>),
     /// A finished folder image for [`compositor::icon_set_from_image`].
     Folder(Arc<RgbaImage>),
+    /// A finished drive, used as the icon as it is, like a finished folder.
+    Drive(Arc<RgbaImage>),
+    /// Artwork from a drive pack: wrapped onto whatever it goes on, like any artwork, and shown on
+    /// a drive in the library.
+    DriveArt(Arc<Artwork>),
 }
 
 impl SkinImage {
     pub fn kind(&self) -> SkinKind {
         match self {
-            SkinImage::Artwork(_) => SkinKind::Artwork,
-            SkinImage::Folder(_) => SkinKind::Folder,
+            SkinImage::Artwork(_) | SkinImage::DriveArt(_) => SkinKind::Artwork,
+            SkinImage::Folder(_) | SkinImage::Drive(_) => SkinKind::Folder,
         }
     }
 
-    /// The picture itself: the flat artwork, or the finished folder.
+    pub fn shape(&self) -> SkinShape {
+        match self {
+            SkinImage::Artwork(_) | SkinImage::Folder(_) => SkinShape::Folder,
+            SkinImage::Drive(_) | SkinImage::DriveArt(_) => SkinShape::Drive,
+        }
+    }
+
+    /// The same pixels as a skin of `shape`: how a drive pack's pictures become drive skins.
+    pub fn as_shape(self, shape: SkinShape) -> SkinImage {
+        match (self, shape) {
+            (SkinImage::Artwork(art) | SkinImage::DriveArt(art), SkinShape::Folder) => {
+                SkinImage::Artwork(art)
+            }
+            (SkinImage::Artwork(art) | SkinImage::DriveArt(art), SkinShape::Drive) => {
+                SkinImage::DriveArt(art)
+            }
+            (SkinImage::Folder(img) | SkinImage::Drive(img), SkinShape::Folder) => {
+                SkinImage::Folder(img)
+            }
+            (SkinImage::Folder(img) | SkinImage::Drive(img), SkinShape::Drive) => {
+                SkinImage::Drive(img)
+            }
+        }
+    }
+
+    /// The picture itself: the flat artwork, or the finished folder or drive.
     pub fn rgba(&self) -> &RgbaImage {
         match self {
-            SkinImage::Artwork(art) => &art.rgba,
-            SkinImage::Folder(img) => img,
+            SkinImage::Artwork(art) | SkinImage::DriveArt(art) => &art.rgba,
+            SkinImage::Folder(img) | SkinImage::Drive(img) => img,
+        }
+    }
+
+    /// The artwork, for a skin that is artwork.
+    pub fn artwork(&self) -> Option<&Artwork> {
+        match self {
+            SkinImage::Artwork(art) | SkinImage::DriveArt(art) => Some(art),
+            SkinImage::Folder(_) | SkinImage::Drive(_) => None,
         }
     }
 
     fn focus(&self) -> Option<[f32; 2]> {
-        match self {
-            SkinImage::Artwork(art) => Some([art.focus.0, art.focus.1]),
-            SkinImage::Folder(_) => None,
-        }
+        self.artwork().map(|art| [art.focus.0, art.focus.1])
     }
 
-    /// The icon at every requested size: artwork composited onto the folder this computer draws
-    /// (Windows' own on Windows, FolderSkin's elsewhere), a finished folder fitted as it is.
+    /// The icon at every requested size for a folder: artwork composited onto the folder this
+    /// computer draws (Windows' own on Windows, FolderSkin's elsewhere), a finished folder or
+    /// drive fitted as it is.
     pub fn icon_set(&self, sizes: &[u32]) -> IconSet {
-        match self {
-            SkinImage::Artwork(art) => {
-                compositor::render_icon_set_in(art, sizes, crate::look::current())
-            }
-            SkinImage::Folder(img) => compositor::icon_set_from_image(img, sizes),
+        match self.artwork() {
+            Some(art) => compositor::render_icon_set_in(art, sizes, crate::look::current()),
+            None => compositor::icon_set_from_image(self.rgba(), sizes),
         }
     }
 
-    /// PNG preview at `size` px, through the same render as the applied icon.
+    /// The icon at every requested size for a drive of `shape`: artwork wrapped onto that drive,
+    /// a finished drive or folder fitted as it is.
+    pub fn drive_icon_set(&self, sizes: &[u32], shape: DriveShape) -> IconSet {
+        match self.artwork() {
+            Some(art) => compositor::render_drive_icon_set(Some(art), sizes, shape),
+            None => compositor::icon_set_from_image(self.rgba(), sizes),
+        }
+    }
+
+    /// PNG preview at `size` px, through the same render as the applied icon, on what the skin is
+    /// for: artwork on the folder, drive artwork on this system's drive, a finished skin as it is.
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
         match self {
             SkinImage::Artwork(art) => {
                 compositor::render_preview_png_in(art, size, crate::look::current())
             }
-            SkinImage::Folder(img) => compositor::preview_png_from_image(img, size),
+            SkinImage::DriveArt(art) => compositor::render_drive_preview_png(
+                Some(art),
+                size,
+                DriveShape::default_for(DriveStyle::current()),
+            ),
+            SkinImage::Folder(img) | SkinImage::Drive(img) => {
+                compositor::preview_png_from_image(img, size)
+            }
         }
     }
 
@@ -244,7 +318,12 @@ impl SkinImage {
                 rgba,
                 focus: art.focus,
             })),
+            SkinImage::DriveArt(art) => SkinImage::DriveArt(Arc::new(Artwork {
+                rgba,
+                focus: art.focus,
+            })),
             SkinImage::Folder(_) => SkinImage::Folder(Arc::new(rgba)),
+            SkinImage::Drive(_) => SkinImage::Drive(Arc::new(rgba)),
         }
     }
 }
@@ -758,7 +837,7 @@ impl Store {
         let rgba = image::load_from_memory(&bytes)
             .map_err(|_| format!("the picture for {} is damaged", entry.name))?
             .to_rgba8();
-        Ok(Some(match entry.kind {
+        let image = match entry.kind {
             SkinKind::Artwork => {
                 let [x, y] = entry.focus.unwrap_or([0.5, 0.5]);
                 SkinImage::Artwork(Arc::new(Artwork {
@@ -767,7 +846,8 @@ impl Store {
                 }))
             }
             SkinKind::Folder => SkinImage::Folder(Arc::new(rgba)),
-        }))
+        };
+        Ok(Some(image.as_shape(entry.shape)))
     }
 
     /// A saved skin's thumbnail PNG: the cached file, or a fresh render (which is then cached)
@@ -1211,7 +1291,7 @@ mod tests {
                 assert_eq!(loaded.rgba, original.rgba, "pixels come back exactly");
                 assert_eq!(loaded.focus, (0.25, 0.75));
             }
-            SkinImage::Folder(_) => panic!("an artwork skin came back as a folder"),
+            _ => panic!("an artwork skin came back as something else"),
         }
         assert!(matches!(
             store.load(&b.id).unwrap(),

@@ -1,7 +1,8 @@
 //! The composer's commands. The user designs a skin on a canvas in the webview; everything around
-//! their design comes from here: the folder template split into the layers the webview stacks the
-//! design between for its live preview, the icon the design makes at any size, and the saved skin.
-//! The pictures the user places in a design, and a saved design to edit again, are read here too.
+//! their design comes from here: the folder template, or a drive, split into the layers the webview
+//! stacks the design between for its live preview, the icon the design makes at any size, and the
+//! saved skin. The pictures the user places in a design, and a saved design to edit again, are read
+//! here too.
 //!
 //! A design is a square picture in icon space: its pixels map one to one onto the 1024-unit canvas
 //! the folder template is drawn on (`folderskin_core::geometry`). The webview never draws folder
@@ -17,17 +18,19 @@ use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use base64::Engine;
 use folderskin_core::base;
 use folderskin_core::compositor::Style;
+use folderskin_core::drive::DriveShape;
 use folderskin_core::{compositor, matte, raster};
-use folderskin_core::{geometry as g, geometry_windows as gw};
+use folderskin_core::{geometry as g, geometry_linux as gl, geometry_windows as gw};
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, ImageFormat, RgbaImage};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
 
@@ -58,6 +61,8 @@ enum Shape {
     Folder,
     /// The design as it is: the whole icon.
     Free,
+    /// On a drive: its face filled with the design, the drive's own parts around and over it.
+    Drive,
 }
 
 impl Shape {
@@ -65,17 +70,19 @@ impl Shape {
         match self {
             Shape::Folder => "folder",
             Shape::Free => "free",
+            Shape::Drive => "drive",
         }
     }
 }
 
-/// Which folder a design is drawn on: FolderSkin's own, as Finder shows it, or Windows'.
+/// Which folder a design is drawn on: FolderSkin's own, as Finder shows it, Windows' or Linux's.
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum FolderStyle {
     #[default]
     Mac,
     Windows,
+    Linux,
 }
 
 impl From<FolderStyle> for Style {
@@ -83,8 +90,18 @@ impl From<FolderStyle> for Style {
         match style {
             FolderStyle::Mac => Style::Mac,
             FolderStyle::Windows => Style::Windows,
+            FolderStyle::Linux => Style::Linux,
         }
     }
+}
+
+/// Why a design on a drive FolderSkin doesn't draw can't be saved or shown.
+const UNKNOWN_DRIVE: &str = "FolderSkin doesn't know that drive";
+
+/// The drive a design is on, from the id the webview names it by (`mac-external`).
+fn drive_shape(id: Option<&str>) -> Result<DriveShape, String> {
+    id.and_then(DriveShape::from_id)
+        .ok_or_else(|| UNKNOWN_DRIVE.to_string())
 }
 
 /// What `composer_save` is told about a design, ahead of its picture.
@@ -98,6 +115,9 @@ struct SaveHeader {
     /// The folder it's drawn on, when its shape is the folder.
     #[serde(default)]
     style: FolderStyle,
+    /// The drive it's drawn on, when its shape is a drive: `mac-external`.
+    #[serde(default)]
+    drive: Option<String>,
     /// The design's document, kept as it came so the composer can open it again.
     #[serde(default)]
     design: serde_json::Value,
@@ -112,6 +132,8 @@ struct PreviewHeader {
     shape: Shape,
     #[serde(default)]
     style: FolderStyle,
+    #[serde(default)]
+    drive: Option<String>,
     sizes: Vec<u32>,
 }
 
@@ -149,6 +171,9 @@ pub struct PartsDto {
     /// under the tab, so left of where it steps up the front starts lower. `None` on FolderSkin's
     /// own, whose top runs straight across.
     pub front_step: Option<[f32; 4]>,
+    /// Where a new layer goes, when that isn't the middle of `front`: on a disc, whose middle is its
+    /// hole, a point on the part that shows. `None` for the folders.
+    pub anchor: Option<[f32; 2]>,
     /// The back panel, tab included.
     pub back: [f32; 4],
     /// The paper sheet between the panels. Windows' folder has none: there it's where the back
@@ -162,6 +187,24 @@ pub struct PartsDto {
 impl PartsDto {
     fn new(style: Style) -> PartsDto {
         let corners = |r: g::Rect| [r.x0, r.y0, r.x1, r.y1];
+        if style == Style::Linux {
+            return PartsDto {
+                canvas: g::CANVAS,
+                folder: corners(gl::BACK_BBOX),
+                front: corners(gl::FRONT),
+                front_radius: gl::CORNER,
+                front_step: None,
+                anchor: None,
+                back: corners(gl::BACK_BBOX),
+                paper: [gl::LEFT, gl::BODY_TOP, gl::RIGHT, gl::BOTTOM],
+                tab: [
+                    gl::LEFT,
+                    gl::TAB_TOP,
+                    gl::TAB_RIGHT + (gl::BODY_TOP - gl::TAB_TOP) * gl::TAB_SLOPE,
+                    gl::BODY_TOP,
+                ],
+            };
+        }
         if style == Style::Windows {
             return PartsDto {
                 canvas: g::CANVAS,
@@ -174,6 +217,7 @@ impl PartsDto {
                     gw::FRONT_STEP_X1,
                     gw::FRONT_TOP_LEFT,
                 ]),
+                anchor: None,
                 back: corners(gw::BACK_BBOX),
                 paper: [gw::LEFT, gw::BODY_TOP, gw::RIGHT, gw::BOTTOM],
                 tab: [gw::LEFT, gw::TAB_TOP, gw::BODY_STEP_X, gw::BODY_TOP],
@@ -185,6 +229,7 @@ impl PartsDto {
             front: corners(g::FRONT),
             front_radius: g::FRONT_RADIUS,
             front_step: None,
+            anchor: None,
             back: corners(g::BACK_BBOX),
             paper: corners(g::PAPER),
             tab: [
@@ -193,6 +238,30 @@ impl PartsDto {
                 g::TAB_TOP_RIGHT_X + g::TAB_SLANT * (g::BACK_BODY.y0 - g::TAB_TOP),
                 g::BACK_BODY.y0,
             ],
+        }
+    }
+}
+
+impl PartsDto {
+    /// The parts of a drive, as the composer places things on it. A drive has one face, so the
+    /// front, the back, the paper and the tab are all the face's box: a new layer lands on the face,
+    /// snaps to its middle and lines up with its edges.
+    fn drive(shape: DriveShape) -> PartsDto {
+        let face = shape.face_box();
+        let box_ = [face.x0, face.y0, face.x1, face.y1];
+        let (ax, ay) = shape.face_point();
+        let centre = ((face.x0 + face.x1) / 2.0, (face.y0 + face.y1) / 2.0);
+        PartsDto {
+            canvas: g::CANVAS,
+            folder: shape.extent(),
+            front: box_,
+            front_radius: 24.0,
+            front_step: None,
+            anchor: ((ax - centre.0).abs() > 1.0 || (ay - centre.1).abs() > 1.0)
+                .then_some([ax, ay]),
+            back: box_,
+            paper: box_,
+            tab: box_,
         }
     }
 }
@@ -221,17 +290,49 @@ pub struct ComposerImageDto {
 // ---------- commands ----------
 
 /// Each folder's template, drawn the first time the composer asks for it and kept until the app
-/// quits: FolderSkin's own, then Windows'.
-static TEMPLATES: [OnceLock<ComposerTemplateDto>; 2] = [OnceLock::new(), OnceLock::new()];
+/// quits, in the order of [`Style::ALL`].
+static TEMPLATES: [OnceLock<ComposerTemplateDto>; 3] =
+    [OnceLock::new(), OnceLock::new(), OnceLock::new()];
 
 /// The layers of the folder of `style` (FolderSkin's own when not given) at 2048 px, and where its
 /// parts are.
 #[tauri::command]
 pub async fn composer_template(style: Option<FolderStyle>) -> Result<ComposerTemplateDto, String> {
     let style = Style::from(style.unwrap_or_default());
-    let slot = usize::from(style == Style::Windows);
+    let slot = Style::ALL.iter().position(|s| *s == style).unwrap_or(0);
     tauri::async_runtime::spawn_blocking(move || {
         TEMPLATES[slot].get_or_init(|| draw_template(style)).clone()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Each drive's layers, drawn the first time a design is on it and kept until the app quits.
+static DRIVE_TEMPLATES: Mutex<Option<HashMap<DriveShape, ComposerTemplateDto>>> = Mutex::new(None);
+
+/// The layers of the drive `drive` names (`mac-external`) at 2048 px, in the shape a folder's come
+/// in, and where its face is. `back` is empty and `middle` is the drive itself, so the webview
+/// stacks a design on a drive exactly as it does on a folder.
+#[tauri::command]
+pub async fn composer_drive_template(drive: String) -> Result<ComposerTemplateDto, String> {
+    let shape = drive_shape(Some(&drive))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let cached = DRIVE_TEMPLATES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get_or_insert_with(HashMap::new)
+            .get(&shape)
+            .cloned();
+        if let Some(dto) = cached {
+            return dto;
+        }
+        let dto = draw_drive_template(shape);
+        DRIVE_TEMPLATES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get_or_insert_with(HashMap::new)
+            .insert(shape, dto.clone());
+        dto
     })
     .await
     .map_err(|e| e.to_string())
@@ -326,6 +427,20 @@ fn draw_template(style: Style) -> ComposerTemplateDto {
     }
 }
 
+fn draw_drive_template(shape: DriveShape) -> ComposerTemplateDto {
+    let layers = folderskin_core::drive::layers(shape, LAYER_SIZE);
+    let url = |layer: &RgbaImage| commands::data_url(&quick_png(layer));
+    ComposerTemplateDto {
+        size: LAYER_SIZE,
+        back: url(&layers.back),
+        front: url(&layers.front),
+        middle: url(&layers.middle),
+        top: url(&layers.top),
+        outline: url(&layers.outline),
+        parts: PartsDto::drive(shape),
+    }
+}
+
 /// Saves the design framed in `body`; see `composer_save`.
 fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
     let (header, png) = unframe::<SaveHeader>(body)?;
@@ -347,11 +462,20 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
             }
             SkinImage::Folder(Arc::new(design))
         }
+        Shape::Drive => {
+            let shape = drive_shape(header.drive.as_deref())?;
+            SkinImage::Drive(Arc::new(raster::to_straight_rgba(
+                &folderskin_core::drive::render_master_placed(shape, &design),
+            )))
+        }
     };
-    // The shape and the folder are part of what was made: the same picture on the folder and on
-    // its own, or on the Mac's folder and on Windows', are different skins.
+    // The shape and what it's on are part of what was made: the same picture on the folder and
+    // on its own, on the Mac's folder and on Windows', or on two drives, are different skins.
+    let drive_id = header.drive.clone().unwrap_or_default();
     let on = match (header.shape, style) {
         (Shape::Folder, Style::Windows) => "windows",
+        (Shape::Folder, Style::Linux) => "linux",
+        (Shape::Drive, _) => drive_id.as_str(),
         _ => "",
     };
     let id = store::skin_id(
@@ -376,14 +500,13 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
         author: None,
         license: None,
         pack_hash: None,
-        // A design on a folder is that folder's; a free icon goes on anything.
-        base: Some(
-            match header.shape {
-                Shape::Folder => base::folder_of(style).id,
-                Shape::Free => base::FREE.id,
-            }
-            .into(),
-        ),
+        // A design on a folder is that folder's; a free icon goes on anything. A drive's design
+        // says which drive it's on in its document.
+        base: match header.shape {
+            Shape::Folder => Some(base::folder_of(style).id.into()),
+            Shape::Free => Some(base::FREE.id.into()),
+            Shape::Drive => None,
+        },
         recipe: None,
     };
     let (entry, thumb, replaced) = match header.replaces {
@@ -421,6 +544,11 @@ fn preview(body: &[u8]) -> Result<Vec<String>, String> {
             compositor::render_placed_icon_set_in(&design, &header.sizes, header.style.into())
         }
         Shape::Free => compositor::icon_set_from_image(&design, &header.sizes),
+        Shape::Drive => compositor::render_drive_placed_icon_set(
+            &design,
+            &header.sizes,
+            drive_shape(header.drive.as_deref())?,
+        ),
     };
     Ok(icons
         .sizes
@@ -891,8 +1019,117 @@ mod tests {
     }
 
     #[test]
+    fn the_linux_folder_has_its_own_parts() {
+        let parts = serde_json::to_value(PartsDto::new(Style::Linux)).unwrap();
+        assert_eq!(parts["folder"], json!([72.0, 140.0, 952.0, 872.0]));
+        assert_eq!(parts["front"], json!([72.0, 276.0, 952.0, 872.0]));
+        assert!(parts["front_step"].is_null());
+        assert!(parts["anchor"].is_null());
+        let tab = parts["tab"].as_array().unwrap();
+        assert_eq!(
+            (tab[0].as_f64(), tab[1].as_f64()),
+            (Some(72.0), Some(140.0))
+        );
+    }
+
+    #[test]
+    fn a_drives_parts_are_its_face() {
+        let shape = DriveShape::from_id("mac-external").unwrap();
+        let parts = serde_json::to_value(PartsDto::drive(shape)).unwrap();
+        let face = shape.face_box();
+        let face = json!([face.x0, face.y0, face.x1, face.y1]);
+        for part in ["front", "back", "paper", "tab"] {
+            assert_eq!(parts[part], face, "{part}");
+        }
+        assert_eq!(parts["folder"], json!(shape.extent()));
+        assert!(
+            parts["anchor"].is_null(),
+            "the middle of its front is on it"
+        );
+        // A disc's middle is its hole, so a new layer goes on the disc instead.
+        let disc = serde_json::to_value(PartsDto::drive(
+            DriveShape::from_id("linux-optical").unwrap(),
+        ))
+        .unwrap();
+        let anchor = disc["anchor"].as_array().unwrap();
+        assert_eq!(anchor[0].as_f64(), Some(512.0));
+        assert!(anchor[1].as_f64().unwrap() < 400.0, "{anchor:?}");
+    }
+
+    #[test]
+    fn a_drives_template_comes_in_the_folders_layers() {
+        let shape = DriveShape::from_id("windows-network").unwrap();
+        let template = serde_json::to_value(draw_drive_template(shape)).unwrap();
+        assert_eq!(template["size"], 2048);
+        let alpha = |layer: &str| {
+            let url = template[layer].as_str().unwrap();
+            let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64)
+                .unwrap();
+            let img = image::load_from_memory(&bytes).unwrap().to_rgba8();
+            assert_eq!(img.dimensions(), (2048, 2048), "{layer}");
+            img.pixels().filter(|p| p.0[3] > 0).count()
+        };
+        assert_eq!(alpha("back"), 0, "a drive has only its face to mask");
+        assert!(alpha("front") > 0 && alpha("middle") > alpha("front"));
+        assert_eq!(
+            template["parts"],
+            serde_json::to_value(PartsDto::drive(shape)).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_design_on_a_drive_is_saved_as_a_drive_skin() {
+        let png = png_of(&design(256, 255));
+        let state = AppState::default();
+        let saved = |drive: Option<&str>| {
+            let mut header = save_header("Mine", "drive", None);
+            header["drive"] = json!(drive);
+            save(&state, &frame(&header, &png))
+        };
+        let external = saved(Some("mac-external")).unwrap().skin;
+        assert_eq!(external.shape, crate::store::SkinShape::Drive);
+        assert_eq!(
+            external.kind,
+            crate::store::SkinKind::Folder,
+            "finished, used as drawn"
+        );
+        assert_ne!(
+            external.id,
+            saved(Some("linux-removable")).unwrap().skin.id,
+            "each drive its own skin"
+        );
+        let folder = save(&state, &frame(&save_header("Mine", "folder", None), &png))
+            .unwrap()
+            .skin;
+        assert_ne!(folder.id, external.id);
+        assert_eq!(folder.shape, crate::store::SkinShape::Folder);
+        for unknown in [None, Some("mac-solid-state"), Some("nonsense")] {
+            assert_eq!(
+                saved(unknown).err().as_deref(),
+                Some(UNKNOWN_DRIVE),
+                "{unknown:?}"
+            );
+        }
+        // The preview is the drive, and a drive nobody draws is refused there too.
+        let body = |drive: &str| {
+            frame(
+                &json!({"shape": "drive", "drive": drive, "sizes": [64]}),
+                &png,
+            )
+        };
+        let icon = preview(&body("mac-external")).unwrap().remove(0);
+        assert_ne!(icon, preview(&body("windows-card")).unwrap()[0]);
+        assert_eq!(
+            preview(&body("mac-solid-state")).unwrap_err(),
+            UNKNOWN_DRIVE
+        );
+    }
+
+    #[test]
     fn the_template_is_drawn_at_2048_with_its_parts() {
-        for style in [Style::Mac, Style::Windows] {
+        for style in Style::ALL {
             let template = serde_json::to_value(draw_template(style)).unwrap();
             assert_eq!(template["size"], 2048);
             for layer in ["back", "front", "middle", "top", "outline"] {
@@ -928,11 +1165,13 @@ mod tests {
             icon("mac"),
             "the Mac's when not said"
         );
-        let linux = frame(
-            &json!({"shape": "folder", "style": "linux", "sizes": [64]}),
+        assert_ne!(icon("linux"), icon("mac"));
+        assert_ne!(icon("linux"), icon("windows"));
+        let amiga = frame(
+            &json!({"shape": "folder", "style": "amiga", "sizes": [64]}),
             &png,
         );
-        assert!(preview(&linux).is_err());
+        assert!(preview(&amiga).is_err());
 
         let state = AppState::default();
         let saved = |style: &str| {
@@ -941,6 +1180,8 @@ mod tests {
             save(&state, &frame(&header, &png)).unwrap().skin.id
         };
         assert_ne!(saved("mac"), saved("windows"));
+        assert_ne!(saved("linux"), saved("windows"));
+        assert_ne!(saved("linux"), saved("mac"));
     }
 
     // Not on Windows: with tauri's `test` feature the lib's test binary imports a WebView2 entry

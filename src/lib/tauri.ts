@@ -22,6 +22,8 @@ export type Skin = {
   custom: boolean;
   /** "artwork" is wrapped onto FolderSkin's folder; "folder" is a finished folder used as-is. */
   kind?: "artwork" | "folder";
+  /** "drive" for a drive skin: a finished drive, or artwork from a drive pack. Anything else is a folder's. */
+  shape?: "folder" | "drive";
   source?: "import" | "ai" | "community" | "composer";
   /** Unix ms when the user added it. */
   created_at?: number | null;
@@ -275,6 +277,24 @@ export type SavedPrompt = {
   updated: string;
 };
 
+/**
+ * One base a skin can be drawn on, from the registry every picker reads (`base_shapes`):
+ * FolderSkin's folders, every drive shape, and none at all.
+ */
+export type BaseShape = {
+  /** `folder-mac`, `drive-linux-solid-state` or `free`. Never changes. */
+  id: string;
+  /** The message that names it: `common.bases.<id>`. */
+  label: string;
+  base: "folder" | "drive" | "free";
+  /** Whose look it's drawn in; null for `free`. */
+  style: "mac" | "windows" | "linux" | null;
+  /** A drive's kind: `external`, `solid-state`, `network`. */
+  kind: string | null;
+  /** The bare shape as a PNG data URL (or an address in the browser preview). */
+  picture: string;
+};
+
 /** The folder template split into the layers the composer draws a design between, as PNG data URLs. */
 export type ComposerTemplate = {
   /** Edge of every layer, in pixels. */
@@ -294,8 +314,10 @@ export type ComposerImage = { url: string; width: number; height: number; name: 
 export type ComposerSaveHeader = {
   name: string;
   tags: string[];
-  shape: "folder" | "free";
+  shape: "folder" | "free" | "drive";
   style: FolderStyle;
+  /** The drive a design on a drive is on: `mac-external`. */
+  drive?: string | null;
   design: unknown;
   replaces: string | null;
 };
@@ -561,11 +583,15 @@ const tauriApi = {
   // ---- the composer ----
   /** The folder template's layers, rendered once by the Rust compositor. */
   composerTemplate: (style: FolderStyle) => invoke<ComposerTemplate>("composer_template", { style }),
+  /** A drive's layers, in the same shape as a folder's, with its face as the front. */
+  composerDriveTemplate: (drive: string) => invoke<ComposerTemplate>("composer_drive_template", { drive }),
+  /** Every base a skin can be drawn on (the folders, the drives and none), each drawn at `size` px. */
+  baseShapes: (size?: number) => invoke<BaseShape[]>("base_shapes", { size: size ?? null }),
   /** Saves a design (its full-size picture and its document) as a skin, or changes one saved before. */
   composerSave: (header: ComposerSaveHeader, png: Uint8Array) => invoke<ComposerSaved>("composer_save", frame(header, png)),
   /** The design as the icon at each of `sizes`, as data URLs, drawn by the compositor. */
-  composerPreview: (shape: "folder" | "free", style: FolderStyle, sizes: number[], png: Uint8Array) =>
-    invoke<string[]>("composer_preview", frame({ shape, style, sizes }, png)),
+  composerPreview: (shape: "folder" | "free" | "drive", style: FolderStyle, sizes: number[], png: Uint8Array, drive?: string | null) =>
+    invoke<string[]>("composer_preview", frame({ shape, style, drive: drive ?? null, sizes }, png)),
   /** A picture file, read (and shrunk) for a picture layer. */
   composerImage: (path: string) => invoke<ComposerImage>("composer_image", { path }),
   /** A saved skin's own picture, for a picture layer or a remix. */

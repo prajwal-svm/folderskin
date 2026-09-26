@@ -67,5 +67,41 @@
     "mac-folder": "Finderに表示されるままのFolderSkinのフォルダ",
     "windows-folder": "Windowsが描くフォルダ",
     "free": "単独のマスコットやキャラクター"
+  },
+  "bases": {
+    "folder-mac": "Macのフォルダ",
+    "folder-windows": "Windowsのフォルダ",
+    "folder-linux": "Linuxのフォルダ",
+    "drive-mac-startup": "起動ディスク",
+    "drive-mac-internal": "内蔵ディスク",
+    "drive-mac-external": "外部ディスク",
+    "drive-mac-removable": "USBドライブ",
+    "drive-mac-card": "メモリーカード",
+    "drive-mac-optical": "光学ディスク",
+    "drive-mac-disk-image": "ディスクイメージ",
+    "drive-mac-network": "ネットワークドライブ",
+    "drive-mac-time-machine": "Time Machine ディスク",
+    "drive-windows-startup": "システムドライブ",
+    "drive-windows-internal": "ローカルディスク",
+    "drive-windows-removable": "USBドライブ",
+    "drive-windows-card": "SDカード",
+    "drive-windows-optical": "光学ドライブ",
+    "drive-windows-network": "ネットワークドライブ",
+    "drive-linux-internal": "ハードディスク",
+    "drive-linux-solid-state": "SSD",
+    "drive-linux-external": "USBハードディスク",
+    "drive-linux-removable": "USBメモリ",
+    "drive-linux-card": "メモリーカード",
+    "drive-linux-optical-drive": "光学ドライブ",
+    "drive-linux-optical": "光学ディスク",
+    "drive-linux-server": "ネットワークサーバー",
+    "drive-linux-network": "ネットワークフォルダ",
+    "drive-linux-multi-disk": "RAIDセット",
+    "free": "自由形アイコン"
+  },
+  "systems": {
+    "mac": "Mac",
+    "windows": "Windows",
+    "linux": "Linux"
   }
 }

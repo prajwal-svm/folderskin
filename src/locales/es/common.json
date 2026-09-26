@@ -71,5 +71,41 @@
     "mac-folder": "La carpeta de FolderSkin, tal como la muestra el Finder",
     "windows-folder": "La carpeta que dibuja Windows",
     "free": "Una mascota, un objeto o un personaje, por sí solo"
+  },
+  "bases": {
+    "folder-mac": "Carpeta Mac",
+    "folder-windows": "Carpeta Windows",
+    "folder-linux": "Carpeta Linux",
+    "drive-mac-startup": "Disco de arranque",
+    "drive-mac-internal": "Disco interno",
+    "drive-mac-external": "Disco externo",
+    "drive-mac-removable": "Memoria USB",
+    "drive-mac-card": "Tarjeta de memoria",
+    "drive-mac-optical": "Disco óptico",
+    "drive-mac-disk-image": "Imagen de disco",
+    "drive-mac-network": "Unidad de red",
+    "drive-mac-time-machine": "Disco de Time Machine",
+    "drive-windows-startup": "Unidad del sistema",
+    "drive-windows-internal": "Disco local",
+    "drive-windows-removable": "Unidad USB",
+    "drive-windows-card": "Tarjeta SD",
+    "drive-windows-optical": "Unidad óptica",
+    "drive-windows-network": "Unidad de red",
+    "drive-linux-internal": "Disco duro",
+    "drive-linux-solid-state": "Disco SSD",
+    "drive-linux-external": "Disco duro USB",
+    "drive-linux-removable": "Memoria USB",
+    "drive-linux-card": "Tarjeta de memoria",
+    "drive-linux-optical-drive": "Unidad óptica",
+    "drive-linux-optical": "Disco óptico",
+    "drive-linux-server": "Servidor de red",
+    "drive-linux-network": "Carpeta de red",
+    "drive-linux-multi-disk": "Conjunto RAID",
+    "free": "Icono libre"
+  },
+  "systems": {
+    "mac": "Mac",
+    "windows": "Windows",
+    "linux": "Linux"
   }
 }

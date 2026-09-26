@@ -511,47 +511,57 @@ fn server(d: &mut Drawing) {
     );
 }
 
-/// A folder on the network: a folder of the desktop's kind, with a network mark on its corner.
+/// A folder on the network: the Linux folder, as FolderSkin draws it for the folder look
+/// ([`crate::geometry_linux`]), with a network mark on its corner.
 fn network_folder(d: &mut Drawing) {
-    let (x0, x1, y1) = (100.0, 924.0, 852.0);
-    let back = join(&[
-        rrect4(x0, 150.0, 460.0, 260.0, [38.0, 38.0, 0.0, 0.0]),
-        rrect(x0, 206.0, x1, y1, 40.0),
-    ]);
+    use crate::geometry_linux as l;
+    let back = l::back_panel_path(1.0);
+    let front = l::front_panel_path(1.0);
     d.fill(
         Layer::Body,
         &back,
-        &down(150.0, y1, &[(0.0, rgb(0x3f82d8)), (1.0, rgb(0x2a62b0))]),
+        &down(
+            l::TAB_TOP,
+            l::BOTTOM,
+            &[(0.0, rgb(0x3f82d8)), (1.0, rgb(0x2a62b0))],
+        ),
+    );
+    d.rim(
+        Layer::Body,
+        &l::back_top_edge_path(1.0),
+        &back,
+        rgba(0xffffff, 60),
+        4.0,
+    );
+    d.rim(
+        Layer::Body,
+        &l::front_top_edge_path(1.0),
+        &back,
+        rgba(0x000000, 34),
+        16.0,
     );
     d.edge(&back);
-    let front = rrect(x0, 300.0, x1, y1, 40.0);
     d.fill(
         Layer::Body,
         &front,
-        &down(300.0, y1, &[(0.0, rgb(0x78b8f7)), (1.0, rgb(0x4592e6))]),
+        &down(
+            l::FRONT_TOP,
+            l::BOTTOM,
+            &[(0.0, rgb(0x78b8f7)), (1.0, rgb(0x4592e6))],
+        ),
     );
     d.set_face(&front);
     d.set_face_point(420.0, 560.0);
     d.edge(&front);
     d.rim(
         Layer::Over,
-        &open_polygon(&[(x0, 390.0), (x0, 300.0), (x1, 300.0), (x1, 390.0)], 40.0),
+        &l::front_top_edge_path(1.0),
         &front,
-        rgba(0xffffff, 170),
-        6.0,
+        rgba(0xffffff, 150),
+        5.0,
     );
-    d.fill_in(
-        Layer::Over,
-        &front,
-        &down(
-            y1 - 60.0,
-            y1,
-            &[(0.0, rgba(0x000000, 0)), (1.0, rgba(0x000000, 40))],
-        ),
-        &front,
-    );
-    // The network mark: three joined nodes on a white disc.
-    let (bx, by, br) = (800.0, 736.0, 118.0);
+    // The network mark: three joined nodes on a white disc, on the front's bottom right corner.
+    let (bx, by, br) = (l::RIGHT - 124.0, l::BOTTOM - 128.0, 118.0);
     d.fill(
         Layer::Over,
         &circle(bx, by + 6.0, br + 4.0),

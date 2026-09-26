@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
+import { api, errorMessage, type BaseShape, type ComposerImage, type Skin } from "../../lib/tauri";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { keys, localOs } from "../../lib/platform";
@@ -14,13 +14,13 @@ import type { ToastTone } from "../../hooks/useToasts";
 import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
 import { canvasPng } from "../../composer/body";
 import { inkOn, luminance } from "../../composer/color";
-import { loadTemplate, type TemplateImages, type View } from "../../composer/composite";
+import { loadTemplate, type View } from "../../composer/composite";
 import {
   addLayer,
+  anchorOf,
   backgroundColor,
   bringForward,
   bringToFront,
-  centreOf,
   cloneLayer,
   coveringTop,
   duplicateLayer,
@@ -42,6 +42,7 @@ import {
   parseDoc,
   patchLayer,
   refit,
+  refitFace,
   removeLayer,
   sendBackward,
   sendToBack,
@@ -53,7 +54,6 @@ import {
   type IconLayer,
   type IconLook,
   type Layer,
-  type Parts,
   type PlacedLayer,
   type PatternKind,
   type ShapeKind,
@@ -62,6 +62,10 @@ import { fitSpot, placeIcon, type Box } from "../../composer/geometry";
 import { canRedo, canUndo, historyReducer, startHistory } from "../../composer/history";
 import { boxOf, renderDoc } from "../../composer/render";
 import { TEMPLATES, type Picture } from "../../composer/templates";
+import { defaultDrive, DRIVE_IDS, driveParts, driveStyleOf, isDriveId } from "../../composer/drives";
+import { FOLDER_STYLES } from "../../composer/parts";
+import { Select } from "../Select";
+import { driveLabel } from "../../lib/bases";
 import { Confirm } from "../Confirm";
 import { ComposerInspector, type Patch } from "./ComposerInspector";
 import { ComposerLayers } from "./ComposerLayers";
@@ -72,7 +76,7 @@ import { ComposerStage, type Backdrop } from "./ComposerStage";
 import { PictureMenu } from "./PictureMenu";
 import { EmojiPicker, PatternGrid, ShapeGrid } from "./pickers";
 import { Popover } from "./Popover";
-import { NewDesign, type Start } from "./NewDesign";
+import { NewDesign, surfaceKey, type Start, type Surfaces } from "./NewDesign";
 import { LookSwitch } from "../LookSwitch";
 import { getLook } from "../../state/look";
 import { useShownTheme } from "../../state/theme";
@@ -522,51 +526,73 @@ export function Composer({
   });
   const doc = history.present;
 
-  // Each folder's layers, from Rust, the first time a design is on that folder; null when they
-  // didn't load, and the design is shown by itself.
-  const [templates, setTemplates] = useState<Partial<Record<FolderStyle, { images: TemplateImages; parts: Parts } | null>>>({});
-  const asked = useRef(new Set<FolderStyle>());
-  const loadFolder = useCallback(
-    (style: FolderStyle) => {
-      if (asked.current.has(style)) return;
-      asked.current.add(style);
-      api
-        .composerTemplate(style)
+  // Each folder's and drive's layers, from Rust, the first time a design is on it; null when they
+  // didn't load, and the design is shown by itself. A folder's are kept under its style and a
+  // drive's under `drive:<id>` (`surfaceKey`).
+  const [templates, setTemplates] = useState<Surfaces>({});
+  const asked = useRef(new Set<string>());
+  const loadSurface = useCallback(
+    (key: string) => {
+      if (asked.current.has(key)) return;
+      asked.current.add(key);
+      const drive = key.startsWith("drive:") ? key.slice("drive:".length) : null;
+      (drive ? api.composerDriveTemplate(drive) : api.composerTemplate(key as FolderStyle))
         .then(async (t) => {
           const images = await loadTemplate(t);
-          setTemplates((all) => ({ ...all, [style]: { images, parts: t.parts } }));
+          setTemplates((all) => ({ ...all, [key]: { images, parts: t.parts } }));
         })
         .catch((e) => {
-          asked.current.delete(style);
-          setTemplates((all) => ({ ...all, [style]: null }));
+          asked.current.delete(key);
+          setTemplates((all) => ({ ...all, [key]: null }));
           toast(tNow("composer.errors.preview", { reason: errorMessage(e) }), { tone: "danger" });
         });
     },
     [toast],
   );
-  useEffect(() => loadFolder(doc.style), [doc.style, loadFolder]);
+  const surface = surfaceKey(doc);
+  useEffect(() => loadSurface(surface), [surface, loadSurface]);
   // Fills that cover only the front are cut to each folder's front, once it has loaded.
   useEffect(() => {
-    for (const style of ["mac", "windows"] as const) {
+    for (const style of FOLDER_STYLES) {
       const folder = templates[style];
       if (folder) assets.setFront(style, folder.images.front);
     }
   }, [assets, templates]);
-  const template = templates[doc.style] ?? null;
-  /** The folder the design is on hasn't loaded yet: the stage waits for it rather than show the design without it. */
-  const folderLoading = templates[doc.style] === undefined;
-  const parts = template?.parts ?? fallbackParts(doc.style);
+  const template = templates[surface] ?? null;
+  /** The folder or drive the design is on hasn't loaded yet: the stage waits for it rather than show the design without it. */
+  const folderLoading = templates[surface] === undefined;
+  const onDrive = doc.drive !== undefined && doc.shape !== "folder";
+  const parts = template?.parts ?? (onDrive && doc.drive ? driveParts(doc.drive) : fallbackParts(doc.style));
+  /** The drive a new design on a drive starts on: the one this design is on, or this system's own. */
+  const startDrive = doc.drive && isDriveId(doc.drive) ? doc.drive : defaultDrive(localOs());
+  /** Every base's bare shape, for the drives in the "Start a new design" dialog; fetched as it first opens. */
+  const [bases, setBases] = useState<BaseShape[] | null>(null);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
   const dirty = doc !== baseline;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** The "Start a new design" dialog: on the first visit, and whenever New is pressed. */
   const [starting, setStarting] = useState(!draft);
-  // The dialog shows a folder's own look on that folder, whichever one this design is on.
+  // The dialog shows a folder's own look on that folder, whichever one this design is on, and the
+  // drive templates on the drive a drive design starts on.
   useEffect(() => {
     if (!starting) return;
-    for (const t of TEMPLATES) if (t.style) loadFolder(t.style);
-  }, [starting, loadFolder]);
+    for (const t of TEMPLATES) if (t.style) loadSurface(t.style);
+    loadSurface(`drive:${startDrive}`);
+  }, [starting, loadSurface, startDrive]);
+  useEffect(() => {
+    if (!starting || bases) return;
+    let live = true;
+    api
+      .baseShapes(208)
+      .then((list) => live && setBases(list))
+      .catch(() => {
+        // The drives' cards wait with a blank picture; each still starts its drive.
+      });
+    return () => {
+      live = false;
+    };
+  }, [starting, bases]);
   const [name, setName] = useState(draft?.name ?? "");
   const [nameTouched, setNameTouched] = useState(draft?.nameTouched ?? false);
   const [editing, setEditing] = useState<Editing | null>(draft?.editing ?? null);
@@ -698,6 +724,11 @@ export function Composer({
         forgetDraft();
         return;
       }
+      if (choice.kind === "drive") {
+        reset(emptyDoc("drive", style, choice.drive), { editing: null, name: "", named: false });
+        forgetDraft();
+        return;
+      }
       let picture: Picture | undefined;
       if (choice.template.photo) {
         const img = await choosePicture();
@@ -705,13 +736,20 @@ export function Composer({
         if (!img) return;
         picture = asPicture(img);
       }
+      if (choice.template.drive) {
+        // A drive's template starts on the drive a drive design starts on.
+        const onParts = templates[`drive:${startDrive}`]?.parts ?? driveParts(startDrive);
+        reset({ ...emptyDoc("drive", style, startDrive), layers: choice.template.make(onParts, picture).layers }, { editing: null, name: "", named: false });
+        forgetDraft();
+        return;
+      }
       // A folder's own look starts on that folder; any other template on the last design's.
       const on = choice.template.style ?? style;
       const onParts = templates[on]?.parts ?? fallbackParts(on);
       reset({ ...choice.template.make(onParts, picture), style: on }, { editing: null, name: "", named: false });
       forgetDraft();
     },
-    [choosePicture, forgetDraft, templates, reset],
+    [choosePicture, forgetDraft, templates, reset, startDrive],
   );
 
   // Edit a saved design, or remix any skin, when the app asks.
@@ -748,7 +786,8 @@ export function Composer({
   }, [request, editing, guard, parts, reset, toast]);
 
   // ---- adding ----
-  const front = centreOf(parts.front);
+  // New layers go in the middle of the front, or on a disc a point on it that shows.
+  const front = anchorOf(parts);
   const bg = backgroundColor(doc);
   // New words, shapes and icons land on the front, whatever covers it.
   const under = backgroundColor(doc, parts.front);
@@ -1051,7 +1090,7 @@ export function Composer({
         const c = makeCanvas(512, 512);
         renderDoc(ctx2d(c), doc, 512, assets);
         const png = await canvasPng(c);
-        const urls = await api.composerPreview(doc.shape, doc.style, PREVIEW_SIZES, png);
+        const urls = await api.composerPreview(doc.shape, doc.style, PREVIEW_SIZES, png, doc.shape === "drive" ? doc.drive : null);
         if (live) setPreviews(urls);
       } catch {
         // The previews are extra; the stage still shows the design.
@@ -1089,7 +1128,10 @@ export function Composer({
         renderDoc(ctx2d(c), d, SAVE_PX, assets);
         const png = await canvasPng(c);
         const replaces = mode === "copy" ? null : (editing?.skinId ?? null);
-        const res = await api.composerSave({ name: finalName, tags: mode === "copy" ? [] : (editing?.tags ?? []), shape: d.shape, style: d.style, design: d, replaces }, png);
+        const res = await api.composerSave(
+          { name: finalName, tags: mode === "copy" ? [] : (editing?.tags ?? []), shape: d.shape, style: d.style, drive: d.shape === "drive" ? d.drive : null, design: d, replaces },
+          png,
+        );
         onSaved(res.skin, res.replaced);
         setEditing({ skinId: res.skin.id, tags: res.skin.tags });
         setName(res.skin.name);
@@ -1129,9 +1171,26 @@ export function Composer({
     lastRestyle.current = { from: d, to: moved };
     commit(moved);
   };
-  // The folder skeleton is the design's shape: on, it's drawn on the folder, a Mac's or Windows';
-  // off, it's a free icon, the whole picture.
-  const viewOf: View = { shape: doc.shape, skeleton: doc.shape === "folder", guide: "rgba(58,134,255,0.95)" };
+  /** Moves a design on a drive onto another drive: each layer keeps its place on the face. */
+  const redrive = (drive: string) => {
+    const d = latestDoc.current;
+    if (!d.drive || d.drive === drive) return;
+    const from = templates[`drive:${d.drive}`]?.parts ?? driveParts(d.drive);
+    const to = templates[`drive:${drive}`]?.parts ?? driveParts(drive);
+    commit(refitFace(d, from, to, drive));
+  };
+  const driveOptions = useMemo(
+    () =>
+      DRIVE_IDS.map((id) => ({
+        value: id,
+        label: t("composer.drive.option", { drive: driveLabel(id), system: t(`common.systems.${driveStyleOf(id)}`) }),
+      })),
+    [t],
+  );
+  // The skeleton is the design's shape: on, it's drawn on the folder (a Mac's, Windows' or
+  // Linux's) or on its drive; off, it's a free icon, the whole picture.
+  const skeletonOn = doc.shape !== "free";
+  const viewOf: View = { shape: doc.shape, skeleton: skeletonOn, guide: "rgba(58,134,255,0.95)" };
   const tools: ToolDef[] = [
     { label: t("composer.tools.text"), hint: t("composer.tools.textHint"), icon: <TypeIcon size={16} />, onClick: addText },
     { label: t("composer.tools.icon"), hint: t("composer.tools.iconHint"), icon: <StickerIcon size={16} />, onClick: () => openIcons(null) },
@@ -1244,7 +1303,7 @@ export function Composer({
             view={viewOf}
             backdrop={backdrop}
             version={version}
-            hint={doc.layers.length === 0 ? t("composer.emptyHint") : null}
+            hint={doc.layers.length === 0 ? (doc.shape === "drive" ? t("composer.emptyHintDrive") : t("composer.emptyHint")) : null}
             onOpen={(layer) => {
               setSelectedId(layer.id);
               window.setTimeout(() => {
@@ -1262,19 +1321,30 @@ export function Composer({
           <button
             type="button"
             role="switch"
-            aria-checked={doc.shape === "folder"}
-            aria-label={t("composer.skeleton.label")}
+            aria-checked={skeletonOn}
+            aria-label={doc.drive ? t("composer.skeleton.driveLabel") : t("composer.skeleton.label")}
             className="cmp-skeleton"
-            data-tip={doc.shape === "folder" ? t("composer.skeleton.onTip") : t("composer.skeleton.offTip")}
-            onClick={() => commit({ ...latestDoc.current, shape: doc.shape === "folder" ? "free" : "folder" })}
+            data-tip={
+              doc.drive
+                ? skeletonOn
+                  ? t("composer.skeleton.driveOnTip")
+                  : t("composer.skeleton.driveOffTip")
+                : skeletonOn
+                  ? t("composer.skeleton.onTip")
+                  : t("composer.skeleton.offTip")
+            }
+            onClick={() => commit({ ...latestDoc.current, shape: skeletonOn ? "free" : doc.drive ? "drive" : "folder" })}
           >
-            <span className={doc.shape === "folder" ? "switch is-on" : "switch"} aria-hidden="true">
+            <span className={skeletonOn ? "switch is-on" : "switch"} aria-hidden="true">
               <span className="knob" />
             </span>
-            <span className="cmp-skeleton-label">{t("composer.skeleton.name")}</span>
+            <span className="cmp-skeleton-label">{doc.drive ? t("composer.skeleton.driveName") : t("composer.skeleton.name")}</span>
           </button>
           {doc.shape === "folder" && (
             <LookSwitch value={doc.style} onChange={restyle} />
+          )}
+          {doc.shape === "drive" && doc.drive && (
+            <Select className="cmp-drive-pick" value={doc.drive} options={driveOptions} onChange={redrive} label={t("composer.drive.label")} />
           )}
           <div className="cmp-backdrops" role="radiogroup" aria-label={t("composer.backdrops.label")} ref={backdropsRef} hidden={!barRoom.backdrops}>
             {BACKDROPS.map((b) => (
@@ -1410,6 +1480,7 @@ export function Composer({
                   index={index}
                   size={selected && isPlaced(selected) ? boxOf(selected, assets) : null}
                   onFolder={doc.shape === "folder"}
+                  onDrive={doc.shape === "drive"}
                 />
               </div>
             </Panel>
@@ -1490,8 +1561,10 @@ export function Composer({
       )}
       {active && starting && (
         <NewDesign
-          folders={templates}
+          surfaces={templates}
           style={doc.style}
+          drive={startDrive}
+          bases={bases}
           assets={assets}
           version={version}
           dirty={dirty && doc.layers.length > 0}

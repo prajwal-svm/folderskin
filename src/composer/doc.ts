@@ -10,21 +10,28 @@ import "../i18n/composer";
 import { t } from "../i18n";
 import { clip } from "../lib/names";
 import { normalizeColor } from "./color";
-import { centreOf, type FolderStyle, type Parts } from "./parts";
+import { isDriveId } from "./drives";
+import { centreOf, isFolderStyle, type FolderStyle, type Parts } from "./parts";
 
-export { centreOf, fallbackParts, FALLBACK_PARTS, WINDOWS_PARTS, type FolderStyle, type Parts } from "./parts";
+export { anchorOf, centreOf, fallbackParts, FALLBACK_PARTS, LINUX_PARTS, WINDOWS_PARTS, type FolderStyle, type Parts } from "./parts";
 
 /** Edge of the design canvas, in the units every position and size below is measured in. */
 export const CANVAS = 1024;
 export const DOC_VERSION = 1;
+/**
+ * The version of a design on a drive. A design on a folder or a free icon stays at 1, exactly as
+ * it always was, so every FolderSkin opens it; one on a drive says 2, so a FolderSkin from before
+ * drives says it's from a newer version rather than opening it on a folder.
+ */
+export const DRIVE_DOC_VERSION = 2;
 /** More layers than anyone needs for an icon; also what a document read from disk is cut to. */
 export const MAX_LAYERS = 64;
 export const MAX_TEXT = 400;
 /** A picture layer's data URL, at most. A 2048 px PNG with transparency is well under this. */
 const MAX_SRC = 24_000_000;
 
-/** "folder": painted onto FolderSkin's folder. "free": the design is the whole icon. */
-export type Shape = "folder" | "free";
+/** "folder": painted onto FolderSkin's folder. "free": the design is the whole icon. "drive": painted onto a drive's face. */
+export type Shape = "folder" | "free" | "drive";
 
 export const BLENDS = [
   { id: "normal" },
@@ -253,8 +260,12 @@ export type Layer = FillLayer | PatternLayer | TextLayer | EmojiLayer | ShapeLay
 export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer | IconLayer;
 export type LayerKind = Layer["kind"];
 
-/** A design: its layers, bottom first, and what it's cut to: a folder (a Mac's or Windows') or nothing. */
-export type Doc = { version: 1; shape: Shape; style: FolderStyle; layers: Layer[] };
+/**
+ * A design: its layers, bottom first, and what it's cut to: a folder (a Mac's, Windows' or
+ * Linux's), a drive, or nothing. `drive` is the drive it's on (`mac-external`), kept while it's a
+ * free icon too, so turning the skeleton back on puts it back on that drive.
+ */
+export type Doc = { version: 1 | 2; shape: Shape; style: FolderStyle; drive?: string; layers: Layer[] };
 
 // ---------- making layers ----------
 
@@ -480,8 +491,38 @@ export function suggestName(doc: Doc): string | null {
 
 // ---------- changing the document ----------
 
-export function emptyDoc(shape: Shape = "folder", style: FolderStyle = "mac"): Doc {
-  return { version: DOC_VERSION, shape, style, layers: [] };
+export function emptyDoc(shape: Shape = "folder", style: FolderStyle = "mac", drive?: string): Doc {
+  if (drive) return { version: DRIVE_DOC_VERSION, shape, style, drive, layers: [] };
+  return { version: DOC_VERSION, shape: shape === "drive" ? "folder" : shape, style, layers: [] };
+}
+
+/**
+ * The design moved from one drive's face onto another's: every placed layer keeps its place on
+ * the face and its size for the face's size, and a layer across the whole face still covers it.
+ * What covers the canvas stays as it is.
+ */
+export function refitFace(doc: Doc, from: Parts, to: Parts, drive: string): Doc {
+  const [ax0, ay0, ax1, ay1] = from.front;
+  const [bx0, by0, bx1, by1] = to.front;
+  const sx = (bx1 - bx0) / Math.max(1, ax1 - ax0);
+  const sy = (by1 - by0) / Math.max(1, ay1 - ay0);
+  // A layer keeps its shape and fits the new face both ways: words that ran across a wide face
+  // still fit across a stick's narrow one.
+  const k = Math.min(sx, sy);
+  const cover = Math.max(sx, sy);
+  const r = (n: number) => Math.round(n * 10) / 10;
+  const layers = doc.layers.map((l): Layer => {
+    if (!isPlaced(l)) return l;
+    const x = r(bx0 + (l.x - ax0) * sx);
+    const y = r(by0 + (l.y - ay0) * sy);
+    if (l.kind === "shape" || l.kind === "image") {
+      const across = l.x - l.w / 2 <= ax0 + 1 && l.x + l.w / 2 >= ax1 - 1 && l.y - l.h / 2 <= ay0 + 1 && l.y + l.h / 2 >= ay1 - 1;
+      const s = across ? cover : k;
+      return { ...l, x, y, w: r(l.w * s), h: r(l.h * s) };
+    }
+    return { ...l, x, y, size: r(l.size * k) };
+  });
+  return { ...doc, drive, layers };
 }
 
 /**
@@ -801,7 +842,7 @@ const ICON_LOOK_IDS = ICON_LOOKS.map((l) => l.id);
  */
 export function parseDoc(value: unknown): Doc | null {
   if (!isObj(value) || !Array.isArray(value.layers)) return null;
-  if (typeof value.version === "number" && value.version > DOC_VERSION) return null;
+  if (typeof value.version === "number" && value.version > DRIVE_DOC_VERSION) return null;
   const seen = new Set<string>();
   const layers: Layer[] = [];
   for (const raw of value.layers.slice(0, MAX_LAYERS)) {
@@ -811,5 +852,11 @@ export function parseDoc(value: unknown): Doc | null {
     seen.add(layer.id);
     layers.push(layer);
   }
-  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", style: value.style === "windows" ? "windows" : "mac", layers };
+  const style = isFolderStyle(value.style) ? value.style : "mac";
+  // A design on a drive FolderSkin doesn't draw is read as one on the folder, as anything else is.
+  if (isDriveId(value.drive)) {
+    const shape = value.shape === "free" ? "free" : "drive";
+    return { version: DRIVE_DOC_VERSION, shape, style, drive: value.drive, layers };
+  }
+  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", style, layers };
 }

@@ -34,12 +34,14 @@
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
-import { fallbackParts, type FolderStyle } from "../composer/parts";
+import { fallbackParts, FOLDER_STYLES, isFolderStyle, type FolderStyle } from "../composer/parts";
+import { DRIVE_IDS, driveParts, driveStyleOf, driveKindOf } from "../composer/drives";
 import type {
   AiCatalogue,
   AiGenerateRequest,
   AiModel,
   AiProvider,
+  BaseShape,
   ChatRefDto,
   ChatSummaryDto,
   LocalStatus,
@@ -876,14 +878,35 @@ export async function mockFindUpdate(): Promise<AvailableUpdate | null> {
  * `folderskin-tools composer-layers` wrote them into docs/images/composer (served in dev only).
  */
 const mockTemplateUrls = (style: FolderStyle) => {
-  const dir = style === "windows" ? "/docs/images/composer/windows" : "/docs/images/composer";
+  const dir = style === "mac" ? "/docs/images/composer" : `/docs/images/composer/${style}`;
   return { back: `${dir}/back.png`, front: `${dir}/front.png`, middle: `${dir}/middle.png`, top: `${dir}/top.png`, outline: `${dir}/outline.png` };
 };
-const mockTemplates = new Map<FolderStyle, Promise<TemplateImages>>();
-const templateImages = (style: FolderStyle) => {
-  if (!mockTemplates.has(style)) mockTemplates.set(style, loadTemplate(mockTemplateUrls(style)));
-  return mockTemplates.get(style)!;
+/** A picture with nothing in it: a drive's back layer, which masks nothing, and no base's picture. */
+const NOTHING = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==";
+/** A drive's layers in the browser preview, as `composer-layers` wrote them into docs/images/composer/drives. */
+const mockDriveUrls = (drive: string) => {
+  const dir = `/docs/images/composer/drives/${drive}`;
+  return { back: NOTHING, front: `${dir}/front.webp`, middle: `${dir}/middle.webp`, top: `${dir}/top.webp`, outline: `${dir}/outline.webp` };
 };
+const mockTemplates = new Map<string, Promise<TemplateImages>>();
+/** A folder's layers by its style, or a drive's by `drive:<id>`. */
+const templateImages = (key: string) => {
+  if (!mockTemplates.has(key)) {
+    const drive = key.startsWith("drive:") ? key.slice("drive:".length) : null;
+    mockTemplates.set(key, loadTemplate(drive ? mockDriveUrls(drive) : mockTemplateUrls(key as FolderStyle)));
+  }
+  return mockTemplates.get(key)!;
+};
+
+/** Every base with its bare shape, as `base_shapes` lists them, the pictures from docs/images/composer/bases. */
+function mockBases(): BaseShape[] {
+  const picture = (id: string) => `/docs/images/composer/bases/${id}.webp`;
+  return [
+    ...FOLDER_STYLES.map((style): BaseShape => ({ id: `folder-${style}`, label: `common.bases.folder-${style}`, base: "folder", style, kind: null, picture: picture(`folder-${style}`) })),
+    ...DRIVE_IDS.map((id): BaseShape => ({ id: `drive-${id}`, label: `common.bases.drive-${id}`, base: "drive", style: driveStyleOf(id), kind: driveKindOf(id), picture: picture(`drive-${id}`) })),
+    { id: "free", label: "common.bases.free", base: "free", style: null, kind: null, picture: NOTHING },
+  ];
+}
 
 /** Which folder the preview puts skins on, kept like the app keeps it. */
 const MOCK_LOOK_KEY = "folderskin.mock.look";
@@ -906,16 +929,16 @@ function loadImg(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** What the Rust side would render for a design: on the folder, or as it is for a free icon. */
-async function mockIcon(png: Uint8Array, shape: "folder" | "free", style: FolderStyle, size: number): Promise<string> {
+/** What the Rust side would render for a design: on the folder or the drive, or as it is for a free icon. */
+async function mockIcon(png: Uint8Array, shape: "folder" | "free" | "drive", style: FolderStyle, size: number, drive?: string | null): Promise<string> {
   const img = await loadImg(`data:image/png;base64,${base64(png)}`);
   const c = document.createElement("canvas");
   c.width = size;
   c.height = size;
   const ctx = c.getContext("2d")!;
   ctx.imageSmoothingQuality = "high";
-  if (shape === "folder") drawOnFolder(ctx, img, await templateImages(style), size, document.createElement("canvas"));
-  else ctx.drawImage(img, 0, 0, size, size);
+  if (shape === "free") ctx.drawImage(img, 0, 0, size, size);
+  else drawOnFolder(ctx, img, await templateImages(shape === "drive" && drive ? `drive:${drive}` : style), size, document.createElement("canvas"));
   return c.toDataURL("image/png");
 }
 
@@ -1086,7 +1109,10 @@ async function redrawTime(): Promise<void> {
 }
 
 export const mockApi = {
-  folderLook: async (): Promise<FolderStyle> => (localStorage.getItem(MOCK_LOOK_KEY) === "windows" ? "windows" : "mac"),
+  folderLook: async (): Promise<FolderStyle> => {
+    const look = localStorage.getItem(MOCK_LOOK_KEY);
+    return isFolderStyle(look) ? look : "mac";
+  },
   setFolderLook: async (look: FolderStyle): Promise<void> => {
     localStorage.setItem(MOCK_LOOK_KEY, look);
     mockRedraw = true;
@@ -1403,6 +1429,14 @@ export const mockApi = {
   },
   aiTestKey: async () => {},
   composerTemplate: async (style: FolderStyle): Promise<ComposerTemplate> => ({ size: 1024, ...mockTemplateUrls(style), parts: fallbackParts(style) }),
+  composerDriveTemplate: async (drive: string): Promise<ComposerTemplate> => {
+    if (!DRIVE_IDS.includes(drive)) throw "FolderSkin doesn't know that drive";
+    return { size: 512, ...mockDriveUrls(drive), parts: driveParts(drive) };
+  },
+  baseShapes: async (_size?: number): Promise<BaseShape[]> => {
+    await sleep(120);
+    return mockBases();
+  },
   composerSave: async (header: ComposerSaveHeader, png: Uint8Array): Promise<ComposerSaved> => {
     await sleep(500);
     const old = header.replaces ? library.find((s) => s.id === header.replaces) : undefined;
@@ -1410,9 +1444,10 @@ export const mockApi = {
       id: `user:c${Date.now().toString(16)}`,
       name: cleanName(header.name) || "My design",
       collection: "yours",
-      thumbnail: await mockIcon(png, header.shape, header.style, 512),
+      thumbnail: await mockIcon(png, header.shape, header.style, 512, header.drive),
       custom: true,
       kind: "folder",
+      shape: header.shape === "drive" ? "drive" : "folder",
       source: "composer",
       created_at: old?.created_at ?? Date.now(),
       tags: cleanTags(header.tags),
@@ -1424,8 +1459,8 @@ export const mockApi = {
     } else keep([skin]);
     return { skin, replaced: old ? old.id : null };
   },
-  composerPreview: async (shape: "folder" | "free", style: FolderStyle, sizes: number[], png: Uint8Array): Promise<string[]> =>
-    Promise.all(sizes.map((size) => mockIcon(png, shape, style, size))),
+  composerPreview: async (shape: "folder" | "free" | "drive", style: FolderStyle, sizes: number[], png: Uint8Array, drive?: string | null): Promise<string[]> =>
+    Promise.all(sizes.map((size) => mockIcon(png, shape, style, size, drive))),
   composerImage: async (_path: string): Promise<ComposerImage> => {
     await sleep(250);
     return mockPhoto();

@@ -119,7 +119,11 @@
     "coversFront": "Avant",
     "coversFrontTip": "Seulement le panneau avant, pour que l'arrière et l'onglet puissent être d'une autre couleur",
     "glow": "En faire une lueur",
-    "shuffle": "Mélanger"
+    "shuffle": "Mélanger",
+    "textOnDrive": "Texte sur le disque",
+    "toFaceTip": "Le placer au milieu de la face avant du disque",
+    "coverDrive": "Couvrir le disque",
+    "coverDriveTip": "En couvrir tout le disque"
   },
   "blends": {
     "normal": "Normal",
@@ -251,11 +255,17 @@
     "neon": "Néon",
     "badge": "Badge",
     "photo": "Photo",
-    "sticker": "Autocollant"
+    "sticker": "Autocollant",
+    "linux": "Dossier Linux",
+    "drive-label": "Disque étiqueté",
+    "drive-colour": "Disque en couleur",
+    "drive-emoji": "Disque emoji",
+    "drive-photo": "Disque photo"
   },
   "templateNotes": {
     "mac": "Le bleu du Mac",
-    "windows": "Le jaune de Windows"
+    "windows": "Le jaune de Windows",
+    "linux": "Le bleu de Linux"
   },
   "templateLayers": {
     "back": "Arrière",
@@ -274,7 +284,8 @@
     "notes": "Notes",
     "night": "Nuit",
     "new": "NOUVEAU",
-    "summer": "Été 2026"
+    "summer": "Été 2026",
+    "backups": "Archives"
   },
   "otherFont": "Autre police",
   "emoji": {
@@ -318,7 +329,12 @@
     },
     "templatesLabel": "partir d'un modèle",
     "templatesHeading": "Ou partez d'un modèle",
-    "asksForPicture": "Demande une image"
+    "asksForPicture": "Demande une image",
+    "drives": {
+      "heading": "Partir d'un disque",
+      "label": "partir d'un disque",
+      "sub": "Chaque sorte de disque que chaque système affiche. Votre création se pose sur sa face avant."
+    }
   },
   "layers": {
     "empty": "Rien pour l'instant. Ajoutez une couleur, du texte ou une image depuis la barre au-dessus du dossier.",
@@ -362,7 +378,8 @@
   },
   "stage": {
     "folderLoading": "Préparation du dossier",
-    "pictureLoading": "Préparation de l'image"
+    "pictureLoading": "Préparation de l'image",
+    "driveLoading": "Préparation du disque"
   },
   "icons": {
     "icons_one": "{{count}} icône",
@@ -499,7 +516,11 @@
     "label": "squelette du dossier",
     "name": "Squelette du dossier",
     "onTip": "Activé : votre création est découpée à la forme du dossier, avec son onglet et ses bords. Désactivé : c'est l'icône entière, de la forme de votre choix.",
-    "offTip": "Désactivé : votre création est l'icône entière, de la forme de votre choix. Activé : elle est découpée à la forme du dossier, avec son onglet et ses bords."
+    "offTip": "Désactivé : votre création est l'icône entière, de la forme de votre choix. Activé : elle est découpée à la forme du dossier, avec son onglet et ses bords.",
+    "driveLabel": "squelette du disque",
+    "driveName": "Squelette du disque",
+    "driveOnTip": "Activé : votre création est découpée à la face avant du disque, avec le disque tout autour. Désactivé : c'est l'icône entière, de la forme de votre choix.",
+    "driveOffTip": "Désactivé : votre création est l'icône entière, de la forme de votre choix. Activé : elle est découpée à la face avant du disque, avec le disque tout autour."
   },
   "sideTabs": {
     "label": "panneau latéral",
@@ -520,5 +541,10 @@
     "chooseTip": "Choisir le dossier auquel l'appliquer",
     "applyTo": "Appliquer à",
     "none": "Aucun dossier choisi"
-  }
+  },
+  "drive": {
+    "label": "quel disque",
+    "option": "{{drive}} · {{system}}"
+  },
+  "emptyHintDrive": "Une création vide laisse le disque tel quel. Ajoutez une couleur, du texte ou une image depuis la barre ci-dessus."
 }

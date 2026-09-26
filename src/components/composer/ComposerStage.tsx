@@ -306,7 +306,7 @@ export function ComposerStage({
       {loader && (
         <div className="cmp-stage-loader" role="status">
           <LoaderIcon size={22} />
-          <span>{loader === "folder" ? t("composer.stage.folderLoading") : t("composer.stage.pictureLoading")}</span>
+          <span>{loader === "folder" ? (view.shape === "drive" ? t("composer.stage.driveLoading") : t("composer.stage.folderLoading")) : t("composer.stage.pictureLoading")}</span>
         </div>
       )}
       {hint && (

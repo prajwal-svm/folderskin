@@ -68,15 +68,18 @@
     "appLabel": "sobre qué carpeta se ponen los aspectos",
     "name": {
       "mac": "Mac",
-      "windows": "Windows"
+      "windows": "Windows",
+      "linux": "Linux"
     },
     "tip": {
       "mac": "Usar la carpeta de Mac como base",
-      "windows": "Usar la carpeta de Windows como base"
+      "windows": "Usar la carpeta de Windows como base",
+      "linux": "Usar la carpeta de Linux como base"
     },
     "redrawing": {
       "mac": "Dibujando tus aspectos sobre la carpeta de Mac",
-      "windows": "Dibujando tus aspectos sobre la carpeta de Windows"
+      "windows": "Dibujando tus aspectos sobre la carpeta de Windows",
+      "linux": "Dibujando tus aspectos sobre la carpeta de Linux"
     }
   },
   "stage": {

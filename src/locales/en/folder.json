@@ -50,15 +50,18 @@
     "appLabel": "which folder skins go on",
     "name": {
       "mac": "Mac",
-      "windows": "Windows"
+      "windows": "Windows",
+      "linux": "Linux"
     },
     "tip": {
       "mac": "Switch to Mac folder as base",
-      "windows": "Switch to Windows folder as base"
+      "windows": "Switch to Windows folder as base",
+      "linux": "Switch to Linux folder as base"
     },
     "redrawing": {
       "mac": "Drawing your skins on the Mac's folder",
-      "windows": "Drawing your skins on Windows' folder"
+      "windows": "Drawing your skins on Windows' folder",
+      "linux": "Drawing your skins on the Linux folder"
     }
   },
   "stage": {

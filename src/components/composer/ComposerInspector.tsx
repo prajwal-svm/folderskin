@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   BLENDS,
+  anchorOf,
   centreOf,
   ICON_LOOKS,
   iconName,
@@ -81,8 +82,21 @@ function AlignGlyph({ to }: { to: AlignTo }) {
   );
 }
 
-function Arrange({ layer, onPatch, parts, size }: { layer: PlacedLayer; onPatch: (p: Patch, key?: string) => void; parts: Parts; size: { w: number; h: number } | null }) {
-  const front = centreOf(parts.front);
+function Arrange({
+  layer,
+  onPatch,
+  parts,
+  size,
+  onDrive,
+}: {
+  layer: PlacedLayer;
+  onPatch: (p: Patch, key?: string) => void;
+  parts: Parts;
+  size: { w: number; h: number } | null;
+  /** On a drive, which has a face and no tab. */
+  onDrive: boolean;
+}) {
+  const front = anchorOf(parts);
   const tab = centreOf(parts.tab);
   const [fx0, fy0, fx1, fy1] = parts.front;
   const w = size?.w ?? 0;
@@ -129,12 +143,14 @@ function Arrange({ layer, onPatch, parts, size }: { layer: PlacedLayer; onPatch:
           <FlipVIcon size={15} />
         </IconButton>
         <span className="cmp-actions-gap" />
-        <button type="button" className="cmp-chip" data-tip={t("composer.inspector.toFrontTip")} onClick={() => onPatch({ x: front.x, y: front.y })}>
+        <button type="button" className="cmp-chip" data-tip={onDrive ? t("composer.inspector.toFaceTip") : t("composer.inspector.toFrontTip")} onClick={() => onPatch({ x: front.x, y: front.y })}>
           {t("composer.inspector.toFront")}
         </button>
-        <button type="button" className="cmp-chip" data-tip={t("composer.inspector.toTabTip")} onClick={() => onPatch({ x: tab.x, y: tab.y })}>
-          {t("composer.inspector.toTab")}
-        </button>
+        {!onDrive && (
+          <button type="button" className="cmp-chip" data-tip={t("composer.inspector.toTabTip")} onClick={() => onPatch({ x: tab.x, y: tab.y })}>
+            {t("composer.inspector.toTab")}
+          </button>
+        )}
         <button type="button" className="cmp-chip" data-tip={t("composer.inspector.centreTip")} onClick={() => onPatch({ x: 512 })}>
           {t("composer.inspector.centre")}
         </button>
@@ -239,10 +255,22 @@ function Effects({ layer, onPatch, used }: { layer: Layer; onPatch: (p: Patch, k
   );
 }
 
-function TextSection({ layer, onPatch, used, textRef }: { layer: TextLayer; onPatch: (p: Patch, key?: string) => void; used: string[]; textRef: RefObject<HTMLTextAreaElement | null> }) {
+function TextSection({
+  layer,
+  onPatch,
+  used,
+  textRef,
+  onDrive,
+}: {
+  layer: TextLayer;
+  onPatch: (p: Patch, key?: string) => void;
+  used: string[];
+  textRef: RefObject<HTMLTextAreaElement | null>;
+  onDrive: boolean;
+}) {
   return (
     <>
-      <Section title={t("composer.inspector.textOnFolder")}>
+      <Section title={onDrive ? t("composer.inspector.textOnDrive") : t("composer.inspector.textOnFolder")}>
         <textarea
           ref={textRef}
           className="cmp-textarea"
@@ -366,14 +394,26 @@ const FX_FIELDS: { key: keyof ImageFx; min: number; max: number; unit?: string }
   { key: "invert", min: 0, max: 100, unit: "%" },
 ];
 
-function ImageSection({ layer, onPatch, parts, onReplace }: { layer: ImageLayer; onPatch: (p: Patch, key?: string) => void; parts: Parts; onReplace: (anchor: HTMLElement) => void }) {
+function ImageSection({
+  layer,
+  onPatch,
+  parts,
+  onReplace,
+  onDrive,
+}: {
+  layer: ImageLayer;
+  onPatch: (p: Patch, key?: string) => void;
+  parts: Parts;
+  onReplace: (anchor: HTMLElement) => void;
+  onDrive: boolean;
+}) {
   const fit = (cover: boolean) => onPatch(imageBox(layer.iw, layer.ih, parts, cover));
   return (
     <>
       <Section title={t("composer.inspector.picture")}>
         <div className="cmp-actions-row is-wrap">
-          <button type="button" className="cmp-chip" onClick={() => fit(true)} data-tip={t("composer.inspector.coverTip")}>
-            {t("composer.inspector.cover")}
+          <button type="button" className="cmp-chip" onClick={() => fit(true)} data-tip={onDrive ? t("composer.inspector.coverDriveTip") : t("composer.inspector.coverTip")}>
+            {onDrive ? t("composer.inspector.coverDrive") : t("composer.inspector.cover")}
           </button>
           <button type="button" className="cmp-chip" onClick={() => fit(false)} data-tip={t("composer.inspector.fitTip")}>
             {t("composer.inspector.fit")}
@@ -556,6 +596,7 @@ export function ComposerInspector({
   index,
   size,
   onFolder,
+  onDrive = false,
 }: {
   layer: Layer | null;
   onPatch: (patch: Patch, key?: string) => void;
@@ -570,6 +611,8 @@ export function ComposerInspector({
   size: { w: number; h: number } | null;
   /** The design is on a folder, whose front a colour can cover alone. */
   onFolder: boolean;
+  /** The design is on a drive, which has no tab to move a layer to. */
+  onDrive?: boolean;
 }) {
   // Draws again in a new language: the sections below read it as they draw.
   useLocale();
@@ -599,7 +642,7 @@ export function ComposerInspector({
         </Section>
       )}
       {layer.kind === "pattern" && <PatternSection layer={layer} onPatch={onPatch} used={used} />}
-      {layer.kind === "text" && <TextSection layer={layer} onPatch={onPatch} used={used} textRef={textRef} />}
+      {layer.kind === "text" && <TextSection layer={layer} onPatch={onPatch} used={used} textRef={textRef} onDrive={onDrive} />}
       {layer.kind === "emoji" && (
         <Section title={t("composer.inspector.emoji")}>
           <Field label={t("composer.inspector.emoji")}>
@@ -612,9 +655,9 @@ export function ComposerInspector({
         </Section>
       )}
       {layer.kind === "shape" && <ShapeSection layer={layer} onPatch={onPatch} used={used} />}
-      {layer.kind === "image" && <ImageSection layer={layer} onPatch={onPatch} parts={parts} onReplace={onReplaceImage} />}
+      {layer.kind === "image" && <ImageSection layer={layer} onPatch={onPatch} parts={parts} onReplace={onReplaceImage} onDrive={onDrive} />}
       {layer.kind === "icon" && <IconSection layer={layer} onPatch={onPatch} used={used} onReplace={onReplaceIcon} />}
-      {isPlaced(layer) && <Arrange layer={layer} onPatch={onPatch} parts={parts} size={size} />}
+      {isPlaced(layer) && <Arrange layer={layer} onPatch={onPatch} parts={parts} size={size} onDrive={onDrive} />}
       <Effects layer={layer} onPatch={onPatch} used={used} />
     </div>
   );

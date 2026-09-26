@@ -106,14 +106,14 @@ test.describe("starting a new design", () => {
   });
 });
 
-test.describe("the Mac's and Windows' own folders", () => {
+test.describe("the Mac's, Windows' and Linux's own folders", () => {
   test("start empty on their own folder, with a front of its own colour that covers only the front", async ({ page }) => {
     await openApp(page);
     await openView(page, /design your own/i);
     // They're the folders as each system draws them, with nothing on them: empty starts, not templates.
     const empty = newDialog(page).getByRole("region", { name: "start empty" });
-    await expect(empty.getByRole("button")).toHaveText([/^Empty folder/, /^Free icon/, /^Mac folder/, /^Windows folder/]);
-    await expect(newDialog(page).getByRole("region", { name: "start from a template" }).getByRole("button", { name: /Mac folder|Windows folder/ })).toHaveCount(0);
+    await expect(empty.getByRole("button")).toHaveText([/^Empty folder/, /^Free icon/, /^Mac folder/, /^Windows folder/, /^Linux folder/]);
+    await expect(newDialog(page).getByRole("region", { name: "start from a template" }).getByRole("button", { name: /Mac folder|Windows folder|Linux folder/ })).toHaveCount(0);
     await empty.getByRole("button", { name: /^Windows folder/ }).click();
     await expect(newDialog(page)).toBeHidden();
     const which = composer(page).getByRole("radiogroup", { name: "which folder" });
@@ -144,6 +144,64 @@ test.describe("the Mac's and Windows' own folders", () => {
     await expect(newDialog(page)).toBeHidden();
     await expect(which.getByRole("radio", { name: "Mac" })).toHaveAttribute("aria-checked", "true");
     await expect(layerNames(page)).toHaveText(["Front", "Back"]);
+
+    // And Linux's on Linux's.
+    await composer(page).getByRole("button", { name: "New" }).click();
+    await newDialog(page).getByRole("region", { name: "start empty" }).getByRole("button", { name: /^Linux folder/ }).click();
+    await expect(newDialog(page)).toBeHidden();
+    await expect(which.getByRole("radio", { name: "Linux" })).toHaveAttribute("aria-checked", "true");
+    await expect(layerNames(page)).toHaveText(["Front", "Back"]);
+  });
+});
+
+test.describe("designing on a drive", () => {
+  test("starts on any drive each system shows, grouped by system", async ({ page }) => {
+    await openApp(page);
+    await openView(page, /design your own/i);
+    const drives = newDialog(page).getByRole("region", { name: "start on a drive" });
+    await expect(drives.getByRole("group")).toHaveText([/^Mac/, /^Windows/, /^Linux/]);
+    await expect(drives.getByRole("group", { name: "Mac" }).getByRole("button")).toHaveCount(9);
+    await expect(drives.getByRole("group", { name: "Windows" }).getByRole("button")).toHaveCount(6);
+    await expect(drives.getByRole("group", { name: "Linux" }).getByRole("button")).toHaveCount(10);
+    // Each shows the drive itself, as Rust draws it.
+    await expect(drives.getByRole("group", { name: "Windows" }).getByRole("button", { name: "System drive" }).locator("img")).toHaveAttribute("src", /drive-windows-startup/);
+
+    await drives.getByRole("group", { name: "Mac" }).getByRole("button", { name: "Network drive" }).click();
+    await expect(newDialog(page)).toBeHidden();
+    const skeleton = composer(page).getByRole("switch", { name: "drive skeleton" });
+    await expect(skeleton).toHaveAttribute("aria-checked", "true");
+    const drive = composer(page).getByRole("button", { name: /^which drive:/ });
+    await expect(drive).toHaveAccessibleName("which drive: Network drive · Mac");
+    // A drive has no folder to choose, and no tab.
+    await expect(composer(page).getByRole("radiogroup", { name: "which folder" })).toHaveCount(0);
+
+    await composer(page).getByRole("button", { name: /^Text$/ }).click();
+    await expect(side(page).getByRole("button", { name: "Tab" })).toHaveCount(0);
+    const before = await layerAt(page);
+    await drive.click();
+    await page.getByRole("option", { name: "USB stick · Linux" }).click();
+    await expect(drive).toHaveAccessibleName("which drive: USB stick · Linux");
+    // The words moved onto the stick's narrow face, and fit it.
+    expect(await layerAt(page)).not.toEqual(before);
+    expect(Number(await side(page).getByLabel("Size", { exact: true }).inputValue())).toBeLessThan(80);
+
+    // A free icon made from it goes back onto the same drive.
+    await skeleton.click();
+    await expect(skeleton).toHaveAttribute("aria-checked", "false");
+    await expect(drive).toHaveCount(0);
+    await skeleton.click();
+    await expect(drive).toHaveAccessibleName("which drive: USB stick · Linux");
+
+    // Saved, it's a drive skin.
+    await side(page).getByRole("button", { name: /save to yours/i }).click();
+    await expect(page.getByText(/is in Yours/)).toBeVisible();
+  });
+
+  test("a drive's template starts on this system's own drive", async ({ page }) => {
+    await openApp(page);
+    await startFrom(page, "Labelled drive");
+    await expect(composer(page).getByRole("button", { name: /^which drive:/ })).toHaveAccessibleName("which drive: External drive · Mac");
+    await expect(layerNames(page)).toHaveText(["Backups", "Background"]);
   });
 });
 

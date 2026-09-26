@@ -67,5 +67,41 @@
     "mac-folder": "Finder에 보이는 그대로의 FolderSkin 폴더",
     "windows-folder": "Windows가 그리는 폴더",
     "free": "단독 마스코트, 물건 또는 캐릭터"
+  },
+  "bases": {
+    "folder-mac": "Mac 폴더",
+    "folder-windows": "Windows 폴더",
+    "folder-linux": "Linux 폴더",
+    "drive-mac-startup": "시동 디스크",
+    "drive-mac-internal": "내장 디스크",
+    "drive-mac-external": "외장 디스크",
+    "drive-mac-removable": "USB 드라이브",
+    "drive-mac-card": "메모리 카드",
+    "drive-mac-optical": "광 디스크",
+    "drive-mac-disk-image": "디스크 이미지",
+    "drive-mac-network": "네트워크 드라이브",
+    "drive-mac-time-machine": "Time Machine 디스크",
+    "drive-windows-startup": "시스템 드라이브",
+    "drive-windows-internal": "로컬 디스크",
+    "drive-windows-removable": "USB 드라이브",
+    "drive-windows-card": "SD 카드",
+    "drive-windows-optical": "광 드라이브",
+    "drive-windows-network": "네트워크 드라이브",
+    "drive-linux-internal": "하드 디스크",
+    "drive-linux-solid-state": "SSD",
+    "drive-linux-external": "USB 하드 디스크",
+    "drive-linux-removable": "USB 메모리",
+    "drive-linux-card": "메모리 카드",
+    "drive-linux-optical-drive": "광 드라이브",
+    "drive-linux-optical": "광 디스크",
+    "drive-linux-server": "네트워크 서버",
+    "drive-linux-network": "네트워크 폴더",
+    "drive-linux-multi-disk": "RAID 세트",
+    "free": "자유형 아이콘"
+  },
+  "systems": {
+    "mac": "Mac",
+    "windows": "Windows",
+    "linux": "Linux"
   }
 }

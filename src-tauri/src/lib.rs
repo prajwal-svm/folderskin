@@ -1,6 +1,7 @@
 //! FolderSkin desktop app (Tauri v2).
 
 pub mod ai;
+pub mod bases;
 pub mod catalog;
 pub mod chats;
 pub mod commands;
@@ -119,6 +120,8 @@ pub fn run() {
             community::import_pack,
             community::export_pack,
             composer::composer_template,
+            composer::composer_drive_template,
+            bases::base_shapes,
             composer::composer_save,
             composer::composer_preview,
             composer::composer_image,

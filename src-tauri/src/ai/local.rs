@@ -1185,6 +1185,7 @@ mod tests {
                 assert_eq!(f.get_pixel(150, 200).0, [0, 255, 0, 255], "the leaf stays");
             }
             SkinImage::Artwork(_) => panic!("an icon became artwork"),
+            SkinImage::Drive(_) | SkinImage::DriveArt(_) => panic!("an icon became a drive"),
         }
         assert!(warning.is_none());
     }

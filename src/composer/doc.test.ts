@@ -23,6 +23,7 @@ import {
   parseDoc,
   patchLayer,
   refit,
+  refitFace,
   removeLayer,
   sendBackward,
   sendToBack,
@@ -32,6 +33,7 @@ import {
   type Doc,
 } from "./doc";
 import { inkOn } from "./color";
+import { driveParts } from "./drives";
 import { templateById } from "./templates";
 
 const three = (): Doc => {
@@ -148,10 +150,56 @@ describe("reading a design back", () => {
     expect(backgroundColor(d)).toBe("#60d0ff");
   });
 
-  it("keeps which folder a design is on, a Mac's unless it says Windows'", () => {
+  it("keeps which folder a design is on, a Mac's unless it says Windows' or Linux's", () => {
     expect(parseDoc({ style: "windows", layers: [] })?.style).toBe("windows");
-    expect(parseDoc({ style: "linux", layers: [] })?.style).toBe("mac");
+    expect(parseDoc({ style: "linux", layers: [] })?.style).toBe("linux");
+    expect(parseDoc({ style: "amiga", layers: [] })?.style).toBe("mac");
     expect(parseDoc(JSON.parse(JSON.stringify(emptyDoc("folder", "windows"))))).toEqual(emptyDoc("folder", "windows"));
+  });
+
+  it("opens a design from before drives exactly as it was", () => {
+    // What 0.1.9 saved: version 1, a folder or a free icon, no drive.
+    const old = { version: 1, shape: "folder", style: "windows", layers: [{ kind: "fill", id: "a1", paint: { type: "solid", color: "#ff0000" }, opacity: 1, blend: "normal" }] };
+    const back = parseDoc(old)!;
+    expect(back).toEqual({ ...old, layers: [{ ...old.layers[0] }] });
+    expect(back).not.toHaveProperty("drive");
+    expect(parseDoc({ version: 1, shape: "free", layers: [] })).toEqual({ version: 1, shape: "free", style: "mac", layers: [] });
+  });
+
+  it("keeps the drive a design is on, as a design of its own version", () => {
+    const d = addLayer(emptyDoc("drive", "mac", "linux-removable"), makeText("Keys", 512, 586, "#ffffff"));
+    expect(d).toMatchObject({ version: 2, shape: "drive", drive: "linux-removable" });
+    expect(parseDoc(JSON.parse(JSON.stringify(d)))).toEqual(d);
+    // Turned into a free icon it keeps its drive, to go back on it.
+    const free = { ...d, shape: "free" as const };
+    expect(parseDoc(JSON.parse(JSON.stringify(free)))).toEqual(free);
+    // A drive FolderSkin doesn't draw is a folder's design, and a newer version is refused.
+    expect(parseDoc({ ...d, drive: "amiga-floppy" })).toMatchObject({ version: 1, shape: "folder" });
+    expect(parseDoc({ ...d, drive: "amiga-floppy" })).not.toHaveProperty("drive");
+    expect(parseDoc({ ...d, version: 3 })).toBeNull();
+    // A folder design asked for on a drive with no drive stays a folder's.
+    expect(emptyDoc("drive", "mac")).toMatchObject({ version: 1, shape: "folder" });
+  });
+
+  it("moves a design from one drive's face to another's", () => {
+    const from = driveParts("mac-external");
+    const to = driveParts("linux-removable");
+    const [fx0, fy0, fx1, fy1] = from.front;
+    let d = emptyDoc("drive", "mac", "mac-external");
+    d = addLayer(d, makeFill(solid("#123456")));
+    d = addLayer(d, makeText("Hi", (fx0 + fx1) / 2, (fy0 + fy1) / 2, "#ffffff"));
+    d = addLayer(d, { ...makeShape("rect", (fx0 + fx1) / 2, (fy0 + fy1) / 2, "#ffffff"), w: fx1 - fx0, h: fy1 - fy0 });
+    const moved = refitFace(d, from, to, "linux-removable");
+    expect(moved.drive).toBe("linux-removable");
+    expect(moved.layers[0]).toEqual(d.layers[0]);
+    const [tx0, ty0, tx1, ty1] = to.front;
+    const text = moved.layers[1] as Extract<Doc["layers"][number], { kind: "text" }>;
+    expect(text.x).toBeCloseTo((tx0 + tx1) / 2, 0);
+    expect(text.y).toBeCloseTo((ty0 + ty1) / 2, 0);
+    // What covered the face still covers it.
+    const cover = moved.layers[2] as Extract<Doc["layers"][number], { kind: "shape" }>;
+    expect(cover.w).toBeGreaterThanOrEqual(tx1 - tx0 - 1);
+    expect(cover.h).toBeGreaterThanOrEqual(ty1 - ty0 - 1);
   });
 
   it("drops what it can't draw and keeps numbers sensible", () => {

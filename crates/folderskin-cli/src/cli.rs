@@ -20,8 +20,8 @@ pub struct Cli {
     /// Also show everything the runtime prints
     #[arg(long, short, global = true)]
     pub verbose: bool,
-    /// The folder artwork goes on, as in the app: mac or windows (default: the one chosen in the
-    /// app). For apply, render, image check and crop, and ai gen, batch and theme
+    /// The folder artwork goes on, as in the app: mac, windows or linux (default: the one chosen
+    /// in the app). For apply, render, image check and crop, and ai gen, batch and theme
     #[arg(long, global = true, value_enum)]
     pub look: Option<LookArg>,
     #[command(subcommand)]
@@ -32,6 +32,7 @@ pub struct Cli {
 pub enum LookArg {
     Mac,
     Windows,
+    Linux,
 }
 
 #[derive(Subcommand, Debug)]
@@ -854,7 +855,11 @@ mod tests {
                 "{args:?}"
             );
         }
-        assert!(parse(&["render", "a.png", "--look", "linux"]).is_err());
+        assert_eq!(
+            parse(&["render", "a.png", "--look", "linux"]).unwrap().look,
+            Some(LookArg::Linux)
+        );
+        assert!(parse(&["render", "a.png", "--look", "amiga"]).is_err());
     }
 
     #[test]

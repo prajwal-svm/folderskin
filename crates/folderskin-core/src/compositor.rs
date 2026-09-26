@@ -10,35 +10,37 @@
 //! [`template_layers`] draws the same template in the layers a design sits between, so the
 //! composer's live preview is made of the same pixels too.
 
-use crate::{fit, geometry as g, geometry_windows as w, raster};
+use crate::{fit, geometry as g, geometry_linux as l, geometry_windows as w, raster};
 use tiny_skia::{
     BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Mask, Paint, Path, Pattern,
     Pixmap, Shader, SpreadMode, Stroke, Transform,
 };
 
-/// Which folder the template is: FolderSkin's own, the one Finder shows on a Mac, or the one
-/// Windows draws. The same skin goes on either; each has its own panels, rims and shading.
+/// Which folder the template is: FolderSkin's own, the one Finder shows on a Mac, the one
+/// Windows draws, or one in the spirit of GNOME's and KDE's. The same skin goes on any of them;
+/// each has its own panels, rims and shading.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Style {
     #[default]
     Mac,
     Windows,
+    Linux,
 }
 
 impl Style {
+    /// Every folder, in the order they are offered.
+    pub const ALL: [Style; 3] = [Style::Mac, Style::Windows, Style::Linux];
+
     pub fn id(self) -> &'static str {
         match self {
             Style::Mac => "mac",
             Style::Windows => "windows",
+            Style::Linux => "linux",
         }
     }
 
     pub fn from_id(id: &str) -> Option<Style> {
-        match id {
-            "mac" => Some(Style::Mac),
-            "windows" => Some(Style::Windows),
-            _ => None,
-        }
+        Style::ALL.into_iter().find(|s| s.id() == id)
     }
 
     /// Where artwork is cover-fitted to: the whole back panel, tab included, and the front.
@@ -46,16 +48,18 @@ impl Style {
         match self {
             Style::Mac => (g::BACK_BBOX, g::FRONT),
             Style::Windows => (w::BACK_BBOX, w::FRONT),
+            Style::Linux => (l::BACK_BBOX, l::FRONT),
         }
     }
 
     /// The shape artwork is best made in for this folder, in pixels, so it crops as little of it
     /// as it can: FolderSkin's own [`SKIN_WIDTH`] × [`SKIN_HEIGHT`] on the Mac's folder, and as
-    /// wide on Windows', as tall as the box it is cover-fitted to there makes it (1024 × 805).
+    /// wide on the others, as tall as the box it is cover-fitted to there makes it (1024 × 805 on
+    /// Windows', 1024 × 852 on Linux's).
     pub fn artwork_size(self) -> (u32, u32) {
         match self {
             Style::Mac => (SKIN_WIDTH, SKIN_HEIGHT),
-            Style::Windows => {
+            Style::Windows | Style::Linux => {
                 let (back, _) = self.fit_boxes();
                 let height = SKIN_WIDTH as f32 * back.height() / back.width();
                 (SKIN_WIDTH, height.round() as u32)
@@ -86,6 +90,16 @@ const WIN_SHADOW: [u8; 4] = [0, 0, 0, 30];
 const WIN_SHADOW_BAND: f32 = 20.0;
 const WIN_HIGHLIGHT: [u8; 4] = [255, 255, 255, 120];
 const WIN_HIGHLIGHT_BAND: f32 = 8.0;
+
+/// The Linux folder's shading: like Windows', its back a shade darker than its front and a soft
+/// shadow where the front meets it, with a crisper light along the front's top edge and a faint
+/// one along the back's, as GNOME's and KDE's folders have.
+const LINUX_BACK_SHADE: u8 = 34;
+const LINUX_SHADOW: [u8; 4] = [0, 0, 0, 34];
+const LINUX_SHADOW_BAND: f32 = 16.0;
+const LINUX_HIGHLIGHT: [u8; 4] = [255, 255, 255, 150];
+const LINUX_HIGHLIGHT_BAND: f32 = 5.0;
+const LINUX_BACK_LIGHT: [u8; 4] = [255, 255, 255, 60];
 
 /// Source artwork plus the focus point (0..1, 0..1) that cover-fit crops keep centred.
 pub struct Artwork {
@@ -239,6 +253,14 @@ impl Template {
                 paper: None,
                 front: w::front_panel_path(scale),
             },
+            Style::Linux => Template {
+                size,
+                scale,
+                style,
+                back: l::back_panel_path(scale),
+                paper: None,
+                front: l::front_panel_path(scale),
+            },
         }
     }
 
@@ -291,9 +313,42 @@ impl Template {
     }
 
     /// Everything between the two panels' fills: the rim light along the back panel's top edge,
-    /// then the paper sheet with the highlight on its top edge. On Windows' folder, the shadow the
-    /// front casts on the back instead (the front's fill then covers its lower half).
+    /// then the paper sheet with the highlight on its top edge. On Windows' folder and Linux's,
+    /// the back's shade and the shadow the front casts on it instead (the front's fill then covers
+    /// the shadow's lower half).
     fn draw_middle(&self, pm: &mut Pixmap) {
+        if self.style == Style::Linux {
+            let mut shade = Paint {
+                anti_alias: true,
+                ..Paint::default()
+            };
+            shade.set_color_rgba8(0, 0, 0, LINUX_BACK_SHADE);
+            pm.fill_path(
+                &self.back,
+                &shade,
+                FillRule::Winding,
+                Transform::identity(),
+                None,
+            );
+            let back = self.mask(&self.back);
+            rim(
+                pm,
+                &l::back_top_edge_path(self.scale),
+                &back,
+                LINUX_BACK_LIGHT,
+                RIM_BAND,
+                self.scale,
+            );
+            rim(
+                pm,
+                &l::front_top_edge_path(self.scale),
+                &back,
+                LINUX_SHADOW,
+                LINUX_SHADOW_BAND,
+                self.scale,
+            );
+            return;
+        }
         if self.style == Style::Windows {
             let mut shade = Paint {
                 anti_alias: true,
@@ -353,6 +408,17 @@ impl Template {
     /// What goes over the front panel's fill: the rim light along its top and sides.
     fn draw_top(&self, pm: &mut Pixmap) {
         let front = self.mask(&self.front);
+        if self.style == Style::Linux {
+            rim(
+                pm,
+                &l::front_top_edge_path(self.scale),
+                &front,
+                LINUX_HIGHLIGHT,
+                LINUX_HIGHLIGHT_BAND,
+                self.scale,
+            );
+            return;
+        }
         if self.style == Style::Windows {
             rim(
                 pm,
@@ -654,11 +720,12 @@ pub fn default_folder_artwork() -> Artwork {
 }
 
 /// [`default_folder_artwork`] for the folder of `style`: on Windows' folder, the yellow Explorer
-/// draws its own in.
+/// draws its own in, and on Linux's, the blue GNOME's and KDE's folders share.
 pub fn default_folder_artwork_in(style: Style) -> Artwork {
     match style {
         Style::Mac => default_folder_artwork(),
         Style::Windows => vertical_gradient([0xFF, 0xE6, 0x9A], [0xFF, 0xCC, 0x48]),
+        Style::Linux => vertical_gradient([0x6C, 0xAA, 0xF2], [0x2F, 0x7B, 0xE0]),
     }
 }
 
@@ -1199,7 +1266,7 @@ mod tests {
     /// is saved as.
     #[test]
     fn the_layers_stacked_around_a_design_are_the_saved_icon() {
-        for style in [Style::Mac, Style::Windows] {
+        for style in Style::ALL {
             layers_stack_into_the_master(style);
         }
     }
@@ -1235,9 +1302,9 @@ mod tests {
             }
         }
         let (x, y) = (worst_at as u32 % RENDER_SIZE, worst_at as u32 / RENDER_SIZE);
-        // Windows' folder rounds once more where the front's shadow on the back meets its
-        // highlight, both anti-aliased along the same edge.
-        let allowed = if style == Style::Windows { 4 } else { 3 };
+        // Windows' folder and Linux's round once more where the front's shadow on the back meets
+        // its highlight, both anti-aliased along the same edge.
+        let allowed = if style == Style::Mac { 3 } else { 4 };
         assert!(
             worst <= allowed,
             "{style:?}: {worst} off the render at ({x},{y})"
@@ -1299,10 +1366,28 @@ mod tests {
 
     #[test]
     fn styles_have_ids() {
-        for s in [Style::Mac, Style::Windows] {
+        for s in Style::ALL {
             assert_eq!(Style::from_id(s.id()), Some(s));
         }
-        assert_eq!(Style::from_id("linux"), None);
+        assert_eq!(Style::from_id("amiga"), None);
+    }
+
+    #[test]
+    fn the_linux_folder_has_its_own_shape_and_no_paper() {
+        let art = solid(1024, 958, [40, 120, 220, 255]);
+        let lin = raster::to_straight_rgba(&render_master_in(&art, Style::Linux));
+        // The tab at the top left, nothing right of it above the body, the body below that.
+        assert_eq!(at(&lin, 200.0, 160.0)[3], 255);
+        assert_eq!(at(&lin, 700.0, 180.0)[3], 0);
+        assert_eq!(at(&lin, 700.0, 240.0)[3], 255);
+        // Between the body's top edge and the front's, the back panel shows, not a sheet.
+        let p = at(&lin, 700.0, 250.0);
+        assert!(p[2] > p[0] + 100, "{p:?} should be the blue back panel");
+        // Its back is darker than its front, and the front is lit along its top.
+        let lum = |p: [u8; 4]| p[0] as u32 + p[1] as u32 + p[2] as u32;
+        assert!(lum(at(&lin, 700.0, 250.0)) + 20 < lum(at(&lin, 700.0, 600.0)));
+        assert!(lum(at(&lin, 700.0, 278.0)) > lum(at(&lin, 700.0, 600.0)) + 20);
+        assert_eq!(Style::Linux.artwork_size(), (1024, 852));
     }
 
     #[test]

@@ -55,7 +55,9 @@ pub enum Command {
         mask: Option<PathBuf>,
     },
     /// Write the layers the composer draws a design between: back.png, front.png, middle.png,
-    /// top.png and outline.png, and the same for Windows' folder in windows/
+    /// top.png and outline.png, the same for Windows' folder in windows/ and Linux's in linux/,
+    /// every drive's in drives/ at half the size, and every base's bare shape in bases/ at a
+    /// quarter, for the browser preview
     ComposerLayers {
         /// Folder to write them into; made if it isn't there
         #[arg(long)]

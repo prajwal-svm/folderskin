@@ -1,18 +1,18 @@
-//! Which folder FolderSkin puts skins on: FolderSkin's own, as a Mac shows it, or the one Windows
-//! draws. The user switches it in the folder panel; every computer starts on the Mac's. Artwork
-//! skins (photos, paintings, AI pictures) are drawn and applied on it, and cached thumbnails are
-//! kept apart per folder (`commands::thumb_tag`).
+//! Which folder FolderSkin puts skins on: FolderSkin's own, as a Mac shows it, the one Windows
+//! draws, or the Linux one. The user switches it in the folder panel; every computer starts on the
+//! Mac's, Linux too. Artwork skins (photos, paintings, AI pictures) are drawn and applied on it, and
+//! cached thumbnails are kept apart per folder (`commands::thumb_tag`).
 //!
 //! It is kept in the app's data folder, beside the skins, so the library's first thumbnails at
 //! launch are already drawn on it.
 
 use folderskin_core::compositor::Style;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Mutex;
 
-/// Whether it's Windows' folder; the Mac's otherwise.
-static WINDOWS: AtomicBool = AtomicBool::new(false);
+/// The folder, as its place in [`Style::ALL`]: the Mac's is 0.
+static LOOK: AtomicU8 = AtomicU8::new(0);
 /// Where the choice is kept, once the data folder is known.
 static FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -20,15 +20,15 @@ const FILE_NAME: &str = "folder-look.txt";
 
 /// The folder skins go on now.
 pub fn current() -> Style {
-    if WINDOWS.load(Ordering::Relaxed) {
-        Style::Windows
-    } else {
-        Style::Mac
-    }
+    Style::ALL
+        .get(usize::from(LOOK.load(Ordering::Relaxed)))
+        .copied()
+        .unwrap_or(Style::Mac)
 }
 
 fn set(style: Style) {
-    WINDOWS.store(style == Style::Windows, Ordering::Relaxed);
+    let at = Style::ALL.iter().position(|s| *s == style).unwrap_or(0);
+    LOOK.store(at as u8, Ordering::Relaxed);
 }
 
 /// The choice saved in `dir`, the app's data folder. Nothing saved, or anything unreadable, is
@@ -50,7 +50,7 @@ fn parse(look: &str) -> Result<Style, String> {
     Style::from_id(look).ok_or_else(|| format!("FolderSkin doesn't know a folder called {look:?}"))
 }
 
-/// The folder skins go on, as the webview names it: "mac" or "windows".
+/// The folder skins go on, as the webview names it: "mac", "windows" or "linux".
 #[tauri::command]
 pub fn folder_look() -> &'static str {
     current().id()
@@ -92,10 +92,11 @@ mod tests {
     }
 
     #[test]
-    fn only_the_two_folders_are_known() {
+    fn only_the_three_folders_are_known() {
         assert_eq!(parse("mac"), Ok(Style::Mac));
         assert_eq!(parse("windows"), Ok(Style::Windows));
-        assert!(parse("linux").is_err());
+        assert_eq!(parse("linux"), Ok(Style::Linux));
+        assert!(parse("amiga").is_err());
     }
 
     #[test]

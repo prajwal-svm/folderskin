@@ -315,12 +315,14 @@ fn crop(args: &CropArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let focus = args.focus.unwrap_or((0.5, 0.5));
     let (cut, what) = match args.aspect.to_lowercase().as_str() {
         "artwork" => {
-            // The shape of the folder artwork goes on in this run: the Mac's, or Windows' wider one.
+            // The shape of the folder artwork goes on in this run: the Mac's, or the wider one of
+            // Windows' or Linux's.
             let look = crate::preview::look();
             let (w, h) = look.artwork_size();
             let whose = match look {
                 Style::Mac => "the folder's",
                 Style::Windows => "Windows' folder's",
+                Style::Linux => "the Linux folder's",
             };
             (
                 matte::crop_to_aspect(&img, w, h, focus),

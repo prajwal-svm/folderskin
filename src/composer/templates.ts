@@ -1,11 +1,13 @@
 /**
  * Starting points for a new design, from a plain folder to a finished-looking one. Each is an
- * ordinary document the user can change in every way; `photo` ones start by asking for a picture.
+ * ordinary document the user can change in every way; `photo` ones start by asking for a picture,
+ * and `drive` ones start on a drive rather than a folder.
  */
 import "../i18n/composer";
 import { t } from "../i18n";
 import { FOLDER_BLUE_BOTTOM, FOLDER_BLUE_TOP } from "./color";
 import {
+  anchorOf,
   CANVAS,
   centreOf,
   emptyDoc,
@@ -37,9 +39,14 @@ export type Template = {
   plain?: boolean;
   /** Needs a picture before it can start. */
   photo?: boolean;
-  /** The design, laid out on `parts`: those of `style`'s folder when the template has one. */
+  /** Starts on a drive: the one the last drive design was on, or this system's own external drive. */
+  drive?: boolean;
+  /** The design, laid out on `parts`: those of `style`'s folder when the template has one, or of the drive. */
   make: (parts: Parts, picture?: Picture) => Doc;
 };
+
+/** Words on a drive's face, as big as its face lets them be: a stick's face is narrow. */
+const wordsFor = (p: Parts, most: number) => Math.round(Math.min(most, (p.front[2] - p.front[0]) * 0.19));
 
 const doc = (layers: Layer[], shape: Doc["shape"] = "folder", style: FolderStyle = "mac"): Doc => ({ ...emptyDoc(shape, style), layers });
 
@@ -122,6 +129,22 @@ export const TEMPLATES: Template[] = [
         "windows",
       );
     },
+  },
+  {
+    // The folder GNOME and KDE draw: a deeper blue back and tab, a lighter front lit along its
+    // top. Colours in the spirit of both.
+    id: "linux",
+    style: "linux",
+    plain: true,
+    make: (p) =>
+      doc(
+        [
+          { ...makeFill(down([p.back[1], "#4c90e8"], [p.front[1], "#2f74d8"])), name: t("composer.templateLayers.back") },
+          { ...makeFill(down([p.front[1], "#7cb7f8"], [p.front[3], "#3c88e6"])), part: "front", name: t("composer.templateLayers.front") },
+        ],
+        "folder",
+        "linux",
+      ),
   },
   {
     id: "colour",
@@ -258,6 +281,41 @@ export const TEMPLATES: Template[] = [
       const y = p.front[3] - band / 2 - 30;
       layers.push({ ...makeShape("rect", 512, y, "#00000066"), w: 1100, h: band, radius: 0, name: t("composer.templateLayers.captionBand") });
       layers.push({ ...makeText(t("composer.templateWords.summer"), 512, y, "#ffffff"), size: 76, weight: 800 });
+      return doc(layers);
+    },
+  },
+  {
+    id: "drive-colour",
+    drive: true,
+    make: () => doc([makeFill(linear(160, "#00c6ff", "#0072ff"))]),
+  },
+  {
+    id: "drive-label",
+    drive: true,
+    make: (p) => {
+      const c = anchorOf(p);
+      return doc([
+        makeFill(linear(180, "#2e3440", "#171b22")),
+        { ...makeText(t("composer.templateWords.backups"), c.x, c.y, "#ffffff"), size: wordsFor(p, 130), font: "system", weight: 800 },
+      ]);
+    },
+  },
+  {
+    id: "drive-emoji",
+    drive: true,
+    make: (p) => {
+      const c = anchorOf(p);
+      return doc([makeFill(linear(150, "#f9d423", "#ff4e50")), { ...makeEmoji("🎬", c.x, c.y + 6), size: wordsFor(p, 130) * 2.4 }]);
+    },
+  },
+  {
+    id: "drive-photo",
+    drive: true,
+    photo: true,
+    make: (p, pic) => {
+      const layers: Layer[] = [makeFill(solid("#20242c"))];
+      // The picture covers the face, which is all a drive shows of a design.
+      if (pic) layers.push(makeImage(pic.src, pic.width, pic.height, imageBox(pic.width, pic.height, { ...p, folder: p.front }, !pic.alpha)));
       return doc(layers);
     },
   },

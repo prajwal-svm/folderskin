@@ -119,7 +119,11 @@
     "coversFront": "앞면",
     "coversFrontTip": "앞면 패널에만 칠해서, 뒷면과 탭을 다른 색으로 둘 수 있어요",
     "glow": "글로우로 바꾸기",
-    "shuffle": "섞기"
+    "shuffle": "섞기",
+    "textOnDrive": "드라이브의 글자",
+    "toFaceTip": "드라이브 앞면 가운데에 놓기",
+    "coverDrive": "드라이브 덮기",
+    "coverDriveTip": "드라이브 전체를 덮기"
   },
   "blends": {
     "normal": "표준",
@@ -251,11 +255,17 @@
     "neon": "네온",
     "badge": "배지",
     "photo": "사진",
-    "sticker": "스티커"
+    "sticker": "스티커",
+    "linux": "Linux 폴더",
+    "drive-label": "라벨 드라이브",
+    "drive-colour": "컬러 드라이브",
+    "drive-emoji": "이모지 드라이브",
+    "drive-photo": "사진 드라이브"
   },
   "templateNotes": {
     "mac": "Mac의 파란색",
-    "windows": "Windows의 노란색"
+    "windows": "Windows의 노란색",
+    "linux": "Linux의 파란색"
   },
   "templateLayers": {
     "back": "뒷면",
@@ -274,7 +284,8 @@
     "notes": "메모",
     "night": "밤",
     "new": "신규",
-    "summer": "2026년 여름"
+    "summer": "2026년 여름",
+    "backups": "백업"
   },
   "otherFont": "다른 글꼴",
   "emoji": {
@@ -318,7 +329,12 @@
     },
     "templatesLabel": "템플릿에서 시작",
     "templatesHeading": "또는 템플릿에서 시작",
-    "asksForPicture": "먼저 이미지를 골라요"
+    "asksForPicture": "먼저 이미지를 골라요",
+    "drives": {
+      "heading": "드라이브에서 시작",
+      "label": "드라이브에서 시작",
+      "sub": "각 시스템이 보여 주는 모든 종류의 드라이브예요. 디자인은 드라이브 앞면에 들어가요."
+    }
   },
   "layers": {
     "empty": "아직 아무것도 없어요. 폴더 위의 막대에서 색, 글자, 이미지를 추가하세요.",
@@ -362,7 +378,8 @@
   },
   "stage": {
     "folderLoading": "폴더를 준비하는 중",
-    "pictureLoading": "이미지를 준비하는 중"
+    "pictureLoading": "이미지를 준비하는 중",
+    "driveLoading": "드라이브를 준비하는 중"
   },
   "icons": {
     "icons_other": "아이콘 {{count}}개",
@@ -485,7 +502,11 @@
     "label": "폴더 뼈대",
     "name": "폴더 뼈대",
     "onTip": "켜짐: 디자인을 폴더 모양으로 자르고 탭과 테두리를 붙여요. 꺼짐: 디자인이 그대로 아이콘 전체가 되고, 원하는 어떤 모양이든 돼요.",
-    "offTip": "꺼짐: 디자인이 그대로 아이콘 전체가 되고, 원하는 어떤 모양이든 돼요. 켜짐: 폴더 모양으로 자르고 탭과 테두리를 붙여요."
+    "offTip": "꺼짐: 디자인이 그대로 아이콘 전체가 되고, 원하는 어떤 모양이든 돼요. 켜짐: 폴더 모양으로 자르고 탭과 테두리를 붙여요.",
+    "driveLabel": "드라이브 뼈대",
+    "driveName": "드라이브 뼈대",
+    "driveOnTip": "켜짐: 디자인을 드라이브 앞면 모양으로 자르고 주위에 드라이브를 그려요. 꺼짐: 디자인이 그대로 아이콘 전체가 되고, 원하는 어떤 모양이든 돼요.",
+    "driveOffTip": "꺼짐: 디자인이 그대로 아이콘 전체가 되고, 원하는 어떤 모양이든 돼요. 켜짐: 드라이브 앞면 모양으로 자르고 주위에 드라이브를 그려요."
   },
   "sideTabs": {
     "label": "사이드 패널",
@@ -506,5 +527,10 @@
     "chooseTip": "적용할 폴더 선택",
     "applyTo": "적용할 폴더",
     "none": "선택한 폴더 없음"
-  }
+  },
+  "drive": {
+    "label": "드라이브 종류",
+    "option": "{{drive}} · {{system}}"
+  },
+  "emptyHintDrive": "빈 디자인은 드라이브를 그대로 둬요. 위의 막대에서 색, 글자, 이미지를 추가하세요."
 }

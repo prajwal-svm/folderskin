@@ -45,6 +45,7 @@ pub fn main() -> ExitCode {
     preview::set_look(match cli.look {
         Some(cli::LookArg::Mac) => folderskin_core::compositor::Style::Mac,
         Some(cli::LookArg::Windows) => folderskin_core::compositor::Style::Windows,
+        Some(cli::LookArg::Linux) => folderskin_core::compositor::Style::Linux,
         None => config::saved_look(),
     });
     catch_panics();

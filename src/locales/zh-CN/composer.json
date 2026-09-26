@@ -119,7 +119,11 @@
     "coversFront": "前面板",
     "coversFrontTip": "只覆盖前面板，这样后面板和页签可以用另一种颜色",
     "glow": "改为发光",
-    "shuffle": "换一换"
+    "shuffle": "换一换",
+    "textOnDrive": "驱动器上的文字",
+    "toFaceTip": "放到驱动器正面的正中",
+    "coverDrive": "铺满驱动器",
+    "coverDriveTip": "铺满整个驱动器"
   },
   "blends": {
     "normal": "正常",
@@ -251,11 +255,17 @@
     "neon": "霓虹",
     "badge": "徽章",
     "photo": "照片",
-    "sticker": "贴纸"
+    "sticker": "贴纸",
+    "linux": "Linux 文件夹",
+    "drive-label": "带标签的驱动器",
+    "drive-colour": "彩色驱动器",
+    "drive-emoji": "表情驱动器",
+    "drive-photo": "照片驱动器"
   },
   "templateNotes": {
     "mac": "Mac 的蓝色",
-    "windows": "Windows 的黄色"
+    "windows": "Windows 的黄色",
+    "linux": "Linux 的蓝色"
   },
   "templateLayers": {
     "back": "后面板",
@@ -274,7 +284,8 @@
     "notes": "笔记",
     "night": "夜晚",
     "new": "新",
-    "summer": "2026 夏天"
+    "summer": "2026 夏天",
+    "backups": "备份"
   },
   "otherFont": "其他字体",
   "emoji": {
@@ -318,7 +329,12 @@
     },
     "templatesLabel": "从模板开始",
     "templatesHeading": "或者从模板开始",
-    "asksForPicture": "需要一张图片"
+    "asksForPicture": "需要一张图片",
+    "drives": {
+      "heading": "从驱动器开始",
+      "label": "从驱动器开始",
+      "sub": "各系统显示的每一种驱动器。你的设计放在它的正面。"
+    }
   },
   "layers": {
     "empty": "这里还没有内容。可以从文件夹上方的工具栏添加颜色、文字或图片。",
@@ -362,7 +378,8 @@
   },
   "stage": {
     "folderLoading": "正在准备文件夹",
-    "pictureLoading": "正在准备图片"
+    "pictureLoading": "正在准备图片",
+    "driveLoading": "正在准备驱动器"
   },
   "icons": {
     "icons_other": "{{count}} 个图标",
@@ -485,7 +502,11 @@
     "label": "文件夹骨架",
     "name": "文件夹骨架",
     "onTip": "开：设计裁成文件夹形状，带页签和边缘。关：设计就是整个图标，形状随你定。",
-    "offTip": "关：设计就是整个图标，形状随你定。开：设计裁成文件夹形状，带页签和边缘。"
+    "offTip": "关：设计就是整个图标，形状随你定。开：设计裁成文件夹形状，带页签和边缘。",
+    "driveLabel": "驱动器骨架",
+    "driveName": "驱动器骨架",
+    "driveOnTip": "开：设计裁成驱动器正面的形状，四周是驱动器本身。关：设计就是整个图标，形状随你定。",
+    "driveOffTip": "关：设计就是整个图标，形状随你定。开：设计裁成驱动器正面的形状，四周是驱动器本身。"
   },
   "sideTabs": {
     "label": "侧面板",
@@ -506,5 +527,10 @@
     "chooseTip": "选择要应用的文件夹",
     "applyTo": "应用到",
     "none": "未选择文件夹"
-  }
+  },
+  "drive": {
+    "label": "驱动器种类",
+    "option": "{{drive}} · {{system}}"
+  },
+  "emptyHintDrive": "空白设计会让驱动器保持原样。可以从上方的工具栏添加颜色、文字或图片。"
 }

@@ -1,11 +1,11 @@
 /**
- * Which folder skins go on: FolderSkin's own, as a Mac shows it, or the one Windows draws. Rust
- * keeps the choice (src-tauri/src/look.rs) and draws artwork skins on it; this mirrors it for the
- * parts drawn here: the empty folder in the folder panel and the folder new designs start on.
- * Every computer starts on the Mac's.
+ * Which folder skins go on: FolderSkin's own, as a Mac shows it, the one Windows draws, or the
+ * Linux one. Rust keeps the choice (src-tauri/src/look.rs) and draws artwork skins on it; this
+ * mirrors it for the parts drawn here: the empty folder in the folder panel and the folder new
+ * designs start on. Every computer starts on the Mac's, Linux too.
  */
 import { useSyncExternalStore } from "react";
-import type { FolderStyle } from "../composer/parts";
+import { isFolderStyle, type FolderStyle } from "../composer/parts";
 import { api } from "../lib/tauri";
 
 let current: FolderStyle = "mac";
@@ -21,7 +21,7 @@ function set(look: FolderStyle) {
 export function startLook(): Promise<void> {
   return api
     .folderLook()
-    .then((look) => set(look === "windows" ? "windows" : "mac"))
+    .then((look) => set(isFolderStyle(look) ? look : "mac"))
     .catch(() => {
       // The Mac's, as every computer starts.
     });
