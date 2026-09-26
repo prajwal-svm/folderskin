@@ -20,7 +20,8 @@ All notable changes to FolderSkin are recorded here. The format follows
   and a memory card to a server and a RAID set. Each one still reads at 16 px.
 - **Design your own on a drive.** Start a new design on any of those shapes, with the drive you
   chose first, and words, shapes and pictures land on its face in a colour that reads there. The
-  Linux folder is there too, beside the Mac's and Windows'.
+  list of drives shows each one's picture, under its system. The Linux folder is there too,
+  beside the Mac's and Windows'.
 - **Paint for a drive, or the Linux folder.** Every drive shape is in the AI prompt's list of
   shapes and in @, beside the folders, and a new chat starts on the drive on show. **Whole
   drive** paints the drive on FolderSkin's drawing of it and cuts it out along the drive's own
@@ -68,6 +69,8 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Changed
 
+- **An empty design's hint sits at the foot of the stage**, beside an info icon, where it never
+  covers the folder or the drive.
 - **Runs over subfolders on a Mac are about 100 times faster, and take a fraction of the
   space.** On the Mac's own disks the folders share one copy of the icon, so each takes about
   30 KB instead of 2.5 MB. On network drives and other disks each folder gets a copy of about

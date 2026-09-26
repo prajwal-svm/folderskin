@@ -23,6 +23,7 @@ import {
 } from "../../composer/geometry";
 import { boxOf, renderDoc } from "../../composer/render";
 import { RotateCwIcon } from "../icons/composer";
+import { InfoIcon } from "../icons/info";
 import { LoaderIcon } from "../icons/loader";
 
 /** Room around the canvas for handles that reach past its edge, in screen pixels. */
@@ -310,8 +311,9 @@ export function ComposerStage({
         </div>
       )}
       {hint && (
-        <p className="cmp-stage-hint" style={{ left, top: top + size / 2, width: size }}>
-          {hint}
+        <p className="cmp-stage-note" role="note">
+          <InfoIcon size={14} />
+          <span>{hint}</span>
         </p>
       )}
       <div

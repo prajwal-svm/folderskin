@@ -179,7 +179,10 @@ test.describe("designing on a drive", () => {
     await expect(side(page).getByRole("button", { name: "Tab" })).toHaveCount(0);
     const before = await layerAt(page);
     await drive.click();
-    await page.getByRole("option", { name: "USB stick · Linux" }).click();
+    // Listed under its system, with its picture beside it.
+    const linux = page.getByRole("listbox", { name: "which drive" }).getByRole("group", { name: "Linux" });
+    await expect(linux.getByRole("option", { name: "USB stick" }).locator("img")).toBeVisible();
+    await linux.getByRole("option", { name: "USB stick" }).click();
     await expect(drive).toHaveAccessibleName("which drive: USB stick · Linux");
     // The words moved onto the stick's narrow face, and fit it.
     expect(await layerAt(page)).not.toEqual(before);

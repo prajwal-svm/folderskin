@@ -204,25 +204,43 @@
   touch-action: none;
 }
 
-.cmp-stage-hint {
+/* What an empty design does, said once at the foot of the stage, out of the design's way. */
+.cmp-stage-note {
   position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: max-content;
+  max-width: min(440px, calc(100% - 32px));
   margin: 0;
-  padding: 0 18%;
-  transform: translateY(-50%);
-  text-align: center;
-  font-weight: 700;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--muted);
+  padding: 8px 12px;
+  border: 1px solid var(--island-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--island) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
   pointer-events: none;
-  animation: fade-up var(--t-slow) var(--ease-out) both;
+  animation: fade-in var(--t-base) var(--ease-out) both;
+}
+
+.cmp-stage-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent-ink);
 }
 
 /* While the folder or a picture is still loading, what's drawn so far stays out of sight, and the
    handles with it; after a moment the loader stands in the design's place. */
 .cmp-stage[data-waiting] .cmp-canvas,
 .cmp-stage[data-waiting] .cmp-overlay,
-.cmp-stage[data-waiting] .cmp-stage-hint {
+.cmp-stage[data-waiting] .cmp-stage-note {
   visibility: hidden;
 }
 
@@ -241,15 +259,12 @@
   animation: fade-in var(--t-base) var(--ease-out) both;
 }
 
-.cmp-stage[data-backdrop="dark"] .cmp-stage-hint,
-.cmp-stage[data-backdrop="colour"] .cmp-stage-hint,
 .cmp-stage[data-backdrop="dark"] .cmp-stage-loader,
 .cmp-stage[data-backdrop="colour"] .cmp-stage-loader {
   color: rgba(255, 255, 255, 0.85);
 }
 
 /* The light desktop is light in either theme. */
-.cmp-stage[data-backdrop="light"] .cmp-stage-hint,
 .cmp-stage[data-backdrop="light"] .cmp-stage-loader {
   color: rgba(16, 24, 40, 0.6);
 }
@@ -2244,8 +2259,59 @@
 }
 
 .cmp-option-label {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* A picture of each option, beside its name: the drives, drawn as they'll be. */
+.cmp-option-pic {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.cmp-option:has(.cmp-option-pic) {
+  min-height: 44px;
+  padding-left: 6px;
+}
+
+.cmp-option:has(.cmp-option-pic) .cmp-option-label {
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Options listed under a heading, such as the drives under their system. */
+.cmp-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cmp-option-group + .cmp-option-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.cmp-option-heading {
+  padding: 6px 10px 4px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* The chosen option's picture, in the button before its name. */
+.cmp-select-pic {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: -4px;
+  object-fit: contain;
 }
 
 .cmp-icon-now {

@@ -572,7 +572,8 @@ export function Composer({
    * design is on, or this system's own.
    */
   const startDrive = pickedDrive ?? (doc.drive && isDriveId(doc.drive) ? doc.drive : defaultDrive(localOs()));
-  /** Every shape bare, for the drives in the "Start a new design" dialog; fetched as it first opens. */
+  /** Every shape bare, for the drives in the "Start a new design" dialog and the drive picker;
+   *  fetched as either first shows. */
   const [shapes, setShapes] = useState<ShapeInfo[] | null>(null);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
@@ -587,8 +588,10 @@ export function Composer({
     for (const t of TEMPLATES) if (t.style) loadSurface(t.style);
     loadSurface(`drive:${startDrive}`);
   }, [starting, loadSurface, startDrive]);
+  /** The bar's drive picker is showing, with a picture of every drive. */
+  const pickingDrive = doc.shape === "drive";
   useEffect(() => {
-    if (!starting || shapes) return;
+    if ((!starting && !pickingDrive) || shapes) return;
     let live = true;
     api
       .shapes(SHAPE_PICTURE_SIZE)
@@ -599,7 +602,7 @@ export function Composer({
     return () => {
       live = false;
     };
-  }, [starting, shapes]);
+  }, [starting, pickingDrive, shapes]);
   const [name, setName] = useState(draft?.name ?? "");
   const [nameTouched, setNameTouched] = useState(draft?.nameTouched ?? false);
   const [editing, setEditing] = useState<Editing | null>(draft?.editing ?? null);
@@ -1193,13 +1196,21 @@ export function Composer({
     const to = templates[`drive:${drive}`]?.parts ?? driveParts(drive);
     commit(refitFace(d, from, to, drive));
   };
+  // Each drive with its picture, listed under its system: "USB stick" under Linux, where the
+  // button, with only the one, says "USB stick · Linux".
   const driveOptions = useMemo(
     () =>
-      DRIVE_IDS.map((id) => ({
-        value: id,
-        label: t("composer.drive.option", { drive: driveLabel(id), system: t(`common.systems.${driveStyleOf(id)}`) }),
-      })),
-    [t],
+      DRIVE_IDS.map((id) => {
+        const system = t(`common.systems.${driveStyleOf(id)}`);
+        return {
+          value: id,
+          label: t("composer.drive.option", { drive: driveLabel(id), system }),
+          listLabel: driveLabel(id),
+          group: system,
+          picture: shapes?.find((s) => s.id === id)?.thumbnail ?? null,
+        };
+      }),
+    [t, shapes],
   );
   // The skeleton is the design's shape: on, it's drawn on the folder (a Mac's, Windows' or
   // Linux's) or on its drive; off, it's a free icon, the whole picture.
@@ -1358,7 +1369,7 @@ export function Composer({
             <LookSwitch value={doc.style} onChange={restyle} />
           )}
           {doc.shape === "drive" && doc.drive && (
-            <Select className="cmp-drive-pick" value={doc.drive} options={driveOptions} onChange={redrive} label={t("composer.drive.label")} />
+            <Select className="cmp-drive-pick" value={doc.drive} options={driveOptions} onChange={redrive} label={t("composer.drive.label")} width={264} />
           )}
           <div className="cmp-backdrops" role="radiogroup" aria-label={t("composer.backdrops.label")} ref={backdropsRef} hidden={!barRoom.backdrops}>
             {BACKDROPS.map((b) => (
