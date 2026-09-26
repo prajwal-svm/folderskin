@@ -977,6 +977,11 @@ select.input {
   padding: 8px;
 }
 
+/* With nothing to pick, the note takes the whole row, not one tile's width. */
+.share-pick .field-note {
+  grid-column: 1 / -1;
+}
+
 .share-pick-one {
   position: relative;
   display: flex;
