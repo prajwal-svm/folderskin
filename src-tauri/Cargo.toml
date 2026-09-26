@@ -25,6 +25,9 @@ tauri-plugin-updater = { version = "2", default-features = false, features = ["s
 # folderskin://install links, from the Install buttons on folderskin.app (deep_link.rs). The scheme
 # is in tauri.conf.json, which the bundles register with the system.
 tauri-plugin-deep-link = "2"
+# "Dune is on 48,210 folders in Projects": a run over a tree that ends while FolderSkin's window
+# isn't in front says so as a system notification (src/lib/notify.ts).
+tauri-plugin-notification = "2"
 folderskin-core.workspace = true
 folderskin-ai = { path = "../crates/folderskin-ai" }
 # "This computer": open-weight models set up and run here, shared with the command line.

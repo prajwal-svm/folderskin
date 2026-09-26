@@ -83,6 +83,8 @@ pub fn run() {
         // is in tauri.conf.json; the page restarts the app once one is installed.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // A run over a tree that ends while the window is behind others says so.
+        .plugin(tauri_plugin_notification::init())
         .manage(state::AppState::default())
         .manage(keys::Keys::default())
         // The AI runs that can be stopped, and this computer as the local models see it.
