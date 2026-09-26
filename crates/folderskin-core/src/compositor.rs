@@ -789,18 +789,50 @@ pub fn blank_template_cutout(width: u32, height: u32) -> image::RgbaImage {
 
 /// [`blank_template_cutout`] of the folder of `style`.
 pub fn blank_template_cutout_in(style: Style, width: u32, height: u32) -> image::RgbaImage {
-    let art = Artwork {
-        rgba: image::RgbaImage::from_pixel(8, 8, image::Rgba(TEMPLATE_GREY)),
-        focus: (0.5, 0.5),
-    };
     let place = BlankPlacement::new(width, height, style);
-    let icon = render_icon_set_in(&art, &[place.size], style)
+    let icon = render_icon_set_in(&template_grey(), &[place.size], style)
         .sizes
         .remove(0)
         .1;
     let mut frame = image::RgbaImage::new(width, height);
     image::imageops::replace(&mut frame, &icon, place.left, place.top);
     frame
+}
+
+/// [`blank_template_in`] of a drive: `shape` with its face painted the template's grey and the
+/// rest of it as it is, so a model repaints that drive and not one of its own, as big as it fits
+/// in the frame and centred on `backdrop`.
+pub fn blank_drive_in(
+    shape: crate::drive::DriveShape,
+    width: u32,
+    height: u32,
+    backdrop: [u8; 3],
+) -> image::RgbaImage {
+    crate::matte::flatten(&blank_drive_cutout_in(shape, width, height), backdrop)
+}
+
+/// [`blank_drive_in`] on transparency: its alpha is the drive's silhouette in that frame.
+pub fn blank_drive_cutout_in(
+    shape: crate::drive::DriveShape,
+    width: u32,
+    height: u32,
+) -> image::RgbaImage {
+    let place = BlankPlacement::around(width, height, shape.extent());
+    let icon = render_drive_icon_set(Some(&template_grey()), &[place.size], shape)
+        .sizes
+        .remove(0)
+        .1;
+    let mut frame = image::RgbaImage::new(width, height);
+    image::imageops::replace(&mut frame, &icon, place.left, place.top);
+    frame
+}
+
+/// Artwork that is the template's grey all over.
+fn template_grey() -> Artwork {
+    Artwork {
+        rgba: image::RgbaImage::from_pixel(8, 8, image::Rgba(TEMPLATE_GREY)),
+        focus: (0.5, 0.5),
+    }
 }
 
 /// The pixels FolderSkin's folder fills in [`blank_template_cutout`] of a `width` × `height`
@@ -837,7 +869,16 @@ impl BlankPlacement {
     /// [`TEMPLATE_MARGIN`] on every side, centred.
     fn new(width: u32, height: u32, style: Style) -> BlankPlacement {
         // The folder's extent in canvas units, from the template's outlines at one pixel a unit.
-        let [x0, y0, x1, y1] = Template::new(g::CANVAS as u32, style).extent();
+        BlankPlacement::around(
+            width,
+            height,
+            Template::new(g::CANVAS as u32, style).extent(),
+        )
+    }
+
+    /// Whatever fills `[x0, y0, x1, y1]` of the canvas, placed the same way: a drive, by its
+    /// extent.
+    fn around(width: u32, height: u32, [x0, y0, x1, y1]: [f32; 4]) -> BlankPlacement {
         let usable = 1.0 - 2.0 * TEMPLATE_MARGIN;
         let px_per_unit =
             (width as f32 * usable / (x1 - x0)).min(height as f32 * usable / (y1 - y0));

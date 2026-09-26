@@ -5,11 +5,10 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { ctx2d, makeCanvas, type Assets } from "../../composer/assets";
 import { drawFolderView, drawFreeView, type TemplateImages } from "../../composer/composite";
 import { emptyDoc, fallbackParts, type Doc, type FolderStyle, type Parts } from "../../composer/doc";
-import { DRIVE_KINDS, DRIVE_STYLES, driveParts } from "../../composer/drives";
+import { DRIVE_KINDS, DRIVE_STYLES, driveLabel, driveParts } from "../../composer/drives";
 import { renderDoc } from "../../composer/render";
 import { TEMPLATES, type Template } from "../../composer/templates";
-import type { BaseShape } from "../../lib/tauri";
-import { driveLabel } from "../../lib/bases";
+import type { ShapeInfo } from "../../lib/shapes";
 import { Modal } from "../Modal";
 import { ImageIcon } from "../icons/image";
 import { LoaderIcon } from "../icons/loader";
@@ -81,7 +80,7 @@ export function NewDesign({
   style,
   drive,
   picked,
-  bases,
+  shapes,
   assets,
   version,
   dirty,
@@ -97,8 +96,8 @@ export function NewDesign({
   drive: string;
   /** The drive chosen on the stage, by its shape and its name, when a drive is. */
   picked: { drive: string; name: string } | null;
-  /** Every base's bare shape, from Rust, for the drives to start on; null while they're on their way. */
-  bases: BaseShape[] | null;
+  /** Every shape bare, from Rust, for the drives to start on; null while they're on their way. */
+  shapes: ShapeInfo[] | null;
   assets: Assets;
   version: number;
   /** The design in progress has changes that aren't saved. */
@@ -131,7 +130,7 @@ export function NewDesign({
   const plain = templates.filter(({ tpl }) => tpl.plain);
   const designed = templates.filter(({ tpl }) => !tpl.plain);
   const template = surfaces[style]?.images ?? null;
-  const pictures = useMemo(() => new Map((bases ?? []).map((b) => [b.id, b.picture])), [bases]);
+  const pictures = useMemo(() => new Map((shapes ?? []).map((s) => [s.id, s.thumbnail ?? undefined])), [shapes]);
 
   return (
     <Modal
@@ -183,7 +182,7 @@ export function NewDesign({
           <div className="new-drives" role="group" aria-label={t("composer.new.drives.picked")}>
             <h4 className="new-drives-heading">{t("composer.new.drives.picked")}</h4>
             <div className="cmp-drive-grid">
-              <DriveCard id={picked.drive} picture={pictures.get(`drive-${picked.drive}`)} name={picked.name} onStart={onStart} />
+              <DriveCard id={picked.drive} picture={pictures.get(picked.drive)} name={picked.name} onStart={onStart} />
             </div>
           </div>
         )}
@@ -193,7 +192,7 @@ export function NewDesign({
             <div className="cmp-drive-grid">
               {DRIVE_KINDS[system].map((kind) => {
                 const id = `${system}-${kind}`;
-                return <DriveCard key={id} id={id} picture={pictures.get(`drive-${id}`)} onStart={onStart} />;
+                return <DriveCard key={id} id={id} picture={pictures.get(id)} onStart={onStart} />;
               })}
             </div>
           </div>

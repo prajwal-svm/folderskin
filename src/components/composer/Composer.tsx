@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, errorMessage, type BaseShape, type ComposerImage, type Skin } from "../../lib/tauri";
+import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
+import type { ShapeInfo } from "../../lib/shapes";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { keys, localOs } from "../../lib/platform";
@@ -62,10 +63,9 @@ import { fitSpot, placeIcon, type Box } from "../../composer/geometry";
 import { canRedo, canUndo, historyReducer, startHistory } from "../../composer/history";
 import { boxOf, renderDoc } from "../../composer/render";
 import { TEMPLATES, type Picture } from "../../composer/templates";
-import { defaultDrive, DRIVE_IDS, driveParts, driveStyleOf, isDriveId } from "../../composer/drives";
+import { defaultDrive, DRIVE_IDS, driveLabel, driveParts, driveStyleOf, isDriveId } from "../../composer/drives";
 import { FOLDER_STYLES } from "../../composer/parts";
 import { Select } from "../Select";
-import { driveLabel } from "../../lib/bases";
 import { Confirm } from "../Confirm";
 import { ComposerInspector, type Patch } from "./ComposerInspector";
 import { ComposerLayers } from "./ComposerLayers";
@@ -572,8 +572,8 @@ export function Composer({
    * design is on, or this system's own.
    */
   const startDrive = pickedDrive ?? (doc.drive && isDriveId(doc.drive) ? doc.drive : defaultDrive(localOs()));
-  /** Every base's bare shape, for the drives in the "Start a new design" dialog; fetched as it first opens. */
-  const [bases, setBases] = useState<BaseShape[] | null>(null);
+  /** Every shape bare, for the drives in the "Start a new design" dialog; fetched as it first opens. */
+  const [shapes, setShapes] = useState<ShapeInfo[] | null>(null);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
   const dirty = doc !== baseline;
@@ -588,18 +588,18 @@ export function Composer({
     loadSurface(`drive:${startDrive}`);
   }, [starting, loadSurface, startDrive]);
   useEffect(() => {
-    if (!starting || bases) return;
+    if (!starting || shapes) return;
     let live = true;
     api
-      .baseShapes(208)
-      .then((list) => live && setBases(list))
+      .shapes(208)
+      .then((list) => live && setShapes(list))
       .catch(() => {
         // The drives' cards wait with a blank picture; each still starts its drive.
       });
     return () => {
       live = false;
     };
-  }, [starting, bases]);
+  }, [starting, shapes]);
   const [name, setName] = useState(draft?.name ?? "");
   const [nameTouched, setNameTouched] = useState(draft?.nameTouched ?? false);
   const [editing, setEditing] = useState<Editing | null>(draft?.editing ?? null);
@@ -1579,7 +1579,7 @@ export function Composer({
           style={doc.style}
           drive={startDrive}
           picked={pickedDrive && folder ? { drive: pickedDrive, name: folder.name } : null}
-          bases={bases}
+          shapes={shapes}
           assets={assets}
           version={version}
           dirty={dirty && doc.layers.length > 0}

@@ -5,7 +5,7 @@
 //! of drives shows in `drives/strip.webp`, and every base's bare shape in `bases/<id>.webp`
 //! ([`folderskin_core::base`]).
 
-use folderskin_core::bases::Base;
+use folderskin_core::base::{self, BASES};
 use folderskin_core::compositor::{template_layers_in, Style};
 use folderskin_core::drive::{self, DriveShape};
 use image::RgbaImage;
@@ -70,12 +70,11 @@ pub fn drive_parts() -> serde_json::Value {
 }
 
 /// Every base's bare shape at `size` px, by id, as `bases/<id>.webp` keeps them: the folders and
-/// the drives. No base has no picture.
+/// the drives. A free icon has no picture.
 pub fn base_pictures(size: u32) -> Vec<(String, RgbaImage)> {
-    Base::all()
-        .into_iter()
-        .filter(|base| *base != Base::Free)
-        .map(|base| (base.id(), base.render(size)))
+    BASES
+        .iter()
+        .filter_map(|b| b.bare(size).map(|bare| (b.id.to_string(), bare)))
         .collect()
 }
 
@@ -96,7 +95,9 @@ pub fn drive_strip() -> RgbaImage {
     let mut strip = RgbaImage::new(side * STRIP_DRIVES.len() as u32, side);
     for (i, id) in STRIP_DRIVES.iter().enumerate() {
         let shape = DriveShape::from_id(id).expect("a drive FolderSkin draws");
-        let tile = Base::Drive(shape).render(side);
+        let tile = base::drive_of(shape)
+            .bare(side)
+            .expect("a drive has a picture");
         image::imageops::replace(&mut strip, &tile, i64::from(i as u32 * side), 0);
     }
     strip

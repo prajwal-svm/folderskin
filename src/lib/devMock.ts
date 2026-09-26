@@ -40,16 +40,16 @@
  * computer is cooling down, which is never tried again.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
+import englishCommon from "../locales/en/common.json";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
 import { fallbackParts, FOLDER_STYLES, isFolderStyle, type FolderStyle } from "../composer/parts";
-import { DRIVE_IDS, DRIVE_KINDS, driveParts, driveStyleOf, driveKindOf, type DriveStyle } from "../composer/drives";
+import { DRIVE_IDS, DRIVE_KINDS, driveParts, driveStyleOf, driveKindOf, isDriveId, type DriveStyle } from "../composer/drives";
 import type { Drive, DriveKind, DriveLock } from "./drives";
 import type {
   AiCatalogue,
   AiGenerateRequest,
   AiModel,
   AiProvider,
-  BaseShape,
   ChatRefDto,
   ChatSummaryDto,
   LocalStatus,
@@ -211,33 +211,16 @@ function saveMockPrompts(list: SavedPrompt[]) {
   localStorage.setItem(PROMPTS_KEY, JSON.stringify(list));
 }
 
-/** The shapes as ai_shapes lists them: each folder drawn bare on its own template, as the
- *  compositor draws it, and the free icon with no picture. Drawn once. */
-let shapesDrawn: Promise<ShapeInfo[]> | null = null;
-function mockShapes(): Promise<ShapeInfo[]> {
-  shapesDrawn ??= (async () => {
-    const bare = async (style: FolderStyle, top: string, bottom: string) => {
-      const size = 96;
-      const art = document.createElement("canvas");
-      art.width = art.height = size;
-      const g = art.getContext("2d")!;
-      const fill = g.createLinearGradient(0, 0, 0, size);
-      fill.addColorStop(0, top);
-      fill.addColorStop(1, bottom);
-      g.fillStyle = fill;
-      g.fillRect(0, 0, size, size);
-      const c = document.createElement("canvas");
-      c.width = c.height = size;
-      drawOnFolder(c.getContext("2d")!, art, await templateImages(style), size, document.createElement("canvas"));
-      return c.toDataURL("image/png");
-    };
-    return [
-      { id: "mac-folder", label: "Mac folder", system: "mac", family: "folder", whole: true, thumbnail: await bare("mac", "#7cc8f5", "#4ea9e4") },
-      { id: "windows-folder", label: "Windows folder", system: "windows", family: "folder", whole: true, thumbnail: await bare("windows", "#ffe69a", "#ffcc48") },
-      { id: "free", label: "Free icon", system: "any", family: "free", whole: false, thumbnail: null },
-    ];
-  })();
-  return shapesDrawn;
+/** The shapes as `shapes` lists them, in its order: the folders, the drives system by system,
+ *  then the free icon, each with its bare picture from docs/images/composer/bases. */
+function mockShapes(): ShapeInfo[] {
+  const picture = (id: string) => `/docs/images/composer/bases/${id}.webp`;
+  const named = englishCommon.shapes as Record<string, string>;
+  return [
+    ...FOLDER_STYLES.map((style): ShapeInfo => ({ id: `${style}-folder`, label: named[`${style}-folder`], system: style, family: "folder", whole: true, kind: null, thumbnail: picture(`${style}-folder`) })),
+    ...DRIVE_IDS.map((id): ShapeInfo => ({ id, label: named[id], system: driveStyleOf(id), family: "drive", whole: true, kind: driveKindOf(id), thumbnail: picture(id) })),
+    { id: "free", label: named.free, system: "any", family: "free", whole: false, kind: null, thumbnail: null },
+  ];
 }
 
 /** A made-up free icon for the preview: a round character in a colour picked from its idea, on
@@ -366,7 +349,7 @@ function seeded(): Skin[] {
         id: `user:drive${i}`,
         name: `Plain ${shape.replace("-", " ")}`,
         collection: "yours",
-        thumbnail: `/docs/images/composer/bases/drive-${shape}.webp`,
+        thumbnail: `/docs/images/composer/bases/${shape}.webp`,
         custom: true,
         kind: "folder",
         shape: "drive",
@@ -407,7 +390,7 @@ function packPictures(pack: MockPack): { name: string; thumbnail: string }[] {
     if (pack.id === "colours") return { name: COLOUR_NAMES[i % 4] + (i >= 4 ? " 2" : ""), thumbnail: COLOUR_FOLDERS[i % 4] };
     if (pack.drives) {
       const shape = PLAIN_DRIVES[i % PLAIN_DRIVES.length];
-      return { name: `Plain ${shape.replace("-", " ")}`, thumbnail: `/docs/images/composer/bases/drive-${shape}.webp` };
+      return { name: `Plain ${shape.replace("-", " ")}`, thumbnail: `/docs/images/composer/bases/${shape}.webp` };
     }
     return { name: pack.skins?.[i] ?? `${pack.name} ${i + 1}`, thumbnail: picture(i + 5) };
   });
@@ -581,7 +564,7 @@ function mockDrive(d: MockDrive): Drive {
     network: d.network ?? false,
     locked,
     thumbnails: `mock-drive:${shape}:`,
-    plain: `/docs/images/composer/bases/drive-${shape}.webp`,
+    plain: `/docs/images/composer/bases/${shape}.webp`,
   };
 }
 
@@ -1100,16 +1083,6 @@ const templateImages = (key: string) => {
   }
   return mockTemplates.get(key)!;
 };
-
-/** Every base with its bare shape, as `base_shapes` lists them, the pictures from docs/images/composer/bases. */
-function mockBases(): BaseShape[] {
-  const picture = (id: string) => `/docs/images/composer/bases/${id}.webp`;
-  return [
-    ...FOLDER_STYLES.map((style): BaseShape => ({ id: `folder-${style}`, label: `common.bases.folder-${style}`, base: "folder", style, kind: null, picture: picture(`folder-${style}`) })),
-    ...DRIVE_IDS.map((id): BaseShape => ({ id: `drive-${id}`, label: `common.bases.drive-${id}`, base: "drive", style: driveStyleOf(id), kind: driveKindOf(id), picture: picture(`drive-${id}`) })),
-    { id: "free", label: "common.bases.free", base: "free", style: null, kind: null, picture: NOTHING },
-  ];
-}
 
 /** Which folder the preview puts skins on, kept like the app keeps it. */
 const MOCK_LOOK_KEY = "folderskin.mock.look";
@@ -1648,10 +1621,6 @@ export const mockApi = {
     if (!DRIVE_IDS.includes(drive)) throw "FolderSkin doesn't know that drive";
     return { size: 512, ...mockDriveUrls(drive), parts: driveParts(drive) };
   },
-  baseShapes: async (_size?: number): Promise<BaseShape[]> => {
-    await sleep(120);
-    return mockBases();
-  },
   composerSave: async (header: ComposerSaveHeader, png: Uint8Array): Promise<ComposerSaved> => {
     await sleep(500);
     const old = header.replaces ? library.find((s) => s.id === header.replaces) : undefined;
@@ -1763,13 +1732,17 @@ export const mockApi = {
     // it: a built-in style's, or the style a saved prompt's look uses.
     const skill = req.skill ? mockPrompts().find((p) => p.id === req.skill) : undefined;
     const style = styleById(skill?.base_style ?? req.style ?? null);
+    // As ai.rs: a picture made for a drive goes with the drive skins, shown on that drive.
+    const drive = req.base && isDriveId(req.base) ? req.base : null;
+    const art = picture(library.length + 1);
     const skin: Skin = {
       id: `user:ai${Date.now().toString(16)}`,
       name: mockShortName(req.idea),
       collection: "yours",
-      thumbnail: free ? mockIconPicture(req.idea) : picture(library.length + 1),
+      thumbnail: free ? mockIconPicture(req.idea) : drive ? await drawOnMockDrive(drive, art) : art,
       custom: true,
       kind: req.shape === "folder" || free ? "folder" : "artwork",
+      shape: drive ? "drive" : undefined,
       source: "ai",
       created_at: Date.now(),
       tags: cleanTags([...req.tags, ...(style ? [style.tag] : [])]),
@@ -1900,7 +1873,7 @@ export const mockApi = {
     const name = path.split(/[\\/]/).pop() || "picture.jpg";
     return { id: Math.random().toString(16).slice(2, 14), name, path, thumb: picture(3) };
   },
-  aiShapes: async (): Promise<ShapeInfo[]> => mockShapes(),
+  shapes: async (_size?: number): Promise<ShapeInfo[]> => mockShapes(),
   promptsList: async (): Promise<SavedPrompt[]> => {
     // `?promptsfail`: the list can't be read, as a damaged file or a missing data folder would.
     if (new URLSearchParams(location.search).has("promptsfail")) throw "prompts can't be kept on this computer: FolderSkin has no data folder here";

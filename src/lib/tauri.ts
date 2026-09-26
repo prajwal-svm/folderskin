@@ -281,24 +281,6 @@ export type SavedPrompt = {
   updated: string;
 };
 
-/**
- * One base a skin can be drawn on, from the registry every picker reads (`base_shapes`):
- * FolderSkin's folders, every drive shape, and none at all.
- */
-export type BaseShape = {
-  /** `folder-mac`, `drive-linux-solid-state` or `free`. Never changes. */
-  id: string;
-  /** The message that names it: `common.bases.<id>`. */
-  label: string;
-  base: "folder" | "drive" | "free";
-  /** Whose look it's drawn in; null for `free`. */
-  style: "mac" | "windows" | "linux" | null;
-  /** A drive's kind: `external`, `solid-state`, `network`. */
-  kind: string | null;
-  /** The bare shape as a PNG data URL (or an address in the browser preview). */
-  picture: string;
-};
-
 /** The folder template split into the layers the composer draws a design between, as PNG data URLs. */
 export type ComposerTemplate = {
   /** Edge of every layer, in pixels. */
@@ -543,7 +525,7 @@ const tauriApi = {
   // ---- AI assistant (bring your own key) ----
   aiCatalogue: () => invoke<AiCatalogue>("ai_catalogue"),
   /** Every shape the chat can paint on, with its picture (folderskin_core::base). */
-  aiShapes: () => invoke<ShapeInfo[]>("ai_shapes"),
+  shapes: (size?: number) => invoke<ShapeInfo[]>("shapes", { size: size ?? null }),
   aiSetKey: (provider: string, key: string) => invoke<void>("ai_set_key", { provider, key }),
   aiClearKey: (provider: string) => invoke<void>("ai_clear_key", { provider }),
   aiTestKey: (provider: string) => invoke<void>("ai_test_key", { provider }),
@@ -598,7 +580,6 @@ const tauriApi = {
   /** A drive's layers, in the same shape as a folder's, with its face as the front. */
   composerDriveTemplate: (drive: string) => invoke<ComposerTemplate>("composer_drive_template", { drive }),
   /** Every base a skin can be drawn on (the folders, the drives and none), each drawn at `size` px. */
-  baseShapes: (size?: number) => invoke<BaseShape[]>("base_shapes", { size: size ?? null }),
   /** Saves a design (its full-size picture and its document) as a skin, or changes one saved before. */
   composerSave: (header: ComposerSaveHeader, png: Uint8Array) => invoke<ComposerSaved>("composer_save", frame(header, png)),
   /** The design as the icon at each of `sizes`, as data URLs, drawn by the compositor. */

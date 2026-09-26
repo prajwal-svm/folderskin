@@ -711,17 +711,23 @@ pub fn skin_image(
         (Key::Green, matte::Surround::Keyed) => folderskin_local::generate::cut_icon(rgba, key),
         _ => matte::finished_cutout(rgba, key.rgb()),
     };
-    match shape.on(base) {
+    let (image, warning) = match shape.on(base) {
         Shape::Artwork => (artwork(&rgba), None),
         Shape::Folder => match cut_out(&rgba) {
             Some(cut) => (SkinImage::Folder(Arc::new(cut)), None),
             None => (
                 artwork(&rgba),
-                Some(
+                Some(if base.family == folderskin_core::base::Family::Drive {
+                    format!(
+                        "the {} couldn't be cut out of its picture, so it's kept as artwork for \
+                         the drive",
+                        base.anatomy.map_or("drive", |a| a.noun)
+                    )
+                } else {
                     "the folder couldn't be cut out of its picture, so it's kept as artwork for \
                      FolderSkin's folder"
-                        .into(),
-                ),
+                        .into()
+                }),
             ),
         },
         Shape::Icon => match cut_out(&rgba) {
@@ -735,7 +741,8 @@ pub fn skin_image(
                 ),
             ),
         },
-    }
+    };
+    (super::for_base(image, base), warning)
 }
 
 /// Copies the reference pictures in beside the painting under plain names, so a picture kept

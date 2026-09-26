@@ -215,13 +215,15 @@ fn words(base: &Base) -> Words {
     }
 }
 
-/// The band at the top of the artwork the shape's tab and its strip hide, in words.
-fn band(base: &Base) -> &'static str {
+/// The band at the top of the artwork the shape's tab and its strip hide, in words. `None` for a
+/// shape with no tab, such as a drive, whose face shows all of the artwork.
+fn band(base: &Base) -> Option<&'static str> {
     match base.tab_share() {
-        s if s <= 0.14 => "eighth",
-        s if s <= 0.18 => "sixth",
-        s if s <= 0.22 => "fifth",
-        _ => "quarter",
+        s if s <= 0.01 => None,
+        s if s <= 0.14 => Some("eighth"),
+        s if s <= 0.18 => Some("sixth"),
+        s if s <= 0.22 => Some("fifth"),
+        _ => Some("quarter"),
     }
 }
 
@@ -409,20 +411,23 @@ fn instruct(r: &Recipe, family: Family) -> String {
                      what the picture shows stays exactly as described above."
                 ));
             }
-            let top = if w.corner.is_empty() {
-                format!("the top {} of the picture holds", band(r.base))
-            } else {
-                format!(
-                    "the top {} of the picture and its {} corner hold",
-                    band(r.base),
+            let space = match band(r.base) {
+                None => "a little open space around it.".to_string(),
+                Some(band) if w.corner.is_empty() => format!(
+                    "open space above it; the top {band} of the picture holds only sky, \
+                     background or soft texture."
+                ),
+                Some(band) => format!(
+                    "open space above it; the top {band} of the picture and its {} corner hold \
+                     only sky, background or soft texture.",
                     w.corner
-                )
+                ),
             };
             paragraphs.push(format!(
                 "Composition: One continuous picture that fills the whole frame, edge to edge. \
-                 The main subject is large, complete and in the centre, with open space above it; \
-                 {top} only sky, background or soft texture. The subject has a bold, clear \
-                 silhouette and strong light-against-dark contrast with what is behind it, so it \
+                 The main subject is large, complete and in the centre, with {space} The subject \
+                 has a bold, clear silhouette and strong light-against-dark contrast with what is \
+                 behind it, so it \
                  reads at a glance even when very small; fine texture and detail inside the \
                  shapes are welcome. It will be seen very small, down to 16 pixels, as well as \
                  large."
@@ -573,14 +578,17 @@ fn flux(r: &Recipe) -> String {
                 .into_iter()
                 .map(|s| format!(" {s}"))
                 .collect();
-            let top = if w.corner.is_empty() {
-                format!("the top {} of the picture", band(r.base))
-            } else {
-                format!(
-                    "the top {} of the picture, and its {} corner,",
-                    band(r.base),
+            let space = match band(r.base) {
+                None => "a little open space around it.".to_string(),
+                Some(band) if w.corner.is_empty() => format!(
+                    "open space above it; the top {band} of the picture is only sky or plain \
+                     background."
+                ),
+                Some(band) => format!(
+                    "open space above it; the top {band} of the picture, and its {} corner, is \
+                     only sky or plain background.",
                     w.corner
-                )
+                ),
             };
             // The one negation stays on evidence. Against "the painted scene continues past all
             // four edges", klein framed the same 1 picture in 6 (pop art and oil, three seeds
@@ -589,8 +597,7 @@ fn flux(r: &Recipe) -> String {
                 "{}{style_tail}.{refs}{letters} The painted scene bleeds off all four edges of the \
                  image: no white border, no margin, no frame line and no paper edge anywhere \
                  around it. The main subject is large and sits in the centre, fully visible, with \
-                 open space above it; {top} is only sky or plain background. Bold shapes and \
-                 strong contrast that still read from across a room.",
+                 {space} Bold shapes and strong contrast that still read from across a room.",
                 capitalised(idea)
             )
         }
@@ -706,15 +713,21 @@ fn design(r: &Recipe) -> String {
         .collect();
     match r.painted() {
         Shape::Skin => {
-            let top = if w.corner.is_empty() {
-                format!("the top {}", band(r.base))
-            } else {
-                format!("the top {} and its {} corner", band(r.base), w.corner)
+            let space = match band(r.base) {
+                None => "a little open space around it".to_string(),
+                Some(band) if w.corner.is_empty() => {
+                    format!("open space above it and only calm background in the top {band}")
+                }
+                Some(band) => format!(
+                    "open space above it and only calm background in the top {band} and its {} \
+                     corner",
+                    w.corner
+                ),
             };
             format!(
                 "{idea}{style_tail}.{letters}{refs} The main subject is large, complete and \
-                 centred, with open space above it and only calm background in {top}; the \
-                 picture fills the frame edge to edge with bold shapes and strong contrast."
+                 centred, with {space}; the picture fills the frame edge to edge with bold \
+                 shapes and strong contrast."
             )
         }
         Shape::Folder => {
@@ -1158,6 +1171,33 @@ mod tests {
         }
     }
 
+    /// A drive's face shows all of its artwork: no tab hides the top of it, so nothing asks for
+    /// the top to stay calm. Painted whole, it's described by its own words.
+    #[test]
+    fn a_drive_has_no_tab_to_keep_the_top_of_its_art_calm_for() {
+        let stick = folderskin_core::base::find("linux-removable").unwrap();
+        for family in [Family::Instruct, Family::Flux, Family::Design] {
+            let p = render(&recipe(stick, Shape::Skin, "koi"), family);
+            assert!(!p.contains("the top "), "{family:?}: {p}");
+            assert!(
+                p.contains("a little open space around it"),
+                "{family:?}: {p}"
+            );
+        }
+        let whole = render(&recipe(stick, Shape::Folder, "koi"), Family::Design);
+        assert!(
+            whole.contains("one Linux-style USB stick seen straight on"),
+            "{whole}"
+        );
+        assert!(
+            whole.contains("a blue plastic body below the plug"),
+            "{whole}"
+        );
+        // A folder's tab still keeps the top of its art calm.
+        let mac = render(&recipe(&MAC_FOLDER, Shape::Skin, "koi"), Family::Flux);
+        assert!(mac.contains("the top eighth of the picture"), "{mac}");
+    }
+
     #[test]
     fn a_base_the_registry_grows_is_described_by_its_name() {
         let drive = Base {
@@ -1165,7 +1205,9 @@ mod tests {
             label: "Mac drive",
             system: folderskin_core::base::System::Mac,
             family: BaseFamily::Drive,
-            template: Some(folderskin_core::compositor::Style::Mac),
+            template: Some(folderskin_core::base::Template::Folder(
+                folderskin_core::compositor::Style::Mac,
+            )),
             anatomy: None,
         };
         let mut r = recipe(&drive, Shape::Folder, "koi");

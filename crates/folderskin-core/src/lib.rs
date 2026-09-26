@@ -7,7 +7,6 @@ pub mod adjust;
 pub mod apply;
 pub mod backdrop;
 pub mod base;
-pub mod bases;
 pub mod compositor;
 pub mod drive;
 pub mod fit;

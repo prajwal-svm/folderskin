@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { defaultDrive, DRIVE_FACES, DRIVE_IDS, DRIVE_KINDS, driveKindOf, driveParts, driveStyleOf, isDriveId } from "./drives";
+import { defaultDrive, DRIVE_FACES, DRIVE_IDS, DRIVE_KINDS, driveKindOf, driveLabel, driveParts, driveStyleOf, isDriveId } from "./drives";
 import english from "../locales/en/common.json";
 
 /** What `folderskin-tools composer-layers` wrote from the Rust drawing, beside the drives' layers. */
@@ -20,12 +20,19 @@ describe("the drives", () => {
     }
     // Each has its layers and its bare shape in the browser preview's pictures too.
     const bases = readdirSync(new URL("../../docs/images/composer/bases", import.meta.url));
-    for (const id of DRIVE_IDS) expect(bases, id).toContain(`drive-${id}.webp`);
+    for (const id of DRIVE_IDS) expect(bases, id).toContain(`${id}.webp`);
   });
 
-  it("each have a name in English", () => {
-    const named = english.bases as Record<string, string>;
-    for (const id of DRIVE_IDS) expect(named[`drive-${id}`], id).toBeTruthy();
+  it("each have a short name, and a full name and a note as a shape, in English", () => {
+    const short = english.driveNames as Record<string, string>;
+    const full = english.shapes as Record<string, string>;
+    const notes = english.shapeNotes as Record<string, string>;
+    for (const id of DRIVE_IDS) {
+      expect(short[id], id).toBeTruthy();
+      expect(full[id], id).toContain(short[id].slice(1));
+      expect(notes[id], id).toBeTruthy();
+    }
+    expect(driveLabel("linux-removable")).toBe("USB stick");
   });
 
   it("are known by their ids and nothing else", () => {

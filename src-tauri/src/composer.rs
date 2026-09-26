@@ -500,13 +500,16 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
         author: None,
         license: None,
         pack_hash: None,
-        // A design on a folder is that folder's; a free icon goes on anything. A drive's design
-        // says which drive it's on in its document.
-        base: match header.shape {
-            Shape::Folder => Some(base::folder_of(style).id.into()),
-            Shape::Free => Some(base::FREE.id.into()),
-            Shape::Drive => None,
-        },
+        // A design on a folder is that folder's, and one on a drive that drive's; a free icon
+        // goes on anything.
+        base: Some(
+            match header.shape {
+                Shape::Folder => base::folder_of(style).id,
+                Shape::Free => base::FREE.id,
+                Shape::Drive => base::drive_of(drive_shape(header.drive.as_deref())?).id,
+            }
+            .into(),
+        ),
         recipe: None,
     };
     let (entry, thumb, replaced) = match header.replaces {

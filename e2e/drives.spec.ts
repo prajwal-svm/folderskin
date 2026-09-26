@@ -27,12 +27,12 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(where(page)).toHaveText("External drive · /Volumes/Backup Disk");
     await expect(where(page).locator(".stage-kind")).toHaveText("External drive");
     // With no icon of its own it shows as the plain drive.
-    await expect(stageImage(page)).toHaveAttribute("src", /drive-mac-external/);
+    await expect(stageImage(page)).toHaveAttribute("src", /bases\/mac-external\.webp/);
 
     await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
     await expect(title(page)).toHaveText("Studio NAS");
     await expect(where(page)).toHaveText("Network drive · /Volumes/Studio NAS");
-    await expect(stageImage(page)).toHaveAttribute("src", /drive-mac-network/);
+    await expect(stageImage(page)).toHaveAttribute("src", /bases\/mac-network\.webp/);
   });
 
   test("shows each skin on the drive, in the library and on the stage, and applies it there", async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(stageImage(page)).toHaveAttribute("src", /^data:image\/png/);
     await panel(page).getByRole("button", { name: "Revert" }).click();
     await expect(page.getByText("Backup Disk has its default icon back")).toBeVisible();
-    await expect(stageImage(page)).toHaveAttribute("src", /drive-mac-external/);
+    await expect(stageImage(page)).toHaveAttribute("src", /bases\/mac-external\.webp/);
   });
 
   test("with its subfolders, gives the drive its own icon and the folders on it the skin", async ({ page }) => {
@@ -62,7 +62,7 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(include).toContainText("5 folders inside");
     await include.click();
     // The folders inside stack up behind it as folders, not as more drives.
-    await expect(panel(page).locator(".stage-stack-img").first()).not.toHaveAttribute("src", /drive-mac-external/);
+    await expect(panel(page).locator(".stage-stack-img").first()).not.toHaveAttribute("src", /bases\/mac-external\.webp/);
 
     await panel(page).getByRole("button", { name: "Apply to 6 folders" }).click();
     await expect(panel(page).getByRole("button", { name: "Revert all 6" })).toBeVisible();
@@ -72,7 +72,7 @@ test.describe("a drive picked instead of a folder", () => {
     // Revert takes it off the drive and the folders alike.
     await panel(page).getByRole("button", { name: "Revert all 6" }).click();
     await expect(panel(page).getByText("6 folders have the default icon back")).toBeVisible();
-    await expect(stageImage(page)).toHaveAttribute("src", /drive-mac-external/);
+    await expect(stageImage(page)).toHaveAttribute("src", /bases\/mac-external\.webp/);
   });
 
   test("puts drive skins first while a drive is picked, and after the folder skins otherwise", async ({ page }) => {
@@ -85,7 +85,7 @@ test.describe("a drive picked instead of a folder", () => {
     await expect(title(page)).toHaveText("Backup Disk");
     await expect.poll(async () => (await names(page)).slice(0, 2)).toEqual(drives);
     // A finished drive is shown as it was drawn, not drawn again.
-    await expect(tiles(page).first().locator(".tile-img")).toHaveAttribute("src", /drive-mac-external\.webp$/);
+    await expect(tiles(page).first().locator(".tile-img")).toHaveAttribute("src", /bases\/mac-external\.webp$/);
     await expect(tiles(page).first().locator(".tile-img.is-under")).toHaveCount(0);
 
     // A folder puts them back after the folder skins.
@@ -143,6 +143,24 @@ test.describe("a drive picked instead of a folder", () => {
     expect((await words())!.size).toBeLessThan(100);
   });
 
+  test("is what a new AI chat paints for, among every shape the picker and @ list", async ({ page }) => {
+    await pickDrive(page, "os=windows&drive=card");
+    await openView(page, /generate with ai/i);
+    const chip = page.locator(".shape-chip");
+    await expect(chip).toHaveText("Windows SD card");
+    await expect(page.locator(".studio-title")).toHaveText("What should your drive look like?");
+    await chip.click();
+    // The three folders, every drive each system shows, and the free icon.
+    await expect(page.locator(".shape-option")).toHaveCount(3 + 9 + 6 + 10 + 1);
+    await expect(page.getByRole("radio", { name: /^Windows SD card/ })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator(".shape-make").getByText("Whole drive")).toBeVisible();
+    await page.getByRole("radio", { name: /^Linux USB stick/ }).click();
+    await expect(chip).toHaveText("Linux USB stick");
+
+    await page.locator("textarea").first().fill("@hard");
+    await expect(page.getByRole("option", { name: /^Linux USB hard disk/ })).toBeVisible();
+  });
+
   test("names a Windows drive by its letter, and says the icon goes with the letter", async ({ page }) => {
     await pickDrive(page, "os=windows&drive=external,removable,startup");
     await expect(title(page)).toHaveText("Backup (E:)");
@@ -152,7 +170,7 @@ test.describe("a drive picked instead of a folder", () => {
     await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();
     await expect(title(page)).toHaveText("USB drive (F:)");
     await expect(where(page)).toHaveText("F:\\");
-    await expect(stageImage(page)).toHaveAttribute("src", /drive-windows-removable/);
+    await expect(stageImage(page)).toHaveAttribute("src", /bases\/windows-removable\.webp/);
 
     // Windows keeps a drive's icon in the registry, so even the system drive can have one.
     await panel(page).getByRole("button", { name: /^choose a different folder than/ }).click();

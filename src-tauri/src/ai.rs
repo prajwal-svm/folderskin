@@ -16,14 +16,14 @@ pub mod local;
 use crate::commands::SkinDto;
 use crate::keys::Keys;
 use crate::state::AppState;
-use crate::store::{self, NewSkin, SkinImage, SkinSource};
+use crate::store::{self, NewSkin, SkinImage, SkinShape, SkinSource};
 use events::AiEvent;
 use failure::{AiFailure, Doing};
 use folderskin_ai::prompts::{self, Shape};
 use folderskin_ai::recipe::{Record, Treatment};
 use folderskin_ai::skill::Skill;
 use folderskin_ai::{AiError, Cut, Finished, ProviderInfo, Reference, Role};
-use folderskin_core::base::{self, Base};
+use folderskin_core::base::{self, Base, Family};
 use folderskin_core::compositor::Artwork;
 use jobs::Jobs;
 use local::{Local, LocalStatusDto};
@@ -208,48 +208,6 @@ pub async fn ai_catalogue(
         })
         .collect();
     Ok(AiCatalogueDto { providers, presets })
-}
-
-/// A shape the chat can paint on, as the prompt's picker shows it (src/lib/shapes.ts).
-#[derive(Serialize, Clone, Debug, PartialEq)]
-pub struct AiShapeDto {
-    pub id: &'static str,
-    /// Its name in English; the window names it in the language on show, by `id`.
-    pub label: &'static str,
-    /// "mac", "windows" or "linux", or "any" for a free icon.
-    pub system: &'static str,
-    /// "folder", "drive" or "free": where its skins go in the library.
-    pub family: &'static str,
-    /// Whether it can be painted whole, from its own template, as well as as artwork.
-    pub whole: bool,
-    /// The shape bare, as its system draws it, as a PNG data URL; none for a free icon.
-    pub thumbnail: Option<String>,
-}
-
-/// Edge of a shape's picture in the picker, in pixels: sharp at twice the size it's shown at.
-const SHAPE_THUMB: u32 = 96;
-
-/// Every shape the chat can paint on, in the order the picker lists them
-/// ([`folderskin_core::base::BASES`]), each with its bare picture. The pictures are drawn once.
-#[tauri::command(async)]
-pub fn ai_shapes() -> Vec<AiShapeDto> {
-    static SHAPES: std::sync::OnceLock<Vec<AiShapeDto>> = std::sync::OnceLock::new();
-    SHAPES
-        .get_or_init(|| base::BASES.iter().map(shape_dto).collect())
-        .clone()
-}
-
-fn shape_dto(b: &'static Base) -> AiShapeDto {
-    AiShapeDto {
-        id: b.id,
-        label: b.label,
-        system: b.system.id(),
-        family: b.family.id(),
-        whole: !b.is_free(),
-        thumbnail: b
-            .bare(SHAPE_THUMB)
-            .map(|img| crate::commands::data_url(&folderskin_core::raster::encode_png(&img))),
-    }
 }
 
 fn key_provider(p: &ProviderInfo, has_key: bool) -> AiProviderDto {
@@ -831,11 +789,17 @@ fn finish(
         ),
         Err(AiError::NoBackdrop) => (
             folderskin_ai::finish(result, base, Shape::Skin, cut)?,
-            Some(
+            Some(if base.family == Family::Drive {
+                format!(
+                    "it came back as a scene rather than a {} on a plain backdrop, so it's kept \
+                     as artwork for the drive",
+                    base.anatomy.map_or("drive", |a| a.noun)
+                )
+            } else {
                 "it came back as a scene rather than a folder on a plain backdrop, so it's kept \
                  as artwork for FolderSkin's folder"
-                    .to_string(),
-            ),
+                    .to_string()
+            }),
         ),
         other => (other?, None),
     };
@@ -846,10 +810,20 @@ fn finish(
             focus: (0.5, 0.5),
         })),
     };
-    Ok((image, warning))
+    Ok((for_base(image, base), warning))
 }
 
 // ---------- helpers ----------
+
+/// A picture made for `base` as the library keeps it: a drive's with the drive skins, drawn on
+/// that drive, and anything else as it is.
+pub(crate) fn for_base(image: SkinImage, base: &Base) -> SkinImage {
+    if base.family == Family::Drive {
+        image.as_shape(SkinShape::Drive)
+    } else {
+        image
+    }
+}
 
 fn known_provider(id: &str) -> Result<&'static ProviderInfo, AiFailure> {
     folderskin_ai::catalogue::provider(id).ok_or_else(|| {
@@ -1120,32 +1094,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn every_shape_is_listed_with_its_picture_and_where_it_goes() {
-        let shapes = ai_shapes();
-        let ids: Vec<&str> = shapes.iter().map(|s| s.id).collect();
-        assert_eq!(ids, ["mac-folder", "windows-folder", "free"]);
-        for s in &shapes {
-            assert_eq!(s.whole, s.family != "free", "{}", s.id);
-            assert_eq!(s.thumbnail.is_some(), s.family != "free", "{}", s.id);
-        }
-        let mac = &shapes[0];
-        assert_eq!(
-            (mac.label, mac.system, mac.family),
-            ("Mac folder", "mac", "folder")
-        );
-        assert!(mac
-            .thumbnail
-            .as_deref()
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
-        assert_eq!((shapes[2].system, shapes[2].family), ("any", "free"));
-        let json = serde_json::to_value(&shapes[2]).unwrap();
-        assert!(json["thumbnail"].is_null(), "{json}");
-        // Drawn once: the second list is the same pictures.
-        assert_eq!(ai_shapes(), shapes);
-    }
-
     fn keyed(img: &image::RgbaImage) -> folderskin_ai::GenerateResult {
         folderskin_ai::GenerateResult {
             image: folderskin_core::raster::encode_png(img),
@@ -1162,6 +1110,38 @@ mod tests {
         key: folderskin_ai::recipe::Key::Magenta,
         template: None,
     };
+
+    /// A picture painted for a drive goes with the drive skins: a whole drive as it is, artwork
+    /// drawn on the drive, and one that came back as a scene kept as artwork for the drive.
+    #[test]
+    fn a_picture_for_a_drive_is_kept_with_the_drives() {
+        let stick = base::find("linux-removable").unwrap();
+        let scene = image::RgbaImage::from_fn(300, 280, |x, y| {
+            image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
+        });
+        let (image, warning) = finish(&keyed(&scene), stick, Shape::Skin, MAGENTA_CUT).unwrap();
+        assert!(matches!(image, SkinImage::DriveArt(_)) && warning.is_none());
+        // The stick's label is tall, and the artwork is made to fit it.
+        let (w, h) = image.rgba().dimensions();
+        assert!(h > w, "{w} x {h}");
+        let (image, warning) = finish(&keyed(&scene), stick, Shape::Folder, MAGENTA_CUT).unwrap();
+        assert!(matches!(image, SkinImage::DriveArt(_)));
+        assert_eq!(
+            warning.as_deref(),
+            Some(
+                "it came back as a scene rather than a USB stick on a plain backdrop, so it's \
+                 kept as artwork for the drive"
+            )
+        );
+        let mut whole = image::RgbaImage::from_pixel(300, 280, image::Rgba([255, 0, 255, 255]));
+        for (x, y, p) in whole.enumerate_pixels_mut() {
+            if (100..200).contains(&x) && (40..240).contains(&y) {
+                *p = image::Rgba([30, 120, 200, 255]);
+            }
+        }
+        let (image, _) = finish(&keyed(&whole), stick, Shape::Folder, MAGENTA_CUT).unwrap();
+        assert!(matches!(&image, SkinImage::Drive(d) if d.dimensions() == (100, 200)));
+    }
 
     #[test]
     fn a_folder_without_its_backdrop_is_kept_as_artwork() {

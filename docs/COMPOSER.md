@@ -209,21 +209,24 @@ FolderSkin from before drives says it's from a newer version rather than opening
 design on a folder or a free icon is still version 1, exactly as before, and every document saved
 before drives opens as it was. A drive FolderSkin doesn't draw is read as a folder's design.
 
-### Every base in one list
+### Every shape in one list
 
-`base_shapes` (`src-tauri/src/bases.rs`, over `folderskin_core::base`) lists every base a picture
-can be drawn on: the three folders, every drive, then `free`, no base at all. Each entry is plain
-data that doesn't change from one version to the next, for anything that lets someone pick a base:
+`shapes` (`src-tauri/src/bases.rs`, over `folderskin_core::base::BASES`) lists every shape a
+picture can be made for: the three folders, every drive, then `free`, no base at all. The composer
+starts designs on them, the AI view paints on them, and a drive picked on the stage is one of them.
+Each entry is plain data that doesn't change from one version to the next:
 
 ```json
-{ "id": "drive-mac-external", "label": "common.bases.drive-mac-external", "base": "drive",
-  "style": "mac", "kind": "external", "picture": "data:image/png;base64,…" }
+{ "id": "mac-external", "label": "Mac external drive", "system": "mac", "family": "drive",
+  "whole": true, "kind": "external", "thumbnail": "data:image/png;base64,…" }
 ```
 
-`id` is `folder-<style>`, `drive-<style>-<kind>` or `free`. `label` is the message that names it
-(`src/lib/bases.ts` turns it into words). `picture` is the bare shape at the size asked for (16 to
-512 px, 128 when not said): the folder in its own colour, the drive with nothing on its face, and
-for `free` an empty square. In Rust, `Base::render(size)` draws the same.
+`id` is `mac-folder`, `windows-folder` or `linux-folder` for a folder, the drive's own id
+(`mac-external`, `linux-solid-state`) for a drive, or `free`. The window names each in the language
+on show from `common.shapes.<id>`, with a line about it from `common.shapeNotes.<id>`, and a drive's
+short name, beside its system, from `common.driveNames.<id>`. `thumbnail` is the bare shape at the
+size asked for (16 to 512 px, 96 when not said): the folder in its own colour and the drive with
+nothing on its face, and none for `free`. In Rust, `Base::bare(size)` draws the same.
 
 ### Limits worth knowing
 

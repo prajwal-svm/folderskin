@@ -1,6 +1,7 @@
 /**
- * The shapes the AI chat paints on: a folder in each system's look, and a free icon with no base
- * at all. The list comes from the app (ai.rs `ai_shapes`, folderskin_core::base), so a shape the
+ * The shapes a skin is made for: a folder in each system's look, every drive shape each system
+ * shows, and a free icon with no base at all. The AI chat paints on them and the composer starts
+ * designs on them. The list comes from the app (bases.rs `shapes`, folderskin_core::base), so a shape the
  * app gains shows up here without a change; the chat names each by its id, in the language on
  * show when the catalog has it (`common.shapes.<id>`), and in the app's own English otherwise.
  */
@@ -8,7 +9,7 @@ import common from "../locales/en/common.json";
 import { t, type MessageKey } from "../i18n";
 import type { FolderStyle } from "../composer/parts";
 
-/** One shape, as ai.rs `AiShapeDto` sends it. */
+/** One shape, as bases.rs `ShapeDto` sends it. */
 export type ShapeInfo = {
   id: string;
   /** Its name in English, for a shape the catalog doesn't name yet. */
@@ -18,6 +19,8 @@ export type ShapeInfo = {
   family: string;
   /** Whether it can be painted whole as well as as artwork. */
   whole: boolean;
+  /** A drive's kind, as docs/DRIVES.md names them: `external`, `solid-state`; none for anything else. */
+  kind?: string | null;
   /** The shape bare, as a data URL; none for a free icon. */
   thumbnail: string | null;
 };

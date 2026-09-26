@@ -183,6 +183,12 @@ impl DriveShape {
             .then_some(DriveShape { style, kind })
     }
 
+    /// The shape of `kind` in `style`, for the registry of shapes ([`crate::base`]), which lists
+    /// only shapes a style draws. Its tests hold every entry to [`DriveShape::new`].
+    pub(crate) const fn listed(style: DriveStyle, kind: DriveKind) -> DriveShape {
+        DriveShape { style, kind }
+    }
+
     pub fn style(self) -> DriveStyle {
         self.style
     }
@@ -274,6 +280,27 @@ impl DriveShape {
     /// outlines.
     pub fn extent(self) -> [f32; 4] {
         self.draw(1024).extent()
+    }
+
+    /// The whole drive's width over its height: the shape of a frame it fills, as a folder's
+    /// [`crate::compositor::Style::aspect`] is.
+    pub fn aspect(self) -> f32 {
+        let [x0, y0, x1, y1] = self.extent();
+        (x1 - x0) / (y1 - y0)
+    }
+
+    /// The shape artwork is best made in for this drive, in pixels, so covering its face crops as
+    /// little of it as it can: the face's own shape, its longer side
+    /// [`crate::compositor::SKIN_WIDTH`]. A USB stick's label is tall, a Windows drive's top wide.
+    pub fn artwork_size(self) -> (u32, u32) {
+        let face = self.face_box();
+        let long = crate::compositor::SKIN_WIDTH as f32;
+        let (w, h) = (face.width(), face.height());
+        if w >= h {
+            (long as u32, (long * h / w).round() as u32)
+        } else {
+            ((long * w / h).round() as u32, long as u32)
+        }
     }
 }
 

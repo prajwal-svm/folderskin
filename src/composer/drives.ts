@@ -5,6 +5,7 @@
  * have arrived, and a saved document can be checked without asking Rust.
  */
 import type { Parts } from "./parts";
+import { t, type MessageKey } from "../i18n";
 
 /** Whose drives a shape is drawn after. */
 export type DriveStyle = "mac" | "windows" | "linux";
@@ -22,6 +23,12 @@ export const DRIVE_KINDS: Record<DriveStyle, string[]> = {
 export const DRIVE_IDS: string[] = DRIVE_STYLES.flatMap((style) => DRIVE_KINDS[style].map((kind) => `${style}-${kind}`));
 
 export const isDriveId = (v: unknown): v is string => typeof v === "string" && DRIVE_IDS.includes(v);
+
+/**
+ * A drive's short name, where its system is said beside it: "External drive" for `mac-external`.
+ * Its full name, system and all, is its shape's (`common.shapes`, src/lib/shapes.ts).
+ */
+export const driveLabel = (id: string): string => t(`common.driveNames.${id}` as MessageKey);
 
 /** The system a drive is drawn after. */
 export const driveStyleOf = (id: string): DriveStyle => (id.startsWith("windows-") ? "windows" : id.startsWith("linux-") ? "linux" : "mac");

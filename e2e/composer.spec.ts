@@ -164,7 +164,7 @@ test.describe("designing on a drive", () => {
     await expect(drives.getByRole("group", { name: "Windows" }).getByRole("button")).toHaveCount(6);
     await expect(drives.getByRole("group", { name: "Linux" }).getByRole("button")).toHaveCount(10);
     // Each shows the drive itself, as Rust draws it.
-    await expect(drives.getByRole("group", { name: "Windows" }).getByRole("button", { name: "System drive" }).locator("img")).toHaveAttribute("src", /drive-windows-startup/);
+    await expect(drives.getByRole("group", { name: "Windows" }).getByRole("button", { name: "System drive" }).locator("img")).toHaveAttribute("src", /bases\/windows-startup\.webp/);
 
     await drives.getByRole("group", { name: "Mac" }).getByRole("button", { name: "Network drive" }).click();
     await expect(newDialog(page)).toBeHidden();
