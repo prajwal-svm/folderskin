@@ -20,6 +20,7 @@ que vous créez est enregistré dans **Mes habillages** comme n'importe quel aut
 | Un dossier à motifs | **Rayures**, **Vichy**, **Pois** | **Motif** en ajoute dix sortes, des rayures aux confettis et au grain de pellicule |
 | Une photo avec une légende | **Photo** | L'éditeur demande d'abord l'image. Vous pourrez en déposer ou en coller d'autres ensuite |
 | Un autocollant, un badge, tout ce qui n'a pas la forme d'un dossier | **Autocollant** | *Icône libre* fait de la création l'icône entière |
+| Un disque à votre façon : *Archives* sur un disque externe, une photo sur une clé USB | Un disque sous **Partir d'un disque**, ou **Disque étiqueté**, **Disque en couleur**, **Disque emoji** ou **Disque photo** | La création se pose sur la face avant du disque. Le menu sous le canevas la déplace vers un autre disque |
 | Un habillage existant, avec votre touche personnelle | Menu ⋯ d'un habillage → **Remixer dans l'éditeur** | L'habillage devient un calque image sur lequel construire |
 | Une modification de ce que vous avez déjà créé | Son menu ⋯ → **Modifier la création** | **Enregistrer** le met à jour sur place. **Dupliquer** garde les deux |
 
@@ -27,7 +28,13 @@ que vous créez est enregistré dans **Mes habillages** comme n'importe quel aut
 
 **Pour commencer.** La première visite, et **Nouveau**, affichent les points de départ. Chacun est
 une création ordinaire : rien n'y est figé. En choisir un alors que votre création a des
-modifications non enregistrées demande d'abord confirmation.
+modifications non enregistrées demande d'abord confirmation. **Partir de zéro** propose, à côté des
+créations vides, les dossiers propres au Mac, à Windows et à Linux, et **Partir d'un disque**
+propose tous les disques qu'affiche chaque système, ceux du Mac, de Windows et de Linux sur une
+rangée chacun ([DRIVES.md](../DRIVES.md), en anglais, les liste). Quand un disque est choisi dans le
+panneau du dossier, **Le disque que vous avez choisi** arrive en tête et montre ce disque sous son
+propre nom. Un modèle de disque part de ce disque, ou sinon de celui de la dernière création, ou à
+défaut du disque externe propre à ce système.
 
 **Ajouter.** La barre au-dessus du dossier ajoute du **Texte**, un **Emoji**, une **Forme** (treize,
 du rectangle arrondi à la bulle de dialogue), une **Image** (un fichier, l'un de vos habillages, ou
@@ -74,6 +81,18 @@ avec dans cet en-tête les boutons pour changer son ordre, le dupliquer et le su
   d'autocollant, une bordure qui suit la silhouette comme un autocollant découpé à la forme.
 
 Quand rien n'est sélectionné, les réglages proposent **Sur le dossier** ou **Icône libre**.
+
+**Sur un disque.** Une création sur un disque en couvre la face avant : le devant du disque,
+l'étiquette d'une carte, ou un disque optique entre son centre et son bord. Le reste du disque (son
+socle, son connecteur, le trou d'un disque optique) est dessiné autour de la face avant et
+par-dessus, et une partie transparente de la création laisse voir la face avant du disque lui-même.
+L'interrupteur sous le canevas devient alors **Squelette du disque**, et à côté, un menu de tous les
+disques déplace la création vers un autre, chaque calque gardant sa place sur la face avant et s'y
+ajustant. Le texte et les formes que vous ajoutez arrivent sur la face avant dans une couleur qui
+s'y lit bien, sombre sur une face claire et blanche sur une face colorée, et le texte n'est jamais
+plus large que la face avant : sur l'étiquette étroite d'une clé USB, il commence petit. Il n'y a
+pas d'onglet sur un disque où placer un calque. Une fois enregistrée, une création sur un disque est
+un habillage de disque, que la bibliothèque place en premier tant qu'un disque est choisi.
 
 **Voir le résultat.** L'interrupteur **Squelette du dossier**, sous le canevas, affiche la création
 sur le dossier (onglet, feuille de papier et bords), ou à plat avec les bords du dossier dessinés
@@ -184,6 +203,8 @@ Un remix lit l'image propre de l'habillage avec `composer_skin_image` :
 | `composer_image` | `path` | `{url, width, height, name, alpha}` : un fichier image, 2048 px au maximum, en PNG s'il a de la transparence et en JPEG sinon |
 | `composer_skin_image` | `skinId` | la même chose, pour l'image propre d'un habillage enregistré |
 | `composer_design` | `skinId` | le document de la création, ou `null` pour un habillage qui n'a pas été fait ici |
+| `composer_drive_template` | `drive` | les calques d'un disque, sous la même forme que ceux du dossier, tels que les envoie `composer_template` : `back` vide, `middle` le disque nu, `front` la zone couverte par sa face avant, `top` ce qui passe par-dessus la face avant, et `parts`, où la face avant tient lieu de panneau avant (et, sur un disque optique, `anchor`, l'endroit où va un nouveau calque) |
+| `shapes` | `size` | toutes les formes pour lesquelles une création ou une image peut être faite, [plus bas](#toutes-les-formes-dans-une-seule-liste) |
 
 ### Le document
 
@@ -208,6 +229,34 @@ d'abord par `parseDoc` :
 - Une image qui n'est pas une URL de données PNG, JPEG, WebP ou GIF est écartée.
 - Un document venant d'une version plus récente est refusé plutôt que mal lu.
 
+Une création sur un disque indique de quel disque il s'agit, sous la forme
+`"drive": "mac-external"`, et porte `"version": 2`, si bien qu'un FolderSkin d'avant les disques
+indique qu'elle vient d'une version plus récente au lieu de l'ouvrir sur un dossier. Une création
+sur un dossier ou une icône libre reste en version 1, exactement comme avant, et chaque document
+enregistré avant l'arrivée des disques s'ouvre tel qu'il était. Une création pour un disque que
+FolderSkin ne dessine pas est lue comme une création de dossier.
+
+### Toutes les formes dans une seule liste
+
+`shapes` (`src-tauri/src/bases.rs`, à partir de `folderskin_core::base::BASES`) liste toutes les
+formes pour lesquelles une image peut être faite : les trois dossiers, chaque disque, puis `free`,
+sans dossier ni disque. L'éditeur démarre les créations sur ces formes, la vue IA peint dessus, et
+un disque choisi dans le panneau du dossier est l'une d'elles. Chaque entrée est une simple donnée
+qui ne change pas d'une version à l'autre :
+
+```json
+{ "id": "mac-external", "label": "Mac external drive", "system": "mac", "family": "drive",
+  "whole": true, "kind": "external", "thumbnail": "data:image/png;base64,…" }
+```
+
+`id` vaut `mac-folder`, `windows-folder` ou `linux-folder` pour un dossier, l'identifiant du disque
+lui-même (`mac-external`, `linux-solid-state`) pour un disque, ou `free`. La fenêtre nomme chacune
+dans la langue affichée d'après `common.shapes.<id>`, avec une ligne de description tirée de
+`common.shapeNotes.<id>`, et donne le nom court d'un disque, à côté de son système, d'après
+`common.driveNames.<id>`. `thumbnail` est la forme nue à la taille demandée (de 16 à 512 px, 96 si
+rien n'est précisé) : le dossier dans sa propre couleur et le disque sans rien sur sa face avant, et
+rien pour `free`. En Rust, `Base::bare(size)` dessine la même chose.
+
 ### Limites à connaître
 
 - **Les emojis** viennent de la police d'emojis du système. Sur macOS, cette police est en bitmap,
@@ -227,10 +276,14 @@ d'abord par `parseDoc` :
 ### L'aperçu dans le navigateur
 
 `pnpm dev` dans un simple navigateur affiche aussi l'éditeur. Les calques du dossier sont les PNG de
-`docs/images/composer/`, écrits par
-`cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`. Un test de
-`folderskin-tools` vérifie qu'ils correspondent aux pixels que dessine le compositeur, pour qu'ils
-ne puissent pas devenir obsolètes.
+`docs/images/composer/` (ceux de Windows dans `windows/`, ceux de Linux dans `linux/`), écrits par
+`cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`. La même commande
+écrit les calques de chaque disque dans `drives/<id>/` à la moitié de la taille, avec l'emplacement
+de la face avant de chaque disque dans `drives/parts.json`, et la forme nue de chaque dossier et de
+chaque disque dans `bases/`, en WebP sans perte. Un test de `folderskin-tools` vérifie qu'ils
+correspondent aux pixels que dessine le compositeur, pour qu'ils ne puissent pas devenir obsolètes,
+et un autre, parmi ceux de la webview, vérifie que `src/composer/drives.ts` place les éléments là où
+le dessin en Rust met la face avant de chaque disque.
 
 ### Tests
 

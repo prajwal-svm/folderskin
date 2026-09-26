@@ -28,6 +28,14 @@ Un pack s'ajoute en entier ou pas du tout : chaque image est d'abord téléchar
 toutes sont enregistrées d'un coup. Une connexion coupée ou un disque plein ne laisse donc jamais
 un demi-pack dans votre bibliothèque. Ses habillages apparaissent dans l'ordre du pack.
 
+Un pack marqué **Disques** est un pack de disques ([DRIVES.md](../DRIVES.md), en anglais) : ses
+illustrations se posent sur le disque que vous choisissez, dessinées à sa forme, et un disque fini
+est utilisé tel qu'il a été dessiné. Tant qu'un disque est choisi, la bibliothèque place les
+habillages de disques en premier, et tant qu'un dossier l'est, après les habillages de dossiers.
+Chaque habillage se pose quand même aussi bien sur l'un que sur l'autre. FolderSkin 0.1.9 et les
+versions précédentes n'affichent pas du tout les packs de disques ([Comment l'app lit les
+packs](#comment-lapp-lit-les-packs)).
+
 ## Partager les vôtres
 
 Vous partagez depuis l'app, et FolderSkin envoie le pack à son service communautaire,
@@ -58,6 +66,10 @@ publié automatiquement en 15 minutes environ
 ([De l'approbation à la publication](#de-lapprobation-à-la-publication), plus bas). Plusieurs packs
 peuvent porter le même nom : celui que vous choisissez est celui que tout le monde voit, et le pack
 reçoit son propre identifiant ([Identifiants de pack](#identifiants-de-pack)).
+
+Un pack contient des dossiers ou des disques, pas les deux. Le service communautaire publie les
+packs de dossiers : pour l'instant, un pack de disques s'enregistre donc comme dossier
+(**Enregistrer dans un dossier**) et arrive par pull request, comme décrit ci-dessous.
 
 Un pack peut aussi être proposé à la main, par une pull request sur
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) qui ajoute un dossier
@@ -225,7 +237,8 @@ packs/night-prints-h4x2qe/
 
 | champ | règle |
 |---|---|
-| `version` | `1` |
+| `version` | `1`, ou `2` pour un pack de disques |
+| `shape` | seulement dans un pack de disques, et alors `"drive"` |
 | `name` | de 1 à 40 caractères |
 | `author` | votre nom d'utilisateur GitHub |
 | `license` | `CC0-1.0`, `CC-BY-4.0` ou `MIT` |
@@ -237,6 +250,22 @@ packs/night-prints-h4x2qe/
 
 Aucun autre champ n'est autorisé : une faute de frappe comme `"tag"` fait échouer la vérification au
 lieu d'être ignorée.
+
+Un pack de disques l'indique, après sa version :
+
+```json
+{
+  "version": 2,
+  "shape": "drive",
+  "name": "Backup drives",
+  ...
+}
+```
+
+Un pack de dossiers est en version 1 et n'indique jamais `shape`, si bien que chaque pack publié
+avant l'arrivée des disques reste exactement ce qu'il était. FolderSkin 0.1.9 et les versions
+précédentes ne lisent que la version 1, et indiquent qu'un pack en version 2 est destiné à un
+FolderSkin plus récent plutôt que de prendre ses disques pour des dossiers.
 
 ### Limites
 
@@ -305,6 +334,13 @@ seule forme :
   n'ont pas de forme à corriger. Un pack qui ne compte qu'un seul dossier fini n'est pas touché non
   plus.
 
+Les disques finis d'un pack de disques partagent une seule forme de la même façon, dans le carré où
+sont dessinés les disques de FolderSkin : 856 px de côté, à 84 px de chaque bord de l'image de
+1024 px. Un disque plus large que haut est redessiné aussi large que le carré et centré
+verticalement, et un disque plus haut que large aussi haut que le carré et centré horizontalement,
+car un disque est aussi souvent dessiné vu de dessus que debout. Ses illustrations ne sont pas
+touchées, comme celles d'un pack de dossiers.
+
 `packs make` fait ce travail pour chaque pack qu'il crée, `community pull` pour chaque pack qu'il
 récupère, et `packs normalize` pour les packs déjà présents dans `packs/`. Le refaire ne change
 rien : un dossier déjà à la forme de son pack, et à sa place, n'est jamais redessiné, et un fichier
@@ -354,6 +390,9 @@ cloné à côté :
 cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders --dir ../folderskin-community \
   --name "3D" --tags 3d,glossy --author your-github-name --preview /tmp/3d.png
 ```
+
+`--drives` crée un pack de disques : `pack.json` l'indique, et ses disques finis prennent une seule
+forme dans le carré des disques.
 
 Le pack reçoit son propre identifiant, son nom suivi de six caractères aléatoires, comme
 `3d-k7q2mx`, et c'est le nom de son dossier. Le rapport l'indique. L'identifiant n'est jamais celui
@@ -436,7 +475,8 @@ prévue pour le workflow de folderskin-community.
 ## Comment l'app lit les packs
 
 La Communauté propose une vue **Liste** et une vue **Galerie**, et **Voir** ouvre n'importe quel
-pack : chaque habillage y est dessiné sous forme de dossier, avec son nom, avant tout ajout.
+pack : chaque habillage y est dessiné sous forme de dossier (ceux d'un pack de disques sous forme de
+disque), avec son nom, avant tout ajout.
 **Actualiser** relit la liste. Un pack que vous avez ajouté et qui a changé depuis affiche **Mettre
 à jour**, qui remplace ses habillages par la nouvelle version. Les dossiers gardent leurs icônes, et
 une image présente dans les deux versions reste en favori si elle l'était.
@@ -450,14 +490,21 @@ une image présente dans les deux versions reste en favori si elle l'était.
   des packs, correspond à [moved.json](#movedjson). `folderskin-tools packs index` écrit ce fichier,
   ainsi que `previews/<id>.png`, une bande qui montre les quatre premiers habillages du pack sous
   forme de dossiers. Les deux sont générés sur la branche `main` de folderskin-community : ne les
-  modifiez jamais à la main.
+  modifiez jamais à la main. Les packs de disques sont listés à part, dans `"drive_packs"` à côté de
+  `"packs"`, si bien que FolderSkin 0.1.9 et les versions précédentes, qui lisent `"packs"`,
+  n'affichent jamais un pack qu'elles ne peuvent pas ajouter. Leurs bandes montrent leurs habillages
+  sur des disques.
 - `v2/`, qu'écrit `packs catalog`, présente les mêmes packs sous forme d'un catalogue dans lequel
   l'app cherche sur votre ordinateur. Son `head.json` désigne le catalogue actuel, liste les packs
   `featured` et `official`, contient `moved`, et liste les miroirs qui servent la même arborescence,
   comme `https://packs.folderskin.app` ([Le miroir](#le-miroir)). L'app récupère chaque fichier
   d'abord sur les miroirs, puis sur GitHub s'ils échouent, et vérifie chacun d'après son hash dans
   les deux cas. Depuis la 0.1.7, elle lit `head.json` lui-même d'abord sur
-  `https://packs.folderskin.app`.
+  `https://packs.folderskin.app`. Le catalogue que `head.json` désigne dans `"catalog"` ne contient
+  que les packs de dossiers. Quand il existe des packs de disques, `"with_drives"` désigne un second
+  catalogue, de tous les packs, avec les identifiants des packs de disques, et c'est celui que
+  lisent les versions qui acceptent les disques. Un pack de disques est publié en version 3, avec
+  `"shape": "drive"`, et ses vignettes, dessinées sur un disque, se trouvent dans `drive-thumbs/`.
 - L'app ne télécharge les images d'un pack que lorsque vous l'ajoutez, quatre à la fois, et affiche
   combien sont arrivées. Elle vérifie chacune d'après les limites ci-dessus et n'enregistre rien tant
   qu'elles ne passent pas toutes. Elle les enregistre ensuite ensemble : un pack n'est jamais ajouté
@@ -468,8 +515,10 @@ une image présente dans les deux versions reste en favori si elle l'était.
 
 `index.json` et `head.json` gagnent des champs avec le temps, et chaque version de l'app lit ceux
 qu'elle connaît et ignore les autres. `pack.json`, c'est l'inverse : il n'accepte aucun champ que le
-contrat ne nomme pas, donc rien ne doit jamais y être ajouté. Toute nouvelle information sur un pack
-va dans l'index.
+contrat ne nomme pas, donc rien ne doit jamais être ajouté à l'une de ses versions. Ce qu'un pack
+doit dire va dans une nouvelle version, comme `shape` est arrivé avec la version 2, si bien qu'un
+FolderSkin qui ne sait pas la lire le signale. Toute autre nouvelle information sur un pack va dans
+l'index.
 
 ## Packs à la une et packs officiels
 

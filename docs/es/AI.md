@@ -58,12 +58,18 @@ para elegir otra:
 
 - **Carpeta Mac**: la carpeta de FolderSkin, tal como la muestra el Finder.
 - **Carpeta Windows**: la carpeta que dibuja Windows.
+- **Carpeta Linux**: la carpeta que dibujan GNOME y KDE.
+- **Una unidad**: todas las unidades que muestra cada sistema, del disco de arranque del Mac a una
+  memoria USB o un conjunto RAID de Linux, dibujadas como las dibuja FolderSkin
+  ([DRIVES.md](../DRIVES.md), en inglés). La imagen va en esa unidad y, en la biblioteca, con los
+  aspectos de unidades.
 - **Icono libre**: una sola cosa, como una mascota, un objeto o un personaje, por sí sola y sin
   ninguna carpeta alrededor. Se pone tal cual en cualquier carpeta.
 
 Después de @, escribe parte de un nombre (`@win`) y presiona Retorno o Tab, o haz clic en la que
 quieras. El botón cambia y la palabra con @ desaparece del cuadro. Un chat nuevo empieza con la
-carpeta sobre la que el panel de la carpeta muestra los aspectos.
+unidad que muestra el panel de la carpeta, si muestra una, y si no, con la carpeta sobre la que
+muestra los aspectos.
 
 La forma pertenece al chat. Cada imagen se crea para la forma que estaba elegida cuando se envió, un
 chat anterior se abre con la forma de su última imagen, y el aspecto se guarda como hecho para esa
@@ -72,7 +78,8 @@ los proveedores y con el Modelo local.
 
 ## Solo la imagen o la carpeta entera
 
-Para una carpeta, esta es la elección que más importa, y no tiene que ver con la calidad.
+Para una carpeta, esta es la elección que más importa, y no tiene que ver con la calidad. Una unidad
+tiene la misma elección, entre **Solo la imagen** y **Unidad entera**.
 
 **Solo la imagen** pide al modelo una imagen plana con las proporciones de la propia carpeta
 (1024 × 960 para la carpeta de Mac, 1024 × 800 para la de Windows), y FolderSkin la coloca sobre su
@@ -98,6 +105,11 @@ conserva la silueta de FolderSkin y los colores de la pintura llegan hasta el mi
 pintura que movió o deformó la carpeta, se usa en cambio el color de recorte. Las imágenes de
 referencia que añades van después de la plantilla, cada una con la función que le diste, tantas como
 admita el modelo.
+
+Una unidad funciona igual. Su ilustración se pide con la forma de su cara frontal (la etiqueta de
+una memoria USB es alta, la parte de arriba de una unidad de Windows es ancha), y su plantilla es la
+unidad con su cara frontal en el gris de la plantilla y el resto (su conector, su franja o sus
+luces) tal como lo dibuja FolderSkin, así que una unidad entera los conserva.
 
 Un **Icono libre** siempre se pinta entero: un solo motivo, completo, en el centro de un cuadrado,
 sobre un fondo transparente o sobre un color de recorte, y después se recorta.
@@ -156,12 +168,14 @@ Las partes que hacen el trabajo son de estructura, no de estilo:
 
 - **Los prompts del modo Solo la imagen** piden una sola imagen continua que llene el encuadre, con
   el motivo grande y en el centro, y dejan para cielo o textura la franja que tapa la pestaña de la
-  carpeta, porque la plantilla la recorta o la curva. En la carpeta de Windows, también dejan libre
-  la esquina superior izquierda.
+  carpeta, porque la plantilla la recorta o la curva. En la carpeta de Windows y en la de Linux,
+  también dejan libre la esquina superior izquierda. Una unidad no tiene pestaña, así que su
+  ilustración solo pide un poco de espacio libre alrededor del motivo.
 - **Los prompts del modo Carpeta entera** nombran las partes de la carpeta, de atrás hacia delante, y
   lo que se queda como está: la pestaña única de la carpeta de Mac y su franja de papel clara, o el
   escalón curvo de la carpeta de Windows. Sin eso, los modelos producen sin falta carpetas apiladas y
-  pestañas dobles.
+  pestañas dobles. Una unidad se describe por sus propias partes, como el conector, el cuerpo azul y
+  el agujero para la anilla de una memoria USB.
 - **Los prompts de Icono libre** piden un solo objeto completo, centrado y sin recortar dentro de un
   cuadrado, sin suelo, paisaje ni marco alrededor.
 - **Las imágenes de referencia** se nombran por su número y su función. Un motivo sigue siendo
@@ -310,7 +324,7 @@ workspace se comprueba en compilación cruzada sin ella.
 | “… finished without painting a picture” | El proveedor respondió sin una imagen y sin decir por qué (el `NO_IMAGE` de Gemini): vuelve a intentarlo o reformula la idea |
 | “… declined that prompt: its filter blocked the picture” | El filtro de seguridad del proveedor detuvo el prompt o la imagen, como la imagen difuminada de Stability o la comprobación de seguridad de Ideogram: reformula el prompt |
 | “… said: … (error 400)” | El mensaje del propio proveedor, tal como llegó. Conviene informar de ello si nombra un campo que envió FolderSkin |
-| “the model drew a scene instead of a folder on a plain backdrop” | Modo de carpeta entera sin un fondo que se pueda recortar: vuelve a intentarlo o cambia a Solo la imagen. La app guarda esa imagen como ilustración para su propia carpeta, y un icono libre como la imagen cuadrada que es, y te lo dice. |
+| “the model drew a scene instead of a folder on a plain backdrop” | Modo de carpeta entera sin un fondo que se pueda recortar: vuelve a intentarlo o cambia a Solo la imagen. La app guarda esa imagen como ilustración para su propia carpeta, o para la unidad para la que se pintó, y un icono libre como la imagen cuadrada que es, y te lo dice. |
 | “the provider returned something that is not an image” | Una respuesta mal formada o que no es una imagen |
 
 ## Carpetas hechas en un asistente de chat

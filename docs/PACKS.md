@@ -61,7 +61,7 @@ Many packs can share a name: the one you pick is what everyone sees, and the pac
 its own ([Pack ids](#pack-ids)).
 
 A pack is all folders or all drives. The community service publishes packs of folders, so for
-now a pack of drives is saved as a folder (**Save as folder**) and comes in by pull request, below.
+now a pack of drives is saved as a folder (**Save a folder**) and comes in by pull request, below.
 
 Packs also come in by hand, through a pull request to
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) that adds one folder

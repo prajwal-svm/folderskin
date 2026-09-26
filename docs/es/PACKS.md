@@ -28,6 +28,14 @@ Un paquete se añade entero o no se añade: primero se descarga y se comprueba c
 se guardan todas de una vez, así que una conexión que se corta o un disco lleno nunca dejan medio
 paquete en tu biblioteca. Sus aspectos aparecen en el orden del propio paquete.
 
+Un paquete marcado como **Unidades** es un paquete de unidades ([DRIVES.md](../DRIVES.md), en
+inglés): sus ilustraciones van en la unidad que elijas, dibujadas con su forma, y una unidad
+terminada se usa tal como se dibujó. Mientras hay una unidad elegida, la biblioteca pone primero los
+aspectos de unidades, y mientras hay una carpeta elegida, los pone después de los aspectos de
+carpetas. Aun así, cualquier aspecto se puede poner en una unidad o en una carpeta. FolderSkin 0.1.9
+y las versiones anteriores no muestran en absoluto los paquetes de unidades ([Cómo lee la app los
+paquetes](#cómo-lee-la-app-los-paquetes)).
+
 ## Compartir los tuyos
 
 Compartes desde la app, y FolderSkin envía el paquete a su servicio de la comunidad, en
@@ -57,6 +65,10 @@ solo, en unos 15 minutos
 ([De la aprobación a la publicación](#de-la-aprobación-a-la-publicación), más abajo). Muchos
 paquetes pueden compartir nombre: el que elijas es el que ven todos, y el paquete recibe su propio
 identificador ([Identificadores de paquete](#identificadores-de-paquete)).
+
+Un paquete lleva carpetas o unidades, no las dos cosas. El servicio de la comunidad publica paquetes
+de carpetas, así que por ahora un paquete de unidades se guarda como carpeta (**Guardar en una
+carpeta**) y llega por pull request, como se explica abajo.
 
 Un paquete también se puede proponer a mano, con un pull request a
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) que añade una carpeta
@@ -224,7 +236,8 @@ packs/night-prints-h4x2qe/
 
 | campo | regla |
 |---|---|
-| `version` | `1` |
+| `version` | `1`, o `2` para un paquete de unidades |
+| `shape` | solo en un paquete de unidades, y entonces `"drive"` |
 | `name` | de 1 a 40 caracteres |
 | `author` | tu nombre de usuario de GitHub |
 | `license` | `CC0-1.0`, `CC-BY-4.0` o `MIT` |
@@ -236,6 +249,22 @@ packs/night-prints-h4x2qe/
 
 No se permite ningún otro campo, así que una errata como `"tag"` hace fallar la comprobación en lugar
 de pasar desapercibida.
+
+Un paquete de unidades lo indica después de su versión:
+
+```json
+{
+  "version": 2,
+  "shape": "drive",
+  "name": "Backup drives",
+  ...
+}
+```
+
+Un paquete de carpetas es de la versión 1 y nunca indica `shape`, así que todos los paquetes
+publicados antes de las unidades siguen exactamente como estaban. FolderSkin 0.1.9 y las versiones
+anteriores solo leen la versión 1, y dicen que un paquete de la versión 2 es para un FolderSkin más
+reciente en lugar de tomar sus unidades por carpetas.
 
 ### Límites
 
@@ -301,6 +330,13 @@ comparten una sola forma:
 - **Las ilustraciones no se tocan.** FolderSkin las coloca sobre su propia carpeta, así que no
   tienen forma propia que corregir. Tampoco se toca un paquete con una sola carpeta terminada.
 
+Las unidades terminadas de un paquete de unidades comparten una sola forma del mismo modo, en el
+cuadrado en el que se dibujan las propias unidades de FolderSkin: 856 px de lado, a 84 px de cada
+borde de la imagen de 1024 px. Una unidad más ancha que alta se vuelve a dibujar tan ancha como el
+cuadrado y centrada de arriba abajo en él, y una más alta, tan alta como el cuadrado y centrada de
+lado a lado, ya que una unidad se dibuja vista desde arriba tan a menudo como de pie. Sus
+ilustraciones no se tocan, igual que las de un paquete de carpetas.
+
 `packs make` hace esto con cada paquete que crea, `community pull` con cada paquete que trae y
 `packs normalize` con los paquetes que ya están en `packs/`. Hacerlo dos veces no cambia nada: una
 carpeta que ya tiene la forma de su paquete, en su sitio, nunca se vuelve a dibujar, y un archivo
@@ -348,6 +384,9 @@ comandos de abajo se ejecutan desde este repositorio, con folderskin-community c
 cargo run -p folderskin-tools -- packs make ~/Downloads/3d-renders --dir ../folderskin-community \
   --name "3D" --tags 3d,glossy --author your-github-name --preview /tmp/3d.png
 ```
+
+`--drives` crea un paquete de unidades: `pack.json` lo indica, y sus unidades terminadas toman una
+sola forma en el cuadrado de las unidades.
 
 El paquete recibe su propio identificador, su nombre y seis caracteres aleatorios, como `3d-k7q2mx`,
 y ese es el nombre de su carpeta. El informe lo indica. El identificador nunca coincide con el de una
@@ -429,7 +468,8 @@ pensado para el flujo de trabajo de folderskin-community.
 ## Cómo lee la app los paquetes
 
 Comunidad tiene una vista de **Lista** y otra de **Galería**, y **Ver** abre cualquier paquete: cada
-aspecto dibujado como la carpeta que produce, con su nombre, antes de añadir nada. **Recargar**
+aspecto dibujado como la carpeta que produce (los de un paquete de unidades, como la unidad), con su
+nombre, antes de añadir nada. **Recargar**
 vuelve a leer la lista. Un paquete que añadiste y que ha cambiado desde entonces muestra
 **Actualizar**, que cambia sus aspectos por la versión nueva. Las carpetas conservan sus iconos, y
 una imagen favorita que esté en las dos versiones sigue siendo favorita.
@@ -443,13 +483,20 @@ una imagen favorita que esté en las dos versiones sigue siendo favorita.
   junto a los paquetes, es [moved.json](#movedjson). `folderskin-tools packs index` lo escribe,
   junto con `previews/<id>.png`, una tira con los cuatro primeros aspectos del paquete dibujados
   como carpetas. Ambos se generan en la rama `main` de folderskin-community: nunca los edites a
-  mano.
+  mano. Los paquetes de unidades se enumeran aparte, en `"drive_packs"` junto a `"packs"`, así que
+  FolderSkin 0.1.9 y las versiones anteriores, que leen `"packs"`, nunca muestran un paquete que no
+  pueden añadir. Sus tiras muestran sus aspectos sobre unidades.
 - `v2/`, que escribe `packs catalog`, son los mismos paquetes en forma de catálogo en el que la app
   busca en tu equipo. Su `head.json` nombra el catálogo actual, enumera los paquetes `featured` y
   `official`, incluye `moved` y enumera los espejos que sirven el mismo árbol, como
   `https://packs.folderskin.app` ([El espejo](#el-espejo)). La app descarga cada archivo primero de
   los espejos y de GitHub si fallan, y en ambos casos comprueba cada uno con su hash. Desde la
-  0.1.7, lee el propio `head.json` primero desde `https://packs.folderskin.app`.
+  0.1.7, lee el propio `head.json` primero desde `https://packs.folderskin.app`. El catálogo que
+  `head.json` nombra en `"catalog"` solo tiene los paquetes de carpetas. Cuando hay paquetes de
+  unidades, `"with_drives"` nombra un segundo catálogo, con todos los paquetes y los identificadores
+  de los paquetes de unidades, y es el que leen las versiones que admiten unidades. Un paquete de
+  unidades se publica como versión 3, con `"shape": "drive"`, y sus miniaturas, dibujadas sobre una
+  unidad, están en `drive-thumbs/`.
 - La app descarga las imágenes de un paquete solo cuando lo añades, de cuatro en cuatro, y muestra
   cuántas han llegado. Comprueba cada una con los límites de arriba y no guarda nada si no pasan
   todas. Después las guarda juntas, así que un paquete nunca queda añadido a medias.
@@ -459,7 +506,9 @@ una imagen favorita que esté en las dos versiones sigue siendo favorita.
 
 `index.json` y `head.json` ganan campos con el tiempo, y cada versión de la app lee los que conoce y
 pasa por alto el resto. `pack.json` es lo contrario: no acepta ningún campo que el contrato no nombre,
-así que nunca se le puede añadir nada. Todo lo nuevo sobre un paquete va en el índice.
+así que nunca se le puede añadir nada a una de sus versiones. Lo que un paquete tenga que decir va
+en una versión nueva, como `shape` llegó con la versión 2, así que un FolderSkin que no la sabe leer
+lo dice. Todo lo demás que sea nuevo sobre un paquete va en el índice.
 
 ## Paquetes destacados y oficiales
 

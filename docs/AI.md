@@ -56,11 +56,16 @@ which one with a small picture of it. Click it, or type @ in the box, to pick an
 
 - **Mac folder**: FolderSkin's folder, as Finder shows it.
 - **Windows folder**: the folder Windows draws.
+- **Linux folder**: the folder GNOME and KDE draw.
+- **A drive**: every drive each system shows, from the Mac's startup disk to a Linux USB stick
+  or RAID set, drawn as FolderSkin draws it ([DRIVES.md](DRIVES.md)). The picture goes on that
+  drive and with the drive skins in the library.
 - **Free icon**: one thing on its own, such as a mascot, an object or a character, with no folder
   around it. It goes on any folder as it is.
 
 After @, type part of a name (`@win`) and press Return or Tab, or click one. The chip changes and
-the @ word leaves the box. A new chat starts on the folder the folder panel shows skins on.
+the @ word leaves the box. A new chat starts on the drive the folder panel shows, when it shows
+one, and otherwise on the folder it shows skins on.
 
 The shape belongs to the chat. Each picture is made for the shape that was picked when it was
 sent, an older chat opens on the shape of its last picture, and the skin is saved as made for
@@ -69,7 +74,8 @@ with every provider and with the Local Model.
 
 ## Just the art or the whole folder
 
-For a folder, this is the choice that matters most, and it is not about quality.
+For a folder, this is the choice that matters most, and it is not about quality. A drive has the
+same choice, as **Just the art** and **Whole drive**.
 
 **Just the art** asks the model for a flat picture in the folder's own proportions (1024 × 960
 for the Mac's folder, 1024 × 800 for Windows'), and FolderSkin wraps it onto its own folder,
@@ -101,6 +107,11 @@ paint beside it. A painting that moved or reshaped the folder is cut out by its 
 instead.
 Reference pictures you add go after the template, each with the job you gave it, as many as the
 model takes.
+
+A drive works the same way. Its art is asked for in the shape of its face (a USB stick's label
+is tall, a Windows drive's top is wide), and its template is the drive with its face in the
+template's grey and the rest of it, its connector, its strip or its lights, as FolderSkin draws
+it, so a whole drive keeps them.
 
 A **Free icon** is always painted whole: one subject, complete, in the middle of a square, on a
 transparent backdrop or on a key colour, and cut out.
@@ -171,10 +182,13 @@ The parts that do the work are structural rather than stylistic:
 
 - **Just-the-art prompts** ask for one continuous picture that fills the frame, with the subject
   large and in the middle, and keep the band the folder's tab hides for sky or texture, because
-  the template crops or curves it away. Windows' folder keeps its upper-left corner clear too.
+  the template crops or curves it away. Windows' and the Linux folder keep their upper-left
+  corner clear too. A drive has no tab, so its art asks only for a little open space around the
+  subject.
 - **Whole-folder prompts** name the folder's parts, back to front, and what stays as it is: the
   Mac's single tab and its pale paper strip, or the curved step on Windows' folder. Without that,
-  models reliably produce stacked folders and double tabs.
+  models reliably produce stacked folders and double tabs. A drive is named by its own parts,
+  such as a USB stick's plug, blue body and ring hole.
 - **Free-icon prompts** ask for one complete object, centred and uncropped in a square, with no
   floor, scenery or frame around it.
 - **Reference pictures** are named by number and job. A subject is kept recognisably the same, a
@@ -316,7 +330,7 @@ fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks with
 | "… finished without painting a picture" | The provider answered without a picture and without saying why (Gemini's `NO_IMAGE`), so try again or reword the idea |
 | "… declined that prompt: its filter blocked the picture" | The provider's safety filter stopped the prompt or the picture, such as Stability's blurred picture or Ideogram's safety check, so reword it |
 | "… said: … (error 400)" | The provider's own words, shown as they came. Worth reporting if it names a field FolderSkin sent |
-| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Just the art. The app keeps such a picture as artwork for its own folder, and a free icon as the square picture it is, and says so. |
+| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Just the art. The app keeps such a picture as artwork for its own folder, or for the drive it was painted for, and a free icon as the square picture it is, and says so. |
 | "the provider returned something that is not an image" | A malformed or non-image response |
 
 ## Folders made in a chat assistant

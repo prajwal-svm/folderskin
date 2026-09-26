@@ -58,12 +58,18 @@ choisir une autre :
 
 - **Dossier Mac** : le dossier de FolderSkin, tel que le Finder l'affiche.
 - **Dossier Windows** : le dossier que dessine Windows.
+- **Dossier Linux** : le dossier que dessinent GNOME et KDE.
+- **Un disque** : tous les disques qu'affiche chaque système, du disque de démarrage du Mac à une
+  clé USB ou une grappe RAID sous Linux, dessinés comme FolderSkin les dessine
+  ([DRIVES.md](../DRIVES.md), en anglais). L'image se pose sur ce disque et rejoint les habillages
+  de disques dans la bibliothèque.
 - **Icône libre** : une seule chose, comme une mascotte, un objet ou un personnage, sans dossier
   autour. Elle se pose telle quelle sur n'importe quel dossier.
 
 Après @, tapez une partie d'un nom (`@win`) et appuyez sur Entrée ou Tab, ou cliquez sur l'une des
 formes. La pastille change et le mot qui commence par @ disparaît du champ. Un nouveau chat part du
-dossier sur lequel le panneau du dossier montre les habillages.
+disque que montre le panneau du dossier, s'il en montre un, et sinon du dossier sur lequel il montre
+les habillages.
 
 La forme appartient au chat. Chaque image est faite pour la forme choisie au moment de l'envoi, un
 chat plus ancien s'ouvre sur la forme de sa dernière image, et l'habillage est enregistré comme fait
@@ -72,7 +78,8 @@ est détouré, avec chaque fournisseur comme avec le Modèle local.
 
 ## Juste l'image ou le dossier entier
 
-Pour un dossier, c'est le choix qui compte le plus, et il n'a rien à voir avec la qualité.
+Pour un dossier, c'est le choix qui compte le plus, et il n'a rien à voir avec la qualité. Un disque
+offre le même choix, entre **Juste l'image** et **Disque entier**.
 
 **Juste l'image** demande au modèle une image à plat aux proportions du dossier (1024 × 960 pour le
 dossier du Mac, 1024 × 800 pour celui de Windows), que FolderSkin plaque sur son propre dossier,
@@ -98,6 +105,11 @@ silhouette de FolderSkin et les couleurs de la peinture jusqu'au bord. Si la pei
 déformé le dossier, c'est la couleur de détourage qui sert à la découper. Les images de référence
 que vous ajoutez viennent après le gabarit, chacune avec le rôle que vous lui avez donné, autant
 que le modèle en accepte.
+
+Un disque fonctionne de la même façon. Son illustration est demandée à la forme de sa face avant
+(l'étiquette d'une clé USB est haute, le dessus d'un disque Windows est large), et son gabarit est
+le disque avec sa face avant dans le gris du gabarit et le reste (son connecteur, sa bande ou ses
+voyants) tel que FolderSkin le dessine, si bien qu'un disque entier les garde.
 
 Une **Icône libre** est toujours peinte en entier, puis détourée : un seul sujet, complet, au milieu
 d'un carré, sur un fond transparent ou sur une couleur de détourage.
@@ -159,12 +171,14 @@ Les parties qui font le travail relèvent de la structure plus que du style :
 
 - **Les prompts du mode Juste l'image** demandent une seule image continue qui remplit le cadre,
   avec le sujet en grand et au milieu, et réservent au ciel ou à une texture la bande que cache
-  l'onglet du dossier, car le gabarit la recadre ou la courbe. Pour le dossier de Windows, ils
-  laissent aussi le coin supérieur gauche dégagé.
+  l'onglet du dossier, car le gabarit la recadre ou la courbe. Pour le dossier de Windows et celui
+  de Linux, ils laissent aussi le coin supérieur gauche dégagé. Un disque n'a pas d'onglet, donc son
+  illustration demande seulement un peu d'espace libre autour du sujet.
 - **Les prompts du mode Dossier entier** nomment les parties du dossier, de l'arrière vers l'avant,
   et ce qui reste tel quel : l'onglet unique du Mac et sa bande de papier pâle, ou le décrochement
   arrondi du dossier de Windows. Sans cela, les modèles produisent à coup sûr des dossiers empilés
-  et des onglets doublés.
+  et des onglets doublés. Un disque est décrit par ses propres parties, comme la prise, le corps
+  bleu et le trou d'anneau d'une clé USB.
 - **Les prompts pour une icône libre** demandent un seul objet complet, centré dans un carré sans
   être coupé, sans sol, décor ni cadre autour.
 - **Les images de référence** sont désignées par leur numéro et leur rôle. Un sujet reste
@@ -317,7 +331,7 @@ workspace se vérifie en compilation croisée sans cela.
 | « … finished without painting a picture » | Le fournisseur a répondu sans image et sans dire pourquoi (`NO_IMAGE` chez Gemini) : réessayez ou reformulez l'idée |
 | « … declined that prompt: its filter blocked the picture » | Le filtre de sécurité du fournisseur a bloqué le prompt ou l'image (l'image floutée de Stability ou le contrôle de sécurité d'Ideogram, par exemple) : reformulez le prompt |
 | « … said: … (error 400) » | Le message du fournisseur, affiché tel quel. À signaler s'il cite un champ envoyé par FolderSkin |
-| « the model drew a scene instead of a folder on a plain backdrop » | Mode dossier entier sans fond détourable : réessayez ou passez à Juste l'image. L'app garde alors l'image pour la plaquer sur son propre dossier (une icône libre reste l'image carrée qu'elle est), et le signale. |
+| « the model drew a scene instead of a folder on a plain backdrop » | Mode dossier entier sans fond détourable : réessayez ou passez à Juste l'image. L'app garde alors l'image pour la plaquer sur son propre dossier, ou sur le disque pour lequel elle a été peinte (une icône libre reste l'image carrée qu'elle est), et le signale. |
 | « the provider returned something that is not an image » | Une réponse mal formée, ou qui n'est pas une image |
 
 ## Dossiers créés dans un assistant conversationnel

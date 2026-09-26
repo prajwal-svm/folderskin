@@ -20,6 +20,7 @@ carpeta que elegiste.
 | Una carpeta con un patrón | **Rayas**, **Vichy**, **Lunares** | **Patrón** añade diez tipos, de rayas a confeti y grano de película |
 | Una foto con leyenda | **Foto** | Primero pide la imagen. Luego puedes soltar o pegar más |
 | Un sticker, una insignia, cualquier cosa sin forma de carpeta | **Sticker** | *Icono libre* convierte el diseño en el icono entero |
+| Una unidad a tu manera: *Copias* en un disco externo, una foto en una memoria USB | Una unidad de **Empezar en una unidad**, o **Unidad con etiqueta**, **Unidad de color**, **Unidad con emoji** o **Unidad con foto** | El diseño va en la cara frontal de la unidad. El menú de debajo del lienzo lo lleva a otra unidad |
 | Un aspecto que ya tienes, con tu toque personal | Menú ⋯ de un aspecto → **Remezclar en el editor** | El aspecto se convierte en una capa de imagen sobre la que construir |
 | Un cambio en algo que ya diseñaste | Su menú ⋯ → **Editar el diseño** | **Guardar cambios** lo actualiza en su sitio. **Guardar copia** conserva los dos |
 
@@ -27,7 +28,13 @@ carpeta que elegiste.
 
 **Para empezar.** La primera visita, y **Nuevo**, muestran los puntos de partida. Cada uno es un
 diseño normal: nada en él es fijo. Si eliges uno mientras tu diseño tiene cambios sin guardar,
-primero te pregunta.
+primero te pregunta. **Empezar desde cero** tiene las carpetas propias del Mac, de Windows y de
+Linux junto a los diseños vacíos, y **Empezar en una unidad** tiene todas las unidades que muestra
+cada sistema, las del Mac, las de Windows y las de Linux, cada sistema en su propia fila
+([DRIVES.md](../DRIVES.md) las enumera, en inglés). Si hay una unidad elegida en el panel de la
+carpeta, **La unidad que elegiste** va primero y muestra esa unidad con su propio nombre. Una
+plantilla de unidad empieza en esa unidad, o en la unidad en la que estaba el último diseño, o si
+no, en el disco externo propio de este sistema.
 
 **Añadir.** La barra de encima de la carpeta añade **Texto**, un **Emoji**, una **Forma** (trece, de
 un rectángulo redondeado a un globo de diálogo), una **Imagen** (un archivo, uno de tus aspectos, o
@@ -73,6 +80,18 @@ los botones para cambiar su orden, duplicarla y borrarla en ese encabezado:
   un borde de sticker, un contorno que sigue la silueta como un sticker troquelado.
 
 Sin nada seleccionado, los ajustes eligen entre **En la carpeta** e **Icono libre**.
+
+**En una unidad.** Un diseño en una unidad cubre su cara frontal: el frente de la unidad, la
+etiqueta de una tarjeta, o un disco óptico entre su centro y su borde. El resto de la unidad (su
+base, su conector, el agujero de un disco óptico) se dibuja alrededor de la cara frontal y por
+encima de ella, y una parte transparente del diseño deja ver la cara frontal de la propia unidad. El
+interruptor de debajo del lienzo pasa a llamarse **Esqueleto de la unidad**, y a su lado un menú con
+todas las unidades lleva el diseño a otra, y cada capa conserva su sitio en la cara frontal y se
+ajusta a ella. El texto y las formas nuevas llegan a la cara frontal en un color que se lee bien
+sobre ella, oscuro sobre una cara clara y blanco sobre una de color, y el texto nunca es más ancho
+que la cara frontal: en la etiqueta estrecha de una memoria USB, empieza pequeño. Una unidad no
+tiene pestaña a la que llevar una capa. Una vez guardado, un diseño en una unidad es un aspecto de
+unidad, que la biblioteca pone primero mientras haya una unidad elegida.
 
 **Ver el resultado.** El interruptor **Esqueleto de la carpeta**, debajo del lienzo, muestra el
 diseño sobre la carpeta (pestaña, hoja de papel y bordes), o en plano con los bordes de la carpeta
@@ -180,6 +199,8 @@ Una remezcla lee la imagen propia del aspecto con `composer_skin_image`:
 | `composer_image` | `path` | `{url, width, height, name, alpha}`: un archivo de imagen, 2048 px como máximo, en PNG si tiene transparencia y en JPEG si no |
 | `composer_skin_image` | `skinId` | lo mismo, para la imagen propia de un aspecto guardado |
 | `composer_design` | `skinId` | el documento del diseño, o `null` para un aspecto que no se hizo aquí |
+| `composer_drive_template` | `drive` | las capas de una unidad, con la misma forma que las de la carpeta, tal como las envía `composer_template`: `back` vacía, `middle` la unidad sin nada, `front` lo que cubre su cara frontal, `top` lo que va encima de la cara frontal, y `parts` con la cara frontal como panel delantero (y, en un disco óptico, `anchor`, donde va una capa nueva) |
+| `shapes` | `size` | todas las formas para las que se puede hacer un diseño o una imagen, [más abajo](#todas-las-formas-en-una-sola-lista) |
 
 ### El documento
 
@@ -202,6 +223,34 @@ documento como URL de datos. Un documento leído del disco pasa primero por `par
 - Una imagen que no sea una URL de datos PNG, JPEG, WebP o GIF se descarta.
 - Un documento de una versión más reciente se rechaza en lugar de leerse mal.
 
+Un diseño en una unidad indica qué unidad es, como `"drive": "mac-external"`, y tiene
+`"version": 2`, así que un FolderSkin de antes de las unidades dice que es de una versión más
+reciente en lugar de abrirlo en una carpeta. Un diseño en una carpeta o un icono libre sigue siendo
+de la versión 1, exactamente como antes, y todos los documentos guardados antes de las unidades se
+abren como estaban. Un diseño para una unidad que FolderSkin no dibuja se lee como un diseño de
+carpeta.
+
+### Todas las formas en una sola lista
+
+`shapes` (`src-tauri/src/bases.rs`, sobre `folderskin_core::base::BASES`) enumera todas las formas
+para las que se puede hacer una imagen: las tres carpetas, todas las unidades y, al final, `free`,
+sin carpeta ni unidad. El editor empieza diseños en ellas, la vista de IA pinta sobre ellas, y una
+unidad elegida en el panel de la carpeta es una de ellas. Cada entrada son datos simples que no
+cambian de una versión a otra:
+
+```json
+{ "id": "mac-external", "label": "Mac external drive", "system": "mac", "family": "drive",
+  "whole": true, "kind": "external", "thumbnail": "data:image/png;base64,…" }
+```
+
+`id` es `mac-folder`, `windows-folder` o `linux-folder` para una carpeta, el identificador de la
+propia unidad (`mac-external`, `linux-solid-state`) para una unidad, o `free`. La ventana nombra
+cada una en el idioma que se muestra con `common.shapes.<id>`, con una línea sobre ella de
+`common.shapeNotes.<id>`, y el nombre corto de una unidad, junto a su sistema, con
+`common.driveNames.<id>`. `thumbnail` es la forma vacía al tamaño pedido (de 16 a 512 px, 96 si no
+se indica): la carpeta en su propio color y la unidad sin nada en su cara frontal, y ninguna para
+`free`. En Rust, `Base::bare(size)` dibuja lo mismo.
+
 ### Límites que conviene conocer
 
 - **Los emojis** vienen de la fuente de emojis del sistema. En macOS esa fuente es un mapa de bits,
@@ -220,10 +269,14 @@ documento como URL de datos. Un documento leído del disco pasa primero por `par
 ### La vista previa en el navegador
 
 `pnpm dev` en un navegador normal también muestra el editor. Las capas de la carpeta son los PNG de
-`docs/images/composer/`, que escribe
-`cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`. Una prueba de
-`folderskin-tools` comprueba que son los píxeles que dibuja el compositor, para que no se queden
-desactualizados.
+`docs/images/composer/` (las de Windows en `windows/`, las de Linux en `linux/`), que escribe
+`cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`. El mismo comando
+escribe las capas de cada unidad en `drives/<id>/` a la mitad del tamaño, con dónde está la cara
+frontal de cada unidad en `drives/parts.json`, y la forma vacía de cada carpeta y cada unidad en
+`bases/`, como WebP sin pérdida. Una prueba de `folderskin-tools` comprueba que son los píxeles que
+dibuja el compositor, para que no se queden desactualizados, y una de las pruebas de la webview
+comprueba que `src/composer/drives.ts` coloca las cosas donde el dibujo de Rust tiene la cara
+frontal de cada unidad.
 
 ### Pruebas
 
