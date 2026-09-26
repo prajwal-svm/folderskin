@@ -102,9 +102,11 @@ fn klein_repaints_the_blank_folder_and_it_is_cut_out() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
-/// A whole drive, painted on its own blank template and cut out along its outline: a Mac's
-/// external drive, and a Linux USB stick, whose plug and ring hole are the finest parts of any
-/// template. `FOLDERSKIN_GPU_OUT` keeps each painting, as painted and as cut out, in that folder.
+/// A whole drive, painted on its own blank template and, where it keeps the drive's outline, cut
+/// out along it: a Mac's external drive, a Linux USB stick, whose plug and ring hole are the
+/// finest parts of any template, and a Linux USB hard disk on its cable. Each one's fit is
+/// printed, and `FOLDERSKIN_GPU_OUT` keeps each painting, as painted and as cut out, in that
+/// folder.
 #[test]
 fn klein_repaints_a_blank_drive_and_it_is_cut_out() {
     if !wanted() {
@@ -112,7 +114,7 @@ fn klein_repaints_a_blank_drive_and_it_is_cut_out() {
     }
     let settings = Settings::for_machine(&detect());
     let keep = std::env::var_os("FOLDERSKIN_GPU_OUT").map(PathBuf::from);
-    for id in ["mac-external", "linux-removable"] {
+    for id in ["mac-external", "linux-removable", "linux-external"] {
         let dir = out_dir(id);
         let mut job = Job::new("a koi pond at night with paper lanterns");
         job.style = "woodblock".into();

@@ -13,10 +13,13 @@
 //! backdrop that drifted from magenta: a lighthouse whose pink clouds and a canyon whose pale back
 //! panel share the dusty pink around them, a night street dark on a dark grey, a flamingo lagoon
 //! whose edge sits a few pixels inside ours on magenta, and a galaxy on Windows' folder. The
-//! reference took the first three for reshaped folders; they aren't.
+//! reference took the first three for reshaped folders; they aren't. `klein-koi-*.jpg` are klein's
+//! whole drives, shrunk the same way: a Mac's external drive, whose backdrop brightens across the
+//! wide margins beside it, and a Linux USB stick, narrow, with a plug and a ring hole.
 
 use folderskin_core::backdrop::Backdrop;
-use folderskin_core::base::{Base, MAC_FOLDER, WINDOWS_FOLDER};
+use folderskin_core::base::{Base, BASES, MAC_FOLDER, WINDOWS_FOLDER};
+use folderskin_core::matte::MAGENTA;
 use folderskin_core::painted::{self, Border, MIN_PAINTED_FIT};
 use image::{GrayImage, Luma, Rgba, RgbaImage};
 use serde_json::Value;
@@ -245,6 +248,107 @@ fn a_klein_folder_made_into_a_card_or_given_another_tab_is_left_alone() {
             );
             assert!(cut.image.is_none(), "{name} with {change}");
         }
+    }
+}
+
+/// klein's whole drives, and the drive each was painted as, by its id.
+const KLEIN_DRIVES: &[(&str, &str)] = &[
+    ("klein-koi-external.jpg", "mac-external"),
+    ("klein-koi-stick.jpg", "linux-removable"),
+];
+
+fn drive(id: &str) -> &'static Base {
+    folderskin_core::base::find(id).unwrap_or_else(|| panic!("no base {id}"))
+}
+
+#[test]
+fn klein_drives_that_kept_their_shape_are_cut_out() {
+    for (name, id) in KLEIN_DRIVES {
+        let img = picture(name);
+        let (w, h) = img.dimensions();
+        let cut = painted::cut_along_silhouette(&img, &silhouette_of(drive(id), w, h));
+        assert!(cut.fit >= MIN_PAINTED_FIT, "{name}: fit {}", cut.fit);
+        let out = cut.image.unwrap();
+        assert_eq!(
+            out.dimensions(),
+            (w, h),
+            "{name}: in the frame it was painted in"
+        );
+        for (x, y) in [(1, 1), (w - 2, h / 2), (w / 5, h - 2)] {
+            assert_eq!(out.get_pixel(x, y).0[3], 0, "{name}: the backdrop is gone");
+        }
+        let (x, y) = (w / 2, h / 2);
+        assert_eq!(
+            out.get_pixel(x, y).0,
+            {
+                let p = img.get_pixel(x, y).0;
+                [p[0], p[1], p[2], 255]
+            },
+            "{name}: the painting stays as painted"
+        );
+    }
+}
+
+#[test]
+fn a_klein_stick_painted_without_its_plug_is_left_alone() {
+    let img = picture("klein-koi-stick.jpg");
+    let (w, h) = img.dimensions();
+    let sil = silhouette_of(drive("linux-removable"), w, h);
+    // The plug is the rows above where the body is at its full width.
+    let width = |y: u32| (0..w).filter(|&x| sil.get_pixel(x, y).0[0] > 127).count();
+    let widest = (0..h).map(width).max().unwrap();
+    let body = (0..h).find(|&y| width(y) * 10 >= widest * 9).unwrap();
+    let backdrop = Backdrop::measure(&img).unwrap();
+    let mut unplugged = img.clone();
+    for y in 0..body {
+        for x in 0..w {
+            let k = backdrop.at(x, y);
+            unplugged.put_pixel(x, y, Rgba([k[0], k[1], k[2], 255]));
+        }
+    }
+    let cut = painted::cut_along_silhouette(&unplugged, &sil);
+    assert!(cut.fit < MIN_PAINTED_FIT, "fit {}", cut.fit);
+    assert!(cut.image.is_none());
+}
+
+/// Every base's blank template as it is on its backdrop, at the size the Local Model paints: the
+/// painting of a model that kept the shape exactly. A USB stick's rounded end and a hard disk's
+/// cable each paint less than a tenth of the rows they cross, and still count.
+#[test]
+fn every_template_painted_as_it_is_keeps_its_shape() {
+    let (w, h) = (1024, 960);
+    std::thread::scope(|scope| {
+        for base in BASES.iter().filter(|b| b.template.is_some()) {
+            scope.spawn(move || {
+                let painted = base.blank(w, h, MAGENTA).unwrap();
+                let cut = painted::cut_along_silhouette(&painted, &silhouette_of(base, w, h));
+                assert!(cut.fit >= MIN_PAINTED_FIT, "{}: fit {}", base.id, cut.fit);
+                assert!(cut.image.is_some(), "{}", base.id);
+            });
+        }
+    });
+}
+
+/// klein's decoder leaves a faint line down the frame's right edge, bluer than the backdrop. It
+/// is neither paint nor backdrop, and doesn't stretch a folder's or a drive's box out to it.
+#[test]
+fn the_decoders_line_down_the_frames_edge_is_passed_over() {
+    let drives: Vec<(&str, &Base)> = KLEIN_DRIVES.iter().map(|(n, id)| (*n, drive(id))).collect();
+    for (name, base) in KLEIN.iter().copied().chain(drives) {
+        let mut img = picture(name);
+        let (w, h) = img.dimensions();
+        for y in 0..h {
+            let [r, g, b, _] = img.get_pixel(w - 1, y).0;
+            let line = [
+                r.saturating_sub(2),
+                g.saturating_add(6),
+                b.saturating_add(35),
+                255,
+            ];
+            img.put_pixel(w - 1, y, Rgba(line));
+        }
+        let cut = painted::cut_along_silhouette(&img, &silhouette_of(base, w, h));
+        assert!(cut.fit >= MIN_PAINTED_FIT, "{name}: fit {}", cut.fit);
     }
 }
 

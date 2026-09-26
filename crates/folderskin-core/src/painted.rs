@@ -4,13 +4,13 @@
 //!   poster or a print, a model often paints the print lying on paper: a flat margin, sometimes
 //!   with a thin dark rule inside it, which on a folder becomes a blank tab and blank edges.
 //!   [`trim_paper`] also cuts bands of paper down just two opposite sides, which klein paints too.
-//! * [`cut_along_silhouette`] cuts a whole-folder picture out along FolderSkin's own silhouette.
-//!   The model repaints the app's blank folder and keeps its shape, but not always its exact scale
-//!   (it came back ~2% smaller in testing), and its backdrop drifts from magenta to a dusty pink,
-//!   a purple or a dark grey, often brighter in one corner. So the backdrop is measured as the
-//!   colour it has at every pixel ([`Backdrop`]), the painted folder is found against it, the
-//!   silhouette is fitted to it, and the silhouette becomes the edge: no colour keying, so no pink
-//!   fringe, and the edge is ours.
+//! * [`cut_along_silhouette`] cuts a whole-folder or whole-drive picture out along FolderSkin's own
+//!   silhouette. The model repaints the app's blank folder and keeps its shape, but not always its
+//!   exact scale (it came back ~2% smaller in testing), and its backdrop drifts from magenta to a
+//!   dusty pink, a purple or a dark grey, often brighter in one corner. So the backdrop is measured
+//!   as the colour it has at every pixel ([`Backdrop`]), the painted folder is found against it,
+//!   the silhouette is fitted to it, and the silhouette becomes the edge: no colour keying, so no
+//!   pink fringe, and the edge is ours.
 //! * [`is_blank`] spots the flat white or black picture a backend writes when it fails quietly
 //!   (stable-diffusion.cpp's Metal backend does on some Macs).
 //!
@@ -367,6 +367,11 @@ const PAINTED_SHARE: f64 = 0.1;
 /// How far the model's edge may wander from ours without disagreeing, as a share of the folder's
 /// shorter side (at least 3 px): klein's stays within about 8 px of it at 1024 px.
 const OUTLINE_SLACK: f64 = 0.008;
+/// How far around the shape's place in the frame its painting is measured, as a share of the
+/// frame's shorter side: room for the model to paint it a little off its place. A backdrop that
+/// drifts further out, across the wide margins beside a narrow shape such as a USB stick, is then
+/// neither taken for paint nor carried in to where the shape's edge is judged.
+const NEAR_SHARE: f64 = 0.05;
 /// How deep into the silhouette bare backdrop is followed from outside it, as a share of the
 /// folder's shorter side: deep enough to cover a missing tab, not so deep that a pink sky which
 /// touches the edge is taken for backdrop all the way in.
@@ -391,7 +396,89 @@ const EDGE_REACH: u32 = 5;
 /// inside it has to be as plain as the backdrop and reach in from outside. A painting that
 /// shares the backdrop's colours (a sunset's pink clouds, a dark street at night) is not taken
 /// for backdrop, since it is neither.
+///
+/// Only the shape's neighbourhood is measured (`NEAR_SHARE`), since the model keeps its size and
+/// place. A folder fills the frame, but a drive can leave wide margins, and a backdrop that
+/// brightens across them would otherwise stretch the painted box out to the frame's edge, as the
+/// faint line klein's decoder leaves down that edge would, which is passed over too.
 pub fn cut_along_silhouette(img: &RgbaImage, silhouette: &GrayImage) -> SilhouetteCut {
+    let (w, h) = img.dimensions();
+    let img = &without_edge_line(img);
+    let Some((sx0, sy0, sx1, sy1)) = bounds(silhouette) else {
+        return SilhouetteCut {
+            fit: 0.0,
+            image: None,
+        };
+    };
+    let near = (f64::from(w.min(h)) * NEAR_SHARE).round() as u32;
+    let (x0, y0) = (sx0.saturating_sub(near), sy0.saturating_sub(near));
+    let (x1, y1) = ((sx1 + near).min(w), (sy1 + near).min(h));
+    if (x0, y0, x1, y1) == (0, 0, w, h) {
+        return cut_in_frame(img, silhouette);
+    }
+    let (cw, ch) = (x1 - x0, y1 - y0);
+    let cut = cut_in_frame(
+        &imageops::crop_imm(img, x0, y0, cw, ch).to_image(),
+        &imageops::crop_imm(silhouette, x0, y0, cw, ch).to_image(),
+    );
+    SilhouetteCut {
+        fit: cut.fit,
+        image: cut.image.map(|near| {
+            let mut whole = RgbaImage::new(w, h);
+            imageops::replace(&mut whole, &near, i64::from(x0), i64::from(y0));
+            whole
+        }),
+    }
+}
+
+/// `img` with its outermost pixels taken from the ones just inside them. klein's decoder leaves a
+/// faint line down the frame's right edge, bluer than the backdrop by up to 35 levels, which is
+/// neither backdrop nor paint and would stretch the painted shape's box out to the edge. No shape
+/// reaches that far: every template leaves a margin.
+fn without_edge_line(img: &RgbaImage) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let mut out = img.clone();
+    if w < 3 || h < 3 {
+        return out;
+    }
+    for y in 0..h {
+        out.put_pixel(0, y, *img.get_pixel(1, y));
+        out.put_pixel(w - 1, y, *img.get_pixel(w - 2, y));
+    }
+    for x in 0..w {
+        let (top, bottom) = (*out.get_pixel(x, 1), *out.get_pixel(x, h - 2));
+        out.put_pixel(x, 0, top);
+        out.put_pixel(x, h - 1, bottom);
+    }
+    out
+}
+
+/// The box around what is white in `silhouette`, as (x0, y0, x1, y1), ends exclusive; `None`
+/// when nothing is.
+fn bounds(silhouette: &GrayImage) -> Option<(u32, u32, u32, u32)> {
+    let (mut x0, mut y0, mut x1, mut y1) = (u32::MAX, u32::MAX, 0, 0);
+    for (x, y, p) in silhouette.enumerate_pixels() {
+        if p.0[0] > 127 {
+            (x0, y0) = (x0.min(x), y0.min(y));
+            (x1, y1) = (x1.max(x + 1), y1.max(y + 1));
+        }
+    }
+    (x0 < x1 && y0 < y1).then_some((x0, y0, x1, y1))
+}
+
+/// Our silhouette over one box, and how well a painting keeps to it there.
+struct Judged {
+    fit: f64,
+    /// The silhouette where it was judged.
+    fitted: GrayImage,
+    /// Which pixels are inside it.
+    inside: Vec<bool>,
+    /// Each pixel's distance in from its edge, in thirds of a pixel.
+    depth_in: Vec<u32>,
+}
+
+/// [`cut_along_silhouette`] in a frame that is all the shape's neighbourhood.
+fn cut_in_frame(img: &RgbaImage, silhouette: &GrayImage) -> SilhouetteCut {
     let nothing = SilhouetteCut {
         fit: 0.0,
         image: None,
@@ -440,61 +527,93 @@ pub fn cut_along_silhouette(img: &RgbaImage, silhouette: &GrayImage) -> Silhouet
         return nothing;
     };
 
-    // Our silhouette, moved and stretched so its body spans the painted folder's box, then a
-    // pixel in from its own edge, where the model's painting blends into the backdrop.
-    let fitted = erode(&place_silhouette(silhouette, (w, h), (x0, y0, x1, y1)), 1);
-    let inside: Vec<bool> = fitted.pixels().map(|p| p.0[0] > 127).collect();
-    let area = inside.iter().filter(|&&i| i).count();
-    if area == 0 {
-        return nothing;
-    }
-    // Every pixel's distance to the other side of our outline, in thirds of a pixel.
-    let depth_in = chamfer(&inside, w, h);
-    let depth_out = chamfer(&inside.iter().map(|i| !i).collect::<Vec<_>>(), w, h);
-    let side = f64::from((x1 - x0).min(y1 - y0));
-    let slack = 3 * (side * OUTLINE_SLACK).round().max(3.0) as u32;
-    let reach = 3 * (side * BARE_REACH).round() as u32;
-
-    // Paint that spilled outside our outline: as little of it as found the box.
-    let spilled = (0..inside.len())
-        .filter(|&i| !inside[i] && depth_out[i] > slack && off[i] > faint && !shade[i])
-        .count();
-    // Bare backdrop inside it: as close to the backdrop as the backdrop itself is and as smooth,
-    // grown in from outside our outline no deeper than `reach`. Outside our outline the backdrop
-    // in shade counts too, so backdrop behind a drop shadow is still reached.
+    // Our silhouette over a box, a pixel in from its own edge, where the model's painting blends
+    // into the backdrop, and how well the painting keeps to it there.
     let smooth = (backdrop.noise * 255.0 * 1.5).max(4.0);
-    let bare_px = |x: u32, y: u32| off[at(x, y)] <= faint && roughness(img, x, y) <= smooth;
-    let passes = |x: u32, y: u32| (!inside[at(x, y)] && shade[at(x, y)]) || bare_px(x, y);
-    let mut reached = vec![false; inside.len()];
-    let mut queue = std::collections::VecDeque::new();
-    for y in 0..h {
-        for x in 0..w {
-            if !inside[at(x, y)] && passes(x, y) {
-                reached[at(x, y)] = true;
-                queue.push_back((x, y));
-            }
+    let judge = |(x0, y0, x1, y1): (u32, u32, u32, u32)| -> Option<Judged> {
+        let fitted = erode(&place_silhouette(silhouette, (w, h), (x0, y0, x1, y1)), 1);
+        let inside: Vec<bool> = fitted.pixels().map(|p| p.0[0] > 127).collect();
+        let area = inside.iter().filter(|&&i| i).count();
+        if area == 0 {
+            return None;
         }
-    }
-    while let Some((x, y)) = queue.pop_front() {
-        for (nx, ny) in [
-            (x.wrapping_sub(1), y),
-            (x + 1, y),
-            (x, y.wrapping_sub(1)),
-            (x, y + 1),
-        ] {
-            if nx < w && ny < h {
-                let i = at(nx, ny);
-                if !reached[i] && depth_in[i] <= reach && passes(nx, ny) {
-                    reached[i] = true;
-                    queue.push_back((nx, ny));
+        // Every pixel's distance to the other side of our outline, in thirds of a pixel.
+        let depth_in = chamfer(&inside, w, h);
+        let depth_out = chamfer(&inside.iter().map(|i| !i).collect::<Vec<_>>(), w, h);
+        let side = f64::from((x1 - x0).min(y1 - y0));
+        let slack = 3 * (side * OUTLINE_SLACK).round().max(3.0) as u32;
+        let reach = 3 * (side * BARE_REACH).round() as u32;
+
+        // Paint that spilled outside our outline: as little of it as found the box.
+        let spilled = (0..inside.len())
+            .filter(|&i| !inside[i] && depth_out[i] > slack && off[i] > faint && !shade[i])
+            .count();
+        // Bare backdrop inside it: as close to the backdrop as the backdrop itself is and as
+        // smooth, grown in from outside our outline no deeper than `reach`. Outside our outline
+        // the backdrop in shade counts too, so backdrop behind a drop shadow is still reached.
+        let bare_px = |x: u32, y: u32| off[at(x, y)] <= faint && roughness(img, x, y) <= smooth;
+        let passes = |x: u32, y: u32| (!inside[at(x, y)] && shade[at(x, y)]) || bare_px(x, y);
+        let mut reached = vec![false; inside.len()];
+        let mut queue = std::collections::VecDeque::new();
+        for y in 0..h {
+            for x in 0..w {
+                if !inside[at(x, y)] && passes(x, y) {
+                    reached[at(x, y)] = true;
+                    queue.push_back((x, y));
                 }
             }
         }
+        while let Some((x, y)) = queue.pop_front() {
+            for (nx, ny) in [
+                (x.wrapping_sub(1), y),
+                (x + 1, y),
+                (x, y.wrapping_sub(1)),
+                (x, y + 1),
+            ] {
+                if nx < w && ny < h {
+                    let i = at(nx, ny);
+                    if !reached[i] && depth_in[i] <= reach && passes(nx, ny) {
+                        reached[i] = true;
+                        queue.push_back((nx, ny));
+                    }
+                }
+            }
+        }
+        let bare = (0..inside.len())
+            .filter(|&i| reached[i] && inside[i] && depth_in[i] > slack)
+            .count();
+        let fit = (1.0 - (spilled as f64 + 2.0 * bare as f64) / area as f64).max(0.0);
+        Some(Judged {
+            fit,
+            fitted,
+            inside,
+            depth_in,
+        })
+    };
+    // Stretched over the painted box, as the model may have painted the shape a little smaller.
+    // A thin part, such as a drive's cable, paints less than a tenth of the rows it crosses, so
+    // the box can miss it: where that doesn't fit, our silhouette is also judged where the
+    // template put it, and the better of the two counts.
+    let found = (x0, y0, x1, y1);
+    let Some(mut judged) = judge(found) else {
+        return nothing;
+    };
+    if judged.fit < MIN_PAINTED_FIT {
+        if let Some(placed) = bounds(silhouette)
+            .filter(|placed| *placed != found)
+            .and_then(judge)
+        {
+            if placed.fit > judged.fit {
+                judged = placed;
+            }
+        }
     }
-    let bare = (0..inside.len())
-        .filter(|&i| reached[i] && inside[i] && depth_in[i] > slack)
-        .count();
-    let fit = (1.0 - (spilled as f64 + 2.0 * bare as f64) / area as f64).max(0.0);
+    let Judged {
+        fit,
+        fitted,
+        inside,
+        depth_in,
+    } = judged;
     if fit < MIN_PAINTED_FIT {
         return SilhouetteCut { fit, image: None };
     }
