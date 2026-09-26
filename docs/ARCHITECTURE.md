@@ -219,7 +219,11 @@ it's deleted.
 Each index entry records the id, name, tags, kind (`artwork` or `folder`), source (`import`,
 `ai`, `community` or `composer`), `created_at` in Unix milliseconds, the focus point for artwork, for AI
 results the provider, model and the user's own words, and for community skins the pack's id,
-name, author, licence and hash. The id is `user:` plus the first 12 hex digits of the
+name, author, licence and hash. An AI result or a composer design also records the shape it
+was made for (`base`: `mac-folder`, `windows-folder` or `free`), and an AI result what it was
+made from (`recipe`: the prompt as it was sent, its style, the words it letters, its pictures
+by job and hash, and the template's version), which
+[AI.md](AI.md#keeping-a-generated-skin) describes. The id is `user:` plus the first 12 hex digits of the
 SHA-256 of what came in (the picture file, or the provider's image), so importing the same
 picture twice finds the skin already saved. Ids from the webview are checked against that exact
 shape before they name a file.

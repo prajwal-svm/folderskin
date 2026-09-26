@@ -16,9 +16,10 @@ configurado, o que un proveedor tiene clave.
 ![Ajustes, Proveedor de IA: el Modelo local y siete proveedores, cada uno con una marca o con la etiqueta Sin clave, y debajo el modelo instalado en este equipo](../images/ai-providers.webp)
 
 No hay servidor de FolderSkin, ni proxy, ni clave incluida, ni un plan gratuito que subvencionar. Con
-una clave, no se envía nada hasta que haces clic en **Generar**, y lo que se envía es tu prompt, el
-tamaño que necesita la forma y la imagen de referencia si elegiste una (para una carpeta entera sin
-imagen de referencia, la propia plantilla de carpeta en blanco de FolderSkin).
+una clave, no se envía nada hasta que haces clic en **Generar**, y lo que se envía es el prompt que
+FolderSkin escribe a partir de tus palabras, el tamaño que necesita la forma y las imágenes que lo
+acompañan: si es una carpeta entera, la propia plantilla en blanco de FolderSkin para esa carpeta, y
+después de ella las imágenes de referencia que hayas añadido.
 
 ## Dónde se guarda la clave
 
@@ -49,30 +50,57 @@ La clave se lee en el momento de la solicitud, nunca aparece en un mensaje de er
 devuelve a la ventana de la app. **Eliminar la clave**, en el cuadro del proveedor, la borra del
 archivo. Borrar `keys.json` las elimina todas.
 
-## Las dos formas
+## Para qué es la imagen
 
-Esta es la elección que más importa, y no tiene que ver con la calidad.
+Cada imagen se crea para una forma. El botón que hay junto al nombre del modelo, debajo del cuadro
+del prompt, muestra cuál es con un pequeño dibujo de ella. Haz clic en él, o escribe @ en el cuadro,
+para elegir otra:
 
-**Solo la imagen** pide al modelo una imagen plana de 1024 × 958, y FolderSkin la coloca sobre su
-propia plantilla de carpeta, exactamente igual que una foto que añades. La geometría es nuestra, así
-que cada aspecto se alinea con todos los demás, en todos los tamaños de icono. Cualquier proveedor
-puede hacerlo, incluidos los que no admiten transparencia. Es la opción predeterminada y la correcta
-la mayoría de las veces.
+- **Carpeta Mac**: la carpeta de FolderSkin, tal como la muestra el Finder.
+- **Carpeta Windows**: la carpeta que dibuja Windows.
+- **Icono libre**: una sola cosa, como una mascota, un objeto o un personaje, por sí sola y sin
+  ninguna carpeta alrededor. Se pone tal cual en cualquier carpeta.
 
-**Carpeta entera** pide al modelo que dibuje la propia carpeta sobre un fondo transparente o sobre un
-fondo liso que se pueda recortar, y esa imagen se convierte directamente en el icono, sin pasar por
-el compositor. Renuncias a una geometría exacta al píxel y ganas una ilustración que puede tener
-relieve de verdad y sobresalir por el borde superior de la carpeta.
+Después de @, escribe parte de un nombre (`@win`) y presiona Retorno o Tab, o haz clic en la que
+quieras. El botón cambia y la palabra con @ desaparece del cuadro. Un chat nuevo empieza con la
+carpeta sobre la que el panel de la carpeta muestra los aspectos.
 
-Cuando el modelo puede partir de una imagen (OpenAI, Grok, Gemini y FLUX.2) y no has adjuntado
-ninguna, FolderSkin envía como esa imagen su propia plantilla de carpeta en blanco: nuestra carpeta,
-pintada de un gris claro liso, centrada sobre el color de recorte liso, todo en 1024 × 958 píxeles
-(`compositor::blank_template`). El prompt le pide al modelo que vuelva a pintar exactamente esa
-carpeta, conservando su contorno, su pestaña, su franja de papel, su tamaño y su posición, y que deje
-el fondo liso. El resultado conserva la silueta de FolderSkin en lugar de la carpeta que el modelo se
-habría inventado. Como la plantilla está sobre el color de recorte, esa generación siempre sigue la
-vía del recorte que se explica abajo, incluso con un modelo que podría devolver transparencia. Una
-imagen de referencia que adjuntes tú se usa como ilustración, igual que antes.
+La forma pertenece al chat. Cada imagen se crea para la forma que estaba elegida cuando se envió, un
+chat anterior se abre con la forma de su última imagen, y el aspecto se guarda como hecho para esa
+forma. La forma decide el prompt, la plantilla, el tamaño y cómo se recorta el resultado, con todos
+los proveedores y con el Modelo local.
+
+## Solo la imagen o la carpeta entera
+
+Para una carpeta, esta es la elección que más importa, y no tiene que ver con la calidad.
+
+**Solo la imagen** pide al modelo una imagen plana con las proporciones de la propia carpeta
+(1024 × 960 para la carpeta de Mac, 1024 × 800 para la de Windows), y FolderSkin la coloca sobre su
+propia carpeta, exactamente igual que una foto que añades. La geometría es nuestra, así que cada
+aspecto se alinea con todos los demás, en todos los tamaños de icono. Cualquier proveedor puede
+hacerlo, incluidos los que no admiten transparencia. Es la opción predeterminada y la correcta la
+mayoría de las veces.
+
+**Carpeta entera** pide al modelo que pinte la propia carpeta, y esa imagen se convierte
+directamente en el icono, sin pasar por el compositor. Renuncias a una geometría exacta al píxel y
+ganas una ilustración que puede tener relieve de verdad y sobresalir por el borde superior de la
+carpeta.
+
+Cuando el modelo puede partir de una imagen (OpenAI, Grok, Gemini y FLUX.2, y el Modelo local),
+FolderSkin envía como primera imagen su propia plantilla en blanco de la carpeta: la carpeta pintada
+de un gris claro liso, centrada sobre un color de recorte liso, con las proporciones de la propia
+carpeta y como mucho 1024 píxeles en su lado más largo (`Base::blank`). El prompt le pide al modelo
+que vuelva a pintar exactamente esa carpeta, conservando su contorno, su pestaña, las partes que la
+identifican como esa carpeta, su tamaño y su posición, y que deje el fondo como está. El color de
+recorte nunca se nombra, porque un modelo al que se le habla del magenta lo usa al pintar. Después,
+FolderSkin recorta la pintura siguiendo el propio contorno de la carpeta, así que el resultado
+conserva la silueta de FolderSkin y los colores de la pintura llegan hasta el mismo borde. Con una
+pintura que movió o deformó la carpeta, se usa en cambio el color de recorte. Las imágenes de
+referencia que añades van después de la plantilla, cada una con la función que le diste, tantas como
+admita el modelo.
+
+Un **Icono libre** siempre se pinta entero: un solo motivo, completo, en el centro de un cuadrado,
+sobre un fondo transparente o sobre un color de recorte, y después se recorta.
 
 ## Cómo se gestiona la transparencia
 
@@ -80,43 +108,130 @@ FolderSkin elige la vía correcta para el modelo que elegiste:
 
 - **Alfa nativo.** La solicitud pide un fondo transparente y el PNG que llega ya lo tiene. FolderSkin
   solo recorta el margen transparente. Así funcionan GPT Image 2.5 Flare y Sunburst.
-- **Sin alfa.** El prompt pide la carpeta sola sobre un color de recorte liso: magenta, `#FF00FF`,
-  con todos los proveedores menos Google. FolderSkin quita después ese color, elimina el magenta que
-  se filtró en el borde suave (el paso que evita que un recorte parezca tener un halo rosa) y
-  recorta. Se usa el magenta porque casi nunca aparece en el arte de una carpeta, y porque un fondo
-  que falta se puede detectar: si el borde no es magenta, el modelo ignoró la instrucción, y
-  FolderSkin lo dice en lugar de aplicar un icono roto. A Recraft también se le indica el color como
-  parámetro (`controls.background_color`), así que su fondo sale liso sea cual sea el estilo que
-  pidas.
-- **Verde para Gemini.** Sobre magenta, Gemini deja un borde rojizo oscuro alrededor del motivo, así
-  que su prompt y su plantilla usan verde, `#00FF00`, en su lugar. El verde sí tiene su sitio en el
-  arte de una carpeta (en cada hoja y cada prado). Por eso un fondo verde solo se quita donde llega
-  al borde de la imagen, a partir del tono de verde que Gemini pintó de verdad, y los verdes pintados
-  sobre la carpeta se quedan (`matte::cutout_connected`).
+- **Sin alfa.** El prompt pide la carpeta sola sobre un color de recorte liso. FolderSkin quita
+  después ese color, elimina el color de recorte que se filtró en el borde suave (el paso que evita
+  que un recorte parezca tener un halo de color) y recorta. Un fondo que falta se puede detectar: si
+  el borde no es del color de recorte, el modelo ignoró la instrucción, y FolderSkin guarda la imagen
+  como ilustración para su propia carpeta en lugar de aplicar un icono roto. A Recraft también se le
+  indica el color como parámetro (`controls.background_color`), así que su fondo sale liso sea cual
+  sea el estilo que pidas.
+
+El color de recorte es el magenta, `#FF00FF`, porque casi nunca aparece en el arte de una carpeta.
+Es el verde, `#00FF00`, con Gemini, que sobre magenta deja un borde rojizo oscuro alrededor del
+motivo, y con todo lo que deba ser rosa o violeta, que un recorte por magenta se comería: los estilos
+Neón, Aerógrafo años 70, Pop art y Synthwave, y cualquier idea que nombre el rosa o el violeta en uno
+de los idiomas de FolderSkin (pink, lilac, rose, rosa, morado, ピンク, 보라, 粉红 y similares). El
+verde sí tiene su sitio en el arte de una carpeta, en cada hoja y cada prado, así que un fondo verde
+solo se quita donde llega al borde de la imagen, a partir del tono de verde que se pintó de verdad, y
+los verdes pintados sobre la carpeta se quedan (`matte::cutout_connected`).
+
+Una carpeta entera pintada sobre la plantilla de FolderSkin no sigue ninguna de las dos vías. Se
+recorta siguiendo el propio contorno de la plantilla, como se explica arriba, y solo recurre al color
+de recorte cuando la carpeta se movió.
 
 El código de recorte está en `crates/folderskin-core/src/matte.rs` y tiene pruebas unitarias,
 incluido el caso de un motivo realmente rosa sobre un fondo magenta.
 
 ## Los prompts
 
-`crates/folderskin-ai/src/prompts.rs` compone el prompt a partir de tus palabras más un contrato. Las
-partes que hacen el trabajo son de estructura, no de estilo:
+Tus palabras nunca se reescriben. `crates/folderskin-ai/src/recipe.rs` reúne en una sola receta lo
+que necesita una imagen: tu idea, la forma y lo que conserva, el estilo, el texto que haya que
+rotular, tus imágenes y la función de cada una, y lo que va alrededor del motivo. Después,
+`prompts.rs` redacta esa receta como mejor la entiende cada familia de modelos, siempre en el mismo
+orden: qué pintar, cómo se ve, cómo se encuadra, las imágenes, el texto y lo que hay que dejar fuera.
 
-- **Los prompts del modo Solo la imagen** prohíben dibujar una carpeta, un icono, un dispositivo o
-  una maqueta, y reservan el octavo superior y un borde del 6 % como espacio muerto, porque la plantilla
-  recorta o curva esas zonas.
-- **Los prompts del modo Carpeta entera** fijan la construcción: exactamente tres partes, una pestaña, un
-  borde de papel visible, un panel delantero y una instrucción explícita de no añadir capas. Sin esa
-  frase, los modelos producen sin falta carpetas apiladas y pestañas dobles.
-- **Los prompts de plantilla** (`compose_on_template`) acompañan a la plantilla en blanco: la imagen
-  adjunta es la carpeta exacta que hay que volver a pintar, su forma y su encuadre se quedan como
-  están, la idea se pinta sobre los paneles trasero y delantero, y el color de recorte se queda liso.
-- **Todos** terminan con un contrato de salida estricto que fija el aislamiento del motivo y el color
-  de recorte o el fondo transparente. Nunca indican un tamaño: los modelos no pintan al número de
-  píxeles que leen, así que el tamaño va en los propios parámetros de la solicitud (ver más abajo).
+- **OpenAI y Gemini** reciben líneas encabezadas por un nombre (Style, Composition, Lettering,
+  Constraints), y las imágenes se llaman image 1, image 2 y así sucesivamente.
+- **Grok** recibe lo mismo, con las imágenes llamadas `<IMAGE_0>`, `<IMAGE_1>`, como las nombra
+  Grok.
+- **FLUX** (Black Forest Labs y el Modelo local) recibe prosa sencilla, con el motivo primero y sin
+  instrucciones sobre lo que no hay que dibujar, porque FLUX no tiene prompt negativo y pinta lo que
+  se le dice que evite. El prompt del Modelo local no pasa de los 400 tokens que lee su codificador
+  de texto y, si hace falta, reduce el estilo a su medio.
+- **Ideogram y Recraft** reciben un encargo de diseño breve, con el texto al principio.
+- **Stability** recibe una lista corta. Tanto Stability como Ideogram reciben lo que hay que dejar
+  fuera como su prompt negativo (ver más abajo).
 
-Puedes editar estas plantillas de prompt. Son constantes de texto normales de Rust, con pruebas que
-comprueban que están las frases clave.
+Las partes que hacen el trabajo son de estructura, no de estilo:
+
+- **Los prompts del modo Solo la imagen** piden una sola imagen continua que llene el encuadre, con
+  el motivo grande y en el centro, y dejan para cielo o textura la franja que tapa la pestaña de la
+  carpeta, porque la plantilla la recorta o la curva. En la carpeta de Windows, también dejan libre
+  la esquina superior izquierda.
+- **Los prompts del modo Carpeta entera** nombran las partes de la carpeta, de atrás hacia delante, y
+  lo que se queda como está: la pestaña única de la carpeta de Mac y su franja de papel clara, o el
+  escalón curvo de la carpeta de Windows. Sin eso, los modelos producen sin falta carpetas apiladas y
+  pestañas dobles.
+- **Los prompts de Icono libre** piden un solo objeto completo, centrado y sin recortar dentro de un
+  cuadrado, sin suelo, paisaje ni marco alrededor.
+- **Las imágenes de referencia** se nombran por su número y su función. Un motivo sigue siendo
+  reconocible, una imagen de estilo aporta su medio, su paleta, su luz y su textura, y nada de su
+  contenido, y una imagen de colores aporta solo sus colores.
+- **Lo que hay que dejar fuera** se escribe según la forma y el estilo: siempre bordes, marcos,
+  marcas de agua y firmas, el texto salvo que lo hayas pedido, los tópicos del propio estilo (como el
+  monte Fuji en un grabado en madera) salvo que tu idea los pida, y la apariencia de clip art en un
+  estilo realista.
+- **Ningún prompt indica un tamaño.** Los modelos no pintan al número de píxeles que leen, así que
+  el tamaño va en los propios parámetros de la solicitud (ver más abajo).
+
+Hay pruebas que comprueban que están las frases clave en cada familia y cada forma, y la receta
+lleva un número de versión (`RECIPE_VERSION`), así que un aspecto puede decir qué receta lo hizo.
+
+## Estilos
+
+Escribe / en el cuadro del prompt para ver treinta estilos, en cinco grupos: Foto y 3D, Materiales y
+artesanía, Pintura y dibujo, Impresión, y Digital y gráfico. Escribe parte de un nombre para acotar
+la lista. Un estilo va aparte, junto al cuadro, nunca dentro de tus palabras, así que la idea se
+conserva palabra por palabra y el estilo se añade después. Para quitarlo, haz clic en su x.
+
+Cada estilo es una fila de `crates/folderskin-ai/src/styles.json`, que leen la app, la línea de
+comandos (`folderskin ai styles` los enumera) y el código que escribe los prompts. Una fila tiene el
+nombre del estilo, una descripción de una línea, las palabras que usa el prompt para él (el medio, y
+después su técnica, su luz, su color y su textura, y nunca el nombre de un artista), cómo rotula las
+palabras, lo que suele añadir sin que nadie lo pida, tres comprobaciones que un resultado debería
+superar, y el preajuste propio de cada proveedor para él, cuando lo tiene (el preajuste de estilo de
+Stability, y el preajuste o el tipo de estilo de Ideogram). Los nombres de estilo de versiones
+anteriores siguen funcionando: `travel` es ahora Póster de viaje (`screenprint`), `ukiyoe` es
+Grabado en madera y `diorama` es Efecto maqueta.
+
+El mismo menú tiene **Ideas** para empezar (cada una es un motivo, sin estilo) y **Tus prompts**.
+Los botones de estilo de un chat nuevo funcionan igual: cada clic llena el cuadro con otra idea y
+pone junto a él el estilo del botón.
+
+## Texto en la imagen
+
+Pon entre comillas las palabras que quieras en el aspecto: *un zorro que lee un mapa, con la palabra
+“ESCAPADA”*. FolderSkin rotula exactamente lo que va entre comillas, deletreado letra por letra para
+los modelos que siguen instrucciones, una sola vez, con las letras propias del estilo y colocado
+según la forma: de lado a lado por el centro del panel delantero en una carpeta, y sobre el objeto o
+debajo de él en un icono libre. Sin comillas, el prompt pide que no haya ningún texto. Que sean una
+o dos palabras cortas, porque un texto largo sigue saliendo ilegible.
+
+## Tus prompts
+
+**Guardar como prompt**, en el menú /, guarda lo que hay en el cuadro y su estilo con el nombre que
+le pongas. Desde entonces aparece en **Tus prompts**: elígelo y el cuadro y el estilo vuelven a
+quedar como estaban. Si escribes un nombre que ya está guardado, FolderSkin te lo dice y reemplaza
+ese prompt. La x junto a uno de los tuyos lo quita, y **Deshacer** lo recupera durante unos
+segundos.
+
+Los prompts guardados se conservan en `skills.json`, junto a la carpeta `skins`
+([ARCHITECTURE.md](../ARCHITECTURE.md#saved-skins) dice dónde está, en inglés), como skills con el
+formato `folderskin.skill/1` que describe `crates/folderskin-ai/src/skill.rs`. Una skill separa lo
+que muestra una imagen (`idea`) de cómo se ve (`base_style`, o su propio `treatment`, `palette` y
+`light`), así que un mismo estilo guardado puede ir con cualquier idea. Cada skill se comprueba antes
+de escribirse: necesita un nombre de hasta 60 caracteres y algo que guardar, su estilo tiene que ser
+uno de los de FolderSkin, su propio tratamiento tiene de 8 a 60 palabras y le dice al modelo qué
+hacer en lugar de qué no hacer, y la skill entera cabe en 4 KB. Un prompt que nombra a alguien como
+estilo (“in the style of” o “by” seguidos de un nombre) se guarda después de un aviso, porque
+describir la técnica funciona mejor.
+
+## Imágenes de referencia
+
+Una imagen que añades a un prompt se usa como **Motivo**, salvo que indiques otra cosa. Haz clic en
+su miniatura para usarla como **Estilo** (un estilo que imitar, sin tomar nada de lo que muestra) o
+como **Colores** (su paleta y nada más). Las imágenes llegan al modelo en ese orden, después de la
+plantilla, y el prompt nombra cada una por su número y su función.
 
 ## Qué se envía a cada proveedor
 
@@ -129,9 +244,10 @@ cabecera que lleva la clave, el tipo de contenido y cada campo se comprueban tal
 red.
 
 Las opciones van en los parámetros propios de cada proveedor, nunca en el texto del prompt. El tamaño
-es el de la forma (1024 × 958 para la ilustración del estilo Mac): se envía exacto cuando un
-proveedor acepta cualquier tamaño, y si no, como el tamaño o la relación de aspecto más cercanos que
-ofrezca:
+es el de la forma (1024 × 960 para la ilustración de la carpeta de Mac, 1024 × 800 para la de
+Windows, una carpeta entera en sus propias proporciones y un icono libre en cuadrado): se envía
+exacto cuando un proveedor acepta cualquier tamaño, y si no, como el tamaño o la relación de aspecto
+más cercanos que ofrezca:
 
 | Proveedor | Solicitud | Tamaño | También se envía |
 |---|---|---|---|
@@ -194,7 +310,7 @@ workspace se comprueba en compilación cruzada sin ella.
 | “… finished without painting a picture” | El proveedor respondió sin una imagen y sin decir por qué (el `NO_IMAGE` de Gemini): vuelve a intentarlo o reformula la idea |
 | “… declined that prompt: its filter blocked the picture” | El filtro de seguridad del proveedor detuvo el prompt o la imagen, como la imagen difuminada de Stability o la comprobación de seguridad de Ideogram: reformula el prompt |
 | “… said: … (error 400)” | El mensaje del propio proveedor, tal como llegó. Conviene informar de ello si nombra un campo que envió FolderSkin |
-| “the model drew a scene instead of a folder on a plain backdrop” | Modo de carpeta entera sin un fondo que se pueda recortar: vuelve a intentarlo o cambia a Solo la imagen |
+| “the model drew a scene instead of a folder on a plain backdrop” | Modo de carpeta entera sin un fondo que se pueda recortar: vuelve a intentarlo o cambia a Solo la imagen. La app guarda esa imagen como ilustración para su propia carpeta, y un icono libre como la imagen cuadrada que es, y te lo dice. |
 | “the provider returned something that is not an image” | Una respuesta mal formada o que no es una imagen |
 
 ## Carpetas hechas en un asistente de chat
@@ -210,10 +326,21 @@ inglés), incluido por qué la foto de un objeto sobre papel magenta sigue siend
 ## Conservar un aspecto generado
 
 Cada aspecto generado se guarda en cuanto llega, igual que una imagen importada, junto con el
-proveedor, el modelo y tu prompt. Después de reiniciar, está en la galería, en Mis aspectos, y
-borrarlo ahí lo elimina del disco. [ARCHITECTURE.md](../ARCHITECTURE.md#saved-skins) dice dónde
-están los archivos (en inglés). Si la escritura falla (por ejemplo, con el disco lleno), el aspecto
-se queda durante el resto de la sesión en lugar de perderse.
+proveedor, el modelo, tu prompt y la forma para la que se hizo. Después de reiniciar, está en la
+galería, en Mis aspectos, y borrarlo ahí lo elimina del disco.
+[ARCHITECTURE.md](../ARCHITECTURE.md#saved-skins) dice dónde están los archivos (en inglés). Si la
+escritura falla (por ejemplo, con el disco lleno), el aspecto se queda durante el resto de la sesión
+en lugar de perderse.
+
+También guarda de qué se hizo, en `recipe` dentro del índice de los aspectos, para que un resultado
+se pueda rastrear hasta su prompt y volver a hacerse: el prompt exactamente como se envió, el prompt
+negativo en los proveedores que lo admiten, el estilo, las palabras que rotula, la función de cada
+imagen y un hash de ella, la plantilla y su versión (`mac-folder/1`), el color de recorte y la
+versión de la receta.
+
+El chat conserva sus palabras y sus imágenes mientras miras otras vistas, incluida una imagen que
+todavía se está creando, y cuando FolderSkin se vuelve a abrir empieza uno nuevo. Los chats
+anteriores están en la lista de chats, cada uno con la forma para la que era.
 
 Para compartir aspectos generados con todo el mundo, ponlos en un paquete de la comunidad:
 etiquétalos y usa **Compartir con la comunidad** en la app, o convierte una carpeta de renders

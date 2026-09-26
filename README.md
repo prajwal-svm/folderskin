@@ -102,6 +102,10 @@ again.
 4. Press **Revert** to put the operating system's default icon back. A folder that already has a
    custom icon offers **Remove custom icon** as soon as you pick it.
 
+The button in the window's top right corner closes the folder panel, to give the library the
+room, and opens it again (⇧⌘\ on a Mac, Ctrl+Shift+\ elsewhere). It stays as you left it, and
+choosing a folder opens it.
+
 To give the folders inside it the same skin, turn on **Include subfolders** under the folder's
 name. It counts them in the background with no limit (all levels down, leaving out hidden
 folders, app bundles and other disks), and the button becomes **Apply to 25 folders**, or however
@@ -182,10 +186,12 @@ computer, for free: set it up once, and it needs no key and sends nothing anywhe
 Apple silicon Macs with macOS 14 or later, and on Windows and Linux PCs. Or use **your own API
 key** from a provider you already use. The key is encrypted and stored on your computer (with no
 keychain password prompts), FolderSkin has no server of its own, and nothing is sent anywhere
-until you press Enter. Open **Generate with AI**, describe a scene, pick a style, and
-choose **Whole folder** (the model paints the whole folder from FolderSkin's template, like a
-poster) or **Just the art** (flat art wrapped onto FolderSkin's folder). Every result is saved to
-**Yours** and can be tried on at once.
+until you press Enter. Open **Generate with AI** and describe a scene. Type / for thirty styles,
+ideas to start from and the prompts you've saved, and @ to pick what it's for: the Mac's folder,
+Windows' folder, or a **Free icon** that stands on its own. For a folder, choose **Whole folder**
+(the model paints the whole folder from FolderSkin's template, like a poster) or **Just the art**
+(flat art wrapped onto FolderSkin's folder). Words in quotes are lettered on the skin. Every
+result is saved to **Yours** and can be tried on at once.
 
 Choose where pictures are made in **Settings → AI Provider**: set up the Local Model there, or
 paste a key. Each provider's name links to the page where you make one.

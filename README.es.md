@@ -106,6 +106,10 @@ paquete se añade entero o no se añade, y siempre puedes llenar la biblioteca m
    la carpeta ya tiene un icono personalizado, en cuanto la eliges aparece **Quitar el icono
    personalizado**.
 
+El botón de la esquina superior derecha de la ventana cierra el panel de la carpeta, para dejarle
+todo el espacio a la biblioteca, y lo vuelve a abrir (⇧⌘\ en Mac, Ctrl+Shift+\ en los demás
+sistemas). El panel se queda como lo dejaste, y al elegir una carpeta se abre.
+
 Para darles el mismo aspecto a las carpetas que contiene, activa **Incluir subcarpetas** debajo del
 nombre de la carpeta. Las cuenta en segundo plano, sean las que sean (en todos los niveles, sin las
 carpetas ocultas, las apps ni otros discos), y el botón pasa a ser **Aplicar a 25 carpetas**, o las
@@ -190,10 +194,13 @@ propio equipo, gratis: lo configuras una vez, y no necesita clave ni envía nada
 Funciona en Mac con chip de Apple y macOS 14 o posterior, y en PC con Windows y Linux. O usa **tu
 propia clave de API** de un proveedor que ya uses. La clave se cifra y se guarda en tu equipo (sin
 que el llavero te pida contraseñas), FolderSkin no tiene servidor propio y no se envía nada hasta
-que presionas Enter. Abre **Generar con IA**, describe una escena, escoge un estilo y elige entre
+que presionas Enter. Abre **Generar con IA** y describe una escena. Escribe / para ver treinta
+estilos, ideas para empezar y los prompts que guardaste, y @ para elegir para qué es la imagen: la
+carpeta de Mac, la de Windows o un **Icono libre**, que va por sí solo. Para una carpeta, elige entre
 **Carpeta entera** (el modelo pinta toda la carpeta a partir de la plantilla de FolderSkin, como un
-póster) o **Solo la imagen** (arte plano que se coloca sobre la carpeta de FolderSkin). Cada
-resultado se guarda en **Mis aspectos** y puedes probarlo al momento.
+póster) o **Solo la imagen** (arte plano que se coloca sobre la carpeta de FolderSkin). Lo que
+escribas entre comillas aparece rotulado en el aspecto. Cada resultado se guarda en **Mis aspectos**
+y puedes probarlo al momento.
 
 Elige dónde se crean las imágenes en **Ajustes → Proveedor de IA**: configura ahí el Modelo local o
 pega una clave. El nombre de cada proveedor lleva a la página donde se crea una.

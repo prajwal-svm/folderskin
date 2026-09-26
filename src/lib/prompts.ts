@@ -1,7 +1,7 @@
 /**
  * Art direction shared by the assistant and the "use your own chat" helper: the ideas the style
  * chips fill in, and the prompt for a chat app's own chat. The styles themselves are the one
- * table in styles.ts. The same text is in docs/PROMPTS.md; keep them in step.
+ * table in styles.ts. docs/PROMPTS.md has the same text, and prompts.test.ts keeps it in step.
  */
 import { styleById, type Style } from "./styles";
 import ai from "../locales/en/ai.json";

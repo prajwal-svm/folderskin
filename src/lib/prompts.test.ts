@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { chatPrompt, CHIP_STYLES, STYLES, styleTags, SUGGESTIONS, suggestion, surprise } from "./prompts";
+import ai from "../locales/en/ai.json";
 
 describe("the ideas the chips fill in", () => {
   it("gives every chip at least two ideas that say what the picture shows, and leave the style to its slot", () => {
@@ -69,5 +71,30 @@ describe("chat prompt", () => {
 
   it("always asks for the flat magenta background the importer cuts away", () => {
     expect(chatPrompt("x", null)).toContain("pure flat magenta #FF00FF");
+  });
+});
+
+describe("docs/PROMPTS.md", () => {
+  // Line breaks in the guide are only where its lines wrap.
+  const flat = (s: string) => s.replace(/\s+/g, " ");
+  const guide = flat(readFileSync(new URL("../../docs/PROMPTS.md", import.meta.url), "utf8"));
+
+  it("has the prompt the app fills in, word for word", () => {
+    expect(guide).toContain(flat(chatPrompt("", null)));
+  });
+
+  it("lists every style the app offers, as the app names and describes it", () => {
+    for (const s of STYLES) {
+      const name = ai.styles[s.id as keyof typeof ai.styles];
+      const said = ai.styleDescriptions[s.id as keyof typeof ai.styleDescriptions];
+      expect(guide, s.id).toContain(`**${name}**: ${said.charAt(0).toLowerCase()}${said.slice(1)}`);
+    }
+  });
+
+  it("has every idea the style buttons fill in, under the style it was written for", () => {
+    for (const [id, ideas] of Object.entries(SUGGESTIONS)) {
+      const name = ai.styles[id as keyof typeof ai.styles];
+      for (const idea of ideas) expect(guide, idea).toContain(`**${name}.** ${idea}`);
+    }
   });
 });

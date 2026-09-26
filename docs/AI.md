@@ -16,9 +16,10 @@ provider has a key.
 ![Settings, AI Provider: the Local Model and seven providers, each ticked or marked No key, and the model on this machine below them](images/ai-providers.webp)
 
 There is no FolderSkin server, no proxy, no bundled key and no free tier to subsidise. With a key,
-nothing is sent anywhere until you press **Generate**, and what is sent is your prompt, the size
-the shape needs, and the reference picture if you picked one (for a whole folder without one,
-FolderSkin's own blank folder template).
+nothing is sent anywhere until you press **Generate**, and what is sent is the prompt FolderSkin
+writes from your words, the size the shape needs, and the pictures that go with it: for a whole
+folder, FolderSkin's own blank template of that folder, and after it any reference pictures you
+added.
 
 ## Where the key lives
 
@@ -48,27 +49,52 @@ The key is read at the moment of a request, never included in an error message, 
 returned to the app's window. **Remove key** in the provider dialog deletes it from the file,
 and deleting `keys.json` removes them all.
 
-## The two shapes
+## What a picture is for
 
-This is the choice that matters most, and it is not about quality.
+Every picture is made for a shape. The chip beside the model's name, under the prompt box, shows
+which one with a small picture of it. Click it, or type @ in the box, to pick another:
 
-**Just the art** asks the model for a flat 1024 × 958 picture and FolderSkin wraps it onto its own
-folder template, exactly like a photo you add. The geometry is ours, so every skin lines up with
-every other, at every icon size. Any provider can do this, including the ones with no
-transparency support. This is the default and the right answer most of the time.
+- **Mac folder**: FolderSkin's folder, as Finder shows it.
+- **Windows folder**: the folder Windows draws.
+- **Free icon**: one thing on its own, such as a mascot, an object or a character, with no folder
+  around it. It goes on any folder as it is.
 
-**Whole folder** asks the model to draw the folder itself on a transparent or keyed background,
-and that image becomes the icon directly, bypassing the compositor. You give up pixel-exact
-geometry and gain artwork that can sit in real relief and break over the folder's top edge.
+After @, type part of a name (`@win`) and press Return or Tab, or click one. The chip changes and
+the @ word leaves the box. A new chat starts on the folder the folder panel shows skins on.
 
-When the model can work from a picture (OpenAI, Grok, Gemini and FLUX.2) and you have not
-attached one, FolderSkin sends its own blank folder template as that picture: our folder, painted
-flat light grey, centred on the solid key colour, 1024 × 958 pixels (`compositor::blank_template`).
-The prompt tells the model to repaint that exact folder, keeping its outline, tab, paper strip,
-size and position, and to leave the backdrop flat. The result keeps FolderSkin's silhouette
-instead of whatever folder the model would have invented. Because the template sits on the key
-colour, such a run always takes the keyed route below, even on a model that could return
-transparency. A reference picture you attach yourself is used as the artwork instead, as before.
+The shape belongs to the chat. Each picture is made for the shape that was picked when it was
+sent, an older chat opens on the shape of its last picture, and the skin is saved as made for
+that shape. The shape decides the prompt, the template, the size and how the result is cut out,
+with every provider and with the Local Model.
+
+## Just the art or the whole folder
+
+For a folder, this is the choice that matters most, and it is not about quality.
+
+**Just the art** asks the model for a flat picture in the folder's own proportions (1024 × 960
+for the Mac's folder, 1024 × 800 for Windows'), and FolderSkin wraps it onto its own folder,
+exactly like a photo you add. The geometry is ours, so every skin lines up with every other, at
+every icon size. Any provider can do this, including the ones with no transparency support.
+This is the default and the right answer most of the time.
+
+**Whole folder** asks the model to paint the folder itself, and that image becomes the icon
+directly, bypassing the compositor. You give up pixel-exact geometry and gain artwork that can
+sit in real relief and break over the folder's top edge.
+
+When the model can work from a picture (OpenAI, Grok, Gemini and FLUX.2, and the Local Model),
+FolderSkin sends its own blank template of the folder as the first picture: the folder painted
+flat light grey, centred on a flat key colour, in the folder's own proportions and at most 1024
+pixels on its longer side (`Base::blank`). The prompt tells the model to repaint that exact
+folder, keeping its outline, its tab, the parts that make it that folder, its size and its
+position, and to leave the backdrop as it is. The key colour is never named, because a model
+told about magenta paints with it. FolderSkin then cuts the painting out along the folder's own
+outline, so the result keeps FolderSkin's silhouette and keeps the painting's colours right up
+to its edge. A painting that moved or reshaped the folder is cut out by its key colour instead.
+Reference pictures you add go after the template, each with the job you gave it, as many as the
+model takes.
+
+A **Free icon** is always painted whole: one subject, complete, in the middle of a square, on a
+transparent backdrop or on a key colour, and cut out.
 
 ## How transparency is handled
 
@@ -77,42 +103,123 @@ FolderSkin picks the right route for the model you chose:
 - **Native alpha.** The request asks for a transparent background and the returned PNG already
   has one. FolderSkin only trims the transparent margin. GPT Image 2.5 Flare and Sunburst work
   this way.
-- **No alpha.** The prompt asks for the folder alone on a flat key colour: magenta, `#FF00FF`,
-  for every provider but Google. FolderSkin then removes that colour, removes the magenta that
-  bled into the soft edge (the step that stops a cutout looking like it has a pink halo), and
-  trims. Magenta is used because it almost never appears in folder art, and because a missing
-  backdrop is detectable: if the border is not magenta, the model ignored the instruction and
-  FolderSkin says so instead of applying a broken icon. Recraft is also told the colour as a
-  parameter (`controls.background_color`), so its backdrop comes out flat whatever style you ask
-  for.
-- **Green for Gemini.** Gemini leaves a dark reddish rim around a subject on magenta, so its
-  prompt and its template use green, `#00FF00`, instead. Green does belong in folder art (every
-  leaf and field), so a green backdrop is only taken away where it reaches the edge of the
-  picture, starting from the shade of green Gemini actually painted, and the greens painted on
-  the folder stay (`matte::cutout_connected`).
+- **No alpha.** The prompt asks for the folder alone on a flat key colour. FolderSkin then
+  removes that colour, removes the key that bled into the soft edge (the step that stops a
+  cutout looking like it has a coloured halo), and trims. A missing backdrop is detectable: if
+  the border is not the key colour, the model ignored the instruction, and FolderSkin keeps the
+  picture as artwork for its own folder instead of applying a broken icon. Recraft is also told
+  the colour as a parameter (`controls.background_color`), so its backdrop comes out flat
+  whatever style you ask for.
+
+The key is magenta, `#FF00FF`, because it almost never appears in folder art. It is green,
+`#00FF00`, for Gemini, which leaves a dark reddish rim around a subject on magenta, and for
+anything that is meant to be pink or violet, which a magenta cut would eat: the Neon, 70s
+airbrush, Pop art and Synthwave styles, and any idea that names pink or violet in one of
+FolderSkin's languages (pink, lilac, rose, rosa, morado, ピンク, 보라, 粉红 and the like). Green
+does belong in folder art, in every leaf and field, so a green backdrop is only taken away where
+it reaches the edge of the picture, starting from the shade of green actually painted, and the
+greens painted on the folder stay (`matte::cutout_connected`).
+
+A whole folder painted on FolderSkin's template takes neither route. It is cut along the
+template's own outline, as described above, and only falls back to the key when the folder moved.
 
 The keying code is in `crates/folderskin-core/src/matte.rs` and is unit-tested, including the
 case of a genuinely pink subject on a magenta backdrop.
 
 ## Prompts
 
-`crates/folderskin-ai/src/prompts.rs` composes the prompt from your words plus a contract. The
-parts that do the work are structural rather than stylistic:
+Your words are never rewritten. `crates/folderskin-ai/src/recipe.rs` gathers what a picture needs
+into one recipe: your idea, the shape and what it keeps, the style, any lettering, your
+pictures and the job each one does, and what goes around the subject. `prompts.rs` then writes
+that recipe out the way each family of models reads best, always in the same order: what to
+paint, how it looks, how it is framed, the pictures, the lettering, and what to leave out.
 
-- **Just-the-art prompts** forbid drawing a folder, an icon, a device or a mockup, and reserve the
-  top eighth and a 6% border as dead space, because the template crops or curves those away.
-- **Whole-folder prompts** pin the construction: exactly three parts, one tab, one visible paper
-  edge, one front panel, and an explicit instruction not to add layers. Without that sentence
+- **OpenAI and Gemini** get labelled lines (Style, Composition, Lettering, Constraints), with the
+  pictures called image 1, image 2 and so on.
+- **Grok** gets the same, with the pictures called `<IMAGE_0>`, `<IMAGE_1>` as Grok names them.
+- **FLUX** (Black Forest Labs and the Local Model) gets plain prose with the subject first and no
+  instructions about what not to draw, because FLUX has no negative prompt and paints what it is
+  told to avoid. The Local Model's prompt stays inside the 400 tokens its text encoder reads,
+  shortening the style to its medium when it has to.
+- **Ideogram and Recraft** get a short design brief, with the lettering early.
+- **Stability** gets a short list. It and Ideogram get what to leave out as their negative
+  prompt (below).
+
+The parts that do the work are structural rather than stylistic:
+
+- **Just-the-art prompts** ask for one continuous picture that fills the frame, with the subject
+  large and in the middle, and keep the band the folder's tab hides for sky or texture, because
+  the template crops or curves it away. Windows' folder keeps its upper-left corner clear too.
+- **Whole-folder prompts** name the folder's parts, back to front, and what stays as it is: the
+  Mac's single tab and its pale paper strip, or the curved step on Windows' folder. Without that,
   models reliably produce stacked folders and double tabs.
-- **Template prompts** (`compose_on_template`) go with the blank template: the attached image
-  is the exact folder to repaint, its shape and framing stay as they are, the idea is painted
-  across the back and front panels, and the key colour stays flat.
-- **All of them** end with a hard output contract naming the isolation of the subject, and
-  either the key colour or the transparent background. They never state a size: models don't
-  paint to a pixel count they read, so the size goes in the request's own parameters (below).
+- **Free-icon prompts** ask for one complete object, centred and uncropped in a square, with no
+  floor, scenery or frame around it.
+- **Reference pictures** are named by number and job. A subject is kept recognisably the same, a
+  style picture gives its medium, palette, light and texture and none of its content, and a
+  colours picture gives only its colours.
+- **What to leave out** is written for the shape and the style: borders, frames, watermarks and
+  signatures always, text unless you asked for some, the style's own clichés (such as Mount Fuji
+  for a woodblock print) unless your idea asks for them, and clip-art looks for a realistic style.
+- **None of them state a size.** Models don't paint to a pixel count they read, so the size goes
+  in the request's own parameters (below).
 
-You can edit these templates. They are ordinary Rust string constants with tests that assert
-the load-bearing phrases are present.
+Tests assert the load-bearing phrases for every family and every shape, and the recipe is
+versioned (`RECIPE_VERSION`) so a skin can say which one made it.
+
+## Styles
+
+Type / in the prompt box for thirty styles, in five groups: Photo and 3D, Materials and craft,
+Painting and drawing, Print, and Digital and graphic. Type part of a name to narrow the list.
+A style goes in its own slot beside the box, never into your words, so the idea stays word for
+word and the style is added after it. Click the slot's x to take it off.
+
+Each style is one row of `crates/folderskin-ai/src/styles.json`, which the app, the command line
+(`folderskin ai styles` lists them) and the prompt writer all read. A row has the style's name,
+a one-line description, the words the prompt uses for it (the medium, then its technique, light,
+colour and texture, and never a name of an artist), how it letters words, what it tends to add
+unasked, three checks a result should pass, and each provider's own preset for it where one
+exists (Stability's style preset, and Ideogram's style preset or style type). Old style names from
+earlier versions still work: `travel` is now Travel poster (`screenprint`), `ukiyoe` is
+Woodblock print and `diorama` is Tilt-shift miniature.
+
+The same menu has **Ideas** to start from (a subject each, with no style) and **Your prompts**.
+The style buttons under a new chat work the same way: each click fills the box with another idea
+and puts the button's style in the slot.
+
+## Lettering
+
+Put the words you want on the skin in quotes: *a fox reading a map, with the word "ESCAPE"*.
+FolderSkin letters exactly what is quoted, spelled out letter by letter for the models that read
+instructions, once, in the style's own lettering, placed for the shape: across the middle of the
+front panel for a folder, and on the object or beneath it for a free icon. Without quotes, the
+prompt asks for no text at all. Keep it to one or two short words, because long text still comes
+out garbled.
+
+## Your prompts
+
+**Save as a prompt**, in the / menu, keeps what is in the box, with its style, under a name you
+give it. It is listed under **Your prompts** from then on: pick it and the box and the style slot
+fill in again. Typing a name that is taken replaces that prompt, after saying so. The x beside
+one of yours removes it, with **Undo** for a few seconds after.
+
+Saved prompts are kept in `skills.json`, beside the `skins` folder
+([ARCHITECTURE.md](ARCHITECTURE.md#saved-skins) says where that is), as skills in the
+`folderskin.skill/1` format that `crates/folderskin-ai/src/skill.rs` describes. A
+skill keeps what a picture shows (`idea`) apart from how it looks (`base_style`, or its own
+`treatment`, `palette` and `light`), so one saved look can go with any idea. Every skill is
+checked before it is written: it needs a name of up to 60 characters and something to save, its
+style must be one FolderSkin has, its own treatment is 8 to 60 words and tells the model what to
+do rather than what not to, and the whole skill fits in 4 KB. A prompt that names someone as
+its style ("in the style of" a name, or "by" one) is saved after a word, because describing the
+technique works better.
+
+## Reference pictures
+
+A picture added to a prompt is used for its **Subject** unless you say otherwise. Click its chip
+to make it the **Style** (a look to match, taking none of what it shows) or the **Colours** (its
+palette and nothing else). The pictures go to the model in that order, after the template, and
+the prompt names each one by number and job.
 
 ## What each provider is sent
 
@@ -124,8 +231,9 @@ documentation says, so the method, the address, the key's header, the content ty
 field are checked on the wire.
 
 Settings go in each provider's own parameters, never in the words. The size is the shape's
-(1024 × 958 for the Mac look's artwork), sent exactly where a provider takes any size and as the
-nearest size or aspect ratio it offers where it doesn't:
+(1024 × 960 for the Mac's artwork, 1024 × 800 for Windows', a whole folder in its own shape and a
+free icon square), sent exactly where a provider takes any size and as the nearest size or
+aspect ratio it offers where it doesn't:
 
 | Provider | Request | Size | Also sent |
 |---|---|---|---|
@@ -186,7 +294,7 @@ fail in `aws-lc-sys`'s build script. The rest of the workspace cross-checks with
 | "… finished without painting a picture" | The provider answered without a picture and without saying why (Gemini's `NO_IMAGE`), so try again or reword the idea |
 | "… declined that prompt: its filter blocked the picture" | The provider's safety filter stopped the prompt or the picture, such as Stability's blurred picture or Ideogram's safety check, so reword it |
 | "… said: … (error 400)" | The provider's own words, shown as they came. Worth reporting if it names a field FolderSkin sent |
-| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Just the art |
+| "the model drew a scene instead of a folder on a plain backdrop" | Whole-folder mode with no keyable background, so try again or switch to Just the art. The app keeps such a picture as artwork for its own folder, and a free icon as the square picture it is, and says so. |
 | "the provider returned something that is not an image" | A malformed or non-image response |
 
 ## Folders made in a chat assistant
@@ -201,10 +309,19 @@ the exact rules, including why a photo of something on magenta paper stays a pic
 ## Keeping a generated skin
 
 Every generated skin is saved the moment it arrives, like an imported picture, together with
-the provider, the model and your prompt. It is in the gallery under Yours after a restart, and
-deleting it there removes it from disk. [ARCHITECTURE.md](ARCHITECTURE.md#saved-skins) says
-where the files live. If the write fails (a full disk, say), the skin stays for the rest of the
-session rather than being lost.
+the provider, the model, your prompt and the shape it was made for. It is in the gallery under
+Yours after a restart, and deleting it there removes it from disk.
+[ARCHITECTURE.md](ARCHITECTURE.md#saved-skins) says where the files live. If the write fails (a
+full disk, say), the skin stays for the rest of the session rather than being lost.
+
+It also keeps what it was made from, under `recipe` in the skins' index, so a result can be
+traced to its prompt and made again: the prompt exactly as it was sent, the negative prompt for
+the providers that take one, the style, the words it letters, each picture's job and a hash of
+it, the template and its version (`mac-folder/1`), the key colour, and the recipe's version.
+
+The chat keeps its words and pictures while you look at other views, including a picture that is
+still being made, and a new one starts when FolderSkin opens again. Earlier chats are in the
+chat list, each on the shape it was for.
 
 To share generated skins with everyone, put them in a community pack: tag them and use **Share
 with community** in the app, or turn a folder of saved renders into a pack with

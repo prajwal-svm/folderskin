@@ -49,46 +49,81 @@ background as exactly #FF00FF" and try again.
 
 ## Styles that suit a folder
 
-Pick one, or mix two:
+Describe one after `Style:`, or mix two. These are the thirty styles FolderSkin's own prompt box
+offers when you type /. Under **No API key?**, the app fills in the exact words it uses for the
+style you pick.
 
-- vintage travel poster, flat colour, grainy print texture
-- ukiyo-e woodblock print with bold outlines
-- 1970s airbrushed poster with glossy chrome
-- surreal photo collage with cut-paper edges and halftone dots
-- art nouveau poster with ornate borders and thin gold lines
-- Renaissance oil painting with dramatic light
-- cinematic photograph at golden hour, 35 mm film grain
-- miniature diorama shot with a tilt-shift lens
-- risograph print in three inks
-- soft clay render, like a stop-motion set
-- constructivist poster with bold diagonals
-- early-90s computer desktop, pixel icons and dithering
+**Photo and 3D**
+
+- **Studio photo**: a true-to-life photograph in soft studio light
+- **Film photo**: a cinematic 35 mm photograph with natural light and grain
+- **Product render**: a polished 3D render with studio light and real materials
+- **Isometric 3D**: a tidy 3D model at the isometric angle
+- **Tilt-shift miniature**: a real scene photographed like a tiny scale model
+
+**Materials and craft**
+
+- **Clay**: soft handmade modelling clay in warm light
+- **Glass**: sculpted translucent glass with refraction and caustics
+- **Neon**: glowing neon tubes against deep darkness
+- **Enamel**: glossy cloisonné enamel with raised gold outlines
+- **Embroidery**: dense satin-stitch embroidery in raised glossy thread
+- **Papercut**: layered cut paper with real shadows between the layers
+- **Stained glass**: jewel-toned leaded glass lit from behind
+
+**Painting and drawing**
+
+- **Oil painting**: rich classical oil paint with dramatic light
+- **Watercolour**: loose, luminous transparent washes
+- **Gouache**: opaque matte paint in flat, harmonious shapes
+- **Pencil**: a detailed graphite drawing with a full tonal range
+- **70s airbrush**: silky gradients, glossy chrome and star glints
+
+**Print**
+
+- **Woodblock print**: carved keylines, flat colour and wood grain
+- **Linocut**: bold carved relief in black and one ink
+- **Risograph**: grainy spot colour with slight misregistration
+- **Travel poster**: mid-century flat colour with bold light
+- **Pop art**: black outlines, primaries and halftone dots
+- **Collage**: surreal cut paper and photographic fragments
+
+**Digital and graphic**
+
+- **Pixel art**: crisp 16-bit pixels and a limited palette
+- **Blueprint**: white technical linework on deep blue
+- **Low poly**: faceted 3D in flat-shaded triangles
+- **Anime**: clean cel-shaded illustration
+- **Art nouveau**: whiplash lines, gold outlines and jewel tones
+- **Art deco**: bold symmetrical geometry in gold and black
+- **Synthwave**: neon-lit 1980s chrome and haze
 
 ## Ideas to start from
 
-Each line is a whole brief, subject and style together. Paste it after `Scene:` and delete the
-`Style:` line. These are the ideas the app's style buttons fill in, two per style.
+Each line is a subject, written for the style in bold. Paste it after `Scene:` and describe that
+style after `Style:`. These are the ideas the style buttons under a new chat fill in, two per
+style. A word in quotes is meant as lettering on the folder.
 
-- **Travel poster.** A tiny red seaplane landing on a turquoise lagoon at sunset, palm silhouettes and a low orange sun, as a vintage travel poster in flat colours with grainy print texture and the word ESCAPE in bold retro letters.
-- **Travel poster.** A cable car climbing past snowy peaks toward a little alpine hotel, as a 1950s travel poster: flat blues and whites, one red accent, soft print grain.
-- **Woodblock.** A giant koi leaping over a great wave under a pale moon, as a ukiyo-e woodblock print with bold black outlines, indigo and vermilion on washi paper.
-- **Woodblock.** A fox in a straw hat crossing a lantern-lit bridge in the rain, as an Edo-period woodblock print with flat colour blocks and fine rain lines.
-- **70s airbrush.** A chrome cassette tape floating over a neon desert highway at dusk, as a 1970s airbrushed poster with glossy highlights and a purple-to-tangerine sky.
-- **70s airbrush.** A shiny roller skate orbiting a ringed planet, as a 70s airbrush illustration with chrome reflections, lens flares and a deep violet starfield.
-- **Collage.** A vintage astronaut floating between cut-paper clouds, holding a steaming coffee cup, as a surreal photo collage with halftone dots and torn-paper edges.
-- **Collage.** A giant hand watering a tiny city skyline like a houseplant, as a retro magazine collage with halftone print, paper grain and a mustard-yellow sky.
-- **Art nouveau.** A woman whose hair turns into ocean waves, framed by lilies and ornate gold lines, as an art nouveau poster in muted teal, cream and coral.
-- **Art nouveau.** A peacock perched on a crescent moon among swirling vines, as an art nouveau poster with thin gold outlines and jewel greens and blues.
-- **Oil painting.** A cat in a velvet cloak holding a tiny laptop, as a Renaissance oil painting with dramatic candlelight, deep reds and golds, and cracked varnish.
-- **Oil painting.** A whale drifting over a sleepy harbour at dawn, as a romantic oil painting with soft clouds, visible brushwork and warm morning light.
-- **Film still.** A lone red phone booth on a snowy mountain ridge at golden hour, as a cinematic 35 mm film still with soft grain and long shadows.
-- **Film still.** A vintage convertible parked under a neon diner sign on a rainy night, as a moody film still with wet reflections and teal-orange colour.
-- **Tiny diorama.** A busy little post office built inside a wooden drawer, tiny workers sorting letters under warm lamps, as a tilt-shift miniature diorama.
-- **Tiny diorama.** A tiny campsite on top of a giant open book, with a tent, a campfire and paper pine trees, as a tilt-shift miniature photo with soft evening light.
-- **Risograph.** A vinyl record rising like the sun over desert dunes, as a three-colour risograph print in teal, yellow and orange, with visible grain and slight misregistration.
-- **Risograph.** A paper boat sailing through a city of stacked books, as a two-colour risograph in blue and orange with a grainy, slightly offset print.
-- **Clay.** A tiny lighthouse on a rocky island throwing a rainbow beam through puffy clouds, as a soft clay stop-motion scene in pastel colours with fingerprints in the clay.
-- **Clay.** A snail carrying a little house with glowing windows through a mossy forest, as a cosy claymation set in soft light.
+- **Travel poster.** A tiny red seaplane landing on a turquoise lagoon at sunset, palm silhouettes and a low orange sun, with the word “ESCAPE”.
+- **Travel poster.** A cable car climbing past snowy peaks toward a little alpine hotel, in flat blues and whites with one red accent.
+- **Woodblock print.** A giant koi leaping from a moonlit river under a pale moon, in indigo and vermilion.
+- **Woodblock print.** A fox in a straw hat crossing a lantern-lit bridge in the rain, with fine rain lines.
+- **70s airbrush.** A chrome cassette tape floating over a desert highway at dusk, under a purple-to-tangerine sky.
+- **70s airbrush.** A shiny roller skate orbiting a ringed planet, with chrome reflections and lens flares against a deep violet starfield.
+- **Collage.** A vintage astronaut floating between paper clouds, holding a steaming coffee cup.
+- **Collage.** A giant hand watering a tiny city skyline like a houseplant, under a mustard-yellow sky.
+- **Art nouveau.** A woman whose hair turns into ocean waves, among lilies, in muted teal, cream and coral.
+- **Art nouveau.** A peacock perched on a crescent moon among swirling vines, in jewel greens and blues.
+- **Oil painting.** A cat in a velvet cloak holding a tiny laptop, lit by candlelight, in deep reds and golds.
+- **Oil painting.** A whale drifting over a sleepy harbour at dawn, with soft clouds and warm morning light.
+- **Film photo.** A lone red phone booth on a snowy mountain ridge at golden hour, with long shadows.
+- **Film photo.** A vintage convertible parked outside a glowing roadside diner on a rainy night, with wet reflections.
+- **Tilt-shift miniature.** A busy little post office built inside a wooden drawer, tiny workers sorting letters under warm lamps.
+- **Tilt-shift miniature.** A tiny campsite on top of a giant open book, with a tent, a campfire and paper pine trees in soft evening light.
+- **Risograph.** A vinyl record rising like the sun over desert dunes, in teal, yellow and orange.
+- **Risograph.** A paper boat sailing through a city of stacked books, in blue and orange.
+- **Clay.** A tiny lighthouse on a rocky island throwing a rainbow beam through puffy clouds, in pastel colours.
+- **Clay.** A snail carrying a little house with glowing windows through a mossy forest, in soft light.
 
 Or let the folder's name pick the scene: *"Scene: a witty poster about a folder called
 'Taxes 2025'"*.
@@ -97,7 +132,8 @@ Or let the folder's name pick the scene: *"Scene: a witty poster about a folder 
 
 Most chat apps return pictures without transparency. A flat #FF00FF background almost never
 occurs in real artwork, so FolderSkin can find it, remove it and soften the edge cleanly. The
-same trick is used when the in-app assistant asks a model for a whole folder.
+in-app assistant uses the same trick, with green instead of magenta for Google's models and for
+pink or violet art, which it cuts out itself.
 
 If a chat app hands back a picture that really is transparent around the folder, that works
 too: FolderSkin uses the transparency as it is.

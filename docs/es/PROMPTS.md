@@ -49,47 +49,81 @@ el fondo exactamente en #FF00FF y vuelve a intentarlo.
 
 ## Estilos que le van bien a una carpeta
 
-Elige uno, o mezcla dos:
+Describe uno después de `Style:`, o mezcla dos. Son los treinta estilos que ofrece el propio cuadro
+del prompt de FolderSkin cuando escribes /. En **¿Sin clave de API?**, la app completa el prompt con
+las palabras exactas que usa para el estilo que elijas.
 
-- póster de viaje vintage, colores planos, textura de impresión granulada
-- grabado ukiyo-e en madera con contornos gruesos
-- póster de los años setenta hecho con aerógrafo y cromados brillantes
-- collage fotográfico surrealista con bordes de papel recortado y trama de puntos
-- póster art nouveau con bordes ornamentados y finas líneas doradas
-- pintura al óleo renacentista con luz dramática
-- fotografía cinematográfica a la hora dorada, grano de película de 35 mm
-- diorama en miniatura fotografiado con un objetivo tilt-shift
-- impresión en risografía con tres tintas
-- render suave de plastilina, como un decorado de animación stop-motion
-- póster constructivista con diagonales marcadas
-- escritorio de un PC de principios de los noventa, iconos pixelados y tramado
+**Foto y 3D**
+
+- **Foto de estudio**: una foto fiel a la realidad con luz suave de estudio
+- **Foto analógica**: una foto cinematográfica de 35 mm con luz natural y grano
+- **Render de producto**: un render 3D pulido con luz de estudio y materiales reales
+- **3D isométrico**: un modelo 3D limpio visto en ángulo isométrico
+- **Efecto maqueta**: una escena real fotografiada como una maqueta diminuta
+
+**Materiales y artesanía**
+
+- **Plastilina**: plastilina hecha a mano con luz cálida
+- **Vidrio**: vidrio esculpido translúcido con refracción y cáusticas
+- **Neón**: tubos de neón brillantes sobre una oscuridad profunda
+- **Esmalte**: esmalte cloisonné brillante con contornos dorados en relieve
+- **Bordado**: bordado denso a punto de satén con hilo brillante en relieve
+- **Papel recortado**: papel recortado en capas con sombras reales entre ellas
+- **Vitral**: vidrio emplomado en tonos de joya iluminado desde atrás
+
+**Pintura y dibujo**
+
+- **Pintura al óleo**: rico óleo clásico con luz dramática
+- **Acuarela**: aguadas sueltas, luminosas y transparentes
+- **Gouache**: pintura mate y opaca en formas planas y armoniosas
+- **Lápiz**: un dibujo a grafito detallado con toda la gama de tonos
+- **Aerógrafo años 70**: degradados sedosos, cromo brillante y destellos de estrella
+
+**Impresión**
+
+- **Grabado en madera**: líneas talladas, color plano y veta de la madera
+- **Linograbado**: relieve tallado y audaz en negro y una tinta
+- **Risografía**: tintas planas granuladas con un leve desajuste
+- **Póster de viaje**: color plano de mediados de siglo con luz intensa
+- **Pop art**: contornos negros, colores primarios y puntos de trama
+- **Collage**: papel recortado surrealista y fragmentos de fotos
+
+**Digital y gráfico**
+
+- **Pixel art**: píxeles nítidos de 16 bits y una paleta limitada
+- **Plano técnico**: trazos técnicos blancos sobre azul intenso
+- **Low poly**: 3D facetado en triángulos de sombreado plano
+- **Anime**: ilustración limpia con sombreado cel
+- **Art nouveau**: líneas en latigazo, contornos dorados y tonos de joya
+- **Art déco**: geometría simétrica audaz en oro y negro
+- **Synthwave**: cromo ochentero iluminado por neón y bruma
 
 ## Ideas para empezar
 
-Cada línea es un encargo completo, con motivo y estilo juntos. Pégala después de `Scene:` y borra la
-línea `Style:`. Son las ideas con las que los botones de estilo de la app completan el prompt, dos
-por estilo.
+Cada línea es un motivo, pensado para el estilo en negrita. Pégala después de `Scene:` y describe ese
+estilo después de `Style:`. Son las ideas con las que los botones de estilo de un chat nuevo llenan
+el cuadro, dos por estilo. Una palabra entre comillas es texto para rotular en la carpeta.
 
-- **Póster de viaje.** Un hidroavión rojo diminuto que se posa en una laguna turquesa al atardecer, con siluetas de palmeras y un sol naranja bajo, como un póster de viaje vintage de colores planos, con textura de impresión granulada y la palabra ESCAPADA en letras retro gruesas.
-- **Póster de viaje.** Un teleférico que sube entre picos nevados hacia un pequeño hotel alpino, como un póster de viaje de los años cincuenta: azules y blancos planos, un toque de rojo, un grano de impresión suave.
-- **Grabado.** Una carpa koi gigante que salta sobre una gran ola bajo una luna pálida, como un grabado ukiyo-e en madera con gruesos contornos negros, índigo y bermellón sobre papel washi.
-- **Grabado.** Un zorro con sombrero de paja que cruza bajo la lluvia un puente iluminado con farolillos, como un grabado del periodo Edo con bloques de color planos y finas líneas de lluvia.
-- **Aerógrafo años 70.** Una cinta de casete cromada que flota sobre una carretera del desierto llena de neones al anochecer, como un póster de los setenta hecho con aerógrafo, con brillos satinados y un cielo que pasa del morado al mandarina.
-- **Aerógrafo años 70.** Un patín de ruedas reluciente que orbita un planeta con anillos, como una ilustración de aerógrafo de los setenta, con reflejos cromados, destellos de lente y un cielo estrellado violeta intenso.
-- **Collage.** Un astronauta vintage que flota entre nubes de papel recortado con una taza de café humeante en la mano, como un collage fotográfico surrealista con trama de puntos y bordes de papel rasgado.
-- **Collage.** Una mano gigante que riega la silueta de una ciudad diminuta como si fuera una planta de interior, como un collage de revista retro con impresión de trama, grano de papel y un cielo amarillo mostaza.
-- **Art nouveau.** Una mujer cuyo cabello se convierte en olas del océano, enmarcada por lirios y ornamentadas líneas doradas, como un póster art nouveau en tonos apagados de verde azulado, crema y coral.
-- **Art nouveau.** Un pavo real posado en una luna creciente entre enredaderas en espiral, como un póster art nouveau con finos contornos dorados y verdes y azules de piedras preciosas.
-- **Pintura al óleo.** Un gato con una capa de terciopelo que sostiene una laptop diminuta, como una pintura al óleo renacentista con una dramática luz de vela, rojos y dorados profundos y barniz agrietado.
-- **Pintura al óleo.** Una ballena que flota a la deriva sobre un puerto dormido al amanecer, como una pintura al óleo romántica con nubes suaves, pinceladas visibles y una cálida luz de la mañana.
-- **Fotograma.** Una cabina telefónica roja solitaria en una cresta nevada a la hora dorada, como un fotograma cinematográfico de 35 mm con grano suave y sombras largas.
-- **Fotograma.** Un convertible vintage estacionado bajo el letrero de neón de un diner en una noche lluviosa, como un fotograma de ambiente sombrío con reflejos mojados y colores verde azulado y naranja.
-- **Diorama en miniatura.** Una pequeña oficina de correos llena de actividad construida dentro de un cajón de madera, con trabajadores diminutos clasificando cartas bajo lámparas cálidas, como un diorama en miniatura con efecto tilt-shift.
-- **Diorama en miniatura.** Un campamento diminuto sobre un libro abierto gigante, con una tienda de campaña, una fogata y pinos de papel, como una foto en miniatura con tilt-shift y una suave luz de atardecer.
-- **Risografía.** Un disco de vinilo que sale como el sol sobre las dunas del desierto, como una risografía de tres colores en verde azulado, amarillo y naranja, con grano visible y un ligero desajuste de registro.
-- **Risografía.** Un barco de papel que navega por una ciudad de libros apilados, como una risografía de dos colores en azul y naranja, con una impresión granulada y ligeramente desfasada.
-- **Plastilina.** Un faro diminuto en una isla rocosa que proyecta un rayo arcoíris entre nubes esponjosas, como una escena de animación stop-motion de plastilina en colores pastel, con huellas de dedos en la plastilina.
-- **Plastilina.** Un caracol que lleva una casita con ventanas iluminadas por un bosque cubierto de musgo, como un acogedor decorado de animación con plastilina bajo una luz suave.
+- **Póster de viaje.** Un hidroavión rojo diminuto que se posa en una laguna turquesa al atardecer, con siluetas de palmeras y un sol naranja bajo, y la palabra “ESCAPADA”.
+- **Póster de viaje.** Un teleférico que sube entre picos nevados hacia un pequeño hotel alpino, en azules y blancos planos con un toque de rojo.
+- **Grabado en madera.** Una carpa koi gigante que salta de un río iluminado por la luna, bajo una luna pálida, en índigo y bermellón.
+- **Grabado en madera.** Un zorro con sombrero de paja que cruza bajo la lluvia un puente iluminado con farolillos, con finas líneas de lluvia.
+- **Aerógrafo años 70.** Una cinta de casete cromada que flota sobre una carretera del desierto al anochecer, bajo un cielo que pasa del morado al mandarina.
+- **Aerógrafo años 70.** Un patín de ruedas reluciente que orbita un planeta con anillos, con reflejos cromados y destellos de lente sobre un cielo estrellado violeta intenso.
+- **Collage.** Un astronauta vintage que flota entre nubes de papel con una taza de café humeante en la mano.
+- **Collage.** Una mano gigante que riega la silueta de una ciudad diminuta como si fuera una planta de interior, bajo un cielo amarillo mostaza.
+- **Art nouveau.** Una mujer cuyo cabello se convierte en olas del océano, entre lirios, en tonos apagados de verde azulado, crema y coral.
+- **Art nouveau.** Un pavo real posado en una luna creciente entre enredaderas en espiral, en verdes y azules de piedras preciosas.
+- **Pintura al óleo.** Un gato con una capa de terciopelo que sostiene una laptop diminuta, a la luz de una vela, en rojos y dorados profundos.
+- **Pintura al óleo.** Una ballena que flota a la deriva sobre un puerto dormido al amanecer, con nubes suaves y una cálida luz de la mañana.
+- **Foto analógica.** Una cabina telefónica roja solitaria en una cresta nevada a la hora dorada, con sombras largas.
+- **Foto analógica.** Un convertible vintage estacionado frente a un diner de carretera iluminado en una noche lluviosa, con reflejos mojados.
+- **Efecto maqueta.** Una pequeña oficina de correos llena de actividad construida dentro de un cajón de madera, con trabajadores diminutos clasificando cartas bajo lámparas cálidas.
+- **Efecto maqueta.** Un campamento diminuto sobre un libro abierto gigante, con una tienda de campaña, una fogata y pinos de papel bajo una suave luz de atardecer.
+- **Risografía.** Un disco de vinilo que sale como el sol sobre las dunas del desierto, en verde azulado, amarillo y naranja.
+- **Risografía.** Un barco de papel que navega por una ciudad de libros apilados, en azul y naranja.
+- **Plastilina.** Un faro diminuto en una isla rocosa que proyecta un rayo arcoíris entre nubes esponjosas, en colores pastel.
+- **Plastilina.** Un caracol que lleva una casita con ventanas iluminadas por un bosque cubierto de musgo, bajo una luz suave.
 
 O deja que el nombre de la carpeta elija la escena: escribe después de `Scene:` algo como
 *“un póster ingenioso sobre una carpeta llamada ‘Impuestos 2025’”*.
@@ -98,8 +132,8 @@ O deja que el nombre de la carpeta elija la escena: escribe después de `Scene:`
 
 La mayoría de las apps de chat devuelven imágenes sin transparencia. Un fondo #FF00FF liso casi nunca
 aparece en una ilustración real, así que FolderSkin puede encontrarlo, quitarlo y suavizar el borde
-de forma limpia. El mismo truco se usa cuando el asistente de la app le pide una carpeta entera a un
-modelo.
+de forma limpia. El asistente de la app usa el mismo truco, con verde en lugar de magenta para los
+modelos de Google y para el arte rosa o violeta, que recorta él mismo.
 
 Si una app de chat te devuelve una imagen que de verdad es transparente alrededor de la carpeta,
 también funciona: FolderSkin usa la transparencia tal cual.

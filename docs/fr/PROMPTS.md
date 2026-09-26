@@ -50,46 +50,81 @@ Demandez-lui de repeindre le fond exactement en #FF00FF, puis réessayez.
 
 ## Des styles qui vont bien à un dossier
 
-Choisissez-en un, ou mélangez-en deux :
+Décrivez-en un après `Style:`, ou mélangez-en deux. Ce sont les trente styles que propose le champ
+du prompt de FolderSkin quand vous tapez /. Sous **Pas de clé d'API ?**, l'app remplit le prompt
+avec les mots exacts qu'elle emploie pour le style que vous choisissez.
 
-- affiche de voyage vintage, aplats de couleur, texture d'impression granuleuse
-- estampe ukiyo-e sur bois, aux contours épais
-- affiche des années 1970 à l'aérographe, avec du chrome brillant
-- collage photo surréaliste, bords de papier découpé et trame de points
-- affiche Art nouveau aux bordures ornementées et aux fins filets dorés
-- peinture à l'huile de la Renaissance, à la lumière dramatique
-- photo cinématographique à l'heure dorée, grain de pellicule 35 mm
-- diorama miniature photographié avec un objectif à bascule (tilt-shift)
-- impression en risographie à trois encres
-- rendu en pâte à modeler tout en douceur, comme un décor d'animation image par image
-- affiche constructiviste aux diagonales marquées
-- bureau d'ordinateur du début des années 90, icônes en pixels et tramage
+**Photo et 3D**
+
+- **Photo de studio** : une photo fidèle au réel, en douce lumière de studio
+- **Photo argentique** : une photo 35 mm de cinéma, lumière naturelle et grain
+- **Rendu produit** : un rendu 3D soigné, lumière de studio et vraies matières
+- **3D isométrique** : un modèle 3D net, vu en perspective isométrique
+- **Effet maquette** : une vraie scène photographiée comme une maquette
+
+**Matières et artisanat**
+
+- **Pâte à modeler** : de la pâte à modeler faite main, en lumière chaude
+- **Verre** : du verre sculpté translucide, avec réfractions et caustiques
+- **Néon** : des tubes néon lumineux sur fond très sombre
+- **Émail** : émail cloisonné brillant, cerné d'or en relief
+- **Broderie** : une broderie au passé plat, dense, en fil brillant et en relief
+- **Papier découpé** : du papier découpé en couches, avec de vraies ombres entre elles
+- **Vitrail** : un vitrail aux tons de pierres précieuses, éclairé par derrière
+
+**Peinture et dessin**
+
+- **Peinture à l'huile** : une riche peinture à l'huile classique, en lumière dramatique
+- **Aquarelle** : des lavis libres, lumineux et transparents
+- **Gouache** : une peinture mate et opaque, en aplats harmonieux
+- **Crayon** : un dessin au graphite détaillé, du gris clair au noir profond
+- **Aérographe années 70** : des dégradés soyeux, du chrome brillant et des reflets en étoile
+
+**Impression**
+
+- **Gravure sur bois** : traits gravés, aplats de couleur et veines du bois
+- **Linogravure** : un relief gravé audacieux, en noir et une encre
+- **Risographie** : des tons directs granuleux, légèrement décalés
+- **Affiche de voyage** : des aplats de couleur des années 50, en lumière franche
+- **Pop art** : contours noirs, couleurs primaires et trame de points
+- **Collage** : papier découpé surréaliste et fragments de photos
+
+**Numérique et graphisme**
+
+- **Pixel art** : des pixels 16 bits nets et une palette réduite
+- **Plan technique** : un tracé technique blanc sur bleu profond
+- **Low poly** : de la 3D à facettes, en triangles unis
+- **Anime** : une illustration nette, en aplats façon celluloïd
+- **Art nouveau** : lignes en coup de fouet, contours dorés et tons de pierres précieuses
+- **Art déco** : une géométrie symétrique audacieuse, en or et noir
+- **Synthwave** : du chrome des années 80 éclairé au néon, dans la brume
 
 ## Des idées pour commencer
 
-Chaque ligne est une consigne complète, sujet et style réunis. Collez-la après `Scene:` et supprimez
-la ligne `Style:`. Ce sont les idées que remplissent les boutons de style de l'app, deux par style.
+Chaque ligne est un sujet, écrit pour le style en gras. Collez-la après `Scene:` et décrivez ce
+style après `Style:`. Ce sont les idées que remplissent les boutons de style sous un nouveau chat,
+deux par style. Un mot entre guillemets est destiné à être écrit sur le dossier.
 
-- **Affiche de voyage.** Un minuscule hydravion rouge qui se pose sur un lagon turquoise au coucher du soleil, des silhouettes de palmiers et un soleil orange bas sur l'horizon, en affiche de voyage vintage aux aplats de couleur, avec une texture d'impression granuleuse et le mot ÉVASION en grosses lettres rétro.
-- **Affiche de voyage.** Un téléphérique qui grimpe entre des sommets enneigés vers un petit hôtel alpin, en affiche de voyage des années 1950 : aplats de bleus et de blancs, une touche de rouge, un léger grain d'impression.
-- **Estampe.** Une carpe koï géante qui bondit par-dessus une grande vague sous une lune pâle, en estampe ukiyo-e aux épais contours noirs, indigo et vermillon sur papier washi.
-- **Estampe.** Un renard coiffé d'un chapeau de paille qui traverse sous la pluie un pont éclairé de lanternes, en estampe de l'époque d'Edo aux aplats de couleur et aux fines lignes de pluie.
-- **Aérographe années 70.** Une cassette audio chromée qui flotte au-dessus d'une route du désert bordée de néons, au crépuscule, en affiche des années 1970 à l'aérographe, avec des reflets brillants et un ciel qui passe du violet à la mandarine.
-- **Aérographe années 70.** Un patin à roulettes rutilant en orbite autour d'une planète à anneaux, en illustration à l'aérographe des années 70, avec des reflets chromés, des halos d'objectif et un ciel étoilé violet profond.
-- **Collage.** Un astronaute vintage qui flotte entre des nuages en papier découpé, une tasse de café fumante à la main, en collage photo surréaliste avec une trame de points et des bords de papier déchiré.
-- **Collage.** Une main géante qui arrose la silhouette d'une ville miniature comme une plante d'intérieur, en collage de magazine rétro, avec une impression tramée, un grain de papier et un ciel jaune moutarde.
-- **Art nouveau.** Une femme dont les cheveux se changent en vagues océanes, encadrée de lys et de filets dorés ornementés, en affiche Art nouveau aux tons sourds de bleu canard, de crème et de corail.
-- **Art nouveau.** Un paon perché sur un croissant de lune parmi des volutes de vigne, en affiche Art nouveau aux fins contours dorés, dans des verts et des bleus de pierres précieuses.
-- **Peinture à l'huile.** Un chat en cape de velours qui tient un minuscule ordinateur portable, en peinture à l'huile de la Renaissance, avec un éclairage dramatique à la bougie, des rouges et des ors profonds, et un vernis craquelé.
-- **Peinture à l'huile.** Une baleine qui dérive au-dessus d'un port endormi à l'aube, en peinture à l'huile romantique, avec des nuages doux, une touche de pinceau visible et une chaude lumière matinale.
-- **Photogramme.** Une cabine téléphonique rouge isolée sur une crête enneigée à l'heure dorée, en photogramme de cinéma 35 mm au grain doux et aux ombres longues.
-- **Photogramme.** Un cabriolet vintage garé sous l'enseigne au néon d'un diner, par une nuit de pluie, en photogramme à l'ambiance sombre, avec des reflets mouillés et des couleurs bleu-vert et orange.
-- **Mini diorama.** Un petit bureau de poste animé, construit dans un tiroir en bois, où de minuscules employés trient le courrier sous des lampes chaleureuses, en diorama miniature photographié en tilt-shift.
-- **Mini diorama.** Un minuscule camping au sommet d'un livre ouvert géant, avec une tente, un feu de camp et des sapins en papier, en photo miniature tilt-shift dans une douce lumière du soir.
-- **Risographie.** Un disque vinyle qui se lève comme le soleil sur des dunes, en risographie trois couleurs, bleu canard, jaune et orange, avec un grain visible et un léger décalage de repérage.
-- **Risographie.** Un bateau en papier qui navigue dans une ville de livres empilés, en risographie deux couleurs, bleu et orange, à l'impression granuleuse et légèrement décalée.
-- **Pâte à modeler.** Un minuscule phare sur une île rocheuse, qui projette un faisceau arc-en-ciel à travers des nuages cotonneux, en scène d'animation en pâte à modeler aux couleurs pastel, avec des empreintes de doigts dans la pâte.
-- **Pâte à modeler.** Un escargot qui porte une petite maison aux fenêtres éclairées à travers une forêt moussue, en décor douillet d'animation en pâte à modeler, sous une lumière douce.
+- **Affiche de voyage.** Un minuscule hydravion rouge qui se pose sur un lagon turquoise au coucher du soleil, des silhouettes de palmiers et un soleil orange bas sur l'horizon, avec le mot « ÉVASION ».
+- **Affiche de voyage.** Un téléphérique qui grimpe entre des sommets enneigés vers un petit hôtel alpin, en aplats de bleus et de blancs avec une touche de rouge.
+- **Gravure sur bois.** Une carpe koï géante qui bondit hors d'une rivière nocturne, sous une lune pâle, en indigo et vermillon.
+- **Gravure sur bois.** Un renard coiffé d'un chapeau de paille qui traverse sous la pluie un pont éclairé de lanternes, avec de fines lignes de pluie.
+- **Aérographe années 70.** Une cassette audio chromée qui flotte au-dessus d'une route du désert au crépuscule, sous un ciel qui passe du violet à la mandarine.
+- **Aérographe années 70.** Un patin à roulettes rutilant en orbite autour d'une planète à anneaux, avec des reflets chromés et des halos d'objectif sur fond de ciel étoilé violet profond.
+- **Collage.** Un astronaute vintage qui flotte entre des nuages en papier, une tasse de café fumante à la main.
+- **Collage.** Une main géante qui arrose la silhouette d'une ville miniature comme une plante d'intérieur, sous un ciel jaune moutarde.
+- **Art nouveau.** Une femme dont les cheveux se changent en vagues océanes, parmi des lys, dans des tons sourds de bleu canard, de crème et de corail.
+- **Art nouveau.** Un paon perché sur un croissant de lune parmi des volutes de vigne, dans des verts et des bleus de pierres précieuses.
+- **Peinture à l'huile.** Un chat en cape de velours qui tient un minuscule ordinateur portable, éclairé à la bougie, dans des rouges et des ors profonds.
+- **Peinture à l'huile.** Une baleine qui dérive au-dessus d'un port endormi à l'aube, avec des nuages doux et une chaude lumière matinale.
+- **Photo argentique.** Une cabine téléphonique rouge isolée sur une crête enneigée à l'heure dorée, avec de longues ombres.
+- **Photo argentique.** Un cabriolet vintage garé devant un diner illuminé au bord de la route, par une nuit de pluie, avec des reflets mouillés.
+- **Effet maquette.** Un petit bureau de poste animé, construit dans un tiroir en bois, où de minuscules employés trient le courrier sous des lampes chaleureuses.
+- **Effet maquette.** Un minuscule camping au sommet d'un livre ouvert géant, avec une tente, un feu de camp et des sapins en papier dans une douce lumière du soir.
+- **Risographie.** Un disque vinyle qui se lève comme le soleil sur des dunes, en bleu canard, jaune et orange.
+- **Risographie.** Un bateau en papier qui navigue dans une ville de livres empilés, en bleu et orange.
+- **Pâte à modeler.** Un minuscule phare sur une île rocheuse, qui projette un faisceau arc-en-ciel à travers des nuages cotonneux, dans des couleurs pastel.
+- **Pâte à modeler.** Un escargot qui porte une petite maison aux fenêtres éclairées à travers une forêt moussue, sous une lumière douce.
 
 Ou laissez le nom du dossier choisir la scène : écrivez par exemple après `Scene:`
 *« une affiche pleine d'esprit sur un dossier appelé “Impôts 2025” »*.
@@ -98,8 +133,8 @@ Ou laissez le nom du dossier choisir la scène : écrivez par exemple après `S
 
 La plupart des apps de chat renvoient des images sans transparence. Un fond #FF00FF uni n'apparaît
 presque jamais dans une vraie illustration, si bien que FolderSkin peut le repérer, le retirer et
-adoucir proprement le bord. La même astuce sert quand l'assistant intégré à l'app demande un dossier
-entier à un modèle.
+adoucir proprement le bord. L'assistant intégré à l'app utilise la même astuce, avec du vert au lieu
+du magenta pour les modèles de Google et pour les images roses ou violettes, qu'il détoure lui-même.
 
 Si une app de chat renvoie une image vraiment transparente autour du dossier, ça marche aussi :
 FolderSkin utilise la transparence telle quelle.

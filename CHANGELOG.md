@@ -24,6 +24,27 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Details says what a picture cost**, as the provider reports it: the price from xAI, Black
   Forest Labs and Recraft, and the tokens OpenAI and Gemini used, with OpenAI's worked out in
   dollars.
+- **Paint for Windows' folder, or a free icon.** The chip beside the model's name, under the AI
+  prompt, says what a picture is for: the Mac's folder, Windows' folder, or a free icon that
+  stands on its own, such as a mascot, an object or a character. Click it, or type @ in the box
+  and pick one by name. A chat keeps its shape, an older chat opens on the one it was using, and
+  every provider and the Local Model paint for it.
+- **Thirty styles under /.** Type / in the prompt box for thirty styles in five groups, from
+  Studio photo and Clay to Risograph and Synthwave, with ideas to start from. Type a few letters
+  to narrow the list. A style goes in its own slot beside the box and leaves your words as they
+  are.
+- **Save a prompt to use again.** **Save as a prompt**, in the / menu, keeps what's in the box
+  and its style under a name, listed under **Your prompts** from then on. The x beside one of
+  yours removes it, with **Undo** in case.
+- **Say what a reference picture is for.** A picture added to a prompt is the subject, kept
+  recognisable. Click its chip to use it as a style to match, or for its colours alone.
+- **Lettering in quotes.** Words in quotes are lettered on the skin exactly as written, once, in
+  the style's own lettering. Without quotes, the picture has no text at all.
+- **Close the folder panel.** The button in the window's top right corner, or ⇧⌘\ (Ctrl+Shift+\
+  on Windows and Linux), closes the folder panel and opens it again, in every view where it
+  shows. It stays as you left it, like the folded sidebar, and choosing a folder opens it.
+- **A skin keeps how it was made:** the prompt exactly as it was sent, its style, its lettering,
+  its pictures and the template it was painted on, so a result can be traced and made again.
 
 ### Changed
 
@@ -63,6 +84,20 @@ All notable changes to FolderSkin are recorded here. The format follows
   where a style has one.
 - **Gemini paints whole folders on green** instead of magenta, which it tends to leave as a dark
   rim around the folder. The greens painted on the folder itself stay.
+- **Prompts are written for each kind of model.** FolderSkin builds every prompt from one recipe
+  and writes it the way each provider reads best: labelled lines for OpenAI and Gemini, Grok's
+  own names for pictures, plain prose with the subject first for FLUX and the Local Model, a
+  short brief for Ideogram and Recraft, and a short list for Stability AI. Your words are never
+  rewritten.
+- **Each style says more.** A style is now its medium and technique, light, colour and texture
+  in a sentence the models follow, and leaves out what it tends to add unasked, such as Mount
+  Fuji in a woodblock print unless you ask for it. The ten styles there were are among the
+  thirty, and their old names still work. Film still is now Film photo, and Tiny diorama is
+  Tilt-shift miniature.
+- **A whole folder keeps FolderSkin's outline.** It's painted on FolderSkin's template of that
+  folder, with your own pictures after it, and cut out along the template's own edge, with any
+  provider that can work from a picture. Pink or violet art is painted on green too, like
+  Gemini's, so the cut-out doesn't eat it.
 
 ### Fixed
 
@@ -84,6 +119,9 @@ All notable changes to FolderSkin are recorded here. The format follows
   folders already were.
 - **The folder panel scrolls from the top** in a short window. A long summary used to push the
   folder's picture out of reach at the top and squash the Include subfolders box.
+- **The AI chat stays as you left it.** Going to another view and coming back started a new chat,
+  and the one you were in, with any picture still being made, went to the chat list. The chat,
+  its scroll and anything still painting now wait for you, until FolderSkin is opened again.
 
 ## 0.1.9 - 2026-09-25
 

@@ -105,6 +105,10 @@ bibliothèque plus tard depuis **Communauté**. L'accueil ne s'affiche qu'une se
 4. Cliquez sur **Rétablir** pour remettre l'icône par défaut du système. Si le dossier a déjà une
    icône personnalisée, **Retirer l'icône personnalisée** apparaît dès que vous le choisissez.
 
+Le bouton en haut à droite de la fenêtre ferme le panneau du dossier, pour laisser toute la place à
+la bibliothèque, et le rouvre (⇧⌘\ sur Mac, Ctrl+Maj+\ ailleurs). Le panneau reste tel que vous
+l'avez laissé, et s'ouvre quand vous choisissez un dossier.
+
 Pour donner le même habillage aux dossiers qu'il contient, activez **Inclure les sous-dossiers** sous
 le nom du dossier. FolderSkin les compte en arrière-plan, quel que soit leur nombre (à tous les
 niveaux, sans les dossiers cachés, les paquets d'applications ni les autres disques), et le bouton
@@ -196,9 +200,12 @@ n'envoie rien nulle part. Il fonctionne sur les Mac à puce Apple sous macOS 14 
 les PC Windows et Linux. Vous pouvez aussi utiliser **votre propre clé d'API** chez un fournisseur
 que vous utilisez déjà. La clé est chiffrée et stockée sur votre ordinateur (sans aucune demande de
 mot de passe du trousseau), FolderSkin n'a aucun serveur à lui, et rien ne part tant que vous n'avez
-pas appuyé sur Entrée. Ouvrez **Générer avec l'IA**, décrivez une scène, choisissez un style, puis
-**Dossier entier** (le modèle peint tout le dossier à partir du gabarit de FolderSkin, comme une
-affiche) ou **Juste l'image** (une image à plat, plaquée sur le dossier de FolderSkin). Chaque
+pas appuyé sur Entrée. Ouvrez **Générer avec l'IA** et décrivez une scène. Tapez / pour afficher
+trente styles, des idées pour commencer et les prompts que vous avez enregistrés, et @ pour choisir
+ce pour quoi l'image est faite : le dossier du Mac, celui de Windows, ou une **Icône libre** qui se
+suffit à elle-même. Pour un dossier, choisissez **Dossier entier** (le modèle peint tout le dossier
+à partir du gabarit de FolderSkin, comme une affiche) ou **Juste l'image** (une image à plat,
+plaquée sur le dossier de FolderSkin). Les mots entre guillemets sont écrits dessus. Chaque
 résultat est enregistré dans **Mes habillages** et peut être essayé tout de suite.
 
 Choisissez où les images sont créées dans **Réglages → Fournisseur d'IA** : installez-y le Modèle
