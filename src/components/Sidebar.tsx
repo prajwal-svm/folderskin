@@ -172,25 +172,17 @@ export function Sidebar({
           <span className="nav-icon">{rail ? <PanelLeftOpenIcon size={18} /> : <PanelLeftCloseIcon size={18} />}</span>
           {!rail && <span className="nav-label">{t("sidebar.collapse")}</span>}
         </button>
+        {/* The row is the switch: it names the look a click gives, the moon in light mode and the sun in dark. */}
         <button
           type="button"
-          className="nav-btn nav-switch"
-          role="switch"
-          aria-checked={dark}
-          aria-label={t("sidebar.darkModeLabel")}
+          className="nav-btn nav-theme"
+          aria-label={dark ? t("sidebar.lightModeLabel") : t("sidebar.darkModeLabel")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={onToggleTheme}
-          {...tip(dark ? t("sidebar.darkOn") : t("sidebar.darkOff"))}
+          {...tip(dark ? t("sidebar.lightMode") : t("sidebar.darkMode"))}
         >
-          <span className="nav-icon">{rail && !dark ? <SunIcon size={18} /> : <MoonIcon />}</span>
-          {!rail && (
-            <>
-              <span className="nav-label">{t("sidebar.darkMode")}</span>
-              <span className={dark ? "switch is-on" : "switch"} aria-hidden="true">
-                <span className="knob" />
-              </span>
-            </>
-          )}
+          <span className="nav-icon">{dark ? <SunIcon size={18} /> : <MoonIcon />}</span>
+          {!rail && <span className="nav-label">{dark ? t("sidebar.lightMode") : t("sidebar.darkMode")}</span>}
         </button>
         <LanguageMenu rail={rail} />
         <button

@@ -30,7 +30,9 @@
     "noFavesText": "Cliquez sur l'étoile d'un habillage, et il vous attendra ici.",
     "noSkins": "Pas encore d'habillages",
     "noSkinsText": "Ajoutez un pack gratuit depuis la Communauté, apportez une de vos images, ou laissez l'IA en peindre un.",
-    "browsePacks": "Parcourir les packs"
+    "browsePacks": "Parcourir les packs",
+    "searchAll": "Chercher dans tous les habillages",
+    "noMatchTextAll": "Essayez un autre mot."
   },
   "delete": {
     "title": "Supprimer « {{name}} » ?",
@@ -41,7 +43,9 @@
   "toolbar": {
     "tabsLabel": "filtrer les habillages par tag",
     "search": "Rechercher des habillages",
-    "searchLabel": "rechercher des habillages"
+    "searchLabel": "rechercher des habillages",
+    "searchIn": "Rechercher des habillages dans {{tag}}",
+    "searchInLabel": "rechercher des habillages dans {{tag}}"
   },
   "tile": {
     "madeWithAi": "{{name}} (fait avec l'IA)",

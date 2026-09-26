@@ -24,11 +24,11 @@
   "collapse": "Contraer barra lateral",
   "darkMode": "Modo oscuro",
   "darkModeLabel": "modo oscuro",
-  "darkOn": "Modo oscuro activado",
-  "darkOff": "Modo oscuro desactivado",
   "settings": "Ajustes",
   "language": {
     "label": "Idioma: {{language}}",
     "menu": "Idioma"
-  }
+  },
+  "lightMode": "Modo claro",
+  "lightModeLabel": "modo claro"
 }

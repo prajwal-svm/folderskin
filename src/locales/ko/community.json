@@ -28,7 +28,8 @@
     "noMatch": "맞는 팩이 없어요",
     "none": "아직 팩이 없어요",
     "noMatchText": "다른 단어나 태그로 찾아보세요.",
-    "noneText": "첫 번째가 되어 보세요. 내 스킨을 공유해 보세요."
+    "noneText": "첫 번째가 되어 보세요. 내 스킨을 공유해 보세요.",
+    "searchAll": "전체 팩에서 검색"
   },
   "remove": {
     "title": "'{{name}}' 팩을 제거할까요?",
@@ -56,7 +57,6 @@
   "viewer": {
     "add_other": "스킨 {{count}}개 추가",
     "added": "추가됨",
-    "github": "GitHub에서 열기",
     "openFailed": "이 팩을 열지 못했어요: {{reason}}.",
     "getting_other": "보여 드리려고 스킨 {{count}}개를 가져오는 중"
   },
@@ -119,5 +119,8 @@
     "show": "보기",
     "addedFromFolder_other": "그 폴더에서 스킨 {{count}}개를 추가했어요",
     "addFolderFailed": "그 팩을 추가하지 못했어요: {{reason}}"
-  }
+  },
+  "searchIn": "'{{tag}}'에서 팩 검색",
+  "searchInLabel": "'{{tag}}'에서 팩 검색",
+  "checkedLabel": "팩 검사 방법"
 }

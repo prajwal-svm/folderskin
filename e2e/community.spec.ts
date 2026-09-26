@@ -132,6 +132,9 @@ test("adding and updating a pack show how far they have got on its card", async 
   // The preview publishes a newer Colours as soon as it is added; Refresh finds it.
   await page.getByRole("button", { name: "refresh packs" }).click();
   await expect(page.getByText("1 of your packs has an update")).toBeVisible();
+  // Update comes before View, so View stays beside the last button whatever a pack offers.
+  const buttons = () => card.locator(".pack-action button").evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim() || el.getAttribute("aria-label")));
+  await expect.poll(async () => (await buttons()).slice(0, 2)).toEqual(["Update", "View"]);
   await card.getByRole("button", { name: "Update", exact: true }).click();
   const updating = card.getByRole("progressbar", { name: "Updating Colours" });
   await expect(updating).toBeVisible();
@@ -251,4 +254,28 @@ test("an install link for a pack Community doesn't have says so, and what to do"
   ).toBeVisible();
   await expect(page.locator(".community .view-title")).toHaveText("Community");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("how packs are checked waits behind an icon beside the count", async ({ page }) => {
+  await openCommunity(page, 0);
+  await expect(page.getByText("Every pack is checked before it's listed")).toHaveCount(0);
+  const info = page.getByRole("button", { name: "how packs are checked" });
+  await expect(info).toHaveAttribute("data-tip", "Every pack is checked before it's listed");
+  await info.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Every pack is checked before it's listed");
+});
+
+test("a tag's search says where it looks, and offers every pack when nothing in the tag matches", async ({ page }) => {
+  await openCommunity(page, 0);
+  await expect(search(page)).toHaveAttribute("placeholder", "Search packs");
+  await page.getByRole("tab", { name: /^Woodblock/ }).click();
+  await expect(search(page)).toHaveAttribute("placeholder", "Search packs in Woodblock");
+  await search(page).fill("Colours");
+  const all = page.getByRole("button", { name: "Search all packs instead" });
+  await expect(all).toBeVisible();
+  await all.click();
+  await expect(page.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true");
+  await expect(search(page)).toHaveValue("Colours");
+  await expect(search(page)).toHaveAttribute("placeholder", "Search packs");
+  await expect(cards(page).filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) })).toHaveCount(1);
 });

@@ -21,13 +21,14 @@ import { VirtualGrid, type VirtualGridHandle } from "./VirtualGrid";
 import { DeleteIcon } from "./icons/delete";
 import { DownloadIcon } from "./icons/download";
 import { EyeIcon } from "./icons/eye";
-import { ExternalLinkIcon } from "./icons/external-link";
 import { FolderOpenIcon } from "./icons/folder-open";
+import { InfoIcon } from "./icons/info";
 import { LayoutGridIcon } from "./icons/layout-grid";
 import { ListIcon } from "./icons/list";
 import { ListFilterIcon } from "./icons/list-filter";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
+import { SearchIcon } from "./icons/search";
 import { SparklesIcon } from "./icons/sparkles";
 import { clip } from "../lib/names";
 
@@ -95,6 +96,8 @@ export function CommunityView({
     if (s.tag && !top.some((f) => f.tag === s.tag)) top.push({ tag: s.tag, count: facets.find((f) => f.tag === s.tag)?.count ?? 0 });
     return [{ id: "", label: t("library.tabs.all"), count: shown?.all ?? 0 }, ...top.map((f) => ({ id: f.tag, label: tagLabel(f.tag), count: f.count }))];
   }, [shown, s.tag, t]);
+  // The search box says where it looks: in the tag picked, so nobody takes it for a search of every pack.
+  const tagName = s.tag ? (tabs.find((tab) => tab.id === s.tag)?.label ?? tagLabel(s.tag)) : "";
 
   const addFromFolder = async () => {
     const path = isTauri()
@@ -166,8 +169,8 @@ export function CommunityView({
         query={s.query}
         onQuery={(q) => community.setQuery(q)}
         label={t("community.tabsLabel")}
-        placeholder={t("community.search")}
-        searchLabel={t("community.searchLabel")}
+        placeholder={tagName ? t("community.searchIn", { tag: tagName }) : t("community.search")}
+        searchLabel={tagName ? t("community.searchInLabel", { tag: tagName }) : t("community.searchLabel")}
         extra={
           <>
             <CommunityOptions sort={s.sort} typed={s.query.trim() !== ""} facets={shown?.facets ?? []} tag={s.tag} />
@@ -236,9 +239,15 @@ export function CommunityView({
             </button>
           )}
         </span>
-        <button type="button" className="link-btn" onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}>
-          {t("community.checked")}
-          <ExternalLinkIcon size={13} />
+        <button
+          type="button"
+          className="icon-btn community-checked"
+          data-tip={t("community.checked")}
+          aria-label={t("community.checkedLabel")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}
+        >
+          <InfoIcon size={15} />
         </button>
       </p>
 
@@ -276,6 +285,13 @@ export function CommunityView({
             <div className="empty">
               <p className="empty-title">{shown.all || shown.q || shown.tag ? t("community.empty.noMatch") : t("community.empty.none")}</p>
               <p className="empty-text">{shown.all || shown.q || shown.tag ? t("community.empty.noMatchText") : t("community.empty.noneText")}</p>
+              {/* Nothing in the tag picked: the same words may well be in another. */}
+              {shown.q && shown.tag && (
+                <button type="button" className="btn btn-secondary" onClick={() => community.setTag("")}>
+                  <SearchIcon size={15} />
+                  {t("community.empty.searchAll")}
+                </button>
+              )}
             </div>
           }
         />
@@ -378,25 +394,26 @@ const PackCard = memo(function PackCard({
           <PackWorking name={pack.name} task={task} progress={progress} />
         ) : (
           <>
+            {/* Update comes first, so View always sits beside the last button, whatever else a pack offers. */}
+            {pack.added && pack.update && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-tip={t("community.pack.updateTip")}
+                disabled={busy || blocked}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void community.update(pack)}
+              >
+                <RefreshCwIcon size={15} />
+                {t("community.pack.update")}
+              </button>
+            )}
             <button type="button" className="btn btn-secondary" onMouseDown={(e) => e.preventDefault()} onClick={() => community.open(pack)}>
               <EyeIcon size={15} />
               {t("community.pack.view")}
             </button>
             {pack.added ? (
               <>
-                {pack.update && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    data-tip={t("community.pack.updateTip")}
-                    disabled={busy || blocked}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => void community.update(pack)}
-                  >
-                    <RefreshCwIcon size={15} />
-                    {t("community.pack.update")}
-                  </button>
-                )}
                 {!gallery ? (
                   <button
                     type="button"

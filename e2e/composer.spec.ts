@@ -179,9 +179,9 @@ test.describe("what's behind the folder", () => {
     await expect(stage).toHaveAttribute("data-backdrop", "light");
     await expect(stage).toHaveCSS("background-color", "rgb(255, 255, 255)");
     // Dark mode: the canvas follows.
-    await page.getByRole("switch", { name: "dark mode" }).click();
+    await page.getByRole("button", { name: "dark mode" }).click();
     await expect(stage).toHaveAttribute("data-backdrop", "dark");
-    await page.getByRole("switch", { name: "dark mode" }).click();
+    await page.getByRole("button", { name: "light mode" }).click();
     await expect(stage).toHaveAttribute("data-backdrop", "light");
     // A backdrop picked stays for this run, whatever the theme does.
     await composer(page).getByRole("radiogroup", { name: "what's behind the folder" }).getByRole("radio", { name: "Colourful wallpaper" }).click();

@@ -3,10 +3,6 @@ import { defaultProfile, loadProfiles, saveProfiles, upsertProfile } from "./pro
 
 /** FolderSkin's own repository on GitHub: the source, the issues, the releases and the pack docs. */
 export const REPO_URL = "https://github.com/prajwal-svm/folderskin";
-/** Community packs live in a repository of their own, under packs/. */
-export const COMMUNITY_REPO_URL = "https://github.com/prajwal-svm/folderskin-community";
-/** The pack folders, to look through on GitHub. */
-export const PACKS_URL = `${COMMUNITY_REPO_URL}/tree/main/packs`;
 // The guides (the pack contract, the pack terms) are on the website in each language:
 // `docsUrl("packs")` and `docsUrl("pack-terms")` from src/i18n. The version of the terms someone
 // agrees to is the service's (`ShareStatus.terms_version`), which it records with the pack.

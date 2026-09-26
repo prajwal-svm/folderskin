@@ -311,6 +311,8 @@ export default function App() {
   );
   // A tag nothing in view carries any more (edited away, deleted, filtered out) falls back to All.
   const activeTag = tabs.some((t) => t.id === tag) ? tag : "";
+  // The search box says where it looks: in the tag picked, so nobody takes it for a search of everything.
+  const activeTagName = activeTag ? (tabs.find((tab) => tab.id === activeTag)?.label ?? tagLabel(activeTag)) : "";
 
   const visible = useMemo(
     () => sortSkins(filtered.filter((s) => (!activeTag || s.tags.includes(activeTag)) && matchesQuery(s, query)), sort),
@@ -809,6 +811,12 @@ export default function App() {
             text: t("library.empty.filteredText"),
             action: (
               <div className="empty-actions">
+                {q && activeTag && (
+                  <button type="button" className="btn btn-secondary" onClick={() => setTag("")}>
+                    <SearchIcon size={15} />
+                    {t("library.empty.searchAll")}
+                  </button>
+                )}
                 <button type="button" className="btn btn-secondary" onClick={() => setFilters(NO_FILTERS)}>
                   {t("library.empty.clearFilters")}
                 </button>
@@ -824,8 +832,19 @@ export default function App() {
           ? {
               icon: <SearchIcon size={20} />,
               title: t("library.empty.noMatch", { query: q }),
-              text: t("library.empty.noMatchText"),
-              action: (
+              // "Look in All" only makes sense from a tag, and then the button does it.
+              text: activeTag ? t("library.empty.noMatchText") : t("library.empty.noMatchTextAll"),
+              action: activeTag ? (
+                <div className="empty-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => setTag("")}>
+                    <SearchIcon size={15} />
+                    {t("library.empty.searchAll")}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
+                    {t("library.empty.clearSearch")}
+                  </button>
+                </div>
+              ) : (
                 <button type="button" className="btn btn-secondary" onClick={() => setQuery("")}>
                   {t("library.empty.clearSearch")}
                 </button>
@@ -970,6 +989,8 @@ export default function App() {
               onChange={setTag}
               query={query}
               onQuery={setQuery}
+              placeholder={activeTagName ? t("library.toolbar.searchIn", { tag: activeTagName }) : undefined}
+              searchLabel={activeTagName ? t("library.toolbar.searchInLabel", { tag: activeTagName }) : undefined}
               extra={
                 <FilterMenu
                   skins={inView}

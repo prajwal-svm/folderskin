@@ -30,7 +30,9 @@
     "noFavesText": "Tap the star on any skin and it will wait for you here.",
     "noSkins": "No skins yet",
     "noSkinsText": "Add a free pack from Community, bring a picture of your own, or have AI paint one.",
-    "browsePacks": "Browse packs"
+    "browsePacks": "Browse packs",
+    "searchAll": "Search all skins instead",
+    "noMatchTextAll": "Try another word."
   },
   "delete": {
     "title": "Delete \"{{name}}\"?",
@@ -41,7 +43,9 @@
   "toolbar": {
     "tabsLabel": "filter skins by tag",
     "search": "Search skins",
-    "searchLabel": "search skins"
+    "searchLabel": "search skins",
+    "searchIn": "Search skins in {{tag}}",
+    "searchInLabel": "search skins in {{tag}}"
   },
   "tile": {
     "madeWithAi": "{{name}} (made with AI)",

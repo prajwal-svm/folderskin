@@ -24,11 +24,11 @@
   "collapse": "サイドバーを折りたたむ",
   "darkMode": "ダークモード",
   "darkModeLabel": "ダークモード",
-  "darkOn": "ダークモードはオンです",
-  "darkOff": "ダークモードはオフです",
   "settings": "設定",
   "language": {
     "label": "言語：{{language}}",
     "menu": "言語"
-  }
+  },
+  "lightMode": "ライトモード",
+  "lightModeLabel": "ライトモード"
 }

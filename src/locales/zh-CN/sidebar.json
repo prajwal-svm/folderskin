@@ -24,11 +24,11 @@
   "collapse": "收起侧边栏",
   "darkMode": "深色模式",
   "darkModeLabel": "深色模式",
-  "darkOn": "深色模式已开启",
-  "darkOff": "深色模式已关闭",
   "settings": "设置",
   "language": {
     "label": "语言：{{language}}",
     "menu": "语言"
-  }
+  },
+  "lightMode": "浅色模式",
+  "lightModeLabel": "浅色模式"
 }

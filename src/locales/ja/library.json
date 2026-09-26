@@ -30,7 +30,9 @@
     "noFavesText": "スキンの星をタップすると、ここに並びます。",
     "noSkins": "スキンはまだありません",
     "noSkinsText": "コミュニティから無料のパックを追加するか、自分の画像を取り込むか、AIに描いてもらいましょう。",
-    "browsePacks": "パックを見る"
+    "browsePacks": "パックを見る",
+    "searchAll": "すべてのスキンから検索",
+    "noMatchTextAll": "別の言葉で試してください。"
   },
   "delete": {
     "title": "「{{name}}」を削除しますか？",
@@ -41,7 +43,9 @@
   "toolbar": {
     "tabsLabel": "タグでスキンを絞り込む",
     "search": "スキンを検索",
-    "searchLabel": "スキンを検索"
+    "searchLabel": "スキンを検索",
+    "searchIn": "「{{tag}}」のスキンを検索",
+    "searchInLabel": "「{{tag}}」のスキンを検索"
   },
   "tile": {
     "madeWithAi": "{{name}}（AIで作成）",

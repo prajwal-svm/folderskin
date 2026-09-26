@@ -28,7 +28,8 @@
     "noMatch": "Ningún paquete coincide",
     "none": "Aún no hay paquetes",
     "noMatchText": "Prueba con otra palabra o etiqueta.",
-    "noneText": "Empieza tú: comparte los tuyos."
+    "noneText": "Empieza tú: comparte los tuyos.",
+    "searchAll": "Buscar en todos los paquetes"
   },
   "remove": {
     "title": "¿Quitar “{{name}}”?",
@@ -60,7 +61,6 @@
     "add_many": "Añadir {{count}} de aspectos",
     "add_other": "Añadir {{count}} aspectos",
     "added": "Añadido",
-    "github": "Abrir en GitHub",
     "openFailed": "No se pudo abrir este paquete: {{reason}}.",
     "getting_one": "Obteniendo {{count}} aspecto para mostrarlo",
     "getting_many": "Obteniendo {{count}} de aspectos para mostrarlos",
@@ -141,5 +141,8 @@
     "addedFromFolder_many": "Se añadieron {{count}} de aspectos de esa carpeta",
     "addedFromFolder_other": "Se añadieron {{count}} aspectos de esa carpeta",
     "addFolderFailed": "No se pudo añadir ese paquete: {{reason}}"
-  }
+  },
+  "searchIn": "Buscar paquetes en {{tag}}",
+  "searchInLabel": "buscar paquetes en {{tag}}",
+  "checkedLabel": "cómo se revisan los paquetes"
 }

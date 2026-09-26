@@ -28,7 +28,8 @@
     "noMatch": "一致するパックはありません",
     "none": "パックはまだありません",
     "noMatchText": "別の言葉やタグで試してください。",
-    "noneText": "最初の1人になりましょう。あなたのスキンを共有してください。"
+    "noneText": "最初の1人になりましょう。あなたのスキンを共有してください。",
+    "searchAll": "すべてのパックから検索"
   },
   "remove": {
     "title": "「{{name}}」を削除しますか？",
@@ -56,7 +57,6 @@
   "viewer": {
     "add_other": "{{count}}個のスキンを追加",
     "added": "追加済み",
-    "github": "GitHubで開く",
     "openFailed": "このパックを開けませんでした：{{reason}}。",
     "getting_other": "表示するために{{count}}個のスキンを取得中"
   },
@@ -119,5 +119,8 @@
     "show": "表示",
     "addedFromFolder_other": "そのフォルダから{{count}}個のスキンを追加しました",
     "addFolderFailed": "そのパックを追加できませんでした：{{reason}}"
-  }
+  },
+  "searchIn": "「{{tag}}」のパックを検索",
+  "searchInLabel": "「{{tag}}」のパックを検索",
+  "checkedLabel": "パックのチェック方法"
 }

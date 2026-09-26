@@ -28,7 +28,8 @@
     "noMatch": "No pack matches",
     "none": "No packs yet",
     "noMatchText": "Try another word or tag.",
-    "noneText": "Be the first: share yours."
+    "noneText": "Be the first: share yours.",
+    "searchAll": "Search all packs instead"
   },
   "remove": {
     "title": "Remove \"{{name}}\"?",
@@ -58,7 +59,6 @@
     "add_one": "Add {{count}} skin",
     "add_other": "Add {{count}} skins",
     "added": "Added",
-    "github": "Open on GitHub",
     "openFailed": "Couldn't open this pack: {{reason}}.",
     "getting_one": "Getting {{count}} skin to show it",
     "getting_other": "Getting {{count}} skins to show them"
@@ -130,5 +130,8 @@
     "addedFromFolder_one": "Added {{count}} skin from that folder",
     "addedFromFolder_other": "Added {{count}} skins from that folder",
     "addFolderFailed": "Couldn't add that pack: {{reason}}"
-  }
+  },
+  "searchIn": "Search packs in {{tag}}",
+  "searchInLabel": "search packs in {{tag}}",
+  "checkedLabel": "how packs are checked"
 }

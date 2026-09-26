@@ -24,11 +24,11 @@
   "collapse": "Replier la barre",
   "darkMode": "Mode sombre",
   "darkModeLabel": "mode sombre",
-  "darkOn": "Mode sombre activé",
-  "darkOff": "Mode sombre désactivé",
   "settings": "Réglages",
   "language": {
     "label": "Langue : {{language}}",
     "menu": "Langue"
-  }
+  },
+  "lightMode": "Mode clair",
+  "lightModeLabel": "mode clair"
 }

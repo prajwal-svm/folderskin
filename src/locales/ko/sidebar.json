@@ -24,11 +24,11 @@
   "collapse": "사이드바 접기",
   "darkMode": "다크 모드",
   "darkModeLabel": "다크 모드",
-  "darkOn": "다크 모드가 켜져 있어요",
-  "darkOff": "다크 모드가 꺼져 있어요",
   "settings": "설정",
   "language": {
     "label": "언어: {{language}}",
     "menu": "언어"
-  }
+  },
+  "lightMode": "라이트 모드",
+  "lightModeLabel": "라이트 모드"
 }

@@ -5,6 +5,20 @@ const sidebar = (page: Page) => page.getByRole("navigation", { name: "sections" 
 const width = async (page: Page, selector: string) => (await page.locator(selector).first().boundingBox())!.width;
 
 test.describe("the sidebar", () => {
+  test("switches the theme with one button that names the look a click gives", async ({ page }) => {
+    await openApp(page);
+    await expect(sidebar(page).getByRole("switch")).toHaveCount(0);
+    const toDark = sidebar(page).getByRole("button", { name: "dark mode" });
+    await expect(toDark).toHaveText("Dark mode");
+    await toDark.click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    const toLight = sidebar(page).getByRole("button", { name: "light mode" });
+    await expect(toLight).toHaveText("Light mode");
+    await toLight.click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(sidebar(page).getByRole("button", { name: "dark mode" })).toHaveText("Dark mode");
+  });
+
   test("folds to an island of icons and opens again", async ({ page }) => {
     await openApp(page);
     await sidebar(page).getByRole("button", { name: "collapse the sidebar" }).click();
@@ -261,5 +275,31 @@ test.describe("the folder skins go on", () => {
     await page.getByLabel("search skins").fill("mona");
     await page.getByLabel("search skins").press("Escape");
     await expect(waiting).toBeVisible();
+  });
+});
+
+test.describe("the library's search", () => {
+  const box = (page: Page) => page.getByRole("searchbox", { name: /search skins/i });
+
+  test("says which tag it looks in, and offers every skin when nothing in the tag matches", async ({ page }) => {
+    await openApp(page);
+    await expect(box(page)).toHaveAttribute("placeholder", "Search skins");
+    await page.getByRole("tab", { name: /^Painting/ }).click();
+    await expect(box(page)).toHaveAttribute("placeholder", "Search skins in Painting");
+    // View of Toledo is tagged photo, not painting.
+    await box(page).fill("Toledo");
+    await expect(page.getByText('Nothing matches "Toledo"')).toBeVisible();
+    await page.getByRole("button", { name: "Search all skins instead" }).click();
+    await expect(page.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true");
+    await expect(box(page)).toHaveValue("Toledo");
+    await expect(box(page)).toHaveAttribute("placeholder", "Search skins");
+    await expect(page.locator(".tile", { hasText: "View of Toledo" })).toBeVisible();
+  });
+
+  test("in All, doesn't send anyone to All", async ({ page }) => {
+    await openApp(page);
+    await box(page).fill("zzzz");
+    await expect(page.getByText("Try another word.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Search all skins instead" })).toHaveCount(0);
   });
 });

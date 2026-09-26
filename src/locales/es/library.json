@@ -30,7 +30,9 @@
     "noFavesText": "Haz clic en la estrella de cualquier aspecto y te esperará aquí.",
     "noSkins": "Aún no hay aspectos",
     "noSkinsText": "Añade un paquete gratuito desde Comunidad, trae una imagen tuya o deja que la IA pinte uno.",
-    "browsePacks": "Explorar paquetes"
+    "browsePacks": "Explorar paquetes",
+    "searchAll": "Buscar en todos los aspectos",
+    "noMatchTextAll": "Prueba con otra palabra."
   },
   "delete": {
     "title": "¿Eliminar “{{name}}”?",
@@ -41,7 +43,9 @@
   "toolbar": {
     "tabsLabel": "filtrar aspectos por etiqueta",
     "search": "Buscar aspectos",
-    "searchLabel": "buscar aspectos"
+    "searchLabel": "buscar aspectos",
+    "searchIn": "Buscar aspectos en {{tag}}",
+    "searchInLabel": "buscar aspectos en {{tag}}"
   },
   "tile": {
     "madeWithAi": "{{name}} (hecho con IA)",

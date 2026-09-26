@@ -28,7 +28,8 @@
     "noMatch": "没有匹配的皮肤包",
     "none": "还没有皮肤包",
     "noMatchText": "换个词或标签试试。",
-    "noneText": "来做第一个吧：分享你的皮肤。"
+    "noneText": "来做第一个吧：分享你的皮肤。",
+    "searchAll": "改为搜索全部皮肤包"
   },
   "remove": {
     "title": "移除“{{name}}”？",
@@ -56,7 +57,6 @@
   "viewer": {
     "add_other": "添加 {{count}} 款皮肤",
     "added": "已添加",
-    "github": "在 GitHub 上打开",
     "openFailed": "无法打开这个皮肤包：{{reason}}。",
     "getting_other": "正在加载 {{count}} 款皮肤的预览"
   },
@@ -119,5 +119,8 @@
     "show": "查看",
     "addedFromFolder_other": "已从该文件夹添加 {{count}} 款皮肤",
     "addFolderFailed": "无法添加这个皮肤包：{{reason}}"
-  }
+  },
+  "searchIn": "在“{{tag}}”中搜索皮肤包",
+  "searchInLabel": "在“{{tag}}”中搜索皮肤包",
+  "checkedLabel": "皮肤包的检查方式"
 }

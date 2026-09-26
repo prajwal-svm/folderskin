@@ -24,11 +24,11 @@
   "collapse": "Collapse sidebar",
   "darkMode": "Dark mode",
   "darkModeLabel": "dark mode",
-  "darkOn": "Dark mode is on",
-  "darkOff": "Dark mode is off",
   "settings": "Settings",
   "language": {
     "label": "Language: {{language}}",
     "menu": "Language"
-  }
+  },
+  "lightMode": "Light mode",
+  "lightModeLabel": "light mode"
 }

@@ -1,13 +1,11 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorMessage, type CommunityPack, type PackProgress, type PackSkinPreview } from "../lib/tauri";
-import { licenseLabel, PACKS_URL } from "../lib/packs";
+import { licenseLabel } from "../lib/packs";
 import { progressLabel, progressShare } from "../lib/communityStore";
 import { Modal } from "./Modal";
 import { OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { DownloadIcon } from "./icons/download";
-import { ExternalLinkIcon } from "./icons/external-link";
 import { LoaderIcon } from "./icons/loader";
 import { RefreshCwIcon } from "./icons/refresh-cw";
 import { t, useT } from "../i18n";
@@ -114,13 +112,6 @@ export function PackViewer({
       onClose={onClose}
       footer={
         <>
-          <button
-            type="button"
-            className="link-btn pack-view-github"
-            onClick={() => void openUrl(`${PACKS_URL}/${pack.id}`).catch(() => {})}
-          >
-            {t("community.viewer.github")} <ExternalLinkIcon size={13} />
-          </button>
           {pack.added && (
             <button type="button" className="btn btn-ghost" disabled={busy || blocked} onClick={onRemove}>
               {t("community.remove.action")}

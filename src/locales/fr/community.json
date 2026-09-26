@@ -28,7 +28,8 @@
     "noMatch": "Aucun pack ne correspond",
     "none": "Pas encore de packs",
     "noMatchText": "Essayez un autre mot ou un autre tag.",
-    "noneText": "Lancez-vous : partagez les vôtres."
+    "noneText": "Lancez-vous : partagez les vôtres.",
+    "searchAll": "Chercher dans tous les packs"
   },
   "remove": {
     "title": "Retirer « {{name}} » ?",
@@ -60,7 +61,6 @@
     "add_many": "Ajouter {{count}} d'habillages",
     "add_other": "Ajouter {{count}} habillages",
     "added": "Ajouté",
-    "github": "Ouvrir sur GitHub",
     "openFailed": "Impossible d'ouvrir ce pack : {{reason}}.",
     "getting_one": "Récupération de {{count}} habillage pour l'afficher",
     "getting_many": "Récupération de {{count}} d'habillages pour les afficher",
@@ -141,5 +141,8 @@
     "addedFromFolder_many": "{{count}} d'habillages ajoutés depuis ce dossier",
     "addedFromFolder_other": "{{count}} habillages ajoutés depuis ce dossier",
     "addFolderFailed": "Impossible d'ajouter ce pack : {{reason}}"
-  }
+  },
+  "searchIn": "Rechercher des packs dans {{tag}}",
+  "searchInLabel": "rechercher des packs dans {{tag}}",
+  "checkedLabel": "comment les packs sont vérifiés"
 }

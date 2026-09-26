@@ -30,7 +30,9 @@
     "noFavesText": "스킨의 별을 누르면 여기서 기다리고 있을 거예요.",
     "noSkins": "아직 스킨이 없어요",
     "noSkinsText": "커뮤니티에서 무료 팩을 추가하거나, 내 이미지를 가져오거나, AI에게 그려 달라고 해 보세요.",
-    "browsePacks": "팩 둘러보기"
+    "browsePacks": "팩 둘러보기",
+    "searchAll": "전체 스킨에서 검색",
+    "noMatchTextAll": "다른 단어로 찾아보세요."
   },
   "delete": {
     "title": "'{{name}}' 스킨을 삭제할까요?",
@@ -41,7 +43,9 @@
   "toolbar": {
     "tabsLabel": "태그로 스킨 거르기",
     "search": "스킨 검색",
-    "searchLabel": "스킨 검색"
+    "searchLabel": "스킨 검색",
+    "searchIn": "'{{tag}}'에서 스킨 검색",
+    "searchInLabel": "'{{tag}}'에서 스킨 검색"
   },
   "tile": {
     "madeWithAi": "{{name}} (AI로 만듦)",
