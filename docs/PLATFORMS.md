@@ -83,6 +83,9 @@ Some network shares keep a custom icon's bytes but refuse `setIcon` itself, sett
 alike: `setIcon` returns false and leaves an empty `Icon\r`. There FolderSkin writes the icon
 `setIcon` would have written straight in (read back once from a scratch folder in the temp
 directory), and a revert that `setIcon` refuses removes `Icon\r` and clears the flag itself.
+A drive's own icon on such a share goes the same way: the `.VolumeIcon.icns` that `setIcon`
+would have written at its root is written in, the flag set on the root, and both taken off again
+on a revert ([DRIVES.md](DRIVES.md#macos)).
 
 The window is transparent over the system's sidebar material (`NSVisualEffectView`), which is
 what makes the sidebar translucent. The light/dark switch sets the window's appearance so the

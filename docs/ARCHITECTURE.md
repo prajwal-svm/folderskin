@@ -28,10 +28,12 @@ folderskin/
 │   ├── src/pack_views.rs    packs looked through, kept drawn for a week
 │   ├── src/ai.rs            the AI assistant's commands
 │   ├── src/composer.rs      the composer's commands: the template's layers, saving a design
+│   ├── src/bases.rs         every shape a skin is made for, drawn for the pickers
+│   ├── src/drive_thumbs.rs  skins drawn on the drive picked, under the fsdrive: scheme
 │   ├── src/state.rs         what the commands share: the store and its caches
 │   └── src/store.rs         saved skins on disk
 ├── crates/
-│   ├── folderskin-core/     geometry · fit · raster · compositor · ico · matte · pack · apply
+│   ├── folderskin-core/     geometry · fit · raster · compositor · ico · matte · pack · base · drive · apply
 │   ├── folderskin-ai/       the AI providers: catalogue, requests, prompts
 │   └── folderskin-tools/    CLI: make, check and index packs, render, guide, apply, revert
 ├── assets/                  the app icon's source and the font
@@ -72,11 +74,31 @@ from `compositor::render_master_placed`, which fills both panels with the design
 drawn. The two share their drawing code, and a test holds the stacked layers within 3 levels of
 the saved icon, so the canvas shows what gets written.
 
+## Folders, drives and the free icon
+
+Every shape a skin is made for is in one list, `folderskin_core::base::BASES`, in the order the
+pickers show it: the Mac's, Windows' and the Linux folder, every drive each system shows
+([DRIVES.md](DRIVES.md)), and the free icon, which has no shape of its own. A `Base` has an id
+(`mac-folder`, `mac-external`, `free`), its system, its family (folder, drive or free), its
+template (`Template::Folder` with the folder's look, or `Template::Drive` with the drive's shape)
+and its anatomy, the words the AI prompts use for its parts ([AI.md](AI.md)). The AI view's shape
+picker and @ menu, Design your own, the stage for a picked drive, a saved skin's `base` and the
+maintainer CLI all find a shape there by its id, and the `shapes` command hands the webview every
+one with its picture ([COMPOSER.md](COMPOSER.md#every-shape-in-one-list)).
+
+A drive is drawn the way the folder is, by `folderskin_core::drive`: vector paths on the same
+1024-unit canvas, rendered once at 2048 px and downsampled. Each shape has a face, the part a
+picture covers, and is drawn in two layers around it: the plain drive underneath, and what goes
+over the face (its rims, its shading, a connector that has to stay in sight). Artwork wrapped
+onto a drive, a design on one, the composer's layers for it and the blank template an AI model
+repaints all come from that one drawing. `drive::detect` tells whether a picked path is a
+drive's root, and what kind of drive it is.
+
 ## Crates
 
 | crate | responsibility |
 |---|---|
-| `folderskin-core` | `geometry` (the template as vector paths), `fit` (cover-fit maths), `raster` (premultiplied downsampling, PNG encoding, and WebP through libwebp), `compositor` (the render, for artwork, a finished folder or a design drawn in place, and the template split into the composer's layers), `ico` (Windows `.ico` writer with PNG entries), `matte` (keying and telling a finished folder from artwork), `pack` (the community pack contract and its checks), `apply` (per-OS icon writers) |
+| `folderskin-core` | `geometry` (the template as vector paths), `fit` (cover-fit maths), `raster` (premultiplied downsampling, PNG encoding, and WebP through libwebp), `compositor` (the render, for artwork, a finished folder or a design drawn in place, and the template split into the composer's layers), `ico` (Windows `.ico` writer with PNG entries), `matte` (keying and telling a finished folder from artwork), `pack` (the community pack contract and its checks), `base` (every shape a skin is made for, in one list), `drive` (the drive shapes, drawn in code as the folder is, and which kind of drive a path is), `apply` (per-OS icon writers, for a folder and for a drive's own icon) |
 | `folderskin-ai` | the AI providers: the catalogue, each provider's request body and response reader, and the prompt templates |
 | `folderskin-tools` | the maintainer CLI. Makes a community pack from pictures, checks the packs and writes their index, renders any picture as the folder the app makes of it, writes the safe-area guide, and applies or reverts an icon without the GUI, which is how the Windows and Linux writers get exercised |
 | `folderskin` (`src-tauri`) | the Tauri app: window, commands, caches. Holds no drawing code |
@@ -87,18 +109,19 @@ tests run without a webview.
 ## Frontend to backend
 
 The commands live in `src-tauri/src/commands.rs` (the library), `community.rs` (packs),
-`deep_link.rs` (install links), `onboarding.rs` (first launch), `ai.rs` (the AI assistant), `composer.rs` (the composer, whose
-six commands are listed in [COMPOSER.md](COMPOSER.md#commands)) and `tree.rs` (a folder and its
-subfolders). Anything slow runs on a blocking
-thread. `src/lib/tauri.ts` is the only place the frontend names them.
+`deep_link.rs` (install links), `onboarding.rs` (first launch), `ai.rs` (the AI assistant),
+`composer.rs` (the composer, whose seven commands are listed in
+[COMPOSER.md](COMPOSER.md#commands)), `bases.rs` (the shapes) and `tree.rs` (a folder and its
+subfolders). Anything slow runs on a blocking thread. `src/lib/tauri.ts` is the only place the
+frontend names them.
 
 | command | input | output |
 |---|---|---|
 | `list_skins` | – | the user's skins, newest first, each with a PNG data-URL thumbnail, and beside them the plain default folder |
-| `inspect_path` | `path` | `{kind: "folder" \| "image" \| "other", name, path}` |
+| `inspect_path` | `path` | `{kind: "folder" \| "drive" \| "image" \| "other", name, path, drive}`. For a drive's root, `drive` is what the stage shows ([DRIVES.md](DRIVES.md#what-the-stage-shows-for-a-drive)): its kind and shape, its letter on Windows, whether it's the startup disk, read-only or a network share, why its icon can't be changed when it can't (`locked`), the plain drive, and where its skins' pictures on it are |
 | `import_image` | `path` | the picture saved as a skin, id `user:<hash>` (the saved one if it was imported before) |
-| `apply_skin` | `folder`, `skinId` | `{}` or an error string |
-| `revert_skin` | `folder` | `{}` or an error string |
+| `apply_skin` | `folder`, `skinId` | `{}` or an error string. On a drive's root, the skin goes on as the drive's own icon, drawn on its shape |
+| `revert_skin` | `folder` | `{}` or an error string. On a drive's root, the drive's own icon comes off |
 | `subfolder_count` | `folder` | `{folder, count, done}`: starts counting the folders inside it in the background (the count before it stops), and answers once it's done or after a moment. The rest comes as `subfolder-count` events |
 | `subfolder_counts` | `folder`, `paths` | `{folder, count, done, paths}`: how far that count has got, and for each of `paths` (folders in it) `{found, inside, done}` |
 | `subfolder_list` | `folder` | `{path, separator, names, nested}`: one folder's own folders, for a column of **Choose subfolders**, and whether each has folders inside (`null` when there wasn't time to look) |
@@ -124,7 +147,8 @@ thread. `src/lib/tauri.ts` is the only place the frontend names them.
 | `export_pack` | `folder`, `name`, `author`, `license`, `tags`, `skinIds` | the pack folder it wrote, named after a new id (`pack::new_id`), already passing the checks |
 | `onboarding_needed` | – | `true` until the first-launch onboarding has been finished on this computer |
 | `finish_onboarding` | – | `{}`, and the onboarding never shows again |
-| `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS) |
+| `folder_icon` | `folder` | the folder's current icon as a PNG data URL (the real one from the OS on macOS), or for a drive the OS gives no icon for, the plain drive of its kind |
+| `shapes` | `size` | every shape a skin is made for, in `base::BASES`'s order, each with its picture at `size` px ([COMPOSER.md](COMPOSER.md#every-shape-in-one-list)) |
 | `platform_info` | – | `{os, browse_label, note}` |
 
 `ai_generate` returns the same skin shape as `import_image`. A skin is:
@@ -220,13 +244,19 @@ Each index entry records the id, name, tags, kind (`artwork` or `folder`), sourc
 `ai`, `community` or `composer`), `created_at` in Unix milliseconds, the focus point for artwork, for AI
 results the provider, model and the user's own words, and for community skins the pack's id,
 name, author, licence and hash. An AI result or a composer design also records the shape it
-was made for (`base`: `mac-folder`, `windows-folder` or `free`), and an AI result what it was
+was made for (`base`: a shape's id from the [one list](#folders-drives-and-the-free-icon), such
+as `mac-folder`, `linux-folder`, `mac-external` or `free`), and an AI result what it was
 made from (`recipe`: the prompt as it was sent, its style, the words it letters, its pictures
 by job and hash, and the template's version), which
 [AI.md](AI.md#keeping-a-generated-skin) describes. The id is `user:` plus the first 12 hex digits of the
 SHA-256 of what came in (the picture file, or the provider's image), so importing the same
 picture twice finds the skin already saved. Ids from the webview are checked against that exact
 shape before they name a file.
+
+A drive skin, a finished drive or artwork from a pack of drives, is marked `"shape": "drive"`.
+A folder's skin leaves `shape` out, as every skin saved before drives does. A skin drawn on a
+drive for the library while that drive is picked is kept beside it as
+`<stem>.thumb-v3-drive-<shape>.png`, and goes with it when it's deleted.
 
 A design from the composer is saved as a finished folder, with its document beside it
 (`<stem>.design.json`) so it can be opened again. The document is written first, it goes with the
@@ -311,6 +341,10 @@ has passed are they saved together (`AppState::save_many`). `community_pack_skin
 `community_update` download the same way without reporting progress, and `import_pack` reads a
 pack folder from disk.
 
+A pack of drives says so in its `pack.json`, and its skins are saved as drive skins. The index
+and the catalog list packs of drives apart from packs of folders, where FolderSkin 0.1.9 and
+earlier don't look ([PACKS.md](PACKS.md#how-the-app-reads-packs)).
+
 A pack is official when folderskin-community's `official.json` lists it: `head.json` carries the
 list and `index.json` marks each such entry, and every pack the commands hand the webview says
 `official`, which Community and the pack viewer show as a badge ([PACKS.md](PACKS.md#featured-and-official-packs)).
@@ -351,6 +385,13 @@ the PNG encodes are slow). On macOS the old icon is cleared before the new one i
 redraws it at once instead of showing the old one until the folder is opened. Every writer refuses anything that is not an existing directory, refuses filesystem
 roots, and writes atomically. What each platform actually writes, and what revert undoes, is
 in [PLATFORMS.md](PLATFORMS.md).
+
+A drive's root is not a folder to the writers. `apply_skin` finds one with
+`drive::detect::drive_at`, draws the skin on the drive's shape (`SkinImage::drive_icon_set`),
+and `apply::drive` puts it where that drive's system keeps a drive's icon, refusing a drive that
+can't have one before anything is tried. `apply_icon`, `revert_icon` and `has_custom_icon` hand a
+drive's root to the same writers, so every caller that takes a folder takes a drive.
+[DRIVES.md](DRIVES.md#how-folderskin-sets-a-drives-icon) has what each system writes.
 
 ## A folder and its subfolders
 
@@ -475,6 +516,10 @@ never a frame.
 | `ico` | round-trip of the multi-size container |
 | `apply` | `desktop.ini` and `.directory` generation and revert parsing as pure functions, and path validation |
 | `pack` | the pack contract: fields, limits, tags, ids, file names, picture checks and the pack hash. An index's optional fields, and fields it doesn't know passed over |
+| `base` | every shape found by its id, a template and words for every folder and drive, and each drive repainted from its own blank template |
+| `drive` | every shape inside the canvas with its face inside it, artwork landing on the face, the same bytes every time, no shadow, and the composer's layers stacked around a design equal to the saved drive |
+| `drive::detect` | what each system says about a drive turned into its kind, as pure functions over what `diskutil`, Windows' drive type and bus, and Linux's mount list and sysfs say, and the startup disk of the computer the tests run on |
+| `apply::drive` | which drives each system refuses, Windows' per-user key taken and given back over a stand-in registry, and Linux's `.xdg-volume-info` written and cleaned. On macOS, disk images made in the temp folder take an icon and give it back, through AppKit and by hand as on a share that refuses AppKit, and one attached read-only is refused (`cargo test -p folderskin-core -- --ignored drive_image`) |
 | `matte` | keying, despill and trim, and telling a finished folder (transparent, keyed, keyed then JPEG-compressed, trimmed tight) from an ordinary photo, a pink sunset and a product shot on magenta paper |
 | `compositor` (composer) | the template's layers stacked around a design equal the saved icon, a design lands where it was drawn, and a see-through design leaves only the paper and the rims |
 | `composer` | the raw body's framing, the picture checks, previews, saving a design and saving over one, a damaged document |

@@ -151,9 +151,10 @@ pub struct SavedSkin {
     /// ([`folderskin_core::pack::pack_hash`]), to tell when it has an update.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack_hash: Option<String>,
-    /// The shape it was made for, by [`folderskin_core::base`] id: "windows-folder", or "free"
-    /// for a free icon, which goes on anything. `None` for a folder skin made before there were
-    /// other shapes, and for a picture brought in from elsewhere.
+    /// The shape it was made for, by [`folderskin_core::base`] id: "windows-folder", a drive's
+    /// such as "mac-external", or "free" for a free icon, which goes on anything. `None` for a
+    /// folder skin made before there were other shapes, and for a picture brought in from
+    /// elsewhere.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
     /// AI results only: what it was made from (the prompt as sent, its style, the words it

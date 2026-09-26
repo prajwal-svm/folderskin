@@ -81,7 +81,7 @@ FolderSkin puts every volume into one of these kinds. The stage says which one w
 | Time Machine disk | `time-machine` | a Time Machine backup disk | drawn as a local disk | drawn as an external drive |
 | RAID set | `multi-disk` | drawn as an external drive | drawn as a local disk | an `md` device |
 
-Two more shapes are only for designing: Linux's optical drive (`optical-drive`) and network server
+Two more shapes are only for designing: Linux's disc drive (`optical-drive`) and network server
 (`server`).
 
 ## How FolderSkin tells what was picked
@@ -145,7 +145,7 @@ still go on a drive from the composer's logo library.
 |---|---|
 | Mac | Startup disk, Internal drive, External drive, USB drive, Memory card, Disc, Disk image, Network drive, Time Machine disk |
 | Windows | System drive, Local disk, USB drive, SD card, Disc drive, Network drive |
-| Linux | Hard disk, Solid-state drive, USB hard disk, USB stick, Memory card, Optical drive, Disc, Network server, Network folder, RAID set |
+| Linux | Hard disk, Solid-state drive, USB hard disk, USB stick, Memory card, Disc drive, Disc, Network server, Network folder, RAID set |
 
 Every shape is drawn on the same 1024-unit canvas as the folders and has a face: the part a
 picture covers and where a design's layers sit. The rest of the drive (its sides, its base, its
@@ -156,9 +156,18 @@ as its kind.
   it, on the shape for the system FolderSkin runs on and the kind of drive picked.
 - **A finished icon**, a drive or a folder drawn whole, is used as drawn.
 - **A design** from the composer is drawn on the shape it was made on, and saved as a drive skin.
+- **A picture from the AI view** made for a drive is kept as a drive skin: its art wrapped onto
+  that drive, or the whole drive as the model painted it from FolderSkin's blank template
+  ([AI.md](AI.md)).
 
 The library puts drive skins first while a drive is picked, and after the folder skins while a
 folder is. Every skin still goes on either.
+
+Every shape is also a base in FolderSkin's one list of shapes (`folderskin_core::base::BASES`),
+after the three folders and before the free icon, with an id of its own (`mac-external`,
+`windows-card`, `linux-removable`). The AI view's shape picker and @ menu, Design your own, the stage
+for a picked drive and packs of drives all take a drive's shape from there
+([ARCHITECTURE.md](ARCHITECTURE.md#folders-drives-and-the-free-icon)).
 
 ## What the stage shows for a drive
 
@@ -183,13 +192,16 @@ The writers are in `crates/folderskin-core/src/apply/drive/`. `apply_icon`, `rev
 
 | | |
 |---|---|
-| apply | `NSWorkspace.setIcon(image, forFile: <mount point>)`, the call Finder's own Get Info uses. For a volume it writes the icon as `.VolumeIcon.icns` at the root and sets the custom-icon flag on the root. Finder is told the volume changed |
+| apply | `NSWorkspace.setIcon(image, forFile: <mount point>)`, the call Finder's own Get Info uses, after clearing the icon that was there, as for a folder. For a volume it writes the icon as `.VolumeIcon.icns` at the root and sets the custom-icon flag on the root. Finder is told the volume changed |
 | revert | `setIcon(nil, …)`, which takes both away again |
-| refused | the startup disk (macOS keeps it sealed and read-only) and a read-only volume or disk image, before anything is tried, and a share whose server doesn't let FolderSkin write, each with a sentence that says so |
+| a share that refuses it | some network shares keep what's written to them but refuse `setIcon`, setting and clearing alike, as they do for a folder ([PLATFORMS.md](PLATFORMS.md#macos)). There the `icns` that `setIcon` would have written goes in as `.VolumeIcon.icns` by hand, with the flag, and a revert takes both off by hand |
+| refused | the startup disk (macOS keeps it sealed and read-only) and a read-only volume or disk image, before anything is tried, and a share whose server lets FolderSkin write neither way, each with a sentence that says so |
 
 A test attaches a disk image made in the temp folder, applies an icon to it, checks for
 `.VolumeIcon.icns` and the flag, reverts it and detaches it (`cargo test -p folderskin-core --
---ignored drive_image`), and one attached read-only is refused.
+--ignored drive_image`). Another gives an image its icon by hand, as on a share that refuses
+`setIcon`, and checks it's byte for byte the `.VolumeIcon.icns` AppKit writes and comes off
+again. One attached read-only is refused.
 
 ### Windows
 

@@ -37,5 +37,5 @@ objc2-core-video = { version = "0.3", default-features = false, features = ["std
 # list, not as a path (see the `notify` in apply/windows.rs).
 # Win32_System_Ioctl, Win32_System_IO and Win32_Security are for asking a drive which bus its disk
 # is on (drive/detect/windows.rs), and Win32_System_Registry for the per-user key that gives a
-# drive letter its icon (apply/drive.rs).
+# drive letter its icon (apply/drive/windows.rs).
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
