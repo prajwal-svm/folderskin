@@ -38,6 +38,8 @@ pub struct AiModelDto {
     pub label: String,
     pub native_alpha: bool,
     pub accepts_reference: bool,
+    /// How many pictures one request can carry, FolderSkin's template included.
+    pub max_references: usize,
     pub sizes: Vec<String>,
     pub price_hint: String,
 }
@@ -146,6 +148,7 @@ fn key_provider(p: &ProviderInfo, has_key: bool) -> AiProviderDto {
                 label: m.label.to_string(),
                 native_alpha: m.native_alpha,
                 accepts_reference: m.accepts_reference,
+                max_references: m.max_references,
                 sizes: m.sizes.iter().map(|s| s.to_string()).collect(),
                 price_hint: m.price_hint.to_string(),
             })

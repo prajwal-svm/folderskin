@@ -13,6 +13,9 @@ pub const FOLDER_W: u32 = 1166;
 pub const FOLDER_H: u32 = 1091;
 /// The key colour as the prompts name it; [`MAGENTA`] is the same colour as pixels.
 pub const KEY_HEX: &str = "#FF00FF";
+/// The green key, for the providers that leave a dark rim around a subject on magenta
+/// ([`crate::ProviderInfo::key_colour`]).
+pub const GREEN: [u8; 3] = [0, 255, 0];
 /// Reference pictures are downscaled before upload; models do not need more and it keeps the
 /// request small.
 pub const REFERENCE_MAX_SIDE: u32 = 1024;
@@ -163,21 +166,23 @@ mod tests {
 
     #[test]
     fn a_folder_from_a_model_with_alpha_asks_for_it_and_names_no_key() {
+        // A picture of the person's own, so no template: the model's own alpha.
+        let png = reference_png(RgbaImage::from_pixel(64, 64, Rgba([9, 9, 9, 255])));
         let req = plan(
-            "recraft",
-            model("recraftv3"),
+            "openai",
+            model("gpt-image-2.5-flare"),
             Shape::Folder,
             "koi",
             None,
-            None,
+            Some(png),
         );
         assert!(req.want_alpha);
-        assert!(req.reference_png.is_none());
+        assert!(req.reference_png.is_some());
         assert!(!req.prompt.contains(KEY_HEX));
         // Artwork never asks for alpha or a key.
         let art = plan(
             "recraft",
-            model("recraftv3"),
+            model("recraftv4_1"),
             Shape::Skin,
             "koi",
             None,
@@ -203,7 +208,7 @@ mod tests {
         assert!(taken.prompt.starts_with("Use the supplied picture"));
         let dropped = plan(
             "recraft",
-            model("recraftv3"),
+            model("recraftv4_1"),
             Shape::Skin,
             "x",
             None,

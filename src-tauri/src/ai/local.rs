@@ -281,6 +281,8 @@ pub fn provider(ready: bool) -> AiProviderDto {
                 label: label.to_string(),
                 native_alpha: false,
                 accepts_reference: *accepts_reference,
+                // klein works from up to four pictures.
+                max_references: if *accepts_reference { 4 } else { 0 },
                 sizes: vec!["1024x1024".into()],
                 price_hint: "Free".into(),
             })

@@ -147,7 +147,6 @@
     },
     "hint": {
       "price": "1枚あたり約{{price}}",
-      "credits": "1枚あたり約{{count}}クレジット",
       "startsWith": "{{prefix}}で始まる",
       "recraft": "Recraftのプロフィールから",
       "google": "Google AI Studioから",

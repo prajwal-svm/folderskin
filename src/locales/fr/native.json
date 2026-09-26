@@ -147,7 +147,6 @@
     },
     "hint": {
       "price": "~{{price}} / image",
-      "credits": "~{{count}} crédits / image",
       "startsWith": "commence par {{prefix}}",
       "recraft": "depuis votre profil Recraft",
       "google": "depuis Google AI Studio",

@@ -383,13 +383,17 @@ fn local_model(name: &str) -> Result<Option<ModelId>, CliError> {
     }
 }
 
-/// One of `provider`'s models by id, in any case: Ideogram's only model is `V_3`.
+/// One of `provider`'s models by id, in any case: Ideogram's only model is `V_3`. A model
+/// FolderSkin no longer offers, saved with `ai config` while it was, paints with the one that
+/// took its place.
 fn provider_model(provider: &ProviderInfo, id: &str) -> Result<&'static ModelInfo, CliError> {
-    let found = folderskin_ai::provider(provider.id).and_then(|p| {
-        p.models
-            .iter()
-            .find(|m| m.id.eq_ignore_ascii_case(id.trim()))
-    });
+    let found = folderskin_ai::provider(provider.id)
+        .and_then(|p| {
+            p.models
+                .iter()
+                .find(|m| m.id.eq_ignore_ascii_case(id.trim()))
+        })
+        .or_else(|| folderskin_ai::model(provider.id, &id.trim().to_lowercase()));
     found.ok_or_else(|| {
         CliError::fixable(
             "unknown_model",
@@ -788,9 +792,15 @@ mod tests {
         }
         let openai = folderskin_ai::provider("openai").unwrap();
         assert_eq!(
-            provider_model(openai, "GPT-IMAGE-1").unwrap().id,
-            "gpt-image-1"
+            provider_model(openai, "GPT-IMAGE-2.5-FLARE").unwrap().id,
+            "gpt-image-2.5-flare"
         );
+        // One saved while it was on offer paints with the model that took its place.
+        assert_eq!(
+            provider_model(openai, "gpt-image-1").unwrap().id,
+            "gpt-image-2"
+        );
+        assert!(provider_model(openai, "dall-e-9").is_err());
     }
 
     #[test]

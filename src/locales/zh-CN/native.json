@@ -147,7 +147,6 @@
     },
     "hint": {
       "price": "约 {{price}} / 张",
-      "credits": "约 {{count}} 积分 / 张",
       "startsWith": "以 {{prefix}} 开头",
       "recraft": "在你的 Recraft 个人资料页获取",
       "google": "在 Google AI Studio 获取",

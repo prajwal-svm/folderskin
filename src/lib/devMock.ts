@@ -38,6 +38,8 @@ import { fallbackParts, type FolderStyle } from "../composer/parts";
 import type {
   AiCatalogue,
   AiGenerateRequest,
+  AiModel,
+  AiProvider,
   ChatRefDto,
   ChatSummaryDto,
   LocalStatus,
@@ -1690,63 +1692,103 @@ const catalogueHeld = new URLSearchParams(location.search).has("holdcatalogue")
   ? new Promise<void>((resolve) => ((window as { mockCatalogueIn?: () => void }).mockCatalogueIn = resolve))
   : Promise.resolve();
 
-/** The providers and models, as ai_catalogue lists them, with the keys saved in this preview. */
+/** A model as ai_catalogue lists it: how many pictures it takes, and its price. */
+const mockModel = (id: string, label: string, max_references: number, price_hint: string, native_alpha = false): AiModel => ({
+  id,
+  label,
+  native_alpha,
+  accepts_reference: max_references > 0,
+  max_references,
+  sizes: ["1024x1024"],
+  price_hint,
+});
+
+/** The providers and models, as ai_catalogue lists them (crates/folderskin-ai/src/catalogue.rs), with the keys saved in this preview. */
 function mockProviders(): AiCatalogue {
+  const provider = (id: string, label: string, models: AiModel[], keys_url: string, docs_url: string, key_hint: string): AiProvider => ({
+    id,
+    label,
+    kind: "key",
+    models,
+    keys_url,
+    docs_url,
+    key_hint,
+    has_key: mockKeys.has(id),
+  });
   return {
     providers: [
       {
         id: "local",
         label: "Local Model",
         kind: "local",
-        models: [
-          { id: "klein", label: "FLUX.2 klein 4B", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "Free" },
-        ],
+        models: [mockModel("klein", "FLUX.2 klein 4B", 4, "Free")],
         keys_url: "",
         docs_url: "",
         key_hint: "",
         has_key: mockLocal.ready,
       },
-      {
-        id: "openai",
-        label: "OpenAI",
-        kind: "key",
-        models: [
-          { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.04 / image" },
-          { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst", native_alpha: true, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.19 / image" },
-        ],
-        keys_url: "https://platform.openai.com/api-keys",
-        docs_url: "https://platform.openai.com/docs/guides/image-generation",
-        key_hint: "starts with sk-",
-        has_key: mockKeys.has("openai"),
-      },
-      {
-        id: "xai",
-        label: "xAI Grok",
-        kind: "key",
-        models: [{ id: "grok-imagine-image", label: "Grok Imagine", native_alpha: false, accepts_reference: true, sizes: ["1024x1024"], price_hint: "~$0.02 / image" }],
-        keys_url: "https://console.x.ai",
-        docs_url: "https://docs.x.ai",
-        key_hint: "starts with xai-",
-        has_key: mockKeys.has("xai"),
-      },
-      ...(
+      provider(
+        "openai",
+        "OpenAI",
         [
-          ["recraft", "Recraft", "recraftv3", "Recraft V3", true, "https://www.recraft.ai/profile/api", "https://www.recraft.ai/docs", "from your Recraft profile"],
-          ["google", "Google Gemini", "gemini-3.1-flash-image", "Gemini 3.1 Flash Image", false, "https://aistudio.google.com/apikey", "https://ai.google.dev/gemini-api/docs/image-generation", "from Google AI Studio"],
-          ["bfl", "Black Forest Labs", "flux-pro-1.1", "FLUX 1.1 Pro", false, "https://dashboard.bfl.ai", "https://docs.bfl.ai", "from the BFL dashboard"],
-          ["stability", "Stability AI", "core", "Stable Image Core", false, "https://platform.stability.ai/account/keys", "https://platform.stability.ai/docs/api-reference", "starts with sk-"],
-          ["ideogram", "Ideogram", "V_3", "Ideogram v3", false, "https://ideogram.ai/manage-api", "https://developer.ideogram.ai", "from your Ideogram account"],
-        ] as const
-      ).map(([id, label, model, modelLabel, alpha, keys_url, docs_url, key_hint]) => ({
-        id,
-        label,
-        kind: "key" as const,
-        models: [{ id: model, label: modelLabel, native_alpha: alpha, accepts_reference: false, sizes: ["1024x1024"], price_hint: "~$0.04 / image" }],
-        keys_url,
-        docs_url,
-        key_hint,
-        has_key: mockKeys.has(id),
-      })),
+          mockModel("gpt-image-2.5-flare", "GPT Image 2.5 Flare", 16, "~$0.05 / image", true),
+          mockModel("gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst", 16, "~$0.20 / image", true),
+          mockModel("gpt-image-2", "GPT Image 2", 16, "~$0.05 / image"),
+        ],
+        "https://platform.openai.com/api-keys",
+        "https://developers.openai.com/api/docs/guides/image-generation",
+        "starts with sk-",
+      ),
+      provider(
+        "xai",
+        "xAI Grok",
+        [mockModel("grok-imagine-image-2.0", "Grok Imagine 2.0", 5, "~$0.04 / image"), mockModel("grok-imagine-image", "Grok Imagine", 3, "~$0.02 / image")],
+        "https://console.x.ai",
+        "https://docs.x.ai/developers/model-capabilities/imagine",
+        "starts with xai-",
+      ),
+      provider(
+        "recraft",
+        "Recraft",
+        [mockModel("recraftv4_1", "Recraft V4.1", 0, "~$0.035 / image"), mockModel("recraftv4_1_flash", "Recraft V4.1 Flash", 0, "~$0.007 / image")],
+        "https://app.recraft.ai/profile/api",
+        "https://www.recraft.ai/docs",
+        "from your Recraft profile",
+      ),
+      provider(
+        "google",
+        "Google Gemini",
+        [
+          mockModel("gemini-3.1-flash-image", "Gemini 3.1 Flash Image", 14, "~$0.07 / image"),
+          mockModel("gemini-3-pro-image", "Gemini 3 Pro Image", 14, "~$0.14 / image"),
+          mockModel("gemini-3.1-flash-lite-image", "Gemini 3.1 Flash Lite Image", 14, "~$0.034 / image"),
+        ],
+        "https://aistudio.google.com/apikey",
+        "https://ai.google.dev/gemini-api/docs/generate-content/image-generation",
+        "from Google AI Studio",
+      ),
+      provider(
+        "bfl",
+        "Black Forest Labs",
+        [
+          mockModel("flux-2-pro", "FLUX.2 pro", 8, "~$0.03–0.05 / image"),
+          mockModel("flux-2-max", "FLUX.2 max", 8, "~$0.07–0.10 / image"),
+          mockModel("flux-2-flex", "FLUX.2 flex", 8, "~$0.05–0.10 / image"),
+          mockModel("flux-2-klein-4b", "FLUX.2 klein 4B", 4, "~$0.015 / image"),
+        ],
+        "https://dashboard.bfl.ai",
+        "https://docs.bfl.ai",
+        "from the BFL dashboard",
+      ),
+      provider(
+        "stability",
+        "Stability AI",
+        [mockModel("ultra", "Stable Image Ultra", 0, "~$0.08 / image"), mockModel("core", "Stable Image Core", 0, "~$0.03 / image")],
+        "https://platform.stability.ai/account/keys",
+        "https://platform.stability.ai/docs/api-reference",
+        "starts with sk-",
+      ),
+      provider("ideogram", "Ideogram", [mockModel("V_3", "Ideogram 3.0", 0, "~$0.06 / image")], "https://ideogram.ai/manage-api", "https://developer.ideogram.ai", "from your Ideogram account"),
     ],
     presets: [
       { id: "aurora", label: "Aurora", idea: "a night sky with green and violet aurora ribbons over dark mountains" },

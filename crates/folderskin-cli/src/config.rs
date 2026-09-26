@@ -365,8 +365,8 @@ mod tests {
     fn a_model_belongs_to_its_provider() {
         let mut c = Config::default();
         c.set(ConfigKey::Provider, "openai").unwrap();
-        c.set(ConfigKey::Model, "gpt-image-1").unwrap();
-        assert_eq!(c.model_for("openai"), Some("gpt-image-1"));
+        c.set(ConfigKey::Model, "gpt-image-2").unwrap();
+        assert_eq!(c.model_for("openai"), Some("gpt-image-2"));
         assert_eq!(
             c.model_for(LOCAL),
             None,

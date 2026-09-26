@@ -106,7 +106,8 @@ fn made_with(entry: &SavedSkin) -> Option<String> {
         return Some(format!("Local Model · {label}"));
     }
     let provider_label = folderskin_ai::catalogue::provider(provider).map_or(provider, |p| p.label);
-    let model_label = folderskin_ai::model(provider, model).map_or(model, |m| m.label);
+    // A model FolderSkin no longer offers keeps its own name: it is what made the skin.
+    let model_label = folderskin_ai::catalogue::model_label(provider, model).unwrap_or(model);
     Some(format!("{provider_label} · {model_label}"))
 }
 
@@ -618,6 +619,19 @@ mod tests {
         assert_eq!(json["made_with"], "xAI Grok · Grok Imagine");
         assert_eq!(json["idea"], "a fox");
         assert!(json["author"].is_null());
+        // A skin made by a model FolderSkin no longer offers is still named for that model, and
+        // one the catalogue never knew by its id.
+        for (model, named) in [
+            ("gpt-image-1", "OpenAI · GPT Image 1"),
+            ("dall-e-3", "OpenAI · dall-e-3"),
+        ] {
+            let older = SavedSkin {
+                provider: Some("openai".into()),
+                model: Some(model.into()),
+                ..entry.clone()
+            };
+            assert_eq!(made_with(&older).as_deref(), Some(named));
+        }
     }
 
     #[test]

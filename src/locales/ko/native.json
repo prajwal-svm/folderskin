@@ -147,7 +147,6 @@
     },
     "hint": {
       "price": "이미지당 약 {{price}}",
-      "credits": "이미지당 약 {{count}}크레딧",
       "startsWith": "{{prefix}}(으)로 시작",
       "recraft": "Recraft 프로필에서",
       "google": "Google AI Studio에서",

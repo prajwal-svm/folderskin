@@ -151,6 +151,8 @@ export type AiModel = {
   label: string;
   native_alpha: boolean;
   accepts_reference: boolean;
+  /** How many pictures one request can carry, FolderSkin's template included (0 when it takes none). */
+  max_references: number;
   sizes: string[];
   price_hint: string;
 };
