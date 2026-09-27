@@ -376,6 +376,11 @@ impl Job {
         }
     }
 
+    /// The folder the run is over, as it was checked: the folder itself, not one inside it.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub fn is_running(&self) -> bool {
         self.lock().running
     }

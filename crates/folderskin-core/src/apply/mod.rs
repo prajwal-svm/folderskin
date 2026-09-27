@@ -99,35 +99,61 @@ pub fn apply_icon(folder: &Path, icons: &IconSet) -> Result<(), ApplyError> {
     // Checked before the icon is encoded, the slow part, so a folder that can't be used fails
     // at once, as it always has.
     validate_folder(folder)?;
-    apply_prepared(folder, &prepare_icon(icons)?)
+    apply_prepared_and_show(folder, &prepare_icon(icons)?)
 }
 
 /// Applies a [`prepare_icon`]d icon to `folder`, which is checked exactly as [`apply_icon`]
-/// checks it.
+/// checks it, as one folder of a run over subfolders.
 ///
 /// A drive's root is left as it is. Its own icon is drawn for its shape rather than a folder's,
 /// so it goes on with [`apply_icon`] (or [`drive::apply`]) before a run over the folders on it,
 /// which comes here for the drive as for any folder.
+///
+/// On Windows the new icon may not show for up to a minute, while Explorer still draws the folder
+/// from what it read of it before; it's drawn again once that has run out
+/// ([`windows::redraw_later`]). [`apply_prepared_and_show`] makes it show at once.
 pub fn apply_prepared(folder: &Path, icon: &PreparedIcon) -> Result<(), ApplyError> {
+    write_prepared(folder, icon, windows::Show::Later)
+}
+
+/// [`apply_prepared`] for a folder the user is looking at: a folder applied on its own, and the
+/// folder a run over subfolders is over.
+///
+/// On Windows it asks Explorer to read the folder again at once ([`windows::show_now`]), since
+/// Explorer draws a folder from what it read of its `desktop.ini` for about a minute afterwards,
+/// and a skin applied soon after another kept showing the one before. That takes a tenth of a
+/// second or more, which is why a run's other folders don't ask. macOS and Linux show a new icon
+/// from the notes their writers already send, and this is [`apply_prepared`] there.
+pub fn apply_prepared_and_show(folder: &Path, icon: &PreparedIcon) -> Result<(), ApplyError> {
+    write_prepared(folder, icon, windows::Show::Now)
+}
+
+fn write_prepared(
+    folder: &Path,
+    icon: &PreparedIcon,
+    show: windows::Show,
+) -> Result<(), ApplyError> {
     let folder = validate_folder(folder)?;
     if volume_at(&folder).is_some() {
         return Ok(());
     }
     #[cfg(target_os = "macos")]
     {
+        let _ = show;
         macos::apply(&folder, &icon.prepared)
     }
     #[cfg(target_os = "windows")]
     {
-        windows::apply(&folder, &icon.bytes)
+        windows::apply(&folder, &icon.bytes, show)
     }
     #[cfg(target_os = "linux")]
     {
+        let _ = show;
         linux::apply(&folder, &icon.bytes)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
-        let _ = (folder, icon);
+        let _ = (folder, icon, show);
         Err(ApplyError::Platform(UNSUPPORTED.into()))
     }
 }
@@ -174,7 +200,11 @@ pub fn revert_icon(folder: &Path) -> Result<(), ApplyError> {
     }
     #[cfg(target_os = "windows")]
     {
-        windows::revert(&folder)
+        windows::revert(&folder)?;
+        // A folder whose own icon came back is drawn from Explorer's older reading, which named
+        // FolderSkin's, until that runs out.
+        windows::redraw_later(&folder);
+        Ok(())
     }
     #[cfg(target_os = "linux")]
     {
@@ -191,14 +221,24 @@ pub fn revert_icon(folder: &Path) -> Result<(), ApplyError> {
 
 /// Asks the file manager to draw folder icons again, once a whole operation has finished.
 ///
-/// Only Windows needs it, and only because the Desktop repaints for nothing else; see
-/// [`windows::refresh_shell_icons`] for what was tried first. It is deliberately called once per
-/// operation rather than once per folder, since it refreshes every view, so a run over a tree
-/// costs one refresh. macOS and Linux file managers act on the per-folder notifications the
-/// writers already send, and do nothing here.
+/// Only Windows needs it, for the views that don't follow the per-folder notifications; see
+/// [`windows::refresh_shell_icons`]. It is deliberately called once per operation rather than
+/// once per folder, since it refreshes every view, so a run over a tree costs one refresh. A new
+/// icon shows at once through [`apply_prepared_and_show`], and whatever Explorer was still drawing
+/// from an older reading is drawn again a minute later on its own ([`windows::redraw_later`]).
+/// macOS and Linux file managers act on the per-folder notifications the writers already send,
+/// and do nothing here.
 pub fn refresh_shell_icons() {
     #[cfg(target_os = "windows")]
     windows::refresh_shell_icons();
+}
+
+/// [`refresh_shell_icons`] for a process that ends straight after, such as a command line: on
+/// Windows it waits here and sends the refresh before it returns, where the other waits on a
+/// thread of its own that would end with the process, the refresh unsent.
+pub fn refresh_shell_icons_now() {
+    #[cfg(target_os = "windows")]
+    windows::refresh_shell_icons_now();
 }
 
 /// True when `folder` wears an icon of its own that [`revert_icon`] would take off: any custom

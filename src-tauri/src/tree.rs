@@ -22,8 +22,8 @@ use crate::state::AppState;
 use count::Count;
 use folderskin_core::apply::tree::{folders_in, has_folders, is_in_package, Choice};
 use folderskin_core::apply::{
-    apply_prepared, bytes_per_folder, has_custom_icon, prepare_icon, revert_icon, validate_folder,
-    ApplyError,
+    apply_prepared, apply_prepared_and_show, bytes_per_folder, has_custom_icon, prepare_icon,
+    revert_icon, validate_folder, ApplyError,
 };
 use folderskin_core::compositor::ICON_SIZES;
 use job::{Emit, Job, Kind};
@@ -446,6 +446,7 @@ fn applying<R: Runtime>(
 ) -> impl FnOnce(Arc<Job>) + Send + 'static {
     let (emit, state) = (emitter(app), app.state::<AppState>().inner().clone());
     move |job: Arc<Job>| {
+        let root = job.root().to_path_buf();
         job.work(
             || {
                 // Rendered and encoded once for every folder, on this thread: on macOS the
@@ -453,9 +454,14 @@ fn applying<R: Runtime>(
                 let skin = state.resolve(&skin_id)?;
                 let icon = prepare_icon(&skin.icon_set(&ICON_SIZES)).map_err(|e| e.to_string())?;
                 Ok(move |folder: &Path| {
-                    apply_prepared(folder, &icon)
-                        .map(|()| Outcome::Changed)
-                        .map_err(|e| reason(&e))
+                    // The folder itself is the one most likely on screen, so it shows at once;
+                    // the rest are drawn again once Explorer is done with what it read of them.
+                    let applied = if folder == root {
+                        apply_prepared_and_show(folder, &icon)
+                    } else {
+                        apply_prepared(folder, &icon)
+                    };
+                    applied.map(|()| Outcome::Changed).map_err(|e| reason(&e))
                 })
             },
             &emit,

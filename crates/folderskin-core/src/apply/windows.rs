@@ -15,6 +15,15 @@
 //! nothing cached for, and re-applying the same skin resolves to the same name and so changes
 //! nothing at all. [`is_our_ico_name`] is what keeps revert honest across both: it matches the
 //! fixed name older versions wrote as well as the hashed ones.
+//!
+//! Explorer also keeps what it read of a folder's `desktop.ini` for about a minute, and draws the
+//! folder from that however often it's told to draw it again. So a second skin applied within a
+//! minute of Explorer last looking at the folder kept the Desktop showing the one before, or the
+//! plain folder once that one's icon file was gone, until something redrew it a minute or more
+//! later. The one thing that makes Explorer read the file again at once is Windows' own call for
+//! setting a folder's icon, so an apply ends with it ([`show_now`]), and whatever that can't cover
+//! is drawn again once the minute is up ([`redraw_later`]). Both are measured, not guessed:
+//! docs/PLATFORMS.md has the numbers.
 
 use super::ApplyError;
 use crate::compositor::IconSet;
@@ -477,36 +486,64 @@ pub fn encode_ini(text: &str, encoding: IniEncoding) -> Vec<u8> {
     }
 }
 
+/// Whether an apply makes Explorer show the folder's new icon at once, or leaves it to be drawn
+/// again once Explorer's older reading of the folder has run out (see the module note).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Show {
+    /// A folder applied on its own, which the user is looking at: asked of Explorer straight away,
+    /// which takes a tenth of a second or more.
+    Now,
+    /// A folder of a run over subfolders, too many to ask about one by one.
+    Later,
+}
+
 #[cfg(windows)]
-pub use imp::{apply, has_custom_icon, refresh_shell_icons, revert};
+pub use imp::{
+    apply, has_custom_icon, redraw_later, refresh_shell_icons, refresh_shell_icons_now, revert,
+    show_now,
+};
 
 #[cfg(windows)]
 mod imp {
     use super::{
         decode_ini, desktop_ini_contents, desktop_ini_without_ours, encode_ini, ico_file_name,
-        our_icon_files, was_before, would_revert, Before, IniEncoding, INI_NAME,
+        our_icon_files, was_before, would_revert, Before, IniEncoding, Show, INI_NAME,
     };
     use crate::apply::paths::write_atomic;
     use crate::apply::ApplyError;
     use std::ffi::{c_void, OsStr};
     use std::os::windows::ffi::OsStrExt;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, MutexGuard};
+    use std::time::{Duration, Instant};
     use windows_sys::Win32::Storage::FileSystem::{
         GetFileAttributesW, SetFileAttributesW, FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_HIDDEN,
         FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, FILE_ATTRIBUTE_READONLY,
         FILE_ATTRIBUTE_SYSTEM, INVALID_FILE_ATTRIBUTES,
     };
     use windows_sys::Win32::UI::Shell::{
-        ILCreateFromPathW, ILFree, SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNE_ATTRIBUTES,
-        SHCNE_RENAMEFOLDER, SHCNE_UPDATEDIR, SHCNE_UPDATEITEM, SHCNF_FLUSH, SHCNF_IDLIST,
-        SHCNF_PATHW,
+        ILCreateFromPathW, ILFree, SHChangeNotify, SHGetSetFolderCustomSettings, FCSM_ICONFILE,
+        FCS_FORCEWRITE, SHCNE_ASSOCCHANGED, SHCNE_ATTRIBUTES, SHCNE_RENAMEFOLDER, SHCNE_UPDATEDIR,
+        SHCNE_UPDATEITEM, SHCNF_FLUSH, SHCNF_IDLIST, SHCNF_PATHW, SHFOLDERCUSTOMSETTINGS,
     };
 
-    /// How long [`refresh_shell_icons`] waits before asking the shell to redraw, so the change it
-    /// is meant to show has been taken in by the time it arrives. Found by measurement: sent with
-    /// no pause at all the refresh is always one operation behind.
-    const SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
+    /// How long [`refresh_shell_icons`] waits before asking the shell to redraw. Sent the moment
+    /// the files are written, the redraw came out one operation behind; this was the cure found
+    /// for that before the real cause was: Explorer's minute-long reading of `desktop.ini`, which
+    /// [`show_now`] and [`redraw_later`] deal with. It is kept as the settle it always was.
+    const SETTLE: Duration = Duration::from_millis(600);
+
+    /// How long after a change Explorer can still be drawing a folder from what it read of its
+    /// `desktop.ini` before. Measured on a folder on the Desktop, redrawn after every skin: a skin
+    /// applied up to 57 seconds after Explorer last read the folder never showed, one applied 70
+    /// seconds after or later always did, and neither drawing the folder again in between nor
+    /// telling the shell about the file itself changed that. So a minute, and a little more.
+    const STALE_FOR: Duration = Duration::from_secs(65);
+
+    /// Folders a [`redraw_later`] names at most. A run over more than this many is drawn again by
+    /// refreshing the whole shell once instead.
+    const LATER_MAX: usize = 32;
 
     /// Writes the icon file (the [`prepare`](super::prepare)d bytes, under the name its contents
     /// give it) and a `desktop.ini` that points at it, then tells Explorer.
@@ -520,7 +557,12 @@ mod imp {
     /// attributes, so a revert can hand them back, and is written back as it was written: UTF-16
     /// stays UTF-16. One that can't be read as either is refused before anything in the folder
     /// changes, and a write that fails part-way takes back what it did.
-    pub fn apply(folder: &Path, ico_bytes: &[u8]) -> Result<(), ApplyError> {
+    ///
+    /// With [`Show::Now`] Explorer is asked to read the new ini before it's told the folder
+    /// changed ([`show_now`]), so the redraw that follows draws the new icon rather than the plain
+    /// folder in between; with [`Show::Later`], or when it can't be asked, the folder is drawn
+    /// again once Explorer's older reading has run out ([`redraw_later`]).
+    pub fn apply(folder: &Path, ico_bytes: &[u8], show: Show) -> Result<(), ApplyError> {
         let name = ico_file_name(ico_bytes);
         let ico = folder.join(&name);
         let ini = folder.join(INI_NAME);
@@ -579,8 +621,74 @@ mod imp {
         hide(&ico)?;
         hide_keeping(&ini, ini_attributes)?;
         set_customized(folder, true, before)?;
+        if !(show == Show::Now && show_now(folder)) {
+            redraw_later(folder);
+        }
         notify(folder);
         Ok(())
+    }
+
+    /// Makes Explorer read `folder`'s `desktop.ini` again now, so the icon [`apply`] just wrote
+    /// shows at once rather than a minute later ([`STALE_FOR`]). True when it did.
+    ///
+    /// Explorer draws a folder from what it last read of its `desktop.ini`, for about a minute
+    /// after reading it. Nothing FolderSkin could send changes that: not the notifications
+    /// [`notify`] sends, not the same ones naming the ini itself, not a refresh of every icon,
+    /// the Desktop's own refresh, the folder's attributes taken off and put back, its time moved
+    /// on, nor the file rewritten in place, through Windows' INI routines or without them. Each of
+    /// those was tried against a folder on the Desktop that was still showing its last skin, and
+    /// each left it showing that. Windows' own call for setting a folder's icon,
+    /// `SHGetSetFolderCustomSettings`, made the Desktop draw the new one within a second every
+    /// time it was tried, so that is what's asked here, with the icon the ini already names.
+    ///
+    /// The call writes that `IconResource` line back through the old INI routines, which read a
+    /// file without a UTF-16 mark in the system's code page. So it's only made when the file is
+    /// plain ASCII or UTF-16, which those routines read exactly as FolderSkin wrote them, and
+    /// what it leaves is checked: if the ini or either of the two attributes differ from how
+    /// FolderSkin left them, they are put back. A folder that can't be asked is drawn again later
+    /// instead ([`redraw_later`]).
+    pub fn show_now(folder: &Path) -> bool {
+        let ini = folder.join(INI_NAME);
+        let Ok(written) = std::fs::read(&ini) else {
+            return false;
+        };
+        let Some((text, encoding)) = decode_ini(&written) else {
+            return false;
+        };
+        if encoding == IniEncoding::Utf8 && !text.is_ascii() {
+            return false;
+        }
+        let Some(name) = our_icon_files(&text).into_iter().next() else {
+            return false;
+        };
+        let folder_was = attributes(folder);
+        let ini_was = attributes(&ini);
+
+        let mut icon = wide(OsStr::new(&name));
+        let folder_w = wide(folder.as_os_str());
+        // SAFETY: a zeroed SHFOLDERCUSTOMSETTINGS is a valid empty one (null pointers, no mask);
+        // the mask names the one field filled in, whose buffer is NUL-terminated and outlives the
+        // call, as does the folder's path.
+        let asked = unsafe {
+            let mut settings: SHFOLDERCUSTOMSETTINGS = std::mem::zeroed();
+            settings.dwSize = std::mem::size_of::<SHFOLDERCUSTOMSETTINGS>() as u32;
+            settings.dwMask = FCSM_ICONFILE;
+            settings.pszIconFile = icon.as_mut_ptr();
+            settings.iIconIndex = 0;
+            SHGetSetFolderCustomSettings(&mut settings, folder_w.as_ptr(), FCS_FORCEWRITE)
+        } >= 0;
+
+        let intact = std::fs::read(&ini).is_ok_and(|now| now == written);
+        if !intact {
+            clear_attributes(&ini);
+            let _ = write_atomic(&ini, &written);
+        }
+        for (path, was) in [(ini.as_path(), ini_was), (folder, folder_was)] {
+            if let Some(was) = was.filter(|&was| attributes(path) != Some(was)) {
+                let _ = set_attributes(path, was);
+            }
+        }
+        asked && intact
     }
 
     /// True when the folder wears FolderSkin's icon, which `revert` would take off.
@@ -783,12 +891,13 @@ mod imp {
 
     /// Tells the shell the folder was renamed — to the name it already has.
     ///
-    /// This is what makes the icon on the *desktop* change. The desktop's icon view keeps the
-    /// image it first drew for an item and re-reads it for nothing: not `SHCNE_UPDATEITEM`,
-    /// `SHCNE_ATTRIBUTES`, `SHCNE_UPDATEDIR` on its parent, nor `SHCNE_UPDATEIMAGE` for the image
-    /// the folder resolves to, by path or by id list. A rename is different in kind — the item is
-    /// dropped and made again, and the new item asks for its icon — so naming the folder as both
-    /// the old and the new path is a rename that moves nothing and refreshes everything.
+    /// For the *desktop*, which drops the item and makes it again, so the new item asks for its
+    /// icon: naming the folder as both the old and the new path is a rename that moves nothing
+    /// and refreshes everything. It was added when the desktop seemed to re-read an item's icon
+    /// for nothing narrower: not `SHCNE_UPDATEITEM`, `SHCNE_ATTRIBUTES`, `SHCNE_UPDATEDIR` on its
+    /// parent, nor `SHCNE_UPDATEIMAGE`. It does re-read for those; what it reads is Explorer's
+    /// minute-old reading of the folder's `desktop.ini` ([`show_now`]), which is why none of them
+    /// showed a new skin, this included, when Explorer had read the folder in the last minute.
     ///
     /// Ordinary Explorer windows are already following the notifications above by this point;
     /// this is for the desktop, which is not an ordinary window.
@@ -824,27 +933,24 @@ mod imp {
 
     /// Asks the shell to draw folder icons again, everywhere.
     ///
-    /// The Desktop is the reason this exists. It does not repaint for any notification about the
-    /// folder that changed: not by path, not by item id list, not `SHCNE_UPDATEITEM`,
-    /// `SHCNE_ATTRIBUTES`, `SHCNE_UPDATEDIR` on its parent, nor `SHCNE_UPDATEIMAGE` for the image
-    /// index the folder resolves to — each was tried against a folder sitting on the Desktop while
-    /// its skin changed, and the icon stayed as it was. `SHCNE_ASSOCCHANGED` is the one that
-    /// works, and it is what folder-icon tools have always used.
+    /// For the views that don't follow the notifications [`apply`] sends: a third-party file
+    /// manager, a window a shell extension opened, and the Desktop as it was understood when this
+    /// was written. `SHCNE_ASSOCCHANGED` is what folder-icon tools have always used. Like any
+    /// redraw, it draws a folder from Explorer's minute-long reading of its `desktop.ini`
+    /// ([`show_now`]), so it shows a new skin only once that reading is fresh.
     ///
     /// It is blunt: the shell treats it as "file associations changed" and refreshes icons across
     /// every view, which can show as a brief flicker. So it is *not* part of [`apply`] — the
     /// caller sends it once when a whole operation has finished, rather than once per folder, so a
     /// run over a thousand folders costs one refresh and not a thousand.
     ///
-    /// And it waits first. Sent the instant the last file is written, the refresh is processed
-    /// before the shell has taken in the change, and the folder keeps its old icon until the
-    /// *next* refresh — applying to one folder would repaint the folder skinned before it, one
-    /// operation behind for ever. [`SETTLE`] is the pause that stops that.
+    /// It waits [`SETTLE`] first, on a thread of its own, and this returns at once, so the apply
+    /// the user is waiting on finishes when the folder is written. Asking again while one is
+    /// waiting replaces it instead of adding to it: a run of applies ends in one refresh,
+    /// [`SETTLE`] after the last of them, not a flicker for each.
     ///
-    /// The pause is spent on a thread of its own and this returns at once, so the apply the user
-    /// is waiting on finishes when the folder is written rather than [`SETTLE`] later. Asking
-    /// again while one is waiting replaces it instead of adding to it: a run of applies ends in
-    /// one refresh, [`SETTLE`] after the last of them, not a flicker for each.
+    /// A process that ends straight after, such as a command line, wants
+    /// [`refresh_shell_icons_now`]: the waiting thread ends with it, and the refresh with it.
     pub fn refresh_shell_icons() {
         let mine = REFRESHES.fetch_add(1, Ordering::SeqCst) + 1;
         std::thread::spawn(move || {
@@ -854,22 +960,109 @@ mod imp {
             if REFRESHES.load(Ordering::SeqCst) != mine {
                 return;
             }
-            // SAFETY: SHCNE_ASSOCCHANGED takes no items, so both are null, which is what the
-            // documentation asks for.
-            unsafe {
-                SHChangeNotify(
-                    SHCNE_ASSOCCHANGED as i32,
-                    SHCNF_IDLIST | SHCNF_FLUSH,
-                    std::ptr::null(),
-                    std::ptr::null(),
-                );
-            }
+            refresh_everything();
         });
+    }
+
+    /// [`refresh_shell_icons`] for a process about to end: it waits [`SETTLE`] here and sends the
+    /// refresh before it returns.
+    pub fn refresh_shell_icons_now() {
+        std::thread::sleep(SETTLE);
+        refresh_everything();
+    }
+
+    /// `SHCNE_ASSOCCHANGED`, now.
+    fn refresh_everything() {
+        // SAFETY: SHCNE_ASSOCCHANGED takes no items, so both are null, which is what the
+        // documentation asks for.
+        unsafe {
+            SHChangeNotify(
+                SHCNE_ASSOCCHANGED as i32,
+                SHCNF_IDLIST | SHCNF_FLUSH,
+                std::ptr::null(),
+                std::ptr::null(),
+            );
+        }
     }
 
     /// Counts calls to [`refresh_shell_icons`], so each waiting refresh can tell whether it is
     /// still the last one asked for.
     static REFRESHES: AtomicU64 = AtomicU64::new(0);
+
+    /// Draws `folder` again once Explorer can no longer be drawing it from a reading older than
+    /// this change: [`STALE_FOR`] after the latest change asked for, so a run of them ends in one
+    /// redraw.
+    ///
+    /// For every change [`show_now`] doesn't cover: a folder of a run over subfolders (asking
+    /// each would take seconds a hundred folders), a folder whose custom icon came off, and one
+    /// [`show_now`] couldn't ask about. Up to [`LATER_MAX`] folders are drawn again by name, the
+    /// notifications [`apply`] sends, which is quiet; past that the whole shell is refreshed once.
+    /// Nothing is kept on disk: a change made just before the app quits is drawn again by the
+    /// next thing that redraws it.
+    pub fn redraw_later(folder: &Path) {
+        let mut later = lock_later();
+        later.due = Some(Instant::now() + STALE_FOR);
+        if let Some(folders) = &mut later.folders {
+            if !folders.iter().any(|f| f == folder) {
+                if folders.len() < LATER_MAX {
+                    folders.push(folder.to_path_buf());
+                } else {
+                    later.folders = None;
+                }
+            }
+        }
+        if later.waiting {
+            return;
+        }
+        later.waiting = true;
+        std::thread::spawn(|| {
+            let folders = loop {
+                let mut later = lock_later();
+                let now = Instant::now();
+                match later.due {
+                    Some(due) if due > now => {
+                        drop(later);
+                        std::thread::sleep(due - now);
+                    }
+                    _ => {
+                        later.waiting = false;
+                        later.due = None;
+                        break later.folders.replace(Vec::new());
+                    }
+                }
+            };
+            match folders {
+                Some(folders) => {
+                    for folder in folders.iter().filter(|f| f.is_dir()) {
+                        notify(folder);
+                    }
+                }
+                None => refresh_everything(),
+            }
+        });
+    }
+
+    /// What [`redraw_later`] has to do, and when.
+    struct Later {
+        /// When the latest change asked for can no longer be drawn from an older reading.
+        due: Option<Instant>,
+        /// The folders to draw again, or `None` for more than [`LATER_MAX`].
+        folders: Option<Vec<PathBuf>>,
+        /// Whether a thread is waiting to draw them.
+        waiting: bool,
+    }
+
+    static LATER: Mutex<Later> = Mutex::new(Later {
+        due: None,
+        folders: Some(Vec::new()),
+        waiting: false,
+    });
+
+    fn lock_later() -> MutexGuard<'static, Later> {
+        LATER
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     /// One `SHChangeNotify` naming `path` as an item id list, which is how the Desktop hears it.
     ///
@@ -917,7 +1110,7 @@ mod imp {
             }
 
             // Nor does an apply take them as leftovers of its own.
-            apply(&folder, ICO).unwrap();
+            apply(&folder, ICO, Show::Later).unwrap();
             revert(&folder).unwrap();
             assert!(!folder.join(ico_file_name(ICO)).exists());
             for name in ["folderskin.ico", "folderskin-0123456789abcdef.ico"] {
@@ -939,7 +1132,7 @@ mod imp {
             set_attributes(&ini, was).unwrap();
             set_attributes(&folder, FILE_ATTRIBUTE_SYSTEM).unwrap();
 
-            apply(&folder, ICO).unwrap();
+            apply(&folder, ICO, Show::Later).unwrap();
             assert!(has_custom_icon(&folder));
             revert(&folder).unwrap();
 
@@ -969,7 +1162,7 @@ mod imp {
             set_attributes(&ini, was).unwrap();
             set_attributes(&folder, FILE_ATTRIBUTE_SYSTEM).unwrap();
 
-            apply(&folder, ICO).unwrap();
+            apply(&folder, ICO, Show::Later).unwrap();
             assert!(has_custom_icon(&folder));
             let (skinned, encoding) = decode_ini(&std::fs::read(&ini).unwrap()).unwrap();
             assert_eq!(encoding, IniEncoding::Utf16, "still UTF-16");
@@ -991,6 +1184,91 @@ mod imp {
             set_attributes(&ini, FILE_ATTRIBUTE_NORMAL).unwrap();
         }
 
+        /// `show_now` asks Windows to write the folder's icon line again, and whatever it writes,
+        /// the folder is left exactly as the apply left it: the same bytes in the ini, in the same
+        /// encoding, and the same attributes on both.
+        #[test]
+        fn asking_explorer_to_read_again_leaves_the_folder_as_it_was_written() {
+            let theirs_utf16 = encode_ini(
+                "[.ShellClassInfo]\r\nLocalizedResourceName=Мои фото\r\nInfoTip=фото\r\n",
+                IniEncoding::Utf16,
+            );
+            let cases: [(&str, Option<Vec<u8>>); 3] = [
+                ("new", None),
+                (
+                    "theirs",
+                    Some(
+                        b"[.ShellClassInfo]\r\nInfoTip=hello\r\n[ViewState]\r\nMode=4\r\n".to_vec(),
+                    ),
+                ),
+                ("utf16", Some(theirs_utf16)),
+            ];
+            for (what, existing) in cases {
+                let folder = tempfile_dir();
+                let ini = folder.join(INI_NAME);
+                if let Some(bytes) = &existing {
+                    std::fs::write(&ini, bytes).unwrap();
+                }
+                apply(&folder, ICO, Show::Later).unwrap();
+                let written = std::fs::read(&ini).unwrap();
+                let marks = (attributes(&folder), attributes(&ini));
+
+                assert!(show_now(&folder), "{what}: asked, and left as it was");
+                assert_eq!(
+                    std::fs::read(&ini).unwrap(),
+                    written,
+                    "{what}: the same bytes"
+                );
+                assert_eq!((attributes(&folder), attributes(&ini)), marks, "{what}");
+                assert!(has_custom_icon(&folder), "{what}");
+
+                revert(&folder).unwrap();
+                match &existing {
+                    Some(bytes) => assert_eq!(&std::fs::read(&ini).unwrap(), bytes, "{what}"),
+                    None => assert!(!ini.exists(), "{what}"),
+                }
+                if ini.exists() {
+                    set_attributes(&ini, FILE_ATTRIBUTE_NORMAL).unwrap();
+                }
+            }
+        }
+
+        /// A UTF-8 ini with more than ASCII in it would go through the INI routines in the
+        /// system's code page, so it isn't handed to them, and nothing in it changes.
+        #[test]
+        fn a_utf8_ini_beyond_ascii_is_not_handed_to_the_ini_routines() {
+            let folder = tempfile_dir();
+            let ini = folder.join(INI_NAME);
+            std::fs::write(&ini, "[.ShellClassInfo]\r\nInfoTip=café\r\n").unwrap();
+            apply(&folder, ICO, Show::Later).unwrap();
+            let written = std::fs::read(&ini).unwrap();
+            assert!(!show_now(&folder));
+            assert_eq!(std::fs::read(&ini).unwrap(), written);
+            revert(&folder).unwrap();
+            set_attributes(&ini, FILE_ATTRIBUTE_NORMAL).unwrap();
+
+            // Nor is a folder that isn't FolderSkin's.
+            assert!(!show_now(&tempfile_dir()));
+        }
+
+        #[test]
+        fn a_folder_applied_in_a_run_is_drawn_again_later_and_one_shown_now_is_not() {
+            let (run, shown) = (tempfile_dir(), tempfile_dir());
+            apply(&run, ICO, Show::Later).unwrap();
+            apply(&shown, ICO, Show::Now).unwrap();
+            {
+                let later = lock_later();
+                assert!(later.waiting && later.due.is_some());
+                // Another test's run may have filled the list past naming each folder.
+                if let Some(folders) = &later.folders {
+                    assert!(folders.iter().any(|f| f == &*run));
+                    assert!(!folders.iter().any(|f| f == &*shown));
+                }
+            }
+            revert(&run).unwrap();
+            revert(&shown).unwrap();
+        }
+
         #[test]
         fn an_ini_it_wont_rewrite_is_refused_before_anything_changes() {
             let folder = tempfile_dir();
@@ -1001,7 +1279,7 @@ mod imp {
             let was = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
             set_attributes(&ini, was).unwrap();
 
-            let e = apply(&folder, ICO).unwrap_err();
+            let e = apply(&folder, ICO, Show::Later).unwrap_err();
             assert!(matches!(e, ApplyError::Refused(_)), "{e:?}");
             assert_eq!(std::fs::read(&ini).unwrap(), theirs);
             assert_eq!(
