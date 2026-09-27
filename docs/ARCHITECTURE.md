@@ -602,7 +602,11 @@ where it will be (`ViewLoading.tsx`), as does any picture still on its way. libw
 pictures and the library's pictures are saved as, added 0.18 MB of code to the binary. That keeps the first screen's script under
 500 KB (488 KB, 161 KB gzipped), the line Vite warns at. Keep it there. `image` is built with `default-features = false` and
 only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one
-codegen unit. Any dependency that would move this budget needs a reason in the pull request.
+codegen unit, except for the crates that draw, cut out and code pictures (`folderskin-core`,
+tiny-skia, `image` with its decoders, and the PNG and WebP coders), which are built at
+`opt-level = 3`. Measured on 2026-09-26, that draws a library thumbnail in about 340 ms instead
+of 560, and a free icon's cut-out in 275 ms instead of 440, for 0.49 MB of binary (14.78 MB to
+15.29 MB). Any dependency that would move this budget needs a reason in the pull request.
 
 Vite copies everything in `public/` into every build, and Tauri embeds the build in the binary,
 so dev-only files stay out of `public/`. The browser mock (`src/lib/devMock.ts`) is only used

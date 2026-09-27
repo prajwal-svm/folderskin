@@ -75,6 +75,9 @@ All notable changes to FolderSkin are recorded here. The format follows
   show, draws the shapes' pictures ten times faster, and wherever something is still on its way,
   a spinner says so: a view, a list of shapes, a drive's picture. A library thumbnail still being
   drawn holds its place with a faint card.
+- **Thumbnails, shape pictures and cut-outs are drawn about 1.6 times faster.** The parts of
+  FolderSkin that draw and code pictures are now built for speed, where the rest of the app is
+  built small, for half a megabyte more to download.
 - **An empty design's hint sits at the foot of the stage**, beside an info icon, where it never
   covers the folder or the drive.
 - **Switching folders is instant.** Choosing the Mac's, Windows' or the Linux folder used to
