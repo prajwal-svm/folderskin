@@ -21,6 +21,9 @@ que vous créez est enregistré dans **Mes habillages** comme n'importe quel aut
 | Une photo avec une légende | **Photo** | L'éditeur demande d'abord l'image. Vous pourrez en déposer ou en coller d'autres ensuite |
 | Un autocollant, un badge, tout ce qui n'a pas la forme d'un dossier | **Autocollant** | *Icône libre* fait de la création l'icône entière |
 | Un disque à votre façon : *Archives* sur un disque externe, une photo sur une clé USB | Un disque sous **Partir d'un disque**, ou **Disque étiqueté**, **Disque en couleur**, **Disque emoji** ou **Disque photo** | La création se pose sur la face avant du disque. Le menu sous le canevas la déplace vers un autre disque |
+| Un disque aux couleurs de votre choix : une clé USB rouge, un disque sans étiquette | N'importe quel disque | Cliquez sur une partie du disque (son boîtier, son port, sa face avant) et donnez-lui une couleur, masquez-la ou retirez-la |
+| Un dossier avec un onglet d'une autre couleur, ou sans feuille de papier | N'importe quel dossier | L'onglet, l'arrière, le papier et l'avant du dossier sont dans la liste des calques, sous les calques de la création |
+| Un dossier ou un disque pivoté, déplacé ou redimensionné | N'importe quel dossier ou disque | Faites-le glisser pour le déplacer, un coin pour le redimensionner et la poignée du dessus pour le faire pivoter. La création le suit |
 | Un habillage existant, avec votre touche personnelle | Menu ⋯ d'un habillage → **Remixer dans l'éditeur** | L'habillage devient un calque image sur lequel construire |
 | Une modification de ce que vous avez déjà créé | Son menu ⋯ → **Modifier la création** | **Enregistrer** le met à jour sur place. **Dupliquer** garde les deux |
 
@@ -52,13 +55,43 @@ coins et sur ses côtés, et une poignée ronde au-dessus pour le faire pivoter.
 - Maintenez ⇧ pour pivoter par pas de 15°, ou pour garder les proportions d'une forme. Maintenez ⌥
   pour redimensionner depuis le centre.
 - Double-cliquez sur du texte pour le modifier, ou sur un emoji pour le changer.
-- Cliquez sur le dossier lui-même pour sélectionner son fond.
+- Cliquez sur le dossier lui-même pour sélectionner son fond ou, là où la création n'apparaît pas,
+  la partie du dossier ou du disque sur laquelle vous avez cliqué.
 
 **Calques.** La liste en haut à droite montre la pile, en commençant par le haut. Faites glisser une
 ligne pour changer l'ordre, double-cliquez sur un nom pour le renommer, et utilisez l'œil, le cadenas
 et la corbeille pour masquer un calque, le verrouiller en place ou le supprimer. **Tout supprimer**,
 au bout de l'en-tête, vide la création. Le message qui l'annonce permet de tout remettre, comme ⌘Z.
 Les boutons d'un en-tête, comme ceux d'une ligne, apparaissent au survol.
+
+**Le dossier ou le disque, partie par partie.** Sous les calques, la liste montre dans un groupe à
+part le dossier ou le disque sur lequel se trouve la création : l'**Avant**, le **Papier**,
+l'**Arrière** et l'**Onglet** d'un dossier du Mac (ceux de Windows et de Linux n'ont pas de papier),
+ou les parties d'un disque, comme la **Face**, le **Boîtier**, les **Trous du port** et le **Port**
+d'une clé USB. Choisissez une partie dans la liste, ou cliquez dessus sur le canevas, et elle se
+teinte :
+
+- **Couleur** lui donne la couleur de votre choix, en gardant ses lumières et ses ombres : un bord
+  éclairé reste plus clair que le reste, quelle que soit la couleur. **Couleur d'origine** lui rend
+  la sienne. Sur une partie où la création apparaît (l'onglet, l'arrière et l'avant d'un dossier, la
+  face avant d'un disque), la couleur remplace à cet endroit les couleurs et les motifs de fond de
+  la création, et le texte, les images et les icônes restent au-dessus.
+- **Opacité** laisse voir ce qu'il y a derrière, et **Sur l'icône** (l'œil dans la liste) la masque.
+- La corbeille, ou Suppr, la retire de l'icône et de la liste. La ligne du groupe permet de remettre
+  les parties retirées, comme ⌘Z.
+
+La face avant d'un disque est une étiquette sur laquelle la création est imprimée : masquez-la et la
+création reste où elle était, sur le boîtier du disque. Sur un dossier, la création est imprimée sur
+les panneaux eux-mêmes : masquez l'onglet et la partie de la création qui s'y trouvait disparaît
+avec lui.
+
+Une fois sélectionné, le dossier ou le disque entier a son propre cadre de sélection, avec ses
+poignées : faites-le glisser depuis n'importe quel point pour le déplacer (il reprend sa place de
+départ quand vous l'en approchez), un coin pour le redimensionner et la poignée du dessus pour le
+faire pivoter (⇧ par pas de 15°). Dans les réglages, **Disque entier** ou **Dossier entier** propose
+sa rotation et sa taille, **Remettre en place** et **Réinitialiser**, et les flèches le décalent.
+Tout ce qui est dessus le suit : les calques de la création sont placés sur le dossier ou le disque,
+pas sur le canevas.
 
 **Calques et Réglages** s'ouvrent et se ferment chacun depuis leur en-tête, et la barre qui les
 sépare se fait glisser pour donner plus ou moins de place aux calques (un double-clic la remet en
@@ -126,10 +159,10 @@ ceux-là sont concernés, et l'interrupteur l'indique : **Inclure 22 sous-dossi
 | Touches | |
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Annuler, refaire |
-| Suppr | Supprimer le calque sélectionné |
+| Suppr | Supprimer le calque sélectionné, ou retirer la partie sélectionnée du dossier ou du disque |
 | ⌘D | Le dupliquer |
 | ⌘C, puis ⌘V | Le copier et en coller une copie. ⌘V avec une image dans le presse-papiers ajoute l'image |
-| Flèches, ⇧ flèches | Décaler de 1 ou de 10 |
+| Flèches, ⇧ flèches | Décaler de 1 ou de 10 : le calque sélectionné, ou le dossier ou le disque entier quand la sélection porte sur lui ou sur l'une de ses parties |
 | ⌘] / ⌘[ | Avancer, reculer (avec ⌥ : au premier plan, à l'arrière-plan) |
 | Échap | Tout désélectionner |
 | Dans la liste des calques | ↑ ↓ sélectionner, ⌥↑ ⌥↓ changer l'ordre, F2 renommer |
@@ -167,6 +200,43 @@ par canal au maximum entre les deux, si bien que le canevas montre l'icône qui 
 cinquième calque, `outline`, correspond aux bords visibles du dossier. La vue à plat le teinte, et il
 ne fait jamais partie d'une icône.
 
+### Le dossier ou le disque, partie par partie
+
+Le même gabarit se décompose en morceaux, chacun correspondant à une partie à une place de la pile,
+pour que le canevas puisse modifier une partie sans toucher au reste (`src/composer/base.ts`,
+`drawBase` dans `composite.ts`). Chaque morceau est rogné au plus près de ses pixels et indique ce
+qu'il est :
+
+- **surface** : là où la création apparaît, en blanc, avec la zone couverte comme canal alpha
+  (l'onglet, l'arrière et l'avant d'un dossier, la face avant d'un disque).
+- **paint** : les couleurs propres d'une partie, que modifie la couleur qu'on lui donne.
+- **light** : les lumières et les ombres posées sur une partie, qui gardent leur couleur quelle que
+  soit celle de la partie.
+
+Les morceaux d'un dossier viennent de `compositor::template_pieces_in` : la zone couverte par le
+panneau arrière, découpée en onglet et en arrière le long du bord supérieur de son corps, le milieu
+dessiné partie par partie (`draw_middle_of` : les lumières et les ombres de l'arrière, l'ombre que
+projette l'avant, le papier), puis la zone couverte par l'avant et sa lumière. Un disque indique à
+quelle partie appartient tout ce qu'il dessine (`Drawing::part` dans `drive/draw.rs`), et
+`drive::pieces` dessine chaque partie séparément, sous la face avant et par-dessus. Le dessin d'une
+partie n'est jamais entrecoupé par celui d'une autre :
+`every_drive_comes_apart_into_parts_that_stack_back_into_it` le vérifie pour les 25 disques, et
+vérifie aussi que les morceaux empilés autour d'une création redonnent le disque enregistré à 3
+niveaux près, comme le fait `the_pieces_stacked_around_a_design_are_the_saved_icon` pour les
+dossiers. Quand rien n'a changé, le canevas montre l'icône qui a toujours été enregistrée.
+
+Pour une partie dans une couleur choisie, ses couleurs propres sont amenées vers cette couleur pixel
+par pixel, chaque pixel restant aussi loin de la nouvelle couleur qu'il l'était de la couleur
+moyenne de la partie (en luminosité), ce qui préserve ses lumières et ses ombres. Le cadrage
+(`frame`) déplace, fait pivoter et redimensionne toute la pile autour du centre du dossier ou du
+disque, et la zone de travail applique au pointeur la transformation inverse, si bien que les
+calques de la création restent là où ils sont sur le dossier ou le disque.
+
+Dès que quelque chose a changé sur le dossier ou le disque, seul le canevas peut dessiner l'icône :
+l'enregistrement envoie l'icône entière à 2048 px avec `composed: true`, et `composer_save` la
+conserve comme dossier ou disque fini (les aperçus sous le canevas sont dessinés de la même façon).
+Quand rien n'a changé, l'enregistrement se fait comme avant.
+
 ### Enregistrement
 
 L'enregistrement redessine la création une dernière fois à 2048 px, l'encode en PNG et l'envoie à
@@ -197,13 +267,13 @@ Un remix lit l'image propre de l'habillage avec `composer_skin_image` :
 
 | commande | entrée | sortie |
 | --- | --- | --- |
-| `composer_template` | – | `{size, back, front, middle, top, outline, parts}` : les calques sous forme d'URL de données PNG, et l'emplacement des parties du dossier (en unités du canevas) |
-| `composer_save` | corps brut, en-tête `{name, tags, shape, design, replaces}` | `{skin, replaced}` : l'habillage enregistré, et l'identifiant de la création qu'il remplace |
-| `composer_preview` | corps brut, en-tête `{shape, sizes}` | l'icône à chaque taille (de 16 à 512, six au maximum), sous forme d'URL de données |
+| `composer_template` | – | `{size, back, front, middle, top, outline, parts, pieces}` : les calques sous forme d'URL de données PNG, l'emplacement des parties du dossier (en unités du canevas), et le dossier décomposé en morceaux, chacun sous la forme `{part, role, rect, src}`, avec `rect` en pixels du gabarit |
+| `composer_save` | corps brut, en-tête `{name, tags, shape, design, replaces, composed}` | `{skin, replaced}` : l'habillage enregistré, et l'identifiant de la création qu'il remplace. `composed` : l'image est l'icône entière, dossier ou disque compris |
+| `composer_preview` | corps brut, en-tête `{shape, sizes, composed}` | l'icône à chaque taille (de 16 à 512, six au maximum), sous forme d'URL de données |
 | `composer_image` | `path` | `{url, width, height, name, alpha}` : un fichier image, 2048 px au maximum, en PNG s'il a de la transparence et en JPEG sinon |
 | `composer_skin_image` | `skinId` | la même chose, pour l'image propre d'un habillage enregistré |
 | `composer_design` | `skinId` | le document de la création, ou `null` pour un habillage qui n'a pas été fait ici |
-| `composer_drive_template` | `drive` | les calques d'un disque, sous la même forme que ceux du dossier, tels que les envoie `composer_template` : `back` vide, `middle` le disque nu, `front` la zone couverte par sa face avant, `top` ce qui passe par-dessus la face avant, et `parts`, où la face avant tient lieu de panneau avant (et, sur un disque optique, `anchor`, l'endroit où va un nouveau calque) |
+| `composer_drive_template` | `drive` | les calques d'un disque, sous la même forme que ceux du dossier, tels que les envoie `composer_template` : `back` vide, `middle` le disque nu, `front` la zone couverte par sa face avant, `top` ce qui passe par-dessus la face avant, et `parts`, où la face avant tient lieu de panneau avant (et, sur un disque optique, `anchor`, l'endroit où va un nouveau calque), ainsi que le disque décomposé en morceaux dans `pieces` |
 | `shapes` | `size` | toutes les formes pour lesquelles une création ou une image peut être faite, [plus bas](#toutes-les-formes-dans-une-seule-liste) |
 
 ### Le document
@@ -228,6 +298,18 @@ d'abord par `parseDoc` :
 - Les nombres sont ramenés dans des plages raisonnables et les couleurs mises sous forme canonique.
 - Une image qui n'est pas une URL de données PNG, JPEG, WebP ou GIF est écartée.
 - Un document venant d'une version plus récente est refusé plutôt que mal lu.
+
+Ce qui a été modifié sur le dossier ou le disque se trouve dans `base`, omis quand rien ne l'a été :
+les modifications de chaque partie, rangées sous son identifiant, et le cadrage.
+
+```json
+"base": { "parts": { "case": { "color": "#e53935" }, "face": { "hidden": true }, "paper": { "removed": true, "opacity": 0.5 } },
+          "frame": { "x": 0, "y": -20, "rotation": 30, "scale": 0.9 } }
+```
+
+Une partie garde ses modifications quand la création passe sur un autre dossier ou un autre disque
+qui l'a aussi (le boîtier d'un disque, l'onglet d'un dossier). Un FolderSkin d'avant les parties
+ouvre la création sans ces modifications.
 
 Une création sur un disque indique de quel disque il s'agit, sous la forme
 `"drive": "mac-external"`, et porte `"version": 2`, si bien qu'un FolderSkin d'avant les disques
@@ -280,7 +362,9 @@ rien pour `free`. En Rust, `Base::bare(size)` dessine la même chose.
 `cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`. La même commande
 écrit les calques de chaque disque dans `drives/<id>/` à la moitié de la taille, avec l'emplacement
 de la face avant de chaque disque dans `drives/parts.json`, et la forme nue de chaque dossier et de
-chaque disque dans `bases/`, en WebP sans perte. Un test de `folderskin-tools` vérifie qu'ils
+chaque disque dans `bases/`, en WebP sans perte. À côté des calques de chaque dossier et de chaque
+disque, `pieces.webp` contient ses morceaux les uns sous les autres, et `pieces.json` indique à
+quelle partie appartient chacun et où il se place. Un test de `folderskin-tools` vérifie qu'ils
 correspondent aux pixels que dessine le compositeur, pour qu'ils ne puissent pas devenir obsolètes,
 et un autre, parmi ceux de la webview, vérifie que `src/composer/drives.ts` place les éléments là où
 le dessin en Rust met la face avant de chaque disque.
@@ -289,7 +373,9 @@ le dessin en Rust met la face avant de chaque disque.
 
 | | |
 | --- | --- |
-| compositeur (`folderskin-core`) | les calques empilés sont identiques à l'icône enregistrée, une création atterrit là où elle a été dessinée, une création transparente ne laisse que le papier et les bords, le contour suit les bords visibles |
+| compositeur (`folderskin-core`) | les calques empilés sont identiques à l'icône enregistrée, une création atterrit là où elle a été dessinée, une création transparente ne laisse que le papier et les bords, le contour suit les bords visibles. Les morceaux de chaque dossier, empilés autour d'une création, redonnent l'icône enregistrée, avec l'onglet entièrement au-dessus du corps |
+| disque (`folderskin-core`) | les parties de chaque disque sont dessinées sans que le dessin d'une autre partie vienne s'intercaler, et ses morceaux, empilés autour d'une création, redonnent le disque enregistré |
 | stockage (`src-tauri`) | le document d'une création est enregistré à côté d'elle, survit à un redémarrage, disparaît quand elle est supprimée, et est nettoyé si un plantage le laisse orphelin. Enregistrer par-dessus une création garde sa place et refuse un habillage qui n'est pas une création |
 | éditeur (`src-tauri`) | le format du corps, les vérifications d'image, les aperçus, l'enregistrement, le nommage, un document endommagé, les encodages d'image, et une création envoyée en octets bruts par l'IPC de Tauri lui-même (son runtime simulé) qui est prévisualisée et enregistrée |
-| frontend (vitest) | le document (ses modifications et sa relecture), l'annulation, le déplacement, le redimensionnement, la rotation et l'aimantation, la mise en page du texte et ses courbes, les formes, les couleurs, les retouches d'image, les points de départ et le format du corps |
+| frontend (vitest) | le document (ses modifications et sa relecture, dont les modifications d'une partie et le cadrage), l'annulation, le déplacement, le redimensionnement, la rotation et l'aimantation, l'ordre des parties et la rotation du cadrage, la mise en page du texte et ses courbes, les formes, les couleurs, les retouches d'image, les points de départ et le format du corps |
+| e2e (`e2e/parts.spec.ts`) | les parties d'une clé USB listées, choisies sur le canevas, colorées, masquées, retirées puis remises, et enregistrées. La clé entière pivotée et la rotation annulée, puis la clé déplacée et remise en place. Le papier d'un dossier retiré et son onglet coloré, et seulement l'onglet |

@@ -21,6 +21,9 @@ carpeta que elegiste.
 | Una foto con leyenda | **Foto** | Primero pide la imagen. Luego puedes soltar o pegar más |
 | Un sticker, una insignia, cualquier cosa sin forma de carpeta | **Sticker** | *Icono libre* convierte el diseño en el icono entero |
 | Una unidad a tu manera: *Copias* en un disco externo, una foto en una memoria USB | Una unidad de **Empezar en una unidad**, o **Unidad con etiqueta**, **Unidad de color**, **Unidad con emoji** o **Unidad con foto** | El diseño va en la cara frontal de la unidad. El menú de debajo del lienzo lo lleva a otra unidad |
+| Una unidad con los colores que quieras: una memoria USB roja, un disco sin etiqueta | Cualquier unidad | Haz clic en una parte de la unidad (su carcasa, su conector, su cara frontal) y dale un color, ocúltala o quítala |
+| Una carpeta con la pestaña de otro color, o sin hoja de papel | Cualquier carpeta | La pestaña, la trasera, el papel y el frente de la carpeta están en la lista de capas, debajo de las capas del propio diseño |
+| Una carpeta o una unidad girada, movida o de otro tamaño | Cualquier carpeta o unidad | Arrástrala para moverla, una esquina para cambiar su tamaño y el control de arriba para girarla. El diseño se mueve con ella |
 | Un aspecto que ya tienes, con tu toque personal | Menú ⋯ de un aspecto → **Remezclar en el editor** | El aspecto se convierte en una capa de imagen sobre la que construir |
 | Un cambio en algo que ya diseñaste | Su menú ⋯ → **Editar el diseño** | **Guardar cambios** lo actualiza en su sitio. **Guardar copia** conserva los dos |
 
@@ -52,13 +55,42 @@ lados, y un control redondo encima para girarla.
 - Mantén presionado ⇧ para girar en pasos de 15° o para conservar las proporciones de una forma.
   Mantén presionado ⌥ para cambiar el tamaño desde el centro.
 - Haz doble clic en un texto para editarlo, o en un emoji para cambiarlo.
-- Haz clic en la propia carpeta para seleccionar su fondo.
+- Haz clic en la propia carpeta para seleccionar su fondo o, donde no se ve el diseño, la parte de
+  la carpeta o de la unidad en la que hiciste clic.
 
 **Capas.** La lista de arriba a la derecha muestra la pila, de arriba abajo. Arrastra una fila para
 cambiar su orden, haz doble clic en un nombre para renombrarlo, y usa el ojo, el candado y la
 papelera para ocultar una capa, fijarla en su sitio o borrarla. **Borrar todo**, al final del
 encabezado, vacía el diseño. El aviso que lo indica permite recuperarlas, igual que ⌘Z. Los botones
 de un encabezado, como los de una fila, aparecen al pasar el puntero por encima.
+
+**La carpeta o la unidad, parte por parte.** Debajo de las capas, la lista muestra, en un grupo
+aparte, la carpeta o la unidad sobre la que está el diseño: el **Frente**, el **Papel**, la
+**Trasera** y la **Pestaña** de una carpeta del Mac (las de Windows y de Linux no tienen papel), o
+las partes de una unidad, como la **Cara**, la **Carcasa**, los **Agujeros del conector** y el
+**Conector** de una memoria USB. Elige una parte en la lista, o haz clic en ella en el lienzo, y se
+tiñe:
+
+- **Color** le da el color que quieras, conservando sus luces y sombras: un borde iluminado sigue
+  siendo más claro que el resto, sea cual sea el color. **Color original** le devuelve el suyo. En
+  una parte donde se ve el diseño (la pestaña, la trasera y el frente de una carpeta, la cara
+  frontal de una unidad), el color cubre ahí los colores y patrones de fondo del diseño, y el texto,
+  las imágenes y los iconos quedan encima.
+- **Opacidad** deja ver lo que hay detrás, y **En el icono** (el ojo de la lista) la oculta.
+- La papelera, o Suprimir, la quita del icono y de la lista. La fila del grupo recupera las partes
+  quitadas, igual que ⌘Z.
+
+La cara frontal de una unidad es una etiqueta en la que va impreso el diseño: si la ocultas, el
+diseño se queda donde estaba, sobre la carcasa de la unidad. En una carpeta, el diseño va impreso en
+los propios paneles: si ocultas la pestaña, la parte del diseño que estaba en ella desaparece
+también.
+
+Si seleccionas la carpeta o la unidad entera, aparece un recuadro con sus propios controles:
+arrástrala desde cualquier punto para moverla (vuelve a encajar en su sitio de partida cuando la
+acercas), una esquina para cambiar su tamaño y el control de arriba para girarla (⇧ en pasos de
+15°). En los ajustes, **Unidad entera** o **Carpeta entera** tiene su giro y su tamaño, **Volver a
+su sitio** y **Restablecer**, y las flechas la mueven. Todo lo que lleva encima se mueve con ella:
+las capas del diseño se colocan sobre la carpeta o la unidad, no sobre el lienzo.
 
 **Capas y Ajustes** se abren y se cierran desde su encabezado, y la barra que las separa se arrastra
 para dar más o menos espacio a las capas (un doble clic la devuelve a su sitio, y cuando tiene el
@@ -123,10 +155,10 @@ el interruptor lo indica: **Incluir 22 de 28 subcarpetas**.
 | Teclas | |
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Deshacer, rehacer |
-| Suprimir | Borrar la capa seleccionada |
+| Suprimir | Borrar la capa seleccionada, o quitar la parte seleccionada de la carpeta o de la unidad |
 | ⌘D | Duplicarla |
 | ⌘C, luego ⌘V | Copiarla y pegar una copia. ⌘V con una imagen en el portapapeles añade la imagen |
-| Flechas, ⇧ flechas | Mover 1 o 10 |
+| Flechas, ⇧ flechas | Mover 1 o 10: la capa seleccionada, o la carpeta o la unidad entera cuando está seleccionada ella o una de sus partes |
 | ⌘] / ⌘[ | Traer adelante, enviar atrás (con ⌥: al frente, al fondo) |
 | Esc | No seleccionar nada |
 | En la lista de capas | ↑ ↓ seleccionar, ⌥↑ ⌥↓ cambiar el orden, F2 renombrar |
@@ -165,6 +197,42 @@ debajo de 3 niveles por canal, así que el lienzo muestra el icono que se escrib
 `outline`, son los bordes visibles de la carpeta. La vista en plano la tiñe, y nunca forma parte de
 un icono.
 
+### La carpeta o la unidad, parte por parte
+
+La misma plantilla se descompone en piezas, cada una con una parte en un lugar de la pila, para que
+el lienzo pueda cambiar una parte sin tocar el resto (`src/composer/base.ts`, `drawBase` en
+`composite.ts`). Cada pieza se recorta a la zona donde tiene píxeles y dice lo que es:
+
+- **surface**: donde se ve el diseño, en blanco, con la zona cubierta como canal alfa (la pestaña,
+  la trasera y el frente de una carpeta, la cara frontal de una unidad).
+- **paint**: los colores propios de una parte, que cambian con el color que le des.
+- **light**: las luces y sombras sobre una parte, que conservan su color sea cual sea el de la
+  parte.
+
+Las piezas de una carpeta salen de `compositor::template_pieces_in`: la zona cubierta por el panel
+trasero, dividida en la pestaña y la trasera a lo largo del borde superior de su cuerpo, el medio
+dibujado parte por parte (`draw_middle_of`: las luces y sombras de la trasera, la sombra que
+proyecta el frente, el papel) y la zona cubierta por el frente con su luz. Una unidad indica a qué
+parte pertenece todo lo que dibuja (`Drawing::part` en `drive/draw.rs`), y `drive::pieces` dibuja
+cada parte por separado, debajo de la cara frontal y encima de ella. El dibujo de una parte nunca
+tiene el de otra en medio: `every_drive_comes_apart_into_parts_that_stack_back_into_it` lo comprueba
+en las 25 unidades, y también que las piezas apiladas alrededor de un diseño son la unidad guardada,
+con 3 niveles de diferencia como mucho, como hace
+`the_pieces_stacked_around_a_design_are_the_saved_icon` con las carpetas. Si no se cambia nada, el
+lienzo muestra el mismo icono que siempre se ha guardado.
+
+Cuando una parte tiene un color elegido, sus colores propios se llevan a ese color píxel a píxel, y
+cada píxel queda tan lejos del nuevo color como lo estaba del color medio de la parte (en
+luminosidad), con lo que se conservan sus luces y sombras. El encuadre (`frame`) mueve, gira y
+cambia el tamaño de toda la pila alrededor del centro de la carpeta o la unidad, y el área de
+trabajo aplica al puntero la transformación inversa, así que las capas del diseño se quedan donde
+están sobre la carpeta o la unidad.
+
+Cuando se ha cambiado algo de la carpeta o la unidad, solo el lienzo puede dibujar el icono: al
+guardar, se envía el icono entero a 2048 px con `composed: true`, y `composer_save` lo guarda como
+carpeta o unidad terminada (las vistas previas de debajo del lienzo se dibujan igual). Si no se ha
+cambiado nada, se guarda como antes.
+
 ### Guardar
 
 Al guardar, el diseño se dibuja una vez más a 2048 px, se codifica como PNG y se envía a
@@ -193,13 +261,13 @@ Una remezcla lee la imagen propia del aspecto con `composer_skin_image`:
 
 | comando | entrada | salida |
 | --- | --- | --- |
-| `composer_template` | – | `{size, back, front, middle, top, outline, parts}`: las capas como URL de datos PNG, y dónde están las partes de la carpeta (en unidades del lienzo) |
-| `composer_save` | cuerpo sin procesar, cabecera `{name, tags, shape, design, replaces}` | `{skin, replaced}`: el aspecto guardado, y el identificador del diseño al que reemplazó |
-| `composer_preview` | cuerpo sin procesar, cabecera `{shape, sizes}` | el icono en cada tamaño (de 16 a 512, seis como máximo), como URL de datos |
+| `composer_template` | – | `{size, back, front, middle, top, outline, parts, pieces}`: las capas como URL de datos PNG, dónde están las partes de la carpeta (en unidades del lienzo), y la carpeta descompuesta en piezas, cada una como `{part, role, rect, src}`, con `rect` en píxeles de la plantilla |
+| `composer_save` | cuerpo sin procesar, cabecera `{name, tags, shape, design, replaces, composed}` | `{skin, replaced}`: el aspecto guardado, y el identificador del diseño al que reemplazó. `composed`: la imagen es el icono entero, con la carpeta o la unidad incluida |
+| `composer_preview` | cuerpo sin procesar, cabecera `{shape, sizes, composed}` | el icono en cada tamaño (de 16 a 512, seis como máximo), como URL de datos |
 | `composer_image` | `path` | `{url, width, height, name, alpha}`: un archivo de imagen, 2048 px como máximo, en PNG si tiene transparencia y en JPEG si no |
 | `composer_skin_image` | `skinId` | lo mismo, para la imagen propia de un aspecto guardado |
 | `composer_design` | `skinId` | el documento del diseño, o `null` para un aspecto que no se hizo aquí |
-| `composer_drive_template` | `drive` | las capas de una unidad, con la misma forma que las de la carpeta, tal como las envía `composer_template`: `back` vacía, `middle` la unidad sin nada, `front` lo que cubre su cara frontal, `top` lo que va encima de la cara frontal, y `parts` con la cara frontal como panel delantero (y, en un disco óptico, `anchor`, donde va una capa nueva) |
+| `composer_drive_template` | `drive` | las capas de una unidad, con la misma forma que las de la carpeta, tal como las envía `composer_template`: `back` vacía, `middle` la unidad sin nada, `front` lo que cubre su cara frontal, `top` lo que va encima de la cara frontal, y `parts` con la cara frontal como panel delantero (y, en un disco óptico, `anchor`, donde va una capa nueva), además de la unidad descompuesta en piezas en `pieces` |
 | `shapes` | `size` | todas las formas para las que se puede hacer un diseño o una imagen, [más abajo](#todas-las-formas-en-una-sola-lista) |
 
 ### El documento
@@ -222,6 +290,18 @@ documento como URL de datos. Un documento leído del disco pasa primero por `par
 - Los números se mantienen en rangos razonables y los colores se normalizan.
 - Una imagen que no sea una URL de datos PNG, JPEG, WebP o GIF se descarta.
 - Un documento de una versión más reciente se rechaza en lugar de leerse mal.
+
+Lo que se ha cambiado de la carpeta o la unidad está en `base`, que se omite si no se ha cambiado
+nada: los cambios de cada parte, bajo su identificador, y el encuadre.
+
+```json
+"base": { "parts": { "case": { "color": "#e53935" }, "face": { "hidden": true }, "paper": { "removed": true, "opacity": 0.5 } },
+          "frame": { "x": 0, "y": -20, "rotation": 30, "scale": 0.9 } }
+```
+
+Una parte conserva sus cambios cuando el diseño pasa a otra carpeta u otra unidad que también la
+tiene (la carcasa de una unidad, la pestaña de una carpeta). Un FolderSkin de antes de las partes
+abre el diseño sin esos cambios.
 
 Un diseño en una unidad indica qué unidad es, como `"drive": "mac-external"`, y tiene
 `"version": 2`, así que un FolderSkin de antes de las unidades dice que es de una versión más
@@ -273,16 +353,19 @@ se indica): la carpeta en su propio color y la unidad sin nada en su cara fronta
 `cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`. El mismo comando
 escribe las capas de cada unidad en `drives/<id>/` a la mitad del tamaño, con dónde está la cara
 frontal de cada unidad en `drives/parts.json`, y la forma vacía de cada carpeta y cada unidad en
-`bases/`, como WebP sin pérdida. Una prueba de `folderskin-tools` comprueba que son los píxeles que
-dibuja el compositor, para que no se queden desactualizados, y una de las pruebas de la webview
-comprueba que `src/composer/drives.ts` coloca las cosas donde el dibujo de Rust tiene la cara
-frontal de cada unidad.
+`bases/`, como WebP sin pérdida. Junto a las capas de cada carpeta y de cada unidad, `pieces.webp`
+tiene sus piezas una debajo de otra y `pieces.json` dice de qué parte es cada una y dónde va. Una
+prueba de `folderskin-tools` comprueba que son los píxeles que dibuja el compositor, para que no se
+queden desactualizados, y una de las pruebas de la webview comprueba que `src/composer/drives.ts`
+coloca las cosas donde el dibujo de Rust tiene la cara frontal de cada unidad.
 
 ### Pruebas
 
 | | |
 | --- | --- |
-| compositor (`folderskin-core`) | las capas apiladas son iguales al icono guardado, un diseño cae donde se dibujó, un diseño transparente solo deja el papel y los bordes, el contorno sigue los bordes visibles |
+| compositor (`folderskin-core`) | las capas apiladas son iguales al icono guardado, un diseño cae donde se dibujó, un diseño transparente solo deja el papel y los bordes, el contorno sigue los bordes visibles. Las piezas de cada carpeta apiladas alrededor de un diseño son el icono guardado, con la pestaña entera por encima del cuerpo |
+| unidad (`folderskin-core`) | las partes de cada unidad se dibujan sin que el dibujo de otra parte se meta en medio, y sus piezas apiladas alrededor de un diseño son la unidad guardada |
 | almacenamiento (`src-tauri`) | el documento de un diseño se guarda a su lado, sobrevive a un reinicio, desaparece cuando se borra el diseño y se limpia si un fallo lo deja huérfano. Guardar encima de un diseño conserva su lugar y rechaza un aspecto que no sea un diseño |
 | editor (`src-tauri`) | el formato del cuerpo, las comprobaciones de imágenes, las vistas previas, el guardado, los nombres, un documento dañado, las codificaciones de imagen, y un diseño enviado como bytes sin procesar por el propio IPC de Tauri (su runtime simulado) que se previsualiza y se guarda |
-| frontend (vitest) | el documento (sus cambios y cómo se vuelve a leer), deshacer, mover, cambiar el tamaño, girar y ajustar, la composición del texto y sus curvas, las formas, los colores, los ajustes de imagen, los puntos de partida y el formato del cuerpo |
+| frontend (vitest) | el documento (sus cambios y cómo se vuelve a leer, incluidos los cambios de una parte y el encuadre), deshacer, mover, cambiar el tamaño, girar y ajustar, el orden de las partes y el giro del encuadre, la composición del texto y sus curvas, las formas, los colores, los ajustes de imagen, los puntos de partida y el formato del cuerpo |
+| e2e (`e2e/parts.spec.ts`) | las partes de una memoria USB listadas, elegidas en el lienzo, coloreadas, ocultas, quitadas y recuperadas, y guardadas. La memoria entera girada y el giro deshecho, luego arrastrada y devuelta a su sitio. El papel de una carpeta quitado y su pestaña coloreada, y solo la pestaña |
