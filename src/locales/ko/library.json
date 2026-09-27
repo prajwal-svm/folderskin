@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "{{name}} 스킨을 삭제하지 못했어요: {{reason}}",
-    "save": "{{name}} 스킨을 저장하지 못했어요: {{reason}}"
+    "save": "{{name}} 스킨을 저장하지 못했어요: {{reason}}",
+    "export": "{{name}} 스킨을 내보내지 못했어요: {{reason}}"
   },
   "empty": {
     "loadFailed": "스킨을 불러오지 못했어요",
@@ -65,7 +66,47 @@
     "addTag": "태그 추가",
     "editDesign": "디자인 편집",
     "remix": "디자이너에서 리믹스",
+    "export": "아이콘 내보내기",
     "share": "커뮤니티에 공유"
+  },
+  "export": {
+    "title": "{{name}} 내보내기",
+    "sub": "저장할 형식을 고르세요. 모두 미리 보기에 보이는 그대로 그려져요.",
+    "done": "{{file}} 파일을 저장했어요",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "모든 크기가 담긴 macOS 아이콘"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "모든 크기가 담긴 Windows 아이콘"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024px, 투명 배경"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024px, 흰 배경"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "Xcode와 iconutil용 PNG"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "Xcode용 앱 아이콘"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "웹사이트에 필요한 모든 것"
+      },
+      "folder": {
+        "name": "폴더",
+        "hint": "이 스킨을 입힌 새 폴더"
+      }
+    }
   },
   "facts": {
     "madeWith": "사용 모델",

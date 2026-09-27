@@ -6,6 +6,7 @@ import { cleanName, MAX_NAME_CHARS } from "../lib/names";
 import { isYours } from "../lib/tags";
 import { TagInput } from "./TagInput";
 import { DeleteIcon } from "./icons/delete";
+import { DownloadIcon } from "./icons/download";
 import { EarthIcon } from "./icons/earth";
 import { PaletteIcon } from "./icons/palette";
 import { PencilIcon } from "./icons/pencil";
@@ -21,7 +22,7 @@ const widthNow = () => Math.min(WIDTH, window.innerWidth - 2 * MARGIN);
 /**
  * Everything about one skin in the library, opened from its ⋯ button (or F2, or a double click
  * on its name): its name (the user's own skins only) and tags, which save as they change, what is known about it (the model and prompt behind an AI result, or the
- * pack and person behind a community skin), and sharing and deleting it.
+ * pack and person behind a community skin), and saving it as an icon file, sharing and deleting it.
  *
  * It floats in its own layer, centred on the skin it's about, below the button that opened it or
  * above when there is no room below, and closes on Escape, a click elsewhere or a scroll
@@ -35,6 +36,7 @@ export function SkinMenu({
   onSave,
   onShare,
   onDesign,
+  onExport,
   onDelete,
   onClose,
 }: {
@@ -50,6 +52,8 @@ export function SkinMenu({
   onShare?: () => void;
   /** Opens it in the composer: a design to edit again, or any other skin to remix. */
   onDesign: () => void;
+  /** Saves it as an icon file of its own, to use anywhere. */
+  onExport: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -226,6 +230,10 @@ export function SkinMenu({
         <button type="button" className="menu-item" onClick={onDesign}>
           <PaletteIcon size={16} />
           {skin.source === "composer" ? t("library.menu.editDesign") : t("library.menu.remix")}
+        </button>
+        <button type="button" className="menu-item" onClick={onExport}>
+          <DownloadIcon size={16} />
+          {t("library.menu.export")}
         </button>
         {onShare && (
           <button type="button" className="menu-item" onClick={onShare}>

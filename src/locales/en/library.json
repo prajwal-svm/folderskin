@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "Couldn't delete {{name}}: {{reason}}",
-    "save": "Couldn't save {{name}}: {{reason}}"
+    "save": "Couldn't save {{name}}: {{reason}}",
+    "export": "Couldn't export {{name}}: {{reason}}"
   },
   "empty": {
     "loadFailed": "The skins didn't load",
@@ -65,7 +66,47 @@
     "addTag": "add a tag",
     "editDesign": "Edit design",
     "remix": "Remix in the composer",
+    "export": "Export icon",
     "share": "Share with community"
+  },
+  "export": {
+    "title": "Export {{name}}",
+    "sub": "Pick what to save it as. Each one is drawn as its preview shows it.",
+    "done": "Saved {{file}}",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "macOS icon with every size"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "Windows icon with every size"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024 px, see-through"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024 px on white"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "PNGs for Xcode and iconutil"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "App icon for Xcode"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "Everything a website needs"
+      },
+      "folder": {
+        "name": "Folder",
+        "hint": "A new folder wearing it"
+      }
+    }
   },
   "facts": {
     "madeWith": "Made with",

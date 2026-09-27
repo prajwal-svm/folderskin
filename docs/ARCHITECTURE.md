@@ -70,6 +70,11 @@ The compositor:
 3. Renders once at 2048 px and downsamples to 1024, 512, 256, 128, 64, 48, 32, 24 and 16 with
    Lanczos3 on premultiplied alpha. Downsampling from one master is what gives the soft
    two-pixel edge the design asks for, and it keeps the small sizes from turning to mush.
+   The sizes list and column views show, 64 px and below, are each finished on their own
+   (`small.rs`): straight edges of the outline land on whole pixels, the pale line Lanczos3's
+   overshoot left just inside the outline is gone, and lightness inside is sharpened a little,
+   never past its neighbours. Folders, drives, designs and finished pictures all go through
+   `compositor::to_picture`, so they are all finished alike, and from 128 px up nothing changes.
 
 Geometry lives in one place, as constants with unit tests that assert every part stays inside
 the canvas and that the template is left–right symmetric. Nothing computes coordinates from

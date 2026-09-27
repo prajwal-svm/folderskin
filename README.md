@@ -134,7 +134,10 @@ Any other picture is wrapped onto FolderSkin's folder.
 Every skin you add has a ⋯ menu: rename it (a double click on its name, or F2, jumps straight
 there), give it tags (they become filters along the top),
 see how it was made (the AI model and prompt, or the pack and who shared it), share it or delete
-it. AI results are tagged with their style, such as `airbrush`, as they arrive.
+it. AI results are tagged with their style, such as `airbrush`, as they arrive. **Export icon**
+saves any skin on its own, drawn as its preview shows it: an ICNS for macOS or an ICO for Windows
+with every size in it, a PNG or a JPEG, an iconset for Xcode, an iOS app icon, a website's
+favicons, or a new folder wearing it.
 
 **Settings**, at the bottom of the sidebar, holds the theme, your AI keys, what sharing fills in
 and where your skins are saved. Hover the version badge beside the logo for About.
@@ -284,6 +287,12 @@ Free · Open source · No account · No tracking
 | Linux · x86_64 | AppImage, DEB or RPM | [![Download for Linux](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest) |
 | Linux · ARM64 | AppImage, DEB or RPM | [![Download for Linux](https://img.shields.io/badge/Download_for_Linux-FCC624?style=for-the-badge&logo=linux&logoColor=111827)](https://github.com/prajwal-svm/folderskin/releases/latest) |
 
+On a Mac you can also install it with [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask prajwal-svm/tap/folderskin
+```
+
 The macOS app is signed and notarized by Apple, so it opens like any other. The Windows installer
 isn't signed yet, so SmartScreen asks first: choose "More info", then "Run anyway". The Linux
 packages need glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later).
@@ -300,6 +309,12 @@ key, and makes packs. On a Mac or Linux:
 
 ```sh
 curl -fsSL https://folderskin.app/install-cli.sh | sh
+```
+
+Or with Homebrew, on a Mac or Linux:
+
+```sh
+brew install prajwal-svm/tap/folderskin-cli
 ```
 
 On Windows, in PowerShell:

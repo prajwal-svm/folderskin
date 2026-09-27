@@ -70,6 +70,7 @@ fn uses_look(command: &Command) -> bool {
         command,
         Command::Apply(_)
             | Command::Render(_)
+            | Command::Glyph(_)
             | Command::Image(
                 ImageCommand::Render(_) | ImageCommand::Check { .. } | ImageCommand::Crop(_)
             )
@@ -81,8 +82,8 @@ fn uses_look(command: &Command) -> bool {
 fn look_unused() -> CliError {
     CliError::usage(
         "That command isn't quite right.",
-        "--look chooses the folder artwork goes on, which only apply, render, ai gen, ai batch, \
-         ai theme, image check and image crop do.",
+        "--look chooses the folder artwork goes on, which only apply, render, glyph, ai gen, \
+         ai batch, ai theme, image check and image crop do.",
     )
     .fix("Leave --look out of this command.")
 }
@@ -95,9 +96,34 @@ pub fn run(command: Command, out: &Arc<Out>) -> Result<(), CliError> {
         Command::Apply(args) => tools::apply(&args, out),
         Command::Revert { folder } => tools::revert(&folder, out),
         Command::Render(args) => tools::render(&args, out),
+        Command::Glyph(args) => tools::glyph(&args, out),
         Command::Template(args) => tools::template(&args, out),
         Command::Packs(command) => tools::packs(command, out),
+        Command::Completions { shell } => completions(shell),
     }
+}
+
+/// `completions`: the script for `shell`, on standard output. A reader that stops early
+/// (`| head`) ends it quietly, as it ends a picture written there.
+fn completions(shell: clap_complete::Shell) -> Result<(), CliError> {
+    use clap::CommandFactory;
+    use std::io::Write;
+    let mut script = Vec::new();
+    clap_complete::generate(shell, &mut Cli::command(), "folderskin", &mut script);
+    let mut stdout = std::io::stdout().lock();
+    stdout
+        .write_all(&script)
+        .and_then(|()| stdout.flush())
+        .map_err(|e| {
+            if images::reader_gone(&e) {
+                std::process::exit(0);
+            }
+            CliError::io(
+                "write the completions",
+                std::path::Path::new("standard output"),
+                &e,
+            )
+        })
 }
 
 /// The async runtime the downloads and requests run on: one thread is plenty for one job.
@@ -295,6 +321,7 @@ mod tests {
             &["image", "crop", "a.png"],
             &["ai", "gen", "a boat"],
             &["ai", "theme", "D:/x"],
+            &["glyph", "logo.png"],
         ] {
             assert!(takes(words), "{words:?}");
         }
@@ -305,6 +332,7 @@ mod tests {
             &["ai", "key", "list"],
             &["ai", "setup"],
             &["packs", "index"],
+            &["completions", "zsh"],
         ] {
             assert!(!takes(words), "{words:?}");
         }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanName, clip, MAX_NAME_CHARS } from "./names";
+import { cleanName, clip, fileName, MAX_NAME_CHARS } from "./names";
 
 const BELL = String.fromCharCode(7);
 
@@ -27,5 +27,17 @@ describe("skin names", () => {
     for (const name of ["Grandma's lighthouse at dusk on the northern coast, summer", "🦊".repeat(40), `${"a".repeat(50)} b`]) {
       expect(clip(name)).not.toMatch(/…|\.\.\.$/);
     }
+  });
+});
+
+describe("file names", () => {
+  it("keeps a plain name as it is", () => {
+    expect(fileName("Summer in Santorini")).toBe("Summer in Santorini");
+  });
+
+  it("drops what a file name can't hold", () => {
+    expect(fileName('AC/DC: "Live" <1979>?')).toBe("AC DC Live 1979");
+    expect(fileName("..hidden.")).toBe("hidden");
+    expect(fileName(" / ")).toBe("icon");
   });
 });

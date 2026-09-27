@@ -4,6 +4,33 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Export a skin as any kind of icon.** **Export icon**, in a skin's ⋯ menu, saves it as an
+  ICNS for macOS or an ICO for Windows with every size in it, a PNG or a JPEG, an iconset for
+  Xcode and iconutil, an iOS app icon, the favicons a website needs, or a new folder wearing it.
+  Each is drawn as its preview shows it, to use for an app, a website or another computer.
+- **Press a symbol into a folder, from the command line.** `folderskin glyph logo.png ~/Music`
+  presses a black-and-white picture (a logo, a symbol, a letter) into FolderSkin's folder, as
+  the composer presses an icon in: a deeper shade of the folder's colour, with a lit lip below
+  it. `--colour` fills the folder with a colour of your own, `--depth` sets how deep it goes,
+  and `--empty` leaves out the paper.
+- **Icon files from the command line.** `render` and `glyph` save the same kinds, all but the new
+  folder: by the name's ending (`.icns`, `.ico`, `.iconset`, `.appiconset`, `.png`, `.jpg`) or
+  with `--format`, which does `favicon` too. A JPEG from `render` is on white now.
+- **Shell completions.** `folderskin completions zsh` (or bash, fish, PowerShell, elvish) prints
+  them for your shell.
+
+### Changed
+
+- **Crisper icons in lists.** The small sizes that list and column views show, 16 to 64 px, are
+  now each finished on their own. A folder's or a drive's straight edges land on whole pixels,
+  the pale line that ran just inside the outline is gone, and a picture or lettering on the icon
+  is a little sharper, with no halo round it. Every skin gets this, the finished pictures in
+  community packs too. From 128 px up, icons are exactly as they were.
+
 ## 0.1.11 - 2026-09-27
 
 ### Fixed

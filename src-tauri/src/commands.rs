@@ -14,6 +14,7 @@ use folderskin_core::apply::{
 use folderskin_core::compositor::{self, Artwork, ICON_SIZES};
 use folderskin_core::drive::detect::{drive_at, Drive};
 use folderskin_core::drive::DriveShape;
+use folderskin_core::export::{self, Format};
 use folderskin_core::matte;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -498,6 +499,42 @@ async fn apply_to_drive(state: AppState, drive: Drive, skin_id: String) -> Resul
         folderskin_core::apply::drive::apply(&drive.volume, &icons).map_err(|e| e.to_string())?;
         refresh_shell_icons();
         Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The side of a skin saved as one picture: the largest icon macOS shows.
+const EXPORT_PICTURE: u32 = 1024;
+
+/// Saves a skin on its own at `dest`, drawn as its preview shows it
+/// ([`crate::store::SkinImage::export_icon_set`]). `format` is a kind of file
+/// ([`folderskin_core::export::Format`]: `png`, `jpeg`, `icns`, `ico`, `iconset`, `ios` or
+/// `favicon`), written as one file or a folder of them, or `folder`: a new folder at `dest`
+/// wearing it.
+#[tauri::command]
+pub async fn export_skin(
+    state: State<'_, AppState>,
+    skin_id: String,
+    dest: String,
+    format: String,
+) -> Result<(), String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let dest = PathBuf::from(dest);
+        let base = state.entry(&skin_id).and_then(|entry| entry.base);
+        let skin = state.resolve(&skin_id)?;
+        if format == "folder" {
+            std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+            let icons = skin.export_icon_set(&ICON_SIZES, base.as_deref());
+            apply_icon(&dest, &icons).map_err(|e| e.to_string())?;
+            refresh_shell_icons();
+            return Ok(());
+        }
+        let format = Format::from_id(&format)
+            .ok_or_else(|| format!("FolderSkin doesn't save icons as {format}"))?;
+        let icons = skin.export_icon_set(&format.sizes(EXPORT_PICTURE), base.as_deref());
+        export::write(&icons, format, EXPORT_PICTURE, &dest).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?

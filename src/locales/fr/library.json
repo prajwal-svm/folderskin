@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "Impossible de supprimer {{name}} : {{reason}}",
-    "save": "Impossible d'enregistrer {{name}} : {{reason}}"
+    "save": "Impossible d'enregistrer {{name}} : {{reason}}",
+    "export": "Impossible d'exporter {{name}} : {{reason}}"
   },
   "empty": {
     "loadFailed": "Les habillages ne se sont pas chargés",
@@ -65,7 +66,47 @@
     "addTag": "ajouter un tag",
     "editDesign": "Modifier la création",
     "remix": "Remixer dans l'éditeur",
+    "export": "Exporter l'icône",
     "share": "Partager avec la communauté"
+  },
+  "export": {
+    "title": "Exporter {{name}}",
+    "sub": "Choisissez sous quelle forme l'enregistrer. Chacune est dessinée comme l'aperçu la montre.",
+    "done": "{{file}} enregistré",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "Icône macOS, toutes les tailles"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "Icône Windows, toutes les tailles"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024 px, transparent"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024 px sur fond blanc"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "PNG pour Xcode et iconutil"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "Icône d'app pour Xcode"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "Tout ce qu'il faut à un site web"
+      },
+      "folder": {
+        "name": "Dossier",
+        "hint": "Un nouveau dossier qui le porte"
+      }
+    }
   },
   "facts": {
     "madeWith": "Fait avec",

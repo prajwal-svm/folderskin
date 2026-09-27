@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import type { ExportKind } from "./exports";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri, mockApi } from "./devMock";
@@ -430,6 +431,8 @@ const tauriApi = {
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
   importImage: (path: string) => invoke<Skin>("import_image", { path }),
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),
+  /** Saves a skin on its own at `dest`, as `format` names: a file, a folder of them, or `folder`, a new folder wearing it. */
+  exportSkin: (skinId: string, dest: string, format: ExportKind) => invoke<void>("export_skin", { skinId, dest, format }),
   revertSkin: (folder: string) => invoke<void>("revert_skin", { folder }),
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
 

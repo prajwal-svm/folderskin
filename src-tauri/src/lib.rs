@@ -119,6 +119,7 @@ pub fn run() {
             commands::inspect_path,
             commands::import_image,
             commands::apply_skin,
+            commands::export_skin,
             commands::revert_skin,
             commands::delete_skin,
             commands::edit_skin,

@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
 import { explain } from "./lib/sentences";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
-import { browseLabel, keys, localOs } from "./lib/platform";
+import { browseLabel, keys, localOs, osOf } from "./lib/platform";
 import { t as tNow, useT } from "./i18n";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
@@ -43,6 +43,7 @@ import type { ApplyOutcome, ComposerHandle, ComposerRequest } from "./components
 import type { StudioHandle } from "./components/studio/Studio";
 import { Confirm } from "./components/Confirm";
 import { SkinMenu } from "./components/SkinMenu";
+import { ExportSkin } from "./components/ExportSkin";
 import { SharePack } from "./components/SharePack";
 import { Settings, type SettingsTab } from "./components/Settings";
 import { Toaster } from "./components/Toaster";
@@ -53,7 +54,8 @@ import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
 import { ListFilterIcon } from "./components/icons/list-filter";
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "./components/icons/panel-right";
-import { clip } from "./lib/names";
+import { clip, fileName } from "./lib/names";
+import { EXPORT_ENDINGS, isFile, suggestedName, withEnding, type ExportKind } from "./lib/exports";
 import { driveName, shapeFirst } from "./lib/drives";
 import { useDrivePictures } from "./hooks/useDrivePictures";
 
@@ -919,6 +921,40 @@ export default function App() {
     });
   }, []);
 
+  /** The skin whose export chooser is open. */
+  const [exporting, setExporting] = useState<Skin | null>(null);
+
+  /**
+   * Saves a skin on its own, as `kind`, wherever the save dialog says: a file, a folder of them,
+   * or a new folder wearing it. A toast says where it went.
+   */
+  const exportSkin = useCallback(
+    async (skin: Skin, kind: ExportKind) => {
+      const os = osOf(platform.os);
+      const ending = EXPORT_ENDINGS[kind];
+      const suggested = suggestedName(fileName(skin.name), kind);
+      const picked = isTauri()
+        ? await saveDialog({
+            title: tNow("library.export.title", { name: clip(skin.name) }),
+            defaultPath: suggested,
+            filters: isFile(kind) && ending ? [{ name: tNow(`library.export.kinds.${kind}.hint`), extensions: kind === "jpeg" ? ["jpg", "jpeg"] : [ending] }] : undefined,
+          }).catch(() => null)
+        : `/Users/you/Desktop/${suggested}`;
+      if (typeof picked !== "string") return;
+      const dest = withEnding(picked, kind);
+      try {
+        await api.exportSkin(skin.id, dest, kind);
+        toast(tNow("library.export.done", { file: clip(dest.split(/[\\/]/).pop() ?? dest) }), {
+          tone: "ok",
+          action: { label: tNow(`common.showIn.${os}`), run: () => void revealItemInDir(dest).catch(() => {}) },
+        });
+      } catch (e) {
+        toast(tNow("library.errors.export", { name: clip(skin.name), reason: errorMessage(e) }), { tone: "danger" });
+      }
+    },
+    [platform.os, toast],
+  );
+
   const askDelete = useCallback((skin: Skin) => setConfirmingDelete(skin), []);
   const cancelDelete = useCallback(() => setConfirmingDelete(null), []);
 
@@ -1427,6 +1463,10 @@ export default function App() {
             setMenu(null);
             designSkin(menu.skin);
           }}
+          onExport={() => {
+            setMenu(null);
+            setExporting(menu.skin);
+          }}
           onShare={
             isYours(menu.skin)
               ? () => {
@@ -1440,6 +1480,17 @@ export default function App() {
             askDelete(menu.skin);
           }}
           onClose={closeMenu}
+        />
+      )}
+      {exporting && (
+        <ExportSkin
+          skin={exporting}
+          os={osOf(platform.os)}
+          onPick={(kind) => {
+            setExporting(null);
+            void exportSkin(exporting, kind);
+          }}
+          onClose={() => setExporting(null)}
         />
       )}
       {liveAsk && (

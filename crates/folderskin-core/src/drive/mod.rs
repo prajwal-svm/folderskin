@@ -11,9 +11,10 @@
 //! badge that has to stay in sight). So a drive with nothing on it is the two layers together, a
 //! skin fills the face between them, and a see-through part of a design shows the drive's own face.
 //!
-//! Rendering follows the folder's single path: one master at [`RENDER_SIZE`], every smaller size a
-//! Lanczos3 downsample of it ([`crate::compositor`]), and [`layers`] splits the same drawing into
-//! the layers the composer stacks a design between, so its canvas shows the icon that is saved.
+//! Rendering follows the folder's single path: one master at [`RENDER_SIZE`], every smaller size
+//! shrunk from it the way a folder's is, the small ones finished on their own
+//! ([`crate::compositor`], [`crate::small`]), and [`layers`] splits the same drawing into the
+//! layers the composer stacks a design between, so its canvas shows the icon that is saved.
 
 pub mod detect;
 pub(crate) mod draw;
