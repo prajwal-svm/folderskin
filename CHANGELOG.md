@@ -140,6 +140,9 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Fixed
 
+- **The canvas's knobs sit on their corners.** Every knob in Design your own was drawn half its
+  size down and to the right of where it works, so a click on the middle of the turn knob missed
+  it.
 - **Network drives that refused custom icons take them now.** Some network drives keep a
   folder's custom icon but refuse the way macOS sets one, so every folder on them failed, and
   Remove custom icons left them half done. FolderSkin now writes the icon in itself there, and

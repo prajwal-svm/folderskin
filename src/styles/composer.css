@@ -290,6 +290,8 @@
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+/* Centred on its point with `translate`, which the pop's `transform` leaves alone: with the
+   centring in `transform`, the animation ended with every knob half its size off its handle. */
 .cmp-knob {
   position: absolute;
   width: 13px;
@@ -297,7 +299,7 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid #ffffff;
-  transform: translate(-50%, -50%);
+  translate: -50% -50%;
   pointer-events: none;
   animation: pop var(--t-base) var(--ease-spring) both;
 }
