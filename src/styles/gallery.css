@@ -161,6 +161,21 @@
   opacity: 0;
 }
 
+/* A thumbnail on its way the first time it's shown: a faint card in its place, and only after a
+   moment, so one read from disk in a frame never flashes it. */
+.tile-wait {
+  border-radius: 18%;
+  background: var(--well);
+  opacity: 0;
+  animation: tile-wait var(--t-base) var(--ease-out) 250ms forwards;
+}
+
+@keyframes tile-wait {
+  to {
+    opacity: 0.8;
+  }
+}
+
 .tile-name {
   grid-area: 2 / 1;
   display: inline-flex;

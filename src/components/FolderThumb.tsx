@@ -114,6 +114,10 @@ export function FolderThumb({
   const src = picture ?? skin.thumbnail;
   const [loaded, setLoaded] = useState<string | null>(null);
   const waiting = under !== undefined && loaded !== src;
+  // The first time a thumbnail is shown it may still be being drawn (src-tauri/src/thumbs.rs): a
+  // faint card holds its place until it arrives. Later changes of picture keep the last one in
+  // place instead, as the browser does, so switching folders never flickers.
+  const [shownOnce, setShownOnce] = useState(false);
 
   const keys = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (onMenu && (e.key === "F2" || (e.key === "Enter" && selected))) {
@@ -147,6 +151,7 @@ export function FolderThumb({
       >
         <span className="tile-art" ref={art}>
           {waiting && <img className="tile-img is-under" src={under} alt="" draggable={false} decoding="async" />}
+          {!waiting && !shownOnce && <span className="tile-img tile-wait" aria-hidden="true" />}
           <img
             className={waiting ? "tile-img is-coming" : "tile-img"}
             src={src}
@@ -154,7 +159,10 @@ export function FolderThumb({
             draggable={false}
             loading="lazy"
             decoding="async"
-            onLoad={() => setLoaded(src)}
+            onLoad={() => {
+              setLoaded(src);
+              setShownOnce(true);
+            }}
           />
         </span>
         <span
