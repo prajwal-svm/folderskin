@@ -208,7 +208,8 @@ counted in the background as soon as the folder is picked, and a run can start b
 ends: it finds the folders as it goes, so it reads **3,120 of 12,000+** until they're all found.
 A run over more than 5,000 folders, or over a tree still being counted, asks first with the count
 so far and the space it takes. On a Mac a folder takes about a tenth of a second to skin and a
-thousandth to revert.
+thousandth to revert. On Windows it takes about 45 milliseconds either way, most of it spent
+telling Explorer about the folder (measured on 200 folders).
 
 A run goes on in the background: another folder can be picked and the rest of the app used
 meanwhile. The sidebar shows it on every view, with the skin, the folder, how far it has got and
