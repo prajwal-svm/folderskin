@@ -14,6 +14,7 @@ use crate::prompts::{self, Shape};
 use crate::{paths, CancelToken, Error};
 use folderskin_ai::recipe::{self, Key, Lettering, Role, Treatment, RECIPE_VERSION};
 use folderskin_core::base::{Base, MAC_FOLDER, TEMPLATE_VERSION};
+use folderskin_core::lift::Subject;
 use folderskin_core::{compositor, matte, painted};
 use image::{GrayImage, Luma, RgbaImage};
 use serde::Serialize;
@@ -768,7 +769,7 @@ pub fn silhouette_of(base: &Base, width: u32, height: u32) -> Option<GrayImage> 
 /// and stem, so a green backdrop only goes where it reaches the edge of the picture, from the
 /// shade actually painted, as a drifted backdrop of any colour does.
 pub fn cut_icon(img: &RgbaImage, key: Key) -> Option<RgbaImage> {
-    cut_icon_lifting(img, key, matte::lifted)
+    cut_icon_lifting(img, key, |img| matte::lifted(img, Subject::Icon))
 }
 
 /// [`cut_icon`], lifting the subject with `lift` where the key isn't clean.
@@ -798,7 +799,7 @@ pub fn cut_icon_lifting(
 /// by the system, the way a free icon is. `None` where it can't be.
 pub fn cut_reshaped_folder(img: &RgbaImage) -> Option<RgbaImage> {
     matte::on_plain_backdrop(img)
-        .then(|| matte::lifted(img))
+        .then(|| matte::lifted(img, Subject::Folder))
         .flatten()
 }
 

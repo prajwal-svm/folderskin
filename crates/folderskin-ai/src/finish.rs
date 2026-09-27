@@ -9,6 +9,7 @@ use crate::recipe::{
 };
 use crate::{AiError, GenerateRequest, GenerateResult, ModelInfo, Reference};
 use folderskin_core::base::{Base, TEMPLATE_VERSION};
+use folderskin_core::lift::Subject;
 use folderskin_core::matte::{self, KeyOptions, MAGENTA};
 use folderskin_core::painted;
 use image::{GrayImage, Luma, RgbaImage};
@@ -288,13 +289,14 @@ pub fn finish(
     finish_lifting(result, base, shape, cut, matte::lifted)
 }
 
-/// [`finish`], lifting a subject off its backdrop with `lift`.
+/// [`finish`], lifting a subject off its backdrop with `lift`, told whether it's a free icon or a
+/// whole folder.
 pub fn finish_lifting(
     result: &GenerateResult,
     base: &Base,
     shape: Shape,
     cut: Cut,
-    lift: impl Fn(&RgbaImage) -> Option<RgbaImage>,
+    lift: impl Fn(&RgbaImage, Subject) -> Option<RgbaImage>,
 ) -> Result<Finished, AiError> {
     let img = image::load_from_memory(&result.image)
         .map_err(|_| AiError::NotAnImage)?
@@ -319,7 +321,10 @@ pub fn finish_lifting(
                 .and_then(|silhouette| painted::cut_along_silhouette(&img, &silhouette).image);
             match along {
                 Some(cutout) => Finished::Folder(matte::autocrop(&cutout, 0)),
-                None => match matte::on_plain_backdrop(&img).then(|| lift(&img)).flatten() {
+                None => match matte::on_plain_backdrop(&img)
+                    .then(|| lift(&img, Subject::Folder))
+                    .flatten()
+                {
                     Some(own) => Finished::Folder(own),
                     None if matte::has_key_background(&img, key, KeyOptions::default()) => {
                         Finished::Folder(keyed(&img))
@@ -331,7 +336,7 @@ pub fn finish_lifting(
         Shape::Icon => {
             if matte::surround(&img, key) == matte::Surround::Keyed {
                 Finished::Folder(keyed(&img))
-            } else if let Some(lifted) = lift(&img) {
+            } else if let Some(lifted) = lift(&img, Subject::Icon) {
                 Finished::Folder(lifted)
             } else if matte::has_key_background(&img, key, KeyOptions::default()) {
                 Finished::Folder(keyed(&img))
@@ -372,7 +377,7 @@ mod tests {
         shape: Shape,
         cut: Cut,
     ) -> Result<Finished, AiError> {
-        finish_lifting(result, base, shape, cut, |_| None)
+        finish_lifting(result, base, shape, cut, |_, _| None)
     }
 
     fn result(img: &RgbaImage, native_alpha: bool) -> GenerateResult {

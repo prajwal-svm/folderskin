@@ -160,9 +160,12 @@ dark it is. Labelling it subject is cheap where the subject's own colours explai
 change of label between neighbours costs what their likeness makes unlikely, so the cut follows
 the subject's edges. It is made at 384 px while the colours are learned, then the edge is cut
 again at full size and softened, and `matte::cut_by_mask` takes it from there. On 26 of the
-Local Model's pictures it agrees with Vision to within a few pixels of edge. A neon sign on a
-dark wall keeps the wall its glow lights inside its outline, and a watercolour wash sent as a
-heavily compressed JPEG can stay around the subject. Where no subject stands out from a plain
+Local Model's pictures it agrees with Vision to within a few pixels of edge, and the same pictures
+sent as JPEGs down to quality 20 come out the same. A shadow painted on the backdrop, darker than
+it and no more colourful, goes with the backdrop too, as the grey wash under a watercolour pot
+does. On a free icon, a neon sign's tubes come off the dark wall they hang on, the wall inside them
+included: an enclosed stretch of the wall's own colour is the wall showing through, and the glow
+around it is the wall's. A whole folder is solid, so a night sky painted on one stays. Where no subject stands out from a plain
 backdrop, a free icon on a flat colour is cut from the edge in, as a green one is.
 
 A whole folder painted on FolderSkin's template takes neither route. It is cut along the

@@ -17,11 +17,15 @@
 //! - **The subject's colours**, learned from the pixels no backdrop explains, then from each cut.
 //! - **Shadows**: a pixel that is the backdrop darkened, compared with the backdrop as lit around
 //!   it (a spotlight included), is the backdrop's shadow, as long as the frame's edge reaches it
-//!   without crossing an edge. A black beak or a grey camera behind one is the subject's, however
-//!   dark.
+//!   without crossing an edge. So is a shadow painted on it, darker than the backdrop and no more
+//!   colourful: the grey wash under a watercolour pot. A black beak or a grey camera behind an
+//!   edge is the subject's, however dark.
 //! - **How far each pixel is from the frame along the smoothest path** ([`geodesic`]), measured
 //!   on a coarse copy: a glow, a wash or a soft shadow is reached for nothing, the subject only
 //!   by crossing its edge. It leans a pixel one way or the other, and decides where to start.
+//!   A free icon can be drawn in outline, a neon sign's tubes on a dark wall, and the wall they
+//!   enclose is measured from too: the backdrop showing through, and the glow around it the
+//!   backdrop's, where a whole folder is solid and a night sky painted on it is its own.
 //!
 //! The cut is made at [`WORK_SIDE`] px, a few times over while the colours are learned, then
 //! tidied: a speck the backdrop's colour goes, and a shadow drawn apart under the subject; a small
@@ -32,8 +36,9 @@
 //! Tested against Vision on 26 of klein's pictures: 19 free icons and 7 whole folders. It agrees
 //! with Vision to within a few pixels of edge on most of them (0.96 to 0.996 of their union
 //! shared), and is the better of the two on a bicycle, whose wheels Vision fills, and a flamingo
-//! lagoon on a folder, where Vision takes only the flamingo. A neon sign on a dark wall keeps the
-//! wall its glow lights inside its outline.
+//! lagoon on a folder, where Vision takes only the flamingo, and it lifts a neon sign's tubes off
+//! the wall inside them as Vision does. The same pictures sent as JPEGs, down to quality 20, come
+//! out the same.
 
 mod gmm;
 mod maxflow;
@@ -88,11 +93,23 @@ const ENCLOSED_REACH: f32 = 2.0 * SHADOW_REACH;
 /// The share of the frame's edge that must be within the backdrop's own noise: a painting that
 /// fills the frame has no subject to lift.
 const PLAIN: f32 = 0.9;
+/// A backdrop no lighter than this (luma, 0..=255) where it shows is a dark wall, which a neon
+/// sign's tubes can enclose.
+const DARK: f32 = 64.0;
+
+/// What is lifted, which says whether the backdrop can show inside it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Subject {
+    /// A free icon, which can be drawn in outline: a neon sign's tubes, with the wall inside them.
+    Icon,
+    /// A whole folder, solid whatever is painted on it: a night sky on one is its own.
+    Folder,
+}
 
 /// How much each pixel of `img` belongs to its subject, the way [`crate::lift::subject_mask`]
 /// gives it: 255 on it, 0 around it, soft along its edge, the size of `img`. `None` when `img`
 /// isn't a subject on a plain backdrop, or no subject stands out from it.
-pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
+pub fn subject_mask(img: &RgbaImage, subject: Subject) -> Option<GrayImage> {
     let (w, h) = img.dimensions();
     let small = if w.max(h) > WORK_SIDE {
         let scale = WORK_SIDE as f32 / w.max(h) as f32;
@@ -104,7 +121,7 @@ pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
     } else {
         img.clone()
     };
-    let cut = Cut::make(&small)?;
+    let cut = Cut::make(&small, subject)?;
     Some(if small.dimensions() == (w, h) {
         cut.soft(img)
     } else {
@@ -128,12 +145,12 @@ struct Cut {
 }
 
 impl Cut {
-    fn make(img: &RgbaImage) -> Option<Cut> {
+    fn make(img: &RgbaImage, subject: Subject) -> Option<Cut> {
         let (w, h) = img.dimensions();
         let n = (w * h) as usize;
         let backdrop_model = Backdrop::measure(img).filter(|b| b.plain >= PLAIN)?;
         let colour: Vec<[f32; 3]> = img.pixels().map(|p| rgb(p.0)).collect();
-        let backdrop: Vec<[f32; 3]> = (0..n)
+        let mut backdrop: Vec<[f32; 3]> = (0..n)
             .map(|i| backdrop_model.at(i as u32 % w, i as u32 / w).map(f32::from))
             .collect();
         // The backdrop's own noise, in colour units.
@@ -143,7 +160,41 @@ impl Cut {
             let (x, y) = (i as u32 % w, i as u32 / w);
             x < band || y < band || x >= w - band || y >= h - band
         };
-        let reach = reach_from_frame(img, (2.0 * sigma).max(6.0) as f32);
+        let slack = (2.0 * sigma).max(6.0) as f32;
+        let mut reach = reach_from_frame(img, slack, None);
+        let far = (6.0 * sigma).max(30.0) as f32;
+        // A neon sign's tubes enclose the dark wall they hang on, lit a little by their glow: an
+        // enclosed stretch of the backdrop's own colour is the backdrop showing through. Inside
+        // the subject the backdrop is the wall seen there, and the frame's edge is measured from
+        // it too, so the glow inside the tubes is reached for nothing, as the glow outside is.
+        if subject == Subject::Icon && dark_where_it_shows(&colour, &reach) {
+            let dim: Vec<bool> = (0..n)
+                .map(|i| {
+                    !in_band(i)
+                        && reach[i] > SEED_REACH
+                        && distance(colour[i], backdrop[i]) < far
+                        && luma(colour[i]) <= DARK
+                })
+                .collect();
+            let mut holes = vec![false; n];
+            for region in regions(&dim, w, h, true) {
+                // Not a speck: a dark joint or a pupil is the subject's.
+                if region.len() >= n / 1000 {
+                    region.into_iter().for_each(|i| holes[i] = true);
+                }
+            }
+            if holes.contains(&true) {
+                let weight: Vec<f32> = holes.iter().map(|&h| f32::from(u8::from(h))).collect();
+                let seen = push_pull(&colour, &weight, w, h);
+                for i in 0..n {
+                    if reach[i] > SEED_REACH {
+                        backdrop[i] = seen[i];
+                    }
+                }
+                reach = reach_from_frame(img, slack, Some(&holes));
+            }
+        }
+        let (backdrop, reach) = (backdrop, reach);
         let off = |i: usize| distance(colour[i], backdrop[i]);
         let shadowy = |i: usize| {
             let (s, r) = shadow_fit(colour[i], backdrop[i]);
@@ -151,14 +202,15 @@ impl Cut {
         };
 
         // Seeds of the subject: well away from the backdrop and behind an edge, and not its
-        // shadow, unless the frame reaches it only far across an edge, where no shadow falls.
-        let far = (6.0 * sigma).max(30.0) as f32;
+        // shadow, unless the frame reaches it only far across an edge, where no shadow falls; nor
+        // a shadow painted on it that the frame reaches without crossing an edge.
         let mut fg: Vec<bool> = (0..n)
             .map(|i| {
                 !in_band(i)
                     && reach[i] > SEED_REACH
                     && off(i) > far
                     && (!shadowy(i) || reach[i] > ENCLOSED_REACH)
+                    && !(painted_shade(colour[i], backdrop[i]) && reach[i] < SHADOW_REACH)
             })
             .collect();
         // The backdrop for certain: the band, what the backdrop model explains, a shadow and
@@ -437,6 +489,14 @@ impl Costs {
                 - f64::from(r).powi(2) / (2.0 * SHADOW_SPREAD * SHADOW_SPREAD);
             back = log_sum(back, along + across + (SHADOW_PRIOR * open).ln());
         }
+        if reach < SHADOW_REACH && painted_shade(p, lit) {
+            // A shadow painted on it: any colour darker than the backdrop and no more colourful,
+            // as likely as any other. A grey wash under a watercolour pot is no darkened green.
+            let span = f64::from(luma(lit).max(1.0))
+                * std::f64::consts::PI
+                * f64::from(chroma(lit) + SHADE_MARGIN).powi(2);
+            back = log_sum(back, -span.ln() + (SHADOW_PRIOR * open).ln());
+        }
         let lean = f64::from((reach / REACH_FULL).min(1.0));
         (
             (-subject).clamp(0.0, MAX_COST) + REACH_NATS * (1.0 - lean),
@@ -532,8 +592,9 @@ fn links(colour: &[[f32; 3]], w: u32, h: u32) -> Vec<(u32, u32, i32)> {
 }
 
 /// Each pixel's distance from the frame along the path that climbs least ([`geodesic`]),
-/// measured on a copy [`GEODESIC_SIDE`] px across and brought back to `img`'s size.
-fn reach_from_frame(img: &RgbaImage, slack: f32) -> Vec<f32> {
+/// measured on a copy [`GEODESIC_SIDE`] px across and brought back to `img`'s size. With
+/// `holes` (one per pixel of `img`), from those pixels too.
+fn reach_from_frame(img: &RgbaImage, slack: f32, holes: Option<&[bool]>) -> Vec<f32> {
     let (w, h) = img.dimensions();
     let scale = (GEODESIC_SIDE as f32 / w.max(h) as f32).min(1.0);
     let (gw, gh) = (
@@ -542,7 +603,17 @@ fn reach_from_frame(img: &RgbaImage, slack: f32) -> Vec<f32> {
     );
     let coarse = imageops::resize(img, gw, gh, FilterType::Triangle);
     let colour: Vec<[f32; 3]> = coarse.pixels().map(|p| rgb(p.0)).collect();
-    let distances = geodesic(&colour, gw, gh, (gw.min(gh) / BAND_SHARE).max(1), slack);
+    let mut from = frame_band(gw, gh, (gw.min(gh) / BAND_SHARE).max(1));
+    if let Some(holes) = holes {
+        for (k, f) in from.iter_mut().enumerate() {
+            // The pixel of `img` at the middle of this one.
+            let (x, y) = (k as u32 % gw, k as u32 / gw);
+            let ix = (((x as f32 + 0.5) * w as f32 / gw as f32) as u32).min(w - 1);
+            let iy = (((y as f32 + 0.5) * h as f32 / gh as f32) as u32).min(h - 1);
+            *f |= holes[(iy * w + ix) as usize];
+        }
+    }
+    let distances = geodesic(&colour, gw, gh, &from, slack);
     (0..w * h)
         .map(|i| {
             let x = ((i % w) as f32 + 0.5) * gw as f32 / w as f32 - 0.5;
@@ -552,21 +623,26 @@ fn reach_from_frame(img: &RgbaImage, slack: f32) -> Vec<f32> {
         .collect()
 }
 
-/// Each pixel's distance from the frame's outer band (`band` px deep) along the path that climbs
-/// least: a step between neighbours costs how far their colours differ beyond `slack`, so a
-/// gradient, a glow or a soft shadow is crossed for nothing and an edge costs its height.
-fn geodesic(colour: &[[f32; 3]], w: u32, h: u32, band: u32, slack: f32) -> Vec<f32> {
+/// The pixels of a `w` x `h` picture in its outer band, `band` px deep.
+fn frame_band(w: u32, h: u32, band: u32) -> Vec<bool> {
+    (0..w * h)
+        .map(|i| {
+            let (x, y) = (i % w, i / w);
+            x < band || y < band || x >= w - band || y >= h - band
+        })
+        .collect()
+}
+
+/// Each pixel's distance from the pixels of `from` along the path that climbs least: a step
+/// between neighbours costs how far their colours differ beyond `slack`, so a gradient, a glow
+/// or a soft shadow is crossed for nothing and an edge costs its height.
+fn geodesic(colour: &[[f32; 3]], w: u32, h: u32, from: &[bool], slack: f32) -> Vec<f32> {
     let n = colour.len();
     let mut best = vec![f32::INFINITY; n];
     let mut queue = BinaryHeap::new();
-    for y in 0..h {
-        for x in 0..w {
-            if x < band || y < band || x >= w - band || y >= h - band {
-                let i = (y * w + x) as usize;
-                best[i] = 0.0;
-                queue.push(Reverse((0u32, i as u32)));
-            }
-        }
+    for i in (0..n).filter(|&i| from[i]) {
+        best[i] = 0.0;
+        queue.push(Reverse((0u32, i as u32)));
     }
     // Distances are queued in sixteenths, so equal ones leave in the same order every time.
     let key = |d: f32| (d * 16.0).round() as u32;
@@ -725,10 +801,6 @@ fn drop_ground_shadow(fg: &mut [bool], colour: &[[f32; 3]], lit: &[[f32; 3]], w:
         return;
     };
     let (_, main_top, _, main_bottom) = bounds(main, w);
-    let luma = |c: [f32; 3]| 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-    let chroma = |c: [f32; 3]| {
-        c.iter().cloned().fold(f32::MIN, f32::max) - c.iter().cloned().fold(f32::MAX, f32::min)
-    };
     let mut shadows = Vec::new();
     for part in &parts {
         if part.len() * 3 > main.len() {
@@ -744,9 +816,7 @@ fn drop_ground_shadow(fg: &mut [bool], colour: &[[f32; 3]], lit: &[[f32; 3]], w:
             }
             sum.map(|v| v / part.len() as f32)
         };
-        let (c, b) = (mean(colour), mean(lit));
-        let shade = luma(c) < luma(b) - 8.0 && chroma(c) <= chroma(b) + 8.0;
-        if below && flat && shade {
+        if below && flat && painted_shade(mean(colour), mean(lit)) {
             shadows.push(part);
         }
     }
@@ -820,6 +890,42 @@ fn regions(fg: &[bool], w: u32, h: u32, value: bool) -> Vec<Vec<usize>> {
         out.push(region);
     }
     out
+}
+
+/// How far a painted shadow is darker than the backdrop at least, and how much more colourful it
+/// can be at most (0..=255).
+const SHADE_MARGIN: f32 = 8.0;
+
+/// True when `p` could be a shadow painted on `backdrop`: darker than it, and no more colourful,
+/// whatever its hue. A grey wash on green paper is one, where the green darkened is only one of
+/// them ([`shadow_fit`]).
+fn painted_shade(p: [f32; 3], backdrop: [f32; 3]) -> bool {
+    luma(p) < luma(backdrop) - SHADE_MARGIN && chroma(p) <= chroma(backdrop) + SHADE_MARGIN
+}
+
+/// True when the backdrop is dark where the frame's edge reaches it for nothing, nine pixels in
+/// ten of it: a wall a neon sign could hang on, where a vignette is lit in the middle.
+fn dark_where_it_shows(colour: &[[f32; 3]], reach: &[f32]) -> bool {
+    let mut open: Vec<f32> = colour
+        .iter()
+        .zip(reach)
+        .filter(|(_, &r)| r <= OPEN_REACH)
+        .map(|(&c, _)| luma(c))
+        .collect();
+    if open.is_empty() {
+        return false;
+    }
+    open.sort_by(f32::total_cmp);
+    open[open.len() * 9 / 10] <= DARK
+}
+
+fn luma(c: [f32; 3]) -> f32 {
+    0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+}
+
+/// How colourful `c` is: its strongest channel less its weakest.
+fn chroma(c: [f32; 3]) -> f32 {
+    c[0].max(c[1]).max(c[2]) - c[0].min(c[1]).min(c[2])
 }
 
 /// How well `p` is `backdrop` darkened: the scale, and how far `p` is from the backdrop at that
@@ -956,7 +1062,7 @@ mod tests {
     fn a_subject_comes_off_its_sweep_and_its_shadow_stays_behind() {
         let (w, h) = (360, 340);
         let (img, inside) = disc_with_shadow(w, h);
-        let mask = subject_mask(&img).expect("the disc");
+        let mask = subject_mask(&img, Subject::Icon).expect("the disc");
         let shared = overlap(&mask, |x, y| inside(x, y) > 0.0);
         assert!(shared > 0.97, "{shared}");
         // The middle of the shadow, just under the disc, is the backdrop's.
@@ -970,7 +1076,7 @@ mod tests {
     fn a_big_picture_is_cut_at_its_own_size() {
         let (w, h) = (900, 850);
         let (img, inside) = disc_with_shadow(w, h);
-        let mask = subject_mask(&img).expect("the disc");
+        let mask = subject_mask(&img, Subject::Icon).expect("the disc");
         assert_eq!(mask.dimensions(), (w, h));
         for (x, y, p) in mask.enumerate_pixels() {
             let d = inside(x as f32 + 0.5, y as f32 + 0.5);
@@ -1009,7 +1115,7 @@ mod tests {
                 (a > 0.0).then_some((colour, a))
             },
         );
-        let mask = subject_mask(&img).expect("the block");
+        let mask = subject_mask(&img, Subject::Icon).expect("the block");
         assert!(mask.get_pixel(180, 165).0[0] >= 240, "the band went");
         let shared = overlap(&mask, |x, y| x > x0 && x < x1 && y > y0 && y < y1);
         assert!(shared > 0.97, "{shared}");
@@ -1037,7 +1143,7 @@ mod tests {
                 }
             },
         );
-        let mask = subject_mask(&img).expect("the ball");
+        let mask = subject_mask(&img, Subject::Icon).expect("the ball");
         assert!(
             mask.get_pixel(180, 265).0[0] < 16,
             "the drawn shadow stayed"
@@ -1060,7 +1166,7 @@ mod tests {
                 (a > 0.0).then_some(([230.0, 170.0, 30.0], a))
             },
         );
-        let mask = subject_mask(&img).expect("the ring");
+        let mask = subject_mask(&img, Subject::Icon).expect("the ring");
         assert!(mask.get_pixel(180, 170).0[0] < 16, "the hole filled");
         assert!(mask.get_pixel(180, 90).0[0] >= 240, "the ring went");
     }
@@ -1068,7 +1174,7 @@ mod tests {
     #[test]
     fn a_plain_sweep_has_no_subject() {
         let img = scene(360, 340, |_, _| 1.0, |_, _| None);
-        assert!(subject_mask(&img).is_none());
+        assert!(subject_mask(&img, Subject::Icon).is_none());
     }
 
     /// A picture that fills the frame to its edge has no backdrop to lift a subject off.
@@ -1078,7 +1184,7 @@ mod tests {
             let v = ((x * 7 + y * 13) % 97) as u8;
             Rgba([v * 2, 255 - v, (x % 64) as u8 * 4, 255])
         });
-        assert!(subject_mask(&img).is_none());
+        assert!(subject_mask(&img, Subject::Icon).is_none());
     }
 
     #[test]
@@ -1116,7 +1222,7 @@ mod tests {
                 }
             })
             .collect();
-        let d = geodesic(&colour, w, h, 1, 6.0);
+        let d = geodesic(&colour, w, h, &frame_band(w, h, 1), 6.0);
         assert_eq!(d[(5 * w + 30) as usize], 0.0, "the gradient costs nothing");
         assert!(
             d[(20 * w + 20) as usize] > 100.0,

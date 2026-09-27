@@ -15,10 +15,13 @@
 
 use image::{GrayImage, RgbaImage};
 
+pub use crate::segment::Subject;
+
 /// How much each pixel of `img` belongs to its subject: 255 on it, 0 around it, soft along its
-/// edge, the same size as `img`. `None` when no subject stands out from a plain backdrop.
-pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
-    imp::subject_mask(img)
+/// edge, the same size as `img`. `None` when no subject stands out from a plain backdrop. Vision
+/// knows a neon sign from a solid thing by what it is; the graph cut is told by `subject`.
+pub fn subject_mask(img: &RgbaImage, subject: Subject) -> Option<GrayImage> {
+    imp::subject_mask(img, subject)
 }
 
 #[cfg(target_os = "macos")]
@@ -36,10 +39,10 @@ mod imp {
     use objc2_foundation::{NSArray, NSData, NSDictionary};
     use objc2_vision::{VNGenerateForegroundInstanceMaskRequest, VNImageRequestHandler, VNRequest};
 
-    pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
+    pub fn subject_mask(img: &RgbaImage, subject: super::Subject) -> Option<GrayImage> {
         // New in macOS 14: before that the class isn't there to ask, and the graph cut lifts it.
         if AnyClass::get(c"VNGenerateForegroundInstanceMaskRequest").is_none() {
-            return crate::segment::subject_mask(img);
+            return crate::segment::subject_mask(img, subject);
         }
         let png = crate::raster::encode_png(img);
         let mask = autoreleasepool(|_| {
@@ -122,8 +125,8 @@ mod imp {
 mod imp {
     use image::{GrayImage, RgbaImage};
 
-    pub fn subject_mask(img: &RgbaImage) -> Option<GrayImage> {
-        crate::segment::subject_mask(img)
+    pub fn subject_mask(img: &RgbaImage, subject: super::Subject) -> Option<GrayImage> {
+        crate::segment::subject_mask(img, subject)
     }
 }
 
@@ -141,7 +144,7 @@ mod tests {
         )
         .unwrap()
         .to_rgba8();
-        let mask = subject_mask(&img).expect("a subject");
+        let mask = subject_mask(&img, Subject::Icon).expect("a subject");
         let (w, h) = img.dimensions();
         assert_eq!(mask.dimensions(), (w, h));
         for (x, y) in [

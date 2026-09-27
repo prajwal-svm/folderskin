@@ -700,11 +700,11 @@ pub fn on_plain_backdrop(img: &RgbaImage) -> bool {
     Backdrop::measure(img).is_some_and(|b| b.plain >= 0.9)
 }
 
-/// The subject of `img` lifted off whatever it was painted on ([`crate::lift`]), cut out and
-/// trimmed; `None` where no subject stands out, or the one that does is too small to be the
-/// picture's ([`MIN_SUBJECT_SHARE`] of the frame).
-pub fn lifted(img: &RgbaImage) -> Option<RgbaImage> {
-    let mask = crate::lift::subject_mask(img)?;
+/// The subject of `img`, a free icon or a whole folder, lifted off whatever it was painted on
+/// ([`crate::lift`]), cut out and trimmed; `None` where no subject stands out, or the one that
+/// does is too small to be the picture's ([`MIN_SUBJECT_SHARE`] of the frame).
+pub fn lifted(img: &RgbaImage, subject: crate::lift::Subject) -> Option<RgbaImage> {
+    let mask = crate::lift::subject_mask(img, subject)?;
     let solid = mask.pixels().filter(|p| p.0[0] >= 128).count();
     let frame = img.width() as f32 * img.height() as f32;
     (solid as f32 >= MIN_SUBJECT_SHARE * frame).then(|| cut_by_mask(img, &mask))
@@ -766,7 +766,7 @@ mod tests {
     fn a_flat_picture_has_nothing_to_lift() {
         // Whatever lifts it, Vision or the graph cut, a flat picture has no subject.
         let flat = RgbaImage::from_pixel(64, 64, Rgba([90, 90, 200, 255]));
-        assert!(lifted(&flat).is_none());
+        assert!(lifted(&flat, crate::lift::Subject::Icon).is_none());
     }
 
     /// A magenta field with an opaque green square in the middle.

@@ -7,10 +7,12 @@
 //! camera in a clay fox's paws on a rose sweep; a cup with steam above it and a contact shadow
 //! nearly black under it; a watercolour cactus on a pale wash of the paper; a pixel-art rocket
 //! with a shadow drawn under it; a flamingo whose beak is black; a bottle whose shadow falls on a
-//! spotlit floor. `robot-640` is the robot again at 640 x 600, big enough to be cut at the working
-//! size and cut again at its own.
+//! spotlit floor; a neon bolt on a dark wall, whose glow lights the wall inside its tubes; and the
+//! cactus again sent as a JPEG at quality 35, the grey wash under its pot broken into blocks.
+//! `robot-640` is the robot again at 640 x 600, big enough to be cut at the working size and cut
+//! again at its own.
 
-use folderskin_core::segment::{subject_mask, WORK_SIDE};
+use folderskin_core::segment::{subject_mask, Subject, WORK_SIDE};
 use image::GrayImage;
 use std::path::PathBuf;
 
@@ -35,7 +37,7 @@ fn overlap(a: &GrayImage, b: &GrayImage) -> f64 {
 
 /// Each icon and how much of the subject its cut must share with Vision's, a little under what
 /// it shares on an Arm Mac, for the rounding another processor does.
-const ICONS: [(&str, f64); 9] = [
+const ICONS: [(&str, f64); 11] = [
     ("robot", 0.955),
     ("robot-640", 0.97),
     ("owl", 0.96),
@@ -45,6 +47,10 @@ const ICONS: [(&str, f64); 9] = [
     ("rocket", 0.975),
     ("flamingo", 0.97),
     ("bottle", 0.945),
+    // The tubes only, as Vision takes them: 0.45 while the wall inside them was the sign's.
+    ("neon", 0.70),
+    // 0.85 while the wash's blocks made it the pot's.
+    ("cactus-q35", 0.93),
 ];
 
 #[test]
@@ -52,7 +58,8 @@ fn klein_s_free_icons_come_off_as_vision_lifts_them() {
     for (name, floor) in ICONS {
         let img = open(&format!("{name}.jpg")).to_rgba8();
         let vision = open(&format!("{name}.vision.png")).to_luma8();
-        let mask = subject_mask(&img).unwrap_or_else(|| panic!("{name}: no subject found"));
+        let mask =
+            subject_mask(&img, Subject::Icon).unwrap_or_else(|| panic!("{name}: no subject found"));
         assert_eq!(mask.dimensions(), img.dimensions(), "{name}");
         let shared = overlap(&mask, &vision);
         assert!(
@@ -68,7 +75,7 @@ fn klein_s_free_icons_come_off_as_vision_lifts_them() {
 fn a_bigger_picture_is_cut_again_at_its_own_size() {
     let img = open("robot-640.jpg").to_rgba8();
     assert!(img.width().max(img.height()) > WORK_SIDE);
-    let mask = subject_mask(&img).expect("the robot");
+    let mask = subject_mask(&img, Subject::Icon).expect("the robot");
     let (w, h) = mask.dimensions();
     let soft: Vec<(u32, u32)> = mask
         .enumerate_pixels()
@@ -94,5 +101,8 @@ fn a_bigger_picture_is_cut_again_at_its_own_size() {
 #[test]
 fn the_cut_is_the_same_every_time() {
     let img = open("coffee.jpg").to_rgba8();
-    assert_eq!(subject_mask(&img), subject_mask(&img));
+    assert_eq!(
+        subject_mask(&img, Subject::Icon),
+        subject_mask(&img, Subject::Icon)
+    );
 }
