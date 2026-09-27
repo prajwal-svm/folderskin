@@ -4,21 +4,20 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.11 - 2026-09-27
 
 ### Fixed
 
+- **Quitting is over at once.** After FolderSkin had read a folder on a network share, macOS
+  could keep it running for over a minute after the window closed, and the Dock showed it open
+  with nothing to show. It now leaves the Dock the moment you quit, stops reading the share, and
+  finishes the folder a run has in hand so none is left half changed.
 - **A neon sign comes off its wall.** On Windows, Linux and Macs before macOS 14, a free icon of
   a neon sign kept the dark wall inside its tubes, lit by their glow. Now only the tubes come off
   the wall, as Preview lifts them.
 - **A painted shadow goes, even from a JPEG.** A grey wash painted under a watercolour subject
   stayed on it when the picture came as a heavily compressed JPEG. It goes with the backdrop now,
   as it does from a PNG.
-
-- **Quitting is over at once.** After FolderSkin had read a folder on a network share, macOS
-  could keep it running for over a minute after the window closed, and the Dock showed it open
-  with nothing to show. It now leaves the Dock the moment you quit, stops reading the share, and
-  finishes the folder a run has in hand so none is left half changed.
 
 ## 0.1.10 - 2026-09-27
 
