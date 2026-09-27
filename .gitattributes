@@ -1,3 +1,8 @@
 # Everything under community/ is checked out byte for byte as committed: pack hashes are taken
 # over the exact bytes of pack.json and its pictures, so a CRLF checkout would change them.
 community/** -text
+
+# Scripts that start with a #! line are checked out with LF on Windows too: after a CRLF checkout
+# the test runner can't read `#!/usr/bin/env node` followed by a carriage return, and
+# scripts/check-locales.test.mjs failed there.
+*.mjs text eol=lf

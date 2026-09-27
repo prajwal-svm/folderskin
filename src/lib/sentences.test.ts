@@ -17,7 +17,9 @@ function rustStrings(): string[] {
   for (const dir of dirs) {
     for (const name of readdirSync(new URL(`${dir}/`, root), { recursive: true, encoding: "utf8" })) {
       if (!name.endsWith(".rs")) continue;
-      const src = readFileSync(new URL(`${dir}/${name.split("\\").join("/")}`, root), "utf8");
+      // A Windows checkout ends its lines with CRLF, and a string's line continuation is a
+      // backslash before a line feed.
+      const src = readFileSync(new URL(`${dir}/${name.split("\\").join("/")}`, root), "utf8").replaceAll("\r\n", "\n");
       for (let i = 0; i < src.length; i++) {
         if (src[i] === "/" && src[i + 1] === "/") {
           i = src.indexOf("\n", i);
