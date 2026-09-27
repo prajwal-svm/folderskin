@@ -151,8 +151,11 @@ fingerprint of it (`photos-holidays-1a2b3c4d.png`), so adding or renaming folder
 never hands one folder's picture to another. It uses klein (about 28 s a folder on a 4 GB laptop
 GPU: a hundred folders is under an hour) and leaves out hidden folders, `$` folders and tool
 folders such as `node_modules`. `--depth 2` goes a level deeper. `folderskin revert "<folder>"`
-takes an icon off again. A name that is an idea rather than a thing ("Taxes 2025") tends to come
-back as lettering; paint that one with `ai gen` and a subject of your own.
+takes an icon off again. Its pictures are asked for with no lettering, since the file manager
+prints the name under each icon, and a name like `weather-app` is read as "weather app". klein
+can still letter a one-word name now and then ("GAMBES" for Games), and an abstract name can come
+back plain. Delete that picture and run again with another `--seed`, or paint it with `ai gen`
+and a subject of your own.
 
 ## Step 4: look at every result
 

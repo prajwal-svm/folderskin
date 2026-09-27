@@ -31,6 +31,14 @@ All notable changes to FolderSkin are recorded here. The format follows
   is a little sharper, with no halo round it. Every skin gets this, the finished pictures in
   community packs too. From 128 px up, icons are exactly as they were.
 
+### Fixed
+
+- **`folderskin ai theme` paints without lettering.** The Local Model often wrote a folder's
+  name on the picture it painted for it, and misspelled it ("GAMEES", "Budget- truchcher"). A
+  theme now asks for no words or letters, since Finder and Explorer show the name under each
+  icon, and reads a name like `weather-app` as the words "weather app". On 16 test folders,
+  misspelled names went from 5 to 1.
+
 ## 0.1.11 - 2026-09-27
 
 ### Fixed

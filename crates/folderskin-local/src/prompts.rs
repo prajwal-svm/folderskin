@@ -188,11 +188,26 @@ pub fn compose_slots(slots: &Slots) -> String {
     }
 }
 
-/// The idea `theme` paints for a folder called `name`. The name bare, and never the word
-/// "folder": quoted, a model letters it (and misspells it); told "folder", it paints a folder.
+/// The idea `theme` paints for a folder called `name`: the name as plain words ("weather-app" is
+/// "weather app"), never the word "folder" (told "folder", a model paints a folder), and no
+/// lettering, since Finder and Explorer print the name under the icon. On 16 test folders with
+/// the name left bare, klein lettered 6 pictures, 5 of them misspelled ("Budget- truchcher").
+/// Quoted, it painted the words alone, misspelled too ("phdo-both"). Asked for no lettering, 1
+/// of the 16 still had some.
 pub fn theme_idea(name: &str) -> String {
-    format!("one clear, recognisable object or scene that stands for {name}")
+    let words = name
+        .split(|c: char| c == '-' || c == '_' || c.is_whitespace() || QUOTES.contains(c))
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "one clear, recognisable object or scene that stands for {words}, with no words, letters \
+         or labels anywhere"
+    )
 }
+
+/// The quote marks [`folderskin_ai::recipe::quoted`] letters between, kept out of a theme's idea.
+const QUOTES: &str = "\"\u{201C}\u{201D}\u{00AB}\u{00BB}\u{300C}\u{300D}\u{300E}\u{300F}\u{201E}";
 
 #[cfg(test)]
 mod tests {
@@ -389,9 +404,19 @@ mod tests {
     #[test]
     fn theme_ideas_never_say_folder() {
         let idea = theme_idea("Taxes 2025");
-        assert!(idea.ends_with("stands for Taxes 2025"));
+        assert!(
+            idea.contains("stands for Taxes 2025, with no words"),
+            "{idea}"
+        );
         assert!(!idea.contains("folder"));
         assert!(!idea.contains('"'));
+        // Plain words, and nothing a recipe would take for words to letter.
+        assert!(theme_idea("weather-app").contains("stands for weather app,"));
+        assert!(theme_idea(" old__client-work ").contains("stands for old client work,"));
+        for name in ["say \"hi\"", "\u{300C}\u{5199}\u{771F}\u{300D}"] {
+            let p = compose(&theme_idea(name), "travel-poster", Shape::Artwork, 0);
+            assert!(!p.contains("The words"), "{name}: {p}");
+        }
         assert_eq!(Shape::parse("folder"), Some(Shape::Folder));
         assert_eq!(Shape::parse("icon"), Some(Shape::Icon));
         assert_eq!(Shape::parse("skin"), None);
