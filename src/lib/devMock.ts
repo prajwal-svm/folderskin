@@ -492,6 +492,12 @@ const mockOs = (): "macos" | "windows" | "linux" => {
   return os === "windows" || os === "linux" ? os : "macos";
 };
 
+// Named from the first paint, as window.rs names Windows in the app, so what's drawn before the
+// app is (the first-launch welcome) is that system's too.
+if (typeof location !== "undefined" && new URLSearchParams(location.search).has("os") && !isTauri()) {
+  document.documentElement.dataset.os = mockOs();
+}
+
 /** A drive in the preview: where it's mounted and what the app would say about it. */
 type MockDrive = { path: string; kind: DriveKind; label: string; letter?: string; startup?: boolean; readOnly?: boolean; network?: boolean };
 

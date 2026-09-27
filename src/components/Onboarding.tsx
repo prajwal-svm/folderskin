@@ -102,8 +102,9 @@ export function Onboarding({ leaving, onDone, onGone }: { leaving: boolean; onDo
       }}
     >
       <div className="onboard-drag" data-tauri-drag-region />
-      {/* Windows' window has no title bar of its own (window.rs), so the welcome brings its buttons. */}
-      {localOs() === "windows" && (
+      {/* Windows' window has no title bar of its own, so the welcome brings its buttons. window.rs names
+          the system before the first paint. */}
+      {(document.documentElement.dataset.os ?? localOs()) === "windows" && (
         <div className="onboard-winctl">
           <WindowControls />
         </div>
