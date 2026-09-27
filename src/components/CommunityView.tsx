@@ -145,7 +145,7 @@ export function CommunityView({
 
   return (
     <section className="community">
-      <header className="community-head">
+      <header className="community-head" data-tauri-drag-region>
         <div className="community-intro">
           <h2 className="view-title">{t("community.title")}</h2>
           <p className="view-sub">{t("community.sub")}</p>

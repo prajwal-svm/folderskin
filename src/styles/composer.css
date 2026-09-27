@@ -530,7 +530,7 @@
 
 .modal-new {
   width: min(820px, 100%);
-  max-height: min(760px, calc(100vh - 48px));
+  max-height: min(760px, calc(100vh - var(--modal-room)));
 }
 
 .new-section {

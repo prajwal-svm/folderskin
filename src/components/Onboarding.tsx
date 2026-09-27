@@ -19,6 +19,8 @@ import { api, errorMessage, type CommunityPack } from "../lib/tauri";
 import { reducesMotion } from "../state/prefs";
 import { applyTheme, loadThemePref } from "../state/theme";
 import { OkBadge } from "./OkBadge";
+import { WindowControls } from "./WindowControls";
+import { localOs } from "../lib/platform";
 import { PackPreview, prefetchPreview } from "./PackPreview";
 import { ArrowLeftIcon } from "./icons/arrow-left";
 import { ArrowRightIcon } from "./icons/arrow-right";
@@ -100,6 +102,12 @@ export function Onboarding({ leaving, onDone, onGone }: { leaving: boolean; onDo
       }}
     >
       <div className="onboard-drag" data-tauri-drag-region />
+      {/* Windows' window has no title bar of its own (window.rs), so the welcome brings its buttons. */}
+      {localOs() === "windows" && (
+        <div className="onboard-winctl">
+          <WindowControls />
+        </div>
+      )}
       {step === "welcome" ? (
         <Welcome
           replay={!played.current}

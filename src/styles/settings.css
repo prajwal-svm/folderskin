@@ -7,8 +7,8 @@
 .modal-settings {
   position: relative;
   width: min(860px, 100%);
-  height: min(620px, calc(100vh - 48px));
-  max-height: min(620px, calc(100vh - 48px));
+  height: min(620px, calc(100vh - var(--modal-room)));
+  max-height: min(620px, calc(100vh - var(--modal-room)));
 }
 
 .modal-close.is-floating {

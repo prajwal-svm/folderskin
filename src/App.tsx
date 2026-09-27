@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
 import { explain } from "./lib/sentences";
 import { isTauri, mockPickFolder } from "./lib/devMock";
-import { IMAGE_EXTENSIONS } from "./lib/files";
+import { pickerExtensions } from "./lib/files";
 import { browseLabel, keys, localOs, osOf } from "./lib/platform";
 import { t as tNow, useT } from "./i18n";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
@@ -223,7 +223,9 @@ export default function App() {
    * would take off; null `url` when the OS can't say.
    */
   const [folderIcon, setFolderIcon] = useState<{ path: string; url: string | null; custom: boolean } | null>(null);
-  const [platform, setPlatform] = useState<PlatformInfo>({ os: "macos", browse_label: "your Mac", note: "" });
+  // The system the web view is on until platform_info says, so a Windows window never starts out
+  // drawn as a Mac's (window.rs has already said which before the first paint).
+  const [platform, setPlatform] = useState<PlatformInfo>(() => ({ os: localOs(), browse_label: browseLabel(localOs()), note: "" }));
   const [view, setView] = useState<View>("skins");
   /** The tag the library is filtered by; empty for all of them. */
   const [tag, setTag] = useState("");
@@ -260,7 +262,8 @@ export default function App() {
   // ⌘\ (Ctrl+\ elsewhere) folds the sidebar and opens it again, as its button's tooltip says.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key !== "\\" || document.querySelector(".modal-backdrop")) return;
+      // Not with Alt: on Windows AltGr is Ctrl+Alt, and it's how a German or French keyboard types a backslash.
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key !== "\\" || document.querySelector(".modal-backdrop")) return;
       e.preventDefault();
       toggleRail();
     };
@@ -530,7 +533,7 @@ export default function App() {
     const picked = await open({
       multiple: false,
       title: tNow("common.dialog.choosePicture"),
-      filters: [{ name: tNow("common.dialog.pictures"), extensions: IMAGE_EXTENSIONS }],
+      filters: [{ name: tNow("common.dialog.pictures"), extensions: pickerExtensions() }],
     }).catch(() => null);
     if (typeof picked === "string") await takePath(picked);
   }, [takePath]);
@@ -1170,7 +1173,7 @@ export default function App() {
   useEffect(() => {
     if (!panelToggle) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.code !== "Backslash" || document.querySelector(".modal-backdrop")) return;
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || !e.shiftKey || e.code !== "Backslash" || document.querySelector(".modal-backdrop")) return;
       e.preventDefault();
       togglePanel();
     };
@@ -1180,7 +1183,7 @@ export default function App() {
   const panelButton = panelToggle && (
     <button
       type="button"
-      className={windowsChrome ? "winctl-btn panel-toggle" : "icon-btn panel-toggle"}
+      className="icon-btn panel-toggle"
       aria-label={rightShown ? t("folder.panel.closeLabel") : t("folder.panel.openLabel")}
       aria-expanded={rightShown}
       aria-keyshortcuts={localOs() === "macos" ? "Shift+Meta+Backslash" : "Shift+Control+Backslash"}
@@ -1271,13 +1274,13 @@ export default function App() {
           {/* A sibling of the buttons, never their parent: a drag region swallows the mousedown of
               anything inside it, which would leave the controls looking live but doing nothing. */}
           <span className="winbar-drag" data-tauri-drag-region />
-          {panelButton}
           <WindowControls />
         </div>
       )}
-      {/* On a Mac the panel's button sits in the window's top right corner, over whichever island is
-          there, as an inspector's does. */}
-      {!windowsChrome && panelButton}
+      {/* The panel's button sits in line with the library's round buttons: on a Mac in the window's
+          top right corner, over whichever island is there, as an inspector's does, and on Windows,
+          where the window's own buttons hold that corner, at the folder panel's top left. */}
+      {panelButton}
 
       {/* Kept while the composer is on show, only hidden: the AI chat inside it lasts the session,
           with its words, its pictures and whatever is still being made. */}

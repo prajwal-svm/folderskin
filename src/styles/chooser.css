@@ -12,8 +12,8 @@
 /* One size whatever is open in it, so going deeper never makes the dialog jump. */
 .modal-chooser {
   width: min(1080px, 100%);
-  height: min(620px, calc(100vh - 48px));
-  max-height: min(620px, calc(100vh - 48px));
+  height: min(620px, calc(100vh - var(--modal-room)));
+  max-height: min(620px, calc(100vh - var(--modal-room)));
 }
 
 .modal-chooser .modal-head {

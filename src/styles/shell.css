@@ -164,7 +164,8 @@
 .panel-toggle {
   position: absolute;
   z-index: 5;
-  top: calc(var(--gap) + 14px);
+  /* The island's 1px border and the toolbar's 14px top, so it's level with the toolbar's own. */
+  top: calc(var(--gap) + 15px);
   right: calc(var(--gap) + 16px);
   width: 38px;
   height: 38px;
@@ -181,9 +182,10 @@
   background: var(--well-2);
 }
 
-/* In line with the chat's header, and with the community's buttons. */
+/* In line with the chat's header, and with the community's buttons: centred on the header's
+   56px, inside the island's border. */
 .app.view-generate .panel-toggle {
-  top: calc(var(--gap) + 11px);
+  top: calc(var(--gap) + 12px);
   width: 34px;
   height: 34px;
 }
@@ -192,27 +194,48 @@
   top: calc(var(--gap) + 43px);
 }
 
-/* On Windows it's one of the caption buttons, left of the window's own. */
-.winbar .panel-toggle {
-  position: static;
-  width: 44px;
-  height: 32px;
-  border-radius: 0;
-  background: none;
-  pointer-events: auto;
+/* On Windows the window's own buttons hold the folder panel's top right corner, so the panel's
+   button is a round one like the library's filter, at the panel's top left: as far in from its
+   edge as the filter is from the library's, and in line with it (the islands' 1px border and
+   the toolbar's 14px top). Closed, it stays in that line at the end of the row, left of the
+   window's buttons, and slides there with the panel. */
+html[data-os="windows"] .panel-toggle {
+  right: calc(var(--gap) + var(--right-w) - 17px - 38px);
+  background: var(--well);
+  color: var(--muted);
 }
 
-.winbar .panel-toggle[aria-expanded="false"]:hover,
-.winbar .panel-toggle[aria-expanded="false"]:focus-visible {
-  background: var(--nav-hover);
+html[data-os="windows"] .panel-toggle:hover:not(:disabled),
+html[data-os="windows"] .panel-toggle:focus-visible {
+  background: var(--well-2);
+  color: var(--ink);
 }
 
-.app.is-right-off .winbar:has(.panel-toggle) {
-  width: 176px;
+/* In the chat it's the smaller size its header's buttons are (above). */
+html[data-os="windows"] .app.view-generate .panel-toggle {
+  right: calc(var(--gap) + var(--right-w) - 17px - 34px);
+}
+
+/* Closed: 12px left of the window's three buttons (132px). */
+html[data-os="windows"] .app.is-right-off .panel-toggle {
+  right: calc(var(--gap) + 132px + 12px);
+}
+
+html[data-os="windows"] .app.view-community.is-right-off .panel-toggle {
+  top: calc(var(--gap) + 15px);
+}
+
+html[data-os="windows"] .app.is-folding .panel-toggle {
+  transition:
+    right var(--t-slow) var(--ease-out),
+    background-color var(--t-fast) ease,
+    color var(--t-fast) ease,
+    transform var(--t-fast) var(--ease-out);
 }
 
 /* Room for it at the end of the headers it sits over while the panel is closed, and on Windows
-   for the window's own buttons beside it. */
+   for the window's own buttons beside it: the button and the 8px the filter keeps from the
+   search, inside the island's border. */
 .app.is-right-off:has(.panel-toggle) .island-main > .toolbar,
 .app.is-right-off:has(.panel-toggle) .community-head {
   padding-right: 64px;
@@ -224,11 +247,11 @@
 
 html[data-os="windows"] .app.is-right-off:has(.panel-toggle) .island-main > .toolbar,
 html[data-os="windows"] .app.is-right-off:has(.panel-toggle) .community-head {
-  padding-right: 192px;
+  padding-right: calc(132px + 12px + 38px + 8px - 1px);
 }
 
 html[data-os="windows"] .app.is-right-off:has(.panel-toggle) .studio-head {
-  padding-right: 188px;
+  padding-right: calc(132px + 12px + 34px + 8px - 1px);
 }
 
 /* ---------- sidebar ---------- */
@@ -382,6 +405,8 @@ html[data-glass]:not([data-fullscreen]) .sidebar.is-rail {
   display: grid;
   place-items: center;
   color: var(--muted);
+  /* The arrow, as over Windows' own: they aren't the page's buttons. */
+  cursor: default;
   transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
@@ -389,6 +414,18 @@ html[data-glass]:not([data-fullscreen]) .sidebar.is-rail {
 .winctl-btn:focus-visible {
   background: var(--nav-hover);
   color: var(--ink);
+}
+
+/* The window's buttons on the first-launch welcome, which is drawn before the app. */
+.onboard-winctl {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+}
+
+.onboard-winctl .winctl {
+  border-radius: 0;
 }
 
 /* Windows paints its close button red on hover, and people aim for that. */

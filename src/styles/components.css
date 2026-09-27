@@ -660,6 +660,16 @@ select.input {
 
 /* ---------- modal ---------- */
 
+/* The room a dialog leaves at the window's top and bottom: the backdrop's padding. On Windows the
+   window's own buttons sit along the top, above every dialog (Modal.tsx), so it leaves more there. */
+:root {
+  --modal-room: 48px;
+}
+
+html[data-os="windows"] {
+  --modal-room: 74px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -673,9 +683,32 @@ select.input {
   animation: fade-in var(--t-base) ease both;
 }
 
+html[data-os="windows"] .modal-backdrop {
+  padding-top: 50px;
+}
+
+/* A dialog's own copy of the window's buttons on Windows, and a strip along the window's top to
+   move it by: the app behind a dialog is inert (Modal.tsx), its buttons with it. They sit where the
+   app's own do, over the backdrop. */
+.modal-winbar {
+  position: fixed;
+  z-index: 55;
+  top: var(--gap);
+  left: 0;
+  right: var(--gap);
+  height: 32px;
+  display: flex;
+  pointer-events: none;
+}
+
+.modal-winbar .winbar-drag {
+  flex: 1;
+  pointer-events: auto;
+}
+
 .modal {
   width: min(520px, 100%);
-  max-height: min(680px, calc(100vh - 48px));
+  max-height: min(680px, calc(100vh - var(--modal-room)));
   display: flex;
   flex-direction: column;
   border-radius: 20px;
@@ -697,7 +730,7 @@ select.input {
    terms underneath both. It gets a width of its own rather than stretching the shared one. */
 .modal-share {
   width: min(780px, 100%);
-  max-height: min(820px, calc(100vh - 48px));
+  max-height: min(820px, calc(100vh - var(--modal-room)));
 }
 
 /* ---------- a skin's ⋯ menu: name, tags, what is known about it, share and delete ---------- */

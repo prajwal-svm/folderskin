@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { branded } from "./Brand";
+import { WindowControls } from "./WindowControls";
 import { t } from "../i18n";
 
 /**
@@ -111,33 +112,44 @@ export function Modal({
   }, []);
 
   return createPortal(
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && closable) onClose();
-      }}
-    >
-      <div className={[ "modal", wide && "modal-wide", narrow && "modal-narrow", className ].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
-        {bare ? (
-          <>
-            {children}
-            {closable && closeButton(onClose, "modal-close is-floating")}
-          </>
-        ) : (
-          <>
-            <header className="modal-head">
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 className="modal-title">{branded(title)}</h2>
-                {sub && <p className="modal-sub">{branded(sub)}</p>}
-              </div>
-              {closable && closeButton(onClose, "modal-close")}
-            </header>
-            <div className="modal-body">{children}</div>
-            {footer && <footer className="modal-foot">{footer}</footer>}
-          </>
-        )}
+    <>
+      {/* Windows' window has no title bar of its own (window.rs), and the app's buttons are behind the
+          inert app, so a dialog brings the window's: with Settings open it still moves, minimises and
+          closes, as a system dialog leaves the title bar in reach. */}
+      {document.documentElement.dataset.os === "windows" && (
+        <div className="modal-winbar">
+          <span className="winbar-drag" data-tauri-drag-region />
+          <WindowControls />
+        </div>
+      )}
+      <div
+        className="modal-backdrop"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget && closable) onClose();
+        }}
+      >
+        <div className={[ "modal", wide && "modal-wide", narrow && "modal-narrow", className ].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+          {bare ? (
+            <>
+              {children}
+              {closable && closeButton(onClose, "modal-close is-floating")}
+            </>
+          ) : (
+            <>
+              <header className="modal-head">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 className="modal-title">{branded(title)}</h2>
+                  {sub && <p className="modal-sub">{branded(sub)}</p>}
+                </div>
+                {closable && closeButton(onClose, "modal-close")}
+              </header>
+              <div className="modal-body">{children}</div>
+              {footer && <footer className="modal-foot">{footer}</footer>}
+            </>
+          )}
+        </div>
       </div>
-    </div>,
+    </>,
     document.body,
   );
 }
