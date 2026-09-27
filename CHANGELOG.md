@@ -4,6 +4,15 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- **Quitting is over at once.** After FolderSkin had read a folder on a network share, macOS
+  could keep it running for over a minute after the window closed, and the Dock showed it open
+  with nothing to show. It now leaves the Dock the moment you quit, stops reading the share, and
+  finishes the folder a run has in hand so none is left half changed.
+
 ## 0.1.10 - 2026-09-27
 
 ### Added

@@ -178,6 +178,21 @@ impl Runs {
         job.tell(emit, record, true);
     }
 
+    /// Stops the run going, if one is, and waits up to `wait` for it to end: the folder in hand
+    /// is finished, so quitting never leaves one half-changed. The app is going, so nobody is
+    /// told.
+    pub fn end(&self, wait: Duration) {
+        let Some(job) = lock(&self.latest).clone() else {
+            return;
+        };
+        job.stop.store(true, Ordering::SeqCst);
+        job.wake.notify_all();
+        let record = job.lock();
+        let _ = job
+            .wake
+            .wait_timeout_while(record, wait, |record| record.running);
+    }
+
     /// Forgets run `id` once it has ended, and says there's none.
     pub fn dismiss(&self, id: u64, emit: &Emit) {
         let mut latest = lock(&self.latest);
@@ -419,6 +434,8 @@ impl Job {
             self.stop.load(Ordering::SeqCst) && record.error.is_none() && record.has_left();
         record.running = false;
         record.stopping = false;
+        // For `Runs::end`, waiting for the run to end as the app quits.
+        self.wake.notify_all();
         self.tell(emit, record, true);
     }
 
@@ -973,6 +990,74 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    /// Starts a run over `scratch` whose every folder takes `each`, and returns once it has the
+    /// first folder in hand.
+    fn slow_run(runs: &Runs, scratch: &Scratch, each: Duration) {
+        let job = Job::new(
+            runs.next_id(),
+            apply("dune"),
+            "the folder".into(),
+            scratch.root(),
+            Choice::everything(),
+        );
+        let (in_hand, first) = std::sync::mpsc::channel();
+        let work = move |job: Arc<Job>| {
+            job.work(
+                move || {
+                    Ok(move |_: &Path| {
+                        let _ = in_hand.send(());
+                        std::thread::sleep(each);
+                        Ok(Outcome::Changed)
+                    })
+                },
+                &Arc::new(Heard::default()).emit(),
+            )
+        };
+        runs.start(job, work).unwrap();
+        first.recv().unwrap();
+    }
+
+    #[test]
+    fn quitting_finishes_the_folder_in_hand_and_starts_no_other() {
+        let scratch = Scratch::with(&["a", "b", "c"]);
+        let runs = Runs::default();
+        slow_run(&runs, &scratch, Duration::from_millis(300));
+        let started = Instant::now();
+        runs.end(Duration::from_secs(20));
+        let run = runs.event().run.unwrap();
+        assert!(!run.running, "it has ended");
+        assert_eq!(
+            (run.done, run.changed),
+            (1, 1),
+            "the folder in hand, and only that"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "it didn't wait out the whole time: {:?}",
+            started.elapsed()
+        );
+        // With no run going, there's nothing to wait for.
+        let started = Instant::now();
+        runs.end(Duration::from_secs(20));
+        Runs::default().end(Duration::from_secs(20));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn quitting_waits_for_a_slow_folder_only_so_long() {
+        let scratch = Scratch::with(&["a"]);
+        let runs = Runs::default();
+        slow_run(&runs, &scratch, Duration::from_secs(3));
+        let started = Instant::now();
+        runs.end(Duration::from_millis(100));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(
+            runs.event().run.unwrap().running,
+            "the folder is still being changed"
+        );
+        assert!(!wait(&runs).running);
     }
 
     #[test]

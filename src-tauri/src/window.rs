@@ -38,6 +38,22 @@ fn warm_up_open_panel(app: &tauri::AppHandle) {
     });
 }
 
+/// Takes FolderSkin off the Dock and the menu bar at once, as it quits. macOS can hold on to a
+/// process for a while after its last read of a network share: once 86 s after the window
+/// closed, with a count of a share's folders going, and all that time the Dock showed FolderSkin
+/// running with no window to show. Called on the main thread, from the run loop's last event.
+#[cfg(target_os = "macos")]
+pub fn leave_dock() {
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+    if let Some(mtm) = objc2::MainThreadMarker::new() {
+        NSApplication::sharedApplication(mtm)
+            .setActivationPolicy(NSApplicationActivationPolicy::Prohibited);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn leave_dock() {}
+
 pub fn create_main(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     let config = app
         .config()

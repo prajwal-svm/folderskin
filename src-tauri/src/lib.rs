@@ -68,6 +68,10 @@ fn log_panics_to(dir: std::path::PathBuf) {
     }));
 }
 
+/// How long quitting waits for a run to finish the folder in hand. A folder on a network share
+/// can take seconds.
+const QUIT_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 pub fn run() {
     let builder = tauri::Builder::default();
     // First, so a second FolderSkin ends before anything else starts. On Windows and Linux a
@@ -231,11 +235,18 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building FolderSkin")
-        .run(|_app, event| {
-            // A painting, or mflux's install, doesn't end with the app on macOS and Linux: it
-            // would go on for minutes after FolderSkin quit, holding gigabytes of memory and the
-            // graphics card. (On Windows the job object ends it anyway.)
+        .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                // Quitting looks done at once, whatever is left to finish: the window has gone,
+                // and on macOS the Dock's FolderSkin goes now too (window.rs).
+                window::leave_dock();
+                // Nothing more is read from the folder on show, which can be on a network share.
+                app.state::<tree::Counts>().end();
+                // A run finishes the folder in hand, so none is left half-changed.
+                app.state::<tree::Runs>().end(QUIT_WAIT);
+                // A painting, or mflux's install, doesn't end with the app on macOS and Linux: it
+                // would go on for minutes after FolderSkin quit, holding gigabytes of memory and
+                // the graphics card. (On Windows the job object ends it anyway.)
                 folderskin_local::run::end_all();
             }
         });

@@ -31,6 +31,14 @@ impl Counts {
         }
     }
 
+    /// Stops the count going on, if one is: the app is quitting, and nothing more is read. The
+    /// folder being read is the last.
+    pub fn end(&self) {
+        if let Some(count) = lock(&self.0).as_ref() {
+            count.stop.store(true, Ordering::SeqCst);
+        }
+    }
+
     /// The count going on (or finished) for `folder`, named as the webview named it.
     pub fn of(&self, folder: &str) -> Option<Arc<Count>> {
         lock(&self.0).clone().filter(|count| count.folder == folder)
@@ -303,6 +311,20 @@ mod tests {
         assert!(!first.now().done);
         second.run(|_| {});
         assert_eq!(second.now().count, 2);
+    }
+
+    #[test]
+    fn quitting_stops_the_count_going_on() {
+        let scratch = Scratch::with(&["a/a1", "b"]);
+        let counts = Counts::default();
+        let going = Arc::new(count(&scratch));
+        counts.start(going.clone());
+        counts.end();
+        going.run(|_| {});
+        assert_eq!(going.now().count, 0, "nothing more is read");
+        assert!(!going.now().done);
+        // With no count going, there's nothing to stop.
+        Counts::default().end();
     }
 
     #[test]
