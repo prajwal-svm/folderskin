@@ -5,17 +5,19 @@ import { Popover } from "../composer/Popover";
 import { Segmented } from "../composer/controls";
 import { ChevronDownIcon, ShapesIcon, TickIcon } from "../icons/composer";
 import { ImageIcon } from "../icons/image";
+import { LoaderIcon } from "../icons/loader";
 import { useT } from "../../i18n";
 
 /**
  * A shape's picture: the bare folder as its system draws it, or, for a free icon, which has no base
  * to show, a sign of one. With `art`, a small picture on its corner says only the art is painted,
- * for the compositor to wrap onto it.
+ * for the compositor to wrap onto it. With `loading`, the pictures are still being drawn, and a
+ * spinner stands in.
  */
-export function ShapeThumb({ shape, art = false }: { shape: ShapeInfo | undefined; art?: boolean }) {
+export function ShapeThumb({ shape, art = false, loading = false }: { shape: ShapeInfo | undefined; art?: boolean; loading?: boolean }) {
   return (
-    <span className={shape?.thumbnail ? "shape-thumb" : "shape-thumb is-free"} aria-hidden="true">
-      {shape?.thumbnail ? <img src={shape.thumbnail} alt="" draggable={false} /> : <ShapesIcon size={15} />}
+    <span className={shape?.thumbnail || loading ? "shape-thumb" : "shape-thumb is-free"} aria-hidden="true">
+      {shape?.thumbnail ? <img src={shape.thumbnail} alt="" draggable={false} /> : loading ? <LoaderIcon size={14} /> : <ShapesIcon size={15} />}
       {art && (
         <span className="shape-thumb-art">
           <ImageIcon size={9} />
@@ -32,6 +34,7 @@ export function ShapeThumb({ shape, art = false }: { shape: ShapeInfo | undefine
  */
 export function ShapePicker({
   shapes,
+  loading,
   shape,
   make,
   onShape,
@@ -39,6 +42,8 @@ export function ShapePicker({
   flash,
 }: {
   shapes: ShapeInfo[];
+  /** The shapes' pictures are still being drawn: the list says so until they're in. */
+  loading: boolean;
   shape: ShapeInfo | undefined;
   make: Shape;
   onShape: (id: string) => void;
@@ -96,13 +101,19 @@ export function ShapePicker({
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
       >
-        <ShapeThumb shape={shape} art={art} />
+        <ShapeThumb shape={shape} art={art} loading={loading} />
         <span className="shape-chip-name">{name}</span>
         <ChevronDownIcon size={13} />
       </button>
       {anchor && (
         <Popover anchor={anchor} onClose={close} width={296} label={t("ai.shape.menuLabel")} className="shape-pop">
-          <div className="shape-list" role="radiogroup" aria-label={t("ai.shape.menuLabel")} ref={list} onKeyDown={onKey}>
+          {loading && (
+            <p className="shape-loading" role="status">
+              <LoaderIcon size={15} />
+              {t("ai.shape.drawing")}
+            </p>
+          )}
+          <div className="shape-list" role="radiogroup" aria-label={t("ai.shape.menuLabel")} ref={list} onKeyDown={onKey} hidden={loading}>
             {groupShapes(shapes).map((group) => (
               <div className="shape-group" key={group.family}>
                 {group.shapes.map((s) => {

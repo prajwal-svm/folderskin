@@ -21,9 +21,10 @@ import { OkBadge } from "./OkBadge";
 import { clip } from "../lib/names";
 import { explain } from "../lib/sentences";
 import { driveKindName } from "../lib/drives";
+import { ViewLoading } from "./ViewLoading";
+import { loadChooser } from "./lazyViews";
 
-/** "Choose subfolders" and its column view, loaded the first time they're wanted. */
-const loadChooser = () => import("./SubfolderChooser");
+/** "Choose subfolders" and its column view, loaded ahead once the library is on show. */
 const SubfolderChooser = lazy(() => loadChooser().then((m) => ({ default: m.SubfolderChooser })));
 
 const SPARKS = Array.from({ length: 12 }, (_, k) => k);
@@ -218,7 +219,7 @@ export function FolderStage({
         {folder && !drag && phase !== "idle" && <SubfolderSwitch state={state} onChange={onIncludeSubfolders} onChoose={() => setChoosing(true)} />}
 
         {choosing && folder && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<ViewLoading overlay />}>
             <SubfolderChooser
               folder={folder}
               chosen={state.chosen}

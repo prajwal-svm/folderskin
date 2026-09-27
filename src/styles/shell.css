@@ -138,6 +138,24 @@
   display: none;
 }
 
+/* A view whose code is still on its way: a spinner where it will be (ViewLoading.tsx). It shows
+   only if the wait is long enough to notice. */
+.view-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: var(--muted);
+  animation: fade-in var(--t-base) var(--ease-out) 150ms both;
+}
+
+.view-loading.is-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
 /* ---------- the folder panel's button ---------- */
 
 /* On a Mac it stays in the window's top right corner, as an inspector's button does: in the

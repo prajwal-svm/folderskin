@@ -20,7 +20,9 @@ import { treeRuns, useTreeRun } from "./state/treeRun";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./state/favorites";
 import { flushChats } from "./state/chatStore";
 import { applyTheme, loadThemePref, resolveTheme, saveThemePref, toggleTheme, type Theme, type ThemePref } from "./state/theme";
-import { chooseLook } from "./state/look";
+import { chooseLook, getLook } from "./state/look";
+import { warmUp } from "./lib/warmUp";
+import { ViewLoading } from "./components/ViewLoading";
 import type { FolderStyle } from "./composer/parts";
 import { columns, DEFAULT_LAYOUT, dragRight, dragSidebar, LEFT, loadLayout, RAIL, RIGHT, saveLayout, stepSidebar, type Layout } from "./state/layout";
 import { IslandResizer } from "./components/IslandResizer";
@@ -32,6 +34,7 @@ import { Sidebar, type View } from "./components/Sidebar";
 import { GalleryToolbar, type TabCount } from "./components/GalleryToolbar";
 import { Gallery, type Empty } from "./components/Gallery";
 import { FolderStage } from "./components/FolderStage";
+import { loadChooser, loadComposer, loadStudio } from "./components/lazyViews";
 import { FilterMenu } from "./components/FilterMenu";
 import { AboutMenu } from "./components/AboutMenu";
 import { WindowControls } from "./components/WindowControls";
@@ -88,10 +91,9 @@ function useTheme(): { theme: Theme; pref: ThemePref; setPref: (pref: ThemePref)
   return { theme, pref, setPref: choose, toggle };
 }
 
-/** The composer is loaded the first time it's opened, so the rest of the app starts without it. */
-const Composer = lazy(() => import("./components/composer/Composer").then((m) => ({ default: m.Composer })));
-/** The AI view likewise. */
-const Studio = lazy(() => import("./components/studio/Studio").then((m) => ({ default: m.Studio })));
+/** The composer and the AI view, loaded ahead once the library is on show (components/lazyViews.ts). */
+const Composer = lazy(() => loadComposer().then((m) => ({ default: m.Composer })));
+const Studio = lazy(() => loadStudio().then((m) => ({ default: m.Studio })));
 
 /** A question before a big run over a folder and its subfolders, answered through `resolve`. */
 type TreeAsk = {
@@ -274,7 +276,9 @@ export default function App() {
         setSkins(newestFirst(list.skins));
         setDefaultThumb(list.default_thumbnail);
       })
-      .catch((e) => setLoadError(errorMessage(e)));
+      .catch((e) => setLoadError(errorMessage(e)))
+      // With the library on show, the other views get ready behind it.
+      .finally(() => warmUp(getLook, [loadStudio, loadComposer, loadChooser]));
   }, []);
 
   // A run over a folder's tree goes on in the background, and so does counting the folders inside
@@ -1299,7 +1303,7 @@ export default function App() {
           <CommunityView onShare={() => setSharing({})} onAdded={addSkins} onRemoved={dropSkins} onShowTag={showTag} toast={toast} />
         )}
         {(studioOpened || aiView) && (
-          <Suspense fallback={null}>
+          <Suspense fallback={aiView ? <ViewLoading /> : null}>
             <Studio
               ref={studio}
               active={aiView}
@@ -1333,7 +1337,9 @@ export default function App() {
           fallback={
             composing ? (
               <>
-                <section className="island island-main" aria-busy="true" />
+                <section className="island island-main" aria-busy="true">
+                  <ViewLoading />
+                </section>
                 <aside className="island" aria-busy="true" />
               </>
             ) : null

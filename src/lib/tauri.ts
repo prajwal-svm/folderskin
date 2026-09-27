@@ -577,6 +577,8 @@ const tauriApi = {
   // ---- the composer ----
   /** The folder template's layers, rendered once by the Rust compositor. */
   composerTemplate: (style: FolderStyle) => invoke<ComposerTemplate>("composer_template", { style }),
+  /** Draws the template "Design your own" opens on, in the background; returns at once. */
+  composerWarmUp: (look: FolderStyle) => invoke<void>("composer_warm_up", { look }),
   /** A drive's layers, in the same shape as a folder's, with its face as the front. */
   composerDriveTemplate: (drive: string) => invoke<ComposerTemplate>("composer_drive_template", { drive }),
   /** Every base a skin can be drawn on (the folders, the drives and none), each drawn at `size` px. */

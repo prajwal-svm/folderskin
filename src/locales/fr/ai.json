@@ -319,6 +319,7 @@
     "tip": "Ce pour quoi l'image est faite. Tapez @ dans le champ pour changer",
     "tipArt": "Ce pour quoi l'image est faite, juste l'image. Tapez @ dans le champ pour changer",
     "menuLabel": "formes",
+    "drawing": "Dessin des formes",
     "none": "Aucune forme ne porte un nom qui ressemble à « {{query}} »."
   },
   "slash": {

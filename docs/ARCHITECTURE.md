@@ -593,8 +593,12 @@ which Tauri embeds, including a 165 KB variable font (Manrope) and the first-lau
 bundle 8.5 MB. With 2.3 MB of built-in skins they had been 8.7 MB and 10.2 MB. The updater
 added 0.25 MB, to a 7.3 MB binary and an 8.8 MB bundle. The composer added 0.16 MB to the
 binary and Include subfolders 0.05 MB, to a 7.6 MB binary and an 8.9 MB bundle. The composer's
-script is a chunk of its own (114 KB, 41 KB gzipped) that the webview loads the first time it's
-opened, and the AI view's is too (19 KB). libwebp, built in for the lossless WebP that pack
+script is a chunk of its own (114 KB, 41 KB gzipped), and the AI view's is too (19 KB). Launch
+doesn't wait for either: once the library is on show, `src/lib/warmUp.ts` loads them behind it,
+one step at a time when the window has a moment, with the shapes' pictures the pickers show
+(`src/lib/shapeList.ts`), the template "Design your own" opens on (`composer_warm_up`),
+Community's first search and its first preview strips. A view opened sooner shows a spinner
+where it will be (`ViewLoading.tsx`), as does any picture still on its way. libwebp, built in for the lossless WebP that pack
 pictures and the library's pictures are saved as, added 0.18 MB of code to the binary. That keeps the first screen's script under
 500 KB (488 KB, 161 KB gzipped), the line Vite warns at. Keep it there. `image` is built with `default-features = false` and
 only `png`, `jpeg` and `webp`, and the release profile uses `opt-level = "s"`, LTO and one

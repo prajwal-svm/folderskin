@@ -127,6 +127,7 @@ pub fn run() {
             community::import_pack,
             community::export_pack,
             composer::composer_template,
+            composer::composer_warm_up,
             composer::composer_drive_template,
             bases::shapes,
             composer::composer_save,

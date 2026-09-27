@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/tauri";
-import { SHAPE_PICTURE_SIZE, type ShapeInfo } from "../../lib/shapes";
+import type { ShapeInfo } from "../../lib/shapes";
+import { loadShapes, shapesNow } from "../../lib/shapeList";
 import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { keys, localOs } from "../../lib/platform";
@@ -574,7 +575,7 @@ export function Composer({
   const startDrive = pickedDrive ?? (doc.drive && isDriveId(doc.drive) ? doc.drive : defaultDrive(localOs()));
   /** Every shape bare, for the drives in the "Start a new design" dialog and the drive picker;
    *  fetched as either first shows. */
-  const [shapes, setShapes] = useState<ShapeInfo[] | null>(null);
+  const [shapes, setShapes] = useState<ShapeInfo[] | null>(shapesNow);
   /** The design as it was when it was last saved, opened or started: anything else is a change. */
   const [baseline, setBaseline] = useState<Doc>(() => (draft?.dirty ? emptyDoc() : history.present));
   const dirty = doc !== baseline;
@@ -593,8 +594,7 @@ export function Composer({
   useEffect(() => {
     if ((!starting && !pickingDrive) || shapes) return;
     let live = true;
-    api
-      .shapes(SHAPE_PICTURE_SIZE)
+    loadShapes()
       .then((list) => live && setShapes(list))
       .catch(() => {
         // The drives' cards wait with a blank picture; each still starts its drive.

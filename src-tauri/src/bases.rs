@@ -79,7 +79,9 @@ pub(crate) fn list(size: u32) -> Vec<ShapeDto> {
         family: b.family.id(),
         whole: !b.is_free(),
         kind: b.drive().map(|shape| shape.kind().id()),
-        thumbnail: b.bare(size).map(|img| data_url(&raster::encode_png(&img))),
+        thumbnail: b
+            .picture(size)
+            .map(|img| data_url(&raster::encode_png(&img))),
     });
     DRAWN
         .lock()

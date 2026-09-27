@@ -69,6 +69,11 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Changed
 
+- **The AI view, Design your own and Community open at once.** They used to load the first time
+  they were opened, and the list of shapes in the AI view stayed empty for seconds while its
+  pictures were drawn. FolderSkin now gets them ready behind the library as soon as it's on
+  show, draws the shapes' pictures ten times faster, and wherever something is still on its way,
+  a spinner says so: a view, a list of shapes, a drive's picture.
 - **An empty design's hint sits at the foot of the stage**, beside an info icon, where it never
   covers the folder or the drive.
 - **Switching folders is instant.** Choosing the Mac's, Windows' or the Linux folder used to

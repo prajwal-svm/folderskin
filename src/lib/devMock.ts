@@ -1603,6 +1603,7 @@ export const mockApi = {
   },
   aiTestKey: async () => {},
   composerTemplate: async (style: FolderStyle): Promise<ComposerTemplate> => ({ size: 1024, ...mockTemplateUrls(style), parts: fallbackParts(style) }),
+  composerWarmUp: async (_look: FolderStyle): Promise<void> => {},
   composerDriveTemplate: async (drive: string): Promise<ComposerTemplate> => {
     if (!DRIVE_IDS.includes(drive)) throw "FolderSkin doesn't know that drive";
     return { size: 512, ...mockDriveUrls(drive), parts: driveParts(drive) };
@@ -1859,7 +1860,11 @@ export const mockApi = {
     const name = path.split(/[\\/]/).pop() || "picture.jpg";
     return { id: Math.random().toString(16).slice(2, 14), name, path, thumb: picture(3) };
   },
-  shapes: async (_size?: number): Promise<ShapeInfo[]> => mockShapes(),
+  shapes: async (_size?: number): Promise<ShapeInfo[]> => {
+    // `?slowshapes`: the pictures take a while to draw, as on a slow computer's first launch.
+    if (new URLSearchParams(location.search).has("slowshapes")) await sleep(4000);
+    return mockShapes();
+  },
   promptsList: async (): Promise<SavedPrompt[]> => {
     // `?promptsfail`: the list can't be read, as a damaged file or a missing data folder would.
     if (new URLSearchParams(location.search).has("promptsfail")) throw "prompts can't be kept on this computer: FolderSkin has no data folder here";

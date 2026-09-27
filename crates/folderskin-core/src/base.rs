@@ -107,6 +107,18 @@ impl Template {
         set.sizes.into_iter().next().expect("the size asked for").1
     }
 
+    /// Bare, `size` px square, drawn from a smaller master than the icon's ([`Base::picture`]).
+    fn picture(self, size: u32) -> RgbaImage {
+        match self {
+            Template::Folder(style) => compositor::render_picture_in(
+                &compositor::default_folder_artwork_in(style),
+                size,
+                style,
+            ),
+            Template::Drive(shape) => crate::drive::render_picture_plain(shape, size),
+        }
+    }
+
     fn blank(self, width: u32, height: u32, backdrop: [u8; 3]) -> RgbaImage {
         match self {
             Template::Folder(style) => {
@@ -777,6 +789,13 @@ impl Base {
         self.template.map(|t| t.bare(size.max(1)))
     }
 
+    /// [`Base::bare`] for a picker: drawn from a master four times its size rather than the
+    /// icon's 2048 px ([`compositor::picture_master`]), so a list of every shape takes a tenth of
+    /// the time. The same drawing; only its finest detail rounds a little differently.
+    pub fn picture(&self, size: u32) -> Option<RgbaImage> {
+        self.template.map(|t| t.picture(size.max(1)))
+    }
+
     /// The base painted a flat light grey and centred on an opaque `backdrop`, `width` x
     /// `height` px: what an image model that can work from a picture is asked to repaint
     /// ([`compositor::blank_template_in`], [`compositor::blank_drive_in`]).
@@ -801,6 +820,37 @@ impl Base {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A picker's picture is the bare base, drawn from a smaller master: every pixel within a
+    /// small rounding of the full render, premultiplied, and most within a level.
+    #[test]
+    fn a_pickers_picture_is_the_bare_base() {
+        for base in BASES.iter().filter(|b| b.template.is_some()) {
+            let (bare, picture) = (base.bare(208).unwrap(), base.picture(208).unwrap());
+            assert_eq!(picture.dimensions(), (208, 208), "{}", base.id);
+            let (mut total, mut most, mut shown) = (0u32, 0u8, 0u32);
+            for (p, q) in bare.pixels().zip(picture.pixels()) {
+                if p.0[3] == 0 && q.0[3] == 0 {
+                    continue;
+                }
+                let premul = |c: [u8; 4], i: usize| (c[i] as u32 * c[3] as u32 / 255) as u8;
+                let d = (0..3)
+                    .map(|i| premul(p.0, i).abs_diff(premul(q.0, i)))
+                    .chain([p.0[3].abs_diff(q.0[3])])
+                    .max()
+                    .unwrap_or(0);
+                total += u32::from(d);
+                most = most.max(d);
+                shown += 1;
+            }
+            let mean = total as f32 / shown.max(1) as f32;
+            assert!(
+                mean < 1.5 && most <= 32,
+                "{}: mean {mean}, most {most}",
+                base.id
+            );
+        }
+    }
 
     #[test]
     fn every_base_has_its_own_id_and_is_found_by_it() {

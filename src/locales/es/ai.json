@@ -319,6 +319,7 @@
     "tip": "Para qué es la imagen. Escribe @ en el cuadro para cambiarlo",
     "tipArt": "Para qué es la imagen, solo la imagen. Escribe @ en el cuadro para cambiarlo",
     "menuLabel": "formas",
+    "drawing": "Dibujando las formas",
     "none": "Ninguna forma se llama nada parecido a “{{query}}”."
   },
   "slash": {

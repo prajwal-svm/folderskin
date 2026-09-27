@@ -317,6 +317,7 @@
     "tip": "What it's for. Type @ in the box to pick another",
     "tipArt": "What it's for, just the art. Type @ in the box to pick another",
     "menuLabel": "shapes",
+    "drawing": "Drawing the shapes",
     "none": "No shape is called anything like “{{query}}”."
   },
   "slash": {

@@ -176,6 +176,11 @@ export class CommunityStore {
     else if (this.state.shown) void this.remark();
   }
 
+  /** Searches ahead of the view's first visit (src/lib/warmUp.ts), when nothing is shown yet. */
+  async warm(): Promise<void> {
+    if (!this.state.shown && !this.state.searching) await this.search();
+  }
+
   setQuery(query: string) {
     this.set({ query });
     clearTimeout(this.timer);

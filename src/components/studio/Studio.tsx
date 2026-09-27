@@ -7,7 +7,8 @@ import { isTauri } from "../../lib/devMock";
 import { IMAGE_EXTENSIONS } from "../../lib/files";
 import { CHIP_STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
 import { lookName, sameLook, styleById, styleDescription, styleName, type Look } from "../../lib/styles";
-import { SHAPE_PICTURE_SIZE, shapeName, shapeOf, type ShapeInfo } from "../../lib/shapes";
+import { shapeName, shapeOf, type ShapeInfo } from "../../lib/shapes";
+import { loadShapes, shapesNow } from "../../lib/shapeList";
 import { clip } from "../../lib/names";
 import type { ToastTone } from "../../hooks/useToasts";
 import { ask, deleteChat, dismissProblem, keepReference, openChat, renameChatTo, setChatBase, setChatFolder, startChats, startNewChat, stop, useChats } from "../../state/chatStore";
@@ -94,7 +95,9 @@ export const Studio = forwardRef<
   const saved = useSavedPrompts();
   const [catalogue, setCatalogue] = useState<AiCatalogue | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [shapes, setShapes] = useState<ShapeInfo[]>([]);
+  // Drawn ahead after launch (src/lib/warmUp.ts), so usually in from the first frame.
+  const [shapes, setShapes] = useState<ShapeInfo[]>(() => shapesNow() ?? []);
+  const [shapesLoading, setShapesLoading] = useState(() => shapesNow() === null);
   const initial = useMemo(loadChoice, []);
   const [providerId, setProviderId] = useState(initial.provider);
   const [modelId, setModelId] = useState(initial.model);
@@ -136,12 +139,16 @@ export const Studio = forwardRef<
     arrivedAway.current = false;
   }, [active]);
 
-  // The shapes the chat can paint on, drawn once.
+  // The shapes the chat can paint on, drawn once for the whole app.
   useEffect(() => {
-    api
-      .shapes(SHAPE_PICTURE_SIZE)
-      .then(setShapes)
-      .catch(() => setShapes([]));
+    let live = true;
+    loadShapes()
+      .then((list) => live && setShapes(list))
+      .catch(() => live && setShapes([]))
+      .finally(() => live && setShapesLoading(false));
+    return () => {
+      live = false;
+    };
   }, []);
 
   const load = useCallback(() => {
@@ -561,6 +568,7 @@ export const Studio = forwardRef<
           onRemoveRef={(id) => setRefs((rs) => rs.filter((r) => r.id !== id))}
           onRefRole={(id, role) => setRefs((rs) => rs.map((r) => (r.id === id ? { ...r, role } : r)))}
           shapes={shapes}
+          shapesLoading={shapesLoading}
           shape={shape}
           onShape={setChatBase}
           make={make}

@@ -7,6 +7,7 @@ import { PaletteIcon } from "../icons/palette";
 import { SparklesIcon } from "../icons/sparkles";
 import { PlusIcon, TickIcon, TypeIcon, XIcon } from "../icons/composer";
 import { useT } from "../../i18n";
+import { LoaderIcon } from "../icons/loader";
 
 const MARGIN = 10;
 const GAP = 6;
@@ -48,6 +49,7 @@ export function PromptMenu({
   onRemove,
   shapes,
   empty,
+  loading = false,
   naming,
 }: {
   id: string;
@@ -64,6 +66,8 @@ export function PromptMenu({
   shapes: ShapeInfo[];
   /** What the menu says when nothing matches. */
   empty: string;
+  /** What the menu lists is still on its way: `empty` says so, beside a spinner. */
+  loading?: boolean;
   /** Present while a prompt is being named, which the menu shows instead of its rows. */
   naming: Naming | null;
 }) {
@@ -210,7 +214,12 @@ export function PromptMenu({
         </form>
       ) : (
         <div className="pm-list" id={id} role="listbox" aria-label={label}>
-          {groups.length === 0 && <p className="pm-empty">{empty}</p>}
+          {groups.length === 0 && (
+            <p className={loading ? "pm-empty is-loading" : "pm-empty"} role={loading ? "status" : undefined}>
+              {loading && <LoaderIcon size={14} />}
+              {empty}
+            </p>
+          )}
           {groups.map((g) => (
             <div className="pm-group" key={g.id} role="group" aria-label={g.title || undefined}>
               {g.title && (

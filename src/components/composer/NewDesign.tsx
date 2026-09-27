@@ -53,7 +53,13 @@ function DriveCard({ id, picture, name, onStart }: { id: string; picture: string
   return (
     <button type="button" className="cmp-card is-drive" data-drive={id} onClick={() => onStart({ kind: "drive", drive: id })}>
       <span className="cmp-card-art" aria-hidden="true">
-        {picture ? <img src={picture} alt="" draggable={false} /> : <span className="cmp-card-wait" />}
+        {picture ? (
+          <img src={picture} alt="" draggable={false} />
+        ) : (
+          <span className="cmp-card-wait">
+            <LoaderIcon size={16} />
+          </span>
+        )}
       </span>
       {name ? (
         <>

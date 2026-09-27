@@ -1,6 +1,7 @@
 {
   "cancel": "Cancelar",
   "close": "cerrar",
+  "loading": "Cargando",
   "twoSentences": "{{first}} {{second}}",
   "official": "Oficial",
   "tags": {

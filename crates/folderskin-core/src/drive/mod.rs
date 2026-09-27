@@ -391,6 +391,13 @@ pub fn render_master_plain(shape: DriveShape) -> raster::Premul {
     render(shape, RENDER_SIZE, Fill::Plain)
 }
 
+/// The plain drive of `shape` as a picture `size` px square for a picker, drawn from a master of
+/// [`crate::compositor::picture_master`] px rather than [`RENDER_SIZE`].
+pub fn render_picture_plain(shape: DriveShape, size: u32) -> image::RgbaImage {
+    let master = crate::compositor::picture_master(size);
+    crate::compositor::to_picture(&render(shape, master, Fill::Plain), size)
+}
+
 /// `art` wrapped onto the drive of `shape` at [`RENDER_SIZE`]: cover-fitted to its face and cut to
 /// it, premultiplied.
 pub fn render_master(shape: DriveShape, art: &Artwork) -> raster::Premul {

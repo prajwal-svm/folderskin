@@ -1,6 +1,7 @@
 {
   "cancel": "Annuler",
   "close": "fermer",
+  "loading": "Chargement",
   "twoSentences": "{{first}} {{second}}",
   "official": "Officiel",
   "tags": {

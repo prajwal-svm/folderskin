@@ -480,7 +480,36 @@ pub fn render_master(art: &Artwork) -> raster::Premul {
 
 /// Renders the folder of `style` at [`RENDER_SIZE`], premultiplied.
 pub fn render_master_in(art: &Artwork, style: Style) -> raster::Premul {
-    let t = Template::new(RENDER_SIZE, style);
+    render_master_sized_in(art, style, RENDER_SIZE)
+}
+
+/// How big a master a picture `size` px across is drawn from: four times it, between 512 px and
+/// [`RENDER_SIZE`]. A picker's picture needs no 2048 px master, and drawing one is up to sixteen
+/// times the work.
+pub fn picture_master(size: u32) -> u32 {
+    size.saturating_mul(4).clamp(512, RENDER_SIZE)
+}
+
+/// `art` on the folder of `style` as a picture `size` px square for a picker, drawn from a master
+/// of [`picture_master`] px rather than the icon's own [`RENDER_SIZE`]: the same drawing, finer
+/// detail rounded a little differently.
+pub fn render_picture_in(art: &Artwork, size: u32, style: Style) -> image::RgbaImage {
+    let master = picture_master(size);
+    to_picture(&render_master_sized_in(art, style, master), size)
+}
+
+/// A master as a straight-alpha picture `size` px square.
+pub(crate) fn to_picture(master: &raster::Premul, size: u32) -> image::RgbaImage {
+    if master.width == size && master.height == size {
+        raster::to_straight_rgba(master)
+    } else {
+        raster::to_straight_rgba(&raster::downsample(master, size))
+    }
+}
+
+/// [`render_master_in`] with a master `master` px square.
+fn render_master_sized_in(art: &Artwork, style: Style, master: u32) -> raster::Premul {
+    let t = Template::new(master, style);
     let art_pm = pattern_pixmap(&art.rgba);
     let (back, front) = style.fit_boxes();
     // Back panel: the skin cover-fitted to the whole back bbox, so the tab shows the top of the

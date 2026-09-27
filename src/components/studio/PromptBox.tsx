@@ -57,6 +57,8 @@ export const PromptBox = forwardRef<
     onRemoveRef: (id: string) => void;
     onRefRole: (id: string, role: RefRole) => void;
     shapes: ShapeInfo[];
+    /** The shapes' pictures are still being drawn. */
+    shapesLoading: boolean;
     /** The shape the chat's pictures are for. */
     shape: ShapeInfo | undefined;
     onShape: (id: string) => void;
@@ -87,7 +89,7 @@ export const PromptBox = forwardRef<
     boxRef?: React.Ref<HTMLFormElement>;
   }
 >(function PromptBox(props, ref) {
-  const { idea, onIdea, placeholder, rows, refs, adding, onAddRef, onRemoveRef, shapes, shape, make, look, prompts, ideas, provider, model, onSettings, onSend, loading, queued, blocked, dropping, boxRef } = props;
+  const { idea, onIdea, placeholder, rows, refs, adding, onAddRef, onRemoveRef, shapes, shapesLoading, shape, make, look, prompts, ideas, provider, model, onSettings, onSend, loading, queued, blocked, dropping, boxRef } = props;
   const t = useT();
   const menuId = useId().replace(/[^a-zA-Z0-9-]/g, "");
   const input = useRef<HTMLTextAreaElement>(null);
@@ -268,7 +270,8 @@ export const PromptBox = forwardRef<
   const where = `${providerName(provider?.label ?? "")} · ${model?.label ?? ""}`;
   const modelName = model?.label ?? t("ai.prompt.thisModel");
   const activeRow = open && items.length > 0 ? `${menuId}-${Math.min(active, items.length - 1)}` : undefined;
-  const menuShown = open !== null && !(open.kind === "@" && shapes.length === 0);
+  // "@" before the shapes are in still opens the menu, saying they're on their way.
+  const menuShown = open !== null && !(open.kind === "@" && shapes.length === 0 && !shapesLoading);
   const lookTip = look ? (look.kind === "style" ? t("ai.prompt.styleTip", { description: styleDescription(look.id) }) : t("ai.prompt.skillTip")) : "";
   const named = naming ? namesSomeone(naming.text) : null;
   return (
@@ -338,6 +341,7 @@ export const PromptBox = forwardRef<
       <div className="composer-bar">
         <ShapePicker
           shapes={shapes}
+          loading={shapesLoading}
           shape={shape}
           make={make}
           flash={flash}
@@ -390,7 +394,8 @@ export const PromptBox = forwardRef<
             if (saved) props.onRemovePrompt(saved);
           }}
           shapes={shapes}
-          empty={open.kind === "@" ? t("ai.shape.none", { query: open.query }) : t("ai.slash.none", { query: open.query })}
+          empty={open.kind === "@" ? (shapesLoading ? t("ai.shape.drawing") : t("ai.shape.none", { query: open.query })) : t("ai.slash.none", { query: open.query })}
+          loading={open.kind === "@" && shapesLoading}
           naming={
             naming
               ? {

@@ -1,6 +1,7 @@
 {
   "cancel": "취소",
   "close": "닫기",
+  "loading": "불러오는 중",
   "twoSentences": "{{first}} {{second}}",
   "official": "공식",
   "tags": {

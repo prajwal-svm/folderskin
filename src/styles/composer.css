@@ -591,8 +591,11 @@
 
 /* A drive's picture on its way: a faint square where it will be. */
 .cmp-card-wait {
+  display: grid;
+  place-items: center;
   border-radius: 14px;
   background: var(--well);
+  color: var(--muted);
 }
 
 .new-empty-art {
@@ -2302,6 +2305,14 @@
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* A picture still on its way. */
+.cmp-option-pic.is-waiting,
+.cmp-select-pic.is-waiting {
+  display: grid;
+  place-items: center;
   color: var(--muted);
 }
 

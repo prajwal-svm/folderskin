@@ -1,6 +1,7 @@
 {
   "cancel": "Cancel",
   "close": "close",
+  "loading": "Loading",
   "twoSentences": "{{first}} {{second}}",
   "official": "Official",
   "tags": {

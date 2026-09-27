@@ -307,6 +307,18 @@ pub async fn composer_template(style: Option<FolderStyle>) -> Result<ComposerTem
     .map_err(|e| e.to_string())
 }
 
+/// Draws, on a thread of its own, the template "Design your own" opens on (the folder of `look`),
+/// so the first time it opens it waits for nothing. Returns at once; the window calls it once the
+/// library is on show.
+#[tauri::command]
+pub fn composer_warm_up(look: Option<FolderStyle>) {
+    let style = Style::from(look.unwrap_or_default());
+    let slot = Style::ALL.iter().position(|s| *s == style).unwrap_or(0);
+    std::thread::spawn(move || {
+        TEMPLATES[slot].get_or_init(|| draw_template(style));
+    });
+}
+
 /// Each drive's layers, drawn the first time a design is on it and kept until the app quits.
 static DRIVE_TEMPLATES: Mutex<Option<HashMap<DriveShape, ComposerTemplateDto>>> = Mutex::new(None);
 

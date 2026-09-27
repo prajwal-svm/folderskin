@@ -1,6 +1,7 @@
 {
   "cancel": "取消",
   "close": "关闭",
+  "loading": "正在加载",
   "twoSentences": "{{first}}{{second}}",
   "official": "官方",
   "tags": {

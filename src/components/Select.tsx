@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { ChevronDownIcon, TickIcon } from "./icons/composer";
 import { Popover } from "./composer/Popover";
 import { branded } from "./Brand";
+import { LoaderIcon } from "./icons/loader";
 
 export type SelectOption<T> = {
   value: T;
@@ -16,9 +17,15 @@ export type SelectOption<T> = {
   listLabel?: string;
 };
 
-/** A picture of an option that hasn't arrived yet: the place it will take, left clear. */
+/** An option's picture, or while it's on its way, a spinner in the place it will take. */
 const PictureOf = ({ src, className }: { src: string | null; className: string }) =>
-  src ? <img className={className} src={src} alt="" draggable={false} /> : <span className={className} aria-hidden="true" />;
+  src ? (
+    <img className={className} src={src} alt="" draggable={false} />
+  ) : (
+    <span className={`${className} is-waiting`} aria-hidden="true">
+      <LoaderIcon size={12} />
+    </span>
+  );
 
 /**
  * A choice from a short list, in the app's own dropdown rather than the system's: the button shows
