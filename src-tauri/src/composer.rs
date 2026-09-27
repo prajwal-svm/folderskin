@@ -182,6 +182,17 @@ pub struct PieceDto {
     pub rect: [u32; 4],
     /// A PNG data URL.
     pub src: String,
+    /// The rows above a line that are another part's, when some are: a folder's tab, in its back
+    /// panel's pieces. `row` is in the template's pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub split: Option<SplitDto>,
+}
+
+/// The rows of a piece above `row` that are part `part`'s.
+#[derive(Serialize, Clone)]
+pub struct SplitDto {
+    pub part: &'static str,
+    pub row: u32,
 }
 
 impl PieceDto {
@@ -191,6 +202,10 @@ impl PieceDto {
             role: piece.role.id(),
             rect: [piece.x, piece.y, piece.image.width(), piece.image.height()],
             src: commands::data_url(&quick_png(&piece.image)),
+            split: piece.split.map(|s| SplitDto {
+                part: s.part,
+                row: s.row,
+            }),
         }
     }
 }
@@ -1360,14 +1375,20 @@ mod tests {
                 template["parts"],
                 serde_json::to_value(PartsDto::new(style)).unwrap()
             );
-            let parts: Vec<&str> = template["pieces"]
-                .as_array()
-                .unwrap()
+            let pieces = template["pieces"].as_array().unwrap();
+            let parts: Vec<&str> = pieces
                 .iter()
                 .filter(|p| p["role"] == "surface")
                 .map(|p| p["part"].as_str().unwrap())
                 .collect();
-            assert_eq!(parts, ["tab", "back", "front"], "{style:?}");
+            assert_eq!(parts, ["back", "front"], "{style:?}");
+            // The tab is the back panel's rows above its body.
+            assert_eq!(pieces[0]["split"]["part"], "tab", "{style:?}");
+            assert!(pieces[0]["split"]["row"].as_u64().unwrap() > 0, "{style:?}");
+            assert!(pieces
+                .iter()
+                .filter(|p| p["part"] == "front")
+                .all(|p| p.get("split").is_none()));
         }
     }
 

@@ -294,6 +294,8 @@ export type ComposerPiece = {
   rect: [number, number, number, number];
   /** A PNG data URL. */
   src: string;
+  /** The rows above `row` (the template's pixels) are part `part`'s: a folder's tab, in its back panel's pieces. */
+  split?: { part: string; row: number };
 };
 
 /** The folder template split into the layers the composer draws a design between, as PNG data URLs. */

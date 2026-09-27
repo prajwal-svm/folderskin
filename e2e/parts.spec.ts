@@ -136,3 +136,50 @@ test.describe("a folder in its parts", () => {
     expect(await pixel(page, 700, 115)).toEqual(back);
   });
 });
+
+test("with nothing changed, every folder and drive is drawn from its parts as it always was", async ({ page }) => {
+  await openApp(page);
+  // At sizes that scale the template by a half, an odd amount and more than its own size.
+  const worst = await page.evaluate(async () => {
+    const { api } = await import("/src/lib/tauri.ts");
+    const comp = await import("/src/composer/composite.ts");
+    const { DRIVE_IDS } = await import("/src/composer/drives.ts");
+    const { centreOf } = await import("/src/composer/doc.ts");
+    const folders = ["mac", "windows", "linux"] as const;
+    const templates = [
+      ...(await Promise.all(folders.map(async (s) => ({ key: s, drive: false, t: await api.composerTemplate(s) })))),
+      ...(await Promise.all(DRIVE_IDS.map(async (id) => ({ key: id, drive: true, t: await api.composerDriveTemplate(id) })))),
+    ];
+    const out: Record<string, number> = {};
+    for (const px of [512, 701, 1333]) {
+      const design = document.createElement("canvas");
+      design.width = design.height = px;
+      const g = design.getContext("2d")!;
+      const across = g.createLinearGradient(0, 0, px, px);
+      across.addColorStop(0, "rgba(230,60,40,0.9)");
+      across.addColorStop(1, "rgba(40,90,220,0.6)");
+      g.fillStyle = across;
+      g.fillRect(0, 0, px, px);
+      for (const { key, drive, t } of templates) {
+        const images = await comp.loadTemplate(t);
+        const whole = document.createElement("canvas");
+        const parts = document.createElement("canvas");
+        whole.width = whole.height = parts.width = parts.height = px;
+        comp.drawOnFolder(whole.getContext("2d")!, design, images, px, document.createElement("canvas"));
+        comp.drawBase(parts.getContext("2d")!, design, images, px, comp.makeScratch(), { base: undefined, drive, pivot: centreOf(t.parts.folder) }, false);
+        const a = whole.getContext("2d")!.getImageData(0, 0, px, px).data;
+        const b = parts.getContext("2d")!.getImageData(0, 0, px, px).data;
+        let most = 0;
+        // What shows: coverage, and colour as far as it's covered.
+        for (let i = 0; i < a.length; i += 4) {
+          most = Math.max(most, Math.abs(a[i + 3] - b[i + 3]));
+          for (let c = 0; c < 3; c++) most = Math.max(most, Math.abs(a[i + c] * a[i + 3] - b[i + c] * b[i + 3]) / 255);
+        }
+        out[`${key}@${px}`] = Math.round(most);
+      }
+    }
+    return out;
+  });
+  const off = Object.entries(worst).filter(([, levels]) => levels > 8);
+  expect(off, "drawn from their parts, these differ from the whole template by more than a rounding").toEqual([]);
+});

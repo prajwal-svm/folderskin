@@ -734,29 +734,57 @@ impl Role {
     }
 }
 
+/// The rows of a piece above a line that are another part's: how a folder's tab is part of its
+/// back panel's drawing. The canvas draws the piece in two, split along a row of its own pixels, so
+/// the two halves meet without a seam at whatever size it's drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Split {
+    /// Whose the rows above the line are.
+    pub part: &'static str,
+    /// The line, in the template's pixels: the first row that isn't `part`'s.
+    pub row: u32,
+}
+
 /// One of a template's parts at one place in the stack the composer draws, cut down to where it
-/// has any pixels: straight-alpha RGBA, its top left corner at `(x, y)` in the template's pixels.
+/// has any pixels and [`PIECE_MARGIN`] round them: straight-alpha RGBA, its top left corner at
+/// `(x, y)` in the template's pixels.
 pub struct Piece {
-    /// The part it belongs to: `"tab"`, `"back"`, `"paper"`, `"front"` on a folder, a drive's own
-    /// parts on a drive ([`crate::drive::pieces`]).
+    /// The part it belongs to: `"back"`, `"paper"`, `"front"` on a folder, a drive's own parts on
+    /// a drive ([`crate::drive::pieces`]).
     pub part: &'static str,
     pub role: Role,
     pub x: u32,
     pub y: u32,
     pub image: image::RgbaImage,
+    /// The rows above a line that are another part's, when some are: a folder's tab.
+    pub split: Option<Split>,
+}
+
+/// The transparent pixels a piece keeps round its own. Drawn smaller or larger, a piece's edge falls
+/// between the canvas's pixels, and with nothing past its own pixels there, the smoothing that
+/// blends an edge into what's behind it would have nothing to blend with.
+const PIECE_MARGIN: u32 = 4;
+
+/// What a piece's box is a whole number of: drawn at a half, a quarter or an eighth of the
+/// template's size, its corner then falls on one of the canvas's pixels, as the whole template's
+/// does, so its edges are smoothed exactly as the whole template's are.
+const PIECE_GRID: u32 = 8;
+
+/// `(x0, y0, x1, y1)` grown by [`PIECE_MARGIN`] and out to [`PIECE_GRID`], inside a square `size`
+/// across.
+fn with_margin((x0, y0, x1, y1): (u32, u32, u32, u32), size: u32) -> (u32, u32, u32, u32) {
+    let (m, g) = (PIECE_MARGIN, PIECE_GRID);
+    let down = |v: u32| v.saturating_sub(m) / g * g;
+    let up = |v: u32| (v + m).div_ceil(g).saturating_mul(g).min(size);
+    (down(x0), down(y0), up(x1), up(y1))
 }
 
 impl Piece {
-    /// What `pm` (premultiplied, square) has in rows `rows`, as a piece of `part`, cut to its
-    /// pixels. `None` when there are none.
-    pub(crate) fn cut(
-        part: &'static str,
-        role: Role,
-        pm: &Pixmap,
-        rows: std::ops::Range<u32>,
-    ) -> Option<Piece> {
+    /// What `pm` (premultiplied, square) has, as a piece of `part`, cut to its pixels. `None` when
+    /// it has none.
+    pub(crate) fn cut(part: &'static str, role: Role, pm: &Pixmap) -> Option<Piece> {
         let width = pm.width();
-        let (x0, y0, x1, y1) = covered(pm.data(), 4, width, rows)?;
+        let (x0, y0, x1, y1) = with_margin(covered(pm.data(), 4, width)?, width);
         let mut data = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
         for y in y0..y1 {
             let from = ((y * width + x0) * 4) as usize;
@@ -773,19 +801,16 @@ impl Piece {
             x: x0,
             y: y0,
             image,
+            split: None,
         })
     }
 
-    /// Where the design shows in rows `rows` of `mask` (square), as a piece of `part`: white, its
-    /// alpha the mask's. `None` when the mask has nothing there.
-    pub(crate) fn surface(
-        part: &'static str,
-        mask: &Mask,
-        rows: std::ops::Range<u32>,
-    ) -> Option<Piece> {
+    /// Where the design shows in `mask` (square), as a piece of `part`: white, its alpha the
+    /// mask's. `None` when the mask has nothing.
+    pub(crate) fn surface(part: &'static str, mask: &Mask) -> Option<Piece> {
         let width = mask.width();
         let alpha = |x: u32, y: u32| mask.data()[(y * width + x) as usize];
-        let (x0, y0, x1, y1) = covered(mask.data(), 1, width, rows)?;
+        let (x0, y0, x1, y1) = with_margin(covered(mask.data(), 1, width)?, width);
         let image = image::RgbaImage::from_fn(x1 - x0, y1 - y0, |x, y| {
             image::Rgba([255, 255, 255, alpha(x0 + x, y0 + y)])
         });
@@ -795,22 +820,26 @@ impl Piece {
             x: x0,
             y: y0,
             image,
+            split: None,
         })
+    }
+
+    /// This piece with its rows above `row` (the template's pixels) part `part`'s.
+    pub(crate) fn split_above(self, part: &'static str, row: u32) -> Piece {
+        Piece {
+            split: Some(Split { part, row }),
+            ..self
+        }
     }
 }
 
-/// The box `[x0, x1) × [y0, y1)` around every pixel in `rows` of a square picture `width` wide
-/// with any coverage, or `None` when it has none there. Its pixels are `bytes` long, the last
-/// byte of each its coverage: 4 for a pixmap, 1 for a mask.
-fn covered(
-    data: &[u8],
-    bytes: usize,
-    width: u32,
-    rows: std::ops::Range<u32>,
-) -> Option<(u32, u32, u32, u32)> {
+/// The box `[x0, x1) × [y0, y1)` around every pixel of a square picture `width` wide with any
+/// coverage, or `None` when it has none. Its pixels are `bytes` long, the last byte of each its
+/// coverage: 4 for a pixmap, 1 for a mask.
+fn covered(data: &[u8], bytes: usize, width: u32) -> Option<(u32, u32, u32, u32)> {
     let stride = width as usize * bytes;
     let (mut x0, mut y0, mut x1, mut y1) = (usize::MAX, u32::MAX, 0, 0);
-    for y in rows.start..rows.end.min(width) {
+    for y in 0..width {
         let row = &data[y as usize * stride..(y as usize + 1) * stride];
         let shows = |p: &[u8]| p[bytes - 1] != 0;
         let Some(first) = row.chunks_exact(bytes).position(shows) else {
@@ -865,36 +894,33 @@ pub(crate) fn worst_off(stack: &[[f32; 4]], want: &[u8]) -> i32 {
 }
 
 /// The folder of `style` taken apart for the composer at `size` px, part by part in the order the
-/// composer stacks them: the design through the tab and through the back panel's body, the back's
-/// light and shade (the tab's share and the body's), the shadow the front casts on the back, the
-/// paper, the design through the front panel and the front's light over it all. Stacked back
-/// around a design they're the folder [`template_layers_in`] makes (a test checks); drawing a part
-/// in another colour, or leaving it out, is how the composer changes the folder's own parts.
+/// composer stacks them: the design through the back panel, the back's light and shade, the shadow
+/// the front casts on the back, the paper, the design through the front panel and the front's light
+/// over it all. Stacked back around a design they're the folder [`template_layers_in`] makes (a test
+/// checks). Drawing a part in another colour, or leaving it out, is how the composer changes the
+/// folder's own parts.
 ///
-/// The tab is the back panel above the top of its body, cut along that line.
+/// The tab is the back panel above the top of its body: the back's pieces say so with a [`Split`]
+/// along that row, rather than being cut in two here, so the tab and the body meet without a seam
+/// however the canvas scales them.
 pub fn template_pieces_in(size: u32, style: Style) -> Vec<Piece> {
     let t = Template::new(size, style);
     let cut = ((style.tab_bottom() * t.scale).round() as u32).min(size);
-    let (tab, body) = (0..cut, cut..size);
-    let whole = 0..size;
+    let tab = |piece: Option<Piece>| piece.map(|p| p.split_above("tab", cut));
     let middle = |part: &str| {
         let mut pm = t.pixmap();
         t.draw_middle_of(&mut pm, Some(part));
         pm
     };
-    let back = t.mask(&t.back);
-    let shade = middle("back");
     let mut top = t.pixmap();
     t.draw_top(&mut top);
     [
-        Piece::surface("tab", &back, tab.clone()),
-        Piece::surface("back", &back, body.clone()),
-        Piece::cut("tab", Role::Light, &shade, tab),
-        Piece::cut("back", Role::Light, &shade, body),
-        Piece::cut("front", Role::Light, &middle("front"), whole.clone()),
-        Piece::cut("paper", Role::Paint, &middle("paper"), whole.clone()),
-        Piece::surface("front", &t.mask(&t.front), whole.clone()),
-        Piece::cut("front", Role::Light, &top, whole),
+        tab(Piece::surface("back", &t.mask(&t.back))),
+        tab(Piece::cut("back", Role::Light, &middle("back"))),
+        Piece::cut("front", Role::Light, &middle("front")),
+        Piece::cut("paper", Role::Paint, &middle("paper")),
+        Piece::surface("front", &t.mask(&t.front)),
+        Piece::cut("front", Role::Light, &top),
     ]
     .into_iter()
     .flatten()
@@ -1572,26 +1598,53 @@ mod tests {
                 "{style:?}: the stacked pieces are {worst} off the saved icon"
             );
             let parts: Vec<(&str, Role)> = pieces.iter().map(|p| (p.part, p.role)).collect();
-            assert_eq!(
-                parts[..2],
-                [("tab", Role::Surface), ("back", Role::Surface)],
-                "{style:?}"
-            );
+            assert_eq!(parts[0], ("back", Role::Surface), "{style:?}");
             assert!(parts.contains(&("front", Role::Surface)), "{style:?}");
             assert_eq!(
                 parts.contains(&("paper", Role::Paint)),
                 style == Style::Mac,
                 "{style:?}: only the Mac's folder has paper"
             );
-            // The tab is all above the body, and the body all below the tab.
+            // The tab is the back panel's rows above the top of its body, and has some.
             let cut = (style.tab_bottom() * RENDER_SIZE as f32 / g::CANVAS).round() as u32;
+            let back = &pieces[0];
+            assert_eq!(
+                back.split,
+                Some(Split {
+                    part: "tab",
+                    row: cut
+                }),
+                "{style:?}"
+            );
+            assert!(
+                back.y < cut,
+                "{style:?}: the back panel's piece starts above its body"
+            );
             for p in &pieces {
-                let (top, bottom) = (p.y, p.y + p.image.height());
-                match p.part {
-                    "tab" => assert!(bottom <= cut, "{style:?}: the tab reaches {bottom}"),
-                    "back" => assert!(top >= cut, "{style:?}: the back's body starts at {top}"),
-                    _ => {}
-                }
+                assert!(
+                    p.split.is_none() || p.part == "back",
+                    "{style:?}: {}",
+                    p.part
+                );
+            }
+            // Every piece keeps a see-through margin round its own pixels.
+            for p in &pieces {
+                let (w, h) = p.image.dimensions();
+                let edge = (0..w)
+                    .flat_map(|x| [(x, 0), (x, h - 1)])
+                    .chain((0..h).flat_map(|y| [(0, y), (w - 1, y)]));
+                let clear = |(x, y): (u32, u32)| {
+                    let at_border = p.x + x == 0
+                        || p.y + y == 0
+                        || p.x + x == RENDER_SIZE - 1
+                        || p.y + y == RENDER_SIZE - 1;
+                    at_border || p.image.get_pixel(x, y).0[3] == 0
+                };
+                assert!(
+                    edge.into_iter().all(clear),
+                    "{style:?}: {} has pixels on its edge",
+                    p.part
+                );
             }
         }
     }

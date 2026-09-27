@@ -60,12 +60,16 @@ pub fn piece_sheet(pieces: &[Piece]) -> (RgbaImage, serde_json::Value) {
     let mut list = Vec::new();
     for p in pieces {
         image::imageops::replace(&mut sheet, &p.image, 0, i64::from(y));
-        list.push(serde_json::json!({
+        let mut entry = serde_json::json!({
             "part": p.part,
             "role": p.role.id(),
             "rect": [p.x, p.y, p.image.width(), p.image.height()],
             "at": [0, y],
-        }));
+        });
+        if let Some(split) = p.split {
+            entry["split"] = serde_json::json!({"part": split.part, "row": split.row});
+        }
+        list.push(entry);
         y += p.image.height();
     }
     (sheet, serde_json::Value::Array(list))

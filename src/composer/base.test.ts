@@ -9,17 +9,18 @@ describe("a folder's or drive's parts", () => {
     const stick = [piece("port", "paint"), piece("holes", "paint"), piece("case", "paint"), piece("face", "paint"), piece("face", "surface"), piece("face", "light")];
     expect(partsOf(stick).map((p) => p.id)).toEqual(["face", "case", "holes", "port"]);
     expect(partsOf(stick)[0]).toEqual({ id: "face", surface: true, paints: true });
-    // The Mac's folder: the front's light over everything doesn't lift the tab or the back.
+    // The Mac's folder: its tab is the back panel's rows above its body, listed under the back,
+    // and the front's light over everything doesn't lift the front above where it shows.
+    const tab = { part: "tab", row: 194 };
     const folder = [
-      piece("tab", "surface"),
-      piece("back", "surface"),
-      piece("tab", "light"),
-      piece("back", "light"),
+      { ...piece("back", "surface"), split: tab },
+      { ...piece("back", "light"), split: tab },
       piece("paper", "paint"),
       piece("front", "surface"),
       piece("front", "light"),
     ];
     expect(partsOf(folder).map((p) => p.id)).toEqual(["front", "paper", "back", "tab"]);
+    expect(partsOf(folder).find((p) => p.id === "tab")).toEqual({ id: "tab", surface: true, paints: false });
     expect(partsOf(folder).find((p) => p.id === "paper")).toEqual({ id: "paper", surface: false, paints: true });
     // A slab over a disc, drawn only over the face, is over it in the list too.
     const discDrive = [piece("disc", "paint"), piece("face", "paint"), piece("face", "surface"), piece("disc", "light"), piece("case", "paint")];

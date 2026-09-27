@@ -19,13 +19,20 @@ import type { Box, Point } from "./geometry";
 
 export type PieceRole = ComposerPiece["role"];
 
-/** One of a template's pieces with its picture loaded. `rect` is in the template's own pixels. */
-export type Piece = { part: string; role: PieceRole; rect: [number, number, number, number]; img: HTMLImageElement };
+/**
+ * One of a template's pieces with its picture loaded. `rect` is in the template's own pixels, and
+ * `split`, when there is one, says its rows above a line are another part's: a folder's tab, in its
+ * back panel's pieces.
+ */
+export type Piece = { part: string; role: PieceRole; rect: [number, number, number, number]; img: HTMLImageElement; split?: { part: string; row: number } };
 
 /** Loads every piece's picture with `load`, in their order. */
 export function loadPieces(list: ComposerPiece[] | undefined, load: (src: string) => Promise<HTMLImageElement>): Promise<Piece[]> {
-  return Promise.all((list ?? []).map(async (p) => ({ part: p.part, role: p.role, rect: p.rect, img: await load(p.src) })));
+  return Promise.all((list ?? []).map(async (p) => ({ part: p.part, role: p.role, rect: p.rect, img: await load(p.src), ...(p.split ? { split: p.split } : {}) })));
 }
+
+/** The parts a piece is drawn as: its own, and the one its rows above its split are. */
+export const partsIn = (p: Piece): string[] => (p.split ? [p.part, p.split.part] : [p.part]);
 
 // ---------- the parts ----------
 
@@ -43,16 +50,13 @@ export function partsOf(pieces: Piece[]): BasePart[] {
   const at = new Map<string, { index: number; light: boolean }>();
   pieces.forEach((p, index) => {
     const light = p.role === "light";
-    const was = at.get(p.part);
-    if (!was || (was.light && !light) || (was.light === light && index > was.index)) at.set(p.part, { index, light });
+    for (const part of partsIn(p)) {
+      const was = at.get(part);
+      if (!was || (was.light && !light) || (was.light === light && index > was.index)) at.set(part, { index, light });
+    }
   });
-  return [...at.entries()]
-    .sort((a, b) => b[1].index - a[1].index)
-    .map(([id]) => ({
-      id,
-      surface: pieces.some((p) => p.part === id && p.role === "surface"),
-      paints: pieces.some((p) => p.part === id && p.role === "paint"),
-    }));
+  const has = (id: string, role: PieceRole) => pieces.some((p) => p.role === role && partsIn(p).includes(id));
+  return [...at.entries()].sort((a, b) => b[1].index - a[1].index).map(([id]) => ({ id, surface: has(id, "surface"), paints: has(id, "paint") }));
 }
 
 /** What a part is called in the layers list: "Case", "Port holes". */
@@ -180,13 +184,15 @@ const PICK_ALPHA = 64;
  */
 export function partAt(pieces: Piece[], size: number, parts: Record<string, PartEdit> | undefined, drive: boolean, p: Point): { part: string; surface: boolean } | null {
   const k = size / CANVAS;
+  const [x, y] = [p.x * k, p.y * k];
   for (let i = pieces.length - 1; i >= 0; i--) {
     const piece = pieces[i];
     if (piece.role === "light") continue;
-    const e = parts?.[piece.part];
+    const part = piece.split && y < piece.split.row ? piece.split.part : piece.part;
+    const e = parts?.[part];
     const gone = e?.hidden === true || e?.removed === true;
     if (gone && !(drive && piece.role === "surface")) continue;
-    if (alphaAt(piece, p.x * k, p.y * k) >= PICK_ALPHA) return { part: piece.part, surface: piece.role === "surface" };
+    if (alphaAt(piece, x, y) >= PICK_ALPHA) return { part, surface: piece.role === "surface" };
   }
   return null;
 }

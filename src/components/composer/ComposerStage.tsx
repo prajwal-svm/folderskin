@@ -60,7 +60,7 @@ const DRAG_PX = 3;
  * The tint over the selected part of the folder or drive: the accent lightened towards white, so
  * it shows as a change even on a part that's already the accent's colour.
  */
-const partTint = (accent: string) => withAlpha(mix(accent || "#3a86ff", "#ffffff", 0.45), 0.5);
+const partTint = (accent: string) => withAlpha(mix(accent || "#3a86ff", "#ffffff", 0.45), 0.38);
 
 export type Backdrop = "window" | "light" | "dark" | "colour";
 

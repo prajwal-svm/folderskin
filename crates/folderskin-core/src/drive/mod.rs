@@ -486,7 +486,6 @@ pub fn pieces(shape: DriveShape, size: u32) -> Vec<Piece> {
         once(plan.parts_in(Layer::Over)),
     );
     let names = once(&[under.clone(), over.clone()].concat());
-    let rows = 0..size;
     // Each part drawn on its own, and cut down to its pixels at once.
     let mut cut = a_few_at_a_time(&names, |&part| {
         let d = shape.draw_part(size, part);
@@ -496,8 +495,8 @@ pub fn pieces(shape: DriveShape, size: u32) -> Vec<Piece> {
             Role::Paint
         };
         (
-            Piece::cut(part, Role::Paint, &d.body, rows.clone()),
-            Piece::cut(part, role, &d.over, rows.clone()),
+            Piece::cut(part, Role::Paint, &d.body),
+            Piece::cut(part, role, &d.over),
         )
     });
     let at = |part: &str| names.iter().position(|p| *p == part).expect("drawn");
@@ -512,7 +511,7 @@ pub fn pieces(shape: DriveShape, size: u32) -> Vec<Piece> {
         Transform::identity(),
     );
     let mut out: Vec<Piece> = under.iter().filter_map(|p| cut[at(p)].0.take()).collect();
-    out.extend(Piece::surface("face", &face, rows.clone()));
+    out.extend(Piece::surface("face", &face));
     out.extend(over.iter().filter_map(|p| cut[at(p)].1.take()));
     out
 }

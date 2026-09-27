@@ -11,7 +11,7 @@
  */
 import type { ComposerPiece } from "../lib/tauri";
 import { CANVAS, isHome, type BaseEdit, type Shape } from "./doc";
-import { frameMatrix, loadPieces, partColor, recoloured, type Piece } from "./base";
+import { frameMatrix, loadPieces, partColor, partsIn, recoloured, type Piece } from "./base";
 import { cssColor } from "./color";
 import type { Point } from "./geometry";
 // Not the composer's own catalog: the browser preview (lib/devMock.ts) draws with this too, and
@@ -210,10 +210,27 @@ export function drawFolderView(ctx: Ctx, design: CanvasImageSource, t: TemplateI
 
 // ---------- the folder or drive in its parts ----------
 
-/** Spare canvases for drawing a design on its folder or drive in parts, kept by whoever draws often. */
-export type Scratch = { mask: HTMLCanvasElement; icon: HTMLCanvasElement };
+/**
+ * Spare canvases for drawing a design on its folder or drive in parts, kept by whoever draws often:
+ * `mask` and `icon` the size drawn at, `piece` a piece's for its tint, and `runs` each run of parts
+ * put together, until a part in it changes.
+ */
+export type Scratch = { mask: HTMLCanvasElement; icon: HTMLCanvasElement; piece: HTMLCanvasElement; runs: Map<number, { key: string; canvas: HTMLCanvasElement }> };
 
-export const makeScratch = (): Scratch => ({ mask: document.createElement("canvas"), icon: document.createElement("canvas") });
+export const makeScratch = (): Scratch => ({
+  mask: document.createElement("canvas"),
+  icon: document.createElement("canvas"),
+  piece: document.createElement("canvas"),
+  runs: new Map(),
+});
+
+/** A number for each template, for what's kept of it. */
+const templateIds = new WeakMap<TemplateImages, number>();
+let nextTemplateId = 1;
+const templateId = (t: TemplateImages) => {
+  if (!templateIds.has(t)) templateIds.set(t, nextTemplateId++);
+  return templateIds.get(t)!;
+};
 
 function sized(c: HTMLCanvasElement, px: number): HTMLCanvasElement {
   if (c.width !== px || c.height !== px) {
@@ -247,7 +264,35 @@ const isGone = (base: BaseEdit | undefined, part: string) => base?.parts?.[part]
  * design's backgrounds there: then the design is needed without them too ([`Onto`]'s `upper`).
  */
 export function needsUpper(t: TemplateImages, base: BaseEdit | undefined): boolean {
-  return t.pieces.some((p) => p.role === "surface" && base?.parts?.[p.part]?.color !== undefined && !isGone(base, p.part));
+  return t.pieces.some((p) => p.role === "surface" && partsIn(p).some((part) => base?.parts?.[part]?.color !== undefined && !isGone(base, part)));
+}
+
+/** A band of a piece, `y0` to `y1` in the canvas's pixels, drawn as `part`. */
+type Band = { part: string; y0: number; y1: number };
+
+/**
+ * The bands a piece is drawn in: the whole of it as its own part, or, for a folder's back panel,
+ * the tab above its split and the back below, split on a row of the canvas's own pixels so the two
+ * meet exactly, with no seam, at any size.
+ */
+function bands(p: Piece, k: number, px: number): Band[] {
+  if (!p.split) return [{ part: p.part, y0: 0, y1: px }];
+  const row = Math.round(p.split.row * k);
+  return [
+    { part: p.split.part, y0: 0, y1: row },
+    { part: p.part, y0: row, y1: px },
+  ];
+}
+
+/** Draws `draw` on `g` cut to a band, when the piece has more than one. */
+function inBand(g: Ctx, band: Band, whole: boolean, px: number, draw: () => void) {
+  if (whole) return draw();
+  g.save();
+  g.beginPath();
+  g.rect(0, band.y0, px, band.y1 - band.y0);
+  g.clip();
+  draw();
+  g.restore();
 }
 
 /** `source` (a picture or a colour) cut to one piece, on `scratch`, with nothing anywhere else. */
@@ -292,60 +337,117 @@ export function drawBase(ctx: Ctx, design: CanvasImageSource, t: TemplateImages,
   const k = px / t.size;
   const edit = (part: string) => onto.base?.parts?.[part] ?? {};
   const gone = (part: string) => isGone(onto.base, part);
-  const shows = (p: Piece) => p.role === "surface" && (onto.drive || !gone(p.part));
+  /** Whether the design shows through a surface's band: a drive's face always does. */
+  const shows = (p: Piece, band: Band) => p.role === "surface" && (onto.drive || !gone(band.part));
   const place = (p: Piece) => p.rect.map((v) => v * k) as [number, number, number, number];
 
   if (skeleton) {
     const m = mask.getContext("2d")!;
     reset(m);
     m.clearRect(0, 0, px, px);
-    for (const p of t.pieces) if (shows(p)) m.drawImage(p.img, ...place(p));
+    for (const p of t.pieces) {
+      const all = bands(p, k, px);
+      for (const band of all) if (shows(p, band)) inBand(m, band, all.length === 1, px, () => m.drawImage(p.img, ...place(p)));
+    }
     m.globalCompositeOperation = "source-in";
     m.drawImage(checkerboard(px), 0, 0);
     m.globalCompositeOperation = "source-over";
     g.drawImage(mask, 0, 0, px, px);
     // The folder's whole outline, while the whole folder is there.
-    if (!t.pieces.some((p) => gone(p.part))) drawOutline(g, t, px, mask, SKELETON_LINE, 1);
+    if (!t.pieces.some((p) => partsIn(p).some(gone))) drawOutline(g, t, px, mask, SKELETON_LINE, 1);
     reset(g);
   }
 
-  /** The selected part's pieces tinted, each where it's drawn so what's over it still hides it. */
-  const tint = (pieces: Piece[]) => {
-    if (!onto.highlight || pieces.length === 0) return;
-    const m = mask.getContext("2d")!;
+  /** A piece tinted where it's drawn, `at` pixels a template pixel, so what's over it still hides it: the selected part's. */
+  const tint = (on: Ctx, p: Piece, at: number) => {
+    if (!onto.highlight) return;
+    const [w, h] = [p.img.naturalWidth, p.img.naturalHeight];
+    const c = scratch.piece;
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    const m = c.getContext("2d")!;
     reset(m);
-    m.clearRect(0, 0, px, px);
-    for (const p of pieces) m.drawImage(p.img, ...place(p));
+    m.clearRect(0, 0, w, h);
+    m.drawImage(p.img, 0, 0);
     m.globalCompositeOperation = "source-in";
     m.fillStyle = onto.highlight.color;
-    m.fillRect(0, 0, px, px);
+    m.fillRect(0, 0, w, h);
     m.globalCompositeOperation = "source-over";
-    g.drawImage(mask, 0, 0, px, px);
+    on.drawImage(c, ...(p.rect.map((v) => v * at) as [number, number, number, number]));
   };
-  const tinted = (p: Piece) => p.part === onto.highlight?.part && p.role !== "light";
+  // A part the design shows on is tinted once, over the design there; any other part on its colours.
+  const surfaced = new Set(t.pieces.filter((p) => p.role === "surface").flatMap(partsIn));
+  const picked = (p: Piece, band: Band) => band.part === onto.highlight?.part && (surfaced.has(band.part) ? p.role === "surface" : p.role === "paint");
 
-  for (const p of t.pieces) {
-    const e = edit(p.part);
-    if (p.role === "surface") {
-      if (!shows(p)) continue;
-      const own = !gone(p.part) && e.color ? e.color : null;
-      g.globalAlpha = onto.drive ? 1 : (e.opacity ?? 1);
-      // A folder's panel in a colour of its own: the colour, then the design's upper layers over it.
-      if (own && !onto.drive) g.drawImage(cutToPiece(mask, own, p, k, px), 0, 0, px, px);
-      g.drawImage(cutToPiece(mask, own ? (onto.upper ?? design) : design, p, k, px), 0, 0, px, px);
-      g.globalAlpha = 1;
-      if (tinted(p) && !gone(p.part)) tint([p]);
+  /**
+   * The pieces from `from` to `to`, none of them a surface, put together at the template's own
+   * size, pixel for pixel as the saved icon has them, each in its colour and opacity, or left out.
+   * Parts that meet are joined before the canvas scales them, so no seam opens between them at any
+   * size. Kept until one of their parts changes.
+   */
+  const run = (from: number, to: number): HTMLCanvasElement => {
+    const pieces = t.pieces.slice(from, to);
+    const parts = [...new Set(pieces.flatMap(partsIn))];
+    const tinted = onto.highlight && parts.includes(onto.highlight.part) ? onto.highlight : null;
+    const key = JSON.stringify([templateId(t), parts.map((part) => onto.base?.parts?.[part] ?? null), tinted]);
+    const kept = scratch.runs.get(from);
+    if (kept?.key === key) return kept.canvas;
+    const canvas = sized(kept?.canvas ?? document.createElement("canvas"), t.size);
+    const r = canvas.getContext("2d")!;
+    reset(r);
+    r.clearRect(0, 0, t.size, t.size);
+    for (const p of pieces) {
+      const all = bands(p, 1, t.size);
+      for (const band of all) {
+        if (gone(band.part)) continue;
+        const e = edit(band.part);
+        inBand(r, band, all.length === 1, t.size, () => {
+          r.globalAlpha = e.opacity ?? 1;
+          const lum = e.color && p.role === "paint" ? partColor(t.pieces, band.part)?.lum : undefined;
+          r.drawImage(lum !== undefined && e.color ? recoloured(p, e.color, lum) : p.img, p.rect[0], p.rect[1]);
+          r.globalAlpha = 1;
+          if (picked(p, band)) tint(r, p, 1);
+        });
+      }
+    }
+    scratch.runs.set(from, { key, canvas });
+    return canvas;
+  };
+
+  for (let i = 0; i < t.pieces.length; ) {
+    const p = t.pieces[i];
+    if (p.role !== "surface") {
+      let end = i;
+      while (end < t.pieces.length && t.pieces[end].role !== "surface") end++;
+      g.drawImage(run(i, end), 0, 0, px, px);
+      i = end;
       continue;
     }
-    if (gone(p.part)) continue;
-    g.globalAlpha = e.opacity ?? 1;
-    const lum = e.color && p.role === "paint" ? partColor(t.pieces, p.part)?.lum : undefined;
-    g.drawImage(lum !== undefined && e.color ? recoloured(p, e.color, lum) : p.img, ...place(p));
-    g.globalAlpha = 1;
-    if (tinted(p)) tint([p]);
+    const all = bands(p, k, px);
+    for (const band of all) {
+      if (!shows(p, band)) continue;
+      const e = edit(band.part);
+      const own = !gone(band.part) && e.color ? e.color : null;
+      inBand(g, band, all.length === 1, px, () => {
+        g.globalAlpha = onto.drive ? 1 : (e.opacity ?? 1);
+        // A folder's panel in a colour of its own: the colour, then the design's upper layers over it.
+        if (own && !onto.drive) g.drawImage(cutToPiece(mask, own, p, k, px), 0, 0, px, px);
+        g.drawImage(cutToPiece(mask, own ? (onto.upper ?? design) : design, p, k, px), 0, 0, px, px);
+        g.globalAlpha = 1;
+        if (picked(p, band) && !gone(band.part)) tint(g, p, k);
+      });
+    }
+    i++;
   }
   // A part left out still shows where it would be while it's selected, over everything.
-  if (onto.highlight && gone(onto.highlight.part)) tint(t.pieces.filter(tinted));
+  if (onto.highlight && gone(onto.highlight.part)) {
+    for (const p of t.pieces) {
+      const all = bands(p, k, px);
+      for (const band of all) if (picked(p, band)) inBand(g, band, all.length === 1, px, () => tint(g, p, k));
+    }
+  }
   g.restore();
 
   if (target && frame) {
