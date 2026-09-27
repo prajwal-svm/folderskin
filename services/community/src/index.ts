@@ -103,7 +103,10 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     const { success } = await env.BURST.limit({ key: await networkHash(env, request) });
     if (!success) {
       if (sharing(request.method, pathname)) {
-        const wait = (await burstStrike(env, request)) - now();
+        // One reading of the clock for the strike and the wait, so a second that turns over
+        // between them doesn't take one off the wait.
+        const at = now();
+        const wait = (await burstStrike(env, request, at)) - at;
         if (wait > BURST_SECONDS) throw coolingDown(wait);
       }
       throw fail(429, "slow_down", "Too many requests from your network. Wait a minute and try again.", { "Retry-After": String(BURST_SECONDS) });
