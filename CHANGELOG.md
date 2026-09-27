@@ -4,7 +4,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.12 - 2026-09-27
 
 ### Added
 
@@ -65,9 +65,6 @@ All notable changes to FolderSkin are recorded here. The format follows
   the web view's print dialog, or its find bar over the window's own buttons.
 - **The command line's `apply`, `revert` and `glyph` refresh Explorer.** On Windows they ended
   before the refresh they asked for went out.
-
-### Fixed
-
 - **`folderskin ai theme` paints without lettering.** The Local Model often wrote a folder's
   name on the picture it painted for it, and misspelled it ("GAMEES", "Budget- truchcher"). A
   theme now asks for no words or letters, since Finder and Explorer show the name under each
