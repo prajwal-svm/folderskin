@@ -181,12 +181,20 @@ fn is_hidden_by_os(meta: &Metadata) -> bool {
     meta.st_flags() & libc::UF_HIDDEN != 0
 }
 
-/// Windows: the hidden or system attribute, which Explorer hides by default.
+/// Windows: the hidden attribute, which Explorer hides by default.
+///
+/// Not the system attribute on its own. Explorer shows a folder that carries it, since it's the
+/// mark of a folder with a `desktop.ini` of its own: every folder FolderSkin skins (see
+/// `apply::windows`), and any folder given an icon in its Properties. Leaving those out meant a
+/// second run over a tree passed by every folder the first had skinned, and **Remove custom
+/// icons** over it took nothing off them. The system's own folders that Explorer hides (the
+/// Recycle Bin's, `System Volume Information`) are hidden as well, and the ones it shows are
+/// refused by [`is_system_location`] whatever they carry.
 #[cfg(windows)]
 fn is_hidden_by_os(meta: &Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
-    use windows_sys::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_SYSTEM};
-    meta.file_attributes() & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) != 0
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_HIDDEN;
+    meta.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
 }
 
 /// Elsewhere a leading dot is the only way to hide a folder.
@@ -745,18 +753,25 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn folders_windows_hides_are_skipped() {
+    fn folders_windows_hides_are_skipped_and_skinned_ones_are_not() {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::Storage::FileSystem::{
-            SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_SYSTEM,
+            SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
+            FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_SYSTEM,
         };
         let tmp = tempfile_dir();
         let root = validate_folder(&tmp).unwrap();
-        make(&root, &["Hidden/inside", "System/inside", "Shown"]);
-        for (name, attribute) in [
-            ("Hidden", FILE_ATTRIBUTE_HIDDEN),
-            ("System", FILE_ATTRIBUTE_SYSTEM),
-        ] {
+        make(
+            &root,
+            &[
+                "Hidden/inside",
+                "Protected/inside",
+                "Customised/inside",
+                "Skinned/inside",
+                "Shown",
+            ],
+        );
+        let mark = |name: &str, attribute: u32| {
             let wide: Vec<u16> = root
                 .join(name)
                 .as_os_str()
@@ -765,8 +780,26 @@ mod tests {
                 .collect();
             // SAFETY: `wide` is a NUL-terminated UTF-16 path that outlives the call.
             assert_ne!(unsafe { SetFileAttributesW(wide.as_ptr(), attribute) }, 0);
-        }
-        assert_eq!(found(&walk(&root, Order::Nearest)), ["Shown"]);
+        };
+        // What Explorer hides: the hidden attribute, alone or with the system one.
+        mark("Hidden", FILE_ATTRIBUTE_HIDDEN);
+        mark("Protected", FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+        // What it shows: a folder given an icon in its Properties (system), and one FolderSkin
+        // skinned (read-only and system), which a second run has to reach.
+        mark("Customised", FILE_ATTRIBUTE_SYSTEM);
+        mark("Skinned", FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM);
+        assert_eq!(
+            found(&walk(&root, Order::Nearest)),
+            [
+                "Customised",
+                "Shown",
+                "Skinned",
+                "Customised/inside",
+                "Skinned/inside"
+            ]
+        );
+        // The scratch folder's cleanup can't take a read-only folder away.
+        mark("Skinned", FILE_ATTRIBUTE_NORMAL);
     }
 
     #[cfg(target_os = "macos")]
