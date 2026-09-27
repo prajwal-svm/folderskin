@@ -23,6 +23,14 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **Shell completions.** `folderskin completions zsh` (or bash, fish, PowerShell, elvish) prints
   them for your shell.
 
+### Changed
+
+- **Crisper icons in lists.** The small sizes that list and column views show, 16 to 64 px, are
+  now each finished on their own. A folder's or a drive's straight edges land on whole pixels,
+  the pale line that ran just inside the outline is gone, and a picture or lettering on the icon
+  is a little sharper, with no halo round it. Every skin gets this, the finished pictures in
+  community packs too. From 128 px up, icons are exactly as they were.
+
 ## 0.1.11 - 2026-09-27
 
 ### Fixed

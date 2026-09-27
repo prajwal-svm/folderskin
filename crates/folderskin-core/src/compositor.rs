@@ -9,8 +9,13 @@
 //! preview the user picks from and the icon written to disk are therefore the same pixels.
 //! [`template_layers`] draws the same template in the layers a design sits between, so the
 //! composer's live preview is made of the same pixels too.
+//!
+//! The sizes a list or column view shows, [`small::LARGEST`] px and below, are each finished on
+//! their own from that master ([`crate::small`]): a crisp outline on whole pixels, no pale line
+//! inside it, a little more bite to what's inside. Every icon, whatever made its master, is
+//! shrunk by one function, [`to_picture`], so they are all finished alike.
 
-use crate::{fit, geometry as g, geometry_linux as l, geometry_windows as w, raster};
+use crate::{fit, geometry as g, geometry_linux as l, geometry_windows as w, raster, small};
 use tiny_skia::{
     BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Mask, Paint, Path, Pattern,
     Pixmap, Shader, SpreadMode, Stroke, Transform,
@@ -132,7 +137,7 @@ impl IconSet {
     }
 }
 
-/// Master render size; every smaller size is a Lanczos3 downsample of this.
+/// Master render size; every smaller size is shrunk from this by [`to_picture`].
 pub const RENDER_SIZE: u32 = 2048;
 /// Sizes the app renders for an applied icon.
 pub const ICON_SIZES: [u32; 10] = [2048, 1024, 512, 256, 128, 64, 48, 32, 24, 16];
@@ -524,10 +529,17 @@ pub fn render_picture_in(art: &Artwork, size: u32, style: Style) -> image::RgbaI
     to_picture(&render_master_sized_in(art, style, master), size)
 }
 
-/// A master as a straight-alpha picture `size` px square.
+/// A master as a straight-alpha picture `size` px square: the master itself at its own size, a
+/// Lanczos3 downsample of it above [`small::LARGEST`] px, and at that size and below one finished
+/// for a small icon ([`small::shrink`]).
+///
+/// Every icon set, whatever made its master (a folder, a drive, a design or a finished picture),
+/// and every picker's picture comes through here, so they are all shrunk alike.
 pub(crate) fn to_picture(master: &raster::Premul, size: u32) -> image::RgbaImage {
     if master.width == size && master.height == size {
         raster::to_straight_rgba(master)
+    } else if size <= small::LARGEST {
+        raster::to_straight_rgba(&small::shrink(master, size))
     } else {
         raster::to_straight_rgba(&raster::downsample(master, size))
     }
@@ -601,19 +613,12 @@ fn render_master_placed_with(
     t.draw(&paint, &paint)
 }
 
-/// Every requested size of one master render: the master itself at [`RENDER_SIZE`], a Lanczos3
-/// downsample of it otherwise.
+/// Every requested size of one master render: the master itself at [`RENDER_SIZE`], shrunk by
+/// [`to_picture`] otherwise.
 fn downsampled(master: &raster::Premul, sizes: &[u32]) -> IconSet {
     let sizes = sizes
         .iter()
-        .map(|&size| {
-            let img = if size == RENDER_SIZE {
-                raster::to_straight_rgba(master)
-            } else {
-                raster::to_straight_rgba(&raster::downsample(master, size))
-            };
-            (size, img)
-        })
+        .map(|&size| (size, to_picture(master, size)))
         .collect();
     IconSet { sizes }
 }
@@ -955,8 +960,8 @@ pub fn template_pieces_in(size: u32, style: Style) -> Vec<Piece> {
 ///
 /// Used for whole-folder renders from an image model: the artwork is not composited onto our
 /// template, it *is* the icon. The picture is fitted into the square icon canvas, centred, with
-/// its aspect preserved, then downsampled through the same Lanczos path as a composited icon so
-/// the small sizes look identical in kind.
+/// its aspect preserved, then shrunk by the same [`to_picture`] as a composited icon, so its
+/// small sizes are finished the same way.
 pub fn icon_set_from_image(img: &image::RgbaImage, sizes: &[u32]) -> IconSet {
     let master = fit_into_canvas(img, RENDER_SIZE);
     let premul = raster::straight_to_premul(&master);
@@ -966,7 +971,7 @@ pub fn icon_set_from_image(img: &image::RgbaImage, sizes: &[u32]) -> IconSet {
             let out = if size == RENDER_SIZE {
                 master.clone()
             } else {
-                raster::to_straight_rgba(&raster::downsample(&premul, size))
+                to_picture(&premul, size)
             };
             (size, out)
         })
@@ -1239,6 +1244,144 @@ mod tests {
         let a = render_preview_png(&solid(1024, 958, [200, 30, 30, 255]), 256);
         let b = render_preview_png(&solid(1024, 958, [200, 30, 30, 255]), 256);
         assert_eq!(a, b);
+        // The small sizes, each finished on its own, come out the same every time too.
+        let small = || render_icon_set(&busy_artwork(), &[64, 48, 32, 24, 16]).sizes;
+        let (first, again) = (small(), small());
+        assert!(first == again);
+    }
+
+    /// Opaque artwork with detail everywhere, as a photo has.
+    fn busy_artwork() -> Artwork {
+        Artwork {
+            rgba: image::RgbaImage::from_fn(640, 600, |x, y| {
+                image::Rgba([(x * 3 + y) as u8, (y * 5) as u8, (x ^ y) as u8, 255])
+            }),
+            focus: (0.5, 0.5),
+        }
+    }
+
+    /// A finished folder picture: an orange box on transparency, wider than it is tall, so it is
+    /// letterboxed in the canvas and its edges fall between pixels at every small size.
+    fn finished_picture() -> image::RgbaImage {
+        image::RgbaImage::from_fn(700, 620, |x, y| {
+            let inside = (23..677).contains(&x) && (41..597).contains(&y);
+            image::Rgba(if inside {
+                [230, 160, 40, 255]
+            } else {
+                [0, 0, 0, 0]
+            })
+        })
+    }
+
+    /// Every way an icon set is made, each with the master it is made from and its name: artwork
+    /// on each folder and on a drive, a plain drive, a design on a folder and on a drive, and a
+    /// finished picture. The set at [`RENDER_SIZE`] is that master.
+    fn every_icon_set(sizes: &[u32]) -> Vec<(String, raster::Premul, IconSet)> {
+        let art = busy_artwork();
+        let design = gradient_design(512);
+        let stick = crate::drive::DriveShape::from_id("linux-removable").unwrap();
+        let disk = crate::drive::DriveShape::from_id("mac-external").unwrap();
+        let picture = finished_picture();
+        let mut all: Vec<(String, raster::Premul, IconSet)> = Style::ALL
+            .iter()
+            .map(|&style| {
+                (
+                    format!("artwork on {style:?}'s folder"),
+                    render_master_in(&art, style),
+                    render_icon_set_in(&art, sizes, style),
+                )
+            })
+            .collect();
+        all.extend([
+            (
+                "a design on Linux's folder".to_string(),
+                render_master_placed_in(&design, Style::Linux),
+                render_placed_icon_set_in(&design, sizes, Style::Linux),
+            ),
+            (
+                "artwork on a USB stick".to_string(),
+                crate::drive::render_master(stick, &art),
+                render_drive_icon_set(Some(&art), sizes, stick),
+            ),
+            (
+                "a plain external disk".to_string(),
+                crate::drive::render_master_plain(disk),
+                render_drive_icon_set(None, sizes, disk),
+            ),
+            (
+                "a design on an external disk".to_string(),
+                crate::drive::render_master_placed(disk, &design),
+                render_drive_placed_icon_set(&design, sizes, disk),
+            ),
+            (
+                "a finished picture".to_string(),
+                raster::straight_to_premul(&fit_into_canvas(&picture, RENDER_SIZE)),
+                icon_set_from_image(&picture, sizes),
+            ),
+        ]);
+        all
+    }
+
+    /// Only the small sizes are finished on their own: from 128 px up, every icon is the plain
+    /// Lanczos3 downsample it always was, byte for byte, and at [`RENDER_SIZE`] it is the master.
+    #[test]
+    fn sizes_from_128_up_are_the_plain_downsample_they_always_were() {
+        for (what, master, set) in every_icon_set(&[2048, 1024, 512, 256, 128]) {
+            for (size, img) in &set.sizes {
+                let want = if *size == RENDER_SIZE {
+                    raster::to_straight_rgba(&master)
+                } else {
+                    raster::to_straight_rgba(&raster::downsample(&master, *size))
+                };
+                if what == "a finished picture" && *size == RENDER_SIZE {
+                    // Its master is the picture fitted into the canvas, straight, as it was.
+                    let fitted = fit_into_canvas(&finished_picture(), RENDER_SIZE);
+                    assert!(*img == fitted, "{what} at {size} px");
+                } else {
+                    assert!(*img == want, "{what} at {size} px");
+                }
+            }
+        }
+    }
+
+    /// Every icon set's small sizes come from the one finish, whatever made its master, and the
+    /// finish changes them: a plain downsample is soft at every one of them.
+    #[test]
+    fn every_icon_set_finishes_its_small_sizes_alike() {
+        let sizes = [64, 48, 32, 24, 16];
+        for (what, master, set) in every_icon_set(&sizes) {
+            let mut changed = 0;
+            for (size, img) in &set.sizes {
+                let finished = raster::to_straight_rgba(&crate::small::shrink(&master, *size));
+                assert!(*img == finished, "{what} at {size} px");
+                let plain = raster::to_straight_rgba(&raster::downsample(&master, *size));
+                changed += usize::from(*img != plain);
+            }
+            assert_eq!(changed, sizes.len(), "{what}");
+        }
+        // A picker's picture of a base at a small size is finished the same way, from its own
+        // smaller master.
+        let art = default_folder_artwork_in(Style::Windows);
+        let picture = render_picture_in(&art, 32, Style::Windows);
+        let master = render_master_sized_in(&art, Style::Windows, picture_master(32));
+        assert!(picture == raster::to_straight_rgba(&crate::small::shrink(&master, 32)));
+    }
+
+    #[test]
+    fn a_finished_pictures_small_sizes_have_crisper_edges() {
+        let picture = finished_picture();
+        let master = raster::straight_to_premul(&fit_into_canvas(&picture, RENDER_SIZE));
+        for (size, crisp) in icon_set_from_image(&picture, &[64, 48, 32, 24, 16]).sizes {
+            let plain = raster::to_straight_rgba(&raster::downsample(&master, size));
+            let (before, after) = (
+                crate::small::edge_energy(&plain),
+                crate::small::edge_energy(&crisp),
+            );
+            assert!(
+                after > before,
+                "{size} px: edge energy {before:.2} became {after:.2}"
+            );
+        }
     }
 
     #[test]

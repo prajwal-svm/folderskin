@@ -24,3 +24,4 @@ pub mod painted;
 pub mod raster;
 pub mod segment;
 pub mod shape;
+pub mod small;
