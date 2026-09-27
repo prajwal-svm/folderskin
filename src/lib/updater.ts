@@ -1,5 +1,6 @@
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { invoke } from "@tauri-apps/api/core";
 import { isTauri, mockFindUpdate } from "./devMock";
 
 /**
@@ -35,7 +36,7 @@ export async function findUpdate(): Promise<AvailableUpdate | null> {
     install: async (onProgress) => {
       let size = 0;
       let arrived = 0;
-      await update.downloadAndInstall((e: DownloadEvent) => {
+      await update.download((e: DownloadEvent) => {
         if (e.event === "Started") {
           size = e.data.contentLength ?? 0;
           onProgress(size ? 0 : null);
@@ -46,6 +47,10 @@ export async function findUpdate(): Promise<AvailableUpdate | null> {
           onProgress(1);
         }
       });
+      // Windows' installer closes FolderSkin as it starts, without quitting it, so what quitting
+      // finishes is finished first: a run over subfolders ends with the folder in hand.
+      await invoke("before_update").catch(() => {});
+      await update.install();
     },
   };
 }

@@ -72,6 +72,26 @@ fn log_panics_to(dir: std::path::PathBuf) {
 /// can take seconds.
 const QUIT_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// What quitting finishes rather than cuts off: the count of the folder on show stops reading it,
+/// which can be on a network share, a run over subfolders finishes the folder in hand, so none is
+/// left half changed, and a painting or mflux's install stops. (On macOS and Linux those don't end
+/// with the app; on Windows the job object ends them anyway.)
+fn end_work<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    app.state::<tree::Counts>().end();
+    app.state::<tree::Runs>().end(QUIT_WAIT);
+    folderskin_local::run::end_all();
+}
+
+/// [`end_work`] for an update about to be installed. On Windows the installer closes FolderSkin as
+/// it starts, without the exit that would end the work, so a run over subfolders was cut off in the
+/// middle of a folder.
+#[tauri::command]
+async fn before_update(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || end_work(&app))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() {
     let builder = tauri::Builder::default();
     // First, so a second FolderSkin ends before anything else starts. On Windows and Linux a
@@ -115,6 +135,7 @@ pub fn run() {
         .manage(tree::Counts::default())
         .manage(tree::Runs::default())
         .invoke_handler(tauri::generate_handler![
+            before_update,
             commands::list_skins,
             commands::inspect_path,
             commands::import_image,
@@ -241,14 +262,9 @@ pub fn run() {
                 // Quitting looks done at once, whatever is left to finish: the window has gone,
                 // and on macOS the Dock's FolderSkin goes now too (window.rs).
                 window::leave_dock();
-                // Nothing more is read from the folder on show, which can be on a network share.
-                app.state::<tree::Counts>().end();
-                // A run finishes the folder in hand, so none is left half-changed.
-                app.state::<tree::Runs>().end(QUIT_WAIT);
-                // A painting, or mflux's install, doesn't end with the app on macOS and Linux: it
-                // would go on for minutes after FolderSkin quit, holding gigabytes of memory and
-                // the graphics card. (On Windows the job object ends it anyway.)
-                folderskin_local::run::end_all();
+                // Left as it is, a painting or mflux's install would go on for minutes after
+                // FolderSkin quit, holding gigabytes of memory and the graphics card.
+                end_work(app);
             }
         });
 }
