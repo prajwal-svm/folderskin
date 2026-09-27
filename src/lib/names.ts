@@ -31,3 +31,13 @@ export function clip(name: string, max = CLIP_CHARS): string {
   if (chars[max] !== " " && space >= max * 0.6) cut = cut.slice(0, space);
   return cut.replace(/[\s,.;:!?–—-]+$/u, "");
 }
+
+/**
+ * A skin's name as a file name on any system: the characters Windows, macOS or Linux won't take
+ * become spaces, dots and spaces go from both ends (a leading dot hides a file), and a name with
+ * nothing left is "icon".
+ */
+export function fileName(name: string): string {
+  const safe = cleanName(name.replace(/[\\/:*?"<>|]/g, " ")).replace(/^[\s.]+|[\s.]+$/gu, "");
+  return safe || "icon";
+}

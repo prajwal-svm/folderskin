@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "Couldn't delete {{name}}: {{reason}}",
-    "save": "Couldn't save {{name}}: {{reason}}"
+    "save": "Couldn't save {{name}}: {{reason}}",
+    "export": "Couldn't export {{name}}: {{reason}}"
   },
   "empty": {
     "loadFailed": "The skins didn't load",
@@ -65,7 +66,15 @@
     "addTag": "add a tag",
     "editDesign": "Edit design",
     "remix": "Remix in the composer",
+    "export": "Export icon",
     "share": "Share with community"
+  },
+  "export": {
+    "title": "Export {{name}}",
+    "macIcon": "macOS icon",
+    "windowsIcon": "Windows icon",
+    "png": "PNG picture",
+    "done": "Saved {{file}}"
   },
   "facts": {
     "madeWith": "Made with",

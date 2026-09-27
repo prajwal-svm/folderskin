@@ -1336,6 +1336,10 @@ export const mockApi = {
     await sleep(400);
     mockIcons.set(folder, null);
   },
+  // Nothing is written in the browser preview; it only takes the time a real save would.
+  exportSkin: async (_skinId: string, _dest: string) => {
+    await sleep(300);
+  },
   // `?os=windows` or `?os=linux` draws the preview as that OS (Windows' own window buttons, and so on).
   platformInfo: async (): Promise<PlatformInfo> => {
     const os = new URLSearchParams(location.search).get("os");

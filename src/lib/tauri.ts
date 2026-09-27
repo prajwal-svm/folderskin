@@ -430,6 +430,8 @@ const tauriApi = {
   inspectPath: (path: string) => invoke<PathInfo>("inspect_path", { path }),
   importImage: (path: string) => invoke<Skin>("import_image", { path }),
   applySkin: (folder: string, skinId: string) => invoke<void>("apply_skin", { folder, skinId }),
+  /** Saves a skin as an icon file of its own: an .icns or .ico with every size, or a PNG, as `dest`'s name asks. */
+  exportSkin: (skinId: string, dest: string) => invoke<void>("export_skin", { skinId, dest }),
   revertSkin: (folder: string) => invoke<void>("revert_skin", { folder }),
   platformInfo: () => invoke<PlatformInfo>("platform_info"),
 

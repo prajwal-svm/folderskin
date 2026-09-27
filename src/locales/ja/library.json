@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "{{name}}を削除できませんでした：{{reason}}",
-    "save": "{{name}}を保存できませんでした：{{reason}}"
+    "save": "{{name}}を保存できませんでした：{{reason}}",
+    "export": "{{name}}を書き出せませんでした：{{reason}}"
   },
   "empty": {
     "loadFailed": "スキンを読み込めませんでした",
@@ -65,7 +66,15 @@
     "addTag": "タグを追加",
     "editDesign": "デザインを編集",
     "remix": "デザイナーでリミックス",
+    "export": "アイコンを書き出す",
     "share": "コミュニティで共有"
+  },
+  "export": {
+    "title": "{{name}}を書き出す",
+    "macIcon": "macOSアイコン",
+    "windowsIcon": "Windowsアイコン",
+    "png": "PNG画像",
+    "done": "{{file}}を保存しました"
   },
   "facts": {
     "madeWith": "使用モデル",

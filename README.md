@@ -134,7 +134,10 @@ Any other picture is wrapped onto FolderSkin's folder.
 Every skin you add has a ⋯ menu: rename it (a double click on its name, or F2, jumps straight
 there), give it tags (they become filters along the top),
 see how it was made (the AI model and prompt, or the pack and who shared it), share it or delete
-it. AI results are tagged with their style, such as `airbrush`, as they arrive.
+it. AI results are tagged with their style, such as `airbrush`, as they arrive. **Export icon**
+saves any skin as an icon file of its own, drawn as its preview shows it: an `.icns` for macOS or
+an `.ico` for Windows, with every size in it, or a PNG. Use it for an app, a disk image or another
+computer.
 
 **Settings**, at the bottom of the sidebar, holds the theme, your AI keys, what sharing fills in
 and where your skins are saved. Hover the version badge beside the logo for About.

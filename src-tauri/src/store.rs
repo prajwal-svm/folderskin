@@ -298,6 +298,22 @@ impl SkinImage {
         }
     }
 
+    /// The icon at every requested size as it is saved in a file of its own (Export icon), on
+    /// what the skin is for, as its preview shows it: artwork on the folder chosen now, drive
+    /// artwork on the drive its `base` names or else this system's, a finished skin as it is.
+    pub fn export_icon_set(&self, sizes: &[u32], base: Option<&str>) -> IconSet {
+        match self {
+            SkinImage::DriveArt(_) => {
+                let shape = base
+                    .and_then(folderskin_core::base::find)
+                    .and_then(|b| b.drive())
+                    .unwrap_or_else(|| DriveShape::default_for(DriveStyle::current()));
+                self.drive_icon_set(sizes, shape)
+            }
+            _ => self.icon_set(sizes),
+        }
+    }
+
     /// PNG preview at `size` px, through the same render as the applied icon, on what the skin is
     /// for: artwork on the folder, drive artwork on this system's drive, a finished skin as it is.
     pub fn preview_png(&self, size: u32) -> Vec<u8> {
@@ -1318,6 +1334,36 @@ mod tests {
             rgba: RgbaImage::from_pixel(64, 60, image::Rgba([r, g, b, 255])),
             focus,
         }))
+    }
+
+    /// Every size's pixels, to compare two renders.
+    fn pixels(icons: &IconSet) -> Vec<(u32, Vec<u8>)> {
+        icons
+            .sizes
+            .iter()
+            .map(|(size, img)| (*size, img.as_raw().clone()))
+            .collect()
+    }
+
+    #[test]
+    fn a_skin_is_exported_as_its_preview_shows_it() {
+        let sizes = [64, 16];
+        // Artwork on the folder, as it is applied.
+        let art = artwork([200, 40, 60], (0.5, 0.5));
+        let on_folder = pixels(&art.icon_set(&sizes));
+        assert_eq!(pixels(&art.export_icon_set(&sizes, None)), on_folder);
+        // Drive artwork on this system's drive.
+        let drive_art = art.clone().as_shape(SkinShape::Drive);
+        let own_drive = DriveShape::default_for(DriveStyle::current());
+        let on_drive = pixels(&drive_art.export_icon_set(&sizes, None));
+        assert_eq!(on_drive, pixels(&drive_art.drive_icon_set(&sizes, own_drive)));
+        assert_ne!(on_drive, on_folder, "a drive, not a folder");
+        // A finished skin as it is.
+        let done = folder();
+        assert_eq!(
+            pixels(&done.export_icon_set(&sizes, None)),
+            pixels(&done.icon_set(&sizes))
+        );
     }
 
     /// A small finished "folder": opaque in the middle, transparent around it.

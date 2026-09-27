@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "Impossible de supprimer {{name}} : {{reason}}",
-    "save": "Impossible d'enregistrer {{name}} : {{reason}}"
+    "save": "Impossible d'enregistrer {{name}} : {{reason}}",
+    "export": "Impossible d'exporter {{name}} : {{reason}}"
   },
   "empty": {
     "loadFailed": "Les habillages ne se sont pas chargés",
@@ -65,7 +66,15 @@
     "addTag": "ajouter un tag",
     "editDesign": "Modifier la création",
     "remix": "Remixer dans l'éditeur",
+    "export": "Exporter l'icône",
     "share": "Partager avec la communauté"
+  },
+  "export": {
+    "title": "Exporter {{name}}",
+    "macIcon": "Icône macOS",
+    "windowsIcon": "Icône Windows",
+    "png": "Image PNG",
+    "done": "{{file}} enregistré"
   },
   "facts": {
     "madeWith": "Fait avec",

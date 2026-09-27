@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "No se pudo eliminar {{name}}: {{reason}}",
-    "save": "No se pudo guardar {{name}}: {{reason}}"
+    "save": "No se pudo guardar {{name}}: {{reason}}",
+    "export": "No se pudo exportar {{name}}: {{reason}}"
   },
   "empty": {
     "loadFailed": "Los aspectos no se cargaron",
@@ -65,7 +66,15 @@
     "addTag": "añadir una etiqueta",
     "editDesign": "Editar el diseño",
     "remix": "Remezclar en el editor",
+    "export": "Exportar icono",
     "share": "Compartir con la comunidad"
+  },
+  "export": {
+    "title": "Exportar {{name}}",
+    "macIcon": "Icono de macOS",
+    "windowsIcon": "Icono de Windows",
+    "png": "Imagen PNG",
+    "done": "Se guardó {{file}}"
   },
   "facts": {
     "madeWith": "Hecho con",

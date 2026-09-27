@@ -15,7 +15,8 @@
   },
   "errors": {
     "delete": "无法删除 {{name}}：{{reason}}",
-    "save": "无法保存 {{name}}：{{reason}}"
+    "save": "无法保存 {{name}}：{{reason}}",
+    "export": "无法导出 {{name}}：{{reason}}"
   },
   "empty": {
     "loadFailed": "皮肤没能加载出来",
@@ -65,7 +66,15 @@
     "addTag": "添加标签",
     "editDesign": "编辑设计",
     "remix": "在设计器中再创作",
+    "export": "导出图标",
     "share": "分享到社区"
+  },
+  "export": {
+    "title": "导出 {{name}}",
+    "macIcon": "macOS 图标",
+    "windowsIcon": "Windows 图标",
+    "png": "PNG 图片",
+    "done": "已保存 {{file}}"
   },
   "facts": {
     "madeWith": "生成模型",

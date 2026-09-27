@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorMessage, type PlatformInfo, type Skin } from "./lib/tauri";
 import { explain } from "./lib/sentences";
 import { isTauri, mockPickFolder } from "./lib/devMock";
 import { IMAGE_EXTENSIONS } from "./lib/files";
-import { browseLabel, keys, localOs } from "./lib/platform";
+import { browseLabel, keys, localOs, osOf } from "./lib/platform";
 import { t as tNow, useT } from "./i18n";
 import { isYours, tagCounts, tagLabel } from "./lib/tags";
 import { activeCount, applyFilters, type Filters, loadSort, matchesQuery, NO_FILTERS, saveSort, type Sort, sortSkins } from "./lib/filters";
@@ -53,7 +53,7 @@ import { StarIcon } from "./components/icons/star";
 import { FolderOpenIcon } from "./components/icons/folder-open";
 import { ListFilterIcon } from "./components/icons/list-filter";
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "./components/icons/panel-right";
-import { clip } from "./lib/names";
+import { clip, fileName } from "./lib/names";
 import { driveName, shapeFirst } from "./lib/drives";
 import { useDrivePictures } from "./hooks/useDrivePictures";
 
@@ -919,6 +919,45 @@ export default function App() {
     });
   }, []);
 
+  /**
+   * Saves a skin as an icon file of its own, to use anywhere: an .icns (macOS) or .ico (Windows)
+   * with every size in it, or a PNG, whichever the name chosen ends in. This system's own kind is
+   * offered first.
+   */
+  const exportSkin = useCallback(
+    async (skin: Skin) => {
+      const os = osOf(platform.os);
+      const kinds = [
+        { name: tNow("library.export.macIcon"), extensions: ["icns"] },
+        { name: tNow("library.export.windowsIcon"), extensions: ["ico"] },
+        { name: tNow("library.export.png"), extensions: ["png"] },
+      ];
+      const own = kinds[os === "macos" ? 0 : os === "windows" ? 1 : 2];
+      const filters = [own, ...kinds.filter((k) => k !== own)];
+      const extension = own.extensions[0];
+      const picked = isTauri()
+        ? await saveDialog({
+            title: tNow("library.export.title", { name: clip(skin.name) }),
+            defaultPath: `${fileName(skin.name)}.${extension}`,
+            filters,
+          }).catch(() => null)
+        : `/Users/you/Desktop/${fileName(skin.name)}.${extension}`;
+      if (typeof picked !== "string") return;
+      // A name typed with no kind of its own (some Linux dialogs add none) gets this system's.
+      const dest = /\.(icns|ico|png)$/i.test(picked) ? picked : `${picked}.${extension}`;
+      try {
+        await api.exportSkin(skin.id, dest);
+        toast(tNow("library.export.done", { file: clip(dest.split(/[\\/]/).pop() ?? dest) }), {
+          tone: "ok",
+          action: { label: tNow(`common.showIn.${os}`), run: () => void revealItemInDir(dest).catch(() => {}) },
+        });
+      } catch (e) {
+        toast(tNow("library.errors.export", { name: clip(skin.name), reason: errorMessage(e) }), { tone: "danger" });
+      }
+    },
+    [platform.os, toast],
+  );
+
   const askDelete = useCallback((skin: Skin) => setConfirmingDelete(skin), []);
   const cancelDelete = useCallback(() => setConfirmingDelete(null), []);
 
@@ -1426,6 +1465,10 @@ export default function App() {
           onDesign={() => {
             setMenu(null);
             designSkin(menu.skin);
+          }}
+          onExport={() => {
+            setMenu(null);
+            void exportSkin(menu.skin);
           }}
           onShare={
             isYours(menu.skin)
