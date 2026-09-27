@@ -10,7 +10,7 @@ written, what revert undoes, and where each mechanism falls short.
 | OS | apply | revert | files touched |
 |---|---|---|---|
 | macOS | `NSWorkspace.setIcon(None, path)` then `setIcon(image, path)` with an `NSImage` carrying the 16–1024 px representations, then `noteFileSystemChanged` on the folder and the one around it | `setIcon(None)`, and the same notes | the invisible `Icon\r` file that macOS itself keeps inside the folder |
-| Windows | writes `folderskin-<hash>.ico` and a `desktop.ini` with `[.ShellClassInfo]` / `IconResource=folderskin-<hash>.ico,0`, marks both hidden + system, deletes the icon file an earlier apply left, sets the folder's read-only attribute, then calls `SHChangeNotify` | removes FolderSkin's lines from `desktop.ini` (and deletes the file if FolderSkin created it), deletes FolderSkin's icon file, clears read-only | `desktop.ini`, `folderskin-<hash>.ico` |
+| Windows | writes `folderskin-<hash>.ico` and a `desktop.ini` with `[.ShellClassInfo]` / `IconResource=folderskin-<hash>.ico,0`, marks both hidden + system, deletes the icon file an earlier apply left, sets the folder's read-only and system attributes, asks Explorer to read the folder again (`SHGetSetFolderCustomSettings`), then calls `SHChangeNotify` | removes FolderSkin's lines from `desktop.ini` (and deletes the file if FolderSkin created it), deletes FolderSkin's icon file, clears read-only and system unless the folder had them before | `desktop.ini`, `folderskin-<hash>.ico` |
 | Linux | writes `.folderskin.png` (512 px) and a `.directory` with `[Desktop Entry]` / `Icon=/abs/path/.folderskin.png`, and runs `gio set <folder> metadata::custom-icon file://…` when `gio` is installed | deletes both files when they are FolderSkin's, and runs `gio set -t unset` on the metadata | `.directory`, `.folderskin.png` |
 
 All three writers validate that the path is an existing directory, refuse filesystem
@@ -94,9 +94,11 @@ Mac App Store, so FolderSkin ships as a DMG. Windows and Linux keep an opaque wi
 
 ### Windows
 
-Explorer only reads `desktop.ini` for folders that carry the read-only attribute. That
-attribute is the mechanism, not a mistake: the folder's contents stay writable and revert
-clears it again.
+Explorer only reads `desktop.ini` for folders that carry the read-only or the system attribute.
+FolderSkin sets both, as Windows' own guidance for customising a folder asks: with read-only
+alone, a folder on a OneDrive-synced Desktop kept drawing the plain folder. The attributes are
+the mechanism, not a mistake: the folder's contents stay writable, and revert clears them again,
+or leaves them on a folder that had them before FolderSkin did.
 
 The icon file is named after its own contents (`folderskin-` plus the first 64 bits of the
 `.ico`'s SHA-256) rather than a fixed `folderskin.ico`. Explorer caches an icon against the
@@ -112,9 +114,8 @@ if it is exactly `folderskin.ico` or `folderskin-` followed by sixteen hex digit
 
 #### Telling Explorer, so the folder changes on screen
 
-Two things are needed, and the app used to do neither. Each was confirmed on its own, by applying
-a skin to a folder sitting in an Explorer window that was already open and watching whether the
-icon changed without a refresh:
+Three things are needed. Each was confirmed on its own, by applying a skin to a folder that was
+already on screen and watching whether the icon changed without a refresh:
 
 1. **The icon file must be at a new path** (the content hash above). With a fixed
    `folderskin.ico`, the folder kept the icon it already had. On the first apply after a revert
@@ -126,9 +127,32 @@ icon changed without a refresh:
    and the folder on screen did not change. `SHCNE_UPDATEDIR` therefore goes to the parent as
    well, and the folder itself also gets `SHCNE_ATTRIBUTES` (applying sets its read-only bit) and
    `SHCNE_UPDATEITEM`.
+3. **Explorer must read the folder's `desktop.ini` again.** Explorer keeps what it read of a
+   folder's `desktop.ini` for about a minute, and draws the folder from that however often it's
+   told to draw it again. Measured with a capture of what the Desktop draws, on a OneDrive-synced
+   Desktop, redrawn after every skin: a skin applied up to 57 seconds after Explorer last read the
+   folder never showed, and one applied 70 seconds after or later always did. So a second skin
+   within a minute left the Desktop showing the one before, or the plain folder once that one's
+   icon file was gone, until the next redraw after the minute, such as applying a skin to another
+   folder. None of these made Explorer read the file again: the notifications above, the same
+   ones naming `desktop.ini` itself, `SHCNE_ASSOCCHANGED`, the Desktop's own refresh, the folder's
+   attributes taken off and put back, its time moved on, or `desktop.ini` rewritten in place.
+   Windows' own call for setting a folder's icon, `SHGetSetFolderCustomSettings`, did every
+   time, within a second or two. So an apply ends with it, asked for the `IconResource` line
+   FolderSkin has just written, before the notifications go out. It writes that line back through
+   the old INI routines, which read a file without a UTF-16 mark in the system's code page, so
+   it's only asked when the file is ASCII or UTF-16, and the file and both attributes are checked
+   afterwards and put back if they differ.
 
-With one of the two missing the icon does not change. With both it changes as the apply finishes.
-A machine-wide cache rebuild (`ie4uinit.exe -show`) is never needed for a folder we just wrote.
+With any of the three missing, the icon doesn't change. With all three it changes as the apply
+finishes. A machine-wide cache rebuild (`ie4uinit.exe -show`) is never needed for a folder we just
+wrote.
+
+A run over subfolders asks `SHGetSetFolderCustomSettings` of its folder alone, the one most likely
+on screen, since it takes a tenth of a second or more a folder. The rest of the run, a folder whose
+custom icon came off, and a folder it couldn't be asked about are drawn again 65 seconds after the
+latest change, once Explorer's reading of them has run out: named one by one for up to 32 folders,
+and with one refresh of every icon (`SHCNE_ASSOCCHANGED`) past that.
 
 `desktop.ini` and the icon file are hidden + system, so they do not show up unless
 "Show hidden files" and "Hide protected operating system files" are both switched.
@@ -174,10 +198,12 @@ than ten folders gives the total. On Windows and Linux a copy is the icon file p
 for the text file.
 
 The run leaves alone, along with everything inside them: symlinks and junctions, folders whose
-names start with a dot, folders the OS hides (Finder's hidden flag, or Windows' hidden or system
+names start with a dot, folders the OS hides (Finder's hidden flag, or Windows' hidden
 attribute), packages such as apps, photo and music libraries, Xcode projects and Keynote or
 Pages documents, the system locations listed under Known limits, and another disk or network
-share mounted inside the folder. There's no limit to how many folders a run takes. They're
+share mounted inside the folder. A Windows folder with only the system attribute is shown by
+Explorer and taken: it's the mark of a folder with an icon of its own, and every folder
+FolderSkin skins carries it, so a second run reaches the folders the first one skinned. There's no limit to how many folders a run takes. They're
 counted in the background as soon as the folder is picked, and a run can start before the count
 ends: it finds the folders as it goes, so it reads **3,120 of 12,000+** until they're all found.
 A run over more than 5,000 folders, or over a tree still being counted, asks first with the count
@@ -206,7 +232,9 @@ it is only FolderSkin's own files, as always. Cloud-synced trees sync every fold
 
 ## Known limits
 
-- **Explorer's icon cache.** A skinned folder repaints as the apply finishes (above). A view
+- **Explorer's icon cache.** A skinned folder repaints as the apply finishes (above). The
+  folders of a run over subfolders, and a folder whose own icon came back with **Remove custom
+  icon**, can show what they were for up to a minute, until FolderSkin draws them again. A view
   that is not listening (a third-party file manager, or a window opened from a shell
   extension that does not subscribe to change notifications) can still need `F5`.
 - **Cloud-synced folders.** iCloud Drive, OneDrive, Dropbox and Google Drive see

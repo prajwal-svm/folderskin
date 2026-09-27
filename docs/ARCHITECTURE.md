@@ -424,7 +424,8 @@ the walk in `folderskin_core::apply::tree`), however many folders it holds.
 - **Which folders.** `folders_in` lists a folder's own folders by name ignoring case. It skips,
   along with everything inside them: symlinks and junctions (and a Windows volume mounted in a
   folder, which is one), names starting with a dot, folders the OS hides (Finder's hidden flag,
-  or Windows' hidden or system attribute), packages (apps, libraries and documents that are
+  or Windows' hidden attribute, not the system attribute alone, which marks a folder with an icon
+  of its own), packages (apps, libraries and documents that are
   folders on disk, known by their extension and, on macOS, by Launch Services), the system
   locations `validate_folder` refuses, and on macOS and Linux another volume mounted inside the
   folder (a folder whose device isn't its parent's). A folder that is a package or inside one has

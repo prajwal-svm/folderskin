@@ -106,9 +106,10 @@ bibliothèque plus tard depuis **Communauté**. L'accueil ne s'affiche qu'une se
 4. Cliquez sur **Rétablir** pour remettre l'icône par défaut du système. Si le dossier a déjà une
    icône personnalisée, **Retirer l'icône personnalisée** apparaît dès que vous le choisissez.
 
-Le bouton en haut à droite de la fenêtre ferme le panneau du dossier, pour laisser toute la place à
-la bibliothèque, et le rouvre (⇧⌘\ sur Mac, Ctrl+Maj+\ ailleurs). Le panneau reste tel que vous
-l'avez laissé, et s'ouvre quand vous choisissez un dossier.
+Le bouton rond du panneau du dossier le ferme, pour laisser toute la place à la bibliothèque, et
+le rouvre (⇧⌘\ sur Mac, Ctrl+Maj+\ ailleurs). Il se trouve en haut à droite de la fenêtre sur Mac,
+et en haut à gauche du panneau sous Windows, aligné sur les boutons de la bibliothèque. Le panneau
+reste tel que vous l'avez laissé, et s'ouvre quand vous choisissez un dossier.
 
 Pour donner le même habillage aux dossiers qu'il contient, activez **Inclure les sous-dossiers** sous
 le nom du dossier. FolderSkin les compte en arrière-plan, quel que soit leur nombre (à tous les
@@ -286,7 +287,7 @@ anglais).
 | système | mécanisme | fichiers écrits dans le dossier | à noter |
 |---|---|---|---|
 | macOS | `NSWorkspace.setIcon` | le fichier invisible `Icon\r` que gère macOS | rien : le Finder se met à jour immédiatement |
-| Windows | `desktop.ini` + `folderskin-<hash>.ico`, tous deux masqués + système, dossier marqué en lecture seule, puis `SHChangeNotify` sur le dossier et son parent | `desktop.ini`, `folderskin-<hash>.ico` | rien : le dossier se redessine dès la fin de l'opération |
+| Windows | `desktop.ini` + `folderskin-<hash>.ico`, tous deux masqués + système, dossier marqué en lecture seule et système, puis `SHGetSetFolderCustomSettings`, l'appel de Windows lui-même, pour que l'Explorateur le relise, et `SHChangeNotify` sur le dossier et son parent | `desktop.ini`, `folderskin-<hash>.ico` | rien : le dossier se redessine dès la fin de l'opération |
 | Linux | `.directory` pour KDE, plus `gio set metadata::custom-icon` pour Nautilus, Nemo et Caja | `.directory`, `.folderskin.png` | certains gestionnaires de fenêtres en mosaïque et gestionnaires de fichiers minimalistes ne lisent ni l'un ni l'autre |
 
 L'icône propre d'un disque va là où son système la garde : `.VolumeIcon.icns` à la racine d'un

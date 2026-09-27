@@ -30,6 +30,41 @@ All notable changes to FolderSkin are recorded here. The format follows
   the pale line that ran just inside the outline is gone, and a picture or lettering on the icon
   is a little sharper, with no halo round it. Every skin gets this, the finished pictures in
   community packs too. From 128 px up, icons are exactly as they were.
+- **The folder panel's button on Windows is a round one**, like the library's search and filter
+  and in line with them: at the panel's top left while it's open, and at the end of the same row
+  once it's closed, beside the window's own buttons. It was a square button among those.
+
+### Fixed
+
+- **A new skin shows on the Windows Desktop at once.** Explorer draws a folder from what it read
+  of it up to a minute before, so a skin applied soon after another left the Desktop showing the
+  one before, or a plain folder, until something else drew it again, such as applying a skin to
+  another folder. FolderSkin now has Windows read the folder again as the skin goes on, as
+  Windows' own Change Icon does, and the new skin shows within a second or two. A run over
+  subfolders does this for its folder, and draws the folders inside it again a minute later, as
+  it does a folder whose own icon came back with **Remove custom icon**.
+- **A second run over a tree reaches every folder on Windows.** Runs over subfolders took the
+  mark Windows gives a folder with an icon of its own for hidden, so they passed by every folder
+  FolderSkin had skinned before: a new skin reached only the folder itself, and **Remove custom
+  icons** left the folders inside wearing theirs.
+- **The window moves, minimises and closes with a dialog open, on Windows.** Settings, the
+  subfolder chooser and every other dialog left the window's own buttons out of reach, and the
+  first-launch welcome had none. Every dialog now keeps them, and a strip to move the window by,
+  above it. With the folder panel closed, Community's header moves the window too.
+- **An update leaves no folder half done on Windows.** Installing an update closed FolderSkin at
+  once, even in the middle of a run over subfolders. The run now finishes the folder in hand
+  first, as it does when you quit.
+- **AltGr types a backslash on Windows.** On German and French keyboards AltGr+ß and AltGr+8
+  folded the sidebar or closed the folder panel instead.
+- **Windows gets its own words and choices.** Design your own says Shift where it said ⇧ and
+  measures Windows' icons in pixels, and Include subfolders mentions app bundles only on a Mac.
+  The emoji picker leaves out countries' flags, which Windows draws as two letters, and the file
+  pickers no longer offer HEIC pictures, which only a Mac can read. The window no longer opens
+  looking like a Mac's for a moment.
+- **Print and find stay out of the way on Windows.** Ctrl+P, Ctrl+G, F3 and Ctrl+F no longer open
+  the web view's print dialog, or its find bar over the window's own buttons.
+- **The command line's `apply`, `revert` and `glyph` refresh Explorer.** On Windows they ended
+  before the refresh they asked for went out.
 
 ### Fixed
 

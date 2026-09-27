@@ -107,9 +107,10 @@ paquete se añade entero o no se añade, y siempre puedes llenar la biblioteca m
    la carpeta ya tiene un icono personalizado, en cuanto la eliges aparece **Quitar el icono
    personalizado**.
 
-El botón de la esquina superior derecha de la ventana cierra el panel de la carpeta, para dejarle
-todo el espacio a la biblioteca, y lo vuelve a abrir (⇧⌘\ en Mac, Ctrl+Shift+\ en los demás
-sistemas). El panel se queda como lo dejaste, y al elegir una carpeta se abre.
+El botón redondo del panel de la carpeta lo cierra, para dejarle todo el espacio a la biblioteca,
+y lo vuelve a abrir (⇧⌘\ en Mac, Ctrl+Shift+\ en los demás sistemas). Está en la esquina superior
+derecha de la ventana en Mac, y arriba a la izquierda del panel en Windows, en línea con los
+botones de la biblioteca. El panel se queda como lo dejaste, y al elegir una carpeta se abre.
 
 Para darles el mismo aspecto a las carpetas que contiene, activa **Incluir subcarpetas** debajo del
 nombre de la carpeta. Las cuenta en segundo plano, sean las que sean (en todos los niveles, sin las
@@ -279,7 +280,7 @@ la galería, la vista previa y el icono en el disco son los mismos píxeles en t
 | sistema | mecanismo | archivos que se escriben dentro de la carpeta | a tener en cuenta |
 |---|---|---|---|
 | macOS | `NSWorkspace.setIcon` | el archivo invisible `Icon\r` que mantiene macOS | nada: el Finder se actualiza al instante |
-| Windows | `desktop.ini` + `folderskin-<hash>.ico`, ambos ocultos + de sistema, la carpeta marcada como de solo lectura, y luego `SHChangeNotify` sobre la carpeta y la que la contiene | `desktop.ini`, `folderskin-<hash>.ico` | nada: la carpeta se redibuja en cuanto termina de aplicarse |
+| Windows | `desktop.ini` + `folderskin-<hash>.ico`, ambos ocultos + de sistema, la carpeta marcada como de solo lectura y de sistema, y luego `SHGetSetFolderCustomSettings`, la llamada del propio Windows, para que el Explorador la vuelva a leer, y `SHChangeNotify` sobre la carpeta y la que la contiene | `desktop.ini`, `folderskin-<hash>.ico` | nada: la carpeta se redibuja en cuanto termina de aplicarse |
 | Linux | `.directory` para KDE, más `gio set metadata::custom-icon` para Nautilus, Nemo y Caja | `.directory`, `.folderskin.png` | algunos gestores de ventanas en mosaico y gestores de archivos minimalistas no leen ninguno de los dos |
 
 El icono propio de una unidad va donde su sistema lo guarda: `.VolumeIcon.icns` en la raíz de una

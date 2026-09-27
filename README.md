@@ -103,9 +103,10 @@ again.
 4. Press **Revert** to put the operating system's default icon back. A folder that already has a
    custom icon offers **Remove custom icon** as soon as you pick it.
 
-The button in the window's top right corner closes the folder panel, to give the library the
-room, and opens it again (⇧⌘\ on a Mac, Ctrl+Shift+\ elsewhere). It stays as you left it, and
-choosing a folder opens it.
+The folder panel's round button closes it, to give the library the room, and opens it again
+(⇧⌘\ on a Mac, Ctrl+Shift+\ elsewhere). It sits in the window's top right corner on a Mac, and at
+the panel's top left on Windows, in line with the library's buttons. The panel stays as you left
+it, and choosing a folder opens it.
 
 To give the folders inside it the same skin, turn on **Include subfolders** under the folder's
 name. It counts them in the background with no limit (all levels down, leaving out hidden
@@ -265,7 +266,7 @@ platform. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the details.
 | OS | mechanism | files written inside the folder | caveat |
 |---|---|---|---|
 | macOS | `NSWorkspace.setIcon` | the invisible `Icon\r` file macOS maintains | none: Finder updates immediately |
-| Windows | `desktop.ini` + `folderskin-<hash>.ico`, both hidden + system, folder marked read-only, then `SHChangeNotify` on the folder and its parent | `desktop.ini`, `folderskin-<hash>.ico` | none: the folder repaints as the apply finishes |
+| Windows | `desktop.ini` + `folderskin-<hash>.ico`, both hidden + system, folder marked read-only and system, then Windows' own `SHGetSetFolderCustomSettings` so Explorer reads it again, and `SHChangeNotify` on the folder and its parent | `desktop.ini`, `folderskin-<hash>.ico` | none: the folder repaints as the apply finishes |
 | Linux | `.directory` for KDE, plus `gio set metadata::custom-icon` for Nautilus, Nemo and Caja | `.directory`, `.folderskin.png` | some tiling and minimal file managers read neither |
 
 A drive's own icon goes where its system keeps one: `.VolumeIcon.icns` at a Mac drive's root, a
