@@ -164,6 +164,10 @@
 /* A thumbnail on its way the first time it's shown: a faint card in its place, and only after a
    moment, so one read from disk in a frame never flashes it. */
 .tile-wait {
+  position: absolute;
+  inset: 7%;
+  width: 86%;
+  height: 86%;
   border-radius: 18%;
   background: var(--well);
   opacity: 0;

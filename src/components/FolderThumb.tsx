@@ -151,7 +151,7 @@ export function FolderThumb({
       >
         <span className="tile-art" ref={art}>
           {waiting && <img className="tile-img is-under" src={under} alt="" draggable={false} decoding="async" />}
-          {!waiting && !shownOnce && <span className="tile-img tile-wait" aria-hidden="true" />}
+          {!waiting && !shownOnce && <span className="tile-wait" aria-hidden="true" />}
           <img
             className={waiting ? "tile-img is-coming" : "tile-img"}
             src={src}
