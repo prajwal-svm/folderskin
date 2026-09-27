@@ -93,12 +93,14 @@ fn front() -> Path {
 fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
     let front = front();
     let [hi, mid, lo] = finish.front;
+    d.part("face");
     d.fill(
         Layer::Body,
         &front,
         &down(TOP, SEAM, &[(0.0, hi), (0.45, mid), (1.0, lo)]),
     );
     // The mark is a deeper shade of the front, the way Finder's own disks carry theirs.
+    d.part("mark");
     d.press(Layer::Body, mark, mix(lo, rgb(0x000000), 0.1), 7.0);
     d.set_face(&front);
     d.edge(&front);
@@ -106,6 +108,7 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
     // The strip it stands on, its light, and the seam between them.
     let strip = rrect4(X0, SEAM, X1, FOOT, [0.0, 0.0, FOOT_R, FOOT_R]);
     let [s0, s1] = finish.strip;
+    d.part("strip");
     d.fill(
         Layer::Body,
         &strip,
@@ -126,6 +129,7 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
         7.0,
     );
     let light = (X1 - 62.0, (SEAM + FOOT) / 2.0 + 2.0);
+    d.part("light");
     d.fill(
         Layer::Body,
         &circle(light.0, light.1, 22.0),
@@ -148,6 +152,7 @@ fn disk(d: &mut Drawing, finish: &Finish, mark: &Path) {
 
     // Over whatever is on the front: its sides turning away, each shade easing out so no line
     // shows where it ends, the light along its top edge and its foot darkening into the seam.
+    d.part("face");
     let ease = |a: u8| {
         let at = |k: f32| rgba(0x000000, (f32::from(a) * k).round() as u8);
         [
@@ -326,6 +331,7 @@ fn card(d: &mut Drawing) {
         ],
         40.0,
     );
+    d.part("case");
     d.fill(
         Layer::Body,
         &body,
@@ -344,6 +350,7 @@ fn card(d: &mut Drawing) {
     );
     // The write-protect switch on its left edge, and the arrow that says which way it goes in.
     let switch = rrect(x0 - 16.0, 430.0, x0 + 10.0, 540.0, 8.0);
+    d.part("switch");
     d.fill(
         Layer::Body,
         &switch,
@@ -357,10 +364,12 @@ fn card(d: &mut Drawing) {
         ],
         6.0,
     );
+    d.part("mark");
     d.fill(Layer::Body, &arrow, &solid(rgba(0xffffff, 150)));
     d.edge(&body);
 
     let label = rrect(x0 + 40.0, y0 + 176.0, x1 - 40.0, y1 - 38.0, 24.0);
+    d.part("face");
     d.fill(
         Layer::Body,
         &label,
@@ -373,6 +382,7 @@ fn card(d: &mut Drawing) {
     d.set_face(&label);
 
     d.rim(Layer::Over, &label, &label, rgba(0x000000, 70), 5.0);
+    d.part("case");
     let top = open_polygon(
         &[
             (x0, y1),
@@ -397,6 +407,7 @@ fn disc(d: &mut Drawing) {
     let (x, y) = (512.0, 512.0);
     let (outer, print_out, print_in, hub, hole) = (428.0, 414.0, 164.0, 150.0, 60.0);
     let whole = ring(x, y, outer, hole);
+    d.part("disc");
     d.fill(
         Layer::Body,
         &whole,
@@ -430,6 +441,7 @@ fn disc(d: &mut Drawing) {
         (1.0, rgba(0xff6b6b, 0)),
     ];
     let band = ring(x, y, print_out, print_in);
+    d.part("face");
     d.fill(Layer::Body, &band, &sweep(x, y, -20.0, &spectrum));
     d.fill(
         Layer::Body,
@@ -451,6 +463,7 @@ fn disc(d: &mut Drawing) {
     d.edge(&circle(x, y, hole));
 
     // The clear hub, its stacking ring and the hole.
+    d.part("hub");
     let hub_ring = ring(x, y, hub, hole);
     d.fill(
         Layer::Body,
@@ -480,6 +493,7 @@ fn disc(d: &mut Drawing) {
     );
 
     // Over the print: the clear lip round the rim and the groove where the print ends.
+    d.part("disc");
     let lip = ring(x, y, outer, print_out);
     d.fill(
         Layer::Over,
@@ -497,6 +511,7 @@ fn disc(d: &mut Drawing) {
         &solid(rgba(0x7c828b, 150)),
         3.0,
     );
+    d.part("face");
     d.stroke(
         Layer::Over,
         &circle(x, y, print_in),

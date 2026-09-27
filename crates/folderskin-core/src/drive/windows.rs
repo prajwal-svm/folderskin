@@ -78,6 +78,7 @@ pub(super) fn draw(kind: DriveKind, d: &mut Drawing) {
             slab(d, &DISK, Layer::Body, true);
             let (x, y) = DISK.middle();
             let mark = house(x, y + 4.0, 0.92);
+            d.part("mark");
             d.fill(
                 Layer::Body,
                 &moved(&mark, 0.0, 6.0),
@@ -102,6 +103,7 @@ fn slab(d: &mut Drawing, s: &Slab, layer: Layer, face: bool) {
     let whole = s.whole();
     let top = s.top();
     // The front edge, then the top over it.
+    d.part("case");
     d.fill(
         layer,
         &whole,
@@ -149,6 +151,7 @@ fn slab(d: &mut Drawing, s: &Slab, layer: Layer, face: bool) {
     );
     let (lx, ly) = (s.x1 - 118.0, (s.edge + s.foot) / 2.0 + 4.0);
     let light = rrect(lx - 38.0, ly - 10.0, lx + 38.0, ly + 10.0, 10.0);
+    d.part("light");
     d.fill(
         layer,
         &rrect(lx - 60.0, ly - 26.0, lx + 60.0, ly + 26.0, 26.0),
@@ -168,6 +171,8 @@ fn slab(d: &mut Drawing, s: &Slab, layer: Layer, face: bool) {
             &[(0.0, rgb(0x7fdcff)), (1.0, rgb(0x33b3f5))],
         ),
     );
+    // The top is the face, or on a drive a disc stands in, the drive's top.
+    d.part(if face { "face" } else { "top" });
     d.fill(
         layer,
         &top,
@@ -268,6 +273,7 @@ fn usb(d: &mut Drawing) {
     };
     let (y0, y1) = (402.0, 574.0);
     let plug = rrect4(s.x1 - 40.0, y0, 958.0, y1, [0.0, 26.0, 26.0, 0.0]);
+    d.part("port");
     d.fill(
         Layer::Body,
         &plug,
@@ -282,6 +288,7 @@ fn usb(d: &mut Drawing) {
         ),
     );
     d.rim(Layer::Body, &plug, &plug, rgba(0x000000, 50), 4.0);
+    d.part("holes");
     for (hy0, hy1) in [(y0 + 34.0, y0 + 70.0), (y1 - 70.0, y1 - 34.0)] {
         d.fill(
             Layer::Body,
@@ -306,12 +313,14 @@ fn card(d: &mut Drawing) {
         ],
         46.0,
     );
+    d.part("case");
     d.fill(
         Layer::Body,
         &body,
         &down(y0, y1, &[(0.0, rgb(0x62728a)), (1.0, rgb(0x3a4556))]),
     );
     // Grooves along its top.
+    d.part("grooves");
     for i in 0..4 {
         let gx = x0 + 88.0 + i as f32 * 64.0;
         d.fill(
@@ -322,6 +331,7 @@ fn card(d: &mut Drawing) {
     }
     d.edge(&body);
     let label = rrect(x0 + 44.0, y0 + 200.0, x1 - 44.0, y1 - 44.0, 28.0);
+    d.part("face");
     d.fill(
         Layer::Body,
         &label,
@@ -333,6 +343,7 @@ fn card(d: &mut Drawing) {
     );
     d.set_face(&label);
     d.rim(Layer::Over, &label, &label, rgba(0x1b2533, 60), 5.0);
+    d.part("case");
     let top = open_polygon(
         &[
             (x0, y1),
@@ -363,6 +374,7 @@ fn disc_drive(d: &mut Drawing) {
     };
     let (x, y, outer, hole) = (512.0, 442.0, 356.0, 50.0);
     let (print_out, print_in) = (344.0, 134.0);
+    d.part("disc");
     d.fill(
         Layer::Body,
         &ring(x, y, outer, hole),
@@ -378,6 +390,7 @@ fn disc_drive(d: &mut Drawing) {
         ),
     );
     let band = ring(x, y, print_out, print_in);
+    d.part("face");
     d.fill(
         Layer::Body,
         &band,
@@ -398,6 +411,7 @@ fn disc_drive(d: &mut Drawing) {
     );
     d.set_face(&band);
     d.set_face_point(x, y - (print_out + print_in) / 2.0);
+    d.part("hub");
     d.fill(
         Layer::Body,
         &ring(x, y, print_in - 6.0, hole),
@@ -415,12 +429,14 @@ fn disc_drive(d: &mut Drawing) {
         4.0,
     );
     d.edge(&circle(x, y, outer));
+    d.part("disc");
     d.stroke(
         Layer::Over,
         &circle(x, y, outer - 1.5),
         &solid(rgba(0x7c828b, 150)),
         3.0,
     );
+    d.part("face");
     d.stroke(
         Layer::Over,
         &circle(x, y, print_in),
@@ -440,6 +456,7 @@ fn network(d: &mut Drawing) {
         ..DISK
     };
     let stem = rrect(488.0, s.foot - 20.0, 536.0, 800.0, 8.0);
+    d.part("post");
     d.fill(
         Layer::Body,
         &stem,
@@ -454,6 +471,7 @@ fn network(d: &mut Drawing) {
         ),
     );
     let pipe = rrect(196.0, 772.0, 828.0, 852.0, 40.0);
+    d.part("pipe");
     d.fill(
         Layer::Body,
         &pipe,

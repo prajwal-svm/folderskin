@@ -31,23 +31,20 @@ pub(super) fn draw(kind: DriveKind, d: &mut Drawing) {
 }
 
 /// A hard disk from `(x0, y0)` to `(x1, y1)`: a light front with screws at its corners over a dark
-/// band with vents and a light. Its front is the face when `face` says so.
+/// band with vents and a light. Its front is the face when `face` says so; a disk that isn't the
+/// face (the one behind, in a RAID set) is one part.
 fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face: bool) {
+    let part = |id: &'static str| if face { id } else { "back-disk" };
     let r = 40.0;
     let band = y1 - (y1 - y0) * 0.18;
     let whole = rrect(x0, y0, x1, y1, r);
+    d.part(part("case"));
     d.fill(
         layer,
         &whole,
         &down(band, y1, &[(0.0, DARK[0]), (1.0, DARK[1])]),
     );
-    let front = rrect4(x0, y0, x1, band, [r, r, 0.0, 0.0]);
-    d.fill(
-        layer,
-        &front,
-        &down(y0, band, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
-    );
-    // Vents on the left of the band and its light on the right.
+    // Vents on the left of the band and its light on the right, below where the front ends.
     let (vy0, vy1) = (band + (y1 - band) * 0.3, y1 - (y1 - band) * 0.3);
     for i in 0..6 {
         let vx = x0 + 46.0 + i as f32 * 40.0;
@@ -58,6 +55,7 @@ fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face:
         );
     }
     let (lx, ly) = (x1 - 58.0, (band + y1) / 2.0);
+    d.part(part("light"));
     d.fill(
         layer,
         &circle(lx, ly, 30.0),
@@ -69,6 +67,13 @@ fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face:
         ),
     );
     d.fill(layer, &circle(lx, ly, 12.0), &solid(rgb(0x8fd6fb)));
+    let front = rrect4(x0, y0, x1, band, [r, r, 0.0, 0.0]);
+    d.part(part("face"));
+    d.fill(
+        layer,
+        &front,
+        &down(y0, band, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
+    );
     d.edge(&whole);
     let over = if face {
         d.set_face(&front);
@@ -102,7 +107,9 @@ fn disk(d: &mut Drawing, x0: f32, y0: f32, x1: f32, y1: f32, layer: Layer, face:
         4.0,
     );
     // A fine edge all round, so a light front keeps its top on a white window.
+    d.part(part("case"));
     d.stroke(over, &whole, &solid(rgba(0x1d2530, 40)), 3.0);
+    d.part(part("screws"));
     let inset = 40.0;
     for (sx, sy) in [
         (x0 + inset, y0 + inset),
@@ -159,6 +166,7 @@ fn solid_state(d: &mut Drawing) {
         pb.close();
         pb.finish().expect("the board")
     };
+    d.part("case");
     d.fill(
         Layer::Body,
         &board,
@@ -167,6 +175,7 @@ fn solid_state(d: &mut Drawing) {
     d.rim(Layer::Body, &board, &board, rgba(0xffffff, 60), 4.0);
     d.edge(&board);
     // The gold fingers, one after another down the connector's end, and none across the key.
+    d.part("contacts");
     let from = x1 - 64.0;
     let mut y = y0 + 22.0;
     while y + 12.0 <= y1 - 22.0 {
@@ -188,6 +197,7 @@ fn solid_state(d: &mut Drawing) {
         y += 22.0;
     }
     // Two small parts on the board between the label and the fingers.
+    d.part("chips");
     for (py0, py1) in [(y0 + 70.0, y0 + 102.0), (y1 - 150.0, y1 - 118.0)] {
         d.fill(
             Layer::Body,
@@ -196,6 +206,7 @@ fn solid_state(d: &mut Drawing) {
         );
     }
     let label = rrect(x0 + 60.0, y0 + 34.0, from - 76.0, y1 - 34.0, 12.0);
+    d.part("face");
     d.fill(
         Layer::Body,
         &label,
@@ -229,8 +240,10 @@ fn usb_disk(d: &mut Drawing) {
         pb.cubic_to(940.0, 620.0, 950.0, 720.0, 872.0, 790.0);
         pb.finish().expect("a curve")
     };
+    d.part("cable");
     d.stroke(Layer::Body, &cable, &solid(rgb(0x3b4046)), 30.0);
     let plug = rrect(826.0, 776.0, 918.0, 884.0, 16.0);
+    d.part("plug");
     d.fill(
         Layer::Body,
         &plug,
@@ -265,6 +278,7 @@ fn usb_disk(d: &mut Drawing) {
 /// dark case around a picture looks like.
 fn stick(d: &mut Drawing) {
     let plug = rrect(420.0, 100.0, 604.0, 300.0, 12.0);
+    d.part("port");
     d.fill(
         Layer::Body,
         &plug,
@@ -278,6 +292,7 @@ fn stick(d: &mut Drawing) {
             ],
         ),
     );
+    d.part("holes");
     for hx in [452.0, 530.0] {
         d.fill(
             Layer::Body,
@@ -295,6 +310,7 @@ fn stick(d: &mut Drawing) {
         circle_path(&mut pb, 512.0, bottom - 70.0, 24.0, false);
         pb.finish().expect("the body")
     };
+    d.part("case");
     d.fill(
         Layer::Body,
         &body,
@@ -326,6 +342,7 @@ fn stick(d: &mut Drawing) {
     );
     d.edge(&body);
     let label = rrect(392.0, 330.0, 632.0, 800.0, 22.0);
+    d.part("face");
     d.fill(
         Layer::Body,
         &label,
@@ -363,11 +380,13 @@ fn card(d: &mut Drawing) {
         ],
         38.0,
     );
+    d.part("case");
     d.fill(
         Layer::Body,
         &body,
         &down(y0, y1, &[(0.0, rgb(0x5d646c)), (1.0, rgb(0x3a3f45))]),
     );
+    d.part("grooves");
     for i in 0..5 {
         let gx = x0 + 60.0 + i as f32 * 60.0;
         d.fill(
@@ -378,6 +397,7 @@ fn card(d: &mut Drawing) {
     }
     d.edge(&body);
     let label = rrect(x0 + 40.0, y0 + 190.0, x1 - 40.0, y1 - 40.0, 22.0);
+    d.part("face");
     d.fill(
         Layer::Body,
         &label,
@@ -387,12 +407,14 @@ fn card(d: &mut Drawing) {
             &[(0.0, rgb(0xf3f5f7)), (1.0, rgb(0xd9dde2))],
         ),
     );
+    d.part("stripe");
     d.fill(
         Layer::Body,
         &rrect(x0 + 40.0, y0 + 190.0, x1 - 40.0, y0 + 250.0, 22.0),
         &down(y0 + 190.0, y0 + 250.0, &[(0.0, BLUE), (1.0, rgb(0x1d8fd8))]),
     );
     d.set_face(&label);
+    d.part("face");
     d.rim(Layer::Over, &label, &label, rgba(0x000000, 60), 4.0);
 }
 
@@ -401,18 +423,21 @@ fn disc_drive(d: &mut Drawing) {
     let (x0, y0, x1, y1) = (92.0, 300.0, 932.0, 720.0);
     let band = 594.0;
     let whole = rrect(x0, y0, x1, y1, 36.0);
+    d.part("case");
     d.fill(
         Layer::Body,
         &whole,
         &down(band, y1, &[(0.0, DARK[0]), (1.0, DARK[1])]),
     );
     let top = rrect4(x0, y0, x1, band, [36.0, 36.0, 0.0, 0.0]);
+    d.part("face");
     d.fill(
         Layer::Body,
         &top,
         &down(y0, band, &[(0.0, LIGHT[0]), (1.0, LIGHT[1])]),
     );
     let slot = rrect(150.0, 642.0, 700.0, 666.0, 12.0);
+    d.part("slot");
     d.fill(Layer::Body, &slot, &solid(rgb(0x1b1e21)));
     d.stroke(
         Layer::Body,
@@ -421,6 +446,7 @@ fn disc_drive(d: &mut Drawing) {
         3.0,
     );
     let button = rrect(756.0, 628.0, 872.0, 680.0, 16.0);
+    d.part("button");
     d.fill(
         Layer::Body,
         &button,
@@ -433,6 +459,7 @@ fn disc_drive(d: &mut Drawing) {
     d.fill(Layer::Body, &eject, &solid(rgb(0xe6e9ec)));
     d.edge(&whole);
     d.set_face(&top);
+    d.part("face");
     d.rim_ink(
         Layer::Over,
         &open_polygon(&[(x0, band), (x0, y0), (x1, y0), (x1, band)], 36.0),
@@ -456,6 +483,7 @@ fn disc_drive(d: &mut Drawing) {
         &solid(rgba(0x000000, 110)),
         4.0,
     );
+    d.part("case");
     d.stroke(Layer::Over, &whole, &solid(rgba(0x1d2530, 40)), 3.0);
 }
 
@@ -463,8 +491,10 @@ fn disc_drive(d: &mut Drawing) {
 fn disc(d: &mut Drawing) {
     let (x, y) = (512.0, 512.0);
     let (outer, print_out, print_in, hub, hole) = (424.0, 408.0, 160.0, 146.0, 56.0);
+    d.part("disc");
     d.fill(Layer::Body, &ring(x, y, outer, hole), &solid(rgb(0xe9ecef)));
     let band = ring(x, y, print_out, print_in);
+    d.part("face");
     d.fill(
         Layer::Body,
         &band,
@@ -487,6 +517,7 @@ fn disc(d: &mut Drawing) {
     );
     d.set_face(&band);
     d.set_face_point(x, y - (print_out + print_in) / 2.0);
+    d.part("hub");
     d.fill(Layer::Body, &ring(x, y, hub, hole), &solid(rgb(0xf6f7f8)));
     d.stroke(
         Layer::Body,
@@ -502,6 +533,8 @@ fn disc(d: &mut Drawing) {
     );
     d.edge(&circle(x, y, outer));
     d.edge(&circle(x, y, hole));
+    // Over the print: the clear lip round the rim, and the groove where the print ends.
+    d.part("disc");
     d.fill(
         Layer::Over,
         &ring(x, y, outer, print_out),
@@ -513,6 +546,7 @@ fn disc(d: &mut Drawing) {
         &solid(rgba(0x6f767e, 170)),
         3.0,
     );
+    d.part("face");
     d.stroke(
         Layer::Over,
         &circle(x, y, print_in),
@@ -529,6 +563,7 @@ fn server(d: &mut Drawing) {
     let (x0, x1, r) = (124.0, 900.0, 26.0);
     let units = [(116.0, 596.0), (624.0, 748.0), (776.0, 900.0)];
     // The ears first, under the units, each with the hole its screw goes through.
+    d.part("ears");
     for &(y0, y1) in &units {
         let holes: &[f32] = if y1 - y0 > 200.0 {
             &[y0 + 64.0, y1 - 64.0]
@@ -573,6 +608,7 @@ fn server(d: &mut Drawing) {
         }
     };
     // The two thin units.
+    d.part("units");
     for &(y0, y1) in &units[1..] {
         let unit = rrect(x0, y0, x1, y1, r);
         d.fill(
@@ -595,14 +631,17 @@ fn server(d: &mut Drawing) {
     let (y0, y1) = units[0];
     let band = y1 - 92.0;
     let whole = rrect(x0, y0, x1, y1, r);
+    d.part("case");
     d.fill(
         Layer::Body,
         &whole,
         &down(band, y1, &[(0.0, DARK[0]), (1.0, DARK[1])]),
     );
     vents(d, band + 30.0, y1 - 30.0);
+    d.part("light");
     lights(d, (band + y1) / 2.0);
     let front = rrect4(x0, y0, x1, band, [r, r, 0.0, 0.0]);
+    d.part("face");
     d.fill(
         Layer::Body,
         &front,
@@ -633,6 +672,7 @@ fn server(d: &mut Drawing) {
         &solid(rgba(0x000000, 110)),
         4.0,
     );
+    d.part("case");
     d.stroke(Layer::Over, &whole, &solid(rgba(0x1d2530, 40)), 3.0);
 }
 
@@ -642,6 +682,7 @@ fn network_folder(d: &mut Drawing) {
     use crate::geometry_linux as l;
     let back = l::back_panel_path(1.0);
     let front = l::front_panel_path(1.0);
+    d.part("back");
     d.fill(
         Layer::Body,
         &back,
@@ -666,6 +707,7 @@ fn network_folder(d: &mut Drawing) {
         16.0,
     );
     d.edge(&back);
+    d.part("face");
     d.fill(
         Layer::Body,
         &front,
@@ -686,6 +728,7 @@ fn network_folder(d: &mut Drawing) {
         5.0,
     );
     // The network mark: three joined nodes on a white disc, on the front's bottom right corner.
+    d.part("badge");
     let (bx, by, br) = (l::RIGHT - 124.0, l::BOTTOM - 128.0, 118.0);
     d.fill(
         Layer::Over,

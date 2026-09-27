@@ -21,10 +21,10 @@ mod linux;
 mod mac;
 mod windows;
 
-use crate::compositor::{Artwork, TemplateLayers, RENDER_SIZE};
+use crate::compositor::{Artwork, Piece, Role, TemplateLayers, RENDER_SIZE};
 use crate::geometry::Rect;
 use crate::{fit, raster};
-use draw::Drawing;
+use draw::{Drawing, Layer};
 use tiny_skia::{FillRule, FilterQuality, Paint, Pattern, Pixmap, SpreadMode, Transform};
 
 /// Which system's drives a shape is drawn after.
@@ -256,7 +256,20 @@ impl DriveShape {
 
     /// The shape drawn, at `size` px square.
     fn draw(self, size: u32) -> Drawing {
-        let mut d = Drawing::new(size);
+        self.draw_into(Drawing::new(size))
+    }
+
+    /// Only the part `part` of the shape drawn, at `size` px square.
+    fn draw_part(self, size: u32, part: &'static str) -> Drawing {
+        self.draw_into(Drawing::only(size, part))
+    }
+
+    /// The shape gone through without painting anything: which parts it draws where, and its face.
+    fn plan(self) -> Drawing {
+        self.draw_into(Drawing::plan())
+    }
+
+    fn draw_into(self, mut d: Drawing) -> Drawing {
         match self.style {
             DriveStyle::Mac => mac::draw(self.kind, &mut d),
             DriveStyle::Windows => windows::draw(self.kind, &mut d),
@@ -449,6 +462,94 @@ pub fn layers(shape: DriveShape, size: u32) -> TemplateLayers {
                 .collect::<Vec<_>>(),
         ),
     }
+}
+
+/// The drive of `shape` taken apart for the composer at `size` px, in the order the composer
+/// stacks the pieces: each part's own drawing under the face ([`Role::Paint`]), in the order the
+/// drive draws them, then the face, where the design shows ([`Role::Surface`]), then what each
+/// part draws over the face. Over the face, a part that's under it too has its light and shade
+/// ([`Role::Light`]), and a part that's only over it (a badge, a disc drive's slab) its own
+/// colours. Stacked back around a design they're [`render_master_placed`] (a test checks).
+pub fn pieces(shape: DriveShape, size: u32) -> Vec<Piece> {
+    let plan = shape.plan();
+    let once = |parts: &[&'static str]| {
+        let mut seen: Vec<&'static str> = Vec::new();
+        for &p in parts {
+            if !seen.contains(&p) {
+                seen.push(p);
+            }
+        }
+        seen
+    };
+    let (under, over) = (
+        once(plan.parts_in(Layer::Body)),
+        once(plan.parts_in(Layer::Over)),
+    );
+    let names = once(&[under.clone(), over.clone()].concat());
+    let rows = 0..size;
+    // Each part drawn on its own, and cut down to its pixels at once.
+    let mut cut = a_few_at_a_time(&names, |&part| {
+        let d = shape.draw_part(size, part);
+        let role = if under.contains(&part) {
+            Role::Light
+        } else {
+            Role::Paint
+        };
+        (
+            Piece::cut(part, Role::Paint, &d.body, rows.clone()),
+            Piece::cut(part, role, &d.over, rows.clone()),
+        )
+    });
+    let at = |part: &str| names.iter().position(|p| *p == part).expect("drawn");
+    // The face at this size: the plan is drawn at one pixel.
+    let mut face = tiny_skia::Mask::new(size, size).expect("mask size");
+    let k = size as f32;
+    let at_size = plan.face().clone().transform(Transform::from_scale(k, k));
+    face.fill_path(
+        &at_size.expect("a scale"),
+        FillRule::Winding,
+        true,
+        Transform::identity(),
+    );
+    let mut out: Vec<Piece> = under.iter().filter_map(|p| cut[at(p)].0.take()).collect();
+    out.extend(Piece::surface("face", &face, rows.clone()));
+    out.extend(over.iter().filter_map(|p| cut[at(p)].1.take()));
+    out
+}
+
+/// `f` for every item, a few at a time on threads of their own, in the items' order. A part's
+/// drawing holds two pictures the size of the icon, so no more than four are drawn at once.
+fn a_few_at_a_time<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .min(4)
+        .clamp(1, items.len().max(1));
+    let next = AtomicUsize::new(0);
+    let mut done: Vec<(usize, R)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut mine = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(i) else { break };
+                        mine.push((i, f(item)));
+                    }
+                    mine
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|w| {
+                w.join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect()
+    });
+    done.sort_by_key(|(i, _)| *i);
+    done.into_iter().map(|(_, r)| r).collect()
 }
 
 #[cfg(test)]
@@ -663,6 +764,52 @@ mod tests {
                 "{id}: the stacked layers are {worst} off the saved drive"
             );
         }
+    }
+
+    #[test]
+    fn every_drive_comes_apart_into_parts_that_stack_back_into_it() {
+        let size = 256;
+        for shape in DriveShape::all() {
+            let id = shape.id();
+            let d = shape.draw(size);
+            for layer in [Layer::Body, Layer::Over] {
+                let parts = d.parts_in(layer);
+                for (i, part) in parts.iter().enumerate() {
+                    assert!(
+                        !parts[..i].contains(part),
+                        "{id}: another part is drawn in the middle of {part}'s drawing in \
+                         {layer:?} ({parts:?}), so {part} can't be drawn on its own"
+                    );
+                }
+            }
+            let design = gradient_design(size);
+            let saved = render(shape, size, Fill::Placed(&design));
+            let pieces = pieces(shape, size);
+            let design = raster::straight_to_premul(&design).data;
+            let worst = compositor::worst_off(
+                &compositor::stack_pieces(&pieces, size, &design),
+                &saved.data,
+            );
+            assert!(
+                worst <= 3,
+                "{id}: the stacked pieces are {worst} off the saved drive"
+            );
+            let is =
+                |part: &str, role: Role| pieces.iter().any(|p| p.part == part && p.role == role);
+            assert!(is("face", Role::Surface), "{id} has a face for the design");
+            assert!(
+                is("face", Role::Paint),
+                "{id}'s face has colours of its own"
+            );
+        }
+        // The USB stick: its port, the two holes in it, the blue case and the label.
+        let stick = pieces(DriveShape::from_id("linux-removable").unwrap(), size);
+        let under: Vec<&str> = stick
+            .iter()
+            .take_while(|p| p.role != Role::Surface)
+            .map(|p| p.part)
+            .collect();
+        assert_eq!(under, ["port", "holes", "case", "face"]);
     }
 
     #[test]

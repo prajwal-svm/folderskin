@@ -8,8 +8,11 @@ import {
   duplicateLayer,
   emptyDoc,
   FALLBACK_PARTS,
+  HOME_FRAME,
   imageBox,
   indexOf,
+  isBaseEdited,
+  isHome,
   layerLabel,
   linear,
   makeEmoji,
@@ -18,15 +21,21 @@ import {
   makePattern,
   makeShape,
   makeText,
+  MAX_FRAME_SCALE,
   MAX_LAYERS,
   moveLayer,
   parseDoc,
+  partEdit,
   patchLayer,
+  patchPart,
   refit,
   refitFace,
   removeLayer,
+  resetParts,
+  restoreParts,
   sendBackward,
   sendToBack,
+  setFrame,
   solid,
   suggestName,
   WINDOWS_PARTS,
@@ -349,5 +358,76 @@ describe("moving a design between the Mac's folder and Windows'", () => {
       expect(Math.abs(b.y - a.y)).toBeLessThan(0.5);
       expect(Math.abs(b.size - a.size)).toBeLessThan(0.5);
     }
+  });
+});
+
+describe("the folder's or drive's own parts", () => {
+  const onStick = (): Doc => ({ ...emptyDoc("drive", "mac", "linux-removable"), layers: [makeFill(solid("#ffffff"))] });
+
+  it("gives a part a colour, hides it or removes it, and drops what changes nothing", () => {
+    let d = patchPart(onStick(), "case", { color: "#e53935" });
+    expect(d.base).toEqual({ parts: { case: { color: "#e53935" } } });
+    expect(isBaseEdited(d)).toBe(true);
+    d = patchPart(d, "face", { hidden: true });
+    d = patchPart(d, "port", { opacity: 0.5 });
+    expect(partEdit(d, "face")).toEqual({ hidden: true });
+    expect(partEdit(d, "port")).toEqual({ opacity: 0.5 });
+    // Back to its own colour, shown and solid: nothing is left of the change.
+    d = patchPart(d, "case", { color: undefined });
+    d = patchPart(d, "face", { hidden: false });
+    d = patchPart(d, "port", { opacity: 1 });
+    expect(d.base).toBeUndefined();
+    expect(isBaseEdited(d)).toBe(false);
+  });
+
+  it("brings removed parts back without undoing their other changes", () => {
+    let d = patchPart(onStick(), "holes", { removed: true, color: "#222222" });
+    d = patchPart(d, "face", { removed: true });
+    d = restoreParts(d);
+    expect(d.base).toEqual({ parts: { holes: { color: "#222222" } } });
+  });
+
+  it("moves, turns and sizes the whole of it, and reset puts every part back where it was", () => {
+    let d = setFrame(onStick(), { x: 20, y: -10, rotation: 45, scale: 1.2 });
+    expect(isBaseEdited(d)).toBe(true);
+    d = patchPart(d, "case", { color: "#e53935" });
+    // Every part as it was, the drive left where it was put.
+    expect(resetParts(d).base).toEqual({ frame: { x: 20, y: -10, rotation: 45, scale: 1.2 } });
+    expect(setFrame(resetParts(d), HOME_FRAME).base).toBeUndefined();
+    // A full turn is where it started.
+    expect(isHome({ x: 0, y: 0, rotation: 360, scale: 1 })).toBe(true);
+  });
+
+  it("keeps its changes when the design is read back, and only sensible ones", () => {
+    const d = setFrame(patchPart(patchPart(onStick(), "case", { color: "#e53935" }), "face", { hidden: true }), { x: 5, y: 6, rotation: 30, scale: 0.8 });
+    expect(parseDoc(JSON.parse(JSON.stringify(d)))).toEqual(d);
+    const read = parseDoc({
+      version: 2,
+      shape: "drive",
+      drive: "linux-removable",
+      layers: [],
+      base: {
+        parts: {
+          case: { color: "#E53935CC", opacity: 3, hidden: "yes" },
+          "Not a part!": { hidden: true },
+          face: { removed: true, color: "nonsense" },
+          nothing: {},
+        },
+        frame: { x: 99999, y: "far", rotation: 30, scale: 40 },
+      },
+    });
+    expect(read?.base).toEqual({
+      parts: { case: { color: "#e53935" }, face: { removed: true } },
+      frame: { x: 4096, y: 0, rotation: 30, scale: MAX_FRAME_SCALE },
+    });
+    // What changes nothing isn't kept at all.
+    expect(parseDoc({ version: 1, layers: [], base: { parts: {}, frame: { x: 0, y: 0, rotation: 0, scale: 1 } } })?.base).toBeUndefined();
+  });
+
+  it("goes with the design to another drive or folder", () => {
+    const d = patchPart(onStick(), "case", { color: "#e53935" });
+    expect(refitFace(d, driveParts("linux-removable"), driveParts("mac-external"), "mac-external").base).toEqual(d.base);
+    const folder = patchPart(emptyDoc("folder", "mac"), "tab", { color: "#ffcc00" });
+    expect(refit(folder, FALLBACK_PARTS, WINDOWS_PARTS, "windows").base).toEqual(folder.base);
   });
 });

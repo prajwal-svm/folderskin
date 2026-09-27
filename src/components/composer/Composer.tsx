@@ -16,13 +16,15 @@ import type { ToastTone } from "../../hooks/useToasts";
 import { Assets, ctx2d, makeCanvas } from "../../composer/assets";
 import { canvasPng } from "../../composer/body";
 import { inkOn, luminance } from "../../composer/color";
-import { faceColor, loadTemplate, type View } from "../../composer/composite";
+import { drawBase, faceColor, loadTemplate, makeScratch, needsUpper, type TemplateImages, type View } from "../../composer/composite";
+import { BASE_ID, baseSelection, partColor, partSelection, partsOf, type Piece } from "../../composer/base";
 import {
   addLayer,
   anchorOf,
   backgroundColor,
   bringForward,
   bringToFront,
+  centreOf,
   cloneLayer,
   coveringTop,
   duplicateLayer,
@@ -30,7 +32,9 @@ import {
   fallbackParts,
   findLayer,
   imageBox,
+  HOME_FRAME,
   indexOf,
+  isBaseEdited,
   isPlaced,
   makeEmoji,
   makeFill,
@@ -38,24 +42,32 @@ import {
   makeImage,
   makePattern,
   makeShape,
+  mainColor,
   makeText,
   mapLayer,
   moveLayer,
   parseDoc,
+  partEdit,
   patchLayer,
+  patchPart,
   refit,
   refitFace,
   removeLayer,
+  resetParts,
+  restoreParts,
   sendBackward,
   sendToBack,
+  setFrame,
   solid,
   suggestName,
   type Doc,
   type FolderStyle,
+  type Frame,
   type IconDrawing,
   type IconLayer,
   type IconLook,
   type Layer,
+  type PartEdit,
   type PlacedLayer,
   type PatternKind,
   type ShapeKind,
@@ -70,6 +82,8 @@ import { Select } from "../Select";
 import { Confirm } from "../Confirm";
 import { ComposerInspector, type Patch } from "./ComposerInspector";
 import { ComposerLayers } from "./ComposerLayers";
+import { BaseLayers, type BaseRow } from "./BaseLayers";
+import { BaseInspector } from "./BaseInspector";
 import { IconButton } from "./controls";
 import { LAYERS_HEIGHT, MIN_LAYERS, MIN_SETTINGS, Panel, Resizer, usePanels } from "./SidePanels";
 import { CopyIcon } from "../icons/copy";
@@ -193,7 +207,28 @@ function colorsOf(doc: Doc): string[] {
     if ((l.kind === "text" || l.kind === "shape") && l.stroke) out.add(l.stroke.color);
     if (isPlaced(l) && l.edge) out.add(l.edge.color);
   }
+  for (const e of Object.values(doc.base?.parts ?? {})) if (e.color) out.add(e.color);
   return [...out];
+}
+
+/** No pieces: a free icon, or a folder or drive still on its way. */
+const NO_PIECES: Piece[] = [];
+
+/**
+ * The design as the whole icon, folder or drive and all, `px` square, as a PNG: what's saved when
+ * the folder's or drive's own parts were changed, which only the canvas draws (docs/COMPOSER.md).
+ */
+async function composedPng(d: Doc, t: TemplateImages, pivot: { x: number; y: number }, px: number, assets: Assets): Promise<Uint8Array> {
+  const design = makeCanvas(px, px);
+  renderDoc(ctx2d(design), d, px, assets);
+  let upper: HTMLCanvasElement | null = null;
+  if (needsUpper(t, d.base)) {
+    upper = makeCanvas(px, px);
+    renderDoc(ctx2d(upper), d, px, assets, { from: coveringTop(d) });
+  }
+  const out = makeCanvas(px, px);
+  drawBase(ctx2d(out), design, t, px, makeScratch(), { base: d.base, drive: d.shape === "drive", pivot, upper }, false);
+  return canvasPng(out);
 }
 
 /** A picture pasted or dropped as a file, shrunk to at most 2048 px, as a picture layer takes it. */
@@ -566,6 +601,11 @@ export function Composer({
   const folderLoading = templates[surface] === undefined;
   const onDrive = doc.drive !== undefined && doc.shape !== "folder";
   const parts = template?.parts ?? (onDrive && doc.drive ? driveParts(doc.drive) : fallbackParts(doc.style));
+  // The folder or drive in its parts, top first, while the design is on one.
+  const pieces = doc.shape !== "free" ? (template?.images.pieces ?? NO_PIECES) : NO_PIECES;
+  const baseParts = useMemo(() => partsOf(pieces), [pieces]);
+  /** What the folder or drive is called: "USB stick", "Mac folder". */
+  const baseName = doc.shape === "drive" && doc.drive ? driveLabel(doc.drive) : t(`common.shapes.${doc.style}-folder`);
   /** The drive chosen on the stage, by its shape, when a drive is. */
   const pickedDrive = folder?.drive && isDriveId(folder.drive.shape) ? folder.drive.shape : null;
   /**
@@ -637,9 +677,13 @@ export function Composer({
   }, [skins, editing]);
 
   const selected = findLayer(doc, selectedId);
+  /** The folder or drive, or one of its parts, when that's what's selected. */
+  const picked = baseSelection(selectedId);
+  const pickedPart = picked?.part ? baseParts.find((p) => p.id === picked.part && !partEdit(doc, p.id).removed) : undefined;
   useEffect(() => {
-    if (selectedId && !selected) setSelectedId(null);
-  }, [selectedId, selected]);
+    if (!selectedId) return;
+    if (picked ? baseParts.length === 0 || (picked.part !== null && !pickedPart) : !selected) setSelectedId(null);
+  }, [selectedId, selected, picked, pickedPart, baseParts.length]);
 
   const commit = useCallback((next: Doc, key?: string) => dispatch({ type: "commit", doc: next, key }), []);
   const latestDoc = useRef(doc);
@@ -802,7 +846,7 @@ export function Composer({
   // New words, shapes and icons land on the front, whatever covers it: a drive's face itself when
   // nothing does, light on most drives.
   const covered = doc.layers.some((l) => !l.hidden && (l.kind === "fill" || l.kind === "image"));
-  const bare = onDrive && template && !covered ? faceColor(template.images, parts.front) : null;
+  const bare = onDrive && template && !covered ? (partEdit(doc, "face").color ?? faceColor(template.images, parts.front)) : null;
   const under = backgroundColor(doc, parts.front) ?? bare;
   const ink = under ? inkOn(under) : "#ffffff";
   const accent = under && luminance(under) > 0.5 ? "#3a86ff" : "#ffffff";
@@ -988,6 +1032,23 @@ export function Composer({
     if (selectedId) removeById(selectedId);
   }, [selectedId, removeById]);
 
+  // ---- the folder's or drive's own parts ----
+  const changePart = useCallback((part: string, patch: PartEdit, key?: string) => commit(patchPart(latestDoc.current, part, patch), key), [commit]);
+  const changeFrame = useCallback((frame: Frame, key?: string) => commit(setFrame(latestDoc.current, frame), key), [commit]);
+  /** Takes a part out of the icon and the list. When it was selected, the part below it is next, or the whole folder or drive. */
+  const removePart = useCallback(
+    (part: string) => {
+      const d = latestDoc.current;
+      const shown = baseParts.filter((p) => !partEdit(d, p.id).removed);
+      const i = shown.findIndex((p) => p.id === part);
+      commit(patchPart(d, part, { removed: true }));
+      if (selectedId !== partSelection(part)) return;
+      const next = shown[i + 1] ?? shown[i - 1];
+      setSelectedId(next && next.id !== part ? partSelection(next.id) : BASE_ID);
+    },
+    [baseParts, selectedId, commit],
+  );
+
   // ---- the side's panels ----
   const [panels, setPanels] = usePanels();
   const layersPanel = useRef<HTMLElement>(null);
@@ -1049,6 +1110,23 @@ export function Composer({
         setSelectedId(null);
         return;
       }
+      const pick = baseSelection(selectedId);
+      if (pick) {
+        if (e.key === "Escape") setSelectedId(null);
+        else if ((e.key === "Backspace" || e.key === "Delete") && pick.part) {
+          e.preventDefault();
+          removePart(pick.part);
+        } else if (e.key.startsWith("Arrow") && !(e.target instanceof Element && e.target.closest(".cmp-layers, .cmp-base"))) {
+          // The arrows move the whole folder or drive, as they move a layer.
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1;
+          const f = d.base?.frame ?? HOME_FRAME;
+          const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+          const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+          commit(setFrame(d, { ...f, x: f.x + dx, y: f.y + dy }), "nudge:base");
+        }
+        return;
+      }
       if (!sel) return;
       if (e.key === "Backspace" || e.key === "Delete") {
         e.preventDefault();
@@ -1095,7 +1173,7 @@ export function Composer({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("paste", onPaste);
     };
-  }, [active, selectedId, remove, duplicate, commit, addPicture, add, toast]);
+  }, [active, selectedId, remove, removePart, duplicate, commit, addPicture, add, toast]);
 
   // ---- the icon at its real sizes, from Rust ----
   useEffect(() => {
@@ -1104,10 +1182,18 @@ export function Composer({
     const t = window.setTimeout(async () => {
       try {
         await assets.ready(doc);
-        const c = makeCanvas(512, 512);
-        renderDoc(ctx2d(c), doc, 512, assets);
-        const png = await canvasPng(c);
-        const urls = await api.composerPreview(doc.shape, doc.style, PREVIEW_SIZES, png, doc.shape === "drive" ? doc.drive : null);
+        // The folder's or drive's own parts changed: the canvas draws the whole icon.
+        const tpl = templates[surfaceKey(doc)];
+        const composed = isBaseEdited(doc) && doc.shape !== "free";
+        if (composed && !tpl?.images.pieces.length) return;
+        let png: Uint8Array;
+        if (composed && tpl) png = await composedPng(doc, tpl.images, centreOf(tpl.parts.folder), 512, assets);
+        else {
+          const c = makeCanvas(512, 512);
+          renderDoc(ctx2d(c), doc, 512, assets);
+          png = await canvasPng(c);
+        }
+        const urls = await api.composerPreview(doc.shape, doc.style, PREVIEW_SIZES, png, doc.shape === "drive" ? doc.drive : null, composed);
         if (live) setPreviews(urls);
       } catch {
         // The previews are extra; the stage still shows the design.
@@ -1117,7 +1203,7 @@ export function Composer({
       live = false;
       window.clearTimeout(t);
     };
-  }, [doc, active, starting, assets, version]);
+  }, [doc, active, starting, assets, version, templates]);
 
   // ---- saving ----
   const suggested = suggestName(doc);
@@ -1141,12 +1227,21 @@ export function Composer({
         const d = latestDoc.current;
         await assets.ready(d);
         await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
-        const c = makeCanvas(SAVE_PX, SAVE_PX);
-        renderDoc(ctx2d(c), d, SAVE_PX, assets);
-        const png = await canvasPng(c);
+        // The folder's or drive's own parts changed: the icon is the canvas's, folder or drive and all.
+        const composed = isBaseEdited(d) && d.shape !== "free";
+        const tpl = templates[surfaceKey(d)];
+        let png: Uint8Array;
+        if (composed) {
+          if (!tpl?.images.pieces.length) throw new Error(tNow("composer.errors.baseLoading"));
+          png = await composedPng(d, tpl.images, centreOf(tpl.parts.folder), SAVE_PX, assets);
+        } else {
+          const c = makeCanvas(SAVE_PX, SAVE_PX);
+          renderDoc(ctx2d(c), d, SAVE_PX, assets);
+          png = await canvasPng(c);
+        }
         const replaces = mode === "copy" ? null : (editing?.skinId ?? null);
         const res = await api.composerSave(
-          { name: finalName, tags: mode === "copy" ? [] : (editing?.tags ?? []), shape: d.shape, style: d.style, drive: d.shape === "drive" ? d.drive : null, design: d, replaces },
+          { name: finalName, tags: mode === "copy" ? [] : (editing?.tags ?? []), shape: d.shape, style: d.style, drive: d.shape === "drive" ? d.drive : null, design: d, replaces, composed },
           png,
         );
         onSaved(res.skin, res.replaced);
@@ -1174,7 +1269,7 @@ export function Composer({
         setSaving(null);
       }
     },
-    [saving, editing, dirty, onApply, folder, finalName, assets, onSaved, toast, skins],
+    [saving, editing, dirty, onApply, folder, finalName, assets, onSaved, toast, skins, templates],
   );
 
   // ---- views ----
@@ -1244,6 +1339,23 @@ export function Composer({
   ];
   const index = selected ? indexOf(doc, selected.id) : -1;
   const used = useMemo(() => colorsOf(doc), [doc]);
+  // The folder's or drive's parts in the layers list: each with the colour it shows, its own, the
+  // one it was given, or on a folder's panel the design's colour there.
+  const baseRows: BaseRow[] = useMemo(
+    () =>
+      baseParts
+        .filter((p) => !partEdit(doc, p.id).removed)
+        .map((p) => {
+          const e = partEdit(doc, p.id);
+          // A panel shows the design's topmost colour there: a colour cut to the front only shows on the front.
+          const fill = p.surface && !p.paints ? [...doc.layers].reverse().find((l) => l.kind === "fill" && !l.hidden && (p.id === "front" || l.part !== "front")) : undefined;
+          const design = fill?.kind === "fill" ? mainColor(fill.paint) : null;
+          return { ...p, color: e.color ?? partColor(pieces, p.id)?.color ?? design, hidden: e.hidden === true };
+        }),
+    [baseParts, doc, pieces],
+  );
+  const removedParts = baseParts.length - baseRows.length;
+  const pickedRow = pickedPart ? baseRows.find((r) => r.id === pickedPart.id) : undefined;
   const busy = saving !== null || applying;
 
   const inside = folder && includeSubfolders && subfolders ? (chosen ? chosen.count : subfolders.count) : 0;
@@ -1459,6 +1571,19 @@ export function Composer({
                   onMove={(id, to) => commit(moveLayer(doc, id, to))}
                   onDelete={removeById}
                 />
+                {baseParts.length > 0 && (
+                  <BaseLayers
+                    name={baseName}
+                    drive={doc.shape === "drive"}
+                    rows={baseRows}
+                    removed={removedParts}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onToggle={(part) => changePart(part, { hidden: !partEdit(doc, part).hidden })}
+                    onRemove={removePart}
+                    onRestore={() => commit(restoreParts(latestDoc.current))}
+                  />
+                )}
               </div>
             </Panel>
             {bothOpen && (
@@ -1486,6 +1611,10 @@ export function Composer({
                       <TrashIcon size={14} />
                     </IconButton>
                   </>
+                ) : pickedRow ? (
+                  <IconButton label={t("composer.base.remove")} onClick={() => removePart(pickedRow.id)} className="is-danger">
+                    <TrashIcon size={14} />
+                  </IconButton>
                 ) : undefined
               }
               open={panels.settings}
@@ -1494,19 +1623,38 @@ export function Composer({
               panelRef={settingsPanel}
             >
               <div className="cmp-side-scroll" key={selectedId ?? "design"}>
-                <ComposerInspector
-                  layer={selected}
-                  onPatch={patch}
-                  parts={parts}
-                  used={used}
-                  textRef={textRef}
-                  onReplaceImage={(anchor) => setReplaceAnchor(anchor)}
-                  onReplaceIcon={() => openIcons(selected?.id ?? null)}
-                  index={index}
-                  size={selected && isPlaced(selected) ? boxOf(selected, assets) : null}
-                  onFolder={doc.shape === "folder"}
-                  onDrive={doc.shape === "drive"}
-                />
+                {picked && baseParts.length > 0 ? (
+                  <BaseInspector
+                    name={baseName}
+                    drive={doc.shape === "drive"}
+                    part={pickedRow?.id ?? null}
+                    edit={pickedRow ? partEdit(doc, pickedRow.id) : {}}
+                    surface={pickedRow?.surface ?? false}
+                    color={pickedRow?.color ?? "#9aa0a8"}
+                    frame={doc.base?.frame ?? HOME_FRAME}
+                    used={used}
+                    removed={removedParts}
+                    edited={doc.base?.parts !== undefined}
+                    onPart={(patch, key) => pickedRow && changePart(pickedRow.id, patch, key)}
+                    onFrame={changeFrame}
+                    onRestore={() => commit(restoreParts(latestDoc.current))}
+                    onResetParts={() => commit(resetParts(latestDoc.current))}
+                  />
+                ) : (
+                  <ComposerInspector
+                    layer={selected}
+                    onPatch={patch}
+                    parts={parts}
+                    used={used}
+                    textRef={textRef}
+                    onReplaceImage={(anchor) => setReplaceAnchor(anchor)}
+                    onReplaceIcon={() => openIcons(selected?.id ?? null)}
+                    index={index}
+                    size={selected && isPlaced(selected) ? boxOf(selected, assets) : null}
+                    onFolder={doc.shape === "folder"}
+                    onDrive={doc.shape === "drive"}
+                  />
+                )}
               </div>
             </Panel>
           </>

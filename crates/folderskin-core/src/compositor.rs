@@ -80,6 +80,16 @@ impl Style {
         let [x0, y0, x1, y1] = Template::new(g::CANVAS as u32, self).extent();
         (x1 - x0) / (y1 - y0)
     }
+
+    /// Where the tab ends and the back panel's body begins, in canvas units: the top of the body,
+    /// which only the tab rises above.
+    fn tab_bottom(self) -> f32 {
+        match self {
+            Style::Mac => g::BACK_BODY.y0,
+            Style::Windows => w::BODY_TOP,
+            Style::Linux => l::BODY_TOP,
+        }
+    }
 }
 
 /// The Windows folder's shading: its back panel a shade darker than its front (the tab and the
@@ -317,72 +327,71 @@ impl Template {
     /// the back's shade and the shadow the front casts on it instead (the front's fill then covers
     /// the shadow's lower half).
     fn draw_middle(&self, pm: &mut Pixmap) {
+        self.draw_middle_of(pm, None);
+    }
+
+    /// [`Template::draw_middle`], or with `only` one part's share of it: `"back"` (the back
+    /// panel's shade and light, the tab's with them), `"front"` (the shadow the front casts on
+    /// the back) or `"paper"` (the sheet and its highlight).
+    fn draw_middle_of(&self, pm: &mut Pixmap, only: Option<&str>) {
+        let draws = |part: &str| only.is_none_or(|p| p == part);
         if self.style == Style::Linux {
-            let mut shade = Paint {
-                anti_alias: true,
-                ..Paint::default()
-            };
-            shade.set_color_rgba8(0, 0, 0, LINUX_BACK_SHADE);
-            pm.fill_path(
-                &self.back,
-                &shade,
-                FillRule::Winding,
-                Transform::identity(),
-                None,
-            );
             let back = self.mask(&self.back);
-            rim(
-                pm,
-                &l::back_top_edge_path(self.scale),
-                &back,
-                LINUX_BACK_LIGHT,
-                RIM_BAND,
-                self.scale,
-            );
-            rim(
-                pm,
-                &l::front_top_edge_path(self.scale),
-                &back,
-                LINUX_SHADOW,
-                LINUX_SHADOW_BAND,
-                self.scale,
-            );
+            if draws("back") {
+                self.shade_back(pm, LINUX_BACK_SHADE);
+                rim(
+                    pm,
+                    &l::back_top_edge_path(self.scale),
+                    &back,
+                    LINUX_BACK_LIGHT,
+                    RIM_BAND,
+                    self.scale,
+                );
+            }
+            if draws("front") {
+                rim(
+                    pm,
+                    &l::front_top_edge_path(self.scale),
+                    &back,
+                    LINUX_SHADOW,
+                    LINUX_SHADOW_BAND,
+                    self.scale,
+                );
+            }
             return;
         }
         if self.style == Style::Windows {
-            let mut shade = Paint {
-                anti_alias: true,
-                ..Paint::default()
-            };
-            shade.set_color_rgba8(0, 0, 0, WIN_BACK_SHADE);
-            pm.fill_path(
-                &self.back,
-                &shade,
-                FillRule::Winding,
-                Transform::identity(),
-                None,
-            );
-            rim(
-                pm,
-                &w::front_top_edge_path(self.scale),
-                &self.mask(&self.back),
-                WIN_SHADOW,
-                WIN_SHADOW_BAND,
-                self.scale,
-            );
+            if draws("back") {
+                self.shade_back(pm, WIN_BACK_SHADE);
+            }
+            if draws("front") {
+                rim(
+                    pm,
+                    &w::front_top_edge_path(self.scale),
+                    &self.mask(&self.back),
+                    WIN_SHADOW,
+                    WIN_SHADOW_BAND,
+                    self.scale,
+                );
+            }
             return;
         }
         let Some(paper_path) = &self.paper else {
             return;
         };
-        rim(
-            pm,
-            &g::back_top_edge_path(self.scale),
-            &self.mask(&self.back),
-            [255, 255, 255, RIM_LIGHT],
-            RIM_BAND,
-            self.scale,
-        );
+        if draws("back") {
+            rim(
+                pm,
+                &g::back_top_edge_path(self.scale),
+                &self.mask(&self.back),
+                [255, 255, 255, RIM_LIGHT],
+                RIM_BAND,
+                self.scale,
+            );
+        }
+        if !draws("paper") {
+            return;
+        }
         let mut paper = Paint {
             anti_alias: true,
             ..Paint::default()
@@ -402,6 +411,23 @@ impl Template {
             PAPER_HIGHLIGHT,
             PAPER_BAND,
             self.scale,
+        );
+    }
+
+    /// The back panel, tab and all, darkened by `alpha` of black: Windows' and Linux's folders
+    /// are a shade deeper inside.
+    fn shade_back(&self, pm: &mut Pixmap, alpha: u8) {
+        let mut shade = Paint {
+            anti_alias: true,
+            ..Paint::default()
+        };
+        shade.set_color_rgba8(0, 0, 0, alpha);
+        pm.fill_path(
+            &self.back,
+            &shade,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
         );
     }
 
@@ -683,6 +709,196 @@ pub fn template_layers_in(size: u32, style: Style) -> TemplateLayers {
         top: raster::to_straight_rgba(&premul_of(layer(Template::draw_top))),
         outline: white_with_alpha(size, outline.pixels().iter().map(|p| p.alpha())),
     }
+}
+
+/// What a piece of a template is to the composer ([`template_pieces_in`],
+/// [`crate::drive::pieces`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Role {
+    /// Where the design shows: white, its alpha the coverage the design is cut to there.
+    Surface,
+    /// A part's own colours, which the composer can change.
+    Paint,
+    /// Light and shade over a part, which keep their colour whatever colour the part is given.
+    Light,
+}
+
+impl Role {
+    /// The name the webview knows it by.
+    pub fn id(self) -> &'static str {
+        match self {
+            Role::Surface => "surface",
+            Role::Paint => "paint",
+            Role::Light => "light",
+        }
+    }
+}
+
+/// One of a template's parts at one place in the stack the composer draws, cut down to where it
+/// has any pixels: straight-alpha RGBA, its top left corner at `(x, y)` in the template's pixels.
+pub struct Piece {
+    /// The part it belongs to: `"tab"`, `"back"`, `"paper"`, `"front"` on a folder, a drive's own
+    /// parts on a drive ([`crate::drive::pieces`]).
+    pub part: &'static str,
+    pub role: Role,
+    pub x: u32,
+    pub y: u32,
+    pub image: image::RgbaImage,
+}
+
+impl Piece {
+    /// What `pm` (premultiplied, square) has in rows `rows`, as a piece of `part`, cut to its
+    /// pixels. `None` when there are none.
+    pub(crate) fn cut(
+        part: &'static str,
+        role: Role,
+        pm: &Pixmap,
+        rows: std::ops::Range<u32>,
+    ) -> Option<Piece> {
+        let width = pm.width();
+        let (x0, y0, x1, y1) = covered(pm.data(), 4, width, rows)?;
+        let mut data = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+        for y in y0..y1 {
+            let from = ((y * width + x0) * 4) as usize;
+            data.extend_from_slice(&pm.data()[from..from + ((x1 - x0) * 4) as usize]);
+        }
+        let image = raster::to_straight_rgba(&raster::Premul {
+            width: x1 - x0,
+            height: y1 - y0,
+            data,
+        });
+        Some(Piece {
+            part,
+            role,
+            x: x0,
+            y: y0,
+            image,
+        })
+    }
+
+    /// Where the design shows in rows `rows` of `mask` (square), as a piece of `part`: white, its
+    /// alpha the mask's. `None` when the mask has nothing there.
+    pub(crate) fn surface(
+        part: &'static str,
+        mask: &Mask,
+        rows: std::ops::Range<u32>,
+    ) -> Option<Piece> {
+        let width = mask.width();
+        let alpha = |x: u32, y: u32| mask.data()[(y * width + x) as usize];
+        let (x0, y0, x1, y1) = covered(mask.data(), 1, width, rows)?;
+        let image = image::RgbaImage::from_fn(x1 - x0, y1 - y0, |x, y| {
+            image::Rgba([255, 255, 255, alpha(x0 + x, y0 + y)])
+        });
+        Some(Piece {
+            part,
+            role: Role::Surface,
+            x: x0,
+            y: y0,
+            image,
+        })
+    }
+}
+
+/// The box `[x0, x1) × [y0, y1)` around every pixel in `rows` of a square picture `width` wide
+/// with any coverage, or `None` when it has none there. Its pixels are `bytes` long, the last
+/// byte of each its coverage: 4 for a pixmap, 1 for a mask.
+fn covered(
+    data: &[u8],
+    bytes: usize,
+    width: u32,
+    rows: std::ops::Range<u32>,
+) -> Option<(u32, u32, u32, u32)> {
+    let stride = width as usize * bytes;
+    let (mut x0, mut y0, mut x1, mut y1) = (usize::MAX, u32::MAX, 0, 0);
+    for y in rows.start..rows.end.min(width) {
+        let row = &data[y as usize * stride..(y as usize + 1) * stride];
+        let shows = |p: &[u8]| p[bytes - 1] != 0;
+        let Some(first) = row.chunks_exact(bytes).position(shows) else {
+            continue;
+        };
+        let last = row.chunks_exact(bytes).rposition(shows).unwrap_or(first);
+        (x0, x1) = (x0.min(first), x1.max(last + 1));
+        (y0, y1) = (y0.min(y), y + 1);
+    }
+    (x1 > x0).then_some((x0 as u32, y0, x1 as u32, y1))
+}
+
+/// `pieces` stacked in order around `design` (premultiplied RGBA, `size` px square), each over the
+/// ones before, the way the composer stacks them: a surface is the design cut to it. Every pixel
+/// premultiplied, 0 to 1.
+#[cfg(test)]
+pub(crate) fn stack_pieces(pieces: &[Piece], size: u32, design: &[u8]) -> Vec<[f32; 4]> {
+    let unit = |v: u8| v as f32 / 255.0;
+    let mut out = vec![[0.0f32; 4]; (size * size) as usize];
+    for piece in pieces {
+        let premul = raster::straight_to_premul(&piece.image).data;
+        let (w, h) = piece.image.dimensions();
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((piece.y + y) * size + piece.x + x) as usize;
+                let j = ((y * w + x) * 4) as usize;
+                let src: [f32; 4] = if piece.role == Role::Surface {
+                    let coverage = unit(piece.image.as_raw()[j + 3]);
+                    std::array::from_fn(|c| unit(design[i * 4 + c]) * coverage)
+                } else {
+                    std::array::from_fn(|c| unit(premul[j + c]))
+                };
+                let dst = out[i];
+                out[i] = std::array::from_fn(|c| src[c] + dst[c] * (1.0 - src[3]));
+            }
+        }
+    }
+    out
+}
+
+/// How far `stack` is from `want` (premultiplied RGBA bytes) at its worst, in levels.
+#[cfg(test)]
+pub(crate) fn worst_off(stack: &[[f32; 4]], want: &[u8]) -> i32 {
+    stack
+        .iter()
+        .zip(want.as_chunks::<4>().0)
+        .flat_map(|(got, want)| {
+            (0..4).map(move |c| ((got[c] * 255.0).round() as i32 - want[c] as i32).abs())
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+/// The folder of `style` taken apart for the composer at `size` px, part by part in the order the
+/// composer stacks them: the design through the tab and through the back panel's body, the back's
+/// light and shade (the tab's share and the body's), the shadow the front casts on the back, the
+/// paper, the design through the front panel and the front's light over it all. Stacked back
+/// around a design they're the folder [`template_layers_in`] makes (a test checks); drawing a part
+/// in another colour, or leaving it out, is how the composer changes the folder's own parts.
+///
+/// The tab is the back panel above the top of its body, cut along that line.
+pub fn template_pieces_in(size: u32, style: Style) -> Vec<Piece> {
+    let t = Template::new(size, style);
+    let cut = ((style.tab_bottom() * t.scale).round() as u32).min(size);
+    let (tab, body) = (0..cut, cut..size);
+    let whole = 0..size;
+    let middle = |part: &str| {
+        let mut pm = t.pixmap();
+        t.draw_middle_of(&mut pm, Some(part));
+        pm
+    };
+    let back = t.mask(&t.back);
+    let shade = middle("back");
+    let mut top = t.pixmap();
+    t.draw_top(&mut top);
+    [
+        Piece::surface("tab", &back, tab.clone()),
+        Piece::surface("back", &back, body.clone()),
+        Piece::cut("tab", Role::Light, &shade, tab),
+        Piece::cut("back", Role::Light, &shade, body),
+        Piece::cut("front", Role::Light, &middle("front"), whole.clone()),
+        Piece::cut("paper", Role::Paint, &middle("paper"), whole.clone()),
+        Piece::surface("front", &t.mask(&t.front), whole.clone()),
+        Piece::cut("front", Role::Light, &top, whole),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// Builds an icon set from a picture that is already a finished folder image.
@@ -1338,6 +1554,45 @@ mod tests {
     fn the_layers_stacked_around_a_design_are_the_saved_icon() {
         for style in Style::ALL {
             layers_stack_into_the_master(style);
+        }
+    }
+
+    #[test]
+    fn the_pieces_stacked_around_a_design_are_the_saved_icon() {
+        for style in Style::ALL {
+            let design = gradient_design(RENDER_SIZE);
+            let master = render_master_placed_in(&design, style);
+            let pieces = template_pieces_in(RENDER_SIZE, style);
+            let design = raster::straight_to_premul(&design).data;
+            let worst = worst_off(&stack_pieces(&pieces, RENDER_SIZE, &design), &master.data);
+            // As the layers are: Windows' and Linux's round once more along the front's top edge.
+            let allowed = if style == Style::Mac { 3 } else { 4 };
+            assert!(
+                worst <= allowed,
+                "{style:?}: the stacked pieces are {worst} off the saved icon"
+            );
+            let parts: Vec<(&str, Role)> = pieces.iter().map(|p| (p.part, p.role)).collect();
+            assert_eq!(
+                parts[..2],
+                [("tab", Role::Surface), ("back", Role::Surface)],
+                "{style:?}"
+            );
+            assert!(parts.contains(&("front", Role::Surface)), "{style:?}");
+            assert_eq!(
+                parts.contains(&("paper", Role::Paint)),
+                style == Style::Mac,
+                "{style:?}: only the Mac's folder has paper"
+            );
+            // The tab is all above the body, and the body all below the tab.
+            let cut = (style.tab_bottom() * RENDER_SIZE as f32 / g::CANVAS).round() as u32;
+            for p in &pieces {
+                let (top, bottom) = (p.y, p.y + p.image.height());
+                match p.part {
+                    "tab" => assert!(bottom <= cut, "{style:?}: the tab reaches {bottom}"),
+                    "back" => assert!(top >= cut, "{style:?}: the back's body starts at {top}"),
+                    _ => {}
+                }
+            }
         }
     }
 

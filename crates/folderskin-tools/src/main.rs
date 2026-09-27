@@ -899,6 +899,16 @@ fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
         }
         std::fs::write(path, bytes).map_err(|e| format!("couldn't write {}: {e}", path.display()))
     };
+    let pieces = |dir: &Path, (sheet, list): (image::RgbaImage, serde_json::Value)| {
+        let json = serde_json::to_string_pretty(&list).map_err(|e| e.to_string())?;
+        write(&dir.join("pieces.json"), format!("{json}\n").as_bytes())?;
+        write(
+            &dir.join("pieces.webp"),
+            &raster::encode_webp_lossless(&sheet),
+        )?;
+        println!("wrote {}", dir.join("pieces.webp").display());
+        Ok::<(), String>(())
+    };
     for style in Style::ALL {
         let dir = out.join(composer::style_dir(style));
         for (file, layer) in composer::layer_files(size, style) {
@@ -906,14 +916,17 @@ fn composer_layers(out: &Path, size: u32) -> Result<(), String> {
             write(&path, &raster::encode_png(&layer))?;
             println!("wrote {} ({size}×{size})", path.display());
         }
+        pieces(&dir, composer::folder_pieces(size, style))?;
     }
     let half = (size / 2).max(16);
     for shape in DriveShape::all() {
+        let dir = out.join("drives").join(shape.id());
         for (file, layer) in composer::drive_layer_files(shape, half) {
-            let path = out.join("drives").join(shape.id()).join(file);
+            let path = dir.join(file);
             write(&path, &raster::encode_webp_lossless(&layer))?;
             println!("wrote {} ({half}×{half})", path.display());
         }
+        pieces(&dir, composer::drive_pieces(shape, half))?;
     }
     let parts = out.join("drives/parts.json");
     let json = serde_json::to_string_pretty(&composer::drive_parts()).map_err(|e| e.to_string())?;

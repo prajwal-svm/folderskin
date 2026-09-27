@@ -3,10 +3,12 @@
 //! Linux's in `linux/`. Beside them, for the browser preview, every drive's layers in
 //! `drives/<id>/` with where each drive's face is in `drives/parts.json` and the strip its pack
 //! of drives shows in `drives/strip.webp`, and every base's bare shape in `bases/<id>.webp`
-//! ([`folderskin_core::base`]).
+//! ([`folderskin_core::base`]). Each folder and drive taken apart into its parts, as the composer's
+//! canvas stacks them, is `pieces.webp` beside its layers, every piece one under the other, with
+//! `pieces.json` saying whose each is and where it goes.
 
 use folderskin_core::base::{self, BASES};
-use folderskin_core::compositor::{template_layers_in, Style};
+use folderskin_core::compositor::{template_layers_in, template_pieces_in, Piece, Style};
 use folderskin_core::drive::{self, DriveShape};
 use image::RgbaImage;
 
@@ -45,6 +47,38 @@ pub fn drive_layer_files(shape: DriveShape, size: u32) -> [(&'static str, RgbaIm
         ("top.webp", layers.top),
         ("outline.webp", layers.outline),
     ]
+}
+
+/// Pieces, one under the other in one picture, and what each is: its part, its role, where it goes
+/// in the template (`rect`, `[x, y, width, height]` in its pixels) and where it is in the picture
+/// (`at`, `[x, y]`). What `pieces.webp` and `pieces.json` keep for the browser preview.
+pub fn piece_sheet(pieces: &[Piece]) -> (RgbaImage, serde_json::Value) {
+    let width = pieces.iter().map(|p| p.image.width()).max().unwrap_or(1);
+    let height = pieces.iter().map(|p| p.image.height()).sum::<u32>().max(1);
+    let mut sheet = RgbaImage::new(width, height);
+    let mut y = 0;
+    let mut list = Vec::new();
+    for p in pieces {
+        image::imageops::replace(&mut sheet, &p.image, 0, i64::from(y));
+        list.push(serde_json::json!({
+            "part": p.part,
+            "role": p.role.id(),
+            "rect": [p.x, p.y, p.image.width(), p.image.height()],
+            "at": [0, y],
+        }));
+        y += p.image.height();
+    }
+    (sheet, serde_json::Value::Array(list))
+}
+
+/// A folder's pieces at `size` px, as `pieces.webp` and `pieces.json` keep them.
+pub fn folder_pieces(size: u32, style: Style) -> (RgbaImage, serde_json::Value) {
+    piece_sheet(&template_pieces_in(size, style))
+}
+
+/// A drive's pieces at `size` px, as `drives/<id>/pieces.webp` and `pieces.json` keep them.
+pub fn drive_pieces(shape: DriveShape, size: u32) -> (RgbaImage, serde_json::Value) {
+    piece_sheet(&drive::pieces(shape, size))
 }
 
 /// Where every drive's face is, in canvas units, by drive id: its box, a point on it nothing hides,
@@ -202,6 +236,21 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 style_dir(style)
             );
+            // The pieces, as a lossless WebP, pixel for pixel wherever a pixel shows.
+            let (sheet, list) = folder_pieces(1024, style);
+            let json: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(format!("{dir}pieces.json")).unwrap())
+                    .unwrap();
+            assert_eq!(json, list, "{dir}pieces.json");
+            let pieces = format!("{dir}pieces.webp");
+            let got = image::open(&pieces)
+                .unwrap_or_else(|e| panic!("couldn't read {pieces}: {e}"))
+                .to_rgba8();
+            assert!(
+                same_pixels(&got, &sheet),
+                "{pieces} differs from the compositor's; write it again with \
+                 `cargo run -p folderskin-tools -- composer-layers --out docs/images/composer`"
+            );
             for (file, want) in layer_files(1024, style) {
                 let path = format!("{dir}{file}");
                 let got = image::open(&path)
@@ -255,6 +304,15 @@ mod tests {
         for shape in DriveShape::all() {
             for (file, want) in drive_layer_files(shape, 512) {
                 near(&format!("{dir}/drives/{}/{file}", shape.id()), &want);
+            }
+            let (sheet, list) = drive_pieces(shape, 512);
+            let path = format!("{dir}/drives/{}/pieces.json", shape.id());
+            let json: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            if json != list {
+                off.borrow_mut().push(format!("{path}: the pieces moved"));
+            } else {
+                near(&format!("{dir}/drives/{}/pieces.webp", shape.id()), &sheet);
             }
         }
         let parts: serde_json::Value =

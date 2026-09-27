@@ -348,8 +348,11 @@ function drawOnFront(ctx: Ctx, layer: FillLayer, k: number, px: number, assets: 
   ctx.restore();
 }
 
-/** Draws `doc` onto `ctx`, a canvas `px` pixels square, from scratch; `only` draws one layer alone. */
-export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: { only?: string } = {}) {
+/**
+ * Draws `doc` onto `ctx`, a canvas `px` pixels square, from scratch; `only` draws one layer alone,
+ * and `from` the layers from that index up (the design without its backgrounds).
+ */
+export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: { only?: string; from?: number } = {}) {
   const k = px / CANVAS;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -358,9 +361,10 @@ export function renderDoc(ctx: Ctx, doc: Doc, px: number, assets: Assets, opts: 
   ctx.clearRect(0, 0, px, px);
   ctx.setTransform(k, 0, 0, k, 0, 0);
   const around: Surround = { folder: backgroundColor(doc) };
-  for (const layer of doc.layers) {
+  for (const [index, layer] of doc.layers.entries()) {
     if (layer.hidden) continue;
     if (opts.only && layer.id !== opts.only) continue;
+    if (opts.from !== undefined && index < opts.from) continue;
     // Until the folder's template has loaded there's no front to cut to: it covers everything.
     const front = layer.kind === "fill" && layer.part === "front" && doc.shape === "folder" ? assets.front(doc.style) : null;
     if (front && layer.kind === "fill") drawOnFront(ctx, layer, k, px, assets, front);

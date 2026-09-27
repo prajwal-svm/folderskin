@@ -18,6 +18,13 @@ All notable changes to FolderSkin are recorded here. The format follows
 - **A drive shape for every kind of drive each system shows**, drawn by FolderSkin: nine on the
   Mac, from the startup disk to Time Machine, six on Windows, and ten on Linux, from a USB stick
   and a memory card to a server and a RAID set. Each one still reads at 16 px.
+- **Every folder and drive in its parts, in Design your own.** A drive's case, face, port and the
+  rest, and a folder's tab, back, paper and front, are in the layers list under the design, and a
+  click on the canvas picks one. Give a part a colour of its own, its light and shade kept, make
+  it see-through, hide it or remove it: a red USB stick with no label, a folder with a yellow tab
+  and no paper. Drag the whole folder or drive to move it, a corner to size it and its knob to turn
+  it, the design on it going too. Saved, the skin is the icon on the canvas. Left as it is, the
+  folder or drive is exactly the one it always was.
 - **Design your own on a drive.** Start a new design on any of those shapes, with the drive you
   chose first, and words, shapes and pictures land on its face in a colour that reads there. The
   list of drives shows each one's picture, under its system. The Linux folder is there too,

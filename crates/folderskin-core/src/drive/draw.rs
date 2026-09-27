@@ -4,6 +4,11 @@
 //! Every shape is written in the 1024-unit canvas the folder uses ([`crate::geometry::CANVAS`]).
 //! A [`Drawing`] scales it to the size it is drawn at, so a shape is the same drawing at 2048 px
 //! for an icon and at 1024 px for the composer's layers.
+//!
+//! Everything a shape draws belongs to one of its parts ([`Drawing::part`]): its case, its face, a
+//! port, a light. A part's drawing runs on without another part's in between, in each of the two
+//! layers, so the composer can draw each part on its own ([`super::pieces`]) and stack them back
+//! into the same drive, and let the user change one part's colour, or leave it out.
 
 use crate::geometry::{arc, fillet, Rect, CANVAS};
 use tiny_skia::{
@@ -260,6 +265,14 @@ pub(crate) struct Drawing {
     face_box: Rect,
     face_point: Option<(f32, f32)>,
     edges: Vec<Path>,
+    /// The part what's drawn next belongs to.
+    part: &'static str,
+    /// Draws only this part, when set: how the composer's pieces of a drive are drawn.
+    only: Option<&'static str>,
+    /// The parts in the order they're drawn in each layer, a part again each time another part's
+    /// drawing came between: a part named twice is one the composer can't draw on its own.
+    body_parts: Vec<&'static str>,
+    over_parts: Vec<&'static str>,
 }
 
 impl Drawing {
@@ -273,7 +286,54 @@ impl Drawing {
             face_box: Rect::new(0.0, 0.0, 0.0, 0.0),
             face_point: None,
             edges: Vec::new(),
+            part: "case",
+            only: None,
+            body_parts: Vec::new(),
+            over_parts: Vec::new(),
         }
+    }
+
+    /// A drawing that draws only `part`, everything else left out.
+    pub fn only(size: u32, part: &'static str) -> Drawing {
+        Drawing {
+            only: Some(part),
+            ..Drawing::new(size)
+        }
+    }
+
+    /// A drawing that paints nothing and only notes which parts are drawn where, and the face:
+    /// how a drive is taken apart without drawing it whole first.
+    pub fn plan() -> Drawing {
+        // No part is called "": nothing is painted, into pixmaps as small as they come.
+        Drawing::only(1, "")
+    }
+
+    /// Says which part what's drawn next belongs to: `"face"`, `"case"`, `"port"`. Everything is
+    /// the case until a shape says otherwise.
+    pub fn part(&mut self, id: &'static str) {
+        self.part = id;
+    }
+
+    /// The parts drawn in `layer`, in order, a part named again each time another's drawing came
+    /// between its own.
+    pub fn parts_in(&self, layer: Layer) -> &[&'static str] {
+        match layer {
+            Layer::Body => &self.body_parts,
+            Layer::Over => &self.over_parts,
+        }
+    }
+
+    /// Notes that the current part draws in `layer`, and says whether it's drawn at all.
+    fn draws(&mut self, layer: Layer) -> bool {
+        let part = self.part;
+        let list = match layer {
+            Layer::Body => &mut self.body_parts,
+            Layer::Over => &mut self.over_parts,
+        };
+        if list.last() != Some(&part) {
+            list.push(part);
+        }
+        self.only.is_none_or(|only| only == part)
     }
 
     /// Pixels per canvas unit.
@@ -436,6 +496,9 @@ impl Drawing {
 
     /// Fills `path` with `ink`.
     pub fn fill(&mut self, layer: Layer, path: &Path, ink: &Ink) {
+        if !self.draws(layer) {
+            return;
+        }
         let (p, paint) = (self.dev(path), self.paint(ink));
         self.layer(layer)
             .fill_path(&p, &paint, FillRule::Winding, Transform::identity(), None);
@@ -443,12 +506,18 @@ impl Drawing {
 
     /// Fills `path` with `ink`, only where `clip` is.
     pub fn fill_in(&mut self, layer: Layer, path: &Path, ink: &Ink, clip: &Path) {
+        if !self.draws(layer) {
+            return;
+        }
         let mask = self.mask(clip);
         self.fill_masked(layer, path, ink, &mask);
     }
 
     /// Fills `path` with `ink`, only as far as `mask` lets it.
     pub fn fill_masked(&mut self, layer: Layer, path: &Path, ink: &Ink, mask: &Mask) {
+        if !self.draws(layer) {
+            return;
+        }
         let (p, paint) = (self.dev(path), self.paint(ink));
         self.layer(layer).fill_path(
             &p,
@@ -461,6 +530,9 @@ impl Drawing {
 
     /// A line `width` canvas units wide along `path`.
     pub fn stroke(&mut self, layer: Layer, path: &Path, ink: &Ink, width: f32) {
+        if !self.draws(layer) {
+            return;
+        }
         let (p, paint) = (self.dev(path), self.paint(ink));
         let stroke = Stroke {
             width: width * self.scale,
@@ -481,6 +553,9 @@ impl Drawing {
 
     /// [`Drawing::rim`] in `ink`, so a light can fade along the edge it follows ([`fading`]).
     pub fn rim_ink(&mut self, layer: Layer, edge: &Path, inside: &Path, ink: &Ink, band: f32) {
+        if !self.draws(layer) {
+            return;
+        }
         let mask = self.mask(inside);
         let e = self.dev(edge);
         for (w, a) in [(2.0, 0.45), (1.25, 0.55), (0.625, 0.65)] {
@@ -500,6 +575,9 @@ impl Drawing {
     /// disk's front: its top edge in shadow and a lit lip under its bottom edge. `depth` is how
     /// far the shadow and the lip reach, in canvas units.
     pub fn press(&mut self, layer: Layer, glyph: &Path, colour: [u8; 4], depth: f32) {
+        if !self.draws(layer) {
+            return;
+        }
         let lip = moved(glyph, 0.0, depth);
         self.fill(layer, &lip, &solid(rgba(0xffffff, 120)));
         self.fill(layer, glyph, &solid(colour));

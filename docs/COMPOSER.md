@@ -20,6 +20,9 @@ any other skin, and **Save & apply** puts it straight on the folder you picked.
 | A photo with a caption | **Photo** | It asks for the picture first. Drop or paste more later |
 | A sticker, a badge, anything that isn't folder-shaped | **Sticker** | *Free icon* makes the design the whole icon |
 | A drive of your own: *Backups* on an external disk, a photo on a USB stick | A drive under **Start on a drive**, or **Labelled drive**, **Coloured drive**, **Emoji drive** or **Photo drive** | The design goes on the drive's face. The menu under the canvas moves it to another drive |
+| A drive in colours of its own: a red USB stick, a disk with no label | Any drive | Click a part of the drive (its case, its port, its face) and give it a colour, hide it or remove it |
+| A folder with a tab of another colour, or no paper sheet | Any folder | The folder's tab, back, paper and front are in the layers list, under the design's own layers |
+| A folder or a drive turned, moved or sized | Any folder or drive | Drag it to move it, a corner to size it and the knob above it to turn it. The design goes with it |
 | A skin you already have, with your own touch | A skin's ⋯ menu → **Remix in the composer** | The skin becomes a picture layer to build on |
 | A change to something you designed before | Its ⋯ menu → **Edit design** | **Save changes** updates it in place, and **Save as new** keeps both |
 
@@ -46,12 +49,36 @@ round knob above it to turn it.
   side. Text and emoji always keep their shape.
 - Hold ⇧ to turn in 15° steps, or to keep a shape's proportions. Hold ⌥ to resize from the middle.
 - Double-click words to edit them, or an emoji to swap it.
-- Click the folder itself to select its background.
+- Click the folder itself to select its background, or where the design doesn't show, the part of
+  the folder or drive you clicked.
 
 **Layers.** The list at the top right shows the stack, top first. Drag a row to restack it,
 double-click a name to rename it, and use the eye, the lock and the bin to hide a layer, pin it in
 place or delete it. **Delete all** at the end of the heading clears the design, and the toast that
 says so puts them back, as ⌘Z does. A heading's buttons, like a row's, show when it's pointed at.
+
+**The folder or drive in its parts.** Under the design's layers, the list shows the folder or drive
+the design is on as a group of its own: a Mac folder's **Front**, **Paper**, **Back** and **Tab**
+(Windows' and Linux's have no paper), or a drive's parts, such as a USB stick's **Face**, **Case**,
+**Port holes** and **Port**. Pick a part in the list, or click it on the canvas, and it's tinted:
+
+- **Colour** gives it a colour of its own, with its light and shade kept: a lit edge stays lighter
+  than the rest, whatever the colour. **Own colour** gives it back its own. On a part the design
+  shows on (a folder's tab, back and front, a drive's face), the colour takes the place of the
+  design's background colours and patterns there, and words, pictures and icons stay on top.
+- **Opacity** lets what's behind it show, and **On the icon** (the eye in the list) hides it.
+- The bin, or Delete, removes it from the icon and the list. The group's row brings removed parts
+  back, as ⌘Z does.
+
+A drive's face is a label the design is printed on: hide it and the design stays where it was, on
+the drive's case. A folder's panels are what the design is printed on: hide the tab and the design
+there goes with it.
+
+Picked, the whole folder or drive has a box with knobs of its own: drag anywhere on it to move it
+(it settles back where it started when it comes near), a corner to size it and the knob above it to
+turn it (⇧ in 15° steps). **Whole drive** or **Whole folder** in the settings has its turn and size,
+**Back in place** and **Reset**, and the arrow keys nudge it. Everything on it goes with it: the
+design's layers are placed on the folder or drive, not on the canvas.
 
 **Layers and Settings** are each opened and closed from their heading, and the bar between them is
 dragged to give the layers more room or less (double-click it to put it back, and the arrow keys
@@ -110,10 +137,10 @@ and the switch says so: **Include 22 of 28 folders inside**.
 | Keys | |
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Undo, redo |
-| Delete | Delete the selected layer |
+| Delete | Delete the selected layer, or remove the selected part of the folder or drive |
 | ⌘D | Duplicate it |
 | ⌘C, then ⌘V | Copy it and paste a copy. ⌘V with a picture on the clipboard adds the picture |
-| Arrows, ⇧ arrows | Nudge by 1 or 10 |
+| Arrows, ⇧ arrows | Nudge by 1 or 10: the selected layer, or the whole folder or drive when it or a part of it is selected |
 | ⌘] / ⌘[ | Bring forward, send backward (with ⌥: to the front, to the back) |
 | Esc | Select nothing |
 | In the layers list | ↑ ↓ select, ⌥↑ ⌥↓ restack, F2 rename |
@@ -149,6 +176,39 @@ with the same helpers, both panels filled with the design at its own place. The 
 so the canvas shows the icon that gets written. A fifth layer, `outline`, is the folder's visible
 edges. The flat view tints it, and it is never part of an icon.
 
+### The folder or drive in its parts
+
+The same template comes apart into pieces, one part at one place in the stack, so the canvas can
+change one part and leave the rest (`src/composer/base.ts`, `drawBase` in `composite.ts`). Each
+piece is cut to where it has pixels and says what it is:
+
+- **surface**: where the design shows, white with the coverage as its alpha (a folder's tab, back
+  and front, a drive's face).
+- **paint**: a part's own colours, which a colour of its own changes.
+- **light**: light and shade over a part, which keep their colour whatever the part's colour.
+
+A folder's pieces come from `compositor::template_pieces_in`: the back panel's coverage cut along
+the top of its body into the tab and the back, the middle drawn part by part (`draw_middle_of`:
+the back's light and shade, the shadow the front casts, the paper) and the front's coverage and
+light. A drive says which part everything it draws belongs to (`Drawing::part` in
+`drive/draw.rs`), and `drive::pieces` draws each part on its own, under the face and over it. A
+part's drawing never has another part's in between, and
+`every_drive_comes_apart_into_parts_that_stack_back_into_it` checks that, for all 25 drives, and
+that the pieces stacked around a design are the saved drive within 3 levels, as
+`the_pieces_stacked_around_a_design_are_the_saved_icon` does for the folders. With nothing
+changed, the canvas shows the icon that's always been saved.
+
+A part in a colour of its own is its paint moved to that colour pixel by pixel, each pixel as far
+from the new colour as it was from the part's own colour on average (by lightness), so its light
+and shade stay. The frame moves, turns and sizes the whole stack about the folder's or drive's
+middle, and the stage maps the pointer back through it, so the design's layers stay where they are
+on the folder or drive.
+
+When anything about the folder or drive was changed, only the canvas can draw the icon: saving
+sends the whole icon at 2048 px with `composed: true`, and `composer_save` keeps it as the finished
+folder or drive (the previews under the canvas are drawn the same way). With nothing changed,
+saving is as before.
+
 ### Saving
 
 Saving draws the design once more at 2048 px, encodes it as PNG and sends it to `composer_save`
@@ -177,13 +237,13 @@ A remix reads the skin's own picture with `composer_skin_image`:
 
 | command | input | output |
 | --- | --- | --- |
-| `composer_template` | – | `{size, back, front, middle, top, outline, parts}`: the layers as PNG data URLs, and where the folder's parts are (canvas units) |
-| `composer_save` | raw body with header `{name, tags, shape, design, replaces}` | `{skin, replaced}`: the saved skin, and the id of the design it replaced |
-| `composer_preview` | raw body with header `{shape, sizes}` | the icon at each size (16 to 512, at most six), as data URLs |
+| `composer_template` | – | `{size, back, front, middle, top, outline, parts, pieces}`: the layers as PNG data URLs, where the folder's parts are (canvas units), and the folder taken apart, each piece `{part, role, rect, src}` with `rect` in the template's pixels |
+| `composer_save` | raw body with header `{name, tags, shape, design, replaces, composed}` | `{skin, replaced}`: the saved skin, and the id of the design it replaced. `composed`: the picture is the whole icon, folder or drive and all |
+| `composer_preview` | raw body with header `{shape, sizes, composed}` | the icon at each size (16 to 512, at most six), as data URLs |
 | `composer_image` | `path` | `{url, width, height, name, alpha}`: a picture file, at most 2048 px, PNG if it has transparency and JPEG if not |
 | `composer_skin_image` | `skinId` | the same, for a saved skin's own picture |
 | `composer_design` | `skinId` | the design's document, or `null` for a skin not made here |
-| `composer_drive_template` | `drive` | a drive's layers in the folder's shape, as `composer_template` sends them: `back` empty, `middle` the plain drive, `front` its face's coverage, `top` what goes over the face, and `parts` with the face as the front (and, on a disc, `anchor`, where a new layer goes) |
+| `composer_drive_template` | `drive` | a drive's layers in the folder's shape, as `composer_template` sends them: `back` empty, `middle` the plain drive, `front` its face's coverage, `top` what goes over the face, and `parts` with the face as the front (and, on a disc, `anchor`, where a new layer goes), and the drive taken apart in `pieces` |
 | `shapes` | `size` | every shape a design or a picture can be made for, [below](#every-shape-in-one-list) |
 
 ### The document
@@ -206,6 +266,17 @@ data URL. A document read from disk goes through `parseDoc` first:
 - Numbers are kept to sensible ranges and colours made canonical.
 - A picture that isn't a PNG, JPEG, WebP or GIF data URL is dropped.
 - A document from a newer version is refused rather than misread.
+
+What was changed of the folder or drive is `base`, left out when nothing was: a part's changes by
+its id, and the frame.
+
+```json
+"base": { "parts": { "case": { "color": "#e53935" }, "face": { "hidden": true }, "paper": { "removed": true, "opacity": 0.5 } },
+          "frame": { "x": 0, "y": -20, "rotation": 30, "scale": 0.9 } }
+```
+
+A part keeps its changes when the design moves to another folder or drive that has it too (a
+drive's case, a folder's tab). A FolderSkin from before parts opens the design without them.
 
 A design on a drive says which drive, as `"drive": "mac-external"`, and has `"version": 2`, so a
 FolderSkin from before drives says it's from a newer version rather than opening it on a folder. A
@@ -251,7 +322,9 @@ nothing on its face, and none for `free`. In Rust, `Base::bare(size)` draws the 
 `docs/images/composer/` (Windows' in `windows/`, Linux's in `linux/`), written by `cargo run -p
 folderskin-tools -- composer-layers --out docs/images/composer`. The same command writes every
 drive's layers into `drives/<id>/` at half the size, with where each drive's face is in
-`drives/parts.json`, and every base's bare shape into `bases/`, as lossless WebP. A test in
+`drives/parts.json`, and every base's bare shape into `bases/`, as lossless WebP. Beside each
+folder's and drive's layers, `pieces.webp` has its pieces one under the other and `pieces.json`
+says whose each is and where it goes. A test in
 `folderskin-tools` checks they are the pixels the compositor draws, so they can't go stale, and one
 in the webview's checks that `src/composer/drives.ts` places things where the Rust drawing has each
 drive's face.
@@ -260,7 +333,9 @@ drive's face.
 
 | | |
 | --- | --- |
-| `folderskin-core` compositor | the stacked layers equal the saved icon, a design lands where it was drawn, a see-through design leaves only the paper and edges, and the outline follows the visible edges |
+| `folderskin-core` compositor | the stacked layers equal the saved icon, a design lands where it was drawn, a see-through design leaves only the paper and edges, and the outline follows the visible edges. Each folder's pieces stacked around a design are the saved icon, the tab all above the body |
+| `folderskin-core` drive | every drive's parts are drawn without another's in between, and its pieces stacked around a design are the saved drive |
 | `src-tauri` store | a design's document is saved beside it, survives a restart, goes when it is deleted, and is cleared away if a crash orphans it. Saving over a design keeps its place and refuses a skin that isn't a design |
 | `src-tauri` composer | the body framing, picture checks, previews, saving, naming, a damaged document and picture encodings. A design sent as raw bytes through Tauri's own IPC (its mock runtime) is previewed and saved |
-| frontend (vitest) | the document (its changes and how it is read back), undo, moving, resizing, turning and snapping, text layout and curves, shapes, colours, picture adjustments, templates and the body framing |
+| frontend (vitest) | the document (its changes and how it is read back, a part's changes and the frame among them), undo, moving, resizing, turning and snapping, the parts' order and the frame's turn, text layout and curves, shapes, colours, picture adjustments, templates and the body framing |
+| e2e (`e2e/parts.spec.ts`) | a USB stick's parts listed, picked on the canvas, coloured, hidden, removed and brought back, and saved. The whole stick turned, undone, dragged and put back in place. A folder's paper left out and its tab coloured, and only the tab |

@@ -290,6 +290,20 @@
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+/* The whole folder or drive's box while one of its parts is picked: the part itself is tinted on
+   the canvas, the box only says what its corners and knob move. */
+.cmp-sel.is-frame {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+/* A layer's snapping guides, turned with the folder or drive they run along. */
+.cmp-guides {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
 /* Centred on its point with `translate`, which the pop's `transform` leaves alone: with the
    centring in `transform`, the animation ended with every knob half its size off its handle. */
 .cmp-knob {
@@ -1025,7 +1039,8 @@
   font-size: 12.5px;
 }
 
-.cmp-layer-label {
+.cmp-layer-label,
+.cmp-base-label {
   flex-shrink: 0;
   max-width: 100%;
   overflow: hidden;
@@ -1092,6 +1107,88 @@
 .cmp-layer-btn.is-danger:focus-visible {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+/* ---------- the folder or drive, in its parts ---------- */
+
+.cmp-base {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmp-base-row {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 4px 0 5px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.cmp-base-row.is-part {
+  padding-left: 27px;
+}
+
+.cmp-base-row:hover,
+.cmp-base-row:focus-visible {
+  background: var(--nav-hover);
+}
+
+.cmp-base-row.is-on {
+  background: var(--accent-soft);
+}
+
+.cmp-base-row.is-hidden .cmp-thumb,
+.cmp-base-row.is-hidden .cmp-layer-name {
+  opacity: 0.45;
+}
+
+.cmp-base-row:hover .cmp-layer-btn,
+.cmp-base-row:focus-visible .cmp-layer-btn {
+  opacity: 1;
+}
+
+.cmp-base-caret {
+  flex: none;
+  width: 18px;
+  height: 26px;
+  margin-right: -6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hint);
+}
+
+.cmp-base-caret:hover,
+.cmp-base-caret:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+/* A part's swatch: its colour, or on a folder's panel that shows the design, the design's mark. */
+.cmp-thumb.is-part {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.cmp-thumb.is-design {
+  background: repeating-linear-gradient(135deg, var(--well) 0 4px, color-mix(in srgb, var(--ink) 10%, var(--well)) 4px 8px);
+}
+
+.cmp-inspector-note {
+  margin: 4px 14px 14px;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* ---------- inspector ---------- */

@@ -281,6 +281,21 @@ export type SavedPrompt = {
   updated: string;
 };
 
+/**
+ * One of a folder's or drive's parts at one place in the stack the composer draws, cut to where it
+ * has pixels. `surface` is where the design shows (white, its alpha the coverage), `paint` the
+ * part's own colours and `light` light and shade over a part, whatever colour the part is.
+ */
+export type ComposerPiece = {
+  /** Whose it is: `tab`, `back`, `paper`, `front` on a folder; `case`, `face`, `port` and so on on a drive. */
+  part: string;
+  role: "surface" | "paint" | "light";
+  /** Where it goes in the template's pixels: x, y, width, height. */
+  rect: [number, number, number, number];
+  /** A PNG data URL. */
+  src: string;
+};
+
 /** The folder template split into the layers the composer draws a design between, as PNG data URLs. */
 export type ComposerTemplate = {
   /** Edge of every layer, in pixels. */
@@ -291,6 +306,8 @@ export type ComposerTemplate = {
   top: string;
   outline: string;
   parts: Parts;
+  /** The same folder or drive taken apart, bottom first, for changing its own parts. */
+  pieces: ComposerPiece[];
 };
 
 /** A picture for a composer layer: a file the user picked, or one of their skins. */
@@ -306,6 +323,8 @@ export type ComposerSaveHeader = {
   drive?: string | null;
   design: unknown;
   replaces: string | null;
+  /** The picture is the whole icon, drawn on the canvas: the folder's or drive's own parts were changed there. */
+  composed?: boolean;
 };
 
 /** A saved design, and the id of the one it replaced. */
@@ -584,9 +603,9 @@ const tauriApi = {
   /** Every base a skin can be drawn on (the folders, the drives and none), each drawn at `size` px. */
   /** Saves a design (its full-size picture and its document) as a skin, or changes one saved before. */
   composerSave: (header: ComposerSaveHeader, png: Uint8Array) => invoke<ComposerSaved>("composer_save", frame(header, png)),
-  /** The design as the icon at each of `sizes`, as data URLs, drawn by the compositor. */
-  composerPreview: (shape: "folder" | "free" | "drive", style: FolderStyle, sizes: number[], png: Uint8Array, drive?: string | null) =>
-    invoke<string[]>("composer_preview", frame({ shape, style, drive: drive ?? null, sizes }, png)),
+  /** The design as the icon at each of `sizes`, as data URLs, drawn by the compositor; `composed` when the picture is already the whole icon. */
+  composerPreview: (shape: "folder" | "free" | "drive", style: FolderStyle, sizes: number[], png: Uint8Array, drive?: string | null, composed = false) =>
+    invoke<string[]>("composer_preview", frame({ shape, style, drive: drive ?? null, sizes, composed }, png)),
   /** A picture file, read (and shrunk) for a picture layer. */
   composerImage: (path: string) => invoke<ComposerImage>("composer_image", { path }),
   /** A saved skin's own picture, for a picture layer or a remix. */

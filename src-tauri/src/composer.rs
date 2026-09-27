@@ -13,7 +13,7 @@
 //! `[u32 little-endian length of a JSON header][the header, UTF-8][PNG bytes]` ([`unframe`]).
 
 use crate::commands::{self, SkinDto};
-use crate::state::AppState;
+use crate::state::{parallel_map, AppState};
 use crate::store::{self, NewSkin, SkinImage, SkinSource};
 use base64::Engine;
 use folderskin_core::base;
@@ -124,6 +124,11 @@ struct SaveHeader {
     /// The id of the saved design this one was made from, to save over it.
     #[serde(default)]
     replaces: Option<String>,
+    /// The picture is the whole icon, the folder or the drive already in it: its own parts were
+    /// changed on the canvas (a colour, one left out, the whole of it turned), which only the
+    /// canvas draws.
+    #[serde(default)]
+    composed: bool,
 }
 
 /// What `composer_preview` is asked for, ahead of the design's picture.
@@ -135,6 +140,9 @@ struct PreviewHeader {
     #[serde(default)]
     drive: Option<String>,
     sizes: Vec<u32>,
+    /// The picture is the whole icon, as `composer_save`'s can be.
+    #[serde(default)]
+    composed: bool,
 }
 
 /// The folder template as the composer stacks it around a design. The layers are PNG data URLs,
@@ -155,6 +163,36 @@ pub struct ComposerTemplateDto {
     /// part of the icon.
     pub outline: String,
     pub parts: PartsDto,
+    /// The same folder or drive taken apart, part by part in the order the canvas stacks them
+    /// ([`compositor::template_pieces_in`], [`folderskin_core::drive::pieces`]), so the user can
+    /// give a part a colour of its own, or leave it out.
+    pub pieces: Vec<PieceDto>,
+}
+
+/// One of a template's parts at one place in its stack, cut to where it has pixels.
+#[derive(Serialize, Clone)]
+pub struct PieceDto {
+    /// Whose it is: `tab`, `back`, `paper`, `front` on a folder, `case`, `face`, `port` and so on
+    /// on a drive.
+    pub part: &'static str,
+    /// `surface`: where the design shows, white with the coverage as its alpha. `paint`: the
+    /// part's own colours. `light`: light and shade over a part, whatever its colour.
+    pub role: &'static str,
+    /// Where it goes in the template's pixels: `[x, y, width, height]`.
+    pub rect: [u32; 4],
+    /// A PNG data URL.
+    pub src: String,
+}
+
+impl PieceDto {
+    fn of(piece: &compositor::Piece) -> PieceDto {
+        PieceDto {
+            part: piece.part,
+            role: piece.role.id(),
+            rect: [piece.x, piece.y, piece.image.width(), piece.image.height()],
+            src: commands::data_url(&quick_png(&piece.image)),
+        }
+    }
 }
 
 /// Where the template's parts are, in canvas units. The canvas is `canvas` units square and the
@@ -426,31 +464,73 @@ pub async fn composer_design(
 // ---------- the work, off the async threads ----------
 
 fn draw_template(style: Style) -> ComposerTemplateDto {
-    let layers = compositor::template_layers_in(LAYER_SIZE, style);
-    let url = |layer: &RgbaImage| commands::data_url(&raster::encode_png(layer));
+    let (layers, pieces) = std::thread::scope(|scope| {
+        let pieces = scope.spawn(|| compositor::template_pieces_in(LAYER_SIZE, style));
+        let layers = compositor::template_layers_in(LAYER_SIZE, style);
+        (layers, joined(pieces))
+    });
+    let [back, front, middle, top, outline] = urls(
+        [
+            &layers.back,
+            &layers.front,
+            &layers.middle,
+            &layers.top,
+            &layers.outline,
+        ],
+        |layer| commands::data_url(&raster::encode_png(layer)),
+    );
     ComposerTemplateDto {
         size: LAYER_SIZE,
-        back: url(&layers.back),
-        front: url(&layers.front),
-        middle: url(&layers.middle),
-        top: url(&layers.top),
-        outline: url(&layers.outline),
+        back,
+        front,
+        middle,
+        top,
+        outline,
         parts: PartsDto::new(style),
+        pieces: parallel_map(&pieces, PieceDto::of),
     }
 }
 
 fn draw_drive_template(shape: DriveShape) -> ComposerTemplateDto {
-    let layers = folderskin_core::drive::layers(shape, LAYER_SIZE);
-    let url = |layer: &RgbaImage| commands::data_url(&quick_png(layer));
+    let (layers, pieces) = std::thread::scope(|scope| {
+        let pieces = scope.spawn(|| folderskin_core::drive::pieces(shape, LAYER_SIZE));
+        let layers = folderskin_core::drive::layers(shape, LAYER_SIZE);
+        (layers, joined(pieces))
+    });
+    let [back, front, middle, top, outline] = urls(
+        [
+            &layers.back,
+            &layers.front,
+            &layers.middle,
+            &layers.top,
+            &layers.outline,
+        ],
+        |layer| commands::data_url(&quick_png(layer)),
+    );
     ComposerTemplateDto {
         size: LAYER_SIZE,
-        back: url(&layers.back),
-        front: url(&layers.front),
-        middle: url(&layers.middle),
-        top: url(&layers.top),
-        outline: url(&layers.outline),
+        back,
+        front,
+        middle,
+        top,
+        outline,
         parts: PartsDto::drive(shape),
+        pieces: parallel_map(&pieces, PieceDto::of),
     }
+}
+
+/// A template's five layers made into data URLs by `url`, side by side.
+fn urls(layers: [&RgbaImage; 5], url: impl Fn(&RgbaImage) -> String + Sync) -> [String; 5] {
+    parallel_map(&layers, |layer| url(layer))
+        .try_into()
+        .expect("five layers in, five out")
+}
+
+/// What a scoped thread made, or its panic carried on here.
+fn joined<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> T {
+    handle
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
 }
 
 /// Saves the design framed in `body`; see `composer_save`.
@@ -465,6 +545,19 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
     let document = serde_json::to_vec(&header.design).map_err(|_| UNREADABLE.to_string())?;
     let style = Style::from(header.style);
     let image = match header.shape {
+        // Its own parts changed on the canvas: the picture is the icon, drawn there.
+        Shape::Folder | Shape::Drive if header.composed => {
+            if matte::alpha_bounds(&design, 8).is_none() {
+                return Err("that design is completely transparent".into());
+            }
+            let icon = Arc::new(master_sized(design));
+            if header.shape == Shape::Drive {
+                drive_shape(header.drive.as_deref())?;
+                SkinImage::Drive(icon)
+            } else {
+                SkinImage::Folder(icon)
+            }
+        }
         Shape::Folder => SkinImage::Folder(Arc::new(raster::to_straight_rgba(
             &compositor::render_master_placed_in(&design, style),
         ))),
@@ -555,6 +648,7 @@ fn preview(body: &[u8]) -> Result<Vec<String>, String> {
     }
     let design = decode_design(png, PREVIEW_DESIGN_SIDE)?;
     let icons = match header.shape {
+        _ if header.composed => compositor::icon_set_from_image(&design, &header.sizes),
         Shape::Folder => {
             compositor::render_placed_icon_set_in(&design, &header.sizes, header.style.into())
         }
@@ -633,6 +727,17 @@ fn decode_design(png: &[u8], max_side: u32) -> Result<RgbaImage, String> {
         ));
     }
     Ok(store::shrink_to(img.to_rgba8(), max_side))
+}
+
+/// A whole icon drawn on the canvas at the size of the icon FolderSkin keeps,
+/// [`compositor::RENDER_SIZE`] px square, as a finished icon from Rust is.
+fn master_sized(icon: RgbaImage) -> RgbaImage {
+    let side = compositor::RENDER_SIZE;
+    if icon.dimensions() == (side, side) {
+        icon
+    } else {
+        image::imageops::resize(&icon, side, side, image::imageops::FilterType::Lanczos3)
+    }
 }
 
 /// A PNG for the webview's canvas, made quickly: level 2 takes about a tenth of the time of the
@@ -1092,6 +1197,101 @@ mod tests {
             template["parts"],
             serde_json::to_value(PartsDto::drive(shape)).unwrap()
         );
+        // Taken apart: the pipe and its post under the slab, the slab's parts, the face where the
+        // design shows, and the face's light and shade over it.
+        let pieces: Vec<(String, String)> = template["pieces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| {
+                let rect: Vec<u64> = serde_json::from_value(p["rect"].clone()).unwrap();
+                let url = p["src"].as_str().unwrap();
+                let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(b64)
+                    .unwrap();
+                let img = image::load_from_memory(&bytes).unwrap();
+                assert_eq!(
+                    [img.width(), img.height()],
+                    [rect[2], rect[3]].map(|v| v as u32)
+                );
+                assert!(
+                    rect[0] + rect[2] <= 2048 && rect[1] + rect[3] <= 2048,
+                    "{rect:?}"
+                );
+                (
+                    p["part"].as_str().unwrap().to_string(),
+                    p["role"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        let named = |part: &str, role: &str| (part.to_string(), role.to_string());
+        assert_eq!(
+            pieces,
+            [
+                named("post", "paint"),
+                named("pipe", "paint"),
+                named("case", "paint"),
+                named("light", "paint"),
+                named("face", "paint"),
+                named("face", "surface"),
+                named("face", "light"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_design_whose_own_parts_changed_is_saved_as_the_icon_it_shows() {
+        // The canvas sends the whole icon: here a square, where no folder or drive would put one.
+        let icon = RgbaImage::from_fn(2048, 2048, |x, y| {
+            image::Rgba(if (100..300).contains(&x) && (100..300).contains(&y) {
+                [10, 200, 90, 255]
+            } else {
+                [0, 0, 0, 0]
+            })
+        });
+        let png = png_of(&icon);
+        let state = AppState::default();
+        for (shape, drive) in [("folder", None), ("drive", Some("linux-removable"))] {
+            let mut header = save_header("Turned", shape, None);
+            header["drive"] = json!(drive);
+            header["composed"] = json!(true);
+            let saved = save(&state, &frame(&header, &png)).unwrap().skin;
+            let (SkinImage::Folder(kept) | SkinImage::Drive(kept)) =
+                state.resolve(&saved.id).unwrap()
+            else {
+                panic!("a finished icon");
+            };
+            assert_eq!(*kept, icon, "{shape}: kept as it was drawn");
+            assert_eq!(
+                saved.shape,
+                if drive.is_some() {
+                    crate::store::SkinShape::Drive
+                } else {
+                    crate::store::SkinShape::Folder
+                }
+            );
+        }
+        // Its previews are that icon too, and a see-through one can't be saved.
+        let body = frame(
+            &json!({"shape": "drive", "drive": "linux-removable", "sizes": [64], "composed": true}),
+            &png,
+        );
+        let url = preview(&body).unwrap().remove(0);
+        let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
+        let small = image::load_from_memory(&bytes).unwrap().to_rgba8();
+        assert_eq!(small.get_pixel(6, 6).0[3], 255);
+        assert_eq!(small.get_pixel(40, 40).0[3], 0);
+        let mut header = save_header("Nothing", "folder", None);
+        header["composed"] = json!(true);
+        let clear = png_of(&RgbaImage::new(2048, 2048));
+        assert!(save(&state, &frame(&header, &clear))
+            .err()
+            .unwrap()
+            .contains("transparent"));
     }
 
     #[test]
@@ -1160,6 +1360,14 @@ mod tests {
                 template["parts"],
                 serde_json::to_value(PartsDto::new(style)).unwrap()
             );
+            let parts: Vec<&str> = template["pieces"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|p| p["role"] == "surface")
+                .map(|p| p["part"].as_str().unwrap())
+                .collect();
+            assert_eq!(parts, ["tab", "back", "front"], "{style:?}");
         }
     }
 

@@ -84,6 +84,13 @@ from `compositor::render_master_placed`, which fills both panels with the design
 drawn. The two share their drawing code, and a test holds the stacked layers within 3 levels of
 the saved icon, so the canvas shows what gets written.
 
+The same template also comes apart part by part (`compositor::template_pieces_in`, and
+`drive::pieces`, where every stroke a drive draws belongs to a part), so the canvas can give a
+folder's tab or a drive's case a colour of its own, leave a part out, or move and turn the whole
+folder or drive. Tests hold the pieces, stacked back, to the saved icon too. Only when something
+about the folder or drive was changed does the icon become the canvas's: it's saved as the whole
+icon the canvas draws.
+
 ## Folders, drives and the free icon
 
 Every shape a skin is made for is in one list, `folderskin_core::base::BASES`, in the order the

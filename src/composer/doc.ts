@@ -261,11 +261,34 @@ export type PlacedLayer = TextLayer | EmojiLayer | ShapeLayer | ImageLayer | Ico
 export type LayerKind = Layer["kind"];
 
 /**
+ * A change to one of the folder's or drive's own parts (a folder's tab or paper, a drive's case or
+ * port): `hidden` leaves it out of the icon, `removed` out of the icon and the layers list, `color`
+ * gives it a colour of its own (`#rrggbb`) and `opacity` (0 to 1) lets what's behind it show.
+ */
+export type PartEdit = { hidden?: boolean; removed?: boolean; color?: string; opacity?: number };
+
+/**
+ * Where the folder or drive sits: moved `x` and `y` canvas units from where FolderSkin draws it,
+ * turned `rotation` degrees clockwise and sized `scale` times, about its own middle. The design on
+ * it goes with it.
+ */
+export type Frame = { x: number; y: number; rotation: number; scale: number };
+
+/** How far a folder or drive can be sized, either way. */
+export const MIN_FRAME_SCALE = 0.2;
+export const MAX_FRAME_SCALE = 3;
+
+/** The changes made to the folder or drive under a design, by part id; left out, it's as FolderSkin draws it. */
+export type BaseEdit = { parts?: Record<string, PartEdit>; frame?: Frame };
+
+/**
  * A design: its layers, bottom first, and what it's cut to: a folder (a Mac's, Windows' or
  * Linux's), a drive, or nothing. `drive` is the drive it's on (`mac-external`), kept while it's a
- * free icon too, so turning the skeleton back on puts it back on that drive.
+ * free icon too, so turning the skeleton back on puts it back on that drive. `base` is what was
+ * changed of the folder or drive itself, kept when the design moves to another folder or drive:
+ * a part the other one has too (a case, a tab) keeps its colour there.
  */
-export type Doc = { version: 1 | 2; shape: Shape; style: FolderStyle; drive?: string; layers: Layer[] };
+export type Doc = { version: 1 | 2; shape: Shape; style: FolderStyle; drive?: string; layers: Layer[]; base?: BaseEdit };
 
 // ---------- making layers ----------
 
@@ -572,6 +595,81 @@ export function refit(doc: Doc, from: Parts, to: Parts, style: FolderStyle): Doc
   return { ...doc, style, layers };
 }
 
+// ---------- the folder's or drive's own parts ----------
+
+/** Where a folder or drive sits when nothing has moved it. */
+export const HOME_FRAME: Frame = { x: 0, y: 0, rotation: 0, scale: 1 };
+
+/** Whether a frame leaves the folder or drive where FolderSkin draws it. */
+export const isHome = (f: Frame | null | undefined): boolean => !f || (f.x === 0 && f.y === 0 && f.rotation % 360 === 0 && f.scale === 1);
+
+/** A part's changes, none when it has none. */
+export const partEdit = (doc: Doc, id: string): PartEdit => doc.base?.parts?.[id] ?? {};
+
+/** A part edit with the fields that change nothing dropped; null when nothing is left. */
+function cleanEdit(e: PartEdit): PartEdit | null {
+  const out: PartEdit = {};
+  if (e.hidden) out.hidden = true;
+  if (e.removed) out.removed = true;
+  if (e.color) out.color = e.color;
+  if (e.opacity !== undefined && e.opacity < 1) out.opacity = Math.max(0, e.opacity);
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** `parts` and `frame` as a base, or none at all when neither changes anything. */
+function baseOf(parts: Record<string, PartEdit>, frame: Frame | undefined): BaseEdit | undefined {
+  const base: BaseEdit = {};
+  if (Object.keys(parts).length > 0) base.parts = parts;
+  if (frame && !isHome(frame)) base.frame = frame;
+  return base.parts || base.frame ? base : undefined;
+}
+
+/** `doc` with the base `parts` and `frame` make. */
+function withBase(doc: Doc, parts: Record<string, PartEdit>, frame: Frame | undefined): Doc {
+  const base = baseOf(parts, frame);
+  const next = { ...doc };
+  if (base) next.base = base;
+  else delete next.base;
+  return next;
+}
+
+/** Changes some of one part's fields: `color: undefined` gives it back its own colour. */
+export function patchPart(doc: Doc, id: string, patch: PartEdit): Doc {
+  const parts = { ...doc.base?.parts };
+  const next = cleanEdit({ ...parts[id], ...patch });
+  if (next) parts[id] = next;
+  else delete parts[id];
+  return withBase(doc, parts, doc.base?.frame);
+}
+
+/** Moves, turns or sizes the whole folder or drive. */
+export function setFrame(doc: Doc, frame: Frame): Doc {
+  return withBase(doc, { ...doc.base?.parts }, frame);
+}
+
+/** Puts back every part that was removed, leaving their colours and whether they're hidden as they were. */
+export function restoreParts(doc: Doc): Doc {
+  const parts: Record<string, PartEdit> = {};
+  for (const [id, e] of Object.entries(doc.base?.parts ?? {})) {
+    const next = cleanEdit({ ...e, removed: false });
+    if (next) parts[id] = next;
+  }
+  return withBase(doc, parts, doc.base?.frame);
+}
+
+/** Every part back as FolderSkin draws it, in its own colours, the folder or drive left where it was put. */
+export function resetParts(doc: Doc): Doc {
+  return withBase(doc, {}, doc.base?.frame);
+}
+
+/** The folder or drive as FolderSkin draws it again: every part back, in its own colours, where it was. */
+export function resetBase(doc: Doc): Doc {
+  return withBase(doc, {}, undefined);
+}
+
+/** Whether anything about the folder or drive itself was changed, so only the canvas can draw the icon. */
+export const isBaseEdited = (doc: Doc): boolean => doc.base !== undefined && (doc.base.parts !== undefined || !isHome(doc.base.frame));
+
 export const indexOf = (doc: Doc, id: string) => doc.layers.findIndex((l) => l.id === id);
 export const findLayer = (doc: Doc, id: string | null) => (id ? (doc.layers.find((l) => l.id === id) ?? null) : null);
 
@@ -828,6 +926,40 @@ function readLayer(v: unknown): Layer | null {
   }
 }
 
+/** A part's id as Rust names it: `case`, `back-disk`. */
+const PART_ID = /^[a-z][a-z-]{0,23}$/;
+/** More parts than any folder or drive has. */
+const MAX_PARTS = 40;
+
+/** What was changed of the folder or drive, read back; `undefined` when nothing was. */
+function readBase(v: unknown): BaseEdit | undefined {
+  if (!isObj(v)) return undefined;
+  const parts: Record<string, PartEdit> = {};
+  if (isObj(v.parts)) {
+    for (const [id, raw] of Object.entries(v.parts).slice(0, MAX_PARTS)) {
+      if (!PART_ID.test(id) || !isObj(raw)) continue;
+      const color = typeof raw.color === "string" ? normalizeColor(raw.color, "").slice(0, 7) : "";
+      const edit = cleanEdit({
+        hidden: raw.hidden === true,
+        removed: raw.removed === true,
+        color: color || undefined,
+        opacity: typeof raw.opacity === "number" ? num(raw.opacity, 1, 0, 1) : undefined,
+      });
+      if (edit) parts[id] = edit;
+    }
+  }
+  const f = isObj(v.frame) ? v.frame : null;
+  const frame = f
+    ? {
+        x: num(f.x, 0, -POS, POS),
+        y: num(f.y, 0, -POS, POS),
+        rotation: num(f.rotation, 0, -3600, 3600),
+        scale: num(f.scale, 1, MIN_FRAME_SCALE, MAX_FRAME_SCALE),
+      }
+    : undefined;
+  return baseOf(parts, frame);
+}
+
 /** Path data and nothing else: commands, numbers, separators. */
 const PATH_DATA = /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]+$/;
 const MAX_PATH = 40_000;
@@ -853,10 +985,12 @@ export function parseDoc(value: unknown): Doc | null {
     layers.push(layer);
   }
   const style = isFolderStyle(value.style) ? value.style : "mac";
+  const base = readBase(value.base);
+  const withEdits = (doc: Doc): Doc => (base ? { ...doc, base } : doc);
   // A design on a drive FolderSkin doesn't draw is read as one on the folder, as anything else is.
   if (isDriveId(value.drive)) {
     const shape = value.shape === "free" ? "free" : "drive";
-    return { version: DRIVE_DOC_VERSION, shape, style, drive: value.drive, layers };
+    return withEdits({ version: DRIVE_DOC_VERSION, shape, style, drive: value.drive, layers });
   }
-  return { version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", style, layers };
+  return withEdits({ version: DOC_VERSION, shape: value.shape === "free" ? "free" : "folder", style, layers });
 }
