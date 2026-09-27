@@ -554,8 +554,8 @@ Para probarlo:
 | | |
 |---|---|
 | macOS | Compila la app (`pnpm tauri build --bundles app`) y abre una vez `target/release/bundle/macos/FolderSkin.app`, lo que registra el esquema en macOS (una copia en `/Applications` es lo más seguro), y luego `open 'folderskin://install?pack=classic-art'`. macOS solo envía enlaces a una app empaquetada, así que `pnpm tauri dev` nunca recibe ninguno |
-| Windows | Instala una compilación o ejecuta `pnpm tauri dev` (una compilación de desarrollo registra el esquema para sí misma), y luego `start "" "folderskin://install?pack=classic-art"` en un símbolo del sistema, o el mismo enlace en el cuadro Ejecutar (Windows+R) |
-| Linux | Instala el `.deb` o el `.rpm`, abre la AppImage una vez o ejecuta `pnpm tauri dev`, y luego `xdg-open 'folderskin://install?pack=classic-art'` |
+| Windows | Instala una compilación o ejecuta `pnpm tauri dev` con `FOLDERSKIN_REGISTER_LINKS=1` definida (solo así una compilación de desarrollo registra el esquema para sí misma), y luego `start "" "folderskin://install?pack=classic-art"` en un símbolo del sistema, o el mismo enlace en el cuadro Ejecutar (Windows+R) |
+| Linux | Instala el `.deb` o el `.rpm`, abre la AppImage una vez o ejecuta `pnpm tauri dev` con `FOLDERSKIN_REGISTER_LINKS=1` definida, y luego `xdg-open 'folderskin://install?pack=classic-art'` |
 | vista previa en el navegador | `pnpm dev` y abre `http://localhost:14200/?install=classic-art` |
 
 Cierra el FolderSkin instalado antes de `pnpm tauri dev` en Windows o Linux: si ya hay uno abierto,

@@ -517,8 +517,8 @@ To try it:
 | | |
 |---|---|
 | macOS | Build the app (`pnpm tauri build --bundles app`) and open `target/release/bundle/macos/FolderSkin.app` once, which registers the scheme with macOS (a copy in `/Applications` is the surest), then `open 'folderskin://install?pack=classic-art'`. macOS sends links only to a bundled app, so `pnpm tauri dev` never receives one |
-| Windows | Install a build, or run `pnpm tauri dev` (a development build registers the scheme for itself), then `start "" "folderskin://install?pack=classic-art"` in a command prompt, or the same link in the Run box (Windows+R) |
-| Linux | Install the `.deb` or `.rpm`, start the AppImage once, or run `pnpm tauri dev`, then `xdg-open 'folderskin://install?pack=classic-art'` |
+| Windows | Install a build, or run `pnpm tauri dev` with `FOLDERSKIN_REGISTER_LINKS=1` set (only then does a development build register the scheme for itself), then `start "" "folderskin://install?pack=classic-art"` in a command prompt, or the same link in the Run box (Windows+R) |
+| Linux | Install the `.deb` or `.rpm`, start the AppImage once, or run `pnpm tauri dev` with `FOLDERSKIN_REGISTER_LINKS=1` set, then `xdg-open 'folderskin://install?pack=classic-art'` |
 | browser preview | `pnpm dev` and open `http://localhost:14200/?install=classic-art` |
 
 Quit an installed FolderSkin before `pnpm tauri dev` on Windows or Linux: with one already

@@ -135,8 +135,13 @@ pub fn bring_forward<R: Runtime>(app: &AppHandle<R>) {
 }
 
 /// Registers the scheme for this copy of FolderSkin where no installer did: an AppImage, and a
-/// development build. A failure (a Linux without `xdg-mime`, say) only means links don't reach
-/// this copy, so it is written to the log and nothing else.
+/// development build started with `FOLDERSKIN_REGISTER_LINKS` set. A failure (a Linux without
+/// `xdg-mime`, say) only means links don't reach this copy, so it is written to the log and
+/// nothing else.
+///
+/// A development build only asks: registering takes the scheme from the installed FolderSkin (on
+/// Windows the per-user key beats an installer's), so the website's links went on opening that
+/// build, from wherever it was built, until the next install or update.
 #[cfg(any(windows, target_os = "linux"))]
 fn register_scheme(app: &tauri::App) {
     use tauri_plugin_deep_link::DeepLinkExt;
@@ -144,7 +149,8 @@ fn register_scheme(app: &tauri::App) {
     let uninstalled = app.env().appimage.is_some();
     #[cfg(windows)]
     let uninstalled = false;
-    if cfg!(debug_assertions) || uninstalled {
+    let asked = cfg!(debug_assertions) && std::env::var_os("FOLDERSKIN_REGISTER_LINKS").is_some();
+    if asked || uninstalled {
         if let Err(e) = app.deep_link().register_all() {
             eprintln!("folderskin: couldn't register folderskin:// links ({e})");
         }

@@ -288,8 +288,8 @@ FolderSkin은 정확히 다음 형식인 링크만 받아요. 스킴은 `folders
 | | |
 |---|---|
 | macOS | 앱을 빌드하고(`pnpm tauri build --bundles app`) `target/release/bundle/macos/FolderSkin.app`을 한 번 열어 macOS에 스킴을 등록해요(`/Applications`에 복사한 사본이 가장 확실해요). 그런 다음 `open 'folderskin://install?pack=classic-art'`를 실행해요. macOS는 번들로 만든 앱에만 링크를 보내기 때문에 `pnpm tauri dev`는 링크를 받지 못해요 |
-| Windows | 빌드를 설치하거나 `pnpm tauri dev`를 실행해요(개발 빌드는 스스로 스킴을 등록해요). 그런 다음 명령 프롬프트에서 `start "" "folderskin://install?pack=classic-art"`를 실행하거나, 실행 창(Windows+R)에 같은 링크를 입력해요 |
-| Linux | `.deb`나 `.rpm`을 설치하거나, AppImage를 한 번 실행하거나, `pnpm tauri dev`를 실행해요. 그런 다음 `xdg-open 'folderskin://install?pack=classic-art'`를 실행해요 |
+| Windows | 빌드를 설치하거나 `FOLDERSKIN_REGISTER_LINKS=1`을 설정하고 `pnpm tauri dev`를 실행해요(개발 빌드는 그럴 때만 스스로 스킴을 등록해요). 그런 다음 명령 프롬프트에서 `start "" "folderskin://install?pack=classic-art"`를 실행하거나, 실행 창(Windows+R)에 같은 링크를 입력해요 |
+| Linux | `.deb`나 `.rpm`을 설치하거나, AppImage를 한 번 실행하거나, `FOLDERSKIN_REGISTER_LINKS=1`을 설정하고 `pnpm tauri dev`를 실행해요. 그런 다음 `xdg-open 'folderskin://install?pack=classic-art'`를 실행해요 |
 | 브라우저 미리 보기 | `pnpm dev`를 실행하고 `http://localhost:14200/?install=classic-art`를 열어요 |
 
 Windows나 Linux에서 `pnpm tauri dev`를 실행하기 전에 설치된 FolderSkin을 종료하세요. 이미 실행 중인 FolderSkin이 있으면 새로 실행한 쪽이 링크를 넘기고 종료해 버려요. 스킴을 등록한 개발 빌드는 설치 프로그램이나 다른 빌드가 다시 등록할 때까지 그 등록을 유지해요.

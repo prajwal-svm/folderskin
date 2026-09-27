@@ -288,8 +288,8 @@ folderskin-community 的根目录下，与 `packs/` 并列放着两份列表，�
 | | |
 |---|---|
 | macOS | 构建应用（`pnpm tauri build --bundles app`），然后打开一次 `target/release/bundle/macos/FolderSkin.app`，让 macOS 注册这个 scheme（最稳妥的做法是在 `/Applications` 里放一份），再运行 `open 'folderskin://install?pack=classic-art'`。macOS 只会把链接发给打包好的应用，所以 `pnpm tauri dev` 永远收不到链接 |
-| Windows | 安装一个构建版本，或者运行 `pnpm tauri dev`（开发版本会为自己注册这个 scheme），然后在命令提示符中运行 `start "" "folderskin://install?pack=classic-art"`，或者在“运行”对话框（Windows+R）中输入同样的链接 |
-| Linux | 安装 `.deb` 或 `.rpm`，或者启动一次 AppImage，或者运行 `pnpm tauri dev`，然后运行 `xdg-open 'folderskin://install?pack=classic-art'` |
+| Windows | 安装一个构建版本，或者设置 `FOLDERSKIN_REGISTER_LINKS=1` 后运行 `pnpm tauri dev`（开发版本只有这样才会为自己注册这个 scheme），然后在命令提示符中运行 `start "" "folderskin://install?pack=classic-art"`，或者在“运行”对话框（Windows+R）中输入同样的链接 |
+| Linux | 安装 `.deb` 或 `.rpm`，或者启动一次 AppImage，或者设置 `FOLDERSKIN_REGISTER_LINKS=1` 后运行 `pnpm tauri dev`，然后运行 `xdg-open 'folderskin://install?pack=classic-art'` |
 | 浏览器预览 | 运行 `pnpm dev`，然后打开 `http://localhost:14200/?install=classic-art` |
 
 在 Windows 或 Linux 上运行 `pnpm tauri dev` 之前，请先退出已安装的 FolderSkin：如果已经有一个在运行，新启动的会把链接交给它，然后自己退出。开发版本注册的 scheme 会一直保留，直到安装程序或另一个构建版本重新注册。

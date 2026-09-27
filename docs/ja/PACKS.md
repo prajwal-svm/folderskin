@@ -288,8 +288,8 @@ FolderSkinがリンクを受け付けるのは、厳密に次の形のときだ�
 | | |
 |---|---|
 | macOS | アプリをビルドし（`pnpm tauri build --bundles app`）、`target/release/bundle/macos/FolderSkin.app`を一度開いて、macOSにスキームを登録します（`/Applications`にコピーしたものがいちばん確実です）。そのあと`open 'folderskin://install?pack=classic-art'`を実行します。macOSはバンドルされたアプリにしかリンクを送らないので、`pnpm tauri dev`がリンクを受け取ることはありません |
-| Windows | ビルドをインストールするか、`pnpm tauri dev`を実行します（開発ビルドは自分でスキームを登録します）。そのあと、コマンドプロンプトで`start "" "folderskin://install?pack=classic-art"`を実行するか、「ファイル名を指定して実行」（Windows+R）に同じリンクを入力します |
-| Linux | `.deb`か`.rpm`をインストールするか、AppImageを一度起動するか、`pnpm tauri dev`を実行します。そのあと`xdg-open 'folderskin://install?pack=classic-art'`を実行します |
+| Windows | ビルドをインストールするか、`FOLDERSKIN_REGISTER_LINKS=1`を設定して`pnpm tauri dev`を実行します（開発ビルドは、そのときだけ自分でスキームを登録します）。そのあと、コマンドプロンプトで`start "" "folderskin://install?pack=classic-art"`を実行するか、「ファイル名を指定して実行」（Windows+R）に同じリンクを入力します |
+| Linux | `.deb`か`.rpm`をインストールするか、AppImageを一度起動するか、`FOLDERSKIN_REGISTER_LINKS=1`を設定して`pnpm tauri dev`を実行します。そのあと`xdg-open 'folderskin://install?pack=classic-art'`を実行します |
 | ブラウザでのプレビュー | `pnpm dev`を実行し、`http://localhost:14200/?install=classic-art`を開きます |
 
 WindowsやLinuxで`pnpm tauri dev`を実行する前に、インストール済みのFolderSkinを終了してください。すでに動いているものがあると、新しく起動したほうはそちらにリンクを渡して終了してしまいます。スキームを登録した開発ビルドは、インストーラや別のビルドが登録し直すまで、その登録を持ち続けます。
