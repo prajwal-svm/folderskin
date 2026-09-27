@@ -2,7 +2,7 @@
 //! and putting one on a folder.
 
 use crate::error::CliError;
-use folderskin_core::apply::{apply_icon, refresh_shell_icons, ApplyError};
+use folderskin_core::apply::{apply_icon, refresh_shell_icons_now, ApplyError};
 use folderskin_core::compositor::{Style, ICON_SIZES};
 use folderskin_core::matte;
 use folderskin_tools::skin::Skin;
@@ -153,7 +153,7 @@ pub fn apply(folder: &Path, picture: &Path, focus: (f32, f32)) -> Result<&'stati
         ),
     };
     apply_icon(folder, &icons).map_err(|e| apply_error(folder, e))?;
-    refresh_shell_icons();
+    refresh_shell_icons_now();
     Ok(what)
 }
 

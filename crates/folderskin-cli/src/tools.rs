@@ -5,7 +5,7 @@ use crate::cli::{ApplyArgs, FormatArg, GlyphArgs, RenderArgs, TemplateArgs};
 use crate::error::CliError;
 use crate::out::Out;
 use crate::{images, preview};
-use folderskin_core::apply::{apply_icon, has_custom_icon, refresh_shell_icons, revert_icon};
+use folderskin_core::apply::{apply_icon, has_custom_icon, refresh_shell_icons_now, revert_icon};
 use folderskin_core::compositor::{
     self, Artwork, IconSet, Style, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
@@ -38,7 +38,7 @@ pub fn revert(folder: &Path, out: &Arc<Out>) -> Result<(), CliError> {
     let had = has_custom_icon(folder);
     revert_icon(folder).map_err(|e| preview::apply_error(folder, e))?;
     if had {
-        refresh_shell_icons();
+        refresh_shell_icons_now();
     }
     let human = if had {
         format!("reverted {}", folder.display())
@@ -345,7 +345,7 @@ pub fn glyph(args: &GlyphArgs, out: &Arc<Out>) -> Result<(), CliError> {
                 .collect(),
         };
         apply_icon(folder, &applied).map_err(|e| preview::apply_error(folder, e))?;
-        refresh_shell_icons();
+        refresh_shell_icons_now();
         out.result(
             Some(folder),
             "applied",
