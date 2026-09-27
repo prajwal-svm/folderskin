@@ -18,7 +18,13 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/prajwal-svm/folderskin/main/scripts/install-cli.ps1 | iex
 ```
 
-Either one downloads the newest command-line release, checks it against its SHA-256, and puts
+Or with [Homebrew](https://brew.sh), on a Mac or Linux:
+
+```sh
+brew install prajwal-svm/tap/folderskin-cli
+```
+
+The install scripts download the newest command-line release, check it against its SHA-256, and put
 `folderskin` on your PATH: in `~/.local/bin` on a Mac or Linux, and in
 `%LOCALAPPDATA%\Programs\folderskin` on Windows. You don't need admin rights.
 `FOLDERSKIN_VERSION=0.1.0` installs a particular version, and `FOLDERSKIN_INSTALL_DIR` puts it
@@ -48,6 +54,12 @@ folderskin revert ~/Music
 
 # See a picture as the folder FolderSkin makes of it
 folderskin render photo.jpg --out folder.png
+
+# Save it as an icon file instead: .icns for macOS, .ico for Windows
+folderskin render photo.jpg --out Photos.icns
+
+# Press a logo into the folder, as the composer presses an icon in, and put it on Music
+folderskin glyph logo.png ~/Music --colour 2A9D8F
 ```
 
 ## Commands
@@ -57,13 +69,16 @@ folderskin render photo.jpg --out folder.png
 | `ai` | Paints folder art: `doctor`, `setup`, `gen`, `batch` (a JSON file of ideas), `theme`, `styles`, `models`, `config`, `key` |
 | `image` | Gets a picture ready: `crop`, `trim`, `clip`, `cutout`, `check`, colour adjustments, `info` |
 | `apply`, `revert` | Puts a picture on a folder, and gives the folder its own icon back |
-| `render`, `template` | Draws a picture as the app's folder icon, and writes the blank folder a model repaints |
+| `render`, `template` | Draws a picture as the app's folder icon (a PNG, an `.icns` or an `.ico`), and writes the blank folder a model repaints |
+| `glyph` | Presses a black-and-white picture (a logo, a symbol, a letter) into the folder, and saves it or puts it on a folder |
 | `packs` | Makes, checks and indexes community packs ([the packs guide](../../docs/PACKS.md)) |
+| `completions` | Prints completions for bash, zsh, fish, PowerShell or elvish |
 
 Every command explains itself with `--help`. `--json` writes each result, progress update and
-error as one JSON object per line, for scripts. `--look mac` or `--look windows` picks the folder
-the artwork goes on, and the folder `ai gen --shape folder` paints. Without it you get the one
-chosen in the app. `ai gen --shape icon` paints a free icon, one subject on its own.
+error as one JSON object per line, for scripts. `--look mac`, `--look windows` or `--look linux`
+picks the folder the artwork goes on, and the folder `ai gen --shape folder` paints. Without it
+you get the one chosen in the app. `ai gen --shape icon` paints a free icon, one subject on its
+own.
 
 ## Building it yourself
 

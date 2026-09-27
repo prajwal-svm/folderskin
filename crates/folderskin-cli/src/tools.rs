@@ -1,16 +1,19 @@
 //! The commands folderskin-tools has always had, on the same library code, with errors that say
 //! what to do: `apply`, `revert`, `render`, `template` and `packs`.
 
-use crate::cli::{ApplyArgs, RenderArgs, TemplateArgs};
+use crate::cli::{ApplyArgs, GlyphArgs, RenderArgs, TemplateArgs};
 use crate::error::CliError;
 use crate::out::Out;
 use crate::{images, preview};
-use folderskin_core::apply::{has_custom_icon, refresh_shell_icons, revert_icon};
+use folderskin_core::apply::{apply_icon, has_custom_icon, refresh_shell_icons, revert_icon};
 use folderskin_core::compositor::{
-    self, render_preview_png_in, Artwork, Style, SKIN_HEIGHT, SKIN_WIDTH,
+    self, Artwork, IconSet, Style, ICON_SIZES, SKIN_HEIGHT, SKIN_WIDTH,
 };
+use folderskin_core::export::{self, Format};
+use folderskin_core::glyph::{self, Fill};
 use folderskin_core::matte;
 use folderskin_tools::cli::PacksCommand;
+use folderskin_tools::skin::Skin;
 use folderskin_tools::{catalog, make, normalize, packs, rename};
 use image::RgbaImage;
 use serde_json::json;
@@ -71,15 +74,16 @@ pub fn rgb(hex: &str) -> Result<[u8; 3], CliError> {
 }
 
 pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
-    let (png, what) = rendered(args, preview::look())?;
+    let format = Format::of(&args.out);
+    let (bytes, what) = rendered(args, preview::look(), format)?;
     focus_unused(args.focus, what, out);
-    images::write_as_named(&png, &args.out, "save the preview")?;
+    save_icon(&bytes, &args.out, format, "save the preview")?;
     let (place, stdout) = place(&args.out);
     out.result(
         (!stdout).then_some(args.out.as_path()),
         "render",
-        json!({"size": args.size, "becomes": what}),
-        &format!("wrote {place} ({size}×{size}): {what}", size = args.size),
+        json!({"size": args.size, "format": format.extension(), "becomes": what}),
+        &format!("wrote {place} ({}): {what}", holds(format, args.size)),
         stdout,
     );
     Ok(())
@@ -96,30 +100,25 @@ fn focus_unused(focus: Option<(f32, f32)>, became: &str, out: &Arc<Out>) {
 /// What a finished folder becomes, as [`preview::becomes`] says it.
 const FINISHED: &str = "a finished folder, used as it is";
 
-/// The PNG `render` writes, with artwork on the folder of `style`, and what it became.
-fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), CliError> {
+/// The file `render` writes as `format`, with artwork on the folder of `style`, and what the
+/// picture became.
+fn rendered(
+    args: &RenderArgs,
+    style: Style,
+    format: Format,
+) -> Result<(Vec<u8>, &'static str), CliError> {
     let focus = args.focus.unwrap_or((0.5, 0.5));
-    Ok(match (&args.image, &args.solid) {
+    let skin = match (&args.image, &args.solid) {
         (Some(path), _) => {
             let (img, _) = images::load(path)?;
-            let skin = preview::skin(img, focus, path)?;
-            (
-                skin.preview_png_in(args.size, style),
-                preview::becomes(&skin, style),
-            )
+            preview::skin(img, focus, path)?
         }
         (None, Some(hex)) => {
             let [r, g, b] = rgb(hex)?;
-            let art = Artwork {
+            Skin::Artwork(Artwork {
                 rgba: RgbaImage::from_pixel(SKIN_WIDTH, SKIN_HEIGHT, image::Rgba([r, g, b, 255])),
                 focus,
-            };
-            let becomes = match style {
-                Style::Mac => "artwork on FolderSkin's folder",
-                Style::Windows => "artwork on Windows' folder",
-                Style::Linux => "artwork on the Linux folder",
-            };
-            (render_preview_png_in(&art, args.size, style), becomes)
+            })
         }
         (None, None) => {
             return Err(CliError::usage(
@@ -128,7 +127,149 @@ fn rendered(args: &RenderArgs, style: Style) -> Result<(Vec<u8>, &'static str), 
             )
             .fix("folderskin render picture.png --out preview.png"))
         }
+    };
+    let bytes = match format {
+        Format::Png => skin.preview_png_in(args.size, style),
+        Format::Icns | Format::Ico => {
+            let icons = skin.icon_set_in(&format.sizes(args.size), style);
+            encoded(&icons, format, args.size)?
+        }
+    };
+    Ok((bytes, preview::becomes(&skin, style)))
+}
+
+/// `icons` as a file of `format`, a PNG `size` px square or an icon file with its every size.
+fn encoded(icons: &IconSet, format: Format, size: u32) -> Result<Vec<u8>, CliError> {
+    export::encode(icons, format, size).ok_or_else(|| {
+        CliError::bug(
+            "The icon wasn't drawn at the sizes its file holds.",
+            format!(
+                "An .{} file of {size} px had nothing to hold.",
+                format.extension()
+            ),
+        )
     })
+}
+
+/// Writes `bytes`, a file of `format`, to `target`: a picture in the format its name asks for
+/// (a PNG as it is, `.jpg` and `.webp` encoded again), an `.icns` or `.ico` as it is.
+fn save_icon(bytes: &[u8], target: &Path, format: Format, doing: &str) -> Result<(), CliError> {
+    match format {
+        Format::Png => images::write_as_named(bytes, target, doing),
+        Format::Icns | Format::Ico => images::write_png(bytes, target, doing),
+    }
+}
+
+/// What a file of `format` holds, for a report line: its size, or the sizes it goes between.
+fn holds(format: Format, size: u32) -> String {
+    let sizes = format.sizes(size);
+    match (sizes.iter().min(), sizes.iter().max()) {
+        (Some(lo), Some(hi)) if lo != hi => format!("every size from {lo} to {hi} px"),
+        _ => format!("{size}×{size}"),
+    }
+}
+
+/// `glyph`: a mark pressed into the folder, written to a file, put on a folder, or both.
+pub fn glyph(args: &GlyphArgs, out: &Arc<Out>) -> Result<(), CliError> {
+    let style = preview::look();
+    if args.empty && style != Style::Mac {
+        out.warn("--empty changes nothing here: only FolderSkin's folder has paper in it");
+    }
+    if let Some(folder) = &args.folder {
+        if folderskin_core::drive::detect::drive_at(folder).is_some() {
+            return Err(mark_on_a_drive(folder));
+        }
+    }
+    let (img, _) = images::load(&args.picture)?;
+    let mark = glyph::coverage(&img, !args.no_trim).ok_or_else(|| {
+        CliError::fixable(
+            "image_empty",
+            "There is no mark in that picture to press into a folder.",
+            format!("{} is one flat colour all over.", args.picture.display()),
+        )
+        .fix("Give a picture of a symbol, a logo or a letter on a plain background.")
+    })?;
+    let fill = match &args.colour {
+        Some(hex) => Fill::Solid(rgb(hex)?),
+        None => Fill::Plain,
+    };
+    let design = glyph::design(&mark, fill, style, args.depth as f32);
+    // A file beside the picture, unless there is a folder to put it on and nowhere else asked.
+    let dest = match (&args.out, &args.folder) {
+        (Some(to), _) => Some(to.clone()),
+        (None, Some(_)) => None,
+        (None, None) => Some(images::target(&args.picture, None, "folder")),
+    };
+    let format = dest.as_deref().map(Format::of);
+    let mut sizes = format.map_or_else(Vec::new, |f| f.sizes(args.size));
+    if args.folder.is_some() {
+        sizes.extend(ICON_SIZES);
+    }
+    sizes.sort_unstable();
+    sizes.dedup();
+    let icons = compositor::render_placed_icon_set_with(&design, &sizes, style, !args.empty);
+    let what = pressed_into(style);
+    let mut stdout = false;
+    if let (Some(dest), Some(format)) = (&dest, format) {
+        save_icon(
+            &encoded(&icons, format, args.size)?,
+            dest,
+            format,
+            "save the icon",
+        )?;
+        let (place, to_stdout) = place(dest);
+        stdout = to_stdout;
+        out.result(
+            (!stdout).then_some(dest.as_path()),
+            "glyph",
+            json!({"size": args.size, "format": format.extension(), "becomes": what}),
+            &format!("wrote {place} ({}): {what}", holds(format, args.size)),
+            stdout,
+        );
+    }
+    if let Some(folder) = &args.folder {
+        // Only the sizes the app applies, whatever else the file above took.
+        let applied = IconSet {
+            sizes: icons
+                .sizes
+                .into_iter()
+                .filter(|(size, _)| ICON_SIZES.contains(size))
+                .collect(),
+        };
+        apply_icon(folder, &applied).map_err(|e| preview::apply_error(folder, e))?;
+        refresh_shell_icons();
+        out.result(
+            Some(folder),
+            "applied",
+            json!({"folder": folder, "picture": args.picture}),
+            &format!("applied to {}: {what}", folder.display()),
+            stdout,
+        );
+    }
+    Ok(())
+}
+
+/// What `glyph` makes, in words, on the folder of `style`.
+fn pressed_into(style: Style) -> &'static str {
+    match style {
+        Style::Mac => "a mark pressed into FolderSkin's folder",
+        Style::Windows => "a mark pressed into Windows' folder",
+        Style::Linux => "a mark pressed into the Linux folder",
+    }
+}
+
+/// A mark can't go on a drive's root: the app gives a drive an icon on the drive's own shape.
+fn mark_on_a_drive(root: &Path) -> CliError {
+    CliError::fixable(
+        "glyph_on_drive",
+        "A mark goes on a folder, not on a drive.",
+        format!(
+            "{} is a drive, and FolderSkin draws a drive's icon on the drive's own shape.",
+            root.display()
+        ),
+    )
+    .fix("Give a folder on the drive instead.")
+    .fix("Or put a picture on the drive itself: folderskin apply <drive> --image picture.png")
 }
 
 /// How a result's destination reads, and whether it is standard output (`-`).
@@ -800,8 +941,8 @@ mod tests {
             size: 64,
             focus: None,
         };
-        let (mac, _) = rendered(&args, Style::Mac).unwrap();
-        let (windows, _) = rendered(&args, Style::Windows).unwrap();
+        let (mac, _) = rendered(&args, Style::Mac, Format::Png).unwrap();
+        let (windows, _) = rendered(&args, Style::Windows, Format::Png).unwrap();
         let art = Artwork {
             rgba: RgbaImage::from_pixel(
                 SKIN_WIDTH,
@@ -810,8 +951,93 @@ mod tests {
             ),
             focus: (0.5, 0.5),
         };
-        assert_eq!(windows, render_preview_png_in(&art, 64, Style::Windows));
+        assert_eq!(
+            windows,
+            compositor::render_preview_png_in(&art, 64, Style::Windows)
+        );
         assert_ne!(mac, windows, "Windows' folder is another shape");
+    }
+
+    #[test]
+    fn render_writes_an_icon_file_with_every_size_in_it() {
+        let dir = std::env::temp_dir().join(format!("fs-render-icns-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let out = Out::new(true, false);
+        for (name, magic) in [("p.icns", &b"icns"[..]), ("p.ICO", &[0, 0, 1, 0][..])] {
+            let r = RenderArgs {
+                image: None,
+                solid: Some("2A9D8F".into()),
+                out: dir.join(name),
+                size: 64,
+                focus: None,
+            };
+            render(&r, &out).unwrap();
+            let bytes = std::fs::read(&r.out).unwrap();
+            assert!(bytes.starts_with(magic), "{name}");
+        }
+        assert_eq!(holds(Format::Icns, 64), "every size from 16 to 1024 px");
+        assert_eq!(holds(Format::Ico, 64), "every size from 16 to 256 px");
+        assert_eq!(holds(Format::Png, 64), "64×64");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// `glyph`'s options for `picture`, as it runs with none given.
+    fn glyph_of(picture: PathBuf) -> GlyphArgs {
+        GlyphArgs {
+            picture,
+            folder: None,
+            out: None,
+            colour: None,
+            depth: 60.0,
+            size: 128,
+            no_trim: false,
+            empty: false,
+        }
+    }
+
+    #[test]
+    fn a_glyph_goes_beside_its_picture_or_where_it_is_asked() {
+        let dir = std::env::temp_dir().join(format!("fs-glyph-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = Out::new(true, false);
+        // A black disc on white.
+        let logo = dir.join("logo.png");
+        RgbaImage::from_fn(64, 64, |x, y| {
+            let d = (x as i32 - 32).pow(2) + (y as i32 - 32).pow(2);
+            image::Rgba(if d < 400 { [0, 0, 0, 255] } else { [255; 4] })
+        })
+        .save(&logo)
+        .unwrap();
+        glyph(&glyph_of(logo.clone()), &out).unwrap();
+        let beside = image::open(dir.join("logo-folder.png")).unwrap();
+        assert_eq!((beside.width(), beside.height()), (128, 128));
+
+        let icns = GlyphArgs {
+            out: Some(dir.join("music.icns")),
+            colour: Some("2A9D8F".into()),
+            empty: true,
+            ..glyph_of(logo)
+        };
+        glyph(&icns, &out).unwrap();
+        assert!(std::fs::read(dir.join("music.icns"))
+            .unwrap()
+            .starts_with(b"icns"));
+
+        let blank = dir.join("blank.png");
+        RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+            .save(&blank)
+            .unwrap();
+        assert_eq!(
+            glyph(&glyph_of(blank), &out).unwrap_err().code,
+            "image_empty"
+        );
+        let bad_colour = GlyphArgs {
+            colour: Some("teal".into()),
+            ..glyph_of(dir.join("logo.png"))
+        };
+        assert_eq!(glyph(&bad_colour, &out).unwrap_err().code, "usage");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

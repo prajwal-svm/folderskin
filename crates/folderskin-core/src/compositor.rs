@@ -564,7 +564,20 @@ pub fn render_master_placed(design: &image::RgbaImage) -> raster::Premul {
 
 /// [`render_master_placed`] on the folder of `style`.
 pub fn render_master_placed_in(design: &image::RgbaImage, style: Style) -> raster::Premul {
-    let t = Template::new(RENDER_SIZE, style);
+    render_master_placed_with(design, style, true)
+}
+
+/// [`render_master_placed_in`], with the paper sheet between the panels or without it: a Mac
+/// folder with nothing in it shows none. Windows' and Linux's folders have none either way.
+fn render_master_placed_with(
+    design: &image::RgbaImage,
+    style: Style,
+    paper: bool,
+) -> raster::Premul {
+    let mut t = Template::new(RENDER_SIZE, style);
+    if !paper {
+        t.paper = None;
+    }
     let (w, h) = design.dimensions();
     if w == 0 || h == 0 {
         let empty = Paint {
@@ -613,6 +626,17 @@ pub fn render_icon_set(art: &Artwork, sizes: &[u32]) -> IconSet {
 /// [`render_icon_set`] on the folder of `style`.
 pub fn render_icon_set_in(art: &Artwork, sizes: &[u32], style: Style) -> IconSet {
     downsampled(&render_master_in(art, style), sizes)
+}
+
+/// A design placed on the folder of `style` ([`render_master_placed_in`]) at every requested
+/// size, with the paper sheet or, for a folder shown empty, without it.
+pub fn render_placed_icon_set_with(
+    design: &image::RgbaImage,
+    sizes: &[u32],
+    style: Style,
+    paper: bool,
+) -> IconSet {
+    downsampled(&render_master_placed_with(design, style, paper), sizes)
 }
 
 /// Renders a design placed on the icon canvas ([`render_master_placed`]) at every requested

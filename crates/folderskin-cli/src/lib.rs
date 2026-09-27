@@ -70,6 +70,7 @@ fn uses_look(command: &Command) -> bool {
         command,
         Command::Apply(_)
             | Command::Render(_)
+            | Command::Glyph(_)
             | Command::Image(
                 ImageCommand::Render(_) | ImageCommand::Check { .. } | ImageCommand::Crop(_)
             )
@@ -81,8 +82,8 @@ fn uses_look(command: &Command) -> bool {
 fn look_unused() -> CliError {
     CliError::usage(
         "That command isn't quite right.",
-        "--look chooses the folder artwork goes on, which only apply, render, ai gen, ai batch, \
-         ai theme, image check and image crop do.",
+        "--look chooses the folder artwork goes on, which only apply, render, glyph, ai gen, \
+         ai batch, ai theme, image check and image crop do.",
     )
     .fix("Leave --look out of this command.")
 }
@@ -95,8 +96,19 @@ pub fn run(command: Command, out: &Arc<Out>) -> Result<(), CliError> {
         Command::Apply(args) => tools::apply(&args, out),
         Command::Revert { folder } => tools::revert(&folder, out),
         Command::Render(args) => tools::render(&args, out),
+        Command::Glyph(args) => tools::glyph(&args, out),
         Command::Template(args) => tools::template(&args, out),
         Command::Packs(command) => tools::packs(command, out),
+        Command::Completions { shell } => {
+            use clap::CommandFactory;
+            clap_complete::generate(
+                shell,
+                &mut Cli::command(),
+                "folderskin",
+                &mut std::io::stdout(),
+            );
+            Ok(())
+        }
     }
 }
 
@@ -295,6 +307,7 @@ mod tests {
             &["image", "crop", "a.png"],
             &["ai", "gen", "a boat"],
             &["ai", "theme", "D:/x"],
+            &["glyph", "logo.png"],
         ] {
             assert!(takes(words), "{words:?}");
         }
@@ -305,6 +318,7 @@ mod tests {
             &["ai", "key", "list"],
             &["ai", "setup"],
             &["packs", "index"],
+            &["completions", "zsh"],
         ] {
             assert!(!takes(words), "{words:?}");
         }

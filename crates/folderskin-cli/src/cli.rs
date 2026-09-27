@@ -21,7 +21,7 @@ pub struct Cli {
     #[arg(long, short, global = true)]
     pub verbose: bool,
     /// The folder artwork goes on, as in the app: mac, windows or linux (default: the one chosen
-    /// in the app). For apply, render, image check and crop, and ai gen, batch and theme
+    /// in the app). For apply, render, glyph, image check and crop, and ai gen, batch and theme
     #[arg(long, global = true, value_enum)]
     pub look: Option<LookArg>,
     #[command(subcommand)]
@@ -50,13 +50,31 @@ pub enum Command {
         /// The folder whose custom icon should go
         folder: PathBuf,
     },
-    /// Draw a picture (or a solid colour) as the folder icon the app makes of it, to a PNG
+    /// Draw a picture (or a solid colour) as the folder icon the app makes of it, to a PNG, an
+    /// .icns or an .ico
     Render(RenderArgs),
+    /// Press a symbol, a logo or a letter into FolderSkin's folder, from a black-and-white picture
+    Glyph(GlyphArgs),
     /// Write the blank folder a model repaints, and optionally its silhouette
     Template(TemplateArgs),
     /// Make, check and index community skin packs
     #[command(subcommand)]
     Packs(PacksCommand),
+    /// Print the script that completes folderskin's commands and options in your shell
+    #[command(
+        after_help = "Save it where your shell looks for completions, for example:\n  \
+        zsh:  folderskin completions zsh > ~/.zfunc/_folderskin\n        \
+        (with fpath+=~/.zfunc before compinit in ~/.zshrc)\n  \
+        bash: folderskin completions bash > ~/.local/share/bash-completion/completions/folderskin\n  \
+        fish: folderskin completions fish > ~/.config/fish/completions/folderskin.fish\n  \
+        PowerShell: folderskin completions powershell >> $PROFILE\n\
+        Installed with Homebrew, they are set up already."
+    )]
+    Completions {
+        /// bash, zsh, fish, powershell or elvish
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -438,14 +456,46 @@ pub struct RenderArgs {
     /// A solid colour instead of a picture, e.g. 2A9D8F
     #[arg(long, value_name = "RRGGBB")]
     pub solid: Option<String>,
+    /// Where it goes: a picture (.png, .jpg, .webp) of --size, or an icon file that holds every
+    /// size, .icns for macOS or .ico for Windows; `-` writes a PNG to standard output
     #[arg(long, default_value = "preview.png")]
     pub out: PathBuf,
-    /// Its size in pixels (square)
+    /// Its size in pixels (square); an .icns or .ico holds every size anyway
     #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(16..=2048))]
     pub size: u32,
     /// What stays in the middle of the crop, e.g. 0.5,0.4 (artwork only)
     #[arg(long, value_parser = parse_focus)]
     pub focus: Option<(f32, f32)>,
+}
+
+#[derive(Args, Debug)]
+pub struct GlyphArgs {
+    /// The mark: black on white, white on black, or any colour on a see-through background (PNG,
+    /// JPEG, WebP); `-` reads standard input
+    pub picture: PathBuf,
+    /// Also put the icon on this folder
+    pub folder: Option<PathBuf>,
+    /// Where the icon goes: a picture (.png, .jpg, .webp) of --size, or an icon file that holds
+    /// every size, .icns for macOS or .ico for Windows; `-` writes a PNG to standard output
+    /// (default: beside the picture as <name>-folder.png, unless a folder is given)
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// The folder's colour, e.g. 2A9D8F (default: the folder's own)
+    #[arg(long, visible_alias = "color", value_name = "RRGGBB")]
+    pub colour: Option<String>,
+    /// How deep the mark is pressed in, from 0 to 100
+    #[arg(long, default_value_t = 60.0, value_parser = parse_share)]
+    pub depth: f64,
+    /// The picture's size in pixels (square); an .icns or .ico holds every size anyway
+    #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(16..=2048))]
+    pub size: u32,
+    /// Keep the picture's margins, rather than fitting the mark itself to the folder
+    #[arg(long)]
+    pub no_trim: bool,
+    /// A folder with nothing in it: no paper between the panels (only FolderSkin's folder has
+    /// paper)
+    #[arg(long)]
+    pub empty: bool,
 }
 
 #[derive(Args, Debug)]
@@ -860,6 +910,55 @@ mod tests {
             Some(LookArg::Linux)
         );
         assert!(parse(&["render", "a.png", "--look", "amiga"]).is_err());
+    }
+
+    #[test]
+    fn a_glyph_takes_a_picture_and_maybe_a_folder() {
+        let Command::Glyph(g) = parse(&["glyph", "logo.png"]).unwrap().command else {
+            panic!("not glyph");
+        };
+        assert_eq!(g.picture, PathBuf::from("logo.png"));
+        assert_eq!((g.folder, g.out, g.colour), (None, None, None));
+        assert_eq!(
+            (g.depth, g.size, g.no_trim, g.empty),
+            (60.0, 1024, false, false)
+        );
+        let Command::Glyph(g) = parse(&[
+            "glyph",
+            "logo.png",
+            "D:/Music",
+            "--out",
+            "music.icns",
+            "--color",
+            "2A9D8F",
+            "--depth",
+            "30",
+            "--no-trim",
+            "--empty",
+            "--look",
+            "windows",
+        ])
+        .unwrap()
+        .command
+        else {
+            panic!("not glyph");
+        };
+        assert_eq!(g.folder, Some(PathBuf::from("D:/Music")));
+        assert_eq!(g.out, Some(PathBuf::from("music.icns")));
+        assert_eq!(g.colour.as_deref(), Some("2A9D8F"));
+        assert!(g.depth == 30.0 && g.no_trim && g.empty);
+        assert!(parse(&["glyph", "logo.png", "--depth", "120"]).is_err());
+        assert!(parse(&["glyph"]).is_err(), "a picture is needed");
+    }
+
+    #[test]
+    fn completions_are_for_a_shell_by_name() {
+        let Command::Completions { shell } = parse(&["completions", "zsh"]).unwrap().command else {
+            panic!("not completions");
+        };
+        assert_eq!(shell, clap_complete::Shell::Zsh);
+        assert!(parse(&["completions", "tcsh"]).is_err());
+        assert!(parse(&["completions"]).is_err());
     }
 
     #[test]
