@@ -71,10 +71,42 @@
   },
   "export": {
     "title": "Export {{name}}",
-    "macIcon": "macOS icon",
-    "windowsIcon": "Windows icon",
-    "png": "PNG picture",
-    "done": "Saved {{file}}"
+    "sub": "Pick what to save it as. Each one is drawn as its preview shows it.",
+    "done": "Saved {{file}}",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "macOS icon with every size"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "Windows icon with every size"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024 px, see-through"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024 px on white"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "PNGs for Xcode and iconutil"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "App icon for Xcode"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "Everything a website needs"
+      },
+      "folder": {
+        "name": "Folder",
+        "hint": "A new folder wearing it"
+      }
+    }
   },
   "facts": {
     "madeWith": "Made with",

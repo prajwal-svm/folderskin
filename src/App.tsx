@@ -43,6 +43,7 @@ import type { ApplyOutcome, ComposerHandle, ComposerRequest } from "./components
 import type { StudioHandle } from "./components/studio/Studio";
 import { Confirm } from "./components/Confirm";
 import { SkinMenu } from "./components/SkinMenu";
+import { ExportSkin } from "./components/ExportSkin";
 import { SharePack } from "./components/SharePack";
 import { Settings, type SettingsTab } from "./components/Settings";
 import { Toaster } from "./components/Toaster";
@@ -54,6 +55,7 @@ import { FolderOpenIcon } from "./components/icons/folder-open";
 import { ListFilterIcon } from "./components/icons/list-filter";
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "./components/icons/panel-right";
 import { clip, fileName } from "./lib/names";
+import { EXPORT_ENDINGS, isFile, suggestedName, withEnding, type ExportKind } from "./lib/exports";
 import { driveName, shapeFirst } from "./lib/drives";
 import { useDrivePictures } from "./hooks/useDrivePictures";
 
@@ -919,34 +921,29 @@ export default function App() {
     });
   }, []);
 
+  /** The skin whose export chooser is open. */
+  const [exporting, setExporting] = useState<Skin | null>(null);
+
   /**
-   * Saves a skin as an icon file of its own, to use anywhere: an .icns (macOS) or .ico (Windows)
-   * with every size in it, or a PNG, whichever the name chosen ends in. This system's own kind is
-   * offered first.
+   * Saves a skin on its own, as `kind`, wherever the save dialog says: a file, a folder of them,
+   * or a new folder wearing it. A toast says where it went.
    */
   const exportSkin = useCallback(
-    async (skin: Skin) => {
+    async (skin: Skin, kind: ExportKind) => {
       const os = osOf(platform.os);
-      const kinds = [
-        { name: tNow("library.export.macIcon"), extensions: ["icns"] },
-        { name: tNow("library.export.windowsIcon"), extensions: ["ico"] },
-        { name: tNow("library.export.png"), extensions: ["png"] },
-      ];
-      const own = kinds[os === "macos" ? 0 : os === "windows" ? 1 : 2];
-      const filters = [own, ...kinds.filter((k) => k !== own)];
-      const extension = own.extensions[0];
+      const ending = EXPORT_ENDINGS[kind];
+      const suggested = suggestedName(fileName(skin.name), kind);
       const picked = isTauri()
         ? await saveDialog({
             title: tNow("library.export.title", { name: clip(skin.name) }),
-            defaultPath: `${fileName(skin.name)}.${extension}`,
-            filters,
+            defaultPath: suggested,
+            filters: isFile(kind) && ending ? [{ name: tNow(`library.export.kinds.${kind}.hint`), extensions: kind === "jpeg" ? ["jpg", "jpeg"] : [ending] }] : undefined,
           }).catch(() => null)
-        : `/Users/you/Desktop/${fileName(skin.name)}.${extension}`;
+        : `/Users/you/Desktop/${suggested}`;
       if (typeof picked !== "string") return;
-      // A name typed with no kind of its own (some Linux dialogs add none) gets this system's.
-      const dest = /\.(icns|ico|png)$/i.test(picked) ? picked : `${picked}.${extension}`;
+      const dest = withEnding(picked, kind);
       try {
-        await api.exportSkin(skin.id, dest);
+        await api.exportSkin(skin.id, dest, kind);
         toast(tNow("library.export.done", { file: clip(dest.split(/[\\/]/).pop() ?? dest) }), {
           tone: "ok",
           action: { label: tNow(`common.showIn.${os}`), run: () => void revealItemInDir(dest).catch(() => {}) },
@@ -1468,7 +1465,7 @@ export default function App() {
           }}
           onExport={() => {
             setMenu(null);
-            void exportSkin(menu.skin);
+            setExporting(menu.skin);
           }}
           onShare={
             isYours(menu.skin)
@@ -1483,6 +1480,17 @@ export default function App() {
             askDelete(menu.skin);
           }}
           onClose={closeMenu}
+        />
+      )}
+      {exporting && (
+        <ExportSkin
+          skin={exporting}
+          os={osOf(platform.os)}
+          onPick={(kind) => {
+            setExporting(null);
+            void exportSkin(exporting, kind);
+          }}
+          onClose={() => setExporting(null)}
         />
       )}
       {liveAsk && (

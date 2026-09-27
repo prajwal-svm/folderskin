@@ -8,16 +8,18 @@ All notable changes to FolderSkin are recorded here. The format follows
 
 ### Added
 
-- **Save a skin as an icon file.** **Export icon**, in a skin's ⋯ menu, saves it as an `.icns`
-  for macOS or an `.ico` for Windows, with every size in it, or as a PNG. It's drawn as its
-  preview shows it, to use for an app, a disk image or another computer.
+- **Export a skin as any kind of icon.** **Export icon**, in a skin's ⋯ menu, saves it as an
+  ICNS for macOS or an ICO for Windows with every size in it, a PNG or a JPEG, an iconset for
+  Xcode and iconutil, an iOS app icon, the favicons a website needs, or a new folder wearing it.
+  Each is drawn as its preview shows it, to use for an app, a website or another computer.
 - **Press a symbol into a folder, from the command line.** `folderskin glyph logo.png ~/Music`
   presses a black-and-white picture (a logo, a symbol, a letter) into FolderSkin's folder, as
   the composer presses an icon in: a deeper shade of the folder's colour, with a lit lip below
   it. `--colour` fills the folder with a colour of your own, `--depth` sets how deep it goes,
   and `--empty` leaves out the paper.
-- **Icon files from the command line.** `render` and `glyph` write an `.icns` or an `.ico` with
-  every size in it when `--out` names one.
+- **Icon files from the command line.** `render` and `glyph` save the same kinds, all but the new
+  folder: by the name's ending (`.icns`, `.ico`, `.iconset`, `.appiconset`, `.png`, `.jpg`) or
+  with `--format`, which does `favicon` too. A JPEG from `render` is on white now.
 - **Shell completions.** `folderskin completions zsh` (or bash, fish, PowerShell, elvish) prints
   them for your shell.
 

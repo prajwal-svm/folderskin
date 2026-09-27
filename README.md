@@ -135,9 +135,9 @@ Every skin you add has a ⋯ menu: rename it (a double click on its name, or F2,
 there), give it tags (they become filters along the top),
 see how it was made (the AI model and prompt, or the pack and who shared it), share it or delete
 it. AI results are tagged with their style, such as `airbrush`, as they arrive. **Export icon**
-saves any skin as an icon file of its own, drawn as its preview shows it: an `.icns` for macOS or
-an `.ico` for Windows, with every size in it, or a PNG. Use it for an app, a disk image or another
-computer.
+saves any skin on its own, drawn as its preview shows it: an ICNS for macOS or an ICO for Windows
+with every size in it, a PNG or a JPEG, an iconset for Xcode, an iOS app icon, a website's
+favicons, or a new folder wearing it.
 
 **Settings**, at the bottom of the sidebar, holds the theme, your AI keys, what sharing fills in
 and where your skins are saved. Hover the version badge beside the logo for About.

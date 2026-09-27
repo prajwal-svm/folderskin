@@ -71,10 +71,42 @@
   },
   "export": {
     "title": "{{name}} 내보내기",
-    "macIcon": "macOS 아이콘",
-    "windowsIcon": "Windows 아이콘",
-    "png": "PNG 이미지",
-    "done": "{{file}} 파일을 저장했어요"
+    "sub": "저장할 형식을 고르세요. 모두 미리 보기에 보이는 그대로 그려져요.",
+    "done": "{{file}} 파일을 저장했어요",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "모든 크기가 담긴 macOS 아이콘"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "모든 크기가 담긴 Windows 아이콘"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024px, 투명 배경"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024px, 흰 배경"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "Xcode와 iconutil용 PNG"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "Xcode용 앱 아이콘"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "웹사이트에 필요한 모든 것"
+      },
+      "folder": {
+        "name": "폴더",
+        "hint": "이 스킨을 입힌 새 폴더"
+      }
+    }
   },
   "facts": {
     "madeWith": "사용 모델",

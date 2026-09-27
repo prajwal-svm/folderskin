@@ -504,29 +504,37 @@ async fn apply_to_drive(state: AppState, drive: Drive, skin_id: String) -> Resul
     .map_err(|e| e.to_string())?
 }
 
-/// The side of a skin saved as a PNG: the largest icon macOS shows.
-const EXPORT_PNG: u32 = 1024;
+/// The side of a skin saved as one picture: the largest icon macOS shows.
+const EXPORT_PICTURE: u32 = 1024;
 
-/// Saves a skin as an icon file of its own, to use anywhere: an `.icns` or `.ico` with every
-/// size in it, or a PNG, whichever `dest`'s name asks for. It is drawn as its preview shows it
-/// ([`crate::store::SkinImage::export_icon_set`]).
+/// Saves a skin on its own at `dest`, drawn as its preview shows it
+/// ([`crate::store::SkinImage::export_icon_set`]). `format` is a kind of file
+/// ([`folderskin_core::export::Format`]: `png`, `jpeg`, `icns`, `ico`, `iconset`, `ios` or
+/// `favicon`), written as one file or a folder of them, or `folder`: a new folder at `dest`
+/// wearing it.
 #[tauri::command]
 pub async fn export_skin(
     state: State<'_, AppState>,
     skin_id: String,
     dest: String,
+    format: String,
 ) -> Result<(), String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let dest = PathBuf::from(dest);
-        let format = Format::of(&dest);
         let base = state.entry(&skin_id).and_then(|entry| entry.base);
-        let icons = state
-            .resolve(&skin_id)?
-            .export_icon_set(&format.sizes(EXPORT_PNG), base.as_deref());
-        let bytes = export::encode(&icons, format, EXPORT_PNG)
-            .ok_or_else(|| "the icon wasn't drawn at the sizes that file holds".to_string())?;
-        write_atomic(&dest, &bytes).map_err(|e| e.to_string())
+        let skin = state.resolve(&skin_id)?;
+        if format == "folder" {
+            std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+            let icons = skin.export_icon_set(&ICON_SIZES, base.as_deref());
+            apply_icon(&dest, &icons).map_err(|e| e.to_string())?;
+            refresh_shell_icons();
+            return Ok(());
+        }
+        let format = Format::from_id(&format)
+            .ok_or_else(|| format!("FolderSkin doesn't save icons as {format}"))?;
+        let icons = skin.export_icon_set(&format.sizes(EXPORT_PICTURE), base.as_deref());
+        export::write(&icons, format, EXPORT_PICTURE, &dest).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?

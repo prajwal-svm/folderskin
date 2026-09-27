@@ -55,8 +55,12 @@ folderskin revert ~/Music
 # See a picture as the folder FolderSkin makes of it
 folderskin render photo.jpg --out folder.png
 
-# Save it as an icon file instead: .icns for macOS, .ico for Windows
+# Save it as an icon file instead: .icns for macOS, .ico for Windows, .iconset for Xcode
 folderskin render photo.jpg --out Photos.icns
+
+# Or as an iOS app icon, or the favicons a website needs
+folderskin render photo.jpg --format ios --out AppIcon
+folderskin render photo.jpg --format favicon --out site
 
 # Press a logo into the folder, as the composer presses an icon in, and put it on Music
 folderskin glyph logo.png ~/Music --colour 2A9D8F
@@ -69,7 +73,7 @@ folderskin glyph logo.png ~/Music --colour 2A9D8F
 | `ai` | Paints folder art: `doctor`, `setup`, `gen`, `batch` (a JSON file of ideas), `theme`, `styles`, `models`, `config`, `key` |
 | `image` | Gets a picture ready: `crop`, `trim`, `clip`, `cutout`, `check`, colour adjustments, `info` |
 | `apply`, `revert` | Puts a picture on a folder, and gives the folder its own icon back |
-| `render`, `template` | Draws a picture as the app's folder icon (a PNG, an `.icns` or an `.ico`), and writes the blank folder a model repaints |
+| `render`, `template` | Draws a picture as the app's folder icon (a PNG or JPEG, an `.icns`, `.ico`, `.iconset`, an iOS app icon or a website's favicons), and writes the blank folder a model repaints |
 | `glyph` | Presses a black-and-white picture (a logo, a symbol, a letter) into the folder, and saves it or puts it on a folder |
 | `packs` | Makes, checks and indexes community packs ([the packs guide](../../docs/PACKS.md)) |
 | `completions` | Prints completions for bash, zsh, fish, PowerShell or elvish |

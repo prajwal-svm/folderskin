@@ -71,10 +71,42 @@
   },
   "export": {
     "title": "导出 {{name}}",
-    "macIcon": "macOS 图标",
-    "windowsIcon": "Windows 图标",
-    "png": "PNG 图片",
-    "done": "已保存 {{file}}"
+    "sub": "选择保存的格式。每种都按预览中的样子绘制。",
+    "done": "已保存 {{file}}",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "包含全部尺寸的 macOS 图标"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "包含全部尺寸的 Windows 图标"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024 px，透明背景"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024 px，白色背景"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "供 Xcode 和 iconutil 使用的 PNG"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "Xcode 用的 App 图标"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "网站所需的全部文件"
+      },
+      "folder": {
+        "name": "文件夹",
+        "hint": "一个带上这个皮肤的新文件夹"
+      }
+    }
   },
   "facts": {
     "madeWith": "生成模型",

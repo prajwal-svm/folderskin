@@ -40,6 +40,7 @@
  * computer is cooling down, which is never tried again.
  */
 import { COLOUR_FOLDERS } from "../assets/onboarding";
+import type { ExportKind } from "./exports";
 import englishCommon from "../locales/en/common.json";
 import { drawOnFolder, loadTemplate, type TemplateImages } from "../composer/composite";
 import { fallbackParts, FOLDER_STYLES, isFolderStyle, type FolderStyle } from "../composer/parts";
@@ -1337,7 +1338,7 @@ export const mockApi = {
     mockIcons.set(folder, null);
   },
   // Nothing is written in the browser preview; it only takes the time a real save would.
-  exportSkin: async (_skinId: string, _dest: string) => {
+  exportSkin: async (_skinId: string, _dest: string, _format: ExportKind) => {
     await sleep(300);
   },
   // `?os=windows` or `?os=linux` draws the preview as that OS (Windows' own window buttons, and so on).

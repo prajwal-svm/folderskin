@@ -71,10 +71,42 @@
   },
   "export": {
     "title": "{{name}}を書き出す",
-    "macIcon": "macOSアイコン",
-    "windowsIcon": "Windowsアイコン",
-    "png": "PNG画像",
-    "done": "{{file}}を保存しました"
+    "sub": "保存する形式を選んでください。どれもプレビューのとおりに描かれます。",
+    "done": "{{file}}を保存しました",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "全サイズ入りのmacOSアイコン"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "全サイズ入りのWindowsアイコン"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024 px、透過"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024 px、白背景"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "Xcode・iconutil用のPNG"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "Xcode用のアプリアイコン"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "Webサイトに必要なものすべて"
+      },
+      "folder": {
+        "name": "フォルダ",
+        "hint": "このスキンを付けた新しいフォルダ"
+      }
+    }
   },
   "facts": {
     "madeWith": "使用モデル",

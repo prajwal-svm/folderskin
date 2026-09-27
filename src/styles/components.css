@@ -869,6 +869,71 @@ select.input {
   color: var(--danger);
 }
 
+/* Export: every kind of file a skin is saved as, two to a row. */
+.export-kinds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.export-kind {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  text-align: left;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.export-kind:hover,
+.export-kind:focus-visible {
+  background: var(--nav-hover);
+  border-color: var(--accent);
+}
+
+.export-kind-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--nav-hover);
+  color: var(--muted);
+}
+
+.export-kind-glyph svg {
+  width: 16px;
+  height: 16px;
+}
+
+.export-kind-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.export-kind-name {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.export-kind-hint {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .export-kinds {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Verifying this computer for sharing: what's happening in the browser, the button that opens it
    again, and what's being waited for, one under another. */
 .share-verify {

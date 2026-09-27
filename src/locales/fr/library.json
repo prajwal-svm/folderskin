@@ -71,10 +71,42 @@
   },
   "export": {
     "title": "Exporter {{name}}",
-    "macIcon": "Icône macOS",
-    "windowsIcon": "Icône Windows",
-    "png": "Image PNG",
-    "done": "{{file}} enregistré"
+    "sub": "Choisissez sous quelle forme l'enregistrer. Chacune est dessinée comme l'aperçu la montre.",
+    "done": "{{file}} enregistré",
+    "kinds": {
+      "icns": {
+        "name": "ICNS",
+        "hint": "Icône macOS, toutes les tailles"
+      },
+      "ico": {
+        "name": "ICO",
+        "hint": "Icône Windows, toutes les tailles"
+      },
+      "png": {
+        "name": "PNG",
+        "hint": "1024 px, transparent"
+      },
+      "jpeg": {
+        "name": "JPEG",
+        "hint": "1024 px sur fond blanc"
+      },
+      "iconset": {
+        "name": "Iconset",
+        "hint": "PNG pour Xcode et iconutil"
+      },
+      "ios": {
+        "name": "iOS",
+        "hint": "Icône d'app pour Xcode"
+      },
+      "favicon": {
+        "name": "Favicon",
+        "hint": "Tout ce qu'il faut à un site web"
+      },
+      "folder": {
+        "name": "Dossier",
+        "hint": "Un nouveau dossier qui le porte"
+      }
+    }
   },
   "facts": {
     "madeWith": "Fait avec",

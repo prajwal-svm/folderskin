@@ -456,16 +456,56 @@ pub struct RenderArgs {
     /// A solid colour instead of a picture, e.g. 2A9D8F
     #[arg(long, value_name = "RRGGBB")]
     pub solid: Option<String>,
-    /// Where it goes: a picture (.png, .jpg, .webp) of --size, or an icon file that holds every
-    /// size, .icns for macOS or .ico for Windows; `-` writes a PNG to standard output
-    #[arg(long, default_value = "preview.png")]
-    pub out: PathBuf,
-    /// Its size in pixels (square); an .icns or .ico holds every size anyway
+    /// Where it goes, and as what its name says: a picture (.png, .jpg, .webp) of --size, an icon
+    /// file with every size (.icns for macOS, .ico for Windows), or a folder of them (.iconset,
+    /// or .appiconset for an iOS app); `-` writes a PNG to standard output (default: preview.png,
+    /// or preview as --format asks)
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// The kind of file, when the name doesn't say, and its ending is added
+    #[arg(long, value_enum)]
+    pub format: Option<FormatArg>,
+    /// Its size in pixels (square), for a picture; icon files hold every size anyway
     #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(16..=2048))]
     pub size: u32,
     /// What stays in the middle of the crop, e.g. 0.5,0.4 (artwork only)
     #[arg(long, value_parser = parse_focus)]
     pub focus: Option<(f32, f32)>,
+}
+
+/// The kinds of file an icon is saved as, for `--format`.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormatArg {
+    /// One picture, see-through around the icon
+    Png,
+    /// One picture on white
+    Jpeg,
+    /// macOS's icon file, every size from 16 to 1024 px
+    Icns,
+    /// Windows' icon file, every size from 16 to 256 px
+    Ico,
+    /// A folder of PNGs for macOS's iconutil and Xcode
+    Iconset,
+    /// An iOS app icon for Xcode, every size on white
+    Ios,
+    /// A folder with a website's favicon.ico, its PNGs, a web manifest and the lines for the page
+    Favicon,
+}
+
+impl FormatArg {
+    /// The kind of file it names.
+    pub fn format(self) -> folderskin_core::export::Format {
+        use folderskin_core::export::Format;
+        match self {
+            FormatArg::Png => Format::Png,
+            FormatArg::Jpeg => Format::Jpeg,
+            FormatArg::Icns => Format::Icns,
+            FormatArg::Ico => Format::Ico,
+            FormatArg::Iconset => Format::Iconset,
+            FormatArg::Ios => Format::Ios,
+            FormatArg::Favicon => Format::Favicon,
+        }
+    }
 }
 
 #[derive(Args, Debug)]
@@ -475,18 +515,22 @@ pub struct GlyphArgs {
     pub picture: PathBuf,
     /// Also put the icon on this folder
     pub folder: Option<PathBuf>,
-    /// Where the icon goes: a picture (.png, .jpg, .webp) of --size, or an icon file that holds
-    /// every size, .icns for macOS or .ico for Windows; `-` writes a PNG to standard output
-    /// (default: beside the picture as <name>-folder.png, unless a folder is given)
+    /// Where the icon goes, and as what its name says: a picture (.png, .jpg, .webp) of --size, an
+    /// icon file with every size (.icns for macOS, .ico for Windows), or a folder of them
+    /// (.iconset, or .appiconset for an iOS app); `-` writes a PNG to standard output (default:
+    /// beside the picture as <name>-folder.png, unless a folder is given)
     #[arg(long)]
     pub out: Option<PathBuf>,
+    /// The kind of file, when the name doesn't say, and its ending is added
+    #[arg(long, value_enum)]
+    pub format: Option<FormatArg>,
     /// The folder's colour, e.g. 2A9D8F (default: the folder's own)
     #[arg(long, visible_alias = "color", value_name = "RRGGBB")]
     pub colour: Option<String>,
     /// How deep the mark is pressed in, from 0 to 100
     #[arg(long, default_value_t = 60.0, value_parser = parse_share)]
     pub depth: f64,
-    /// The picture's size in pixels (square); an .icns or .ico holds every size anyway
+    /// Its size in pixels (square), for a picture; icon files hold every size anyway
     #[arg(long, default_value_t = 1024, value_parser = clap::value_parser!(u32).range(16..=2048))]
     pub size: u32,
     /// Keep the picture's margins, rather than fitting the mark itself to the folder
@@ -918,7 +962,10 @@ mod tests {
             panic!("not glyph");
         };
         assert_eq!(g.picture, PathBuf::from("logo.png"));
-        assert_eq!((g.folder, g.out, g.colour), (None, None, None));
+        assert_eq!(
+            (g.folder, g.out, g.colour, g.format),
+            (None, None, None, None)
+        );
         assert_eq!(
             (g.depth, g.size, g.no_trim, g.empty),
             (60.0, 1024, false, false)
@@ -949,6 +996,31 @@ mod tests {
         assert!(g.depth == 30.0 && g.no_trim && g.empty);
         assert!(parse(&["glyph", "logo.png", "--depth", "120"]).is_err());
         assert!(parse(&["glyph"]).is_err(), "a picture is needed");
+    }
+
+    #[test]
+    fn a_format_is_named_or_left_to_the_name() {
+        let Command::Render(r) = parse(&["render", "a.png"]).unwrap().command else {
+            panic!("not render");
+        };
+        assert_eq!((r.out, r.format), (None, None));
+        let Command::Render(r) =
+            parse(&["render", "a.png", "--format", "favicon", "--out", "site"])
+                .unwrap()
+                .command
+        else {
+            panic!("not render");
+        };
+        assert_eq!(r.format, Some(FormatArg::Favicon));
+        assert_eq!(r.out, Some(PathBuf::from("site")));
+        let Command::Glyph(g) = parse(&["glyph", "logo.png", "--format", "ios"])
+            .unwrap()
+            .command
+        else {
+            panic!("not glyph");
+        };
+        assert_eq!(g.format, Some(FormatArg::Ios));
+        assert!(parse(&["render", "a.png", "--format", "gif"]).is_err());
     }
 
     #[test]

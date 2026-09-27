@@ -1,7 +1,7 @@
 //! The commands folderskin-tools has always had, on the same library code, with errors that say
 //! what to do: `apply`, `revert`, `render`, `template` and `packs`.
 
-use crate::cli::{ApplyArgs, GlyphArgs, RenderArgs, TemplateArgs};
+use crate::cli::{ApplyArgs, FormatArg, GlyphArgs, RenderArgs, TemplateArgs};
 use crate::error::CliError;
 use crate::out::Out;
 use crate::{images, preview};
@@ -74,18 +74,24 @@ pub fn rgb(hex: &str) -> Result<[u8; 3], CliError> {
 }
 
 pub fn render(args: &RenderArgs, out: &Arc<Out>) -> Result<(), CliError> {
-    let format = Format::of(&args.out);
-    let (bytes, what) = rendered(args, preview::look(), format)?;
+    let style = preview::look();
+    let skin = to_render(args)?;
+    let what = preview::becomes(&skin, style);
     focus_unused(args.focus, what, out);
-    save_icon(&bytes, &args.out, format, "save the preview")?;
-    let (place, stdout) = place(&args.out);
-    out.result(
-        (!stdout).then_some(args.out.as_path()),
-        "render",
-        json!({"size": args.size, "format": format.extension(), "becomes": what}),
-        &format!("wrote {place} ({}): {what}", holds(format, args.size)),
-        stdout,
-    );
+    let dest = destination(
+        args.out.as_deref(),
+        args.format.map(FormatArg::format),
+        |f| {
+            PathBuf::from(if f == Format::Favicon {
+                "favicon"
+            } else {
+                "preview"
+            })
+        },
+    )?;
+    let icons = skin.icon_set_in(&dest.sizes(args.size), style);
+    save(&icons, &dest, args.size, "save the preview")?;
+    wrote(out, "render", &dest, args.size, what);
     Ok(())
 }
 
@@ -100,72 +106,181 @@ fn focus_unused(focus: Option<(f32, f32)>, became: &str, out: &Arc<Out>) {
 /// What a finished folder becomes, as [`preview::becomes`] says it.
 const FINISHED: &str = "a finished folder, used as it is";
 
-/// The file `render` writes as `format`, with artwork on the folder of `style`, and what the
-/// picture became.
-fn rendered(
-    args: &RenderArgs,
-    style: Style,
-    format: Format,
-) -> Result<(Vec<u8>, &'static str), CliError> {
+/// What `render` draws, as the app takes it: the picture given, or artwork of one colour.
+fn to_render(args: &RenderArgs) -> Result<Skin, CliError> {
     let focus = args.focus.unwrap_or((0.5, 0.5));
-    let skin = match (&args.image, &args.solid) {
+    match (&args.image, &args.solid) {
         (Some(path), _) => {
             let (img, _) = images::load(path)?;
-            preview::skin(img, focus, path)?
+            preview::skin(img, focus, path)
         }
         (None, Some(hex)) => {
             let [r, g, b] = rgb(hex)?;
-            Skin::Artwork(Artwork {
+            Ok(Skin::Artwork(Artwork {
                 rgba: RgbaImage::from_pixel(SKIN_WIDTH, SKIN_HEIGHT, image::Rgba([r, g, b, 255])),
                 focus,
-            })
+            }))
         }
-        (None, None) => {
-            return Err(CliError::usage(
-                "There is nothing to render.",
-                "Give a picture, or a colour with --solid.",
-            )
-            .fix("folderskin render picture.png --out preview.png"))
-        }
-    };
-    let bytes = match format {
-        Format::Png => skin.preview_png_in(args.size, style),
-        Format::Icns | Format::Ico => {
-            let icons = skin.icon_set_in(&format.sizes(args.size), style);
-            encoded(&icons, format, args.size)?
-        }
-    };
-    Ok((bytes, preview::becomes(&skin, style)))
-}
-
-/// `icons` as a file of `format`, a PNG `size` px square or an icon file with its every size.
-fn encoded(icons: &IconSet, format: Format, size: u32) -> Result<Vec<u8>, CliError> {
-    export::encode(icons, format, size).ok_or_else(|| {
-        CliError::bug(
-            "The icon wasn't drawn at the sizes its file holds.",
-            format!(
-                "An .{} file of {size} px had nothing to hold.",
-                format.extension()
-            ),
+        (None, None) => Err(CliError::usage(
+            "There is nothing to render.",
+            "Give a picture, or a colour with --solid.",
         )
-    })
-}
-
-/// Writes `bytes`, a file of `format`, to `target`: a picture in the format its name asks for
-/// (a PNG as it is, `.jpg` and `.webp` encoded again), an `.icns` or `.ico` as it is.
-fn save_icon(bytes: &[u8], target: &Path, format: Format, doing: &str) -> Result<(), CliError> {
-    match format {
-        Format::Png => images::write_as_named(bytes, target, doing),
-        Format::Icns | Format::Ico => images::write_png(bytes, target, doing),
+        .fix("folderskin render picture.png --out preview.png")),
     }
 }
 
-/// What a file of `format` holds, for a report line: its size, or the sizes it goes between.
-fn holds(format: Format, size: u32) -> String {
-    let sizes = format.sizes(size);
-    match (sizes.iter().min(), sizes.iter().max()) {
-        (Some(lo), Some(hi)) if lo != hi => format!("every size from {lo} to {hi} px"),
-        _ => format!("{size}×{size}"),
+/// Where `render` or `glyph` writes an icon, and as what.
+#[derive(Debug, PartialEq)]
+struct Dest {
+    path: PathBuf,
+    /// The kind of file, or `None` for a picture in whatever format its name asks for: `.webp`,
+    /// or a PNG on standard output.
+    format: Option<Format>,
+}
+
+impl Dest {
+    /// The sizes to draw for it: a picture's `size`, or every size its kind holds.
+    fn sizes(&self, size: u32) -> Vec<u32> {
+        self.format.map_or_else(|| vec![size], |f| f.sizes(size))
+    }
+}
+
+/// `--out` and `--format` read together. A name that ends as a kind does (`.icns`, `.iconset`)
+/// is that kind, and `--format` says the kind where it doesn't, adding the ending. With no
+/// `--out`, the icon is named by `default` and the ending of the kind asked for, PNG if none.
+fn destination(
+    out: Option<&Path>,
+    asked: Option<Format>,
+    default: impl FnOnce(Format) -> PathBuf,
+) -> Result<Dest, CliError> {
+    let Some(path) = out else {
+        let format = asked.unwrap_or(Format::Png);
+        return Ok(Dest {
+            path: with_ending(default(format), format),
+            format: Some(format),
+        });
+    };
+    match (asked, Format::of(path)) {
+        (None, named) => Ok(Dest {
+            path: path.to_path_buf(),
+            format: named,
+        }),
+        (Some(asked), Some(named)) if asked != named => Err(CliError::usage(
+            "The name and --format don't agree.",
+            format!(
+                "{} is named as {}, and --format asks for {}.",
+                path.display(),
+                kind_of(named),
+                kind_of(asked)
+            ),
+        )
+        .fix("Change the name's ending, or leave --format out.")),
+        (Some(Format::Png), None) if path.as_os_str() == "-" => Ok(Dest {
+            path: path.to_path_buf(),
+            format: None,
+        }),
+        (Some(asked), None) if path.as_os_str() == "-" => Err(CliError::usage(
+            "Only a PNG can go to standard output.",
+            format!("--format asks for {}, and --out is -.", kind_of(asked)),
+        )
+        .fix("Give it a name instead, such as --out icons")),
+        (Some(asked), _) => Ok(Dest {
+            path: with_ending(path.to_path_buf(), asked),
+            format: Some(asked),
+        }),
+    }
+}
+
+/// `path` with the ending of `format`'s names added, unless it has it already. A website's
+/// favicons are a folder named as it is.
+fn with_ending(path: PathBuf, format: Format) -> PathBuf {
+    match format.extension() {
+        Some(ending) if Format::of(&path) != Some(format) => {
+            let mut name = path.into_os_string();
+            name.push(".");
+            name.push(ending);
+            name.into()
+        }
+        _ => path,
+    }
+}
+
+/// A kind of file, as a sentence names it.
+fn kind_of(format: Format) -> &'static str {
+    match format {
+        Format::Png => "a PNG",
+        Format::Jpeg => "a JPEG",
+        Format::Icns => "an .icns",
+        Format::Ico => "an .ico",
+        Format::Iconset => "an .iconset",
+        Format::Ios => "an iOS app icon",
+        Format::Favicon => "a website's favicons",
+    }
+}
+
+/// Writes `icons` to `dest`: a picture in the format its name asks for, or the kind of file
+/// `dest` names, whose folder is made first.
+fn save(icons: &IconSet, dest: &Dest, size: u32, doing: &str) -> Result<(), CliError> {
+    let Some(format) = dest.format else {
+        let png = icons.png(size).ok_or_else(|| drawn_wrong(size))?;
+        return images::write_as_named(&png, &dest.path, doing);
+    };
+    if !format.is_folder() && dest.path.is_dir() {
+        return Err(CliError::folder_not_file(doing, &dest.path));
+    }
+    if format.is_folder() && dest.path.is_file() {
+        return Err(CliError::fixable(
+            "not_a_folder",
+            format!(
+                "{} is a folder of files, and a file has that name.",
+                kind_of(format)
+            ),
+            format!("{} is a file.", dest.path.display()),
+        )
+        .fix("Give it a name nothing has yet."));
+    }
+    export::write(icons, format, size, &dest.path).map_err(|e| CliError::io(doing, &dest.path, &e))
+}
+
+/// The icon wasn't drawn at a size it was asked for: a bug.
+fn drawn_wrong(size: u32) -> CliError {
+    CliError::bug(
+        "The icon wasn't drawn at the size it was asked for.",
+        format!("There was no {size} px image to write."),
+    )
+}
+
+/// Says what went to `dest`, and returns whether that was standard output.
+fn wrote(out: &Arc<Out>, kind: &str, dest: &Dest, size: u32, what: &str) -> bool {
+    let (place, stdout) = place(&dest.path);
+    let format = dest.format.map_or_else(
+        || {
+            dest.path
+                .extension()
+                .map_or("png".into(), |e| e.to_string_lossy().to_ascii_lowercase())
+        },
+        |f| f.id().to_string(),
+    );
+    out.result(
+        (!stdout).then_some(dest.path.as_path()),
+        kind,
+        json!({"size": size, "format": format, "becomes": what}),
+        &format!("wrote {place} ({}): {what}", holds(dest.format, size)),
+        stdout,
+    );
+    stdout
+}
+
+/// What a file of `format` holds, for a report line: a picture's size, or the sizes and files.
+fn holds(format: Option<Format>, size: u32) -> String {
+    match format {
+        None | Some(Format::Png | Format::Jpeg) => format!("{size}×{size}"),
+        Some(Format::Icns | Format::Iconset) => "every size from 16 to 1024 px".into(),
+        Some(Format::Ico) => "every size from 16 to 256 px".into(),
+        Some(Format::Ios) => "every iPhone and iPad size, and the App Store's".into(),
+        Some(Format::Favicon) => {
+            "favicon.ico, its PNGs, a web manifest and the lines for the page".into()
+        }
     }
 }
 
@@ -180,6 +295,19 @@ pub fn glyph(args: &GlyphArgs, out: &Arc<Out>) -> Result<(), CliError> {
             return Err(mark_on_a_drive(folder));
         }
     }
+    let asked = args.format.map(FormatArg::format);
+    // Where the icon goes: --out, or beside the picture, unless there is a folder to put it on
+    // and no file was asked for. From standard input, it goes to standard output.
+    let dest = match (&args.out, &args.folder, asked) {
+        (None, Some(_), None) => None,
+        (None, None, None) if args.picture.as_os_str() == "-" => Some(Dest {
+            path: PathBuf::from("-"),
+            format: None,
+        }),
+        (to, _, asked) => Some(destination(to.as_deref(), asked, |f| {
+            beside(&args.picture, f)
+        })?),
+    };
     let (img, _) = images::load(&args.picture)?;
     let mark = glyph::coverage(&img, !args.no_trim).ok_or_else(|| {
         CliError::fixable(
@@ -194,14 +322,7 @@ pub fn glyph(args: &GlyphArgs, out: &Arc<Out>) -> Result<(), CliError> {
         None => Fill::Plain,
     };
     let design = glyph::design(&mark, fill, style, args.depth as f32);
-    // A file beside the picture, unless there is a folder to put it on and nowhere else asked.
-    let dest = match (&args.out, &args.folder) {
-        (Some(to), _) => Some(to.clone()),
-        (None, Some(_)) => None,
-        (None, None) => Some(images::target(&args.picture, None, "folder")),
-    };
-    let format = dest.as_deref().map(Format::of);
-    let mut sizes = format.map_or_else(Vec::new, |f| f.sizes(args.size));
+    let mut sizes = dest.as_ref().map_or_else(Vec::new, |d| d.sizes(args.size));
     if args.folder.is_some() {
         sizes.extend(ICON_SIZES);
     }
@@ -210,22 +331,9 @@ pub fn glyph(args: &GlyphArgs, out: &Arc<Out>) -> Result<(), CliError> {
     let icons = compositor::render_placed_icon_set_with(&design, &sizes, style, !args.empty);
     let what = pressed_into(style);
     let mut stdout = false;
-    if let (Some(dest), Some(format)) = (&dest, format) {
-        save_icon(
-            &encoded(&icons, format, args.size)?,
-            dest,
-            format,
-            "save the icon",
-        )?;
-        let (place, to_stdout) = place(dest);
-        stdout = to_stdout;
-        out.result(
-            (!stdout).then_some(dest.as_path()),
-            "glyph",
-            json!({"size": args.size, "format": format.extension(), "becomes": what}),
-            &format!("wrote {place} ({}): {what}", holds(format, args.size)),
-            stdout,
-        );
+    if let Some(dest) = &dest {
+        save(&icons, dest, args.size, "save the icon")?;
+        stdout = wrote(out, "glyph", dest, args.size, what);
     }
     if let Some(folder) = &args.folder {
         // Only the sizes the app applies, whatever else the file above took.
@@ -247,6 +355,21 @@ pub fn glyph(args: &GlyphArgs, out: &Arc<Out>) -> Result<(), CliError> {
         );
     }
     Ok(())
+}
+
+/// Where a glyph from `picture` goes when nothing else is asked, without its ending: beside it,
+/// as `logo-folder` (or `logo-favicon` for a website's favicons).
+fn beside(picture: &Path, format: Format) -> PathBuf {
+    let stem = match picture.file_stem() {
+        Some(stem) if picture.as_os_str() != "-" => stem.to_string_lossy().into_owned(),
+        _ => "glyph".into(),
+    };
+    let suffix = if format == Format::Favicon {
+        "favicon"
+    } else {
+        "folder"
+    };
+    picture.with_file_name(format!("{stem}-{suffix}"))
 }
 
 /// What `glyph` makes, in words, on the folder of `style`.
@@ -915,12 +1038,13 @@ mod tests {
         let r = RenderArgs {
             image: Some(t.out.clone()),
             solid: None,
-            out: dir.join("c").join("d").join("p.png"),
+            out: Some(dir.join("c").join("d").join("p.png")),
+            format: None,
             size: 32,
             focus: None,
         };
         render(&r, &out).unwrap();
-        for p in [&t.out, t.mask.as_ref().unwrap(), &r.out] {
+        for p in [&t.out, t.mask.as_ref().unwrap(), r.out.as_ref().unwrap()] {
             assert!(image::open(p).is_ok(), "{}", p.display());
         }
         let both = TemplateArgs {
@@ -937,12 +1061,19 @@ mod tests {
         let args = RenderArgs {
             image: None,
             solid: Some("2A9D8F".into()),
-            out: "-".into(),
+            out: Some("-".into()),
+            format: None,
             size: 64,
             focus: None,
         };
-        let (mac, _) = rendered(&args, Style::Mac, Format::Png).unwrap();
-        let (windows, _) = rendered(&args, Style::Windows, Format::Png).unwrap();
+        let drawn = |style| {
+            to_render(&args)
+                .unwrap()
+                .icon_set_in(&[64], style)
+                .png(64)
+                .unwrap()
+        };
+        let (mac, windows) = (drawn(Style::Mac), drawn(Style::Windows));
         let art = Artwork {
             rgba: RgbaImage::from_pixel(
                 SKIN_WIDTH,
@@ -967,17 +1098,22 @@ mod tests {
             let r = RenderArgs {
                 image: None,
                 solid: Some("2A9D8F".into()),
-                out: dir.join(name),
+                out: Some(dir.join(name)),
+                format: None,
                 size: 64,
                 focus: None,
             };
             render(&r, &out).unwrap();
-            let bytes = std::fs::read(&r.out).unwrap();
+            let bytes = std::fs::read(r.out.as_ref().unwrap()).unwrap();
             assert!(bytes.starts_with(magic), "{name}");
         }
-        assert_eq!(holds(Format::Icns, 64), "every size from 16 to 1024 px");
-        assert_eq!(holds(Format::Ico, 64), "every size from 16 to 256 px");
-        assert_eq!(holds(Format::Png, 64), "64×64");
+        assert_eq!(
+            holds(Some(Format::Icns), 64),
+            "every size from 16 to 1024 px"
+        );
+        assert_eq!(holds(Some(Format::Ico), 64), "every size from 16 to 256 px");
+        assert_eq!(holds(Some(Format::Png), 64), "64×64");
+        assert_eq!(holds(None, 64), "64×64");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -987,6 +1123,7 @@ mod tests {
             picture,
             folder: None,
             out: None,
+            format: None,
             colour: None,
             depth: 60.0,
             size: 128,
@@ -1107,21 +1244,142 @@ mod tests {
         let r = RenderArgs {
             image: Some(t.out.clone()),
             solid: None,
-            out: dir.join("p.jpg"),
+            out: Some(dir.join("p.jpg")),
+            format: None,
             size: 32,
             focus: None,
         };
         render(&r, &out).unwrap();
+        let webp = RenderArgs {
+            out: Some(dir.join("p.webp")),
+            ..r
+        };
+        render(&webp, &out).unwrap();
         let format = |p: &Path| image::guess_format(&std::fs::read(p).unwrap()).unwrap();
         assert_eq!(format(&t.out), image::ImageFormat::WebP);
         assert_eq!(format(&dir.join("m.jpg")), image::ImageFormat::Jpeg);
-        assert_eq!(format(&r.out), image::ImageFormat::Jpeg);
+        assert_eq!(format(&dir.join("p.jpg")), image::ImageFormat::Jpeg);
+        assert_eq!(format(&dir.join("p.webp")), image::ImageFormat::WebP);
+        // A JPEG of an icon is on white, not the key colour.
+        let jpeg = image::open(dir.join("p.jpg")).unwrap().to_rgb8();
+        assert!(
+            jpeg.get_pixel(0, 0).0.iter().all(|&c| c > 240),
+            "{:?}",
+            jpeg.get_pixel(0, 0)
+        );
         // A name no picture format goes by is refused, as the image commands refuse it.
         let gif = RenderArgs {
-            out: dir.join("p.gif"),
-            ..r
+            out: Some(dir.join("p.gif")),
+            ..webp
         };
         assert_eq!(render(&gif, &out).unwrap_err().code, "unknown_format");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_name_or_format_says_where_and_as_what() {
+        let default = |f: Format| {
+            PathBuf::from(if f == Format::Favicon {
+                "favicon"
+            } else {
+                "preview"
+            })
+        };
+        let dest = |out: Option<&str>, asked: Option<Format>| {
+            destination(out.map(Path::new), asked, default)
+        };
+        let is = |path: &str, format: Option<Format>| Dest {
+            path: PathBuf::from(path),
+            format,
+        };
+        // Nothing asked: a PNG called preview.png, or the kind asked for, named after it.
+        assert_eq!(
+            dest(None, None).unwrap(),
+            is("preview.png", Some(Format::Png))
+        );
+        assert_eq!(
+            dest(None, Some(Format::Ios)).unwrap(),
+            is("preview.appiconset", Some(Format::Ios))
+        );
+        assert_eq!(
+            dest(None, Some(Format::Favicon)).unwrap(),
+            is("favicon", Some(Format::Favicon))
+        );
+        // The name says the kind, and --format adds the ending it lacks.
+        assert_eq!(
+            dest(Some("a/b.iconset"), None).unwrap(),
+            is("a/b.iconset", Some(Format::Iconset))
+        );
+        assert_eq!(dest(Some("b.webp"), None).unwrap(), is("b.webp", None));
+        assert_eq!(
+            dest(Some("Photos"), Some(Format::Icns)).unwrap(),
+            is("Photos.icns", Some(Format::Icns))
+        );
+        assert_eq!(
+            dest(Some("My.Photos"), Some(Format::Ico)).unwrap(),
+            is("My.Photos.ico", Some(Format::Ico))
+        );
+        assert_eq!(
+            dest(Some("site"), Some(Format::Favicon)).unwrap(),
+            is("site", Some(Format::Favicon))
+        );
+        assert_eq!(
+            dest(Some("x.ICNS"), Some(Format::Icns)).unwrap(),
+            is("x.ICNS", Some(Format::Icns))
+        );
+        // A name and a format that disagree, and anything but a PNG on standard output, are refused.
+        assert_eq!(
+            dest(Some("x.png"), Some(Format::Icns)).unwrap_err().code,
+            "usage"
+        );
+        assert_eq!(
+            dest(Some("-"), Some(Format::Iconset)).unwrap_err().code,
+            "usage"
+        );
+        assert_eq!(dest(Some("-"), Some(Format::Png)).unwrap(), is("-", None));
+    }
+
+    #[test]
+    fn render_writes_every_kind_of_file() {
+        let dir = std::env::temp_dir().join(format!("fs-render-kinds-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let out = Out::new(true, false);
+        for (format, name, check) in [
+            (
+                FormatArg::Iconset,
+                "Photos",
+                "Photos.iconset/icon_512x512@2x.png",
+            ),
+            (
+                FormatArg::Ios,
+                "AppIcon",
+                "AppIcon.appiconset/Contents.json",
+            ),
+            (FormatArg::Favicon, "site", "site/favicon.ico"),
+            (FormatArg::Jpeg, "Photos", "Photos.jpg"),
+        ] {
+            let r = RenderArgs {
+                image: None,
+                solid: Some("2A9D8F".into()),
+                out: Some(dir.join(name)),
+                format: Some(format),
+                size: 64,
+                focus: None,
+            };
+            render(&r, &out).unwrap();
+            assert!(dir.join(check).is_file(), "{check}");
+        }
+        // A folder of files can't take the place of a file.
+        std::fs::write(dir.join("taken.iconset"), b"x").unwrap();
+        let r = RenderArgs {
+            image: None,
+            solid: Some("2A9D8F".into()),
+            out: Some(dir.join("taken.iconset")),
+            format: None,
+            size: 64,
+            focus: None,
+        };
+        assert_eq!(render(&r, &out).unwrap_err().code, "not_a_folder");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
