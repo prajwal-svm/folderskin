@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { frame, unframe } from "./body";
 import { FALLBACK_PARTS, fallbackParts, LINUX_PARTS, parseDoc, WINDOWS_PARTS } from "./doc";
 import { DRIVE_IDS, driveParts } from "./drives";
-import { EMOJI, searchEmoji } from "./emoji";
+import { EMOJI, emojiGroups, isCountryFlag, searchEmoji } from "./emoji";
 import { confettiColors, grainPixels, seeded } from "./patterns";
 import { templateById, TEMPLATES } from "./templates";
 
@@ -101,6 +101,18 @@ describe("patterns and emoji", () => {
     const c = confettiColors("#ff0000");
     expect(c[0]).toBe("#ff0000");
     expect(new Set(c).size).toBe(5);
+  });
+
+  it("leaves countries' flags out on Windows, whose emoji font draws them as letters", () => {
+    expect(isCountryFlag("🇯🇵")).toBe(true);
+    expect(isCountryFlag("🏳️‍🌈")).toBe(false);
+    expect(isCountryFlag("🐶")).toBe(false);
+    const flags = (os: "macos" | "windows" | "linux") => emojiGroups(os).find((g) => g.id === "flags")?.items.map(([c]) => c) ?? [];
+    expect(flags("macos")).toContain("🇯🇵");
+    expect(flags("windows")).not.toContain("🇯🇵");
+    expect(flags("windows")).toContain("🏳️‍🌈");
+    expect(searchEmoji("japan", 120, emojiGroups("windows"))).not.toContain("🇯🇵");
+    expect(searchEmoji("japan", 120, emojiGroups("linux"))).toContain("🇯🇵");
   });
 
   it("finds emoji by what they are", () => {

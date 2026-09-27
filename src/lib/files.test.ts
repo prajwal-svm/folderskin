@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { baseName, dragInfoFor, isImagePath, looksLikeDrive, prettyPath } from "./files";
+import { baseName, dragInfoFor, isImagePath, looksLikeDrive, pickerExtensions, prettyPath } from "./files";
 
 describe("file helpers", () => {
   it("names the last path component on every OS", () => {
@@ -37,5 +37,16 @@ describe("file helpers", () => {
     expect(prettyPath("/home/me")).toBe("~");
     expect(prettyPath("/Volumes/Backup/Photos")).toBe("/Volumes/Backup/Photos");
     expect(prettyPath("C:\\Users\\me")).toBe("C:\\Users\\me");
+  });
+});
+
+describe("pickerExtensions", () => {
+  it("offers HEIC only on a Mac, the one system that reads it", () => {
+    expect(pickerExtensions("macos")).toContain("heic");
+    for (const os of ["windows", "linux"] as const) {
+      expect(pickerExtensions(os)).not.toContain("heic");
+      expect(pickerExtensions(os)).not.toContain("heif");
+      expect(pickerExtensions(os)).toContain("png");
+    }
   });
 });

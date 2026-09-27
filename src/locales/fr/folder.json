@@ -163,7 +163,11 @@
         "windows": "L'Explorateur de fichiers suit au fur et à mesure.",
         "linux": "Fichiers suit au fur et à mesure."
       },
-      "skipped": "Les dossiers cachés et les paquets d'applications sont ignorés.",
+      "skipped": {
+        "macos": "Les dossiers cachés et les paquets d'applications sont ignorés.",
+        "windows": "Les dossiers cachés sont ignorés.",
+        "linux": "Les dossiers cachés sont ignorés."
+      },
       "picturesToo": "Les images marchent aussi. Déposez-en une pour en faire un habillage.",
       "ownIcon": "Il a sa propre icône.",
       "nothingChanges": "Rien ne change sur le disque tant que vous n'appliquez pas.",

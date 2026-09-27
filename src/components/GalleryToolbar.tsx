@@ -127,7 +127,7 @@ export function GalleryToolbar({
             }
           }}
         />
-        {!query && <kbd>{mac ? "⌘F" : "Ctrl F"}</kbd>}
+        {!query && <kbd>{mac ? "⌘F" : "Ctrl+F"}</kbd>}
       </label>
       {extra}
     </div>

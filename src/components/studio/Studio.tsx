@@ -4,7 +4,7 @@ import { api, errorMessage, type AiCatalogue, type SavedPrompt, type Skin } from
 import { currentModel } from "../../lib/providerNames";
 import { explain } from "../../lib/sentences";
 import { isTauri } from "../../lib/devMock";
-import { IMAGE_EXTENSIONS } from "../../lib/files";
+import { pickerExtensions } from "../../lib/files";
 import { CHIP_STYLES, styleTags, suggestion, surprise as surprisePick } from "../../lib/prompts";
 import { lookName, sameLook, styleById, styleDescription, styleName, type Look } from "../../lib/styles";
 import { shapeName, shapeOf, type ShapeInfo } from "../../lib/shapes";
@@ -241,7 +241,7 @@ export const Studio = forwardRef<
 
   const pickReference = useCallback(async () => {
     if (!isTauri()) return addReference("/Users/you/Pictures/Reference.jpg");
-    const picked = await open({ multiple: false, title: tNow("ai.studio.chooseRef"), filters: [{ name: tNow("common.dialog.pictures"), extensions: IMAGE_EXTENSIONS }] }).catch(() => null);
+    const picked = await open({ multiple: false, title: tNow("ai.studio.chooseRef"), filters: [{ name: tNow("common.dialog.pictures"), extensions: pickerExtensions() }] }).catch(() => null);
     if (typeof picked === "string") await addReference(picked);
   }, [addReference]);
 

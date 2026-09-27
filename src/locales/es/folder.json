@@ -163,7 +163,11 @@
         "windows": "El Explorador de archivos se pone al día sobre la marcha.",
         "linux": "Archivos se pone al día sobre la marcha."
       },
-      "skipped": "Se omiten las carpetas ocultas y las apps.",
+      "skipped": {
+        "macos": "Se omiten las carpetas ocultas y las apps.",
+        "windows": "Se omiten las carpetas ocultas.",
+        "linux": "Se omiten las carpetas ocultas."
+      },
       "picturesToo": "También funciona con imágenes. Suelta una para convertirla en un aspecto.",
       "ownIcon": "Tiene un icono propio.",
       "nothingChanges": "Nada cambia en el disco hasta que aplicas.",

@@ -135,7 +135,11 @@
         "windows": "Explorer catches up as it goes.",
         "linux": "Files catches up as it goes."
       },
-      "skipped": "Hidden folders and app bundles are skipped.",
+      "skipped": {
+        "macos": "Hidden folders and app bundles are skipped.",
+        "windows": "Hidden folders are skipped.",
+        "linux": "Hidden folders are skipped."
+      },
       "picturesToo": "Pictures work too. Drop one to turn it into a skin.",
       "ownIcon": "It has an icon of its own.",
       "nothingChanges": "Nothing changes on disk until you apply.",

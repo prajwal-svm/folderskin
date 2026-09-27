@@ -1,7 +1,16 @@
 import type { DragInfo } from "../state/dropzone";
+import { localOs } from "./platform";
 
 /** Picture formats FolderSkin can read (HEIC goes through the system converter on macOS). */
 export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "heic", "heif"];
+
+/**
+ * The formats a file picker offers here: HEIC only on a Mac, the one system with a converter for
+ * it. A HEIC dropped on the window elsewhere still says why it can't be used.
+ */
+export function pickerExtensions(os = localOs()): string[] {
+  return os === "macos" ? IMAGE_EXTENSIONS : IMAGE_EXTENSIONS.filter((ext) => ext !== "heic" && ext !== "heif");
+}
 
 /** Last path component, without a trailing separator. */
 export function baseName(path: string): string {

@@ -2,7 +2,7 @@
   "sizes": {
     "tip": {
       "macos": "Cómo se ve en el Finder a 64, 32 y 16 puntos",
-      "windows": "Cómo se ve en el Explorador de archivos a 64, 32 y 16 puntos",
+      "windows": "Cómo se ve en el Explorador de archivos a 64, 32 y 16 píxeles",
       "linux": "Cómo se ve en Archivos a 64, 32 y 16 puntos"
     },
     "label": "el icono a sus tamaños reales"
@@ -481,7 +481,7 @@
     "title": "Consejos y atajos",
     "colour": "Haz clic en la carpeta para cambiar su color.",
     "doubleClick": "Haz doble clic en un texto para editarlo, en un emoji para cambiarlo o en un icono para elegir otro.",
-    "resize": "Arrastra una esquina para cambiar el tamaño, y el control redondo para girar. Mantén presionado ⇧ para ir en pasos regulares.",
+    "resize": "Arrastra una esquina para cambiar el tamaño, y el control redondo para girar. Mantén presionado {{shift}} para ir en pasos regulares.",
     "snap": "Mantén presionado {{key}} mientras arrastras para que nada se ajuste solo.",
     "drop": "Suelta o pega una imagen directamente en la carpeta.",
     "keys": "{{undo}} deshace, {{duplicate}} duplica y Suprimir borra la capa seleccionada."

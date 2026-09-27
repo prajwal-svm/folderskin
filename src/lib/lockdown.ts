@@ -18,7 +18,20 @@ export function isBrowserShortcut(e: Keys): boolean {
   // the inspector, its console and its element picker: ⌘⌥ on macOS, Ctrl+Shift elsewhere
   if ((e.metaKey && e.altKey) || (e.ctrlKey && e.shiftKey)) return ["I", "J", "C"].includes(letter);
   // the page's source
-  return e.ctrlKey && !e.shiftKey && !e.altKey && letter === "U";
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && letter === "U") return true;
+  // printing the page, and the next match of the find bar (Windows' web view has both)
+  if (mod && !e.shiftKey && !e.altKey && (letter === "P" || letter === "G")) return true;
+  return e.key === "F3";
+}
+
+/**
+ * The key that opens the web view's own find bar, which on Windows sits over the window's
+ * buttons. It's kept from the web view but still reaches the page, where the library's search
+ * takes it.
+ */
+export function isFindShortcut(e: Keys): boolean {
+  const letter = e.code.startsWith("Key") ? e.code.slice(3) : "";
+  return (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && letter === "F";
 }
 
 export function lockDown(): void {
@@ -30,6 +43,8 @@ export function lockDown(): void {
       if (isBrowserShortcut(e)) {
         e.preventDefault();
         e.stopPropagation();
+      } else if (isFindShortcut(e)) {
+        e.preventDefault();
       }
     },
     true,

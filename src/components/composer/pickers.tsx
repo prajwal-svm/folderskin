@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Assets, ctx2d } from "../../composer/assets";
 import { makePattern, makeShape, PATTERNS, SHAPES, type PatternKind, type ShapeKind } from "../../composer/doc";
-import { EMOJI, searchEmoji } from "../../composer/emoji";
+import { emojiGroups, searchEmoji } from "../../composer/emoji";
 import { CUSTOM, FONTS, fontLabel } from "../../composer/fonts";
 import "../../i18n/composer";
 import { t, useLocale, type MessageKey } from "../../i18n";
@@ -20,10 +20,11 @@ function firstEmoji(s: string): string | null {
 export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
   useLocale();
   const [query, setQuery] = useState("");
-  const [group, setGroup] = useState(EMOJI[0].id);
-  const found = useMemo(() => searchEmoji(query), [query]);
+  const groups = useMemo(() => emojiGroups(), []);
+  const [group, setGroup] = useState(groups[0].id);
+  const found = useMemo(() => searchEmoji(query, 120, groups), [query, groups]);
   const typed = firstEmoji(query);
-  const list = query.trim() ? (typed && !found.includes(typed) ? [typed, ...found] : found) : (EMOJI.find((g) => g.id === group)?.items.map(([c]) => c) ?? []);
+  const list = query.trim() ? (typed && !found.includes(typed) ? [typed, ...found] : found) : (groups.find((g) => g.id === group)?.items.map(([c]) => c) ?? []);
   return (
     <div className="cmp-emoji">
       <input
@@ -40,7 +41,7 @@ export function EmojiPicker({ onPick }: { onPick: (char: string) => void }) {
       />
       {!query.trim() && (
         <div className="cmp-emoji-tabs" role="tablist" aria-label={t("composer.emoji.groupsLabel")}>
-          {EMOJI.map((g) => (
+          {groups.map((g) => (
             <button
               key={g.id}
               type="button"

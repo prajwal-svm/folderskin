@@ -2,8 +2,8 @@
   "sizes": {
     "tip": {
       "macos": "How it looks in Finder at 64, 32 and 16 points",
-      "windows": "How it looks in Explorer at 64, 32 and 16 points",
-      "linux": "How it looks in Files at 64, 32 and 16 points"
+      "windows": "How it looks in Explorer at 64, 32 and 16 pixels",
+      "linux": "How it looks in Files at 64, 32 and 16 pixels"
     },
     "label": "the icon at its real sizes"
   },
@@ -475,7 +475,7 @@
     "title": "Tips and shortcuts",
     "colour": "Click the folder to change its colour.",
     "doubleClick": "Double-click words to edit them, an emoji to swap it, or an icon to pick another.",
-    "resize": "Drag a corner to resize, the round knob to turn. Hold ⇧ for even steps.",
+    "resize": "Drag a corner to resize, the round knob to turn. Hold {{shift}} for even steps.",
     "snap": "Hold {{key}} while dragging to stop things snapping into place.",
     "drop": "Drop or paste a picture straight onto the folder.",
     "keys": "{{undo}} undoes, {{duplicate}} duplicates, Delete removes the selected layer."

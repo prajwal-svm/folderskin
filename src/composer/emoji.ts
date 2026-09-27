@@ -4,6 +4,8 @@
  * the picker's field (or a text layer), since the system's emoji font draws them all.
  */
 
+import { localOs } from "../lib/platform";
+
 export type EmojiGroup = { id: string; icon: string; items: [char: string, words: string][] };
 
 export const EMOJI: EmojiGroup[] = [
@@ -154,12 +156,27 @@ export const EMOJI: EmojiGroup[] = [
   },
 ];
 
+/** True for a country's flag: a pair of regional indicator letters. */
+export function isCountryFlag(char: string): boolean {
+  const points = [...char].map((c) => c.codePointAt(0) ?? 0);
+  return points.length === 2 && points.every((p) => p >= 0x1f1e6 && p <= 0x1f1ff);
+}
+
+/**
+ * The picker's groups on this system. Windows' emoji font has no countries' flags, so it draws
+ * each as its two letters ("US"), in the picker and on the canvas alike: they're left out there.
+ */
+export function emojiGroups(os = localOs()): EmojiGroup[] {
+  if (os !== "windows") return EMOJI;
+  return EMOJI.map((group) => ({ ...group, items: group.items.filter(([char]) => !isCountryFlag(char)) }));
+}
+
 /** Every emoji whose words start with or contain `query`, in group order. */
-export function searchEmoji(query: string, limit = 120): string[] {
+export function searchEmoji(query: string, limit = 120, groups = emojiGroups()): string[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const out: string[] = [];
-  for (const group of EMOJI)
+  for (const group of groups)
     for (const [char, words] of group.items) {
       if (out.length >= limit) return out;
       if (words.split(" ").some((w) => w.startsWith(q)) || (q.length > 2 && words.includes(q))) out.push(char);

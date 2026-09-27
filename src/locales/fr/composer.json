@@ -2,7 +2,7 @@
   "sizes": {
     "tip": {
       "macos": "Son rendu dans le Finder à 64, 32 et 16 points",
-      "windows": "Son rendu dans l'Explorateur de fichiers à 64, 32 et 16 points",
+      "windows": "Son rendu dans l'Explorateur de fichiers à 64, 32 et 16 pixels",
       "linux": "Son rendu dans Fichiers à 64, 32 et 16 points"
     },
     "label": "l'icône à ses tailles réelles"
@@ -481,7 +481,7 @@
     "title": "Astuces et raccourcis",
     "colour": "Cliquez sur le dossier pour changer sa couleur.",
     "doubleClick": "Double-cliquez sur du texte pour le modifier, sur un emoji pour le changer, ou sur une icône pour en choisir une autre.",
-    "resize": "Faites glisser un coin pour redimensionner, la poignée ronde pour faire pivoter. Maintenez ⇧ pour avancer par pas réguliers.",
+    "resize": "Faites glisser un coin pour redimensionner, la poignée ronde pour faire pivoter. Maintenez {{shift}} pour avancer par pas réguliers.",
     "snap": "Maintenez {{key}} pendant le glissement pour que rien ne s'aimante.",
     "drop": "Déposez ou collez une image directement sur le dossier.",
     "keys": "{{undo}} annule, {{duplicate}} duplique, Suppr supprime le calque sélectionné."

@@ -4,7 +4,7 @@ import { api, errorMessage, type ComposerImage, type Skin } from "../../lib/taur
 import type { ShapeInfo } from "../../lib/shapes";
 import { loadShapes, shapesNow } from "../../lib/shapeList";
 import { isTauri } from "../../lib/devMock";
-import { IMAGE_EXTENSIONS } from "../../lib/files";
+import { pickerExtensions } from "../../lib/files";
 import { keys, localOs } from "../../lib/platform";
 import "../../i18n/composer";
 import { t as tNow, useT } from "../../i18n";
@@ -462,7 +462,7 @@ function TipsButton() {
           <ul className="cmp-tips">
             <li>{t("composer.tips.colour")}</li>
             <li>{t("composer.tips.doubleClick")}</li>
-            <li>{t("composer.tips.resize")}</li>
+            <li>{t("composer.tips.resize", { shift: localOs() === "macos" ? "⇧" : "Shift" })}</li>
             <li>{t("composer.tips.snap", { key: localOs() === "macos" ? "⌘" : "Ctrl" })}</li>
             <li>{t("composer.tips.drop")}</li>
             <li>{t("composer.tips.keys", { undo: keys("Z"), duplicate: keys("D") })}</li>
@@ -756,7 +756,7 @@ export function Composer({
   const choosePicture = useCallback(async (): Promise<ComposerImage | null> => {
     try {
       if (!isTauri()) return await api.composerImage("mock");
-      const picked = await open({ multiple: false, title: tNow("common.dialog.choosePicture"), filters: [{ name: tNow("common.dialog.pictures"), extensions: IMAGE_EXTENSIONS }] }).catch(() => null);
+      const picked = await open({ multiple: false, title: tNow("common.dialog.choosePicture"), filters: [{ name: tNow("common.dialog.pictures"), extensions: pickerExtensions() }] }).catch(() => null);
       if (typeof picked !== "string") return null;
       return await api.composerImage(picked);
     } catch (e) {

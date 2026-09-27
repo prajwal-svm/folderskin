@@ -723,7 +723,7 @@ function statusLine(state: State, run: TreeRun | null, skin: Skin | null, os: Os
     return run.kind === "apply" ? both(t(`folder.stage.status.catchesUp.${os}`), keepsGoing) : keepsGoing;
   }
   if (isTree(state) && (state.phase === "ready" || (state.phase === "applied" && run === null))) {
-    return t("folder.stage.status.skipped");
+    return t(`folder.stage.status.skipped.${os}`);
   }
   switch (state.phase) {
     case "idle":
