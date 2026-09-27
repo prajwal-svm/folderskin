@@ -99,17 +99,31 @@ pub fn run(command: Command, out: &Arc<Out>) -> Result<(), CliError> {
         Command::Glyph(args) => tools::glyph(&args, out),
         Command::Template(args) => tools::template(&args, out),
         Command::Packs(command) => tools::packs(command, out),
-        Command::Completions { shell } => {
-            use clap::CommandFactory;
-            clap_complete::generate(
-                shell,
-                &mut Cli::command(),
-                "folderskin",
-                &mut std::io::stdout(),
-            );
-            Ok(())
-        }
+        Command::Completions { shell } => completions(shell),
     }
+}
+
+/// `completions`: the script for `shell`, on standard output. A reader that stops early
+/// (`| head`) ends it quietly, as it ends a picture written there.
+fn completions(shell: clap_complete::Shell) -> Result<(), CliError> {
+    use clap::CommandFactory;
+    use std::io::Write;
+    let mut script = Vec::new();
+    clap_complete::generate(shell, &mut Cli::command(), "folderskin", &mut script);
+    let mut stdout = std::io::stdout().lock();
+    stdout
+        .write_all(&script)
+        .and_then(|()| stdout.flush())
+        .map_err(|e| {
+            if images::reader_gone(&e) {
+                std::process::exit(0);
+            }
+            CliError::io(
+                "write the completions",
+                std::path::Path::new("standard output"),
+                &e,
+            )
+        })
 }
 
 /// The async runtime the downloads and requests run on: one thread is plenty for one job.

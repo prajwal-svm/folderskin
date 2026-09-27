@@ -183,7 +183,7 @@ pub fn write_png(bytes: &[u8], target: &Path, doing: &str) -> Result<(), CliErro
 
 /// Whether writing failed because the other end of the pipe was closed: a broken pipe, or on
 /// Windows "the pipe has been ended" (109) or "the pipe is being closed" (232).
-fn reader_gone(e: &std::io::Error) -> bool {
+pub(crate) fn reader_gone(e: &std::io::Error) -> bool {
     e.kind() == std::io::ErrorKind::BrokenPipe
         || (cfg!(windows) && matches!(e.raw_os_error(), Some(109 | 232)))
 }

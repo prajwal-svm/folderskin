@@ -1356,7 +1356,10 @@ mod tests {
         let drive_art = art.clone().as_shape(SkinShape::Drive);
         let own_drive = DriveShape::default_for(DriveStyle::current());
         let on_drive = pixels(&drive_art.export_icon_set(&sizes, None));
-        assert_eq!(on_drive, pixels(&drive_art.drive_icon_set(&sizes, own_drive)));
+        assert_eq!(
+            on_drive,
+            pixels(&drive_art.drive_icon_set(&sizes, own_drive))
+        );
         assert_ne!(on_drive, on_folder, "a drive, not a folder");
         // A finished skin as it is.
         let done = folder();
