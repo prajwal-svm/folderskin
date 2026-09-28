@@ -4,6 +4,14 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- **The x86_64 AppImage starts for every user.** Its launcher could be run only by the account
+  that owned it. Started by anyone else, for example in a firejail sandbox, the AppImage stopped
+  with "Permission denied" before a window opened. The ARM64 AppImage wasn't affected.
+
 ## 0.1.12 - 2026-09-27
 
 ### Added

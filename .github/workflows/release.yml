@@ -309,6 +309,12 @@ jobs:
           echo "UPDATES_SIGNED=true" >> "$GITHUB_ENV"
           echo "update signing: on"
 
+      # Tauri saves the AppImage's launcher so that only its owner and group may run it; the script says
+      # why that stops the app for anyone else, and how this gets round it.
+      - name: Let every user start the AppImage
+        if: runner.os == 'Linux'
+        run: scripts/appimage-launcher.sh seed
+
       - name: Build and attach the installers
         uses: tauri-apps/tauri-action@v1
         env:
@@ -330,6 +336,12 @@ jobs:
           prerelease: false
           retryAttempts: ${{ matrix.retries }}
           args: ${{ matrix.args }} ${{ env.TAURI_SIGN_ARGS }} ${{ env.UPDATER_ARGS }}
+
+      # The AppImage is already on the draft by now, but a failure here fails this build, so the
+      # draft is reported incomplete.
+      - name: Check that every user can start the AppImage
+        if: runner.os == 'Linux'
+        run: scripts/appimage-launcher.sh check target/release/bundle/appimage/*.AppImage
 
       # tauri-action adds this platform to the draft's latest.json, but the four builds do it at
       # the same time and one can overwrite another's. So each keeps its own copy too, and the

@@ -17,7 +17,7 @@ The CI jobs:
 | Rust (macOS), Rust (Windows) | macOS, Windows | clippy and tests again, because the code that writes icons only compiles on its own system |
 | cargo-deny | Ubuntu | RustSec advisories, and the licences a third-party crate may have (`deny.toml`) |
 | SonarQube Cloud | Ubuntu | static analysis and coverage, once it's set up (below) |
-| Bundle | all three | the installers, unsigned, kept for 14 days to try a change on a system you don't have |
+| Bundle | all three | the installers, unsigned, kept for 14 days to try a change on a system you don't have; on Linux, that every user can start the AppImage (`scripts/appimage-launcher.sh`) |
 
 Run the same checks locally with:
 

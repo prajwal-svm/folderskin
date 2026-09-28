@@ -329,8 +329,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Tauri saves the AppImage's launcher so that only its owner and group may run it; the script says
+      # why that stops the app for anyone else, and how this gets round it.
+      - name: Let every user start the AppImage
+        if: runner.os == 'Linux'
+        run: scripts/appimage-launcher.sh seed
+
       - name: Build the app bundles
         run: pnpm tauri build --ci
+
+      - name: Check that every user can start the AppImage
+        if: runner.os == 'Linux'
+        run: scripts/appimage-launcher.sh check target/release/bundle/appimage/*.AppImage
 
       # `src-tauri` is a workspace member, so the bundles land in the workspace's target folder.
       - name: Upload the bundles
