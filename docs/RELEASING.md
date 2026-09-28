@@ -95,6 +95,13 @@ lists the six secrets and the Azure setup.
 
 Nothing to sign: distributions don't gate AppImages or packages on a signature.
 
+Tauri's bundler saves the AppImage's launcher (`AppRun.wrapped` inside it) so that only its owner
+may run it. Anyone else who starts the AppImage, as firejail and the
+[AppImage catalog](https://appimage.github.io)'s test do, gets "Permission denied". Before the
+build, `scripts/appimage-launcher.sh seed` gives the bundler a copy everyone may run. After it,
+`scripts/appimage-launcher.sh check` fails the build if any file in the AppImage is still limited
+to its owner.
+
 ## Checking a signed build
 
 On a Mac, after installing from the draft's `.dmg`:
