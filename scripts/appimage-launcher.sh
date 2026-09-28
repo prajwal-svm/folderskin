@@ -31,7 +31,7 @@ seed() {
 }
 
 check() {
-  local appimage name work bad status=0
+  local appimage name path work bad status=0
   (($#)) || { echo "check: name the AppImages to check" >&2; return 2; }
   for appimage in "$@"; do
     name="$(basename "$appimage")"
@@ -40,8 +40,10 @@ check() {
       status=1
       continue
     fi
+    # Resolved here: the AppImage unpacks into the folder it's started from, so it runs from $work.
+    path="$(realpath "$appimage")"
     work="$(mktemp -d)"
-    (cd "$work" && "$(realpath "$appimage")" --appimage-extract >/dev/null)
+    (cd "$work" && "$path" --appimage-extract >/dev/null)
     # Files everyone can read, and run whenever their owner can; folders everyone can open.
     bad="$(cd "$work/squashfs-root" && find . \
       \( -type f \( ! -perm -o+r -o \( -perm -u+x ! -perm -o+x \) \) \) \
