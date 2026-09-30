@@ -61,7 +61,8 @@ Gratis · Código abierto · Sin cuenta · Sin rastreo
 | Usar una foto tuya | Suelta la imagen en la ventana o haz clic en **Añadir tu foto** |
 | Diseñar el tuyo | **Diseña el tuyo**: empieza con un color, un rótulo, un emoji o una foto, cambia lo que quieras y luego **Guardar y aplicar** |
 | Que una IA te pinte uno | **Generar con IA**, con tu propia clave de API, o el prompt para el chat de Grok o de ChatGPT en **¿Sin clave de API?** |
-| Conseguir aspectos que hicieron otras personas | **Comunidad** y luego añade un paquete |
+| Conseguir los aspectos propios de FolderSkin | **Comunidad** se abre en **Oficial**: abre un aspecto y luego **Usar este aspecto** |
+| Conseguir aspectos que hicieron otras personas | **Comunidad** y luego añade un paquete, o toma solo uno de sus aspectos con **Usar** |
 | Compartir los tuyos | Menú ⋯ de un aspecto → **Compartir con la comunidad** |
 | Volver a encontrar un aspecto | Las etiquetas de arriba, ⌘F / Ctrl+F, el botón de filtro (color, paquete, cuándo lo añadiste y más) o la estrella de **Favoritos** |
 | Deshacerlo | **Restaurar**, o **Quitar el icono personalizado** en una carpeta que ya tiene uno, vuelve a poner el icono del sistema operativo |
@@ -69,16 +70,16 @@ Gratis · Código abierto · Sin cuenta · Sin rastreo
 ## Qué se queda en tu equipo
 
 Todo, salvo las pocas cosas que necesitan internet. No hay cuenta, ni muro de pago, ni nada que te
-rastree: lo único que FolderSkin comunica es que se añadió un paquete de la comunidad, solo con el
-identificador del paquete, para que folderskin.app pueda mostrar cuántas veces se añade cada uno. En
-Mac, la descarga ocupa menos de 20 MB.
+rastree: lo único que FolderSkin comunica es que se añadió un paquete o un aspecto de la comunidad,
+sin más datos que el identificador del paquete y el hash de la imagen, para que folderskin.app pueda
+mostrar cuántas veces se añade cada uno. En Mac, la descarga ocupa menos de 20 MB.
 
 | Se queda en tu equipo | Sale a internet |
 | --- | --- |
 | Tus carpetas y los iconos que FolderSkin escribe en ellas | Una solicitud de IA, cuando haces una: va al proveedor que elegiste, con tu clave |
 | Cada imagen que añades y cada aspecto que creas | Comunidad y el primer inicio, que leen los paquetes compartidos desde packs.folderskin.app, o desde GitHub cuando no responde |
 | Tus claves de API, cifradas | La búsqueda de actualizaciones: al abrirse, FolderSkin lee en GitHub el archivo que indica la última versión |
-| Favoritos, etiquetas y ajustes | Añadir un paquete desde Comunidad: su identificador, y nada más, va al servicio de la comunidad de FolderSkin, que cuenta los paquetes añadidos una sola vez al día por red y no guarda ninguna dirección ([detalles](docs/es/PACKS.md#recuento-de-instalaciones)) |
+| Favoritos, etiquetas y ajustes | Añadir un paquete o un solo aspecto desde Comunidad: nada más que el identificador del paquete y el hash de la imagen del aspecto va al servicio de la comunidad de FolderSkin, que cuenta cada uno una sola vez al día por red y no guarda ninguna dirección ([detalles](docs/es/PACKS.md#recuento-de-instalaciones)) |
 
 La [política de privacidad](https://folderskin.app/es/privacy/) detalla todo lo que FolderSkin envía,
 adónde va y qué guarda el servicio de la comunidad.
@@ -163,8 +164,12 @@ FolderSkin, gratis para todos. El primer inicio te los ofrece, y en **Comunidad*
 siempre. Al añadir un paquete, sus aspectos pasan a tu biblioteca con sus etiquetas, y el botón
 **Instalar** de un paquete en la galería de [folderskin.app](https://folderskin.app/es/community/)
 abre FolderSkin y lo añade por ti. Los paquetes marcados como **Oficial** son los que avala el
-mantenedor. **Classic Art** es un buen primer paquete: dieciséis pinturas de dominio público, de la
-Mona Lisa a La noche estrellada, cada una pintada sobre una carpeta. Para compartir los tuyos, abre
+mantenedor. Comunidad se abre en **Oficial**, la colección propia de FolderSkin: aspectos que no
+pertenecen a ningún paquete, de uso libre con licencia MIT y cada vez más. **Usar este aspecto** en
+uno de ellos, o **Usar** en cualquier aspecto de un paquete, guarda solo ese aspecto en tu
+biblioteca, elegido y listo para aplicar, y una marca de verificación señala los que ya tienes.
+**Classic Art** es un buen primer paquete: dieciséis pinturas de dominio público, de la Mona Lisa a
+La noche estrellada, cada una pintada sobre una carpeta. Para compartir los tuyos, abre
 el menú ⋯ de un aspecto y elige **Compartir con la comunidad**, o usa **Comunidad → Compartir tus
 aspectos** para compartir varios. Verificas tu equipo una sola vez en el navegador, sin cuenta, y
 una persona revisa el paquete antes de que se sume a Comunidad para todos. **Guardar en una

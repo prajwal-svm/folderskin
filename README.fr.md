@@ -61,7 +61,8 @@ Gratuit · Open source · Sans compte · Sans pistage
 | Utiliser une de vos photos | Déposez l'image sur la fenêtre, ou cliquez sur **Ajouter une photo** |
 | Créer le vôtre | **Créer le vôtre** : partez d'une couleur, d'une étiquette, d'un emoji ou d'une photo, modifiez tout ce que vous voulez, puis **Enregistrer et appliquer** |
 | Faire peindre un habillage par une IA | **Générer avec l'IA**, avec votre propre clé d'API, ou le prompt pour le chat de Grok ou de ChatGPT sous **Pas de clé d'API ?** |
-| Obtenir des habillages créés par d'autres | **Communauté**, puis ajoutez un pack |
+| Obtenir les habillages de FolderSkin | La **Communauté** s'ouvre sur **Officiel** : ouvrez un habillage, puis **Utiliser cet habillage** |
+| Obtenir des habillages créés par d'autres | **Communauté**, puis ajoutez un pack, ou prenez un seul de ses habillages avec **Utiliser** |
 | Partager les vôtres | Menu ⋯ d'un habillage → **Partager avec la communauté** |
 | Retrouver un habillage | Les tags en haut, ⌘F / Ctrl+F, le bouton de filtre (couleur, pack, date d'ajout, etc.), ou l'étoile pour les **Favoris** |
 | Revenir en arrière | **Rétablir**, ou **Retirer l'icône personnalisée** sur un dossier qui en a déjà une, remet l'icône du système |
@@ -69,8 +70,9 @@ Gratuit · Open source · Sans compte · Sans pistage
 ## Ce qui reste sur votre ordinateur
 
 Tout, sauf les rares choses qui ont besoin d'Internet. Pas de compte, rien à payer, rien qui vous
-piste : la seule chose que FolderSkin signale, c'est l'ajout d'un pack de la communauté, par son
-seul identifiant, pour que folderskin.app puisse afficher combien de fois chaque pack est ajouté.
+piste : la seule chose que FolderSkin signale, c'est l'ajout d'un pack ou d'un habillage de la
+communauté, par l'identifiant du pack et le hash de l'image, rien de plus, pour que folderskin.app
+puisse afficher combien de fois chacun est ajouté.
 Sur Mac, le téléchargement fait moins de 20 Mo.
 
 | Reste sur votre ordinateur | Passe par Internet |
@@ -78,7 +80,7 @@ Sur Mac, le téléchargement fait moins de 20 Mo.
 | Vos dossiers et les icônes que FolderSkin y écrit | Une requête à une IA, quand vous en faites une : elle part chez le fournisseur que vous avez choisi, avec votre clé |
 | Chaque image que vous ajoutez et chaque habillage que vous créez | La Communauté et le premier lancement, qui lisent les packs partagés sur packs.folderskin.app, ou sur GitHub quand il ne répond pas |
 | Vos clés d'API, chiffrées | La recherche de mises à jour : à l'ouverture, FolderSkin lit sur GitHub le fichier qui indique la dernière version |
-| Favoris, tags et réglages | L'ajout d'un pack depuis la Communauté : son identifiant, et rien d'autre, part vers le service communautaire de FolderSkin, qui compte les ajouts une fois par jour et par réseau et ne conserve aucune adresse ([détails](docs/fr/PACKS.md#nombre-dinstallations)) |
+| Favoris, tags et réglages | L'ajout d'un pack ou d'un seul habillage depuis la Communauté : seuls l'identifiant du pack et le hash de l'image de l'habillage partent vers le service communautaire de FolderSkin, qui compte chaque ajout une fois par jour et par réseau et ne conserve aucune adresse ([détails](docs/fr/PACKS.md#nombre-dinstallations)) |
 
 La [politique de confidentialité](https://folderskin.app/fr/privacy/) détaille tout ce que FolderSkin
 envoie, à qui, et ce que conserve le service communautaire.
@@ -168,10 +170,15 @@ propose, et vous les retrouvez à tout moment dans **Communauté**. Ajouter un p
 habillages dans
 votre bibliothèque avec leurs tags, et le bouton **Installer** d'un pack, dans la galerie de
 [folderskin.app](https://folderskin.app/fr/community/), ouvre FolderSkin et l'ajoute pour vous. Les
-packs marqués **Officiel** sont ceux dont le mainteneur se porte garant. **Classic Art** est un bon
-premier pack : seize tableaux du domaine public, de la Joconde à La Nuit étoilée, chacun peint sur
-un dossier. Pour partager les vôtres, ouvrez le menu ⋯ d'un habillage et choisissez **Partager avec
-la communauté**, ou passez par **Communauté → Partager vos habillages** pour en partager plusieurs.
+packs marqués **Officiel** sont ceux dont le mainteneur se porte garant. La Communauté s'ouvre sur
+**Officiel**, la collection de FolderSkin : des habillages qui n'appartiennent à aucun pack, libres
+d'utilisation sous licence MIT, et de plus en plus nombreux. **Utiliser cet habillage** sur l'un
+d'eux, ou **Utiliser** sur n'importe quel habillage d'un pack, enregistre cet habillage seul dans
+votre bibliothèque, sélectionné et prêt à être appliqué, et une coche signale ceux que vous avez
+déjà. **Classic Art** est un bon premier pack : seize tableaux du domaine public, de la Joconde à
+La Nuit étoilée, chacun peint sur un dossier. Pour partager les vôtres, ouvrez le menu ⋯ d'un
+habillage et choisissez **Partager avec la communauté**, ou passez par **Communauté → Partager vos
+habillages** pour en partager plusieurs.
 Vous vérifiez votre ordinateur une seule fois dans le navigateur, sans compte, et une personne relit
 le pack avant qu'il rejoigne la Communauté pour tout le monde. **Enregistrer dans un dossier**, dans
 la même fenêtre, écrit plutôt le pack sous forme de fichiers. Les images sont partagées sans perte :

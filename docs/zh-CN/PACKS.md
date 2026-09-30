@@ -1,10 +1,12 @@
 # 社区皮肤与皮肤包
 
-任何人都可以把皮肤免费分享给所有 FolderSkin 用户。一组分享出来的皮肤叫作**皮肤包**，只分享一款皮肤时，它就是只装了一款的皮肤包。皮肤包存放在单独的仓库 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) 的 `packs/` 下，添加皮肤包不需要账号。FolderSkin 本身不带任何皮肤：所有皮肤都来自皮肤包、你自己的图片和 AI 生成的结果。
+任何人都可以把皮肤免费分享给所有 FolderSkin 用户。一组分享出来的皮肤叫作**皮肤包**，只分享一款皮肤时，它就是只装了一款的皮肤包。皮肤包存放在单独的仓库 [folderskin-community](https://github.com/prajwal-svm/folderskin-community) 的 `packs/` 下，添加皮肤包不需要账号。FolderSkin 本身不带任何皮肤：所有皮肤都来自它的[官方合集](#官方合集)、皮肤包、你自己的图片和 AI 生成的结果，而且在你需要之前，什么都不会下载。
 
 ## 添加皮肤包
 
 FolderSkin 第一次打开时，会推荐一些皮肤包，帮你把皮肤库先充实起来。之后可以在应用里打开**社区**。顶部的筛选项就是各个皮肤包的标签。**添加**会把皮肤包里的皮肤放进你的皮肤库，并带上皮肤包的标签，每款皮肤的 ⋯ 菜单里都会注明它来自哪个皮肤包、由谁分享。**移除**会把整个皮肤包再拿掉。已经用上其中某款皮肤的文件夹会保留现有的图标，因为图标就保存在文件夹本身里。
+
+在皮肤包查看页里，任意一款皮肤上的**使用**只会拿走这一款皮肤：只下载、检查它的图片并保存到你的皮肤库，然后选中它，随时可以应用。皮肤包不会被添加，皮肤包的**更新**和**移除**也不会动这款皮肤。之后再添加这个皮肤包，这款皮肤就会成为其中的一部分，只保存一份。对勾会标出哪些皮肤已经在你的皮肤库里：在皮肤包查看页中，每款皮肤上都会显示。对于你没有添加、但从中拿过皮肤的皮肤包，它的卡片和查看页上会显示“✓ 3/40”。
 
 **从文件夹添加**对你电脑上的皮肤包文件夹做同样的事，分享之前也可以用它先试试你的皮肤包。
 
@@ -275,11 +277,41 @@ folderskin-community 的根目录下，与 `packs/` 并列放着两份列表，�
 
 两份列表都是可选的。每个 ID 都必须对应 `packs/` 中的一个皮肤包，重复列出的只算一次。只要任一列表指向了不存在的皮肤包，`packs index` 和 `packs catalog` 就会停下来，什么也不写，所以改名或删除皮肤包不会留下空缺。pull request 的检查会运行 `packs catalog`，在合并之前就能发现问题。`packs rename` 会自动改写这两份列表。folderskin-community 的 Packs 工作流会在其 `paths` 中的文件变化时重建索引，所以这两份列表和 `moved.json` 都应该和 `packs/**` 一起写在 `paths` 里。
 
+## 官方合集
+
+**社区**打开时显示的是**官方**：由 FolderSkin 制作、不属于任何皮肤包的皮肤。合集不像皮肤包那样各自选择许可协议，也不限制皮肤数量，所以会随着时间不断增加。其中每款皮肤都采用合集指定的许可协议（MIT，需注明 FolderSkin）。你可以在合集里搜索，按最新或名称排序，也可以打开一款皮肤查看大图。**使用这个皮肤**会把这一款皮肤保存到你的皮肤库并选中它，和皮肤包里的**使用**一样。已经在你皮肤库里的皮肤会带上对勾，按钮也会变成**已在皮肤库中**，点它会选中这款皮肤。在**全部**下输入搜索词时，匹配的官方皮肤会排在匹配皮肤的最前面。
+
+合集存放在 folderskin-community 的 `collection/` 中，包括图片，以及按顺序列出这些图片的 `collection.json`：
+
+```json
+{
+  "version": 1,
+  "license": "MIT",
+  "skins": [
+    { "file": "vibe-giraffe-cola.webp", "name": "Giraffe Cola", "tags": ["pop art"], "added": "2026-09-30" }
+  ]
+}
+```
+
+| 字段 | 规则 |
+|---|---|
+| `license` | `CC0-1.0`、`CC-BY-4.0` 或 `MIT`，适用于合集中的每款皮肤 |
+| `file` | `collection/` 中的一张图片，命名规则和皮肤包的图片相同。那里的每张图片都只列出一次，也不能有两项是同一张图片 |
+| `name` | 1 到 60 个字符 |
+| `tags` | 最多 3 个，和皮肤包里的皮肤一样 |
+| `added` | 加入合集的日期，`YYYY-MM-DD` |
+
+每张图片都遵循[皮肤包图片的规则](#图片)：无损，不超过 1.5 MB，每边 256 到 1024 px。除了 20,000 款皮肤这个以防万一的上限，没有任何数量或大小限制。
+
+只有维护者可以往合集里添加皮肤，用的是 `folderskin-tools collection add`：它会像 `packs make` 一样处理每张图片（裁出成品文件夹并统一成一种形状，所有图片都缩成 1024 px 的无损 WebP），用文件名给皮肤命名，并记上当天的日期。`collection check` 检查整个合集。`packs check` 也会检查合集，合集有问题时，`packs catalog` 会拒绝发布。`packs catalog` 会把每张图片及其缩略图和皮肤包的放在一起，发布到 `pictures/` 和 `thumbs/`，在目录的 `collection` 表中列出合集，并为网站把完整列表写成 `collection/<hash>.json`。`head.json` 会写明皮肤数量（`"collection"`）、许可协议（`"collection_license"`）以及这份列表的位置（`"collection_manifest"`）。FolderSkin 0.1.13 及更早的版本不会读取其中任何内容。
+
 ## 安装链接
 
 `folderskin://install?pack=<id>` 会打开 FolderSkin，在**社区**中定位到皮肤包 `<id>` 并添加它，和点它的**添加**按钮完全一样，进度显示和最后的提示也相同。窗口会先切换到最前面。如果重新向 GitHub 查询后，**社区**里仍然没有这个 ID 的皮肤包，FolderSkin 会告诉你，并建议你搜索一下。如果皮肤包已经在你的皮肤库里，就直接打开它，并提示已经添加过了。从 0.1.7 开始，带旧 ID 的链接会打开它迁移后的皮肤包（见 [moved.json](#movedjson)）。
 
-只有完全符合下列格式的链接，FolderSkin 才会接受：scheme 是 `folderskin`，`install` 作为主机名（`folderskin://install?…`）或整个路径（`folderskin:install?…`），不带用户名、密码或端口，并且只有一个 `pack` 参数，它的值必须是皮肤包 ID（由小写字母和数字组成的单词，用单个连字符连接，最多 40 个字符）。其他参数会被跳过，其他任何形式的链接都会被忽略。
+同一个链接也可以用图片的 SHA-256 指定一款皮肤，而不是整个皮肤包：官方合集里的皮肤用 `folderskin://install?skin=<sha256>`，皮肤包 `<id>` 里的皮肤用 `folderskin://install?skin=<sha256>&in=<id>`。它会在**社区**中打开这款皮肤（官方皮肤单独打开，皮肤包里的皮肤在它的皮肤包中打开并滚动到它），然后使用它，和点它的**使用**按钮完全一样：只把这一款皮肤保存到你的皮肤库并选中，随时可以应用，皮肤包不会被添加。如果这款皮肤已经不在列表里，FolderSkin 会告诉你它已经不在了。皮肤所属的皮肤包用 `in` 而不是 `pack` 指定：FolderSkin 0.1.13 及更早的版本会跳过 `skin`，如果用 `pack`，它们就会添加整个皮肤包，而用 `in` 时，它们找不到皮肤包，就会忽略这个链接。
+
+只有完全符合下列格式的链接，FolderSkin 才会接受：scheme 是 `folderskin`，`install` 作为主机名（`folderskin://install?…`）或整个路径（`folderskin:install?…`），不带用户名、密码或端口，并且 `pack`、`skin` 和 `in` 各自最多只有一个。`pack` 或 `in` 的值必须是皮肤包 ID（由小写字母和数字组成的单词，用单个连字符连接，最多 40 个字符），`skin` 的值必须是 64 位小写十六进制数字。带 `skin` 的链接永远只针对这款皮肤：`skin` 不正确，或者旁边还带着 `pack` 的链接会被忽略，绝不会被当成整个皮肤包的链接。不带 `skin` 时，必须有 `pack`。其他参数会被跳过，其他任何形式的链接都会被忽略。
 
 这个 scheme 由安装程序注册：macOS 应用的 `Info.plist`、Windows 安装程序，以及 Linux `.deb` 和 `.rpm` 的桌面条目。AppImage 没有安装步骤，所以会在启动时自行注册。在 Windows 和 Linux 上，点击链接会启动第二个 FolderSkin，它把链接交给已经在运行的那个后就退出，所以始终只有一个在运行。
 
@@ -290,13 +322,13 @@ folderskin-community 的根目录下，与 `packs/` 并列放着两份列表，�
 | macOS | 构建应用（`pnpm tauri build --bundles app`），然后打开一次 `target/release/bundle/macos/FolderSkin.app`，让 macOS 注册这个 scheme（最稳妥的做法是在 `/Applications` 里放一份），再运行 `open 'folderskin://install?pack=classic-art'`。macOS 只会把链接发给打包好的应用，所以 `pnpm tauri dev` 永远收不到链接 |
 | Windows | 安装一个构建版本，或者设置 `FOLDERSKIN_REGISTER_LINKS=1` 后运行 `pnpm tauri dev`（开发版本只有这样才会为自己注册这个 scheme），然后在命令提示符中运行 `start "" "folderskin://install?pack=classic-art"`，或者在“运行”对话框（Windows+R）中输入同样的链接 |
 | Linux | 安装 `.deb` 或 `.rpm`，或者启动一次 AppImage，或者设置 `FOLDERSKIN_REGISTER_LINKS=1` 后运行 `pnpm tauri dev`，然后运行 `xdg-open 'folderskin://install?pack=classic-art'` |
-| 浏览器预览 | 运行 `pnpm dev`，然后打开 `http://localhost:14200/?install=classic-art` |
+| 浏览器预览 | 运行 `pnpm dev`，然后打开 `http://localhost:14200/?install=classic-art`，或者 `?skin=<sha256>`（皮肤包里的皮肤再加上 `&in=<id>`） |
 
 在 Windows 或 Linux 上运行 `pnpm tauri dev` 之前，请先退出已安装的 FolderSkin：如果已经有一个在运行，新启动的会把链接交给它，然后自己退出。开发版本注册的 scheme 会一直保留，直到安装程序或另一个构建版本重新注册。
 
 ## 安装次数统计
 
-从**社区**添加一个皮肤包后，FolderSkin 会把这个皮肤包的 ID 告诉社区服务：`POST https://community.folderskin.app/v1/packs/<id>/installs`，不带请求体。它发送的仅此而已：没有账号，没有设备 ID，也没有关于你的皮肤库或文件夹的任何信息（和 FolderSkin 发出的所有请求一样，User-Agent 里会写明应用的版本）。这个请求在皮肤包保存之后才发出，五秒没有响应就放弃，不会让任何操作等待它，失败了也不会报错。开发版本，以及从另一份副本读取皮肤包的版本（`FOLDERSKIN_COMMUNITY_URL`），都不会发送任何内容，除非 `FOLDERSKIN_COMMUNITY_API` 指定了要发送到的服务。
+从**社区**添加一个皮肤包后，FolderSkin 会把这个皮肤包的 ID 告诉社区服务：`POST https://community.folderskin.app/v1/packs/<id>/installs`，不带请求体。单独使用一款皮肤（**使用**）时，它改为告诉社区服务这款皮肤图片的 SHA-256：`POST https://community.folderskin.app/v1/skins/<sha256>/downloads`，皮肤包里的皮肤再加上 `?pack=<id>`，同样不带请求体。这是单独的计数：使用皮肤包里的皮肤永远不会增加皮肤包的安装次数。它发送的仅此而已：没有账号，没有设备 ID，也没有关于你的皮肤库或文件夹的任何信息（和 FolderSkin 发出的所有请求一样，User-Agent 里会写明应用的版本）。这个请求在皮肤包或皮肤保存之后才发出，五秒没有响应就放弃，不会让任何操作等待它，失败了也不会报错。开发版本，以及从另一份副本读取皮肤包的版本（`FOLDERSKIN_COMMUNITY_URL`），都不会发送任何内容，除非 `FOLDERSKIN_COMMUNITY_API` 指定了要发送到的服务。应用从不发送浏览次数：只有 folderskin.app 会统计浏览。
 
 对每个网络和每个皮肤包，服务每天只计一次添加，而且只统计已发布的 `index.json` 中的皮肤包。以旧 ID 添加的会计入它迁移后的皮肤包，所以 0.1.7 之前的应用也照样计数。服务为每个皮肤包保存一个计数，并在当天（UTC）剩下的时间里保存请求来源网络的加盐哈希，这样同一天重复添加同一个皮肤包不会被计两次。每天的清理任务会删除这些哈希。不保存任何地址。
 

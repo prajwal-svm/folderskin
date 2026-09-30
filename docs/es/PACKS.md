@@ -4,8 +4,9 @@ Cualquiera puede compartir aspectos gratis con todas las personas que usan Folde
 de aspectos compartido es un **paquete**, y un aspecto suelto es un paquete de uno. Los paquetes
 viven en su propio repositorio,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community), dentro de `packs/`, y
-añadir uno no requiere ninguna cuenta. FolderSkin no trae aspectos propios: todos salen de los
-paquetes, de tus propias imágenes o de los resultados de la IA.
+añadir uno no requiere ninguna cuenta. FolderSkin no trae aspectos propios: todos salen de su
+[colección oficial](#la-colección-oficial), de los paquetes, de tus propias imágenes o de los
+resultados de la IA, y no se descarga nada hasta que lo pides.
 
 ## Añadir un paquete
 
@@ -15,6 +16,14 @@ aspectos de un paquete en tu biblioteca, con las etiquetas del paquete, y el men
 indica de qué paquete viene y quién lo compartió. **Quitar** vuelve a sacar el paquete entero. Las
 carpetas que ya usan uno de sus aspectos conservan su icono, porque el icono vive en la propia
 carpeta.
+
+**Usar**, en cualquier aspecto de la vista de un paquete, toma solo ese aspecto: se descarga, se
+comprueba y se guarda en tu biblioteca únicamente su imagen, y el aspecto queda elegido, listo para
+aplicar. El paquete no se añade, y sus **Actualizar** y **Quitar** no tocan ese aspecto. Si más
+adelante añades el paquete, el aspecto pasa a formar parte de él, guardado una sola vez. Una marca
+de verificación indica qué aspectos ya están en tu biblioteca: en cada aspecto de la vista de un
+paquete, y como “✓ 3/40” en la tarjeta y en la vista de un paquete que no has añadido pero del que
+has tomado aspectos.
 
 **Añadir desde una carpeta** hace lo mismo con la carpeta de un paquete que tengas en tu equipo, y
 así es también como pruebas un paquete antes de compartirlo.
@@ -529,6 +538,54 @@ antes de fusionar. `packs rename` reescribe las dos listas por su cuenta. El flu
 de folderskin-community reconstruye el índice cuando cambia un archivo de sus `paths`, así que las
 dos listas deben estar ahí, junto a `packs/**`, igual que `moved.json`.
 
+## La colección oficial
+
+Comunidad se abre en **Oficial**: aspectos hechos por FolderSkin que no pertenecen a ningún
+paquete. La colección no tiene una licencia elegida por cada paquete ni un límite de aspectos, así
+que crece con el tiempo. Cada uno de sus aspectos está bajo la licencia que indica la colección
+(MIT, con crédito a FolderSkin). Puedes buscar en ella, ordenarla por los más recientes o por
+nombre, y abrir un aspecto para verlo en grande. **Usar este aspecto** guarda ese único aspecto en
+tu biblioteca y lo elige, como hace **Usar** en un paquete. Un aspecto que ya está en tu biblioteca
+lleva una marca de verificación, y su botón pasa a ser **En la biblioteca**, que lo elige. Al
+escribir una búsqueda en **Todos**, los aspectos oficiales que coinciden aparecen al principio de
+los aspectos que coinciden.
+
+Vive en `collection/`, dentro de folderskin-community: las imágenes y `collection.json`, que las
+enumera en orden:
+
+```json
+{
+  "version": 1,
+  "license": "MIT",
+  "skins": [
+    { "file": "vibe-giraffe-cola.webp", "name": "Giraffe Cola", "tags": ["pop art"], "added": "2026-09-30" }
+  ]
+}
+```
+
+| campo | regla |
+|---|---|
+| `license` | `CC0-1.0`, `CC-BY-4.0` o `MIT`, para todos los aspectos de la colección |
+| `file` | una imagen de `collection/`, con un nombre como los de las imágenes de un paquete. Cada imagen de esa carpeta aparece una sola vez, y no hay dos que sean la misma imagen |
+| `name` | de 1 a 60 caracteres |
+| `tags` | hasta 3, como las de un aspecto de un paquete |
+| `added` | el día en que se sumó, `YYYY-MM-DD` |
+
+Cada imagen sigue [las reglas de las imágenes de un paquete](#imágenes): sin pérdida, 1.5 MB como
+máximo, de 256 a 1024 px por lado. No hay límite de cantidad ni de tamaño, aparte de un tope de
+seguridad de 20 000 aspectos.
+
+Solo el mantenedor le añade aspectos, con `folderskin-tools collection add`, que prepara cada
+imagen como lo hace `packs make` (las carpetas terminadas se recortan y reciben una sola forma, y
+todo se reduce a WebP sin pérdida de 1024 px), le pone el nombre de su archivo y la fecha de hoy.
+`collection check` comprueba la colección entera. `packs check` la incluye, y `packs catalog` se
+niega a publicar mientras tenga algún problema. `packs catalog` publica cada imagen y su miniatura
+en `pictures/` y `thumbs/`, junto a las de los paquetes, enumera la colección en una tabla
+`collection` del catálogo y escribe la lista completa como `collection/<hash>.json` para el sitio
+web. `head.json` indica cuántos aspectos hay (`"collection"`), con qué licencia
+(`"collection_license"`) y dónde está esa lista (`"collection_manifest"`). FolderSkin 0.1.13 y las
+versiones anteriores no leen nada de esto.
+
 ## El enlace de instalación
 
 `folderskin://install?pack=<id>` abre FolderSkin en el paquete `<id>` dentro de Comunidad y lo
@@ -538,11 +595,24 @@ siquiera después de volver a consultar GitHub, FolderSkin lo dice y sugiere bus
 que ya está en tu biblioteca se abre, con un aviso de que ya está ahí. Desde la 0.1.7, un enlace con
 un identificador antiguo abre el paquete al que se movió ([moved.json](#movedjson)).
 
+El mismo enlace puede nombrar un solo aspecto en lugar de un paquete entero, por el SHA-256 de su
+imagen: `folderskin://install?skin=<sha256>` para un aspecto de la colección oficial, y
+`folderskin://install?skin=<sha256>&in=<id>` para un aspecto del paquete `<id>`. Abre ese aspecto
+en Comunidad (uno oficial por sí solo, y el de un paquete dentro de su paquete, desplazado hasta
+él) y lo usa, exactamente como su botón **Usar**: ese único aspecto se guarda en tu biblioteca y
+queda elegido, listo para aplicar, y el paquete no se añade. Si el aspecto ya no aparece ahí,
+FolderSkin avisa de que ya no está. El paquete de un aspecto va en `in`, no en `pack`: FolderSkin
+0.1.13 y las versiones anteriores pasan por alto `skin`, así que con un `pack` añadirían el paquete
+entero, mientras que con `in` no encuentran ningún paquete e ignoran el enlace.
+
 FolderSkin solo acepta un enlace si tiene exactamente esta forma: el esquema `folderskin`, `install`
 como host (`folderskin://install?…`) o como ruta completa (`folderskin:install?…`), sin usuario,
-contraseña ni puerto, y exactamente un `pack`, que tiene que ser un identificador de paquete (letras
-minúsculas y dígitos, en palabras unidas por guiones simples, 40 caracteres como máximo). Cualquier
-otro parámetro se pasa por alto, y cualquier otro enlace se ignora.
+contraseña ni puerto, y como máximo un `pack`, un `skin` y un `in`. Un `pack` o un `in` tiene que
+ser un identificador de paquete (letras minúsculas y dígitos, en palabras unidas por guiones
+simples, 40 caracteres como máximo), y un `skin`, 64 dígitos hexadecimales en minúscula. Un enlace
+con `skin` solo sirve para ese aspecto: si su `skin` no es correcto, o si lleva un `pack` al lado,
+se ignora, y nunca se toma por su paquete entero. Sin `skin`, necesita un `pack`. Cualquier otro
+parámetro se pasa por alto, y cualquier otro enlace se ignora.
 
 Los instaladores registran el esquema: el `Info.plist` de la app de macOS, los instaladores de
 Windows y la entrada de escritorio de los `.deb` y `.rpm` de Linux. Una AppImage lo registra al
@@ -556,7 +626,7 @@ Para probarlo:
 | macOS | Compila la app (`pnpm tauri build --bundles app`) y abre una vez `target/release/bundle/macos/FolderSkin.app`, lo que registra el esquema en macOS (una copia en `/Applications` es lo más seguro), y luego `open 'folderskin://install?pack=classic-art'`. macOS solo envía enlaces a una app empaquetada, así que `pnpm tauri dev` nunca recibe ninguno |
 | Windows | Instala una compilación o ejecuta `pnpm tauri dev` con `FOLDERSKIN_REGISTER_LINKS=1` definida (solo así una compilación de desarrollo registra el esquema para sí misma), y luego `start "" "folderskin://install?pack=classic-art"` en un símbolo del sistema, o el mismo enlace en el cuadro Ejecutar (Windows+R) |
 | Linux | Instala el `.deb` o el `.rpm`, abre la AppImage una vez o ejecuta `pnpm tauri dev` con `FOLDERSKIN_REGISTER_LINKS=1` definida, y luego `xdg-open 'folderskin://install?pack=classic-art'` |
-| vista previa en el navegador | `pnpm dev` y abre `http://localhost:14200/?install=classic-art` |
+| vista previa en el navegador | `pnpm dev` y abre `http://localhost:14200/?install=classic-art`, o `?skin=<sha256>` (con `&in=<id>` para el aspecto de un paquete) |
 
 Cierra el FolderSkin instalado antes de `pnpm tauri dev` en Windows o Linux: si ya hay uno abierto,
 el nuevo le pasa el relevo y se cierra. Una compilación de desarrollo que registró el esquema lo
@@ -566,12 +636,16 @@ conserva hasta que un instalador u otra compilación lo vuelva a registrar.
 
 Cuando se añade un paquete de Comunidad, FolderSkin le comunica el identificador del paquete a su
 servicio de la comunidad: `POST https://community.folderskin.app/v1/packs/<id>/installs`, sin
-cuerpo. Es todo lo que envía: ninguna cuenta, ningún identificador de dispositivo, nada sobre tu
-biblioteca ni tus carpetas (como todas las peticiones de FolderSkin, indica la versión de la app en
-su User-Agent). Ocurre después de guardar el paquete, se rinde a los cinco segundos, y nada lo
-espera ni informa de un fallo. Una compilación de desarrollo, y una que lee los paquetes de otra
-copia (`FOLDERSKIN_COMMUNITY_URL`), no envían nada salvo que `FOLDERSKIN_COMMUNITY_API` indique un
-servicio al que enviarlo.
+cuerpo. Cuando se usa un aspecto suelto (**Usar**), le comunica en su lugar el SHA-256 de la imagen
+del aspecto: `POST https://community.folderskin.app/v1/skins/<sha256>/downloads`, con
+`?pack=<id>` para el aspecto de un paquete, también sin cuerpo. Es un recuento aparte: usar un
+aspecto de un paquete nunca suma a las instalaciones del paquete. Es todo lo que envía: ninguna
+cuenta, ningún identificador de dispositivo, nada sobre tu biblioteca ni tus carpetas (como todas
+las peticiones de FolderSkin, indica la versión de la app en su User-Agent). Ocurre después de
+guardar el paquete o el aspecto, se rinde a los cinco segundos, y nada lo espera ni informa de un
+fallo. Una compilación de desarrollo, y una que lee los paquetes de otra copia
+(`FOLDERSKIN_COMMUNITY_URL`), no envían nada salvo que `FOLDERSKIN_COMMUNITY_API` indique un
+servicio al que enviarlo. La app nunca envía visualizaciones: solo folderskin.app las cuenta.
 
 El servicio cuenta una instalación una vez al día por cada red y paquete, y solo para los paquetes
 del `index.json` publicado. Una instalación con un identificador antiguo cuenta para el paquete al
