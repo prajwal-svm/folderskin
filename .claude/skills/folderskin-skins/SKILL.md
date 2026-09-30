@@ -185,6 +185,26 @@ Tell the user, in a few lines:
 Do not commit anything unless the user asks. The files to commit are `packs/<id>/` in
 folderskin-community, where a pull request proposes the pack.
 
+## Adding to the official collection
+
+The official collection is FolderSkin's own skins, outside any pack: `collection/` in
+folderskin-community, with no 50-skin or 64 MB cap and one licence for all of it (MIT, credit
+FolderSkin). Only the maintainer adds to it, so do this only when the user asks for skins to go
+into the official collection rather than a pack. Steps 1, 2 and 6 above apply as they do to a pack.
+
+```sh
+cargo run -p folderskin-tools -- collection add "<folder or files>" --dir ../folderskin-community \
+  --preview /tmp/collection.png
+cargo run -p folderskin-tools -- collection check --dir ../folderskin-community
+```
+
+- Pictures are prepared exactly as `packs make` prepares them (`--flat-backdrop`, `--keep-outliers`
+  and `--max-kb` work the same) and go on the end of `collection.json`, named after their files
+  and dated today. A picture the collection has already is skipped.
+- Names come from file names, so give files meaningful names first, or fix `name` and `tags` (up
+  to 3) in `collection.json` afterwards, then check again.
+- The Packs workflow publishes it on `main`; don't touch `v2/`.
+
 ## Rules
 
 - Only pictures the user made or is allowed to share, under `CC0-1.0`, `CC-BY-4.0` or `MIT`, with

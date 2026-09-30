@@ -69,14 +69,18 @@ pub fn install_url(base: &str, pack_id: &str) -> Option<String> {
     if !pack::is_pack_id(pack_id) {
         return None;
     }
-    Some(format!("{}/v1/packs/{pack_id}/installs", service_base(base)?))
+    Some(format!(
+        "{}/v1/packs/{pack_id}/installs",
+        service_base(base)?
+    ))
 }
 
 /// `<base>/v1/skins/<sha256>/downloads`, with `?pack=<pack_id>` when there is one, or `None` when
 /// `sha256` isn't 64 lower-case hex digits, `pack_id` isn't a pack id, or `base` isn't an address
 /// to send it to ([`install_url`]).
 pub fn download_url(base: &str, sha256: &str, pack_id: Option<&str>) -> Option<String> {
-    if !folderskin_catalog::tree::is_hex(sha256, 64) || pack_id.is_some_and(|id| !pack::is_pack_id(id))
+    if !folderskin_catalog::tree::is_hex(sha256, 64)
+        || pack_id.is_some_and(|id| !pack::is_pack_id(id))
     {
         return None;
     }

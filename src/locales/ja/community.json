@@ -81,9 +81,16 @@
   },
   "use": {
     "button": "このスキンを使う",
-    "short": "使う",
     "label": "{{name}}を使う",
     "tip": "このスキンだけをライブラリに追加します"
+  },
+  "inLibrary": {
+    "label": "ライブラリにあります",
+    "button": "ライブラリにあります",
+    "showTip": "ライブラリで表示",
+    "have_other": "{{count}}個中{{have}}個がライブラリにあります",
+    "packInfo": "✓ はライブラリにあるスキンです。「使う」はスキンを1つだけ、「追加」はパック全体を追加し、最新の状態に保ちます。",
+    "officialInfo": "✓ はライブラリにあるスキンです。「使う」はスキンを1つだけ追加します。"
   },
   "progress": {
     "adding": "追加中",
@@ -148,7 +155,9 @@
     "addFolderFailed": "そのパックを追加できませんでした：{{reason}}",
     "used": "{{name}}をライブラリに追加しました",
     "usedAlready": "{{name}}はすでにライブラリにあります",
-    "useFailed": "{{name}}を追加できませんでした：{{reason}}"
+    "useFailed": "{{name}}を追加できませんでした：{{reason}}",
+    "noSuchSkin": "そのスキンを追加できませんでした：コミュニティにもうありません。再読み込みしてからお試しください。",
+    "useLinkFailed": "そのスキンを追加できませんでした：{{reason}}"
   },
   "searchIn": "「{{tag}}」のパックを検索",
   "searchInLabel": "「{{tag}}」のパックを検索",

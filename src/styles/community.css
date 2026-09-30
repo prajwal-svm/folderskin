@@ -181,6 +181,21 @@
   align-self: start;
 }
 
+/* an official skin's thumbnail, with the tick on its corner when it's in the library already */
+.skin-hit-art {
+  grid-row: 1 / span 2;
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.skin-hit-art .ok-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+}
+
 /* an official skin, which is in no pack: the Official badge where the pack's name would be */
 .skin-hit-mark {
   display: flex;
@@ -555,8 +570,8 @@
   top: 6px;
   right: 6px;
   z-index: 1;
-  height: 26px;
-  padding: 0 10px;
+  width: 28px;
+  height: 28px;
   background: var(--island);
   color: var(--accent-ink);
   border: 1px solid var(--line);
@@ -605,6 +620,79 @@
   overflow: hidden;
 }
 
+/* A skin in the library already: the tick where Use would be, there all the time. */
+.pack-skin-have {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.22));
+}
+
+/* ---------- what's in the library already ---------- */
+
+/* How many of a pack's skins are in the library while the pack isn't: the tick and "3/40". */
+.have-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px 0 3px;
+  border-radius: var(--r-pill);
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+  font-weight: 750;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* An ⓘ with the longer words in its tip: it tints under the pointer and the keyboard, as the icon
+   buttons do, and does nothing when pressed. */
+.info-tip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  cursor: default;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.info-tip:hover,
+.info-tip:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+/* The pack viewer's top: the pack's badges and tags, and at the end, how many of its skins are in
+   the library and the ⓘ that says what the ticks, Use and Add mean. */
+.pack-viewer-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pack-viewer-top .pack-tags {
+  flex: 1;
+  margin-top: 0;
+}
+
+.pack-have {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
 /* ---------- the official skins ---------- */
 
 /* Tiles as the library draws them. They arrive with their page rather than rising a row at a
@@ -621,6 +709,16 @@
 .packs-grid.is-skins .tile-hit:hover .tile-art::before {
   opacity: 0.5;
   transform: none;
+}
+
+/* in the library already: a tick on the folder's corner */
+.tile-kept {
+  position: absolute;
+  top: 5%;
+  right: 5%;
+  z-index: 1;
+  display: flex;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.22));
 }
 
 /* a place whose page is on its way */
@@ -641,6 +739,13 @@
 .tile.is-placeholder .pack-line {
   width: 60%;
   margin-top: 3px;
+}
+
+/* The skin viewer's button for a skin in the library already: the tick's green, deepening under
+   the pointer and the keyboard, as it takes you to the skin. */
+.btn-primary.is-done:hover:not(:disabled),
+.btn-primary.is-done:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--ok-soft) 82%, var(--ok-solid));
 }
 
 /* the skin viewer: one official skin, as big as its thumbnail stays sharp */

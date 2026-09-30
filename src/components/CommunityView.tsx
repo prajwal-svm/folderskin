@@ -10,9 +10,11 @@ import { formatNumber } from "../i18n/format";
 import { Rich } from "../i18n/Rich";
 import { tagLabel } from "../lib/tags";
 import { collectionCountLine, community, countLine, progressLabel, progressShare, useCommunity, type PackTask, type PackView } from "../lib/communityStore";
+import { inLibrary, libraryIndex, packInLibrary } from "../lib/inLibrary";
 import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
+import { HaveChip, InfoTip } from "./InLibrary";
 import { DrivesBadge, OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { PackPreview } from "./PackPreview";
@@ -60,27 +62,38 @@ const skinRow = (width: number) => width + 28;
  *
  * The Official tab, first in the row, lists FolderSkin's own skins instead: not packs but skins,
  * searched and paged the same way, each opened in a skin viewer and used one at a time.
+ *
+ * Skins in the library already wear a tick, wherever they show: on the official skins, in the
+ * strip of skins, in a pack opened to look through, and, counted, on a pack's card while the pack
+ * itself isn't added. The ticks follow `library` as it changes (lib/inLibrary.ts).
  */
 export function CommunityView({
+  library,
   onShare,
   onAdded,
   onRemoved,
   onUsed,
+  onShowSkin,
   onShowTag,
   toast,
 }: {
+  /** The skins in the library. */
+  library: Skin[];
   /** Opens "Share your skins". */
   onShare: () => void;
   onAdded: (skins: Skin[]) => void;
   onRemoved: (skinIds: string[]) => void;
   /** Picks a skin taken on its own ("Use"), now in the library. */
   onUsed: (skin: Skin) => void;
+  /** Picks skin `id` of the library's, where Apply is. */
+  onShowSkin: (id: string) => void;
   /** Opens the library filtered by `tag`. */
   onShowTag: (tag: string) => void;
   toast: Toast;
 }) {
   const t = useT();
   const s = useCommunity();
+  const kept = useMemo(() => libraryIndex(library), [library]);
   // The newest of the app's callbacks, for a pack that finishes adding after the view has gone.
   useLayoutEffect(() => community.bind({ onAdded, onRemoved, onUsed, onShowTag, toast }));
   useEffect(() => community.start(), []);
@@ -162,17 +175,19 @@ export function CommunityView({
           blocked={s.busy !== null && s.busy !== pack.id}
           progress={s.busy === pack.id ? s.progress : null}
           tag={s.tag}
+          have={packInLibrary(kept, pack)}
           onRemove={setRemoving}
         />
       ) : (
         <PackPlaceholder index={index} view={s.view} />
       ),
-    [s.view, s.busy, s.task, s.progress, s.tag],
+    [s.view, s.busy, s.task, s.progress, s.tag, kept],
   );
 
   const renderSkin = useCallback(
-    (skin: CollectionSkin | undefined, index: number) => (skin ? <OfficialTile skin={skin} /> : <SkinPlaceholder index={index} />),
-    [],
+    (skin: CollectionSkin | undefined, index: number) =>
+      skin ? <OfficialTile skin={skin} kept={inLibrary(kept, skin.skin_id)} /> : <SkinPlaceholder index={index} />,
+    [kept],
   );
 
   const viewing = s.viewing;
@@ -261,7 +276,10 @@ export function CommunityView({
             {officialHits.map((skin) => (
               <li key={skin.sha256}>
                 <button type="button" className="skin-hit is-official" data-tip={skin.name} data-tip-overflow onClick={() => community.openSkin(skin)}>
-                  <img src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+                  <span className="skin-hit-art">
+                    <img src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+                    {inLibrary(kept, skin.skin_id) && <OkBadge size={16} label={t("community.inLibrary.label")} />}
+                  </span>
                   <span className="skin-hit-name">{skin.name}</span>
                   <span className="skin-hit-mark">
                     <OfficialBadge />
@@ -299,16 +317,21 @@ export function CommunityView({
             )}
           </span>
         )}
-        <button
-          type="button"
-          className="icon-btn community-checked"
-          data-tip={t("community.checked")}
-          aria-label={t("community.checkedLabel")}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}
-        >
-          <InfoIcon size={15} />
-        </button>
+        {/* The official skins aren't packs, so their ⓘ says what the tick and Use mean instead. */}
+        {official ? (
+          <InfoTip className="icon-btn community-checked" text={t("community.inLibrary.officialInfo")} />
+        ) : (
+          <button
+            type="button"
+            className="icon-btn community-checked"
+            data-tip={t("community.checked")}
+            aria-label={t("community.checkedLabel")}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void openUrl(docsUrl("packs")).catch(() => {})}
+          >
+            <InfoIcon size={15} />
+          </button>
+        )}
       </p>
 
       {official ? (
@@ -420,6 +443,7 @@ export function CommunityView({
           onClose={() => community.close()}
           using={s.using}
           onUse={(skin) => skin.sha256 && void community.use({ kind: "pack", id: viewing.pack.id, hash: viewing.pack.hash }, skin.sha256, skin.name)}
+          library={kept}
         />
       )}
 
@@ -430,7 +454,12 @@ export function CommunityView({
           license={s.collectionLicense}
           using={s.using === viewingSkin.sha256}
           blocked={s.using !== null && s.using !== viewingSkin.sha256}
+          kept={inLibrary(kept, viewingSkin.skin_id)}
           onUse={() => void community.use({ kind: "collection" }, viewingSkin.sha256, viewingSkin.name)}
+          onShow={() => {
+            community.closeSkin();
+            if (viewingSkin.skin_id) onShowSkin(viewingSkin.skin_id);
+          }}
           onClose={() => community.closeSkin()}
         />
       )}
@@ -451,7 +480,8 @@ export function CommunityView({
   );
 }
 
-/** One pack: its folders, who made it and its tags, and Add (or Update and Remove). */
+/** One pack: its folders, who made it and its tags, and Add (or Update and Remove). A pack not
+ *  added with some of its skins in the library says how many beside its name. */
 const PackCard = memo(function PackCard({
   pack,
   view,
@@ -459,6 +489,7 @@ const PackCard = memo(function PackCard({
   blocked,
   progress,
   tag,
+  have,
   onRemove,
 }: {
   pack: CommunityPack;
@@ -470,6 +501,8 @@ const PackCard = memo(function PackCard({
   progress: PackProgress | null;
   /** The tag the list is filtered by. */
   tag: string;
+  /** How many of its skins are in the library while it isn't. */
+  have: number;
   onRemove: (pack: CommunityPack) => void;
 }) {
   const t = useT();
@@ -490,7 +523,7 @@ const PackCard = memo(function PackCard({
       <div className="pack-meta">
         <div className="pack-title">
           <p className="pack-name">{pack.name}</p>
-          {pack.added && <OkBadge size={20} label={t("community.pack.added")} />}
+          {pack.added ? <OkBadge size={20} label={t("community.pack.added")} /> : have > 0 && <HaveChip have={have} total={pack.count} />}
         </div>
         <p className="pack-by">
           <Rich k="community.pack.by" vars={{ author: pack.author }} tags={{ a: (s) => <span className="pack-author">{s}</span> }} /> ·{" "}
@@ -623,13 +656,20 @@ function PackPlaceholder({ index, view }: { index: number; view: PackView }) {
   );
 }
 
-/** One official skin: the folder it makes and its name, which open it in the skin viewer. */
-const OfficialTile = memo(function OfficialTile({ skin }: { skin: CollectionSkin }) {
+/** One official skin: the folder it makes and its name, which open it in the skin viewer, and a
+ *  tick in the corner when it's in the library already. */
+const OfficialTile = memo(function OfficialTile({ skin, kept }: { skin: CollectionSkin; kept: boolean }) {
+  const t = useT();
   return (
     <div className="tile">
       <button type="button" className="tile-hit" onMouseDown={(e) => e.preventDefault()} onClick={() => community.openSkin(skin)}>
         <span className="tile-art">
           <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+          {kept && (
+            <span className="tile-kept">
+              <OkBadge size={20} label={t("community.inLibrary.label")} />
+            </span>
+          )}
         </span>
         <span className="tile-name" data-tip={skin.name} data-tip-overflow>
           <span className="tile-name-text">{skin.name}</span>

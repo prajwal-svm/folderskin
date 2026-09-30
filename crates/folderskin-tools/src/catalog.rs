@@ -1062,7 +1062,10 @@ mod tests {
         assert_eq!(fewer.head.collection, 1);
         assert_ne!(fewer.head.collection_manifest, manifest_path);
         assert!(c.out().join(tree::picture_path(&fox_sha, "png")).is_file());
-        assert!(c.out().join(&manifest_path).is_file(), "the list the old head names");
+        assert!(
+            c.out().join(&manifest_path).is_file(),
+            "the list the old head names"
+        );
         c.build().unwrap();
         assert!(!c.out().join(tree::picture_path(&fox_sha, "png")).exists());
         assert!(!c.out().join(tree::thumb_path(&fox_sha)).exists());

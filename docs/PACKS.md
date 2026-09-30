@@ -3,8 +3,9 @@
 Anyone can share skins with everyone who uses FolderSkin, for free. A shared set of skins is a
 **pack**, and one skin on its own is a pack of one. Packs live in their own repository,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community), under `packs/`, and
-adding one needs no account. FolderSkin ships no skins of its own: packs, your own pictures and AI
-results are where every skin comes from.
+adding one needs no account. FolderSkin ships no skins of its own: its [official
+collection](#the-official-collection), packs, your own pictures and AI results are where every
+skin comes from, and nothing is downloaded until you ask for it.
 
 ## Adding a pack
 
@@ -13,6 +14,13 @@ The first time FolderSkin opens, it offers packs to start your library with. Aft
 in your library, carrying the pack's tags, and each skin's ⋯ menu says which pack it came from and
 who shared it. **Remove** takes the whole pack out again. Folders that already use one of its
 skins keep their icon, because the icon lives in the folder itself.
+
+**Use**, on any one skin in a pack's viewer, takes just that skin: its picture alone is
+downloaded, checked and saved in your library, and picked, ready to apply. The pack isn't added,
+and its **Update** and **Remove** leave that skin alone. Add the pack later and the skin becomes
+part of it, saved once. A check mark shows which skins are in your library already: on each skin
+in a pack's viewer, and as "✓ 3/40" on the card and in the viewer of a pack you haven't added but
+have taken skins from.
 
 **Add from a folder** does the same for a pack folder on your computer, which is also how you try
 a pack out before sharing it.
@@ -492,6 +500,51 @@ there, so a pack that is renamed or removed can't leave a gap. The pull request 
 Packs workflow in folderskin-community rebuilds the index when a file in its `paths` changes, so
 both lists belong there beside `packs/**`, and so does `moved.json`.
 
+## The official collection
+
+Community opens on **Official**: skins made by FolderSkin that belong to no pack. The collection
+has no licence of each pack's choosing and no limit on how many skins it holds, so it grows over
+time. Every skin in it is under the licence the collection names (MIT, with credit to
+FolderSkin). Search it, sort it by newest or by name, and open a skin to see it large. **Use this
+skin** saves that one skin in your library and picks it, as **Use** does in a pack. A skin in
+your library already wears a check mark, and its button becomes **In library**, which picks it.
+Typing a search under **All** lists the official skins that match at the head of the matching
+skins.
+
+It lives in folderskin-community's `collection/`: the pictures, and `collection.json`, which lists
+them in order:
+
+```json
+{
+  "version": 1,
+  "license": "MIT",
+  "skins": [
+    { "file": "vibe-giraffe-cola.webp", "name": "Giraffe Cola", "tags": ["pop art"], "added": "2026-09-30" }
+  ]
+}
+```
+
+| field | rule |
+|---|---|
+| `license` | `CC0-1.0`, `CC-BY-4.0` or `MIT`, for every skin in the collection |
+| `file` | a picture in `collection/`, named as a pack's pictures are; every picture there is listed once, and no two are the same picture |
+| `name` | 1 to 60 characters |
+| `tags` | up to 3, as a pack skin's |
+| `added` | the day it joined, `YYYY-MM-DD` |
+
+Each picture follows [the rules for a pack's pictures](#pictures): lossless, at most 1.5 MB, 256
+to 1024 px on each side. There is no count or size limit beyond a sanity cap of 20,000 skins.
+
+Only the maintainer adds to it, with `folderskin-tools collection add`, which prepares each
+picture as `packs make` does (finished folders cut and given one shape, everything shrunk to
+1024 px lossless WebP), names it after its file and dates it today. `collection check` checks the
+whole collection; `packs check` includes it, and `packs catalog` refuses to publish while it has a
+problem. `packs catalog` publishes each picture and its thumbnail in `pictures/` and `thumbs/`
+beside the packs', lists the collection in a `collection` table of the catalog, and writes the
+whole list as `collection/<hash>.json` for the website. `head.json` says how many skins there are
+(`"collection"`), under what licence (`"collection_license"`) and where that list is
+(`"collection_manifest"`). FolderSkin 0.1.13 and older never read any of it.
+
 ## The install link
 
 `folderskin://install?pack=<id>` opens FolderSkin on pack `<id>` in Community and adds it,
@@ -501,11 +554,21 @@ GitHub again, FolderSkin says so and suggests searching for it. A pack already i
 is opened and said to be there. From 0.1.7, a link with an old id opens the pack it moved to
 ([moved.json](#movedjson)).
 
+The same link can name one skin instead of a whole pack, by the SHA-256 of its picture:
+`folderskin://install?skin=<sha256>` for a skin of the official collection, and
+`folderskin://install?skin=<sha256>&pack=<id>` for a skin of pack `<id>`. It opens that skin in
+Community (an official one on its own, a pack's in its pack, scrolled to it) and uses it, exactly
+as its **Use** button does: that one skin is saved to your library and picked, ready to apply, and
+the pack isn't added. A skin that isn't listed there any more is said to be gone. FolderSkin
+0.1.13 and older ignore these links.
+
 FolderSkin takes a link only when it is exactly that: the scheme `folderskin`, `install` as the
 host (`folderskin://install?…`) or the whole path (`folderskin:install?…`), no user, password or
-port, and exactly one `pack`, which has to be a pack id (lower-case letters and digits in words
-joined by single dashes, at most 40 characters). Any other parameter is passed over, and anything
-else is ignored.
+port, and at most one `pack` and at most one `skin`. A `pack` has to be a pack id (lower-case
+letters and digits in words joined by single dashes, at most 40 characters), and a `skin` has to
+be 64 lower-case hex digits. A link with a `skin` is only ever for that skin: one whose `skin`
+isn't right is ignored, never taken for its whole pack. Without a `skin`, it needs a `pack`. Any
+other parameter is passed over, and anything else is ignored.
 
 The installers register the scheme: the macOS app's `Info.plist`, the Windows installers, and
 the desktop entry of the Linux `.deb` and `.rpm`. An AppImage registers it as it starts, since
@@ -519,7 +582,7 @@ To try it:
 | macOS | Build the app (`pnpm tauri build --bundles app`) and open `target/release/bundle/macos/FolderSkin.app` once, which registers the scheme with macOS (a copy in `/Applications` is the surest), then `open 'folderskin://install?pack=classic-art'`. macOS sends links only to a bundled app, so `pnpm tauri dev` never receives one |
 | Windows | Install a build, or run `pnpm tauri dev` with `FOLDERSKIN_REGISTER_LINKS=1` set (only then does a development build register the scheme for itself), then `start "" "folderskin://install?pack=classic-art"` in a command prompt, or the same link in the Run box (Windows+R) |
 | Linux | Install the `.deb` or `.rpm`, start the AppImage once, or run `pnpm tauri dev` with `FOLDERSKIN_REGISTER_LINKS=1` set, then `xdg-open 'folderskin://install?pack=classic-art'` |
-| browser preview | `pnpm dev` and open `http://localhost:14200/?install=classic-art` |
+| browser preview | `pnpm dev` and open `http://localhost:14200/?install=classic-art`, or `?skin=<sha256>` (with `&pack=<id>` for a pack's skin) |
 
 Quit an installed FolderSkin before `pnpm tauri dev` on Windows or Linux: with one already
 running, the new one hands over to it and quits. A development build that registered the scheme
@@ -528,12 +591,16 @@ keeps it until an installer or another build registers it again.
 ## Install counts
 
 When a pack from Community has been added, FolderSkin tells its community service the pack's
-id: `POST https://community.folderskin.app/v1/packs/<id>/installs`, with no body. That is all it
-sends: no account, no device id, nothing about your library or your folders (like every request
-FolderSkin makes, it names the app's version in its User-Agent). It happens after the pack is
-saved, gives up after five seconds, and nothing waits for it or reports a failure. A development
-build, and one reading packs from another copy (`FOLDERSKIN_COMMUNITY_URL`), send nothing unless
-`FOLDERSKIN_COMMUNITY_API` names a service to send to.
+id: `POST https://community.folderskin.app/v1/packs/<id>/installs`, with no body. When one skin
+has been used on its own (**Use**), it tells it the SHA-256 of the skin's picture instead:
+`POST https://community.folderskin.app/v1/skins/<sha256>/downloads`, with `?pack=<id>` for a skin
+of a pack, again with no body. That is a count of its own: using a pack's skin never adds to the
+pack's installs. That is all it sends: no account, no device id, nothing about your library or
+your folders (like every request FolderSkin makes, it names the app's version in its User-Agent).
+It happens after the pack or skin is saved, gives up after five seconds, and nothing waits for it
+or reports a failure. A development build, and one reading packs from another copy
+(`FOLDERSKIN_COMMUNITY_URL`), send nothing unless `FOLDERSKIN_COMMUNITY_API` names a service to
+send to. The app never sends views: only folderskin.app counts those.
 
 The service counts an add once a day for each network and pack, and only for packs in the
 published `index.json`. An add under an old id counts for the pack it moved to, so apps from

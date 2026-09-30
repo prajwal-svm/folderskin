@@ -141,14 +141,16 @@ export function PackViewer({
       }
     >
       {(pack.official || pack.drives || pack.tags.length > 0 || have > 0 || usable) && (
-        <div className="pack-tags">
-          {pack.official && <OfficialBadge />}
-          {pack.drives && <DrivesBadge />}
-          {pack.tags.map((t) => (
-            <span key={t} className="tag-chip">
-              {t}
-            </span>
-          ))}
+        <div className="pack-viewer-top">
+          <div className="pack-tags">
+            {pack.official && <OfficialBadge />}
+            {pack.drives && <DrivesBadge />}
+            {pack.tags.map((t) => (
+              <span key={t} className="tag-chip">
+                {t}
+              </span>
+            ))}
+          </div>
           {(have > 0 || usable) && (
             <span className="pack-have">
               {have > 0 && <HaveChip have={have} total={pack.count} />}

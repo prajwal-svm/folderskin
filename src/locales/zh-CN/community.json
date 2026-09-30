@@ -81,9 +81,16 @@
   },
   "use": {
     "button": "使用这个皮肤",
-    "short": "使用",
     "label": "使用 {{name}}",
     "tip": "只把这个皮肤添加到你的皮肤库"
+  },
+  "inLibrary": {
+    "label": "已在你的皮肤库中",
+    "button": "已在皮肤库中",
+    "showTip": "在皮肤库中查看",
+    "have_other": "{{count}} 款中有 {{have}} 款已在你的皮肤库中",
+    "packInfo": "✓ 表示已在你的皮肤库中。“使用”只添加一款皮肤，“添加”则添加整个皮肤包并保持更新。",
+    "officialInfo": "✓ 表示已在你的皮肤库中。“使用”只添加一款皮肤。"
   },
   "progress": {
     "adding": "正在添加",
@@ -148,7 +155,9 @@
     "addFolderFailed": "无法添加这个皮肤包：{{reason}}",
     "used": "已将 {{name}} 添加到你的皮肤库",
     "usedAlready": "{{name}} 已经在你的皮肤库里了",
-    "useFailed": "无法添加 {{name}}：{{reason}}"
+    "useFailed": "无法添加 {{name}}：{{reason}}",
+    "noSuchSkin": "无法添加这款皮肤：它已不在社区中。请刷新后再试。",
+    "useLinkFailed": "无法添加这款皮肤：{{reason}}"
   },
   "searchIn": "在“{{tag}}”中搜索皮肤包",
   "searchInLabel": "在“{{tag}}”中搜索皮肤包",

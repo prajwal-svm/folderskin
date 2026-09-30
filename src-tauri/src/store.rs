@@ -2078,8 +2078,14 @@ mod tests {
         );
         assert_eq!(added[1].entry.pack.as_deref(), Some("blues"));
         assert!(added[1].fresh);
-        assert_eq!(added[2].entry, other, "used from another pack: left as it is");
-        assert_eq!(added[3].entry, imported, "not a community skin: left as it is");
+        assert_eq!(
+            added[2].entry, other,
+            "used from another pack: left as it is"
+        );
+        assert_eq!(
+            added[3].entry, imported,
+            "not a community skin: left as it is"
+        );
 
         // For good, and the pack is added with it.
         let reopened = Store::open(dir.clone());
@@ -2104,7 +2110,9 @@ mod tests {
         std::fs::create_dir(dir.join(INDEX_FILE)).unwrap();
         let mut red = pack_skin(&lone.id, "Lone");
         red.pack = Some("reds".into());
-        let err = store.add_many(vec![(red.clone(), folder())], &|| {}).unwrap_err();
+        let err = store
+            .add_many(vec![(red.clone(), folder())], &|| {})
+            .unwrap_err();
         assert!(err.starts_with("couldn't save those skins"), "{err}");
         assert_eq!(store.get(&lone.id).unwrap(), lone);
         std::fs::remove_dir(dir.join(INDEX_FILE)).unwrap();

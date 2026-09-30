@@ -87,9 +87,18 @@
   },
   "use": {
     "button": "Usar este aspecto",
-    "short": "Usar",
     "label": "usar {{name}}",
     "tip": "Añade solo este aspecto a tu biblioteca"
+  },
+  "inLibrary": {
+    "label": "En tu biblioteca",
+    "button": "En la biblioteca",
+    "showTip": "Verlo en tu biblioteca",
+    "have_one": "{{have}} de {{count}} aspecto en tu biblioteca",
+    "have_many": "{{have}} de {{count}} de aspectos en tu biblioteca",
+    "have_other": "{{have}} de {{count}} aspectos en tu biblioteca",
+    "packInfo": "✓ En tu biblioteca. Usar añade un solo aspecto, y Añadir añade el paquete entero y lo mantiene al día.",
+    "officialInfo": "✓ En tu biblioteca. Usar añade un solo aspecto."
   },
   "progress": {
     "adding": "Añadiendo",
@@ -174,7 +183,9 @@
     "addFolderFailed": "No se pudo añadir ese paquete: {{reason}}",
     "used": "Se añadió {{name}} a tu biblioteca",
     "usedAlready": "{{name}} ya está en tu biblioteca",
-    "useFailed": "No se pudo añadir {{name}}: {{reason}}"
+    "useFailed": "No se pudo añadir {{name}}: {{reason}}",
+    "noSuchSkin": "No se pudo añadir ese aspecto: ya no está en Comunidad. Recarga e inténtalo de nuevo.",
+    "useLinkFailed": "No se pudo añadir ese aspecto: {{reason}}"
   },
   "searchIn": "Buscar paquetes en {{tag}}",
   "searchInLabel": "buscar paquetes en {{tag}}",

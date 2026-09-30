@@ -313,8 +313,9 @@ export class MockCollection {
 export function fakeSha256(text: string): string {
   let out = "";
   for (let k = 0; k < 8; k++) {
-    let h = 0x811c9dc5 ^ k;
-    for (const ch of `${k}:${text}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
+    // The part's number after the text: before it, it cancels out of the hash's first step.
+    let h = 0x811c9dc5;
+    for (const ch of `${text}#${k}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
     out += (h >>> 0).toString(16).padStart(8, "0");
   }
   return out;

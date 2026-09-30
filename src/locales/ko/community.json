@@ -81,9 +81,16 @@
   },
   "use": {
     "button": "이 스킨 사용",
-    "short": "사용",
     "label": "{{name}} 사용",
     "tip": "이 스킨만 라이브러리에 추가해요"
+  },
+  "inLibrary": {
+    "label": "라이브러리에 있음",
+    "button": "라이브러리에 있음",
+    "showTip": "라이브러리에서 보기",
+    "have_other": "스킨 {{count}}개 중 {{have}}개가 라이브러리에 있어요",
+    "packInfo": "✓ 표시는 라이브러리에 있는 스킨이에요. '사용'은 스킨 하나만, '추가'는 팩 전체를 추가하고 최신으로 유지해요.",
+    "officialInfo": "✓ 표시는 라이브러리에 있는 스킨이에요. '사용'은 스킨 하나만 추가해요."
   },
   "progress": {
     "adding": "추가하는 중",
@@ -148,7 +155,9 @@
     "addFolderFailed": "그 팩을 추가하지 못했어요: {{reason}}",
     "used": "{{name}} 스킨을 라이브러리에 추가했어요",
     "usedAlready": "{{name}} 스킨은 이미 라이브러리에 있어요",
-    "useFailed": "{{name}} 스킨을 추가하지 못했어요: {{reason}}"
+    "useFailed": "{{name}} 스킨을 추가하지 못했어요: {{reason}}",
+    "noSuchSkin": "그 스킨을 추가하지 못했어요: 이제 커뮤니티에 없어요. 새로 고친 뒤 다시 해 보세요.",
+    "useLinkFailed": "그 스킨을 추가하지 못했어요: {{reason}}"
   },
   "searchIn": "'{{tag}}'에서 팩 검색",
   "searchInLabel": "'{{tag}}'에서 팩 검색",

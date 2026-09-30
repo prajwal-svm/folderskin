@@ -28,6 +28,7 @@ import {
   type CollectionSort,
   type CommunityPack,
   type CommunitySort,
+  type InstallLink,
   type PackProgress,
   type Skin,
   type SkinHit,
@@ -180,8 +181,8 @@ export class CommunityStore {
   private working: CommunityPack | null = null;
   /** Goes up with every pack marked, so an older answer about the library isn't laid over it. */
   private marked = 0;
-  /** The pack a folderskin://install link asked for, until there are handlers to add it with. */
-  private linked: string | null = null;
+  /** What a folderskin://install link asked for, until there are handlers to act on it with. */
+  private linked: InstallLink | null = null;
 
   constructor(private readonly delay = SEARCH_DELAY_MS) {}
 
@@ -205,17 +206,21 @@ export class CommunityStore {
   /**
    * A folderskin://install link, from an Install button on folderskin.app: the pack it names,
    * opened and added the way its Add button adds it, with the same progress and toasts. A pack in
-   * the library already is opened and said to be there. The first time, it waits for the view's
+   * the library already is opened and said to be there. From a Use in FolderSkin button, the link
+   * names one skin instead: it is opened (an official one on its own, a pack's in its pack, at that
+   * skin) and used the way its Use button uses it. The first time, it waits for the view's
    * handlers: a link can come before Community has ever been open.
    */
-  install(packId: string) {
-    this.linked = packId;
+  install(link: InstallLink) {
+    this.linked = link;
     if (this.handlers) void this.installLinked();
   }
 
   private async installLinked() {
-    const id = this.linked;
+    const link = this.linked;
     this.linked = null;
+    if (link?.skin) return this.useLinked(link.skin, link.pack);
+    const id = link?.pack;
     if (!id) return;
     let pack: CommunityPack | null;
     try {
@@ -235,6 +240,31 @@ export class CommunityStore {
       return;
     }
     await this.add(pack);
+  }
+
+  /** The skin a link names by its picture's SHA-256, in pack `packId` or, with none, official:
+   *  opened where it is listed, and used. */
+  private async useLinked(sha256: string, packId: string | null) {
+    const toast = (text: string) => this.handlers?.toast(text, { tone: "danger" });
+    try {
+      if (!packId) {
+        const skin = await api.communityCollectionSkin(sha256);
+        if (!skin) return toast(t("community.toast.noSuchSkin"));
+        this.showOfficial();
+        this.openSkin(skin);
+        return await this.use({ kind: "collection" }, sha256, skin.name);
+      }
+      const pack = await api.communityPack(packId);
+      if (!pack) return toast(t("community.toast.noSuchSkin"));
+      const skins = await api.packSkins(pack.id, pack.hash);
+      const at = skins.findIndex((s) => s.sha256 === sha256);
+      // Not in it any more: the pack is still worth a look.
+      this.open(pack, at < 0 ? null : at);
+      if (at < 0) return toast(t("community.toast.noSuchSkin"));
+      await this.use({ kind: "pack", id: pack.id, hash: pack.hash }, sha256, skins[at].name);
+    } catch (e) {
+      toast(t("community.toast.useLinkFailed", { reason: errorMessage(e) }));
+    }
   }
 
   /** Searches the first time the view opens; after that the answer is already here, and only

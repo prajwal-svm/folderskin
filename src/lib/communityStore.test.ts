@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CollectionPage, CollectionSkin, CollectionSort, CommunityPack, CommunityQuery, CommunitySearch, PackProgress, Skin, UseFrom } from "./tauri";
+import type { CollectionPage, CollectionSkin, CollectionSort, CommunityPack, CommunityQuery, CommunitySearch, InstallLink, PackProgress, PackSkinPreview, Skin, UseFrom } from "./tauri";
 
 /** Searches the store has sent, each answered when the test says. */
 const asked: { query: CommunityQuery; answer: (r: CommunitySearch) => void; fail: (e: unknown) => void }[] = [];
@@ -18,6 +18,9 @@ const addedIds: string[] = [];
 const skinAsks: { q: string; sort: CollectionSort; offset: number; limit: number; answer: (r: CollectionPage) => void; fail: (e: unknown) => void }[] = [];
 /** Skins taken on their own, each answered when the test says. */
 const uses: { from: UseFrom; sha256: string; answer: (skin: Skin) => void; fail: (e: unknown) => void }[] = [];
+/** What `community_collection_skin` answers for a SHA-256, and what `community_pack_skins` does for a pack id. */
+let officialBySha: Record<string, CollectionSkin> = {};
+let packSkinsOf: Record<string, PackSkinPreview[]> = {};
 
 vi.mock("./tauri", () => ({
   api: {
@@ -52,11 +55,16 @@ vi.mock("./tauri", () => ({
       new Promise<Skin>((answer, fail) => {
         uses.push({ from, sha256, answer, fail });
       }),
+    communityCollectionSkin: async (sha256: string) => officialBySha[sha256] ?? null,
+    packSkins: async (id: string) => packSkinsOf[id] ?? [],
   },
   errorMessage: (e: unknown) => String(e),
 }));
 
 const { CommunityStore, PAGE, SKIN_PAGE, collectionCountLine, countLine, progressLabel, progressShare } = await import("./communityStore");
+
+/** An install link for a whole pack. */
+const packLink = (id: string): InstallLink => ({ pack: id, skin: null });
 
 function pack(id: string): CommunityPack {
   return { id, name: id, author: "a", license: "CC0-1.0", tags: ["t"], count: 1, bytes: 0, hash: "", preview: "", added: false, update: false, official: false };
@@ -100,6 +108,8 @@ beforeEach(() => {
   addedIds.length = 0;
   skinAsks.length = 0;
   uses.length = 0;
+  officialBySha = {};
+  packSkinsOf = {};
 });
 afterEach(() => vi.useRealTimers());
 
@@ -273,7 +283,7 @@ describe("the Community store", () => {
     const toast = vi.fn();
     lookups = { colours: { ...pack("colours"), name: "Colours", official: true } };
     // Before Community has ever been open: it waits for the view's handlers.
-    store.install("colours");
+    store.install(packLink("colours"));
     await settle();
     expect(looked).toEqual([]);
     const heard: (string | null)[] = [];
@@ -302,11 +312,11 @@ describe("the Community store", () => {
       colours: { ...pack("colours"), name: "Colours", added: true },
       greek: { ...pack("greek"), name: "Greek Art", added: true, update: true },
     };
-    store.install("colours");
+    store.install(packLink("colours"));
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     expect(toast).toHaveBeenLastCalledWith("Colours is in your library already", expect.objectContaining({ tone: "ok" }));
     expect(store.get().viewing?.pack.id).toBe("colours");
-    store.install("greek");
+    store.install(packLink("greek"));
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
     expect(toast).toHaveBeenLastCalledWith(
       "Greek Art is in your library already, and Update gets its newer version",
@@ -319,7 +329,7 @@ describe("the Community store", () => {
     const store = new CommunityStore(0);
     const toast = vi.fn();
     store.bind(handlers({ toast }));
-    store.install("gone-pack");
+    store.install(packLink("gone-pack"));
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const [said, opts] = toast.mock.calls[0];
     expect(said).toBe("Couldn't add “gone-pack”: there's no pack by that name in Community. Search for it there, as it may have been renamed.");
@@ -327,11 +337,61 @@ describe("the Community store", () => {
     expect(opts).toEqual({ tone: "danger" });
 
     lookups = { colours: new Error("couldn't reach GitHub. Check your connection and try again") };
-    store.install("colours");
+    store.install(packLink("colours"));
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
     expect(toast).toHaveBeenLastCalledWith("Couldn't add “colours”: couldn't reach GitHub. Check your connection and try again", { tone: "danger" });
     expect(store.get().viewing).toBeNull();
     expect(addedIds).toEqual([]);
+  });
+
+  it("opens the official skin a link names on its own, and uses it as its Use button does", async () => {
+    const store = new CommunityStore(0);
+    const onUsed = vi.fn();
+    const toast = vi.fn();
+    const giraffe = officialSkin("Giraffe cola", 3);
+    officialBySha = { [giraffe.sha256]: giraffe };
+    store.install({ pack: null, skin: giraffe.sha256 });
+    await settle();
+    expect(uses).toEqual([]);
+    store.bind(handlers({ onUsed, toast }));
+    await vi.waitFor(() => expect(uses).toHaveLength(1));
+    expect(store.get().tab).toBe("official");
+    expect(store.get().viewingSkin).toEqual(giraffe);
+    expect(uses[0].from).toEqual({ kind: "collection" });
+    expect(store.get().using).toBe(giraffe.sha256);
+    uses[0].answer({ id: "user:1", name: "Giraffe cola", collection: "yours", thumbnail: "", custom: true, tags: [] });
+    await vi.waitFor(() => expect(onUsed).toHaveBeenCalledOnce());
+    expect(addedIds).toEqual([]);
+
+    // One the collection doesn't list: said so, and nothing is used.
+    store.install({ pack: null, skin: "f".repeat(64) });
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledOnce());
+    expect(toast.mock.calls[0][1]).toEqual({ tone: "danger" });
+    expect(uses).toHaveLength(1);
+  });
+
+  it("opens a pack's skin a link names in its pack, at that skin, and uses it without adding the pack", async () => {
+    const store = new CommunityStore(0);
+    const toast = vi.fn();
+    store.bind(handlers({ toast }));
+    const sha = "a".repeat(64);
+    lookups = { colours: { ...pack("colours"), hash: "h1", count: 3 } };
+    packSkinsOf = {
+      colours: ["b", "a", "c"].map((c) => ({ name: `Skin ${c}`, tags: [], thumbnail: "", sha256: c.repeat(64), ext: "webp", skin_id: null })),
+    };
+    store.install({ pack: "colours", skin: sha });
+    await vi.waitFor(() => expect(uses).toHaveLength(1));
+    expect(store.get().viewing).toEqual({ pack: lookups.colours, focus: 1 });
+    expect(uses[0]).toMatchObject({ from: { kind: "pack", id: "colours", hash: "h1" }, sha256: sha });
+    expect(addedIds).toEqual([]);
+
+    // Not in the pack any more: the pack is opened, and it's said.
+    uses[0].answer({ id: "user:1", name: "Skin a", collection: "yours", thumbnail: "", custom: true, tags: [] });
+    await settle();
+    store.install({ pack: "colours", skin: "d".repeat(64) });
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledOnce());
+    expect(store.get().viewing).toEqual({ pack: lookups.colours, focus: null });
+    expect(uses).toHaveLength(1);
   });
 
   it("says how far adding has got", () => {

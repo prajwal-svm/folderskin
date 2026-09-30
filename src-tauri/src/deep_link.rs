@@ -249,7 +249,10 @@ mod tests {
         };
         for (link, wanted) in [
             (format!("folderskin://install?skin={sha}"), &official),
-            (format!("folderskin:install?skin={sha}&from=gallery"), &official),
+            (
+                format!("folderskin:install?skin={sha}&from=gallery"),
+                &official,
+            ),
             (
                 format!("folderskin://install?skin={sha}&pack=classic-art"),
                 &of_pack,
@@ -265,7 +268,7 @@ mod tests {
         for link in [
             format!("folderskin://install?skin={}", sha.to_uppercase()),
             format!("folderskin://install?skin={}&pack=classic-art", &sha[1..]),
-            format!("folderskin://install?skin=&pack=classic-art"),
+            "folderskin://install?skin=&pack=classic-art".to_string(),
             format!("folderskin://install?skin={sha}0&pack=classic-art"),
             format!("folderskin://install?skin=../{}", &sha[3..]),
             format!("folderskin://install?skin={sha}&skin={sha}"),

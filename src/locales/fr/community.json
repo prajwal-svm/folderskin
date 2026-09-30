@@ -87,9 +87,18 @@
   },
   "use": {
     "button": "Utiliser cet habillage",
-    "short": "Utiliser",
     "label": "utiliser {{name}}",
     "tip": "Ajouter seulement cet habillage à votre bibliothèque"
+  },
+  "inLibrary": {
+    "label": "Dans votre bibliothèque",
+    "button": "Dans la bibliothèque",
+    "showTip": "Le voir dans votre bibliothèque",
+    "have_one": "{{have}} sur {{count}} habillage dans votre bibliothèque",
+    "have_many": "{{have}} sur {{count}} d'habillages dans votre bibliothèque",
+    "have_other": "{{have}} sur {{count}} habillages dans votre bibliothèque",
+    "packInfo": "✓ Dans votre bibliothèque. Utiliser ajoute un seul habillage, et Ajouter ajoute tout le pack et le tient à jour.",
+    "officialInfo": "✓ Dans votre bibliothèque. Utiliser ajoute un seul habillage."
   },
   "progress": {
     "adding": "Ajout",
@@ -174,7 +183,9 @@
     "addFolderFailed": "Impossible d'ajouter ce pack : {{reason}}",
     "used": "{{name}} ajouté à votre bibliothèque",
     "usedAlready": "{{name}} est déjà dans votre bibliothèque",
-    "useFailed": "Impossible d'ajouter {{name}} : {{reason}}"
+    "useFailed": "Impossible d'ajouter {{name}} : {{reason}}",
+    "noSuchSkin": "Impossible d'ajouter cet habillage : il n'est plus dans la Communauté. Actualisez et réessayez.",
+    "useLinkFailed": "Impossible d'ajouter cet habillage : {{reason}}"
   },
   "searchIn": "Rechercher des packs dans {{tag}}",
   "searchInLabel": "rechercher des packs dans {{tag}}",

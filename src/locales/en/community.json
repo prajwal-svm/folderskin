@@ -84,9 +84,17 @@
   },
   "use": {
     "button": "Use this skin",
-    "short": "Use",
     "label": "use {{name}}",
     "tip": "Add just this skin to your library"
+  },
+  "inLibrary": {
+    "label": "In your library",
+    "button": "In library",
+    "showTip": "Show it in your library",
+    "have_one": "{{have}} of {{count}} skin in your library",
+    "have_other": "{{have}} of {{count}} skins in your library",
+    "packInfo": "✓ In your library. Use takes one skin, and Add takes the whole pack and keeps it up to date.",
+    "officialInfo": "✓ In your library. Use adds just that skin."
   },
   "progress": {
     "adding": "Adding",
@@ -161,7 +169,9 @@
     "addFolderFailed": "Couldn't add that pack: {{reason}}",
     "used": "Added {{name}} to your library",
     "usedAlready": "{{name}} is in your library already",
-    "useFailed": "Couldn't add {{name}}: {{reason}}"
+    "useFailed": "Couldn't add {{name}}: {{reason}}",
+    "noSuchSkin": "Couldn't add that skin: it isn't in Community any more. Refresh and try again.",
+    "useLinkFailed": "Couldn't add that skin: {{reason}}"
   },
   "searchIn": "Search packs in {{tag}}",
   "searchInLabel": "search packs in {{tag}}",

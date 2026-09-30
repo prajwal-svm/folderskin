@@ -175,6 +175,9 @@ describe("the preview's official collection follows the app's", () => {
 
   it("finds a skin by its picture's SHA-256", () => {
     expect(collection.find(fakeSha256("Koi"))?.name).toBe("Koi");
+    // 64 hex digits in eight parts that differ, so its first twelve (a skin's id) do too.
+    expect(fakeSha256("Koi")).toMatch(/^[0-9a-f]{64}$/);
+    expect(new Set(fakeSha256("Koi").match(/.{8}/g)).size).toBe(8);
     expect(collection.find("nope")).toBeUndefined();
   });
 });
