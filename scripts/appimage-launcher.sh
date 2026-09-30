@@ -12,9 +12,12 @@
 # the ARM64 one happens not to.
 #
 # `seed` puts the same launcher in the bundler's cache with mode 755 first. The bundler downloads
-# it only when it's missing, so it copies that one in. `check` opens each AppImage and fails when a
-# file in it isn't readable by everyone, or is runnable by its owner but not by everyone, so a
-# Tauri that keeps its launcher somewhere else fails the build instead of shipping.
+# it only when it's missing, so it copies that one in. `check` lists the modes stored in each
+# AppImage and fails when a file in it isn't readable by everyone, or is runnable by its owner but
+# not by everyone, or a folder isn't open to everyone, so a Tauri that keeps its launcher
+# somewhere else fails the build instead of shipping. It reads the image with unsquashfs
+# (squashfs-tools) rather than unpacking it: the AppImage runtime's --appimage-extract makes every
+# folder it unpacks owner-only (since late September 2026), whatever the image stores.
 set -euo pipefail
 
 # Where tauri-bundler's AppImage tools live when bundle.useLocalToolsDir is off:
@@ -31,8 +34,9 @@ seed() {
 }
 
 check() {
-  local appimage name path work bad status=0
+  local appimage name path offset listing bad status=0
   (($#)) || { echo "check: name the AppImages to check" >&2; return 2; }
+  command -v unsquashfs >/dev/null || { echo "::error::check needs unsquashfs (squashfs-tools)" >&2; return 2; }
   for appimage in "$@"; do
     name="$(basename "$appimage")"
     if [ ! -f "$appimage" ]; then
@@ -40,16 +44,19 @@ check() {
       status=1
       continue
     fi
-    # Resolved here: the AppImage unpacks into the folder it's started from, so it runs from $work.
     path="$(realpath "$appimage")"
-    work="$(mktemp -d)"
-    (cd "$work" && "$path" --appimage-extract >/dev/null)
-    # Files everyone can read, and run whenever their owner can; folders everyone can open.
-    bad="$(cd "$work/squashfs-root" && find . \
-      \( -type f \( ! -perm -o+r -o \( -perm -u+x ! -perm -o+x \) \) \) \
-      -o \( -type d ! -perm -o+rx \) | sort | xargs -r -d '\n' ls -ld)"
-    rm -rf "$work"
-    if [ -n "$bad" ]; then
+    # Where the image starts, past the runtime; the runtime says so itself.
+    offset="$("$path" --appimage-offset)"
+    listing="$(unsquashfs -lln -o "$offset" "$path")"
+    # Files everyone can read, and run whenever their owner can; folders everyone can open. Links
+    # carry no modes of their own.
+    bad="$(printf '%s\n' "$listing" | awk '
+      $1 ~ /^-/ && (substr($1, 8, 1) != "r" || (substr($1, 4, 1) ~ /[xs]/ && substr($1, 10, 1) !~ /[xt]/)) { print; next }
+      $1 ~ /^d/ && (substr($1, 8, 1) != "r" || substr($1, 10, 1) !~ /[xt]/) { print }')"
+    if [ -z "$(printf '%s\n' "$listing" | grep -m1 ' squashfs-root/AppRun$')" ]; then
+      echo "::error::$name: couldn't list what's in it"
+      status=1
+    elif [ -n "$bad" ]; then
       echo "::error::$name: files only their owner or group can use; mounted by root and started by anyone else, the app won't open"
       printf '%s\n' "$bad"
       status=1

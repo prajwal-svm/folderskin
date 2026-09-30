@@ -140,6 +140,7 @@ jobs:
             file \
             libxdo-dev \
             libssl-dev \
+            squashfs-tools \
             libayatana-appindicator3-dev \
             librsvg2-dev
 
@@ -310,6 +311,7 @@ jobs:
             file \
             libxdo-dev \
             libssl-dev \
+            squashfs-tools \
             libayatana-appindicator3-dev \
             librsvg2-dev
 
