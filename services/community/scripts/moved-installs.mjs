@@ -7,7 +7,8 @@
  *
  * Each old id's count is added to its new id's (summed when both have one) and the old row is
  * deleted; today's once-a-network records move too, so an add under the old id and one under the
- * new still count once today. Running it a second time changes nothing, so a run that stops
+ * new still count once today. The pack's views and its daily counts of installs and views
+ * (src/counts.ts) move the same way. Running it a second time changes nothing, so a run that stops
  * halfway can simply be run again. From the moment index.json lists a rename, the service counts
  * an add under the old id toward the new one by itself (src/installs.ts); this is for the counts
  * from before.
@@ -58,6 +59,13 @@ export function movedInstallsSql(file) {
       // A network that added the pack under both ids today is counted once, as it would have been.
       `UPDATE OR IGNORE installs_seen SET pack = '${to}' WHERE pack = '${from}';`,
       `DELETE FROM installs_seen WHERE pack = '${from}';`,
+      // Its views, and each day's installs and views, which the website's week is summed from.
+      `INSERT INTO counts_total (kind, target, n) SELECT kind, '${to}', n FROM counts_total WHERE kind = 'pack_view' AND target = '${from}' AND n > 0 ON CONFLICT (kind, target) DO UPDATE SET n = n + excluded.n;`,
+      `DELETE FROM counts_total WHERE kind = 'pack_view' AND target = '${from}';`,
+      `INSERT INTO counts_daily (kind, target, day, n) SELECT kind, '${to}', day, n FROM counts_daily WHERE kind IN ('install', 'pack_view') AND target = '${from}' AND n > 0 ON CONFLICT (day, kind, target) DO UPDATE SET n = n + excluded.n;`,
+      `DELETE FROM counts_daily WHERE kind IN ('install', 'pack_view') AND target = '${from}';`,
+      `UPDATE OR IGNORE counts_seen SET target = '${to}' WHERE kind = 'pack_view' AND target = '${from}';`,
+      `DELETE FROM counts_seen WHERE kind = 'pack_view' AND target = '${from}';`,
     );
   }
   return `${lines.join("\n")}\n`;

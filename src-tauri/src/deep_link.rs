@@ -1,4 +1,6 @@
-//! `folderskin://install?pack=<id>` links: the Install buttons on folderskin.app's gallery.
+//! `folderskin://install?pack=<id>` links: the Install buttons on folderskin.app's gallery. And
+//! `folderskin://install?skin=<sha256>` (an official skin) or `…?skin=<sha256>&pack=<id>` (a skin of
+//! a pack): its "Use in FolderSkin" buttons, which take that one skin.
 //!
 //! The scheme is in tauri.conf.json (`plugins > deep-link`), and the bundles register it with the
 //! system: the macOS app's Info.plist, the Windows installers, and the desktop entry of the Linux
@@ -13,14 +15,17 @@
 //!   single-instance plugin (lib.rs) hands the link to it and ends the new one.
 //!
 //! A link FolderSkin was started with is there as it sets up (`get_current`); later ones come as
-//! events (`on_open_url`). Every one goes through [`install_pack`], which takes nothing but an
-//! install link that names a pack id. A good one brings the window forward and waits in
-//! [`InstallLinks`] until the webview takes it with `install_link_take`. The webview asks as it
-//! starts, since a link can come before it has (or during the first-launch welcome, which it
-//! waits out), and again whenever [`EVENT`] says another has come. It opens Community on that
-//! pack and adds it the way the pack's Add button does. A link with an id the pack had before it
-//! moved still finds it: `community_pack` follows head.json's `moved` (community.rs).
+//! events (`on_open_url`). Every one goes through [`install_link`], which takes nothing but an
+//! install link that names a pack id, or a skin's SHA-256 and perhaps its pack's id. A good one
+//! brings the window forward and waits in [`InstallLinks`] until the webview takes it with
+//! `install_link_take`. The webview asks as it starts, since a link can come before it has (or
+//! during the first-launch welcome, which it waits out), and again whenever [`EVENT`] says another
+//! has come. For a pack, it opens Community on that pack and adds it the way the pack's Add button
+//! does; for a skin, it opens the skin (in its pack, for a pack's) and uses it the way its Use
+//! button does. A link with an id the pack had before it moved still finds it: `community_pack`
+//! follows head.json's `moved` (community.rs), and so does using a pack's skin.
 
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
@@ -31,16 +36,28 @@ pub const EVENT: &str = "install-link";
 /// The longest link read at all. An install link is a small fraction of it.
 const MAX_LINK: usize = 512;
 
-/// The pack id in a `folderskin://install?pack=<id>` link, or `None` for anything else.
+/// What an install link asks for: a pack to add (`pack` alone), or one skin to use (`skin`, with
+/// the pack it is in, or no pack for an official skin).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct InstallLink {
+    pub pack: Option<String>,
+    /// The SHA-256 of the skin's picture, in lower-case hex.
+    pub skin: Option<String>,
+}
+
+/// What a `folderskin://install?pack=<id>` link, or a `folderskin://install?skin=<sha256>` one
+/// with or without `&pack=<id>`, asks for; `None` for anything else.
 ///
 /// The scheme has to be `folderskin`, and the link has to say `install`: as its host
 /// (`folderskin://install?pack=…`, the way the website writes it, with or without a `/` after it)
 /// or as its whole path (`folderskin:install?pack=…`). It may have no user, password or port. It
-/// needs exactly one `pack`, and that has to be a pack id as `folderskin_core::pack::is_pack_id`
-/// has it: lower-case letters and digits in words joined by single dashes, at most 40
-/// characters. Other parameters are passed over, so the website can add one later without the
-/// apps already installed turning its links down.
-pub fn install_pack(link: &str) -> Option<String> {
+/// may name at most one `pack` and at most one `skin`. A pack has to be a pack id as
+/// `folderskin_core::pack::is_pack_id` has it: lower-case letters and digits in words joined by
+/// single dashes, at most 40 characters. A skin has to be a SHA-256, 64 lower-case hex digits.
+/// With a skin, the link is for that skin alone, never its whole pack: a skin that isn't right
+/// turns the whole link down. Without one, it needs a pack. Other parameters are passed over, so
+/// the website can add one later without the apps already installed turning its links down.
+pub fn install_link(link: &str) -> Option<InstallLink> {
     let link = link.trim();
     if link.len() > MAX_LINK {
         return None;
@@ -61,42 +78,63 @@ pub fn install_pack(link: &str) -> Option<String> {
     if !install {
         return None;
     }
-    let mut packs = url
-        .query_pairs()
-        .filter(|(key, _)| key == "pack")
-        .map(|(_, value)| value.into_owned());
-    match (packs.next(), packs.next()) {
-        (Some(pack), None) if folderskin_core::pack::is_pack_id(&pack) => Some(pack),
-        _ => None,
+    // At most one of each: `Err` for two.
+    let one = |name: &str| -> Result<Option<String>, ()> {
+        let mut values = url
+            .query_pairs()
+            .filter(|(key, _)| key == name)
+            .map(|(_, value)| value.into_owned());
+        match (values.next(), values.next()) {
+            (value, None) => Ok(value),
+            _ => Err(()),
+        }
+    };
+    let (pack, skin) = (one("pack").ok()?, one("skin").ok()?);
+    if pack
+        .as_deref()
+        .is_some_and(|id| !folderskin_core::pack::is_pack_id(id))
+    {
+        return None;
+    }
+    match skin {
+        Some(sha) if folderskin_catalog::tree::is_hex(&sha, 64) => Some(InstallLink {
+            pack,
+            skin: Some(sha),
+        }),
+        Some(_) => None,
+        None => pack.map(|pack| InstallLink {
+            pack: Some(pack),
+            skin: None,
+        }),
     }
 }
 
-/// The pack the newest good link asked for, until the webview takes it. Only the newest is kept:
+/// What the newest good link asked for, until the webview takes it. Only the newest is kept:
 /// packs are added one at a time, and a link that comes before the webview has taken the one
 /// before it stands for what was clicked last.
 #[derive(Default)]
-pub struct InstallLinks(Mutex<Option<String>>);
+pub struct InstallLinks(Mutex<Option<InstallLink>>);
 
 impl InstallLinks {
-    fn put(&self, pack: String) {
-        *self.lock() = Some(pack);
+    fn put(&self, link: InstallLink) {
+        *self.lock() = Some(link);
     }
 
-    fn take(&self) -> Option<String> {
+    fn take(&self) -> Option<InstallLink> {
         self.lock().take()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<String>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<InstallLink>> {
         self.0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
-/// The pack a `folderskin://install` link asked for, once: `None` when none is waiting, or the
-/// one that was has been taken.
+/// What a `folderskin://install` link asked for, once: `None` when none is waiting, or the one
+/// that was has been taken.
 #[tauri::command]
-pub fn install_link_take(links: State<'_, InstallLinks>) -> Option<String> {
+pub fn install_link_take(links: State<'_, InstallLinks>) -> Option<InstallLink> {
     links.take()
 }
 
@@ -117,10 +155,10 @@ pub fn watch(app: &tauri::App) {
 /// The links the system handed over. The last good one waits for the webview, which is told, and
 /// the window comes to the front; anything else is ignored.
 fn arrived<R: Runtime>(app: &AppHandle<R>, links: impl IntoIterator<Item = String>) {
-    let Some(pack) = links.into_iter().filter_map(|l| install_pack(&l)).last() else {
+    let Some(link) = links.into_iter().filter_map(|l| install_link(&l)).last() else {
         return;
     };
-    app.state::<InstallLinks>().put(pack);
+    app.state::<InstallLinks>().put(link);
     bring_forward(app);
     let _ = app.emit(EVENT, ());
 }
@@ -165,6 +203,13 @@ fn register_scheme(_app: &tauri::App) {}
 mod tests {
     use super::*;
 
+    /// The pack a link asks to add, when it asks for a whole pack.
+    fn install_pack(link: &str) -> Option<String> {
+        install_link(link)
+            .filter(|l| l.skin.is_none())
+            .and_then(|l| l.pack)
+    }
+
     #[test]
     fn an_install_link_gives_its_pack() {
         for link in [
@@ -189,6 +234,48 @@ mod tests {
             install_pack(&format!("folderskin://install?pack={longest}")),
             Some(longest)
         );
+    }
+
+    #[test]
+    fn a_skin_link_gives_its_skin_and_its_pack_if_it_names_one() {
+        let sha = "0123456789abcdef".repeat(4);
+        let official = InstallLink {
+            pack: None,
+            skin: Some(sha.clone()),
+        };
+        let of_pack = InstallLink {
+            pack: Some("classic-art".into()),
+            skin: Some(sha.clone()),
+        };
+        for (link, wanted) in [
+            (format!("folderskin://install?skin={sha}"), &official),
+            (format!("folderskin:install?skin={sha}&from=gallery"), &official),
+            (
+                format!("folderskin://install?skin={sha}&pack=classic-art"),
+                &of_pack,
+            ),
+            (
+                format!("folderskin://install/?pack=classic-art&skin={sha}"),
+                &of_pack,
+            ),
+        ] {
+            assert_eq!(install_link(&link).as_ref(), Some(wanted), "{link}");
+        }
+        // With a skin that isn't right, it's never taken for the whole pack.
+        for link in [
+            format!("folderskin://install?skin={}", sha.to_uppercase()),
+            format!("folderskin://install?skin={}&pack=classic-art", &sha[1..]),
+            format!("folderskin://install?skin=&pack=classic-art"),
+            format!("folderskin://install?skin={sha}0&pack=classic-art"),
+            format!("folderskin://install?skin=../{}", &sha[3..]),
+            format!("folderskin://install?skin={sha}&skin={sha}"),
+            format!("folderskin://install?skin={sha}&pack=Classic-Art"),
+            format!("folderskin://install?skin={sha}&pack=classic-art&pack=colours"),
+            format!("folderskins://install?skin={sha}"),
+            format!("folderskin://open?skin={sha}"),
+        ] {
+            assert_eq!(install_link(&link), None, "{link}");
+        }
     }
 
     #[test]
@@ -264,7 +351,7 @@ mod tests {
                 },
             )
             .unwrap()
-            .deserialize::<Option<String>>()
+            .deserialize::<Option<InstallLink>>()
             .unwrap()
         };
 
@@ -285,7 +372,28 @@ mod tests {
             ],
         );
         assert_eq!(told.load(Ordering::SeqCst), 1);
-        assert_eq!(take().as_deref(), Some("classic-art"));
+        assert_eq!(
+            take(),
+            Some(InstallLink {
+                pack: Some("classic-art".into()),
+                skin: None
+            })
+        );
         assert_eq!(take(), None, "taken once");
+
+        // A skin's link waits the same way, and says which skin.
+        let sha = "ab".repeat(32);
+        arrived(
+            app.handle(),
+            [format!("folderskin://install?skin={sha}&pack=colours")],
+        );
+        assert_eq!(told.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            take(),
+            Some(InstallLink {
+                pack: Some("colours".into()),
+                skin: Some(sha)
+            })
+        );
     }
 }

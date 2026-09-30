@@ -1,10 +1,11 @@
 /**
  * The community catalog for the browser preview: made-up packs in any number (`?packs=10000`),
- * and a search over them that follows the app's (crates/folderskin-catalog/src/search.rs) rule
- * for rule, so the preview and the end-to-end tests see what the app would. Nothing here runs in
- * the app, and nothing runs at all until the preview first asks for packs.
+ * made-up official skins (`?collection=600`), and a search over them that follows the app's
+ * (crates/folderskin-catalog/src/search.rs) rule for rule, so the preview and the end-to-end tests
+ * see what the app would. Nothing here runs in the app, and nothing runs at all until the preview
+ * first asks for packs.
  */
-import type { CommunitySort } from "./tauri";
+import type { CollectionSort, CommunitySort } from "./tauri";
 
 /** A pack as the preview's catalog holds it. */
 export type MockPack = {
@@ -244,6 +245,111 @@ export function madeUpPacks(n: number, previews: string[], seed = 20260923): Moc
       added: now - next(3 * 365 * 24 * 3600),
       skins,
       preview: previews[i % previews.length],
+    };
+  });
+}
+
+// ---------- the official collection ----------
+
+/** One official skin as the preview's catalog holds it. */
+export type MockOfficialSkin = {
+  name: string;
+  tags: string[];
+  sha256: string;
+  ext: string;
+  bytes: number;
+  /** When it joined the collection, in Unix seconds. */
+  added: number;
+  thumbnail: string;
+};
+
+export type MockCollectionQuery = { q: string; sort: CollectionSort; offset: number; limit: number };
+
+/** Official skins a search of the packs brings along, as the app's `Results::collection` does. */
+export const COLLECTION_HITS = 24;
+
+/** One official skin's words, and its place in collection.json (from 1), which ties fall back to. */
+type IndexedSkin = { skin: MockOfficialSkin; n: number; words: string[]; sortName: string };
+
+/**
+ * The official collection: skins that aren't in a pack, searched by name and tag the way the
+ * packs are (every word typed the start of one of the skin's), newest first or A to Z.
+ */
+export class MockCollection {
+  private indexed: IndexedSkin[];
+
+  constructor(skins: MockOfficialSkin[]) {
+    this.indexed = skins.map((skin, i) => ({ skin, n: i + 1, words: [...words(skin.name), ...skin.tags.flatMap(words)], sortName: words(skin.name).join(" ") }));
+  }
+
+  get size(): number {
+    return this.indexed.length;
+  }
+
+  find(sha256: string): MockOfficialSkin | undefined {
+    return this.indexed.find((i) => i.skin.sha256 === sha256)?.skin;
+  }
+
+  search({ q, sort, offset, limit }: MockCollectionQuery): { total: number; items: MockOfficialSkin[] } {
+    const typed = words(q).slice(0, MAX_WORDS);
+    const page = Math.min(Math.max(limit, 1), MAX_PAGE);
+    const found = this.indexed.filter((i) => typed.every((w) => i.words.some((x) => x.startsWith(w))));
+    // The latest additions lead; a day's additions, the last listed first.
+    const ordered =
+      sort === "name"
+        ? found.sort((a, b) => (a.sortName < b.sortName ? -1 : a.sortName > b.sortName ? 1 : a.n - b.n))
+        : found.sort((a, b) => b.skin.added - a.skin.added || b.n - a.n);
+    return { total: ordered.length, items: ordered.slice(offset, offset + page).map((i) => i.skin) };
+  }
+
+  /** The few official skins a search of the packs brings along: none with nothing typed. */
+  hits(q: string): MockOfficialSkin[] {
+    if (words(q).length === 0) return [];
+    return this.search({ q, sort: "newest", offset: 0, limit: COLLECTION_HITS }).items;
+  }
+}
+
+/** A made-up SHA-256 that is always the same for the same text: 64 hex digits, from FNV-1a eight ways. */
+export function fakeSha256(text: string): string {
+  let out = "";
+  for (let k = 0; k < 8; k++) {
+    let h = 0x811c9dc5 ^ k;
+    for (const ch of `${k}:${text}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
+    out += (h >>> 0).toString(16).padStart(8, "0");
+  }
+  return out;
+}
+
+const SUBJECTS = [
+  "Giraffe", "Astronaut", "Lighthouse", "Tiger", "Octopus", "Hummingbird", "Cactus", "Robot", "Whale", "Fox",
+  "Panda", "Volcano", "Sunflower", "Jellyfish", "Samurai", "Flamingo", "Rocket", "Teapot", "Bonsai", "Tortoise",
+];
+const SCENES = ["cola", "at dusk", "in neon", "on paper", "in gold", "in the rain", "dreaming", "at sea", "in bloom", "after dark"];
+const OFFICIAL_TAGS = ["pop art", "anime", "retro", "nature", "space", "animals", "minimal", "neon", "vintage", "painting"];
+
+/**
+ * `n` made-up official skins, in the order collection.json would list them: a subject and a
+ * scene for a name ("Giraffe cola"), up to three tags, and a date over the past year, several on
+ * the same day as a batch would be. `pictures` are real ones to borrow, one per skin in turn.
+ */
+export function madeUpCollection(n: number, pictures: string[], seed = 20260930): MockOfficialSkin[] {
+  const next = random(seed);
+  const today = 1_790_000_000 - (1_790_000_000 % 86_400);
+  const named = new Map<string, number>();
+  return Array.from({ length: n }, (_, i) => {
+    const base = `${SUBJECTS[next(SUBJECTS.length)]} ${SCENES[next(SCENES.length)]}`;
+    const seen = (named.get(base) ?? 0) + 1;
+    named.set(base, seen);
+    const tags = [...new Set(Array.from({ length: next(4) }, () => OFFICIAL_TAGS[next(OFFICIAL_TAGS.length)]))];
+    return {
+      name: seen === 1 ? base : `${base} ${seen}`,
+      tags,
+      sha256: fakeSha256(`official:${i}`),
+      ext: "webp",
+      bytes: 240_000 + next(1_200_000),
+      // Later in collection.json is added later: a batch every few days, going back a year.
+      added: today - Math.floor(((n - 1 - i) / 6) * 3) * 86_400,
+      thumbnail: pictures[i % pictures.length],
     };
   });
 }

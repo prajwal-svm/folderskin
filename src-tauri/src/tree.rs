@@ -1034,6 +1034,7 @@ pub(crate) mod tests {
                 author: None,
                 license: None,
                 pack_hash: None,
+                from_pack: None,
                 base: None,
                 recipe: None,
             };

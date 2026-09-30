@@ -1,6 +1,7 @@
 /**
  * FolderSkin's community service: sharing a pack without a GitHub account, and counting how often
- * each community pack is added (installs.ts), for folderskin.app's gallery.
+ * each community pack is added (installs.ts), each skin downloaded on its own and each pack and
+ * skin viewed (counts.ts), for folderskin.app's gallery.
  *
  * The app verifies the computer once (a Turnstile check in the browser, bound to the computer's
  * Ed25519 key), then sends packs here, signed with that key. Every pack waits in a private bucket
@@ -16,6 +17,7 @@
 import * as account from "./account";
 import * as admin from "./admin";
 import { now } from "./bytes";
+import * as counts from "./counts";
 import { daily } from "./daily";
 import type { Env } from "./env";
 import { errorResponse, fail, html, HttpError } from "./http";
@@ -51,6 +53,12 @@ const ROUTES: Route[] = [
   ["GET", /^\/v1\/packs\/installs$/, (req, env) => installs.counts(req, env)],
   ["OPTIONS", /^\/v1\/packs\/installs$/, (req) => installs.preflight(req)],
   ["POST", /^\/v1\/packs\/([^/]{1,100})\/installs$/, (req, env, _, [id]) => installs.count(req, env, id)],
+  ["POST", /^\/v1\/skins\/([^/]{1,100})\/downloads$/, (req, env, _, [sha]) => counts.download(req, env, sha)],
+  ["OPTIONS", /^\/v1\/skins\/([^/]{1,100})\/downloads$/, (req) => counts.preflight(req, "POST, OPTIONS")],
+  ["POST", /^\/v1\/views$/, (req, env) => counts.view(req, env)],
+  ["OPTIONS", /^\/v1\/views$/, (req) => counts.preflight(req, "POST, OPTIONS")],
+  ["GET", /^\/v1\/stats$/, (req, env) => counts.stats(req, env)],
+  ["OPTIONS", /^\/v1\/stats$/, (req) => counts.preflight(req, "GET, OPTIONS")],
 
   ["GET", /^\/v1\/admin\/queue$/, (req, env) => admin.queue(req, env)],
   ["GET", new RegExp(`^/v1/admin/submissions/${ID}$`), (req, env, _, [id]) => admin.detail(req, env, id)],
@@ -93,12 +101,12 @@ function script(source: string): Response {
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const { pathname } = new URL(request.url);
   // A burst limit per network before anything else, the database included. Its key needs IP_SALT;
-  // the install counts need nothing but D1, so they go without the limit until IP_SALT is set,
-  // rather than answer "not set up" to the website. A sharing request it turns away is a strike on
-  // the network, which only writes when the network isn't cooling down already; when that leaves
-  // the network waiting longer than the burst does, the answer says so, rather than send the app
-  // back in a minute to be turned away again.
-  const open = pathname === installs.COUNTS_PATH && !env.IP_SALT;
+  // the install counts and the stats need nothing but D1, so they go without the limit until
+  // IP_SALT is set, rather than answer "not set up" to the website. A sharing request it turns
+  // away is a strike on the network, which only writes when the network isn't cooling down
+  // already; when that leaves the network waiting longer than the burst does, the answer says so,
+  // rather than send the app back in a minute to be turned away again.
+  const open = (pathname === installs.COUNTS_PATH || pathname === counts.STATS_PATH) && !env.IP_SALT;
   if (env.BURST && pathname !== "/" && !open) {
     const { success } = await env.BURST.limit({ key: await networkHash(env, request) });
     if (!success) {

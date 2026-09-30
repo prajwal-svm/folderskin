@@ -64,6 +64,30 @@
     "getting_one": "Getting {{count}} skin to show it",
     "getting_other": "Getting {{count}} skins to show them"
   },
+  "official": {
+    "collection": "Official collection",
+    "search": "Search skins",
+    "searchLabel": "search official skins",
+    "gridLabel": "official skins",
+    "loading": "Loading official skins",
+    "loadFailed": "The official skins didn't load",
+    "loadFailedText": "{{reason}}.",
+    "sortButton": "Sort official skins",
+    "sortLabel": "sort official skins",
+    "empty": {
+      "noMatch": "No official skin matches",
+      "noMatchText": "Try another word, or search the packs.",
+      "none": "No official skins yet",
+      "noneText": "Refresh looks for them again.",
+      "searchPacks": "Search the packs instead"
+    }
+  },
+  "use": {
+    "button": "Use this skin",
+    "short": "Use",
+    "label": "use {{name}}",
+    "tip": "Add just this skin to your library"
+  },
   "progress": {
     "adding": "Adding",
     "updating": "Updating",
@@ -104,7 +128,11 @@
       "unanswered": "{{host}} isn't answering, so these are the packs from your last visit",
       "behind": "The newest list of packs didn't arrive, so these are the packs from your last visit",
       "other": "{{why}}, so these are the packs from your last visit"
-    }
+    },
+    "official_one": "{{count}} official skin",
+    "official_other": "{{count}} official skins",
+    "officialMatching_one": "{{count}} official skin matches “{{query}}”",
+    "officialMatching_other": "{{count}} official skins match “{{query}}”"
   },
   "toast": {
     "addLinkFailed": "Couldn't add “{{id}}”: {{reason}}",
@@ -130,7 +158,10 @@
     "show": "Show",
     "addedFromFolder_one": "Added {{count}} skin from that folder",
     "addedFromFolder_other": "Added {{count}} skins from that folder",
-    "addFolderFailed": "Couldn't add that pack: {{reason}}"
+    "addFolderFailed": "Couldn't add that pack: {{reason}}",
+    "used": "Added {{name}} to your library",
+    "usedAlready": "{{name}} is in your library already",
+    "useFailed": "Couldn't add {{name}}: {{reason}}"
   },
   "searchIn": "Search packs in {{tag}}",
   "searchInLabel": "search packs in {{tag}}",

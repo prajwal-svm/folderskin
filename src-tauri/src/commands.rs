@@ -70,6 +70,9 @@ pub struct SkinDto {
     pub tags: Vec<String>,
     /// For a community skin, the pack it came from.
     pub pack: Option<String>,
+    /// For a community skin used on its own, without its pack: the pack it came from, which
+    /// isn't added for it (`pack` is `None`).
+    pub from_pack: Option<String>,
     /// AI results: the provider and model that made it, as people call them.
     pub made_with: Option<String>,
     /// AI results: the description it was made from.
@@ -108,6 +111,7 @@ impl SkinDto {
             created_at: entry.created_at,
             tags: entry.tags.clone(),
             pack: entry.pack.clone(),
+            from_pack: entry.from_pack.clone(),
             made_with: made_with(entry),
             idea: entry.idea.clone(),
             pack_name: entry.pack_name.clone(),
@@ -432,6 +436,7 @@ pub async fn import_image(state: State<'_, AppState>, path: String) -> Result<Sk
             author: None,
             license: None,
             pack_hash: None,
+            from_pack: None,
             base: None,
             recipe: None,
         };
@@ -809,6 +814,7 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            from_pack: None,
             base: None,
             recipe: None,
         };
@@ -821,6 +827,7 @@ mod tests {
         assert_eq!(json["created_at"], 1_790_000_000_000u64);
         assert_eq!(json["tags"], serde_json::json!(["woodblock"]));
         assert!(json["pack"].is_null());
+        assert!(json["from_pack"].is_null());
         assert!(
             json["base"].is_null(),
             "a skin from before shapes names none"

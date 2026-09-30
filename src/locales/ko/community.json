@@ -61,6 +61,30 @@
     "openFailed": "이 팩을 열지 못했어요: {{reason}}.",
     "getting_other": "보여 드리려고 스킨 {{count}}개를 가져오는 중"
   },
+  "official": {
+    "collection": "공식 컬렉션",
+    "search": "스킨 검색",
+    "searchLabel": "공식 스킨 검색",
+    "gridLabel": "공식 스킨",
+    "loading": "공식 스킨을 불러오는 중",
+    "loadFailed": "공식 스킨을 불러오지 못했어요",
+    "loadFailedText": "{{reason}}.",
+    "sortButton": "공식 스킨 정렬",
+    "sortLabel": "공식 스킨 정렬",
+    "empty": {
+      "noMatch": "맞는 공식 스킨이 없어요",
+      "noMatchText": "다른 단어로 찾아보거나 팩에서 검색해 보세요.",
+      "none": "아직 공식 스킨이 없어요",
+      "noneText": "새로 고치면 다시 찾아봐요.",
+      "searchPacks": "팩에서 검색"
+    }
+  },
+  "use": {
+    "button": "이 스킨 사용",
+    "short": "사용",
+    "label": "{{name}} 사용",
+    "tip": "이 스킨만 라이브러리에 추가해요"
+  },
   "progress": {
     "adding": "추가하는 중",
     "updating": "업데이트하는 중",
@@ -96,7 +120,9 @@
       "unanswered": "{{host}}에서 응답이 없어서 지난번에 본 팩을 보여 드려요",
       "behind": "최신 팩 목록이 오지 않아서 지난번에 본 팩을 보여 드려요",
       "other": "{{why}}. 지난번에 본 팩을 보여 드려요"
-    }
+    },
+    "official_other": "공식 스킨 {{count}}개",
+    "officialMatching_other": "'{{query}}'에 맞는 공식 스킨 {{count}}개"
   },
   "toast": {
     "addLinkFailed": "'{{id}}' 팩을 추가하지 못했어요: {{reason}}",
@@ -119,7 +145,10 @@
     "refreshFailed": "새로 고치지 못했어요: {{reason}}",
     "show": "보기",
     "addedFromFolder_other": "그 폴더에서 스킨 {{count}}개를 추가했어요",
-    "addFolderFailed": "그 팩을 추가하지 못했어요: {{reason}}"
+    "addFolderFailed": "그 팩을 추가하지 못했어요: {{reason}}",
+    "used": "{{name}} 스킨을 라이브러리에 추가했어요",
+    "usedAlready": "{{name}} 스킨은 이미 라이브러리에 있어요",
+    "useFailed": "{{name}} 스킨을 추가하지 못했어요: {{reason}}"
   },
   "searchIn": "'{{tag}}'에서 팩 검색",
   "searchInLabel": "'{{tag}}'에서 팩 검색",

@@ -1,15 +1,15 @@
-import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { api, errorMessage, type CommunityPack, type CommunitySort, type PackProgress, type Skin, type SkinHit } from "../lib/tauri";
+import { api, errorMessage, type CollectionSkin, type CollectionSort, type CommunityPack, type CommunitySort, type PackProgress, type Skin, type SkinHit } from "../lib/tauri";
 import { isTauri } from "../lib/devMock";
 import { licenseLabel } from "../lib/packs";
 import { docsUrl, t as tNow, useT } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { Rich } from "../i18n/Rich";
 import { tagLabel } from "../lib/tags";
-import { community, countLine, progressLabel, progressShare, useCommunity, type PackTask, type PackView } from "../lib/communityStore";
+import { collectionCountLine, community, countLine, progressLabel, progressShare, useCommunity, type PackTask, type PackView } from "../lib/communityStore";
 import type { ToastTone } from "../hooks/useToasts";
 import { Confirm } from "./Confirm";
 import { GalleryToolbar, type TabCount } from "./GalleryToolbar";
@@ -17,7 +17,9 @@ import { DrivesBadge, OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { PackPreview } from "./PackPreview";
 import { PackViewer } from "./PackViewer";
+import { SkinViewer } from "./SkinViewer";
 import { VirtualGrid, type VirtualGridHandle } from "./VirtualGrid";
+import { BadgeCheckIcon } from "./icons/badge-check";
 import { DeleteIcon } from "./icons/delete";
 import { DownloadIcon } from "./icons/download";
 import { EyeIcon } from "./icons/eye";
@@ -36,6 +38,8 @@ type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string;
 
 /** Tags beside "All"; the rest are a click away under the options button. */
 const TOP_TAGS = 8;
+/** The Official tab's id among the tags', which no tag can be: a tag has no colon (lib/tags.ts). */
+const OFFICIAL_TAB = ":official";
 const GAP = 10;
 const PADDING = 14;
 
@@ -44,6 +48,8 @@ const PADDING = 14;
 const galleryRow = (width: number) => Math.min(width - 24, 300) + 200;
 /** A row's height: the strip beside the words, or, in a narrow window, above them. */
 const listRow = (width: number) => (width < 560 ? 240 : 116);
+/** An official skin's height for its width: the folder, square, then a line of name. */
+const skinRow = (width: number) => width + 28;
 
 
 /**
@@ -51,11 +57,15 @@ const listRow = (width: number) => (width < 560 ? 240 : 116);
  * skin in them. The list can run to tens of thousands, so only the cards on screen are drawn and
  * only their previews are fetched, a page at a time. What the view shows lives in
  * lib/communityStore, so leaving and coming back finds it as it was.
+ *
+ * The Official tab, first in the row, lists FolderSkin's own skins instead: not packs but skins,
+ * searched and paged the same way, each opened in a skin viewer and used one at a time.
  */
 export function CommunityView({
   onShare,
   onAdded,
   onRemoved,
+  onUsed,
   onShowTag,
   toast,
 }: {
@@ -63,6 +73,8 @@ export function CommunityView({
   onShare: () => void;
   onAdded: (skins: Skin[]) => void;
   onRemoved: (skinIds: string[]) => void;
+  /** Picks a skin taken on its own ("Use"), now in the library. */
+  onUsed: (skin: Skin) => void;
   /** Opens the library filtered by `tag`. */
   onShowTag: (tag: string) => void;
   toast: Toast;
@@ -70,32 +82,47 @@ export function CommunityView({
   const t = useT();
   const s = useCommunity();
   // The newest of the app's callbacks, for a pack that finishes adding after the view has gone.
-  useLayoutEffect(() => community.bind({ onAdded, onRemoved, onShowTag, toast }));
+  useLayoutEffect(() => community.bind({ onAdded, onRemoved, onUsed, onShowTag, toast }));
   useEffect(() => community.start(), []);
   const [removing, setRemoving] = useState<CommunityPack | null>(null);
   const grid = useRef<VirtualGridHandle>(null);
   const shown = s.shown;
-  const listed = shown !== null;
+  const official = s.tab === "official";
+  const collection = s.collection;
+  const listed = official ? collection !== null : shown !== null;
 
   // Back where it was on the way in, at the top for a new answer, and remembered as it scrolls.
+  // Each tab keeps its own place.
   useLayoutEffect(() => {
     const el = grid.current?.element();
-    if (el) el.scrollTop = community.get().scrollTop;
-  }, [shown?.id, s.view]);
+    const now = community.get();
+    if (el) el.scrollTop = now.tab === "official" ? now.collectionScroll : now.scrollTop;
+  }, [shown?.id, s.view, s.tab, collection?.id]);
   useEffect(() => {
     const el = grid.current?.element();
     if (!el) return;
     const keep = () => community.keepScroll(el.scrollTop);
     el.addEventListener("scroll", keep, { passive: true });
     return () => el.removeEventListener("scroll", keep);
-  }, [listed]);
+  }, [listed, s.tab]);
 
+  // Official comes first, once there are official skins (or while it's the tab on show), in the
+  // Official badge's colours.
+  const officialCount = official ? (collection?.total ?? s.collectionSize ?? 0) : (s.collectionSize ?? 0);
   const tabs = useMemo<TabCount[]>(() => {
     const facets = shown?.facets ?? [];
     const top = facets.slice(0, TOP_TAGS);
     if (s.tag && !top.some((f) => f.tag === s.tag)) top.push({ tag: s.tag, count: facets.find((f) => f.tag === s.tag)?.count ?? 0 });
-    return [{ id: "", label: t("library.tabs.all"), count: shown?.all ?? 0 }, ...top.map((f) => ({ id: f.tag, label: tagLabel(f.tag), count: f.count }))];
-  }, [shown, s.tag, t]);
+    const first: TabCount[] =
+      official || officialCount > 0
+        ? [{ id: OFFICIAL_TAB, label: t("common.official"), count: officialCount, icon: <BadgeCheckIcon size={14} />, className: "is-official" }]
+        : [];
+    return [
+      ...first,
+      { id: "", label: t("library.tabs.all"), count: shown?.all ?? 0 },
+      ...top.map((f) => ({ id: f.tag, label: tagLabel(f.tag), count: f.count })),
+    ];
+  }, [shown, s.tag, official, officialCount, t]);
   // The search box says where it looks: in the tag picked, so nobody takes it for a search of every pack.
   const tagName = s.tag ? (tabs.find((tab) => tab.id === s.tag)?.label ?? tagLabel(s.tag)) : "";
 
@@ -122,6 +149,8 @@ export function CommunityView({
     const pack = shown?.hitPacks.find((p) => p.id === hit.pack);
     if (pack) community.open(pack, hit.index);
   };
+  // Official skins lead the strip of skins, in All: a tag narrows packs, and they're in none.
+  const officialHits = shown && !shown.tag ? shown.official : [];
 
   const renderPack = useCallback(
     (pack: CommunityPack | undefined, index: number) =>
@@ -141,7 +170,13 @@ export function CommunityView({
     [s.view, s.busy, s.task, s.progress, s.tag],
   );
 
+  const renderSkin = useCallback(
+    (skin: CollectionSkin | undefined, index: number) => (skin ? <OfficialTile skin={skin} /> : <SkinPlaceholder index={index} />),
+    [],
+  );
+
   const viewing = s.viewing;
+  const viewingSkin = s.viewingSkin;
 
   return (
     <section className="community">
@@ -164,16 +199,20 @@ export function CommunityView({
 
       <GalleryToolbar
         tabs={tabs}
-        active={s.tag}
-        onChange={(tag) => community.setTag(tag)}
+        active={official ? OFFICIAL_TAB : s.tag}
+        onChange={(id) => (id === OFFICIAL_TAB ? community.showOfficial() : community.setTag(id))}
         query={s.query}
         onQuery={(q) => community.setQuery(q)}
         label={t("community.tabsLabel")}
-        placeholder={tagName ? t("community.searchIn", { tag: tagName }) : t("community.search")}
-        searchLabel={tagName ? t("community.searchInLabel", { tag: tagName }) : t("community.searchLabel")}
+        placeholder={official ? t("community.official.search") : tagName ? t("community.searchIn", { tag: tagName }) : t("community.search")}
+        searchLabel={official ? t("community.official.searchLabel") : tagName ? t("community.searchInLabel", { tag: tagName }) : t("community.searchLabel")}
         extra={
           <>
-            <CommunityOptions sort={s.sort} typed={s.query.trim() !== ""} facets={shown?.facets ?? []} tag={s.tag} />
+            {official ? (
+              <OfficialOptions sort={s.collectionSort} />
+            ) : (
+              <CommunityOptions sort={s.sort} typed={s.query.trim() !== ""} facets={shown?.facets ?? []} tag={s.tag} />
+            )}
             <button
               type="button"
               className="icon-btn"
@@ -186,36 +225,50 @@ export function CommunityView({
             >
               {s.refreshing ? <LoaderIcon size={16} /> : <RefreshCwIcon size={16} />}
             </button>
-            <div className="view-switch" role="radiogroup" aria-label={t("community.viewLabel")}>
-              {(
-                [
-                  ["gallery", t("community.views.gallery"), LayoutGridIcon],
-                  ["list", t("community.views.list"), ListIcon],
-                ] as const
-              ).map(([id, label, Icon]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={s.view === id}
-                  aria-label={label}
-                  data-tip={label}
-                  className={s.view === id ? "view-switch-btn is-active" : "view-switch-btn"}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => community.setView(id)}
-                >
-                  <Icon size={16} />
-                </button>
-              ))}
-            </div>
+            {/* Gallery or list is for packs: an official skin is one folder, whichever. */}
+            {!official && (
+              <div className="view-switch" role="radiogroup" aria-label={t("community.viewLabel")}>
+                {(
+                  [
+                    ["gallery", t("community.views.gallery"), LayoutGridIcon],
+                    ["list", t("community.views.list"), ListIcon],
+                  ] as const
+                ).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={s.view === id}
+                    aria-label={label}
+                    data-tip={label}
+                    className={s.view === id ? "view-switch-btn is-active" : "view-switch-btn"}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => community.setView(id)}
+                  >
+                    <Icon size={16} />
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         }
       />
 
-      {shown && shown.q && shown.skins.length > 0 && (
+      {!official && shown && shown.q && shown.skins.length + officialHits.length > 0 && (
         <section className="skin-hits" aria-label={t("community.hits.label")}>
           <p className="skin-hits-title">{t("community.hits.title")}</p>
           <ul className="skin-hits-list">
+            {officialHits.map((skin) => (
+              <li key={skin.sha256}>
+                <button type="button" className="skin-hit is-official" data-tip={skin.name} data-tip-overflow onClick={() => community.openSkin(skin)}>
+                  <img src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+                  <span className="skin-hit-name">{skin.name}</span>
+                  <span className="skin-hit-mark">
+                    <OfficialBadge />
+                  </span>
+                </button>
+              </li>
+            ))}
             {shown.skins.map((hit) => (
               <li key={`${hit.pack}:${hit.index}`}>
                 <button type="button" className="skin-hit" data-tip={t("community.hits.tip", { name: hit.name, pack: hit.pack_name })} data-tip-overflow onClick={() => openHit(hit)}>
@@ -230,15 +283,22 @@ export function CommunityView({
       )}
 
       <p className="community-status" aria-live="polite">
-        <span className="community-count" data-results-for={shown ? shown.q : undefined}>
-          {countLine(shown, s.error)}
-          {s.searching && shown && <LoaderIcon size={13} />}
-          {shown?.lastVisit && !s.error && (
-            <button type="button" className="link-btn" disabled={s.refreshing} onClick={() => void community.refresh()}>
-              {t("community.tryAgain")}
-            </button>
-          )}
-        </span>
+        {official ? (
+          <span className="community-count" data-results-for={collection ? collection.q : undefined}>
+            {collectionCountLine(collection, s.collectionError)}
+            {s.collectionSearching && collection && <LoaderIcon size={13} />}
+          </span>
+        ) : (
+          <span className="community-count" data-results-for={shown ? shown.q : undefined}>
+            {countLine(shown, s.error)}
+            {s.searching && shown && <LoaderIcon size={13} />}
+            {shown?.lastVisit && !s.error && (
+              <button type="button" className="link-btn" disabled={s.refreshing} onClick={() => void community.refresh()}>
+                {t("community.tryAgain")}
+              </button>
+            )}
+          </span>
+        )}
         <button
           type="button"
           className="icon-btn community-checked"
@@ -251,7 +311,54 @@ export function CommunityView({
         </button>
       </p>
 
-      {shown === null ? (
+      {official ? (
+        collection === null ? (
+          s.collectionError ? (
+            <div className="empty">
+              <span className="empty-glyph">
+                <DownloadIcon size={20} />
+              </span>
+              <p className="empty-title">{t("community.official.loadFailed")}</p>
+              <p className="empty-text">{t("community.official.loadFailedText", { reason: s.collectionError.charAt(0).toUpperCase() + s.collectionError.slice(1) })}</p>
+              <button type="button" className="btn btn-secondary" onClick={() => void community.searchCollection()}>
+                {t("community.tryAgain")}
+              </button>
+            </div>
+          ) : (
+            <p className="community-note">
+              <LoaderIcon /> {t("community.official.loading")}
+            </p>
+          )
+        ) : (
+          <VirtualGrid
+            key="official"
+            ref={grid}
+            className="packs-grid is-skins"
+            items={collection.skins}
+            minCell={136}
+            gap={GAP}
+            padding={PADDING}
+            rowHeight={skinRow}
+            getKey={(skin, i) => skin?.sha256 ?? `place-${i}`}
+            renderItem={renderSkin}
+            role="region"
+            aria-label={t("community.official.gridLabel")}
+            empty={
+              <div className="empty">
+                <p className="empty-title">{collection.q ? t("community.official.empty.noMatch") : t("community.official.empty.none")}</p>
+                <p className="empty-text">{collection.q ? t("community.official.empty.noMatchText") : t("community.official.empty.noneText")}</p>
+                {/* The same words may well find packs. */}
+                {collection.q && (
+                  <button type="button" className="btn btn-secondary" onClick={() => community.setTag("")}>
+                    <SearchIcon size={15} />
+                    {t("community.official.empty.searchPacks")}
+                  </button>
+                )}
+              </div>
+            }
+          />
+        )
+      ) : shown === null ? (
         s.error ? (
           <div className="empty">
             <span className="empty-glyph">
@@ -270,6 +377,7 @@ export function CommunityView({
         )
       ) : (
         <VirtualGrid
+          key="packs"
           ref={grid}
           className={s.view === "gallery" ? "packs-grid is-gallery" : "packs-grid is-list"}
           items={shown.packs}
@@ -310,6 +418,20 @@ export function CommunityView({
           onUpdate={() => void community.update(viewing.pack)}
           onRemove={() => setRemoving(viewing.pack)}
           onClose={() => community.close()}
+          using={s.using}
+          onUse={(skin) => skin.sha256 && void community.use({ kind: "pack", id: viewing.pack.id, hash: viewing.pack.hash }, skin.sha256, skin.name)}
+        />
+      )}
+
+      {viewingSkin && (
+        <SkinViewer
+          key={viewingSkin.sha256}
+          skin={viewingSkin}
+          license={s.collectionLicense}
+          using={s.using === viewingSkin.sha256}
+          blocked={s.using !== null && s.using !== viewingSkin.sha256}
+          onUse={() => void community.use({ kind: "collection" }, viewingSkin.sha256, viewingSkin.name)}
+          onClose={() => community.closeSkin()}
         />
       )}
 
@@ -501,6 +623,37 @@ function PackPlaceholder({ index, view }: { index: number; view: PackView }) {
   );
 }
 
+/** One official skin: the folder it makes and its name, which open it in the skin viewer. */
+const OfficialTile = memo(function OfficialTile({ skin }: { skin: CollectionSkin }) {
+  return (
+    <div className="tile">
+      <button type="button" className="tile-hit" onMouseDown={(e) => e.preventDefault()} onClick={() => community.openSkin(skin)}>
+        <span className="tile-art">
+          <img className="tile-img" src={skin.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+        </span>
+        <span className="tile-name" data-tip={skin.name} data-tip-overflow>
+          <span className="tile-name-text">{skin.name}</span>
+        </span>
+      </button>
+    </div>
+  );
+});
+
+/** A place among the official skins whose page hasn't come yet: asks for it, and shimmers until it's here. */
+function SkinPlaceholder({ index }: { index: number }) {
+  useEffect(() => community.needSkin(index), [index]);
+  return (
+    <div className="tile is-placeholder" aria-hidden="true">
+      <span className="tile-hit">
+        <span className="tile-art">
+          <span className="skin-blank" />
+        </span>
+        <span className="pack-line is-short" />
+      </span>
+    </div>
+  );
+}
+
 const SORTS: { id: CommunitySort; label: (typed: boolean) => string }[] = [
   { id: "best", label: (typed) => (typed ? tNow("community.sort.bestMatch") : tNow("community.sort.featured")) },
   { id: "newest", label: () => tNow("community.sort.newest") },
@@ -510,6 +663,57 @@ const SORTS: { id: CommunitySort; label: (typed: boolean) => string }[] = [
 
 const WIDTH = 320;
 const MARGIN = 12;
+
+const OFFICIAL_SORTS: { id: CollectionSort; label: () => string }[] = [
+  { id: "newest", label: () => tNow("community.sort.newest") },
+  { id: "name", label: () => tNow("community.sort.name") },
+];
+
+/** The button beside the search that orders the official skins: they have no tags to pick. */
+function OfficialOptions({ sort }: { sort: CollectionSort }) {
+  const t = useT();
+  const [openNow, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className={sort !== "newest" ? "filter-btn is-on" : "filter-btn"}
+        aria-haspopup="dialog"
+        aria-expanded={openNow}
+        aria-label={t("community.official.sortButton")}
+        data-tip={t("community.official.sortButton")}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <ListFilterIcon size={16} />
+      </button>
+      {openNow && button.current && (
+        <OptionsPopover anchor={button.current} label={t("community.official.sortLabel")} title={t("community.official.sortButton")} onClose={close}>
+          <section className="filter-sec">
+            <p className="filter-label">{t("library.filters.sortBy")}</p>
+            <div className="seg seg-sm filter-sort community-sort" role="radiogroup" aria-label={t("library.filters.sortByLabel")}>
+              {OFFICIAL_SORTS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={sort === s.id}
+                  className={sort === s.id ? "seg-btn is-active" : "seg-btn"}
+                  onClick={() => community.setCollectionSort(s.id)}
+                >
+                  {s.label()}
+                </button>
+              ))}
+            </div>
+          </section>
+        </OptionsPopover>
+      )}
+    </>
+  );
+}
 
 /** The button beside the search that opens the order of the list and every tag. */
 function CommunityOptions({ sort, typed, facets, tag }: { sort: CommunitySort; typed: boolean; facets: { tag: string; count: number }[]; tag: string }) {
@@ -533,27 +737,88 @@ function CommunityOptions({ sort, typed, facets, tag }: { sort: CommunitySort; t
       >
         <ListFilterIcon size={16} />
       </button>
-      {openNow && button.current && <OptionsPopover anchor={button.current} sort={sort} typed={typed} facets={facets} tag={tag} onClose={close} />}
+      {openNow && button.current && (
+        <OptionsPopover
+          anchor={button.current}
+          label={t("community.options.label")}
+          title={t("community.options.title")}
+          sub={t("community.options.tagCount", { count: facets.length })}
+          action={
+            tag && (
+              <button type="button" className="filter-clear" onClick={() => community.setTag("")}>
+                {t("community.options.allTags")}
+              </button>
+            )
+          }
+          onClose={close}
+        >
+          <section className="filter-sec">
+            <p className="filter-label">{t("library.filters.sortBy")}</p>
+            <div className="seg seg-sm filter-sort community-sort" role="radiogroup" aria-label={t("library.filters.sortByLabel")}>
+              {SORTS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={sort === s.id}
+                  className={sort === s.id ? "seg-btn is-active" : "seg-btn"}
+                  onClick={() => community.setSort(s.id)}
+                >
+                  {s.label(typed)}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {facets.length > 0 && (
+            <section className="filter-sec">
+              <p className="filter-label">{t("community.options.tags")}</p>
+              <div className="filter-chips">
+                {facets.map((f) => {
+                  const on = f.tag === tag;
+                  return (
+                    <button
+                      key={f.tag}
+                      type="button"
+                      aria-pressed={on}
+                      className={on ? "fchip is-on" : "fchip"}
+                      onClick={() => community.setTag(on ? "" : f.tag)}
+                    >
+                      <span className="fchip-label">{tagLabel(f.tag)}</span>
+                      <span className="count">{formatNumber(f.count)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </OptionsPopover>
+      )}
     </>
   );
 }
 
+/** A popover under an options button: its heading, then whatever it offers. Escape or a click
+ *  outside closes it. */
 function OptionsPopover({
   anchor,
-  sort,
-  typed,
-  facets,
-  tag,
+  label,
+  title,
+  sub,
+  action,
   onClose,
+  children,
 }: {
   anchor: HTMLElement;
-  sort: CommunitySort;
-  typed: boolean;
-  facets: { tag: string; count: number }[];
-  tag: string;
+  /** Its name for screen readers. */
+  label: string;
+  title: string;
+  sub?: string;
+  /** A button beside the heading, such as "All tags". */
+  action?: ReactNode;
   onClose: () => void;
+  children: ReactNode;
 }) {
-  const t = useT();
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
 
@@ -601,62 +866,18 @@ function OptionsPopover({
       ref={panel}
       className="filter-pop"
       role="dialog"
-      aria-label={t("community.options.label")}
+      aria-label={label}
       tabIndex={-1}
       style={pos ? { left: pos.left, top: pos.top, width: WIDTH, maxHeight: pos.maxHeight } : { visibility: "hidden" }}
     >
       <div className="filter-head">
         <div>
-          <p className="filter-title">{t("community.options.title")}</p>
-          <p className="filter-sub">{t("community.options.tagCount", { count: facets.length })}</p>
+          <p className="filter-title">{title}</p>
+          {sub && <p className="filter-sub">{sub}</p>}
         </div>
-        {tag && (
-          <button type="button" className="filter-clear" onClick={() => community.setTag("")}>
-            {t("community.options.allTags")}
-          </button>
-        )}
+        {action}
       </div>
-
-      <section className="filter-sec">
-        <p className="filter-label">{t("library.filters.sortBy")}</p>
-        <div className="seg seg-sm filter-sort community-sort" role="radiogroup" aria-label={t("library.filters.sortByLabel")}>
-          {SORTS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              role="radio"
-              aria-checked={sort === s.id}
-              className={sort === s.id ? "seg-btn is-active" : "seg-btn"}
-              onClick={() => community.setSort(s.id)}
-            >
-              {s.label(typed)}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {facets.length > 0 && (
-        <section className="filter-sec">
-          <p className="filter-label">{t("community.options.tags")}</p>
-          <div className="filter-chips">
-            {facets.map((f) => {
-              const on = f.tag === tag;
-              return (
-                <button
-                  key={f.tag}
-                  type="button"
-                  aria-pressed={on}
-                  className={on ? "fchip is-on" : "fchip"}
-                  onClick={() => community.setTag(on ? "" : f.tag)}
-                >
-                  <span className="fchip-label">{tagLabel(f.tag)}</span>
-                  <span className="count">{formatNumber(f.count)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {children}
     </div>,
     document.body,
   );

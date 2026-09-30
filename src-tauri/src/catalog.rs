@@ -20,7 +20,10 @@
 use crate::community::{fetch, host, uncached, Fetch};
 use crate::previews::{DiskCache, CACHE_BYTES};
 use folderskin_catalog::tree::{self, CatalogRef, Head};
-use folderskin_catalog::{build, Catalog, PackRecord, PackRow, Query, Results};
+use folderskin_catalog::{
+    build, Catalog, CollectionItem, CollectionPage, CollectionQuery, PackRecord, PackRow, Query,
+    Results,
+};
 use folderskin_core::apply::paths::write_atomic;
 use folderskin_core::pack::{self, Index};
 use std::collections::{BTreeMap, HashMap};
@@ -254,6 +257,9 @@ pub struct Source {
     /// Packs whose ids changed, each old id to the one it has now: head.json's `moved`, less any
     /// entry [`Head::current_id`] wouldn't follow. Empty for a list made from index.json.
     moved: BTreeMap<String, String>,
+    /// The licence of the official collection's skins: head.json's `collection_license` when it
+    /// is one a pack can have, and empty otherwise, as for a list made from index.json.
+    pub collection_license: String,
     /// Set once the library's records have followed `moved` (community.rs), so the catalog's
     /// moves are followed once rather than at every search.
     followed: AtomicBool,
@@ -285,6 +291,7 @@ impl Source {
             official: Vec::new(),
             drive_packs: Vec::new(),
             moved: BTreeMap::new(),
+            collection_license: String::new(),
             followed: AtomicBool::new(false),
             generation,
             last_visit,
@@ -347,6 +354,21 @@ impl Source {
     /// How many packs and skins it lists.
     pub fn counts(&self) -> (usize, usize) {
         lock(&self.catalog).counts()
+    }
+
+    /// How many skins the official collection has: none in a list made from index.json.
+    pub fn collection_count(&self) -> usize {
+        lock(&self.catalog).collection_count()
+    }
+
+    /// A page of the official collection's skins matching `query`.
+    pub fn collection(&self, query: &CollectionQuery) -> Result<CollectionPage, String> {
+        lock(&self.catalog).collection(query)
+    }
+
+    /// The official collection's skin whose picture has SHA-256 `sha256`, if it lists one.
+    pub fn collection_item(&self, sha256: &str) -> Result<Option<CollectionItem>, String> {
+        lock(&self.catalog).collection_item(sha256)
     }
 
     /// Downloads `path` from the first folder that has it whole (`whole` says whether bytes are
@@ -594,6 +616,9 @@ async fn from_head(
     source.featured = head.featured_ids();
     source.official = head.official_ids();
     source.drive_packs = drive_packs;
+    if pack::LICENSES.contains(&head.collection_license.as_str()) {
+        source.collection_license = head.collection_license.clone();
+    }
     source.moved = moves(head);
     if !source.moved.is_empty() {
         // An id a pack still has is that pack's. A move from it is a mistake in moved.json, and
@@ -766,7 +791,8 @@ pub fn from_index(
             skin_names: Vec::new(),
         })
         .collect();
-    let catalog = Catalog::from_connection(build::in_memory(&records)?)?;
+    // index.json knows nothing of the official collection, so this catalog has an empty one.
+    let catalog = Catalog::from_connection(build::in_memory(&records, &[])?)?;
     let generation = tree::sha256_hex(bytes)[..16].to_string();
     let mut source = Source::new(
         catalog,

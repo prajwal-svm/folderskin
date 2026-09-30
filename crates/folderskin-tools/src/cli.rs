@@ -90,6 +90,12 @@ pub enum Command {
         #[command(subcommand)]
         command: PacksCommand,
     },
+    /// Add to and check the official collection: FolderSkin's own skins, one at a time rather
+    /// than in a pack, in <dir>/collection
+    Collection {
+        #[command(subcommand)]
+        command: CollectionCommand,
+    },
     /// Look after the community service: packs shared from the app, their review, and pulling
     /// approved ones into the packs repository (github.com/prajwal-svm/folderskin-community)
     Community {
@@ -341,6 +347,52 @@ pub enum PacksCommand {
         /// Another https:// folder serving the same tree, which the app tries first; repeatable
         #[arg(long = "mirror", value_name = "URL")]
         mirrors: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CollectionCommand {
+    /// Add pictures to the official collection, each made ready as `packs make` makes a pack's:
+    /// finished folders (on magenta or transparency) are cut out and given one shape, and
+    /// everything is shrunk to 1024 px and saved as lossless WebP, named after its file. Each is
+    /// listed at the end of collection.json, dated today. A picture the collection has already is
+    /// skipped, and when anything fails the collection is left as it was
+    Add {
+        /// Pictures (PNG, JPEG or WebP), or folders of them, taken in name order
+        #[arg(required = true)]
+        pictures: Vec<PathBuf>,
+        /// The folderskin-community checkout, holding collection/ (made if it isn't there)
+        #[arg(long, default_value = ".")]
+        dir: PathBuf,
+        /// Tags for every picture added, comma-separated; three at most
+        #[arg(long, value_delimiter = ',')]
+        tags: Vec<String>,
+        /// Cut away a flat backdrop of any colour, not only magenta: for renders whose #FF00FF
+        /// drifted to pink or raspberry. Only the backdrop reaching the edge goes
+        #[arg(long)]
+        flat_backdrop: bool,
+        /// Keep a finished folder more than 8% off the others' shape, as it is, instead of
+        /// leaving it out
+        #[arg(long)]
+        keep_outliers: bool,
+        /// The largest a picture may be, in KB: 1536, or less. A picture over it at 1024 px is
+        /// made 896 and then 768 px, still lossless
+        #[arg(long, value_name = "KB", default_value_t = 1536)]
+        max_kb: usize,
+        /// Also write a PNG showing every skin added as the folder it makes
+        #[arg(long, value_name = "PNG")]
+        preview: Option<PathBuf>,
+        /// The licence of every skin in a new collection: CC0-1.0, CC-BY-4.0 or MIT (MIT unless
+        /// asked). A collection that has one keeps it
+        #[arg(long)]
+        license: Option<String>,
+    },
+    /// Check <dir>/collection the way the app will; exit 1 on problems. `packs check` checks it
+    /// too
+    Check {
+        /// The folderskin-community checkout, holding collection/
+        #[arg(long, default_value = ".")]
+        dir: PathBuf,
     },
 }
 
@@ -767,6 +819,66 @@ mod tests {
                 assert_eq!(id.as_deref(), Some("3d-k7q2mx"));
                 assert!(keep_outliers);
             }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_collection_add_and_check_in_the_community_folder_by_default() {
+        let cli = Cli::parse_from([
+            "folderskin-tools",
+            "collection",
+            "add",
+            "renders/",
+            "koi.png",
+            "--tags",
+            "pop art,retro",
+            "--preview",
+            "sheet.png",
+        ]);
+        match cli.command {
+            Command::Collection {
+                command:
+                    CollectionCommand::Add {
+                        pictures,
+                        dir,
+                        tags,
+                        flat_backdrop,
+                        keep_outliers,
+                        max_kb,
+                        preview,
+                        license,
+                    },
+            } => {
+                assert_eq!(
+                    pictures,
+                    [PathBuf::from("renders/"), PathBuf::from("koi.png")]
+                );
+                assert_eq!(license, None, "MIT for a new collection, or the one it has");
+                assert_eq!(dir, PathBuf::from("."));
+                assert_eq!(tags, ["pop art", "retro"]);
+                assert!(!flat_backdrop && !keep_outliers);
+                assert_eq!(max_kb, 1536);
+                assert_eq!(preview, Some(PathBuf::from("sheet.png")));
+            }
+            other => panic!("{other:?}"),
+        }
+        match Cli::parse_from(["folderskin-tools", "collection", "add", "a.png"]).command {
+            Command::Collection {
+                command: CollectionCommand::Add { tags, .. },
+            } => assert!(tags.is_empty(), "tags are optional"),
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            Cli::try_parse_from(["folderskin-tools", "collection", "add"]).is_err(),
+            "add needs pictures"
+        );
+        match Cli::parse_from(["folderskin-tools", "collection", "check", "--dir", "/tmp/c"])
+            .command
+        {
+            Command::Collection {
+                command: CollectionCommand::Check { dir },
+            } => assert_eq!(dir, PathBuf::from("/tmp/c")),
             other => panic!("{other:?}"),
         }
     }

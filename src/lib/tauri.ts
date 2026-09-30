@@ -33,6 +33,9 @@ export type Skin = {
   tags: string[];
   /** For a community skin, the id of the pack it came from. */
   pack?: string | null;
+  /** For a community skin taken on its own ("Use"), the id of the pack it came from, which
+   *  stays not added (`pack` is null). */
+  from_pack?: string | null;
   /** AI results: the provider and model that made it, e.g. "OpenAI · GPT Image 2.5 Flare". */
   made_with?: string | null;
   /** AI results: the description it was made from. */
@@ -77,7 +80,44 @@ export type PackSkinPreview = {
   tags: string[];
   /** The skin as the folder it makes: a data URL, or the address of its thumbnail. */
   thumbnail: string;
+  /** Its picture's SHA-256 and file ending, which "Use" takes it by. Only a pack from the
+   *  published tree has them: a pack from the old list is added whole or not at all. */
+  sha256?: string | null;
+  ext?: string | null;
+  /** The id the skin would have in the library, to show whether it's there already; null when
+   *  that can't be told (a skin of a pack of drives). */
+  skin_id?: string | null;
 };
+
+/** One of FolderSkin's official skins: not in a pack, and used one at a time. */
+export type CollectionSkin = {
+  sha256: string;
+  ext: string;
+  name: string;
+  tags: string[];
+  /** The address of its thumbnail: the skin drawn as the folder it makes, 256 px. */
+  thumbnail: string;
+  /** Its picture's size. */
+  bytes: number;
+  /** When it joined the collection, in Unix seconds. */
+  added: number;
+  /** The id the skin has in the library, to show whether it's there already. */
+  skin_id?: string | null;
+};
+
+/** What a folderskin://install link asks for: a pack to add (`pack` alone), or one skin to use
+ *  by its picture's SHA-256 (`skin`), with the pack it's in, or none for an official skin. */
+export type InstallLink = { pack: string | null; skin: string | null };
+
+/** The orders the official skins come in: the latest additions first, or A to Z. */
+export type CollectionSort = "newest" | "name";
+
+/** One page of the official skins matching a search, how many match in all, and the licence
+ *  every official skin comes under, such as "MIT" (empty when the collection names none). */
+export type CollectionPage = { total: number; items: CollectionSkin[]; license: string };
+
+/** Where a skin taken on its own ("Use") is listed: the official collection, or a published pack at version `hash`. */
+export type UseFrom = { kind: "collection" } | { kind: "pack"; id: string; hash: string };
 
 /** The orders the Community list comes in. "best" is the best match for the words typed, or,
  *  with nothing typed, the featured packs and then the newest. */
@@ -97,6 +137,8 @@ export type CommunitySearch = {
   all: number;
   packs: CommunityPack[];
   skins: SkinHit[];
+  /** Official skins the words match, a few of them; none when nothing is typed. */
+  collection: CollectionSkin[];
   /** The packs `skins` are in, so one can be opened wherever it is in the list. */
   hit_packs: CommunityPack[];
   /** The tags of the packs the words match, most used first. */
@@ -507,7 +549,7 @@ const tauriApi = {
   /** One page of the packs matching a search, searched on this computer once the catalog is in. */
   communitySearch: (query: CommunityQuery) => invoke<CommunitySearch>("community_search", { ...query }),
   /** Asks for the packs again past every cache; resolves to how many of the library's packs have an update. */
-  communityRefresh: () => invoke<{ updates: number; packs: number }>("community_refresh"),
+  communityRefresh: () => invoke<{ updates: number; packs: number; collection: number }>("community_refresh"),
   /** The packs in the library now, by id, with the version each was added at (null when it
    *  was added before FolderSkin kept one). Nothing is downloaded. */
   communityInstalled: () => invoke<Record<string, string | null>>("community_installed"),
@@ -515,8 +557,8 @@ const tauriApi = {
    *  has or had that id. A pack the list doesn't have is looked for again past every cache, in
    *  case it was published since. */
   communityPack: (packId: string) => invoke<CommunityPack | null>("community_pack", { packId }),
-  /** The pack a folderskin://install link asked for, once; null when none is waiting. */
-  takeInstallLink: () => invoke<string | null>("install_link_take"),
+  /** What a folderskin://install link asked for, once: a pack, or one skin; null when none is waiting. */
+  takeInstallLink: () => invoke<InstallLink | null>("install_link_take"),
   /** Downloads a pack and saves all of its skins or none; resolves to them. `onProgress` hears how far it has got. */
   addPack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
     invoke<Skin[]>("community_add", { packId, onProgress: new Channel<PackProgress>(onProgress) }),
@@ -524,6 +566,16 @@ const tauriApi = {
   /** Downloads and draws a pack to look through, or shows it as drawn before when this version
    *  (`hash`) was looked at in the last week. */
   packSkins: (packId: string, hash: string) => invoke<PackSkinPreview[]>("community_pack_skins", { packId, hash }),
+  /** One page of the official skins matching `q` (every official skin when it's blank), searched
+   *  on this computer like the packs. None at all while the packs come from the old list. */
+  communityCollection: (q: string, sort: CollectionSort, offset: number, limit: number) =>
+    invoke<CollectionPage>("community_collection", { q, sort, offset, limit }),
+  /** Saves one skin into the library on its own, from the official collection or a pack that
+   *  isn't added, and resolves to it; one saved already comes back as it is. The pack stays not added. */
+  useCommunitySkin: (from: UseFrom, sha256: string) => invoke<Skin>("community_use_skin", { from, sha256 }),
+  /** The official skin whose picture has this SHA-256, for an install link; null when the
+   *  collection doesn't list it, even after asking past every cache. */
+  communityCollectionSkin: (sha256: string) => invoke<CollectionSkin | null>("community_collection_skin", { sha256 }),
   /** Swaps an added pack's skins for the version published now. `onProgress` hears how far it has got. */
   updatePack: (packId: string, onProgress?: (progress: PackProgress) => void) =>
     invoke<PackUpdate>("community_update", { packId, onProgress: new Channel<PackProgress>(onProgress) }),

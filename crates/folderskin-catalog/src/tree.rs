@@ -8,12 +8,19 @@
 //! drive-thumbs/<sha256>.webp         one skin of a pack of drives as its drive, 256 px
 //! pictures/<sha256>.<ext>            one skin's picture, as the pack has it
 //! packs/<id>/<pack hash>.json        pack.json with each picture's size and SHA-256
+//! collection/<hash>.json             the official collection, every skin, for the website
 //! ```
 //!
 //! Packs of drives are in a catalog of their own making, beside the other: `with_drives` in
 //! `head.json` names a catalog of every pack, drives and all, and `catalog` goes on naming one of
 //! the packs of folders alone. A FolderSkin from before drives reads `catalog`, so it never lists
 //! a pack it can't add, and one that takes drives reads `with_drives`.
+//!
+//! The official collection's pictures and thumbnails sit in `pictures/` and `thumbs/` beside the
+//! packs' skins', and both catalogs list its skins (`build`), each with its picture's SHA-256.
+//! `head.json` says how many there are, and what licence they have. The whole collection is also
+//! one JSON file ([`PublishedCollection`]), which `head.json` names as `collection_manifest`: the
+//! website lists the skins from it, having no catalog to search. The app never reads it.
 //!
 //! Everything but `head.json` is named after what is in it, so a host can let every cache keep
 //! it forever: a changed pack is new files under new names, never new bytes under an old one.
@@ -75,6 +82,22 @@ pub struct Head {
     /// when there are none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub with_drives: Option<WithDrives>,
+    /// How many skins the official collection has, which both catalogs list. Left out when it
+    /// has none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub collection: usize,
+    /// The licence of every skin in the official collection (`collection.json`'s), such as
+    /// "MIT". Left out when there is no collection.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub collection_license: String,
+    /// Where the whole official collection is listed for the website ([`PublishedCollection`]),
+    /// as [`collection_manifest_path`] names it. Left out when there is no collection.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub collection_manifest: String,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// A catalog of every pack, the packs of drives with the others, and which of them are drives.
@@ -317,6 +340,46 @@ impl PublishedSkin {
     }
 }
 
+/// The version a published collection declares.
+pub const COLLECTION_MANIFEST_VERSION: u32 = 1;
+
+/// The official collection as the website reads it: every skin, in `collection.json`'s order,
+/// under the licence they all have.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PublishedCollection {
+    pub version: u32,
+    pub license: String,
+    pub skins: Vec<PublishedOfficialSkin>,
+}
+
+/// One skin of the published collection.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PublishedOfficialSkin {
+    pub name: String,
+    pub tags: Vec<String>,
+    /// SHA-256 of the picture, in hex: its name under `pictures/` and `thumbs/`.
+    pub sha256: String,
+    /// The picture's extension, part of its name under `pictures/`.
+    pub ext: String,
+    pub bytes: u64,
+    pub w: u32,
+    pub h: u32,
+    /// The day it joined the collection, "YYYY-MM-DD".
+    pub added: String,
+}
+
+impl PublishedCollection {
+    /// The file's bytes, the same for the same collection every time, and the path it is
+    /// published at, named after them.
+    pub fn to_file(&self) -> Result<(String, Vec<u8>), String> {
+        let json = serde_json::to_string_pretty(self).map_err(|e| e.to_string())? + "\n";
+        let path = collection_manifest_path(&sha256_hex(json.as_bytes())[..16]);
+        Ok((path, json.into_bytes()))
+    }
+}
+
 /// The version a published pack of `shape` declares.
 pub fn manifest_version(shape: PackShape) -> u32 {
     match shape {
@@ -365,6 +428,11 @@ pub fn picture_path(sha256: &str, ext: &str) -> String {
 
 pub fn manifest_path(id: &str, pack_hash: &str) -> String {
     format!("packs/{id}/{pack_hash}.json")
+}
+
+/// Where the published collection is: named after sixteen hex digits of its file's SHA-256.
+pub fn collection_manifest_path(hash: &str) -> String {
+    format!("collection/{hash}.json")
 }
 
 /// True when `s` is `len` lower-case hex digits.
@@ -435,6 +503,67 @@ mod tests {
         let none = Head::parse(head("catalog/0123456789abcdef.sqlite.gz").as_bytes()).unwrap();
         assert!(none.moved.is_empty());
         assert!(!serde_json::to_string(&none).unwrap().contains("moved"));
+    }
+
+    #[test]
+    fn a_head_says_how_big_the_collection_is_and_leaves_it_out_when_there_is_none() {
+        let none = Head::parse(head("catalog/0123456789abcdef.sqlite.gz").as_bytes()).unwrap();
+        assert_eq!(
+            (none.collection, none.collection_license.as_str()),
+            (0, ""),
+            "a head from before the collection"
+        );
+        assert!(!serde_json::to_string(&none).unwrap().contains("collection"));
+        let some = head("catalog/0123456789abcdef.sqlite.gz").replace(
+            r#""mirrors": []"#,
+            r#""mirrors": [], "collection": 587, "collection_license": "MIT",
+  "collection_manifest": "collection/0123456789abcdef.json""#,
+        );
+        let h = Head::parse(some.as_bytes()).unwrap();
+        assert_eq!((h.collection, h.collection_license.as_str()), (587, "MIT"));
+        assert_eq!(h.collection_manifest, "collection/0123456789abcdef.json");
+        assert!(serde_json::to_string(&h).unwrap().ends_with(
+            r#""collection":587,"collection_license":"MIT","collection_manifest":"collection/0123456789abcdef.json"}"#
+        ));
+    }
+
+    #[test]
+    fn a_published_collection_is_named_after_its_bytes_which_are_the_same_every_time() {
+        let collection = PublishedCollection {
+            version: COLLECTION_MANIFEST_VERSION,
+            license: "MIT".into(),
+            skins: vec![PublishedOfficialSkin {
+                name: "Giraffe cola".into(),
+                tags: vec!["pop art".into()],
+                sha256: "b".repeat(64),
+                ext: "webp".into(),
+                bytes: 1234,
+                w: 1024,
+                h: 1024,
+                added: "2026-09-30".into(),
+            }],
+        };
+        let (path, bytes) = collection.to_file().unwrap();
+        assert_eq!(collection.to_file().unwrap(), (path.clone(), bytes.clone()));
+        assert_eq!(
+            path,
+            collection_manifest_path(&sha256_hex(&bytes)[..16]),
+            "{path}"
+        );
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "version": 1,
+                "license": "MIT",
+                "skins": [{
+                    "name": "Giraffe cola", "tags": ["pop art"], "sha256": "b".repeat(64),
+                    "ext": "webp", "bytes": 1234, "w": 1024, "h": 1024, "added": "2026-09-30"
+                }]
+            })
+        );
+        let read: PublishedCollection = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(read, collection);
     }
 
     #[test]
@@ -597,6 +726,10 @@ mod tests {
         assert_eq!(strip_path("ab"), "strips/ab.webp");
         assert_eq!(picture_path("cd", "jpg"), "pictures/cd.jpg");
         assert_eq!(manifest_path("x", "ab"), "packs/x/ab.json");
+        assert_eq!(
+            collection_manifest_path("0123456789abcdef"),
+            "collection/0123456789abcdef.json"
+        );
         assert!(is_hex(&sha256_hex(b""), 64));
     }
 }

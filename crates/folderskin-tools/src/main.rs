@@ -9,10 +9,12 @@ use folderskin_core::compositor::{
 };
 use folderskin_core::raster;
 use folderskin_share::{Client, DeviceKey};
-use folderskin_tools::cli::{Cli, Command, CommunityCommand, PacksCommand, Service};
+use folderskin_tools::cli::{
+    Cli, CollectionCommand, Command, CommunityCommand, PacksCommand, Service,
+};
 use folderskin_tools::normalize;
 use folderskin_tools::skin::Skin;
-use folderskin_tools::{catalog, composer, make, mirror, packs, pull, rename};
+use folderskin_tools::{catalog, collection, composer, make, mirror, packs, pull, rename};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -198,6 +200,29 @@ fn run(cli: Cli) -> Result<(), String> {
                 };
                 packs_make(&pictures, &opts, preview.as_deref())
             }
+        },
+        Command::Collection { command } => match command {
+            CollectionCommand::Add {
+                pictures,
+                dir,
+                tags,
+                flat_backdrop,
+                keep_outliers,
+                max_kb,
+                preview,
+                license,
+            } => {
+                let opts = collection::AddOptions {
+                    dir,
+                    tags,
+                    max_bytes: max_kb * 1024,
+                    flat_backdrop,
+                    keep_outliers,
+                    license,
+                };
+                collection_add(&pictures, &opts, preview.as_deref())
+            }
+            CollectionCommand::Check { dir } => collection_check(&dir),
         },
         Command::Community { command } => community(command),
     }
@@ -749,6 +774,94 @@ fn packs_make(
         println!("preview: {}", path.display());
     }
     println!("Rename the skins in pack.json if their file names don't make good names.");
+    Ok(())
+}
+
+/// Adds pictures to the official collection and says what went in, as `packs make` says it: each
+/// skin's file, whether it is a finished folder or artwork, its size and what was done to it;
+/// then the pictures skipped because the collection has them, and those left out for being too
+/// far off the others' shape.
+fn collection_add(
+    pictures: &[PathBuf],
+    opts: &collection::AddOptions,
+    preview: Option<&Path>,
+) -> Result<(), String> {
+    let added = collection::add(pictures, opts)?;
+    for m in &added.made {
+        let kind = if m.folder { "folder " } else { "artwork" };
+        let scaled = m.scaled_to.map_or(String::new(), |side| {
+            format!(
+                ", made {side} px to fit {} KB",
+                opts.max_bytes.min(folderskin_core::pack::MAX_PICTURE_BYTES) / 1024
+            )
+        });
+        println!(
+            "{kind}  {:>4} KB  {}  \"{}\"  from {}{scaled}{}",
+            m.bytes.div_ceil(1024),
+            m.file,
+            m.name,
+            m.source.display(),
+            m.shape_note()
+        );
+    }
+    for s in &added.skipped {
+        println!("{}", s.describe());
+    }
+    for l in &added.left_out {
+        println!("{}", l.describe());
+    }
+    if added.made.is_empty() {
+        println!(
+            "nothing added: the collection has every one of those pictures already, {} in all",
+            added.total
+        );
+        return Ok(());
+    }
+    let total: usize = added.made.iter().map(|m| m.bytes).sum();
+    let folders = added.made.iter().filter(|m| m.folder).count();
+    let one_shape = added.shape.map_or(String::new(), |shape| {
+        format!(", given one shape {}", normalize::times_as_wide(shape))
+    });
+    println!(
+        "added {} to {} ({folders} finished folders{one_shape}, {} artwork), {} KB; it has {} now, \
+         all good",
+        if added.made.len() == 1 {
+            "1 skin".to_string()
+        } else {
+            format!("{} skins", added.made.len())
+        },
+        added.folder.display(),
+        added.made.len() - folders,
+        total.div_ceil(1024),
+        added.total
+    );
+    if let Some(path) = preview {
+        let files: Vec<PathBuf> = added
+            .made
+            .iter()
+            .map(|m| added.folder.join(&m.file))
+            .collect();
+        let sheet =
+            packs::contact_sheet_of(&files, folderskin_core::pack::PackShape::Folder, 256, 6)?;
+        sheet
+            .save(path)
+            .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+        println!("preview: {}", path.display());
+    }
+    println!("Rename the skins in collection.json if their file names don't make good names.");
+    Ok(())
+}
+
+/// Checks the official collection in `dir`, printing each problem on its own line.
+fn collection_check(dir: &Path) -> Result<(), String> {
+    let checked = collection::check(dir);
+    for problem in &checked.problems {
+        println!("{problem}");
+    }
+    if !checked.problems.is_empty() {
+        return Err(checked.summary());
+    }
+    println!("{}", checked.summary());
     Ok(())
 }
 

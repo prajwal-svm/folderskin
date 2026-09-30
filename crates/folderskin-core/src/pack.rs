@@ -767,7 +767,8 @@ pub fn decode_picture(bytes: &[u8]) -> Result<image::RgbaImage, String> {
         .to_rgba8())
 }
 
-fn has_text(s: &str, max_chars: usize) -> bool {
+/// True when `s`, trimmed, is 1 to `max_chars` characters with none hidden ([`is_hidden`]).
+pub(crate) fn has_text(s: &str, max_chars: usize) -> bool {
     let s = s.trim();
     !s.is_empty() && s.chars().count() <= max_chars && !s.chars().any(is_hidden)
 }
@@ -781,7 +782,7 @@ fn is_hidden(c: char) -> bool {
 
 /// Adds a problem for each tag that is not already in the form [`clean_tag`] keeps, for repeats,
 /// and for going over `max`.
-fn check_tags(tags: &[String], max: usize, whose: &str, problems: &mut Vec<String>) {
+pub(crate) fn check_tags(tags: &[String], max: usize, whose: &str, problems: &mut Vec<String>) {
     if tags.len() > max {
         problems.push(format!(
             "{whose} has {} tags, and the most is {max}",

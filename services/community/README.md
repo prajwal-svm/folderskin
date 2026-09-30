@@ -10,7 +10,8 @@ It does three things:
   folderskin-community's packs workflow to publish it (`src/publish.ts`, below). The workflow pulls
   it with `folderskin-tools community pull`, checks it, commits it, and uploads the catalog it
   builds back here, into the bucket behind `https://packs.folderskin.app`.
-- **Counting installs**, for the counts on folderskin.app's gallery (`src/installs.ts`, below).
+- **Counting installs, downloads and views**, for the counts and sorts on folderskin.app's gallery
+  (`src/installs.ts` and `src/counts.ts`, below).
 
 ## The API
 
@@ -27,6 +28,9 @@ It does three things:
 | `GET /v1/exports/pending` | how many approved packs wait to be published |
 | `POST /v1/packs/<id>/installs` | one install of a community pack |
 | `GET /v1/packs/installs` | every pack's install count |
+| `POST /v1/skins/<sha256>/downloads` | one download of one skin, from the app or the website |
+| `POST /v1/views` | one view of a pack or a skin, from folderskin.app |
+| `GET /v1/stats` | every pack's installs and views and every skin's downloads and views, all told and for the last seven days |
 
 Every error is `{"error": {"code", "message"}}`, the message a sentence the app shows as it is. A
 refusal that ends at a known time also has `retry_after`, in seconds.
@@ -182,7 +186,8 @@ pnpm exec wrangler d1 execute folderskin-community --remote --file=/tmp/moved-in
 ```
 
 Each old id's count is added to its new id's (summed when both have one) and the old row deleted,
-and today's once-a-network records move too. Running it a second time changes nothing.
+and today's once-a-network records move too. The pack's views and its daily counts of installs and
+views move the same way. Running it a second time changes nothing.
 
 `GET /v1/packs/installs` answers `{"version": 1, "installs": {"classic-art-k7q2mx": 42}}`: every
 pack counted at least once. It has `Cache-Control: public, max-age=300`, and each Worker isolate
@@ -191,6 +196,69 @@ reads D1 for it at most once a minute. Pages on `https://folderskin.app` and
 plain `GET` needs no preflight, and an `OPTIONS` is answered anyway. It needs nothing but D1, so it
 works before any secret is set, and the burst limit covers it once `IP_SALT` is.
 
+Each install counted also goes into the day's count, which `GET /v1/stats` sums over the week
+(below).
+
+## Downloads, views and stats
+
+Once the app has used one skin from Community, without adding its pack, it sends
+`POST /v1/skins/<sha256>/downloads` with no body, and `?pack=<id>` when the skin came from a pack;
+the website's Download button sends the same. `<sha256>` is the SHA-256 of the skin's picture, the
+name the tree gives it. The answer is `{"counted": true}`, or `{"counted": false}` when the same
+network downloaded that skin earlier the same UTC day. It is a download of the skin alone and never
+adds to the pack's installs: `pack` is checked to be a pack id, and nothing is kept of it.
+
+When a pack's or a skin's dialog opens on folderskin.app, the page sends `POST /v1/views` with
+`{"pack": "<id>"}` or `{"skin": "<sha256>"}`, and gets the same answer, counted the same way. Only
+pages on `https://folderskin.app` and `https://www.folderskin.app` can send one: a view with any
+other `Origin`, or with none, as the app's would be, is turned away. The body is read whatever its
+`Content-Type` says, so a page can send it as `text/plain` and skip the preflight, and an `OPTIONS`
+is answered anyway, allowing `Content-Type`.
+
+A skin counts when it is published: when its thumbnail is in the `PACKS` bucket, as
+`v2/thumbs/<sha256>.webp`, or `v2/drive-thumbs/<sha256>.webp` for a skin of a pack of drives. Every
+published skin, the official collection's included, has one of the two, named after its SHA-256
+alone where its picture's name needs its extension too, so most skins take one R2 `head` and the
+rest two, and each Worker isolate remembers a skin it found for a day. The mirror uploads a skin's
+files before the `head.json` that lists it, so a skin on packs.folderskin.app is always there. A
+pack counts when `index.json` lists it, as for installs, and a renamed pack's old id counts toward
+its new one.
+
+| status | code | when |
+|---|---|---|
+| 400 | `bad_skin` | the SHA-256 isn't 64 lower-case hex digits |
+| 400 | `bad_pack` | the pack's id isn't a pack id |
+| 400 | `bad_view` | a view names neither a pack nor a skin, or both |
+| 400 | `bad_json` | a view's body isn't a JSON object |
+| 403 | `not_the_website` | a view that doesn't come from a page on folderskin.app |
+| 404 | `unknown_skin` | neither thumbnail of that skin is in the bucket |
+| 404 | `unknown_pack` | no pack with that id is in `index.json` |
+| 413 | `too_large` | a view's body is over 1 KB |
+| 429 | `slow_down` | the network's burst limit (`BURST`) is spent |
+| 503 | `not_configured` | `IP_SALT` isn't set |
+| 503 | `index_unavailable` | a view of a pack, while `index.json` can't be read and no copy from the last day is kept |
+
+`GET /v1/stats` answers with every count, for the website's sorts (trending, most viewed, most
+downloaded):
+
+```json
+{
+  "version": 1,
+  "packs": {"classic-art-k7q2mx": {"installs": 42, "views": 310, "installs_7d": 5, "views_7d": 61}},
+  "skins": {"<sha256>": {"downloads": 17, "views": 88, "downloads_7d": 3, "views_7d": 12}}
+}
+```
+
+`installs` comes from the same table `GET /v1/packs/installs` reads, which stays as it is for the
+versions of the site already out. A `_7d` number adds up the last seven UTC days, today's so far
+included. A number that is 0 is left out, and so is a pack or a skin with none at all. It has
+`Cache-Control: public, max-age=300`, and each Worker isolate reads D1 for it at most once every
+five minutes, since it reads a row for everything ever counted. Like the install counts, it needs
+nothing but D1, and the burst limit covers it once `IP_SALT` is set.
+
+The website's pages may read every answer here, errors included (`Access-Control-Allow-Origin` for
+folderskin.app and www, with `Vary: Origin`), and each address answers an `OPTIONS`.
+
 ## What is kept
 
 The `installs` table holds a count per pack id. `installs_seen` holds, for each add counted today,
@@ -198,6 +266,14 @@ the UTC day, the pack id and an HMAC of the network the request came from (its I
 /48, as the quotas count it), under a key made from `IP_SALT` for installs and for that day alone,
 so it can't be matched with the quotas' rows or with another day's. The daily cron deletes every
 `installs_seen` row from before today. No address, user agent or other header is stored.
+
+Downloads and views are kept the same way. `counts_total` holds each skin's downloads and each
+pack's and skin's views, all told, and `counts_daily` each UTC day's count of all four, installs
+included, for 30 days: the daily cron deletes the days before that. `counts_seen` is
+`installs_seen` for downloads and views: the UTC day, what was counted and an HMAC of the network,
+under a key made from `IP_SALT` for that kind of count and that day alone, so a network's
+downloads can't be matched with its views, its installs or its quotas. The daily cron deletes every
+`counts_seen` row from before today.
 
 Penalties are the one place a network is recognised from one day to the next, since a ban lasts a
 month. `penalties` and `marks` hold an HMAC of the network under a key made from `IP_SALT` for
@@ -226,8 +302,18 @@ curl -X POST http://localhost:8787/v1/packs/classic-art/installs
 curl http://localhost:8787/v1/packs/installs
 ```
 
-A FolderSkin started with `FOLDERSKIN_COMMUNITY_API=http://localhost:8787` reports its installs
-there (a development build reports nowhere else).
+A skin's download or view counts once its thumbnail is in the local bucket, and a view needs the
+website's `Origin`:
+
+```sh
+pnpm exec wrangler r2 object put folderskin-packs/v2/thumbs/<sha256>.webp --local --file=<any file>
+curl -X POST http://localhost:8787/v1/skins/<sha256>/downloads
+curl -X POST -H 'Origin: https://folderskin.app' -d '{"skin": "<sha256>"}' http://localhost:8787/v1/views
+curl http://localhost:8787/v1/stats
+```
+
+A FolderSkin started with `FOLDERSKIN_COMMUNITY_API=http://localhost:8787` reports its installs and
+downloads there (a development build reports nowhere else).
 
 ## Deploying
 
@@ -240,9 +326,11 @@ pnpm run deploy
 ```
 
 `migrations/0002_installs.sql` adds the two install tables, `migrations/0003_penalties.sql` the
-`penalties` and `marks` tables and each submission's `network`, and `migrations/0004_pending_index.sql`
-the index the pending count reads. Until they are applied, counting, sharing and decisions fail,
-and the pending count reads every approved pack. The `PACKS` binding needs the
+`penalties` and `marks` tables and each submission's `network`, `migrations/0004_pending_index.sql`
+the index the pending count reads, and `migrations/0006_counts.sql` the three tables behind
+downloads, views and the stats. Until they are applied, counting, sharing and decisions fail (an
+install too, once the Worker writes each one into the day's count), and the pending count reads
+every approved pack. The `PACKS` binding needs the
 `folderskin-packs` bucket, with `packs.folderskin.app` as its custom domain. Secrets are set with
 `wrangler secret put` and never go in the repository. `wrangler.toml` lists them,
 `GITHUB_DISPATCH_TOKEN` among them.

@@ -337,7 +337,9 @@ pub async fn manifest(
     Ok(published)
 }
 
-async fn cached(files: Option<&DiskCache>, key: Option<&str>) -> Option<Vec<u8>> {
+/// The file kept under `key` in `files`, read off the async threads; `None` when there is no
+/// such file, or nowhere to keep one.
+pub(crate) async fn cached(files: Option<&DiskCache>, key: Option<&str>) -> Option<Vec<u8>> {
     let (files, key) = (files?.clone(), key?.to_string());
     tauri::async_runtime::spawn_blocking(move || files.get(&key))
         .await

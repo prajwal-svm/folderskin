@@ -151,6 +151,9 @@ mod tests {
                 name: name.to_string(),
                 tags: vec!["pop art".into()],
                 thumbnail: format!("data:image/png;base64,{name}"),
+                sha256: None,
+                ext: None,
+                skin_id: None,
             })
             .collect()
     }

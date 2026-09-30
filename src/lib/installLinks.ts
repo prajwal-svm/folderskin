@@ -1,28 +1,28 @@
 /**
- * folderskin://install links, as the page hears of them. The app keeps the pack a link asked for
- * until the page takes it (src-tauri/src/deep_link.rs): a link can come before the window has
- * loaded, or during the first-launch welcome, so the page asks for one as it starts and again
- * each time the app says another has come.
+ * folderskin://install links, as the page hears of them. The app keeps what a link asked for (a
+ * pack, or one skin) until the page takes it (src-tauri/src/deep_link.rs): a link can come before
+ * the window has loaded, or during the first-launch welcome, so the page asks for one as it starts
+ * and again each time the app says another has come.
  */
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./devMock";
-import { api } from "./tauri";
+import { api, type InstallLink } from "./tauri";
 
 /** What the app emits when a link is waiting (deep_link.rs `EVENT`). */
 export const INSTALL_LINK_EVENT = "install-link";
 
 /**
- * Hands `open` the pack of every folderskin://install link: the one waiting now, if any, and each
- * that comes after. Returns what stops listening. A pack already taken from the app is handed
+ * Hands `open` what every folderskin://install link asks for: the one waiting now, if any, and
+ * each that comes after. Returns what stops listening. A link already taken from the app is handed
  * over even when that happens after the stop, since nothing else would ever see it (React mounts
  * everything twice in development, so a stop can come a moment after the start).
  */
-export function watchInstallLinks(open: (packId: string) => void): () => void {
+export function watchInstallLinks(open: (link: InstallLink) => void): () => void {
   const take = () => {
     api
       .takeInstallLink()
-      .then((packId) => {
-        if (packId) open(packId);
+      .then((link) => {
+        if (link && (link.pack || link.skin)) open(link);
       })
       .catch(() => {});
   };

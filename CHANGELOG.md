@@ -4,7 +4,27 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.13 - 2026-09-27
+## Unreleased
+
+### Added
+
+- **FolderSkin's official collection.** Community opens on **Official**: skins made by
+  FolderSkin that belong to no pack, free to use under MIT with credit to FolderSkin. Search
+  them, sort them by newest or by name, and open any one to see it large. The collection grows
+  over time, with no limit on how many skins it holds.
+- **Take one skin, not the whole pack.** **Use** on an official skin, or on any skin in a pack's
+  viewer, downloads just that picture, checks it and saves it in your library, picked and ready
+  to apply. **Add** still takes a whole pack and keeps it up to date. A check mark shows which
+  skins are in your library already, on a pack's skins, its card and the official grid.
+- **One skin from the website.** Each skin in folderskin.app's gallery can open FolderSkin and
+  take just that skin, as a pack's Install button takes the pack.
+- **Official skins in search.** Typing in Community lists the official skins that match at the
+  head of the matching skins.
+- **The collection from the command line.** `folderskin-tools collection add` prepares pictures
+  the way `packs make` does and adds them to the collection, and `collection check` checks it.
+  `packs check` includes the collection, and `packs catalog` publishes it.
+
+
 
 ### Fixed
 

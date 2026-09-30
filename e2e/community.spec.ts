@@ -16,6 +16,8 @@ const cards = (page: Page) => page.locator(".pack:not(.is-placeholder)");
 const search = (page: Page) => page.getByRole("searchbox", { name: /search packs/i });
 const grid = (page: Page) => page.locator(".packs-grid");
 const searches = (page: Page) => page.evaluate(() => (window as { mockCommunitySearches?: number }).mockCommunitySearches ?? 0);
+/** The first tag's tab: after Official and All. */
+const firstTag = (page: Page) => page.getByRole("tab").nth(2);
 
 test("typing searches ten thousand packs in under 300 ms, and only what's on screen is drawn", async ({ page }) => {
   await openCommunity(page);
@@ -66,7 +68,7 @@ test("typing searches ten thousand packs in under 300 ms, and only what's on scr
 
 test("a tag narrows the list, and the options sort it", async ({ page }) => {
   await openCommunity(page);
-  const tab = page.getByRole("tab").nth(1);
+  const tab = firstTag(page);
   const tag = (await tab.locator(".count").evaluate((el) => el.parentElement!.firstChild!.textContent ?? "")).trim();
   await tab.click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
@@ -148,7 +150,7 @@ test("leaving Community and coming back finds it as it was, without searching ag
   await openCommunity(page);
   await search(page).fill("neon");
   await expect(page.locator(".community-count")).toContainText("match “neon”");
-  const tab = page.getByRole("tab").nth(1);
+  const tab = firstTag(page);
   await tab.click();
   await expect(page.locator(".community-count")).toContainText("tagged");
   const status = await page.locator(".community-count").textContent();
@@ -162,7 +164,7 @@ test("leaving Community and coming back finds it as it was, without searching ag
   await openView(page, /community/i);
 
   await expect(search(page)).toHaveValue("neon");
-  await expect(page.getByRole("tab").nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(firstTag(page)).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".community-count")).toHaveText(status!);
   await expect.poll(() => grid(page).evaluate((el) => el.scrollTop)).toBe(scrolled);
   expect(await searches(page)).toBe(before);

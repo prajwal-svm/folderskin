@@ -76,6 +76,22 @@
   color: var(--muted);
 }
 
+/* The official collection's tab, first in the row: the Official badge's colours and its mark. */
+.seg-btn.is-official,
+.seg-btn.is-official:hover {
+  color: var(--accent-ink);
+}
+
+.seg-btn.is-official > svg {
+  flex: none;
+  margin-right: -2px;
+}
+
+.seg-btn.is-official .count {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
 /* ---------- skins whose names match ---------- */
 
 .skin-hits {
@@ -163,6 +179,17 @@
   font-size: 11.5px;
   color: var(--muted);
   align-self: start;
+}
+
+/* an official skin, which is in no pack: the Official badge where the pack's name would be */
+.skin-hit-mark {
+  display: flex;
+  align-self: start;
+  min-width: 0;
+}
+
+.skin-hit-mark .tag-chip {
+  height: 20px;
 }
 
 /* ---------- the packs ---------- */
@@ -515,6 +542,49 @@
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* A skin's own Use, which saves just that one: it springs in over the folder's corner under the
+   pointer or the keyboard, and stays on the skin the viewer opened at and the one being saved.
+   While one is being saved, the others stay hidden. It wears the library's tile buttons' look
+   (the star, the ⋯), which reads over a picture of any colour. */
+.pack-skin {
+  position: relative;
+}
+
+.pack-skin .pack-skin-use {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  height: 26px;
+  padding: 0 10px;
+  background: var(--island);
+  color: var(--accent-ink);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity var(--t-fast) ease,
+    transform var(--t-fast) var(--ease-in),
+    background-color var(--t-fast) ease;
+}
+
+.pack-skin .pack-skin-use:hover:not(:disabled),
+.pack-skin .pack-skin-use:focus-visible {
+  background: var(--accent-soft);
+}
+
+.pack-skin:hover .pack-skin-use:not(:disabled),
+.pack-skin .pack-skin-use:focus-visible,
+.pack-skin.is-focus .pack-skin-use:not(:disabled),
+.pack-skin.is-using .pack-skin-use {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--t-base) ease,
+    transform var(--t-slow) var(--ease-spring),
+    background-color var(--t-fast) ease;
+}
+
 .pack-skin img {
   width: 100%;
   max-width: 120px;
@@ -533,6 +603,60 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ---------- the official skins ---------- */
+
+/* Tiles as the library draws them. They arrive with their page rather than rising a row at a
+   time as the list scrolls, and hovering one tints the square behind it, as focus does. */
+.packs-grid.is-skins .tile {
+  height: 100%;
+  animation: none;
+}
+
+.packs-grid.is-skins .tile-img {
+  animation: fade-in var(--t-base) ease both;
+}
+
+.packs-grid.is-skins .tile-hit:hover .tile-art::before {
+  opacity: 0.5;
+  transform: none;
+}
+
+/* a place whose page is on its way */
+.tile.is-placeholder {
+  pointer-events: none;
+}
+
+.skin-blank {
+  position: absolute;
+  inset: 7%;
+  border-radius: 18%;
+  background: linear-gradient(90deg, var(--well-2), var(--island), var(--well-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  animation-play-state: var(--loop-state);
+}
+
+.tile.is-placeholder .pack-line {
+  width: 60%;
+  margin-top: 3px;
+}
+
+/* the skin viewer: one official skin, as big as its thumbnail stays sharp */
+.skin-view {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--well);
+}
+
+.skin-view img {
+  width: min(256px, 100%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  animation: fade-in var(--t-base) ease both;
 }
 
 /* Add in the viewer, filling as the pack arrives */
