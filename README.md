@@ -60,7 +60,8 @@ Free · Open source · No account · No tracking
 | Use a photo of your own | Drop the picture on the window, or press **Add your photo** |
 | Design your own | **Design your own**: start from a colour, a label, an emoji or a photo, change anything, then **Save & apply** |
 | Have an AI paint one | **Generate with AI**, with your own API key, or the prompt for Grok's or ChatGPT's chat under **No API key?** |
-| Get skins other people made | **Community**, then add a pack |
+| Get FolderSkin's own skins | **Community** opens on **Official**: open a skin, then **Use this skin** |
+| Get skins other people made | **Community**, then add a pack, or **Use** just one of its skins |
 | Share yours | A skin's ⋯ menu → **Share with community** |
 | Find a skin again | The tags along the top, ⌘F / Ctrl+F, the filter button (colour, pack, when you added it and more), or the star for **Favourites** |
 | Undo it | **Revert**, or **Remove custom icon** on a folder that already has one, puts the operating system's icon back |
@@ -68,16 +69,16 @@ Free · Open source · No account · No tracking
 ## What stays on your computer
 
 Everything except the few things that need the internet. There's no account, no paywall and
-nothing that tracks you: the one thing FolderSkin reports is that a community pack was added, by
-the pack's id alone, so folderskin.app can show how often each is added. On a Mac the download is
-under 20 MB.
+nothing that tracks you: the one thing FolderSkin reports is that a community pack or skin was
+added, by nothing but the pack's id and the picture's hash, so folderskin.app can show how often
+each is added. On a Mac the download is under 20 MB.
 
 | Stays on your computer | Goes online |
 | --- | --- |
 | Your folders and the icons FolderSkin writes | An AI request, when you make one: sent to the provider you picked, with your key |
 | Every picture you add and every skin you make | Community and the first launch, which read the shared packs from packs.folderskin.app, or from GitHub when that doesn't answer |
 | Your AI keys, encrypted | The update check: when it opens, FolderSkin reads the newest release's version file from GitHub |
-| Favourites, tags and settings | Adding a pack from Community: its id, and nothing else, goes to FolderSkin's community service, which counts adds once a day per network and keeps no address ([details](docs/PACKS.md#install-counts)) |
+| Favourites, tags and settings | Adding a pack or one skin from Community: nothing but the pack's id and the skin's picture hash goes to FolderSkin's community service, which counts each once a day per network and keeps no address ([details](docs/PACKS.md#install-counts)) |
 
 The [privacy policy](https://folderskin.app/privacy/) lists everything FolderSkin sends, where it
 goes, and what the community service keeps.
@@ -160,8 +161,11 @@ FolderSkin ships no skins of its own. People share skins and packs of skins thro
 free for everyone. The first launch offers them, and **Community** has them any time. Adding a pack puts
 its skins in your library with their tags, and the **Install** button on a pack in the gallery on
 [folderskin.app](https://folderskin.app/community/) opens FolderSkin and adds it for you. Packs
-marked **Official** are ones the maintainer vouches for. **Classic Art** is a good first pack: sixteen
-public-domain paintings, from the Mona Lisa to The Starry Night, each painted onto a folder. To share yours, open a skin's ⋯ menu and
+marked **Official** are ones the maintainer vouches for. Community opens on **Official**,
+FolderSkin's own collection of skins that belong to no pack, free to use under MIT and growing over
+time. **Use this skin** on one of them, or **Use** on any skin in a pack, saves just that skin in
+your library, picked and ready to apply, and a check mark shows the skins you have already.
+**Classic Art** is a good first pack: sixteen public-domain paintings, from the Mona Lisa to The Starry Night, each painted onto a folder. To share yours, open a skin's ⋯ menu and
 choose **Share with community**, or use **Community → Share your skins** for several. You verify
 your computer once in the browser, with no account, and a person reviews the pack before it joins
 Community for everyone. **Save a folder** in the same dialog writes the pack as files instead.

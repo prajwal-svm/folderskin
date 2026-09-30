@@ -1,10 +1,12 @@
 # 커뮤니티 스킨과 팩
 
-누구나 FolderSkin을 쓰는 모든 사람과 스킨을 무료로 공유할 수 있어요. 공유하는 스킨 묶음을 **팩**이라고 하고, 스킨 하나만 있어도 하나의 팩이에요. 팩은 별도의 저장소인 [folderskin-community](https://github.com/prajwal-svm/folderskin-community)의 `packs/` 아래에 있고, 팩을 추가할 때 계정은 필요 없어요. FolderSkin에는 기본으로 들어 있는 스킨이 없어요. 스킨은 모두 팩이나 내 이미지, AI 생성 결과에서 나와요.
+누구나 FolderSkin을 쓰는 모든 사람과 스킨을 무료로 공유할 수 있어요. 공유하는 스킨 묶음을 **팩**이라고 하고, 스킨 하나만 있어도 하나의 팩이에요. 팩은 별도의 저장소인 [folderskin-community](https://github.com/prajwal-svm/folderskin-community)의 `packs/` 아래에 있고, 팩을 추가할 때 계정은 필요 없어요. FolderSkin에는 기본으로 들어 있는 스킨이 없어요. 스킨은 모두 [공식 컬렉션](#공식-컬렉션)이나 팩, 내 이미지, AI 생성 결과에서 나오고, 요청하기 전에는 아무것도 내려받지 않아요.
 
 ## 팩 추가하기
 
 FolderSkin을 처음 열면 라이브러리를 채울 첫 팩을 추천해 줘요. 그다음부터는 앱에서 **커뮤니티**를 열면 돼요. 위쪽의 필터는 팩에 붙은 태그예요. **추가**를 누르면 팩의 스킨이 팩의 태그와 함께 라이브러리에 들어가요. 각 스킨의 ⋯ 메뉴에서 어느 팩에서 왔는지, 누가 공유했는지 볼 수 있어요. **제거**를 누르면 팩 전체를 다시 빼요. 이미 그 팩의 스킨을 쓰고 있는 폴더는 아이콘이 그대로 남아요. 아이콘은 폴더 안에 저장되기 때문이에요.
+
+팩 뷰어에서 스킨 하나의 **사용**을 누르면 그 스킨만 가져와요. 그 스킨의 이미지만 내려받아 검사하고 라이브러리에 저장한 다음 선택해 두기 때문에 바로 적용할 수 있어요. 팩은 추가되지 않고, 팩의 **업데이트**와 **제거**도 그 스킨은 건드리지 않아요. 나중에 팩을 추가하면 그 스킨은 팩의 일부가 되고, 한 번만 저장돼요. 이미 라이브러리에 있는 스킨에는 체크 표시가 붙어요. 팩 뷰어에서는 각 스킨에 붙고, 추가하지는 않았지만 스킨을 가져온 적이 있는 팩에서는 카드와 뷰어에 "✓ 3/40"처럼 표시돼요.
 
 **폴더에서 추가**는 내 컴퓨터에 있는 팩 폴더로 같은 일을 해요. 팩을 공유하기 전에 미리 써 볼 때도 이 방법을 써요.
 
@@ -275,11 +277,41 @@ folderskin-community의 루트에는 `packs/` 옆에 목록 두 개가 있고, �
 
 두 파일 모두 없어도 돼요. 모든 ID는 `packs/`에 있는 팩이어야 하고, 두 번 나온 ID는 한 번으로 쳐요. 둘 중 하나라도 없는 팩을 가리키면 `packs index`와 `packs catalog`는 멈추고 아무것도 쓰지 않아요. 그래서 ID를 바꾸거나 지운 팩이 빈자리로 남는 일은 없어요. 풀 리퀘스트 검사에서 `packs catalog`를 실행하기 때문에 병합 전에 잡아낼 수 있어요. `packs rename`은 두 목록을 알아서 고쳐 줘요. folderskin-community의 Packs 워크플로는 `paths`에 있는 파일이 바뀌면 인덱스를 다시 만들어요. 그래서 두 목록은 `packs/**`와 함께 `paths`에 들어 있어야 하고, `moved.json`도 마찬가지예요.
 
+## 공식 컬렉션
+
+커뮤니티는 **공식**에서 시작해요. 어느 팩에도 속하지 않는, FolderSkin이 만든 스킨이에요. 팩마다 고르는 라이선스도, 스킨 수 제한도 없어서 컬렉션은 시간이 지나면서 점점 늘어나요. 컬렉션의 모든 스킨은 컬렉션이 정한 라이선스(MIT, FolderSkin 출처 표시)를 따라요. 검색하고, 최신순이나 이름순으로 정렬하고, 스킨을 열어 크게 볼 수 있어요. **이 스킨 사용**을 누르면 팩에서 **사용**을 누를 때처럼 그 스킨 하나만 라이브러리에 저장하고 선택해요. 이미 라이브러리에 있는 스킨에는 체크 표시가 붙고, 버튼이 **라이브러리에 있음**으로 바뀌어요. 이 버튼을 누르면 그 스킨을 선택해요. **전체**에서 검색어를 입력하면 일치하는 공식 스킨이 일치하는 스킨들의 맨 앞에 나와요.
+
+컬렉션은 folderskin-community의 `collection/`에 있어요. 이미지들과, 이미지를 순서대로 나열한 `collection.json`이에요.
+
+```json
+{
+  "version": 1,
+  "license": "MIT",
+  "skins": [
+    { "file": "vibe-giraffe-cola.webp", "name": "Giraffe Cola", "tags": ["pop art"], "added": "2026-09-30" }
+  ]
+}
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `license` | `CC0-1.0`, `CC-BY-4.0`, `MIT` 중 하나. 컬렉션의 모든 스킨에 적용돼요 |
+| `file` | `collection/`에 있는 이미지. 이름은 팩 이미지와 같은 규칙을 따라요. 그 안의 모든 이미지는 한 번씩만 나열되고, 같은 이미지가 두 번 들어갈 수 없어요 |
+| `name` | 1~60자 |
+| `tags` | 최대 3개. 팩의 스킨과 같아요 |
+| `added` | 컬렉션에 들어온 날짜. `YYYY-MM-DD` |
+
+각 이미지는 [팩 이미지 규칙](#이미지)을 따라요. 무손실이고, 최대 1.5MB, 각 변이 256~1024px예요. 스킨 수나 전체 크기에는 제한이 없고, 만일을 위한 상한 20,000개만 있어요.
+
+컬렉션에는 메인테이너만 `folderskin-tools collection add`로 스킨을 추가해요. 이 명령은 `packs make`와 같은 방식으로 각 이미지를 준비하고(완성된 폴더는 잘라 내어 한 가지 모양으로 맞추고, 모든 이미지를 1024px 무손실 WebP로 줄여요), 파일 이름으로 이름을 붙이고, 오늘 날짜를 넣어요. `collection check`는 컬렉션 전체를 검사해요. `packs check`도 컬렉션을 함께 검사하고, 문제가 있는 동안에는 `packs catalog`가 공개를 거부해요. `packs catalog`는 각 이미지와 썸네일을 팩의 것과 함께 `pictures/`와 `thumbs/`에 공개하고, 카탈로그의 `collection` 테이블에 컬렉션을 넣고, 웹사이트를 위해 목록 전체를 `collection/<hash>.json`으로 써요. `head.json`에는 스킨 수(`"collection"`), 라이선스(`"collection_license"`), 그 목록의 위치(`"collection_manifest"`)가 들어 있어요. FolderSkin 0.1.13 이하는 이 중 아무것도 읽지 않아요.
+
 ## 설치 링크
 
 `folderskin://install?pack=<id>`를 열면 FolderSkin이 커뮤니티에서 `<id>` 팩을 보여 주고 추가해요. 팩의 **추가** 버튼과 똑같이 동작하고, 진행 표시와 마지막 메시지도 같아요. 먼저 창이 맨 앞으로 나와요. GitHub에 다시 물어봐도 커뮤니티에 그 ID의 팩이 없으면, FolderSkin이 그렇다고 알려 주고 검색해 보라고 제안해요. 이미 라이브러리에 있는 팩이면 팩을 열고 이미 있다고 알려 줘요. 0.1.7부터는 옛 ID가 든 링크를 열면 옮겨 간 팩이 열려요([moved.json](#movedjson)).
 
-FolderSkin은 정확히 다음 형식인 링크만 받아요. 스킴은 `folderskin`이고, `install`이 호스트(`folderskin://install?…`)이거나 경로 전체(`folderskin:install?…`)여야 해요. 사용자, 비밀번호, 포트는 없어야 하고, `pack`이 정확히 하나 있어야 하며, 그 값은 팩 ID(소문자 영문자와 숫자로 된 단어를 하이픈 하나로 이어 붙인 최대 40자)여야 해요. 다른 매개변수는 건너뛰고, 그 밖의 링크는 무시해요.
+같은 링크로 팩 전체 대신 스킨 하나를, 그 이미지의 SHA-256으로 지정할 수도 있어요. 공식 컬렉션의 스킨은 `folderskin://install?skin=<sha256>`, `<id>` 팩의 스킨은 `folderskin://install?skin=<sha256>&in=<id>`예요. 커뮤니티에서 그 스킨을 열고(공식 스킨은 단독으로, 팩의 스킨은 그 팩 안에서 그 스킨까지 스크롤해서), 스킨의 **사용** 버튼과 똑같이 사용해요. 그 스킨 하나만 라이브러리에 저장되고 선택되어 바로 적용할 수 있고, 팩은 추가되지 않아요. 더 이상 목록에 없는 스킨이면 없어졌다고 알려 줘요. 스킨의 팩을 `pack`이 아니라 `in`으로 지정하는 이유는 FolderSkin 0.1.13 이하가 `skin`을 건너뛰기 때문이에요. `pack`이었다면 이 버전들은 팩 전체를 추가하겠지만, `in`이면 팩을 찾지 못해 링크를 무시해요.
+
+FolderSkin은 정확히 다음 형식인 링크만 받아요. 스킴은 `folderskin`이고, `install`이 호스트(`folderskin://install?…`)이거나 경로 전체(`folderskin:install?…`)여야 해요. 사용자, 비밀번호, 포트는 없어야 하고, `pack`, `skin`, `in`은 각각 많아야 하나씩이어야 해요. `pack`과 `in`의 값은 팩 ID(소문자 영문자와 숫자로 된 단어를 하이픈 하나로 이어 붙인 최대 40자)여야 하고, `skin`의 값은 소문자 16진수 64자리여야 해요. `skin`이 있는 링크는 언제나 그 스킨만을 위한 링크예요. `skin`이 올바르지 않거나 옆에 `pack`이 있는 링크는 무시하고, 팩 전체를 위한 링크로 받아들이지 않아요. `skin`이 없으면 `pack`이 있어야 해요. 다른 매개변수는 건너뛰고, 그 밖의 링크는 무시해요.
 
 스킴은 설치 프로그램이 등록해요. macOS는 앱의 `Info.plist`, Windows는 설치 프로그램, Linux는 `.deb`와 `.rpm`의 데스크톱 항목이에요. AppImage는 설치하는 과정이 없어서 실행할 때 직접 등록해요. Windows와 Linux에서는 링크를 열면 두 번째 FolderSkin이 실행되어 이미 실행 중인 FolderSkin에 링크를 넘기고 종료하기 때문에, 항상 하나만 실행돼요.
 
@@ -290,13 +322,13 @@ FolderSkin은 정확히 다음 형식인 링크만 받아요. 스킴은 `folders
 | macOS | 앱을 빌드하고(`pnpm tauri build --bundles app`) `target/release/bundle/macos/FolderSkin.app`을 한 번 열어 macOS에 스킴을 등록해요(`/Applications`에 복사한 사본이 가장 확실해요). 그런 다음 `open 'folderskin://install?pack=classic-art'`를 실행해요. macOS는 번들로 만든 앱에만 링크를 보내기 때문에 `pnpm tauri dev`는 링크를 받지 못해요 |
 | Windows | 빌드를 설치하거나 `FOLDERSKIN_REGISTER_LINKS=1`을 설정하고 `pnpm tauri dev`를 실행해요(개발 빌드는 그럴 때만 스스로 스킴을 등록해요). 그런 다음 명령 프롬프트에서 `start "" "folderskin://install?pack=classic-art"`를 실행하거나, 실행 창(Windows+R)에 같은 링크를 입력해요 |
 | Linux | `.deb`나 `.rpm`을 설치하거나, AppImage를 한 번 실행하거나, `FOLDERSKIN_REGISTER_LINKS=1`을 설정하고 `pnpm tauri dev`를 실행해요. 그런 다음 `xdg-open 'folderskin://install?pack=classic-art'`를 실행해요 |
-| 브라우저 미리 보기 | `pnpm dev`를 실행하고 `http://localhost:14200/?install=classic-art`를 열어요 |
+| 브라우저 미리 보기 | `pnpm dev`를 실행하고 `http://localhost:14200/?install=classic-art`를 열어요. 스킨은 `?skin=<sha256>`로 열어요(팩의 스킨이면 `&in=<id>`도 붙여요) |
 
 Windows나 Linux에서 `pnpm tauri dev`를 실행하기 전에 설치된 FolderSkin을 종료하세요. 이미 실행 중인 FolderSkin이 있으면 새로 실행한 쪽이 링크를 넘기고 종료해 버려요. 스킴을 등록한 개발 빌드는 설치 프로그램이나 다른 빌드가 다시 등록할 때까지 그 등록을 유지해요.
 
 ## 설치 수
 
-커뮤니티의 팩이 추가되면 FolderSkin은 커뮤니티 서비스에 그 팩의 ID를 알려요. 본문 없이 `POST https://community.folderskin.app/v1/packs/<id>/installs`를 보내는 게 전부예요. 계정도, 기기 ID도, 라이브러리나 폴더에 관한 정보도 보내지 않아요(FolderSkin의 다른 모든 요청처럼 User-Agent에는 앱 버전이 들어가요). 이 요청은 팩을 저장한 다음에 보내고, 5초가 지나면 포기해요. 이 요청을 기다리는 것도 없고, 실패해도 알리지 않아요. 개발 빌드와, 다른 사본에서 팩을 읽는 빌드(`FOLDERSKIN_COMMUNITY_URL`)는 `FOLDERSKIN_COMMUNITY_API`로 보낼 서비스를 지정하지 않는 한 아무것도 보내지 않아요.
+커뮤니티의 팩이 추가되면 FolderSkin은 커뮤니티 서비스에 그 팩의 ID를 알려요. 본문 없이 `POST https://community.folderskin.app/v1/packs/<id>/installs`를 보내요. 스킨 하나만 따로 사용하면(**사용**) 대신 그 스킨 이미지의 SHA-256을 알려요. 팩의 스킨이면 `?pack=<id>`를 붙여, 역시 본문 없이 `POST https://community.folderskin.app/v1/skins/<sha256>/downloads`를 보내요. 이 수는 따로 세기 때문에, 팩의 스킨을 사용해도 팩의 설치 수는 늘지 않아요. 보내는 건 이게 전부예요. 계정도, 기기 ID도, 라이브러리나 폴더에 관한 정보도 보내지 않아요(FolderSkin의 다른 모든 요청처럼 User-Agent에는 앱 버전이 들어가요). 이 요청은 팩이나 스킨을 저장한 다음에 보내고, 5초가 지나면 포기해요. 이 요청을 기다리는 것도 없고, 실패해도 알리지 않아요. 개발 빌드와, 다른 사본에서 팩을 읽는 빌드(`FOLDERSKIN_COMMUNITY_URL`)는 `FOLDERSKIN_COMMUNITY_API`로 보낼 서비스를 지정하지 않는 한 아무것도 보내지 않아요. 앱은 조회 수를 보내지 않아요. 조회 수는 folderskin.app만 세요.
 
 서비스는 네트워크와 팩마다 하루에 한 번만 추가를 세고, 공개된 `index.json`에 있는 팩만 대상으로 해요. 옛 ID로 추가한 것은 옮겨 간 팩으로 세기 때문에, 0.1.7 이전 앱에서 추가한 것도 계속 세어져요. 서비스는 팩별 횟수와, 그날(UTC)이 끝날 때까지 요청이 온 네트워크의 솔트 처리된 해시를 보관해요. 그래서 같은 날 같은 팩을 다시 추가해도 두 번 세지 않아요. 이 해시는 매일 하는 정리 작업에서 지워져요. 주소는 저장하지 않아요.
 

@@ -4,8 +4,9 @@ Tout le monde peut partager gratuitement des habillages avec tous les utilisateu
 Une série d'habillages partagée s'appelle un **pack**, et un habillage seul forme un pack à lui tout
 seul. Les packs vivent dans leur propre dépôt,
 [folderskin-community](https://github.com/prajwal-svm/folderskin-community), dans `packs/`, et en
-ajouter un ne demande aucun compte. FolderSkin n'est livré avec aucun habillage : tous viennent des
-packs, de vos propres images ou des résultats de l'IA.
+ajouter un ne demande aucun compte. FolderSkin n'est livré avec aucun habillage : tous viennent de
+sa [collection officielle](#la-collection-officielle), des packs, de vos propres images ou des
+résultats de l'IA, et rien n'est téléchargé avant que vous le demandiez.
 
 ## Ajouter un pack
 
@@ -15,6 +16,14 @@ habillages d'un pack dans votre bibliothèque, avec les tags du pack, et le menu
 habillage indique de quel pack il vient et qui l'a partagé. **Retirer** enlève le pack entier. Les
 dossiers qui utilisent déjà l'un de ses habillages gardent leur icône, car l'icône est stockée dans
 le dossier lui-même.
+
+**Utiliser**, sur n'importe quel habillage dans la vue d'un pack, ne prend que cet habillage :
+seule son image est téléchargée, vérifiée et enregistrée dans votre bibliothèque, et l'habillage
+est sélectionné, prêt à être appliqué. Le pack n'est pas ajouté, et ses boutons **Mettre à jour**
+et **Retirer** ne touchent pas à cet habillage. Si vous ajoutez le pack plus tard, l'habillage en
+fait partie, enregistré une seule fois. Une coche indique les habillages déjà présents dans votre
+bibliothèque : sur chaque habillage dans la vue d'un pack, et sous la forme « ✓ 3/40 » sur la carte
+et dans la vue d'un pack que vous n'avez pas ajouté mais dont vous avez pris des habillages.
 
 **Ajouter depuis un dossier** fait de même avec un dossier de pack présent sur votre ordinateur.
 C'est aussi la façon de tester un pack avant de le partager.
@@ -539,6 +548,54 @@ problème avant la fusion. `packs rename` réécrit lui-même les deux listes. L
 folderskin-community reconstruit l'index quand un fichier de ses `paths` change : les deux listes y
 ont donc leur place, à côté de `packs/**`, tout comme `moved.json`.
 
+## La collection officielle
+
+La Communauté s'ouvre sur **Officiel** : des habillages créés par FolderSkin qui n'appartiennent à
+aucun pack. La collection n'a ni licence choisie pack par pack, ni limite au nombre d'habillages
+qu'elle contient : elle s'agrandit donc avec le temps. Chacun de ses habillages est sous la licence
+que nomme la collection (MIT, en créditant FolderSkin). Vous pouvez y chercher, la trier par date
+(les plus récents d'abord) ou par nom, et ouvrir un habillage pour le voir en grand. **Utiliser cet
+habillage** enregistre cet habillage seul dans votre bibliothèque et le sélectionne, comme
+**Utiliser** dans un pack. Un habillage déjà présent dans votre bibliothèque porte une coche, et
+son bouton devient **Dans la bibliothèque**, qui le sélectionne. Une recherche tapée sous **Tous**
+affiche les habillages officiels correspondants en tête des habillages trouvés.
+
+Elle se trouve dans `collection/`, dans folderskin-community : les images, et `collection.json`,
+qui les liste dans l'ordre :
+
+```json
+{
+  "version": 1,
+  "license": "MIT",
+  "skins": [
+    { "file": "vibe-giraffe-cola.webp", "name": "Giraffe Cola", "tags": ["pop art"], "added": "2026-09-30" }
+  ]
+}
+```
+
+| champ | règle |
+|---|---|
+| `license` | `CC0-1.0`, `CC-BY-4.0` ou `MIT`, pour tous les habillages de la collection |
+| `file` | une image de `collection/`, nommée comme les images d'un pack. Chaque image de ce dossier est listée une fois, et deux entrées ne peuvent pas être la même image |
+| `name` | de 1 à 60 caractères |
+| `tags` | 3 au maximum, comme pour un habillage de pack |
+| `added` | le jour où il a rejoint la collection, `YYYY-MM-DD` |
+
+Chaque image suit [les règles des images d'un pack](#images) : sans perte, 1,5 Mo au maximum, de 256
+à 1024 px de côté. Il n'y a aucune limite de nombre ni de taille, hormis un plafond de sécurité de
+20 000 habillages.
+
+Seul le mainteneur y ajoute des habillages, avec `folderskin-tools collection add`, qui prépare
+chaque image comme le fait `packs make` (les dossiers finis sont découpés et ramenés à une même
+forme, et tout est réduit en WebP sans perte de 1024 px), lui donne le nom de son fichier et la
+date du jour. `collection check` vérifie toute la collection. `packs check` l'inclut, et
+`packs catalog` refuse de publier tant qu'elle a un problème. `packs catalog` publie chaque image
+et sa vignette dans `pictures/` et `thumbs/`, à côté de celles des packs, liste la collection dans
+une table `collection` du catalogue, et écrit la liste entière sous la forme
+`collection/<hash>.json` pour le site. `head.json` indique combien il y a d'habillages
+(`"collection"`), sous quelle licence (`"collection_license"`) et où se trouve cette liste
+(`"collection_manifest"`). FolderSkin 0.1.13 et les versions précédentes n'en lisent rien.
+
 ## Le lien d'installation
 
 `folderskin://install?pack=<id>` ouvre FolderSkin sur le pack `<id>` dans la Communauté et l'ajoute,
@@ -548,11 +605,25 @@ après avoir interrogé à nouveau GitHub, FolderSkin le signale et propose de l
 déjà présent dans votre bibliothèque est ouvert, avec un message qui le précise. Depuis la 0.1.7, un
 lien avec un ancien identifiant ouvre le pack vers lequel il a été déplacé ([moved.json](#movedjson)).
 
+Le même lien peut désigner un seul habillage au lieu d'un pack entier, par le SHA-256 de son image :
+`folderskin://install?skin=<sha256>` pour un habillage de la collection officielle, et
+`folderskin://install?skin=<sha256>&in=<id>` pour un habillage du pack `<id>`. Il ouvre cet
+habillage dans la Communauté (un habillage officiel seul, celui d'un pack dans son pack, avec la vue
+qui défile jusqu'à lui) et l'utilise, exactement comme son bouton **Utiliser** : cet habillage seul
+est enregistré dans votre bibliothèque et sélectionné, prêt à être appliqué, et le pack n'est pas
+ajouté. Si l'habillage n'y est plus listé, FolderSkin signale qu'il a disparu. Le pack d'un
+habillage se donne avec `in`, et non `pack` : FolderSkin 0.1.13 et les versions précédentes
+laissent `skin` de côté, donc avec un `pack` elles ajouteraient le pack entier, alors qu'avec `in`
+elles ne trouvent aucun pack et ignorent le lien.
+
 FolderSkin n'accepte un lien que s'il a exactement cette forme : le schéma `folderskin`, `install`
 comme hôte (`folderskin://install?…`) ou comme chemin entier (`folderskin:install?…`), sans
-utilisateur, mot de passe ni port, et exactement un `pack`, qui doit être un identifiant de pack
-(des lettres minuscules et des chiffres, en mots reliés par des tirets simples, 40 caractères au
-maximum). Tout autre paramètre est laissé de côté, et tout autre lien est ignoré.
+utilisateur, mot de passe ni port, et au plus un `pack`, un `skin` et un `in`. Un `pack` ou un `in`
+doit être un identifiant de pack (des lettres minuscules et des chiffres, en mots reliés par des
+tirets simples, 40 caractères au maximum), et un `skin`, 64 chiffres hexadécimaux en minuscules. Un
+lien avec un `skin` ne vaut jamais que pour cet habillage : s'il a un `skin` incorrect, ou un `pack`
+à côté, il est ignoré, et jamais pris pour tout son pack. Sans `skin`, il lui faut un `pack`. Tout
+autre paramètre est laissé de côté, et tout autre lien est ignoré.
 
 Les installateurs enregistrent le schéma : le `Info.plist` de l'app macOS, les installateurs Windows
 et l'entrée de bureau des `.deb` et `.rpm` Linux. Une AppImage l'enregistre à son démarrage, puisque
@@ -566,7 +637,7 @@ Pour l'essayer :
 | macOS | Compilez l'app (`pnpm tauri build --bundles app`) et ouvrez une fois `target/release/bundle/macos/FolderSkin.app`, ce qui enregistre le schéma auprès de macOS (une copie dans `/Applications` est le plus sûr), puis lancez `open 'folderskin://install?pack=classic-art'`. macOS n'envoie les liens qu'à une app empaquetée, donc `pnpm tauri dev` n'en reçoit jamais |
 | Windows | Installez une version compilée, ou lancez `pnpm tauri dev` avec `FOLDERSKIN_REGISTER_LINKS=1` défini (une version de développement n'enregistre le schéma pour elle-même qu'à cette condition), puis `start "" "folderskin://install?pack=classic-art"` dans une invite de commandes, ou le même lien dans la boîte Exécuter (Windows+R) |
 | Linux | Installez le `.deb` ou le `.rpm`, démarrez l'AppImage une fois, ou lancez `pnpm tauri dev` avec `FOLDERSKIN_REGISTER_LINKS=1` défini, puis `xdg-open 'folderskin://install?pack=classic-art'` |
-| aperçu dans le navigateur | `pnpm dev` et ouvrez `http://localhost:14200/?install=classic-art` |
+| aperçu dans le navigateur | `pnpm dev` et ouvrez `http://localhost:14200/?install=classic-art`, ou `?skin=<sha256>` (avec `&in=<id>` pour un habillage de pack) |
 
 Quittez le FolderSkin installé avant `pnpm tauri dev` sous Windows ou Linux : si un exemplaire tourne
 déjà, le nouveau lui passe la main et se ferme. Une version de développement qui a enregistré le
@@ -576,12 +647,17 @@ schéma le garde jusqu'à ce qu'un installateur ou une autre version compilée l
 
 Quand un pack de la Communauté a été ajouté, FolderSkin communique l'identifiant du pack à son
 service communautaire : `POST https://community.folderskin.app/v1/packs/<id>/installs`, sans corps
-de requête. C'est tout ce qu'il envoie : aucun compte, aucun identifiant d'appareil, rien sur votre
-bibliothèque ni sur vos dossiers (comme toutes les requêtes de FolderSkin, celle-ci indique la
-version de l'app dans son User-Agent). L'envoi a lieu après l'enregistrement du pack, abandonne au
-bout de cinq secondes, et rien ne l'attend ni ne signale d'échec. Une version de développement, ou
-une version qui lit les packs depuis une autre copie (`FOLDERSKIN_COMMUNITY_URL`), n'envoie rien,
-sauf si `FOLDERSKIN_COMMUNITY_API` désigne un service destinataire.
+de requête. Quand un seul habillage a été utilisé (**Utiliser**), il lui communique plutôt le
+SHA-256 de l'image de l'habillage : `POST https://community.folderskin.app/v1/skins/<sha256>/downloads`,
+avec `?pack=<id>` pour un habillage de pack, là encore sans corps de requête. C'est un compteur à
+part : utiliser un habillage d'un pack n'ajoute jamais rien aux installations du pack. C'est tout ce
+qu'il envoie : aucun compte, aucun identifiant d'appareil, rien sur votre bibliothèque ni sur vos
+dossiers (comme toutes les requêtes de FolderSkin, celle-ci indique la version de l'app dans son
+User-Agent). L'envoi a lieu après l'enregistrement du pack ou de l'habillage, abandonne au bout de
+cinq secondes, et rien ne l'attend ni ne signale d'échec. Une version de développement, ou une
+version qui lit les packs depuis une autre copie (`FOLDERSKIN_COMMUNITY_URL`), n'envoie rien, sauf
+si `FOLDERSKIN_COMMUNITY_API` désigne un service destinataire. L'app n'envoie jamais de vues : seul
+folderskin.app les compte.
 
 Le service compte un ajout une fois par jour pour chaque réseau et chaque pack, et seulement pour
 les packs de l'`index.json` publié. Un ajout sous un ancien identifiant compte pour le pack vers
