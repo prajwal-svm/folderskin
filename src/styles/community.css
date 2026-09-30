@@ -776,6 +776,9 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Each folder keeps its square, so a pack of one, two or three is never stretched to fill the
+   box: the rows sit in the middle, and a folder alone on its row (a pack of one, the third of
+   three) is centred under the others at the same size. */
 .pack-quad {
   width: 100%;
   max-width: 300px;
@@ -783,7 +786,8 @@
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-content: center;
   gap: 6px;
   padding: 10px;
   border-radius: 12px;
@@ -792,7 +796,14 @@
 }
 
 .pack-quad span {
+  aspect-ratio: 1;
   background-image: var(--strip);
   background-repeat: no-repeat;
   background-position-y: center;
+}
+
+.pack-quad span:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: calc(50% - 3px);
 }
