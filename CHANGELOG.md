@@ -4,7 +4,7 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.14 - 2026-09-30
 
 ### Added
 
@@ -24,7 +24,13 @@ All notable changes to FolderSkin are recorded here. The format follows
   the way `packs make` does and adds them to the collection, and `collection check` checks it.
   `packs check` includes the collection, and `packs catalog` publishes it.
 
+### Fixed
 
+- **A small pack's preview keeps its folders square.** In Community's gallery a pack of one, two
+  or three skins showed tall, narrow folders, and the third of three sat to one side. Every folder
+  now keeps its shape, a lone one is centred, and the panel behind them is as wide as the card.
+
+## 0.1.13 - 2026-09-27
 
 ### Fixed
 
