@@ -1,6 +1,8 @@
 //! `folderskin://install?pack=<id>` links: the Install buttons on folderskin.app's gallery. And
-//! `folderskin://install?skin=<sha256>` (an official skin) or `…?skin=<sha256>&pack=<id>` (a skin of
-//! a pack): its "Use in FolderSkin" buttons, which take that one skin.
+//! `folderskin://install?skin=<sha256>` (an official skin) or `…?skin=<sha256>&in=<id>` (a skin of
+//! a pack): its "Use in FolderSkin" buttons, which take that one skin. A skin's pack is `in`, not
+//! `pack`, because FolderSkin 0.1.13 and older pass `skin` over and would add the whole pack a
+//! `pack` names: with `in` they find no pack and leave the link alone.
 //!
 //! The scheme is in tauri.conf.json (`plugins > deep-link`), and the bundles register it with the
 //! system: the macOS app's Info.plist, the Windows installers, and the desktop entry of the Linux
@@ -46,17 +48,19 @@ pub struct InstallLink {
 }
 
 /// What a `folderskin://install?pack=<id>` link, or a `folderskin://install?skin=<sha256>` one
-/// with or without `&pack=<id>`, asks for; `None` for anything else.
+/// with or without `&in=<id>`, asks for; `None` for anything else.
 ///
 /// The scheme has to be `folderskin`, and the link has to say `install`: as its host
 /// (`folderskin://install?pack=…`, the way the website writes it, with or without a `/` after it)
 /// or as its whole path (`folderskin:install?pack=…`). It may have no user, password or port. It
-/// may name at most one `pack` and at most one `skin`. A pack has to be a pack id as
-/// `folderskin_core::pack::is_pack_id` has it: lower-case letters and digits in words joined by
-/// single dashes, at most 40 characters. A skin has to be a SHA-256, 64 lower-case hex digits.
-/// With a skin, the link is for that skin alone, never its whole pack: a skin that isn't right
-/// turns the whole link down. Without one, it needs a pack. Other parameters are passed over, so
-/// the website can add one later without the apps already installed turning its links down.
+/// may name at most one `pack`, one `skin` and one `in`. A pack (`pack`, or `in` for a skin's) has
+/// to be a pack id as `folderskin_core::pack::is_pack_id` has it: lower-case letters and digits in
+/// words joined by single dashes, at most 40 characters. A skin has to be a SHA-256, 64 lower-case
+/// hex digits. With a skin, the link is for that skin alone, never its whole pack: a skin that
+/// isn't right, or a `pack` beside it (the link an older FolderSkin would take for the whole
+/// pack), turns the whole link down. Without one, it needs a `pack`, and `in` is passed over.
+/// Other parameters are passed over, so the website can add one later without the apps already
+/// installed turning its links down.
 pub fn install_link(link: &str) -> Option<InstallLink> {
     let link = link.trim();
     if link.len() > MAX_LINK {
@@ -89,18 +93,24 @@ pub fn install_link(link: &str) -> Option<InstallLink> {
             _ => Err(()),
         }
     };
-    let (pack, skin) = (one("pack").ok()?, one("skin").ok()?);
-    if pack
-        .as_deref()
-        .is_some_and(|id| !folderskin_core::pack::is_pack_id(id))
-    {
+    let (pack, skin, within) = (one("pack").ok()?, one("skin").ok()?, one("in").ok()?);
+    let not_a_pack = |id: &Option<String>| {
+        id.as_deref()
+            .is_some_and(|id| !folderskin_core::pack::is_pack_id(id))
+    };
+    if not_a_pack(&pack) {
         return None;
     }
     match skin {
-        Some(sha) if folderskin_catalog::tree::is_hex(&sha, 64) => Some(InstallLink {
-            pack,
-            skin: Some(sha),
-        }),
+        Some(sha) if folderskin_catalog::tree::is_hex(&sha, 64) => {
+            if pack.is_some() || not_a_pack(&within) {
+                return None;
+            }
+            Some(InstallLink {
+                pack: within,
+                skin: Some(sha),
+            })
+        }
         Some(_) => None,
         None => pack.map(|pack| InstallLink {
             pack: Some(pack),
@@ -222,6 +232,7 @@ mod tests {
             "  folderskin://install?pack=classic-art\n",
             "folderskin://install?pack=classic%2Dart",
             "folderskin://install?from=gallery&pack=classic-art#top",
+            "folderskin://install?pack=classic-art&in=colours",
         ] {
             assert_eq!(
                 install_pack(link).as_deref(),
@@ -254,11 +265,11 @@ mod tests {
                 &official,
             ),
             (
-                format!("folderskin://install?skin={sha}&pack=classic-art"),
+                format!("folderskin://install?skin={sha}&in=classic-art"),
                 &of_pack,
             ),
             (
-                format!("folderskin://install/?pack=classic-art&skin={sha}"),
+                format!("folderskin://install/?in=classic-art&skin={sha}"),
                 &of_pack,
             ),
         ] {
@@ -267,13 +278,16 @@ mod tests {
         // With a skin that isn't right, it's never taken for the whole pack.
         for link in [
             format!("folderskin://install?skin={}", sha.to_uppercase()),
-            format!("folderskin://install?skin={}&pack=classic-art", &sha[1..]),
-            "folderskin://install?skin=&pack=classic-art".to_string(),
-            format!("folderskin://install?skin={sha}0&pack=classic-art"),
+            format!("folderskin://install?skin={}&in=classic-art", &sha[1..]),
+            "folderskin://install?skin=&in=classic-art".to_string(),
+            format!("folderskin://install?skin={sha}0&in=classic-art"),
             format!("folderskin://install?skin=../{}", &sha[3..]),
             format!("folderskin://install?skin={sha}&skin={sha}"),
-            format!("folderskin://install?skin={sha}&pack=Classic-Art"),
-            format!("folderskin://install?skin={sha}&pack=classic-art&pack=colours"),
+            format!("folderskin://install?skin={sha}&in=Classic-Art"),
+            format!("folderskin://install?skin={sha}&in=classic-art&in=colours"),
+            // The pack as `pack` beside a skin: an older FolderSkin would add the whole pack.
+            format!("folderskin://install?skin={sha}&pack=classic-art"),
+            format!("folderskin://install?skin={sha}&in=classic-art&pack=classic-art"),
             format!("folderskins://install?skin={sha}"),
             format!("folderskin://open?skin={sha}"),
         ] {
@@ -388,7 +402,7 @@ mod tests {
         let sha = "ab".repeat(32);
         arrived(
             app.handle(),
-            [format!("folderskin://install?skin={sha}&pack=colours")],
+            [format!("folderskin://install?skin={sha}&in=colours")],
         );
         assert_eq!(told.load(Ordering::SeqCst), 2);
         assert_eq!(

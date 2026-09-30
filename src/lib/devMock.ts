@@ -39,7 +39,7 @@
  *
  * `?install=colours` opens the preview the way a folderskin://install link opens the app: on that
  * pack in Community, adding it. `?skin=<sha256>` is the link for one official skin, and with
- * `&pack=colours` for one of that pack's: opened and used. The link is taken once, as the app
+ * `&in=colours` for one of that pack's: opened and used. The link is taken once, as the app
  * takes one.
  * Sharing works in the preview against a made-up service: `?noshare` shows it as a build without
  * one, `?offline` as one that can't reach it, and `?shared` starts with a few packs already sent,
@@ -1569,7 +1569,7 @@ export const mockApi = {
     mockLinkTaken = true;
     const params = new URLSearchParams(location.search);
     const skin = params.get("skin");
-    if (skin) return { pack: params.get("pack"), skin };
+    if (skin) return { pack: params.get("in"), skin };
     const pack = params.get("install");
     return pack ? { pack, skin: null } : null;
   },

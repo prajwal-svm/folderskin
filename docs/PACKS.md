@@ -556,19 +556,21 @@ is opened and said to be there. From 0.1.7, a link with an old id opens the pack
 
 The same link can name one skin instead of a whole pack, by the SHA-256 of its picture:
 `folderskin://install?skin=<sha256>` for a skin of the official collection, and
-`folderskin://install?skin=<sha256>&pack=<id>` for a skin of pack `<id>`. It opens that skin in
+`folderskin://install?skin=<sha256>&in=<id>` for a skin of pack `<id>`. It opens that skin in
 Community (an official one on its own, a pack's in its pack, scrolled to it) and uses it, exactly
 as its **Use** button does: that one skin is saved to your library and picked, ready to apply, and
-the pack isn't added. A skin that isn't listed there any more is said to be gone. FolderSkin
-0.1.13 and older ignore these links.
+the pack isn't added. A skin that isn't listed there any more is said to be gone. A skin's pack
+is `in`, not `pack`: FolderSkin 0.1.13 and older pass `skin` over, so a `pack` would have them add
+the whole pack, while with `in` they find no pack and ignore the link.
 
 FolderSkin takes a link only when it is exactly that: the scheme `folderskin`, `install` as the
 host (`folderskin://install?…`) or the whole path (`folderskin:install?…`), no user, password or
-port, and at most one `pack` and at most one `skin`. A `pack` has to be a pack id (lower-case
-letters and digits in words joined by single dashes, at most 40 characters), and a `skin` has to
-be 64 lower-case hex digits. A link with a `skin` is only ever for that skin: one whose `skin`
-isn't right is ignored, never taken for its whole pack. Without a `skin`, it needs a `pack`. Any
-other parameter is passed over, and anything else is ignored.
+port, and at most one each of `pack`, `skin` and `in`. A `pack` or an `in` has to be a pack id
+(lower-case letters and digits in words joined by single dashes, at most 40 characters), and a
+`skin` has to be 64 lower-case hex digits. A link with a `skin` is only ever for that skin: one
+whose `skin` isn't right, or that has a `pack` beside it, is ignored, never taken for its whole
+pack. Without a `skin`, it needs a `pack`. Any other parameter is passed over, and anything else
+is ignored.
 
 The installers register the scheme: the macOS app's `Info.plist`, the Windows installers, and
 the desktop entry of the Linux `.deb` and `.rpm`. An AppImage registers it as it starts, since
@@ -582,7 +584,7 @@ To try it:
 | macOS | Build the app (`pnpm tauri build --bundles app`) and open `target/release/bundle/macos/FolderSkin.app` once, which registers the scheme with macOS (a copy in `/Applications` is the surest), then `open 'folderskin://install?pack=classic-art'`. macOS sends links only to a bundled app, so `pnpm tauri dev` never receives one |
 | Windows | Install a build, or run `pnpm tauri dev` with `FOLDERSKIN_REGISTER_LINKS=1` set (only then does a development build register the scheme for itself), then `start "" "folderskin://install?pack=classic-art"` in a command prompt, or the same link in the Run box (Windows+R) |
 | Linux | Install the `.deb` or `.rpm`, start the AppImage once, or run `pnpm tauri dev` with `FOLDERSKIN_REGISTER_LINKS=1` set, then `xdg-open 'folderskin://install?pack=classic-art'` |
-| browser preview | `pnpm dev` and open `http://localhost:14200/?install=classic-art`, or `?skin=<sha256>` (with `&pack=<id>` for a pack's skin) |
+| browser preview | `pnpm dev` and open `http://localhost:14200/?install=classic-art`, or `?skin=<sha256>` (with `&in=<id>` for a pack's skin) |
 
 Quit an installed FolderSkin before `pnpm tauri dev` on Windows or Linux: with one already
 running, the new one hands over to it and quits. A development build that registered the scheme
