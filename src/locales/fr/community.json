@@ -67,6 +67,39 @@
     "getting_many": "Récupération de {{count}} d'habillages pour les afficher",
     "getting_other": "Récupération de {{count}} habillages pour les afficher"
   },
+  "official": {
+    "collection": "Collection officielle",
+    "search": "Rechercher des habillages",
+    "searchLabel": "rechercher des habillages officiels",
+    "gridLabel": "habillages officiels",
+    "loading": "Chargement des habillages officiels",
+    "loadFailed": "Les habillages officiels ne se sont pas chargés",
+    "loadFailedText": "{{reason}}.",
+    "sortButton": "Trier les habillages officiels",
+    "sortLabel": "trier les habillages officiels",
+    "empty": {
+      "noMatch": "Aucun habillage officiel ne correspond",
+      "noMatchText": "Essayez un autre mot, ou cherchez dans les packs.",
+      "none": "Pas encore d'habillages officiels",
+      "noneText": "Actualiser les cherche à nouveau.",
+      "searchPacks": "Chercher dans les packs"
+    }
+  },
+  "use": {
+    "button": "Utiliser cet habillage",
+    "label": "utiliser {{name}}",
+    "tip": "Ajouter seulement cet habillage à votre bibliothèque"
+  },
+  "inLibrary": {
+    "label": "Dans votre bibliothèque",
+    "button": "Dans la bibliothèque",
+    "showTip": "Le voir dans votre bibliothèque",
+    "have_one": "{{have}} sur {{count}} habillage dans votre bibliothèque",
+    "have_many": "{{have}} sur {{count}} d'habillages dans votre bibliothèque",
+    "have_other": "{{have}} sur {{count}} habillages dans votre bibliothèque",
+    "packInfo": "✓ Dans votre bibliothèque. Utiliser ajoute un seul habillage, et Ajouter ajoute tout le pack et le tient à jour.",
+    "officialInfo": "✓ Dans votre bibliothèque. Utiliser ajoute un seul habillage."
+  },
   "progress": {
     "adding": "Ajout",
     "updating": "Mise à jour",
@@ -112,7 +145,13 @@
       "unanswered": "{{host}} ne répond pas, voici donc les packs de votre dernière visite",
       "behind": "La liste de packs la plus récente n'est pas arrivée, voici donc ceux de votre dernière visite",
       "other": "{{why}}, voici donc les packs de votre dernière visite"
-    }
+    },
+    "official_one": "{{count}} habillage officiel",
+    "official_many": "{{count}} d'habillages officiels",
+    "official_other": "{{count}} habillages officiels",
+    "officialMatching_one": "{{count}} habillage officiel correspond à « {{query}} »",
+    "officialMatching_many": "{{count}} d'habillages officiels correspondent à « {{query}} »",
+    "officialMatching_other": "{{count}} habillages officiels correspondent à « {{query}} »"
   },
   "toast": {
     "addLinkFailed": "Impossible d'ajouter « {{id}} » : {{reason}}",
@@ -141,7 +180,12 @@
     "addedFromFolder_one": "{{count}} habillage ajouté depuis ce dossier",
     "addedFromFolder_many": "{{count}} d'habillages ajoutés depuis ce dossier",
     "addedFromFolder_other": "{{count}} habillages ajoutés depuis ce dossier",
-    "addFolderFailed": "Impossible d'ajouter ce pack : {{reason}}"
+    "addFolderFailed": "Impossible d'ajouter ce pack : {{reason}}",
+    "used": "{{name}} ajouté à votre bibliothèque",
+    "usedAlready": "{{name}} est déjà dans votre bibliothèque",
+    "useFailed": "Impossible d'ajouter {{name}} : {{reason}}",
+    "noSuchSkin": "Impossible d'ajouter cet habillage : il n'est plus dans la Communauté. Actualisez et réessayez.",
+    "useLinkFailed": "Impossible d'ajouter cet habillage : {{reason}}"
   },
   "searchIn": "Rechercher des packs dans {{tag}}",
   "searchInLabel": "rechercher des packs dans {{tag}}",

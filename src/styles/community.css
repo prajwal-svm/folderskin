@@ -76,6 +76,22 @@
   color: var(--muted);
 }
 
+/* The official collection's tab, first in the row: the Official badge's colours and its mark. */
+.seg-btn.is-official,
+.seg-btn.is-official:hover {
+  color: var(--accent-ink);
+}
+
+.seg-btn.is-official > svg {
+  flex: none;
+  margin-right: -2px;
+}
+
+.seg-btn.is-official .count {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
 /* ---------- skins whose names match ---------- */
 
 .skin-hits {
@@ -163,6 +179,32 @@
   font-size: 11.5px;
   color: var(--muted);
   align-self: start;
+}
+
+/* an official skin's thumbnail, with the tick on its corner when it's in the library already */
+.skin-hit-art {
+  grid-row: 1 / span 2;
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.skin-hit-art .ok-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+}
+
+/* an official skin, which is in no pack: the Official badge where the pack's name would be */
+.skin-hit-mark {
+  display: flex;
+  align-self: start;
+  min-width: 0;
+}
+
+.skin-hit-mark .tag-chip {
+  height: 20px;
 }
 
 /* ---------- the packs ---------- */
@@ -329,11 +371,11 @@
   height: auto;
 }
 
+/* As tall as the folders will be, and as wide as the panel they come on. */
 .packs-grid.is-gallery .pack-preview-blank {
   height: auto;
   aspect-ratio: 1;
-  max-width: 300px;
-  margin-inline: auto;
+  max-height: 300px;
   border-radius: 12px;
 }
 
@@ -515,6 +557,49 @@
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* A skin's own Use, which saves just that one: it springs in over the folder's corner under the
+   pointer or the keyboard, and stays on the skin the viewer opened at and the one being saved.
+   While one is being saved, the others stay hidden. It wears the library's tile buttons' look
+   (the star, the ⋯), which reads over a picture of any colour. */
+.pack-skin {
+  position: relative;
+}
+
+.pack-skin .pack-skin-use {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  background: var(--island);
+  color: var(--accent-ink);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity var(--t-fast) ease,
+    transform var(--t-fast) var(--ease-in),
+    background-color var(--t-fast) ease;
+}
+
+.pack-skin .pack-skin-use:hover:not(:disabled),
+.pack-skin .pack-skin-use:focus-visible {
+  background: var(--accent-soft);
+}
+
+.pack-skin:hover .pack-skin-use:not(:disabled),
+.pack-skin .pack-skin-use:focus-visible,
+.pack-skin.is-focus .pack-skin-use:not(:disabled),
+.pack-skin.is-using .pack-skin-use {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--t-base) ease,
+    transform var(--t-slow) var(--ease-spring),
+    background-color var(--t-fast) ease;
+}
+
 .pack-skin img {
   width: 100%;
   max-width: 120px;
@@ -535,6 +620,150 @@
   overflow: hidden;
 }
 
+/* A skin in the library already: the tick where Use would be, there all the time. */
+.pack-skin-have {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.22));
+}
+
+/* ---------- what's in the library already ---------- */
+
+/* How many of a pack's skins are in the library while the pack isn't: the tick and "3/40". */
+.have-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px 0 3px;
+  border-radius: var(--r-pill);
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+  font-weight: 750;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* An ⓘ with the longer words in its tip: it tints under the pointer and the keyboard, as the icon
+   buttons do, and does nothing when pressed. */
+.info-tip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  cursor: default;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.info-tip:hover,
+.info-tip:focus-visible {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+/* The pack viewer's top: the pack's badges and tags, and at the end, how many of its skins are in
+   the library and the ⓘ that says what the ticks, Use and Add mean. */
+.pack-viewer-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pack-viewer-top .pack-tags {
+  flex: 1;
+  margin-top: 0;
+}
+
+.pack-have {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+/* ---------- the official skins ---------- */
+
+/* Tiles as the library draws them. They arrive with their page rather than rising a row at a
+   time as the list scrolls, and hovering one tints the square behind it, as focus does. */
+.packs-grid.is-skins .tile {
+  height: 100%;
+  animation: none;
+}
+
+.packs-grid.is-skins .tile-img {
+  animation: fade-in var(--t-base) ease both;
+}
+
+.packs-grid.is-skins .tile-hit:hover .tile-art::before {
+  opacity: 0.5;
+  transform: none;
+}
+
+/* in the library already: a tick on the folder's corner */
+.tile-kept {
+  position: absolute;
+  top: 5%;
+  right: 5%;
+  z-index: 1;
+  display: flex;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.22));
+}
+
+/* a place whose page is on its way */
+.tile.is-placeholder {
+  pointer-events: none;
+}
+
+.skin-blank {
+  position: absolute;
+  inset: 7%;
+  border-radius: 18%;
+  background: linear-gradient(90deg, var(--well-2), var(--island), var(--well-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  animation-play-state: var(--loop-state);
+}
+
+.tile.is-placeholder .pack-line {
+  width: 60%;
+  margin-top: 3px;
+}
+
+/* The skin viewer's button for a skin in the library already: the tick's green, deepening under
+   the pointer and the keyboard, as it takes you to the skin. */
+.btn-primary.is-done:hover:not(:disabled),
+.btn-primary.is-done:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--ok-soft) 82%, var(--ok-solid));
+}
+
+/* the skin viewer: one official skin, as big as its thumbnail stays sharp */
+.skin-view {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--well);
+}
+
+.skin-view img {
+  width: min(256px, 100%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  animation: fade-in var(--t-base) ease both;
+}
+
 /* Add in the viewer, filling as the pack arrives */
 .btn.pack-adding,
 .btn.pack-adding:disabled {
@@ -547,23 +776,40 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The panel is as wide as the card, whatever the pack's size, and the folders sit in a square
+   in its middle. Each folder keeps its square, so a pack of one, two or three is never stretched:
+   the rows sit in the middle, and a folder alone on its row (a pack of one, the third of three)
+   is centred under the others at the same size. */
 .pack-quad {
   width: 100%;
-  max-width: 300px;
-  margin-inline: auto;
-  aspect-ratio: 1;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: 6px;
-  padding: 10px;
+  display: flex;
+  justify-content: center;
   border-radius: 12px;
   background: var(--island);
   animation: fade-in var(--t-base) ease both;
 }
 
-.pack-quad span {
+.pack-quad-grid {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  align-content: center;
+  gap: 6px;
+  padding: 10px;
+}
+
+.pack-quad-grid span {
+  aspect-ratio: 1;
   background-image: var(--strip);
   background-repeat: no-repeat;
   background-position-y: center;
+}
+
+.pack-quad-grid span:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: calc(50% - 3px);
 }

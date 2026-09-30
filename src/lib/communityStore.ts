@@ -1,7 +1,11 @@
 /**
  * What the Community view is showing, kept outside the view so leaving it and coming back finds
- * everything as it was: the words typed, the tag, the order, the results, where the list was
- * scrolled to and a pack still being added. Nothing is fetched again on the way back.
+ * everything as it was: the tab, the words typed, the tag, the order, the results, where each list
+ * was scrolled to and a pack still being added. Nothing is fetched again on the way back.
+ *
+ * Two lists share the search box: the packs, narrowed by a tag, and the official collection, the
+ * skins FolderSkin publishes on their own. Only the one on show is searched as the words change;
+ * the other is searched when its tab is picked, unless what it shows already answers them.
  *
  * Searching: typing waits a moment (`SEARCH_DELAY_MS`) for the next key; a tag or an order
  * searches at once. Every search is numbered and only the newest one's answer is shown, so an
@@ -16,10 +20,25 @@ import type { ToastTone } from "../hooks/useToasts";
 import { clip } from "./names";
 import { tagLabel } from "./tags";
 import { t } from "../i18n";
-import { api, errorMessage, type CommunityPack, type CommunitySort, type PackProgress, type Skin, type SkinHit } from "./tauri";
+import {
+  api,
+  errorMessage,
+  type CollectionPage,
+  type CollectionSkin,
+  type CollectionSort,
+  type CommunityPack,
+  type CommunitySort,
+  type InstallLink,
+  type PackProgress,
+  type Skin,
+  type SkinHit,
+  type UseFrom,
+} from "./tauri";
 
 /** Packs a page holds. */
 export const PAGE = 60;
+/** Official skins a page holds. */
+export const SKIN_PAGE = 100;
 /** How long typing waits for the next key before it searches. */
 export const SEARCH_DELAY_MS = 100;
 
@@ -28,6 +47,9 @@ export type PackView = "gallery" | "list";
 
 /** What is being done to a pack. */
 export type PackTask = "add" | "update" | "remove";
+
+/** Which list is on show: the packs, or the official collection's skins. */
+export type CommunityTab = "packs" | "official";
 
 /** One search's answer, as far as it has been paged in. */
 export type Shown = {
@@ -42,6 +64,8 @@ export type Shown = {
   /** Every place in the list; a place whose page hasn't come yet is empty. */
   packs: (CommunityPack | undefined)[];
   skins: SkinHit[];
+  /** Official skins the words match, which the strip of skins lists first. */
+  official: CollectionSkin[];
   hitPacks: CommunityPack[];
   facets: { tag: string; count: number }[];
   /** Why these are the packs from the last visit ("you're offline"); null when they are current. */
@@ -50,7 +74,19 @@ export type Shown = {
   generation: string;
 };
 
+/** One search of the official collection, as far as it has been paged in. */
+export type ShownCollection = {
+  q: string;
+  sort: CollectionSort;
+  /** Goes up with every new answer, so a page asked for an older one is dropped. */
+  id: number;
+  total: number;
+  /** Every place in the list; a place whose page hasn't come yet is empty. */
+  skins: (CollectionSkin | undefined)[];
+};
+
 export type CommunityState = {
+  tab: CommunityTab;
   /** What is in the search box, as typed. */
   query: string;
   tag: string;
@@ -71,6 +107,21 @@ export type CommunityState = {
   viewing: { pack: CommunityPack; focus: number | null } | null;
   /** Where the list was scrolled to. */
   scrollTop: number;
+  /** The official collection's order, its answer on screen (null until the first comes), whether
+   *  a search of it hasn't answered yet, why the last one failed, and where its list was scrolled to. */
+  collectionSort: CollectionSort;
+  collection: ShownCollection | null;
+  collectionSearching: boolean;
+  collectionError: string | null;
+  collectionScroll: number;
+  /** How many official skins there are, for their tab; null until the app has said. */
+  collectionSize: number | null;
+  /** The licence every official skin comes under, such as "MIT"; empty until the app has said. */
+  collectionLicense: string;
+  /** The official skin open in the skin viewer. */
+  viewingSkin: CollectionSkin | null;
+  /** The skin being taken on its own ("Use"), by its picture's SHA-256. */
+  using: string | null;
 };
 
 type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string; run: () => void } }) => void;
@@ -79,11 +130,14 @@ type Toast = (text: string, opts?: { tone?: ToastTone; action?: { label: string;
 export type CommunityHandlers = {
   onAdded: (skins: Skin[]) => void;
   onRemoved: (skinIds: string[]) => void;
+  /** A skin taken on its own is in the library: the app picks it, where Apply is. */
+  onUsed: (skin: Skin) => void;
   onShowTag: (tag: string) => void;
   toast: Toast;
 };
 
 const INITIAL: CommunityState = {
+  tab: "packs",
   query: "",
   tag: "",
   sort: "best",
@@ -97,6 +151,15 @@ const INITIAL: CommunityState = {
   progress: null,
   viewing: null,
   scrollTop: 0,
+  collectionSort: "newest",
+  collection: null,
+  collectionSearching: false,
+  collectionError: null,
+  collectionScroll: 0,
+  collectionSize: null,
+  collectionLicense: "",
+  viewingSkin: null,
+  using: null,
 };
 
 export class CommunityStore {
@@ -107,13 +170,19 @@ export class CommunityStore {
   private timer: ReturnType<typeof setTimeout> | undefined;
   /** Pages asked for, for the answer on screen. */
   private pages = new Set<number>();
+  /** The same two for the official collection, and the answers it has shown, which its pages go by. */
+  private askedSkins = 0;
+  private skinPages = new Set<number>();
+  private shownSkins = 0;
+  /** Counting the official skins, while it is under way: asked once, however many want it. */
+  private counting: Promise<void> | null = null;
   private handlers: CommunityHandlers | null = null;
   /** The pack `busy` names, for saying which one to wait for. */
   private working: CommunityPack | null = null;
   /** Goes up with every pack marked, so an older answer about the library isn't laid over it. */
   private marked = 0;
-  /** The pack a folderskin://install link asked for, until there are handlers to add it with. */
-  private linked: string | null = null;
+  /** What a folderskin://install link asked for, until there are handlers to act on it with. */
+  private linked: InstallLink | null = null;
 
   constructor(private readonly delay = SEARCH_DELAY_MS) {}
 
@@ -137,17 +206,21 @@ export class CommunityStore {
   /**
    * A folderskin://install link, from an Install button on folderskin.app: the pack it names,
    * opened and added the way its Add button adds it, with the same progress and toasts. A pack in
-   * the library already is opened and said to be there. The first time, it waits for the view's
+   * the library already is opened and said to be there. From a Use in FolderSkin button, the link
+   * names one skin instead: it is opened (an official one on its own, a pack's in its pack, at that
+   * skin) and used the way its Use button uses it. The first time, it waits for the view's
    * handlers: a link can come before Community has ever been open.
    */
-  install(packId: string) {
-    this.linked = packId;
+  install(link: InstallLink) {
+    this.linked = link;
     if (this.handlers) void this.installLinked();
   }
 
   private async installLinked() {
-    const id = this.linked;
+    const link = this.linked;
     this.linked = null;
+    if (link?.skin) return this.useLinked(link.skin, link.pack);
+    const id = link?.pack;
     if (!id) return;
     let pack: CommunityPack | null;
     try {
@@ -169,27 +242,69 @@ export class CommunityStore {
     await this.add(pack);
   }
 
+  /** The skin a link names by its picture's SHA-256, in pack `packId` or, with none, official:
+   *  opened where it is listed, and used. */
+  private async useLinked(sha256: string, packId: string | null) {
+    const toast = (text: string) => this.handlers?.toast(text, { tone: "danger" });
+    try {
+      if (!packId) {
+        const skin = await api.communityCollectionSkin(sha256);
+        if (!skin) return toast(t("community.toast.noSuchSkin"));
+        this.showOfficial();
+        this.openSkin(skin);
+        return await this.use({ kind: "collection" }, sha256, skin.name);
+      }
+      const pack = await api.communityPack(packId);
+      if (!pack) return toast(t("community.toast.noSuchSkin"));
+      const skins = await api.packSkins(pack.id, pack.hash);
+      const at = skins.findIndex((s) => s.sha256 === sha256);
+      // Not in it any more: the pack is still worth a look.
+      this.open(pack, at < 0 ? null : at);
+      if (at < 0) return toast(t("community.toast.noSuchSkin"));
+      await this.use({ kind: "pack", id: pack.id, hash: pack.hash }, sha256, skins[at].name);
+    } catch (e) {
+      toast(t("community.toast.useLinkFailed", { reason: errorMessage(e) }));
+    }
+  }
+
   /** Searches the first time the view opens; after that the answer is already here, and only
-   *  whether its packs are in the library is asked again. */
+   *  whether its packs are in the library is asked again. The official skins are counted once,
+   *  for their tab. */
   start() {
     if (!this.state.shown && !this.state.searching) void this.search();
     else if (this.state.shown) void this.remark();
+    if (this.state.tab === "official" && !this.state.collection && !this.state.collectionSearching) void this.searchCollection();
+    else if (this.state.collectionSize === null) void this.countCollection();
   }
 
   /** Searches ahead of the view's first visit (src/lib/warmUp.ts), when nothing is shown yet. */
   async warm(): Promise<void> {
-    if (!this.state.shown && !this.state.searching) await this.search();
+    await Promise.all([
+      !this.state.shown && !this.state.searching ? this.search() : undefined,
+      this.state.collectionSize === null ? this.countCollection() : undefined,
+    ]);
   }
 
   setQuery(query: string) {
     this.set({ query });
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.search(), this.delay);
+    this.timer = setTimeout(() => void (this.state.tab === "official" ? this.searchCollection() : this.search()), this.delay);
   }
 
+  /** Shows the packs in tag `tag` ("" for all of them). */
   setTag(tag: string) {
-    this.set({ tag });
+    const back = this.state.tab === "official";
+    this.set({ tag, tab: "packs" });
+    // Back from the official skins to the packs they left, as they were: nothing to search again.
+    if (back && this.answers(this.state.shown)) return;
     void this.search();
+  }
+
+  /** Shows the official skins, searched for the words in the box if they aren't already. */
+  showOfficial() {
+    if (this.state.tab === "official") return;
+    this.set({ tab: "official" });
+    if (!this.answersCollection(this.state.collection)) void this.searchCollection();
   }
 
   setSort(sort: CommunitySort) {
@@ -197,13 +312,31 @@ export class CommunityStore {
     void this.search();
   }
 
+  setCollectionSort(sort: CollectionSort) {
+    this.set({ collectionSort: sort });
+    void this.searchCollection();
+  }
+
   setView(view: PackView) {
     this.set({ view, scrollTop: 0 });
   }
 
+  /** Remembers where the list on show is scrolled to. */
   keepScroll(scrollTop: number) {
     // Not worth telling anyone: it is only read when the view is drawn again.
-    this.state = { ...this.state, scrollTop };
+    this.state = this.state.tab === "official" ? { ...this.state, collectionScroll: scrollTop } : { ...this.state, scrollTop };
+  }
+
+  /** Whether `shown` is the answer to what is asked of the packs now. */
+  private answers(shown: Shown | null): boolean {
+    const { query, tag, sort, searching } = this.state;
+    return !searching && shown !== null && shown.q === query.trim() && shown.tag === tag && shown.sort === sort;
+  }
+
+  /** Whether `shown` is the answer to what is asked of the official skins now. */
+  private answersCollection(shown: ShownCollection | null): boolean {
+    const { query, collectionSort, collectionSearching } = this.state;
+    return !collectionSearching && shown !== null && shown.q === query.trim() && shown.sort === collectionSort;
   }
 
   /** Searches for what is asked now. Resolves once it has answered, or been overtaken. The
@@ -231,6 +364,7 @@ export class CommunityStore {
           all: r.all,
           packs,
           skins: r.skins,
+          official: r.collection ?? [],
           hitPacks: r.hit_packs,
           facets: r.facets,
           lastVisit: r.last_visit,
@@ -274,12 +408,112 @@ export class CommunityStore {
       });
   }
 
+  /** Searches the official skins for what is asked now, as `search` does the packs. */
+  async searchCollection(): Promise<void> {
+    clearTimeout(this.timer);
+    const n = ++this.askedSkins;
+    const { query, collectionSort: sort } = this.state;
+    const q = query.trim();
+    this.set({ collectionSearching: true });
+    try {
+      const r = await api.communityCollection(q, sort, 0, SKIN_PAGE);
+      if (n !== this.askedSkins) return;
+      this.showCollection(r, q, sort);
+      this.set({ collectionSearching: false, collectionError: null });
+    } catch (e) {
+      if (n === this.askedSkins) this.set({ collectionSearching: false, collectionError: errorMessage(e) });
+    }
+  }
+
+  /** Counts the official skins for their tab, keeping the first page of them for when it's picked. */
+  private countCollection(): Promise<void> {
+    this.counting ??= (async () => {
+      const n = this.askedSkins;
+      try {
+        const r = await api.communityCollection("", "newest", 0, SKIN_PAGE);
+        this.set({ collectionSize: r.total, collectionLicense: r.license });
+        // Nobody has searched them meanwhile: this is the answer to nothing typed, newest first.
+        if (n === this.askedSkins && !this.state.collection) this.showCollection(r, "", "newest");
+      } catch {
+        // Counted again the next time the view opens.
+      } finally {
+        this.counting = null;
+      }
+    })();
+    return this.counting;
+  }
+
+  /** Shows answer `r` for `q` in order `sort`, at the top of the list. */
+  private showCollection(r: CollectionPage, q: string, sort: CollectionSort) {
+    const skins: (CollectionSkin | undefined)[] = new Array(r.total);
+    r.items.forEach((s, i) => (skins[i] = s));
+    this.skinPages = new Set([0]);
+    const id = ++this.shownSkins;
+    this.set({
+      collection: { q, sort, id, total: r.total, skins },
+      // Every official skin, when nothing narrows them: the tab says so.
+      ...(q === "" ? { collectionSize: r.total } : {}),
+      collectionLicense: r.license,
+      collectionScroll: 0,
+    });
+  }
+
+  /** Asks for the page holding place `index` of the official skins on screen, once. */
+  needSkin(index: number) {
+    const shown = this.state.collection;
+    if (!shown || index < 0 || index >= shown.total) return;
+    const page = Math.floor(index / SKIN_PAGE);
+    if (this.skinPages.has(page)) return;
+    this.skinPages.add(page);
+    const { q, sort, id } = shown;
+    api
+      .communityCollection(q, sort, page * SKIN_PAGE, SKIN_PAGE)
+      .then((r) => {
+        const now = this.state.collection;
+        if (!now || now.id !== id) return;
+        const skins = now.skins.slice();
+        r.items.forEach((s, i) => (skins[page * SKIN_PAGE + i] = s));
+        this.set({ collection: { ...now, skins } });
+      })
+      .catch(() => {
+        // Asked again when that place is drawn again.
+        this.skinPages.delete(page);
+      });
+  }
+
   open(pack: CommunityPack, focus: number | null = null) {
     this.set({ viewing: { pack, focus } });
   }
 
   close() {
     this.set({ viewing: null });
+  }
+
+  openSkin(skin: CollectionSkin) {
+    this.set({ viewingSkin: skin });
+  }
+
+  closeSkin() {
+    this.set({ viewingSkin: null });
+  }
+
+  /**
+   * "Use": one skin, from the official collection or a pack, saved into the library without the
+   * rest of its pack (which stays not added) and handed to the app, which picks it where Apply is.
+   * The viewers close behind it, so coming back finds the list. One at a time.
+   */
+  async use(from: UseFrom, sha256: string, name: string) {
+    if (this.state.using) return;
+    this.set({ using: sha256 });
+    try {
+      const skin = await api.useCommunitySkin(from, sha256);
+      this.set({ viewing: null, viewingSkin: null });
+      this.handlers?.onUsed(skin);
+    } catch (e) {
+      this.handlers?.toast(t("community.toast.useFailed", { name: clip(name), reason: errorMessage(e) }), { tone: "danger" });
+    } finally {
+      this.set({ using: null });
+    }
   }
 
   /** Marks pack `id` as in the library or not, everywhere it is shown. */
@@ -387,13 +621,15 @@ export class CommunityStore {
     };
   }
 
-  /** Asks for the packs again past every cache, then shows the list afresh. */
+  /** Asks for the packs again past every cache, then shows the list afresh, and the official
+   *  skins too: on show they're searched again, and otherwise counted again and searched when picked. */
   async refresh() {
     if (this.state.refreshing) return;
     this.set({ refreshing: true });
     try {
       const { updates } = await api.communityRefresh();
-      await this.search();
+      if (this.state.tab !== "official") this.set({ collection: null });
+      await Promise.all([this.search(), this.state.tab === "official" ? this.searchCollection() : this.countCollection()]);
       this.handlers?.toast(
         updates ? t("community.toast.updates", { count: updates }) : t("community.toast.upToDate"),
         { tone: "ok" },
@@ -460,4 +696,12 @@ export function countLine(shown: Shown | null, error: string | null): string {
       ? t("community.count.tagged", { count, tag })
       : t("community.count.packs", { count });
   return shown.lastVisit ? t("community.count.withLastVisit", { line, why: lastVisitLine(shown.lastVisit) }) : line;
+}
+
+/** What the official list holds, in a few words: "587 official skins", "12 official skins match “cat”". */
+export function collectionCountLine(shown: ShownCollection | null, error: string | null): string {
+  if (!shown) return "";
+  if (error) return t("community.count.searchFailed", { reason: error });
+  const count = shown.total;
+  return shown.q ? t("community.count.officialMatching", { count, query: shown.q }) : t("community.count.official", { count });
 }

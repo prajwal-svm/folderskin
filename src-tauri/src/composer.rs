@@ -620,6 +620,7 @@ fn save(state: &AppState, body: &[u8]) -> Result<ComposerSavedDto, String> {
         author: None,
         license: None,
         pack_hash: None,
+        from_pack: None,
         // A design on a folder is that folder's, and one on a drive that drive's; a free icon
         // goes on anything.
         base: Some(

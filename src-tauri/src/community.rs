@@ -13,15 +13,24 @@
 //! comes from outside the catalog is looked up through [`Source::current_id`], and the library's
 //! records of packs added under an old id move to the new one ([`follow_moves`]), so a pack added
 //! before it moved still shows as added and still gets its updates.
+//!
+//! The official collection, FolderSkin's own skins outside any pack, is listed in the same catalog
+//! and paged through a hundred at a time ([`community_collection`]). Its skins, and any skin of a
+//! pack in the published tree, can be used one at a time without adding a pack
+//! ([`community_use_skin`]): the one picture is fetched and checked as adding its pack would
+//! fetch it, kept in the disk cache, and saved to the library as adding the pack would save it,
+//! except that no pack shows as added.
 
 use crate::catalog::{Community, Origin, Source};
 use crate::commands::{data_url, prepare_import, SkinDto};
 use crate::pack_views::PackViews;
-use crate::previews;
+use crate::previews::{self, DiskCache};
 use crate::state::{parallel_map, parallel_queue, AppState};
 use crate::store::{self, NewSkin, SkinImage, SkinShape, SkinSource};
 use folderskin_catalog::tree::{self, PublishedPack};
-use folderskin_catalog::{Facet, PackRow, Query, Sort};
+use folderskin_catalog::{
+    CollectionItem, CollectionQuery, CollectionSort, Facet, PackRow, Query, Sort,
+};
 use folderskin_core::pack::{self, Pack, PackShape, PackSkin};
 use futures_util::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
@@ -50,6 +59,15 @@ const FIRST_PACKS: usize = 24;
 /// for little more speed.
 const PARALLEL_ENCODES: usize = 6;
 const MB: usize = 1024 * 1024;
+/// The most skins of the official collection one page holds.
+const MAX_COLLECTION_PAGE: u32 = 200;
+/// What the library calls where a skin of the official collection came from, in place of a
+/// pack's name.
+pub const OFFICIAL_COLLECTION: &str = "Official collection";
+/// Whose the official collection's skins are, as the library credits them.
+pub const OFFICIAL_AUTHOR: &str = "FolderSkin";
+/// Why a skin can't be used: where it was listed, it isn't now.
+const NOT_LISTED: &str = "that skin isn't listed any more. Try Refresh";
 
 /// One pack in the Community list.
 #[derive(Serialize)]
@@ -130,6 +148,9 @@ pub struct SearchDto {
     /// Which catalog answered, so a page that comes from a newer one than the rest of the list
     /// can be told apart.
     pub generation: String,
+    /// Skins of the official collection whose names or tags match the words, newest first; none
+    /// when nothing is typed, or the list has no collection.
+    pub collection: Vec<CollectionSkinDto>,
 }
 
 /// What Refresh found.
@@ -138,6 +159,8 @@ pub struct RefreshDto {
     /// How many packs in the library have a newer version.
     pub updates: usize,
     pub packs: usize,
+    /// How many skins the official collection has.
+    pub collection: usize,
 }
 
 /// One skin of a pack being looked through before it's added.
@@ -145,8 +168,78 @@ pub struct RefreshDto {
 pub struct PackSkinDto {
     pub name: String,
     pub tags: Vec<String>,
-    /// The skin as the folder it makes, as a PNG data URL.
+    /// The skin as the folder it makes: its thumbnail's address, or a PNG data URL.
     pub thumbnail: String,
+    /// SHA-256 of its picture, which [`community_use_skin`] asks for it by: set for a pack in the
+    /// published tree, `None` for one listed in index.json, whose skins can't be used alone.
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Its picture's extension, with `sha256`.
+    #[serde(default)]
+    pub ext: Option<String>,
+    /// The id the skin it makes has in the library ([`store::pack_skin_id`]), which the webview
+    /// looks for there to show whether it is in the library already. `None` when that can't be
+    /// told without the picture: a skin of a pack of drives in the published tree.
+    #[serde(default)]
+    pub skin_id: Option<String>,
+}
+
+/// One skin of the official collection.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct CollectionSkinDto {
+    /// SHA-256 of its picture, which [`community_use_skin`] asks for it by.
+    pub sha256: String,
+    /// Its picture's extension.
+    pub ext: String,
+    pub name: String,
+    pub tags: Vec<String>,
+    /// The address of its thumbnail, drawn as its folder (previews.rs).
+    pub thumbnail: String,
+    /// What using it downloads, in bytes.
+    pub bytes: u64,
+    /// When it was added: 00:00 UTC of its day, in Unix seconds.
+    pub added: i64,
+    /// The id the skin it makes has in the library, which the webview looks for there to show
+    /// whether it is in the library already.
+    pub skin_id: Option<String>,
+}
+
+impl CollectionSkinDto {
+    fn new(item: CollectionItem) -> CollectionSkinDto {
+        CollectionSkinDto {
+            thumbnail: previews::thumb_url_for(PackShape::Folder, &item.sha256),
+            skin_id: store::pack_skin_id_by_sha256(&item.sha256, PackShape::Folder),
+            sha256: item.sha256,
+            ext: item.ext,
+            name: item.name,
+            tags: item.tags,
+            bytes: item.bytes,
+            added: item.added,
+        }
+    }
+}
+
+/// A page of the official collection, and how many of its skins match in all.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct CollectionPageDto {
+    pub total: usize,
+    pub items: Vec<CollectionSkinDto>,
+    /// The licence of every skin in the collection, such as "MIT"; empty when there is none.
+    pub license: String,
+}
+
+/// Where a skin to use is listed: `{"kind": "collection"}`, or
+/// `{"kind": "pack", "id": "…", "hash": "…"}` for a pack in the published tree.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum UseFrom {
+    Collection,
+    /// The pack's id and the version the webview shows. The skin is looked up in the version the
+    /// catalog lists now, under the id the pack has now, so neither needs to be current.
+    Pack {
+        id: String,
+        hash: String,
+    },
 }
 
 /// How big the folders are drawn when looking through a pack.
@@ -417,6 +510,63 @@ fn search(
         facets: results.facets,
         last_visit: source.last_visit.as_ref().map(|why| why.to_string()),
         generation: source.generation.clone(),
+        collection: if tree {
+            results
+                .collection
+                .into_iter()
+                .map(CollectionSkinDto::new)
+                .collect()
+        } else {
+            Vec::new()
+        },
+    })
+}
+
+/// One page of the official collection's skins matching `q` (every word the start of a word in a
+/// skin's name or tags; nothing typed lists them all), in `sort` order ("newest" or "name"),
+/// `limit` of them (1 to 200) from `offset`, with how many match in all. A list made from
+/// index.json has no collection.
+#[tauri::command]
+pub async fn community_collection(
+    app: AppHandle,
+    community: State<'_, Community>,
+    q: String,
+    sort: String,
+    offset: u32,
+    limit: u32,
+) -> Result<CollectionPageDto, String> {
+    community.init_cache(&app);
+    let source = community.current(&origin()).await?;
+    tauri::async_runtime::spawn_blocking(move || collection_page(&source, &q, &sort, offset, limit))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// [`community_collection`] over `source`.
+fn collection_page(
+    source: &Source,
+    q: &str,
+    sort: &str,
+    offset: u32,
+    limit: u32,
+) -> Result<CollectionPageDto, String> {
+    if !source.is_tree() {
+        return Ok(CollectionPageDto {
+            total: 0,
+            items: Vec::new(),
+            license: String::new(),
+        });
+    }
+    let page = source.collection(&CollectionQuery {
+        q,
+        sort: CollectionSort::parse(sort),
+        offset: offset as usize,
+        limit: limit.clamp(1, MAX_COLLECTION_PAGE) as usize,
+    })?;
+    Ok(CollectionPageDto {
+        total: page.total,
+        items: page.items.into_iter().map(CollectionSkinDto::new).collect(),
+        license: source.collection_license.clone(),
     })
 }
 
@@ -442,6 +592,7 @@ pub async fn community_refresh(
         Ok(RefreshDto {
             updates,
             packs: source.counts().0,
+            collection: source.collection_count(),
         })
     })
     .await
@@ -569,6 +720,9 @@ fn published_skins(published: &PublishedPack) -> Vec<PackSkinDto> {
             name: skin.name.trim().to_string(),
             tags: pack.tags_for(skin),
             thumbnail: previews::thumb_url_for(published.shape, &meta.sha256),
+            sha256: Some(meta.sha256.clone()),
+            ext: Some(meta.ext()),
+            skin_id: store::pack_skin_id_by_sha256(&meta.sha256, published.shape),
         })
         .collect()
 }
@@ -614,10 +768,14 @@ async fn pack_skins(
     let (pack, downloaded, pictures) = download_pack_from(base, &pack_id, &no_progress).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let ready = prepare_pack(&pack, &pictures)?;
-        let skins = parallel_map(&ready, |(skin, _, image)| PackSkinDto {
+        let skins = parallel_map(&ready, |(skin, id, image)| PackSkinDto {
             name: skin.name.trim().to_string(),
             tags: pack.tags_for(skin),
             thumbnail: data_url(&image.preview_png(PACK_VIEW_SIZE)),
+            sha256: None,
+            ext: None,
+            // The whole picture is here, so even a drive skin's id is known.
+            skin_id: Some(id.clone()),
         });
         if let Some(views) = views {
             views.put(&pack_id, &downloaded, &skins, SystemTime::now());
@@ -626,6 +784,209 @@ async fn pack_skins(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Saves one skin to the library without adding its pack, and returns it ready to apply: a skin
+/// of the official collection, or of a pack in the published tree, named by its picture's SHA-256.
+/// Only the SHA-256 is taken from the webview: the skin is looked up where it is listed now, the
+/// collection in the catalog, a pack through its manifest (under the id the pack has now), and a
+/// skin that isn't there any more is refused. Its picture is fetched and checked as adding its
+/// pack would fetch it, and kept in the disk cache, so using it again needs no download; it is
+/// saved as adding the pack would save it, credited to the pack or to the collection, but with no
+/// pack id, so no pack shows as added; a pack's skin remembers which pack it came from
+/// (`from_pack`), which adding that pack later takes it over by. A skin already in the library
+/// comes back as it is.
+///
+/// Once it is in the library, the community service is told the skin's SHA-256, and the pack's id
+/// for a pack's skin, so folderskin.app can count it ([`crate::installs::report_skin`]): a count of
+/// its own, which never adds to the pack's installs. The command doesn't wait for it.
+#[tauri::command]
+pub async fn community_use_skin(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    community: State<'_, Community>,
+    from: UseFrom,
+    sha256: String,
+) -> Result<SkinDto, String> {
+    community.init_cache(&app);
+    let source = community.current(&origin()).await?;
+    let skin = use_skin(state.inner(), &source, community.files(), &from, &sha256).await?;
+    let pack = match &from {
+        UseFrom::Collection => None,
+        UseFrom::Pack { id, .. } => Some(source.current_id(id)),
+    };
+    crate::installs::report_skin(&sha256, pack);
+    Ok(skin)
+}
+
+/// One official skin by its picture's SHA-256, for a `folderskin://install?skin=…` link; `None`
+/// when the collection doesn't list it. A skin the list this session loaded doesn't have is looked
+/// for again past every cache, as Refresh does, since the link may be for one published since.
+#[tauri::command]
+pub async fn community_collection_skin(
+    app: AppHandle,
+    community: State<'_, Community>,
+    sha256: String,
+) -> Result<Option<CollectionSkinDto>, String> {
+    community.init_cache(&app);
+    if !tree::is_hex(&sha256, 64) {
+        return Ok(None);
+    }
+    let source = community.current(&origin()).await?;
+    if let Some(found) = official_skin(&source, &sha256)? {
+        return Ok(Some(found));
+    }
+    let source = community.refresh(&origin()).await?;
+    official_skin(&source, &sha256)
+}
+
+/// The official skin whose picture has SHA-256 `sha256` in `source`, when it lists it.
+fn official_skin(source: &Source, sha256: &str) -> Result<Option<CollectionSkinDto>, String> {
+    if !source.is_tree() {
+        return Ok(None);
+    }
+    Ok(source.collection_item(sha256)?.map(CollectionSkinDto::new))
+}
+
+/// [`community_use_skin`] from `source`, keeping the picture in `files`.
+async fn use_skin(
+    state: &AppState,
+    source: &Source,
+    files: Option<&DiskCache>,
+    from: &UseFrom,
+    sha256: &str,
+) -> Result<SkinDto, String> {
+    let listed = listed_skin(source, files, from, sha256).await?;
+    let state = state.clone();
+    // A skin of folders is known by its picture's SHA-256, so one in the library already needs
+    // nothing downloaded, however long ago it was used and whatever the disk cache let go since.
+    if let Some(id) = store::pack_skin_id_by_sha256(&listed.sha256, listed.shape) {
+        let found = {
+            let state = state.clone();
+            tauri::async_runtime::spawn_blocking(move || state.find_saved(&id))
+                .await
+                .map_err(|e| e.to_string())?
+        };
+        if let Some((entry, thumb)) = found {
+            return Ok(SkinDto::saved(&entry, &thumb));
+        }
+    }
+    let bytes = used_picture(source, files, &listed).await?;
+    tauri::async_runtime::spawn_blocking(move || save_used(&state, &listed, &bytes))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// A skin to use, as it is listed where it was found.
+struct Listed {
+    sha256: String,
+    ext: String,
+    /// Its picture's size, which it is checked against as it arrives.
+    bytes: u64,
+    /// What it goes on: a pack of drives' skins are drive skins.
+    shape: PackShape,
+    name: String,
+    tags: Vec<String>,
+    credit: Credit,
+}
+
+/// The skin whose picture has SHA-256 `sha256`, where `from` says it is listed.
+async fn listed_skin(
+    source: &Source,
+    files: Option<&DiskCache>,
+    from: &UseFrom,
+    sha256: &str,
+) -> Result<Listed, String> {
+    // Only the published tree names pictures by their contents.
+    if !source.is_tree() || !tree::is_hex(sha256, 64) {
+        return Err(NOT_LISTED.into());
+    }
+    match from {
+        UseFrom::Collection => {
+            let item = source
+                .collection_item(sha256)?
+                .filter(|item| {
+                    pack::PICTURE_EXTENSIONS.contains(&item.ext.as_str())
+                        && (1..=pack::MAX_READ_PICTURE_BYTES as u64).contains(&item.bytes)
+                })
+                .ok_or(NOT_LISTED)?;
+            Ok(Listed {
+                sha256: item.sha256,
+                ext: item.ext,
+                bytes: item.bytes,
+                shape: PackShape::Folder,
+                name: item.name.trim().to_string(),
+                tags: item.tags,
+                credit: Credit::official(&source.collection_license),
+            })
+        }
+        UseFrom::Pack { id, .. } => {
+            let published = published_pack(source, files, source.current_id(id)).await?;
+            let pack = published.to_pack();
+            let (skin, meta) = pack
+                .skins
+                .iter()
+                .zip(&published.skins)
+                .find(|(_, meta)| meta.sha256 == sha256)
+                .ok_or(NOT_LISTED)?;
+            Ok(Listed {
+                sha256: meta.sha256.clone(),
+                ext: meta.ext(),
+                bytes: meta.bytes,
+                shape: published.shape,
+                name: skin.name.trim().to_string(),
+                tags: pack.tags_for(skin),
+                credit: Credit::used_from(source.current_id(id), &pack),
+            })
+        }
+    }
+}
+
+/// `listed`'s picture: kept in `files` from an earlier use, or fetched from the first of the
+/// source's folders that has it whole, checked against its size and SHA-256 as adding a pack
+/// checks each picture ([`download_published`]), and kept.
+async fn used_picture(
+    source: &Source,
+    files: Option<&DiskCache>,
+    listed: &Listed,
+) -> Result<Vec<u8>, String> {
+    let key = format!("picture-{}", listed.sha256);
+    let is_it = |bytes: &[u8]| tree::sha256_hex(bytes) == listed.sha256;
+    if let Some(bytes) = previews::cached(files, Some(&key))
+        .await
+        .filter(|b| b.len() as u64 == listed.bytes && is_it(b))
+    {
+        return Ok(bytes);
+    }
+    let path = tree::picture_path(&listed.sha256, &listed.ext);
+    let bytes = source
+        .get(&path, listed.bytes as usize, is_it)
+        .await
+        .map_err(|e| match e {
+            // Its size is known, so one bigger is the wrong file too.
+            Fetch::Damaged | Fetch::TooBig(_) => {
+                format!("{} arrived damaged. Try again", listed.name)
+            }
+            e => format!("{}: {e}", listed.name),
+        })?;
+    if let Some(files) = files {
+        let (files, bytes) = (files.clone(), bytes.clone());
+        let _ = tauri::async_runtime::spawn_blocking(move || files.put(&key, &bytes)).await;
+    }
+    Ok(bytes)
+}
+
+/// Saves the skin `listed` with its picture `bytes` ([`AppState::save`], which keeps it decoded
+/// for the apply that follows), or finds it saved already.
+fn save_used(state: &AppState, listed: &Listed, bytes: &[u8]) -> Result<SkinDto, String> {
+    let id = store::pack_skin_id(bytes, listed.shape);
+    if let Some((entry, thumb)) = state.find_saved(&id) {
+        return Ok(SkinDto::saved(&entry, &thumb));
+    }
+    let image = community_image(&listed.name, bytes, listed.shape)?;
+    let new = listed.credit.skin(id, &listed.name, listed.tags.clone());
+    let (entry, thumb) = state.save(new, image)?;
+    Ok(SkinDto::saved(&entry, &thumb))
 }
 
 /// Replaces an added pack's skins with the version published now. The new version is
@@ -1256,18 +1617,97 @@ fn prepare_pack<'p>(
     pictures: &[Vec<u8>],
 ) -> Result<Vec<(&'p PackSkin, String, SkinImage)>, String> {
     let listed: Vec<(&PackSkin, &Vec<u8>)> = pack.skins.iter().zip(pictures).collect();
-    // A pack of drives' skins are drive skins: artwork goes on the drive picked, and a finished
-    // drive is used as it is.
-    let shape = SkinShape::of_pack(pack.shape());
     parallel_map(&listed, |&(skin, bytes)| {
-        let rgba = pack::decode_picture(bytes).map_err(|e| format!("{} {e}", skin.file))?;
-        let image = prepare_import(rgba)
-            .map_err(|e| format!("{}: {e}", skin.file))?
-            .as_shape(shape);
+        let image = community_image(&skin.file, bytes, pack.shape())?;
         Ok((skin, store::pack_skin_id(bytes, pack.shape()), image))
     })
     .into_iter()
     .collect()
+}
+
+/// A community picture as the skin it makes, whether its pack is added whole or it is used on
+/// its own: decoded within the pack limits, and told apart as a finished folder or artwork as an
+/// imported picture is. A pack of drives' skins are drive skins: artwork goes on the drive picked,
+/// and a finished drive is used as it is. The error starts with `label`, the picture's file or
+/// name.
+fn community_image(label: &str, bytes: &[u8], shape: PackShape) -> Result<SkinImage, String> {
+    let rgba = pack::decode_picture(bytes).map_err(|e| format!("{label} {e}"))?;
+    Ok(prepare_import(rgba)
+        .map_err(|e| format!("{label}: {e}"))?
+        .as_shape(SkinShape::of_pack(shape)))
+}
+
+/// Whom a community skin is from, as the library keeps it with the skin.
+struct Credit {
+    /// The pack's id and the version added ([`pack::pack_hash`], `None` when nobody knows), for a
+    /// skin whose whole pack was added: what makes the pack show as added, and what removing or
+    /// updating it goes by. A skin used on its own has neither.
+    added: Option<(String, Option<String>)>,
+    /// The id of the pack a skin used on its own came from, which leaves that pack not added.
+    from_pack: Option<String>,
+    /// The pack's name, or [`OFFICIAL_COLLECTION`]: where the library says it came from.
+    pack_name: String,
+    author: String,
+    license: Option<String>,
+}
+
+impl Credit {
+    /// A skin of `pack`, added whole under `pack_id` at version `hash`.
+    fn added(pack_id: &str, pack: &Pack, hash: Option<String>) -> Credit {
+        Credit {
+            added: Some((pack_id.to_string(), hash)),
+            from_pack: None,
+            ..Credit::used_from(pack_id, pack)
+        }
+    }
+
+    /// A skin of `pack`, whose id is `pack_id`, used on its own, which leaves the pack not added.
+    fn used_from(pack_id: &str, pack: &Pack) -> Credit {
+        Credit {
+            added: None,
+            from_pack: Some(pack_id.to_string()),
+            pack_name: pack.name.trim().to_string(),
+            author: pack.author.clone(),
+            license: Some(pack.license.clone()),
+        }
+    }
+
+    /// A skin of the official collection, which is FolderSkin's, under the collection's
+    /// `license` (none when that is empty).
+    fn official(license: &str) -> Credit {
+        Credit {
+            added: None,
+            from_pack: None,
+            pack_name: OFFICIAL_COLLECTION.into(),
+            author: OFFICIAL_AUTHOR.into(),
+            license: (!license.is_empty()).then(|| license.to_string()),
+        }
+    }
+
+    /// The community skin `id`, called `name` and tagged `tags`, credited this way.
+    fn skin(&self, id: String, name: &str, tags: Vec<String>) -> NewSkin {
+        let (pack, pack_hash) = match &self.added {
+            Some((pack, hash)) => (Some(pack.clone()), hash.clone()),
+            None => (None, None),
+        };
+        NewSkin {
+            id,
+            name: name.to_string(),
+            source: SkinSource::Community,
+            provider: None,
+            model: None,
+            idea: None,
+            tags,
+            pack,
+            pack_name: Some(self.pack_name.clone()),
+            author: Some(self.author.clone()),
+            license: self.license.clone(),
+            pack_hash,
+            from_pack: self.from_pack.clone(),
+            base: None,
+            recipe: None,
+        }
+    }
 }
 
 /// Saves prepared pictures as community skins carrying the pack's tags, its id and its `hash`,
@@ -1286,25 +1726,11 @@ fn store_pack(
     progress: &(dyn Fn(PackProgress) + Sync),
 ) -> Result<Vec<SkinDto>, String> {
     let total = ready.len();
+    let credit = Credit::added(pack_id, pack, hash);
     let skins = ready
         .into_iter()
         .map(|(skin, id, image)| {
-            let new = NewSkin {
-                id,
-                name: skin.name.trim().to_string(),
-                source: SkinSource::Community,
-                provider: None,
-                model: None,
-                idea: None,
-                tags: pack.tags_for(skin),
-                pack: Some(pack_id.to_string()),
-                pack_name: Some(pack.name.trim().to_string()),
-                author: Some(pack.author.clone()),
-                license: Some(pack.license.clone()),
-                pack_hash: hash.clone(),
-                base: None,
-                recipe: None,
-            };
+            let new = credit.skin(id, skin.name.trim(), pack.tags_for(skin));
             (new, image)
         })
         .collect();
@@ -1914,6 +2340,11 @@ pub(crate) mod tests {
         let first = look(&base).unwrap();
         let names: Vec<&str> = first.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Ada", "Alan"]);
+        // The whole picture is here, so each says the id it would have in the library.
+        assert_eq!(
+            first[1].skin_id,
+            Some(store::pack_skin_id(&pictures[1], PackShape::Folder))
+        );
         // Nothing listens here, so only the cache can answer.
         let nowhere = "http://127.0.0.1:9";
         assert_eq!(look(nowhere).unwrap(), first);
@@ -1951,6 +2382,18 @@ pub(crate) mod tests {
     /// `packs` published as `packs catalog` writes them, as files served under `/v2`, with the
     /// head.json among them and each pack's hash.
     pub(crate) fn tree_files(packs: &[Published]) -> (Served, Head, HashMap<String, String>) {
+        tree_files_with(packs, &[])
+    }
+
+    /// An official skin: its name, its tags and its picture, a PNG.
+    pub(crate) type Official = (&'static str, &'static [&'static str], Vec<u8>);
+
+    /// [`tree_files`] with the official `collection` published beside the packs, each skin added
+    /// on 2026-09-30.
+    pub(crate) fn tree_files_with(
+        packs: &[Published],
+        collection: &[Official],
+    ) -> (Served, Head, HashMap<String, String>) {
         let mut files: Served = Vec::new();
         let mut serve = |path: String, body: Vec<u8>| files.push((path, body, Duration::ZERO));
         let mut records = Vec::new();
@@ -2013,7 +2456,26 @@ pub(crate) mod tests {
             });
             hashes.insert(id.to_string(), hash);
         }
-        let bytes = build::to_bytes(&records).unwrap();
+        let mut official = Vec::new();
+        for (name, tags, bytes) in collection {
+            let sha256 = tree::sha256_hex(bytes);
+            serve(
+                format!("/v2/{}", tree::picture_path(&sha256, "png")),
+                bytes.clone(),
+            );
+            serve(format!("/v2/{}", tree::thumb_path(&sha256)), webp(&sha256));
+            official.push(folderskin_catalog::CollectionRecord {
+                name: name.to_string(),
+                tags: tags.iter().map(|t| t.to_string()).collect(),
+                sha256,
+                ext: "png".into(),
+                bytes: bytes.len() as u64,
+                w: 256,
+                h: 256,
+                added: 1_790_726_400,
+            });
+        }
+        let bytes = build::to_bytes(&records, &official).unwrap();
         let generation = tree::sha256_hex(&bytes)[..16].to_string();
         let gz = tree::gzip(&bytes);
         let head = Head {
@@ -2031,6 +2493,13 @@ pub(crate) mod tests {
             mirrors: Vec::new(),
             moved: Default::default(),
             with_drives: None,
+            collection: official.len(),
+            collection_license: if official.is_empty() {
+                String::new()
+            } else {
+                "MIT".into()
+            },
+            collection_manifest: String::new(),
         };
         serve(format!("/v2/{}", tree::catalog_path(&generation)), gz);
         serve("/v2/head.json".into(), serde_json::to_vec(&head).unwrap());
@@ -2332,6 +2801,324 @@ pub(crate) mod tests {
             skins[1].thumbnail,
             previews::thumb_url(&published.skins[1].sha256)
         );
+    }
+
+    fn official_skins() -> Vec<Official> {
+        vec![
+            (
+                "Giraffe cola",
+                &["pop art"],
+                png(256, 256, [230, 160, 40, 255]),
+            ),
+            (
+                "Night harbour",
+                &["night"],
+                png(256, 256, [20, 30, 90, 255]),
+            ),
+            (
+                "Moon over Edo",
+                &["night"],
+                png(256, 256, [200, 200, 160, 255]),
+            ),
+        ]
+    }
+
+    #[test]
+    fn the_collection_pages_by_newest_or_name_and_only_a_tree_has_one() {
+        let (files, head, _) = tree_files_with(&colour_packs(), &official_skins());
+        assert_eq!(head.collection, 3);
+        let (base, _) = serve(files);
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
+        let page = collection_page(&source, "", "newest", 0, 2).unwrap();
+        assert_eq!((page.total, page.license.as_str()), (3, "MIT"));
+        let giraffe = tree::sha256_hex(&official_skins()[0].2);
+        assert_eq!(
+            page.items[0],
+            CollectionSkinDto {
+                sha256: giraffe.clone(),
+                ext: "png".into(),
+                name: "Giraffe cola".into(),
+                tags: vec!["pop art".into()],
+                thumbnail: previews::thumb_url(&giraffe),
+                bytes: official_skins()[0].2.len() as u64,
+                added: 1_790_726_400,
+                skin_id: Some(store::skin_id(&official_skins()[0].2)),
+            },
+            "one day's additions in the order they were added"
+        );
+        // Looked up alone, as a link to it does.
+        assert_eq!(
+            official_skin(&source, &giraffe).unwrap().as_ref(),
+            Some(&page.items[0])
+        );
+        let navy = tree::sha256_hex(&colour_packs()[1].3[0].2);
+        assert_eq!(official_skin(&source, &navy).unwrap(), None, "a pack's");
+        let names = |page: &CollectionPageDto| -> Vec<String> {
+            page.items.iter().map(|i| i.name.clone()).collect()
+        };
+        assert_eq!(
+            names(&collection_page(&source, "", "newest", 2, 2).unwrap()),
+            ["Moon over Edo"]
+        );
+        assert_eq!(
+            names(&collection_page(&source, "", "name", 0, 0).unwrap()),
+            ["Giraffe cola"],
+            "a page holds one skin at least"
+        );
+        let night = collection_page(&source, "night", "name", 0, 1000).unwrap();
+        assert_eq!(night.total, 2);
+        assert_eq!(names(&night), ["Moon over Edo", "Night harbour"]);
+
+        // The search as you type brings them along with the packs.
+        let found = search(&source, &HashMap::new(), &query("night")).unwrap();
+        let hits: Vec<&str> = found.collection.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(hits, ["Night harbour", "Moon over Edo"]);
+        assert!(search(&source, &HashMap::new(), &query(""))
+            .unwrap()
+            .collection
+            .is_empty());
+
+        // A list made from index.json has none.
+        let index = r#"{ "version": 1, "packs": [] }"#;
+        let (base, _) = serve(vec![(
+            "/index.json".into(),
+            index.as_bytes().to_vec(),
+            Duration::ZERO,
+        )]);
+        let legacy = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
+        assert_eq!(
+            collection_page(&legacy, "", "newest", 0, 100).unwrap(),
+            CollectionPageDto {
+                total: 0,
+                items: Vec::new(),
+                license: String::new()
+            }
+        );
+    }
+
+    #[test]
+    fn an_official_skin_is_used_on_its_own_and_kept_for_the_next_time() {
+        let store = temp_dir("use-official-store");
+        let cache = temp_dir("use-official-cache");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let files = DiskCache::new(cache.to_path_buf(), previews::CACHE_BYTES);
+        let (served, _, _) = tree_files_with(&colour_packs(), &official_skins());
+        let (base, _, asked) = serve_logged(served);
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
+        let giraffe = tree::sha256_hex(&official_skins()[0].2);
+        let use_it = |source: &Source, from: &UseFrom, sha: &str| {
+            block_on(use_skin(&state, source, Some(&files), from, sha))
+        };
+
+        let skin = use_it(&source, &UseFrom::Collection, &giraffe).unwrap();
+        assert_eq!(skin.name, "Giraffe cola");
+        assert_eq!(skin.source, SkinSource::Community);
+        assert_eq!(skin.tags, ["pop art"]);
+        assert_eq!(skin.pack, None, "no pack is added");
+        assert_eq!(skin.pack_name.as_deref(), Some(OFFICIAL_COLLECTION));
+        assert_eq!(skin.author.as_deref(), Some(OFFICIAL_AUTHOR));
+        assert_eq!(skin.license.as_deref(), Some("MIT"), "the collection's");
+        assert_eq!(skin.kind, SkinKind::Artwork);
+        assert!(skin.thumbnail.starts_with("data:image/png;base64,"));
+        assert_eq!(skin.id, store::skin_id(&official_skins()[0].2));
+        assert_eq!(skin.from_pack, None, "it's from no pack");
+        assert!(state.installed_packs().is_empty());
+        assert_eq!(state.saved_skins().len(), 1);
+        let pictures_asked = || {
+            lock(&asked)
+                .iter()
+                .filter(|p| p.starts_with("/v2/pictures/"))
+                .count()
+        };
+        assert_eq!(pictures_asked(), 1);
+
+        // Used again it's the skin already saved; taken out of the library and used again, its
+        // picture comes from the disk cache: nothing more is downloaded either way.
+        let again = use_it(&source, &UseFrom::Collection, &giraffe).unwrap();
+        assert_eq!(again.id, skin.id);
+        let without_cache = block_on(use_skin(
+            &state,
+            &source,
+            None,
+            &UseFrom::Collection,
+            &giraffe,
+        ));
+        assert_eq!(
+            without_cache.unwrap().id,
+            skin.id,
+            "in the library, it needs no picture at all"
+        );
+        state.delete(&skin.id).unwrap();
+        let back = use_it(&source, &UseFrom::Collection, &giraffe).unwrap();
+        assert_eq!(back.id, skin.id);
+        assert_eq!(pictures_asked(), 1);
+
+        // Only what the collection lists can be used, as the collection.
+        let navy = tree::sha256_hex(&colour_packs()[1].3[0].2);
+        for sha in [navy.as_str(), "not-a-sha", &"0".repeat(64)] {
+            assert_eq!(
+                use_it(&source, &UseFrom::Collection, sha).unwrap_err(),
+                NOT_LISTED
+            );
+        }
+    }
+
+    #[test]
+    fn a_packs_skin_is_used_without_adding_the_pack() {
+        let store = temp_dir("use-pack-store");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let packs = colour_packs();
+        let (files, _, hashes) = tree_files(&packs);
+        let files = changed_head(files, |head| {
+            head.moved = BTreeMap::from([("sky-blues".to_string(), "blues".to_string())]);
+        });
+        let (base, _) = serve(files);
+        let source = Arc::new(block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap());
+
+        // The viewer knows each skin's picture on the published path, and never on the old one.
+        let published = block_on(published_pack(&source, None, "blues")).unwrap();
+        let viewed = published_skins(&published);
+        let sky = tree::sha256_hex(&packs[1].3[1].2);
+        assert_eq!(viewed[1].sha256.as_deref(), Some(sky.as_str()));
+        assert_eq!(viewed[1].ext.as_deref(), Some("png"));
+        // And the id each would have in the library, to show which are there already.
+        assert_eq!(
+            viewed[1].skin_id,
+            Some(store::pack_skin_id(&packs[1].3[1].2, PackShape::Folder))
+        );
+
+        // Asked for under the pack's old id and an old version: found where it's listed now.
+        let from = UseFrom::Pack {
+            id: "sky-blues".into(),
+            hash: "0000000000000000".into(),
+        };
+        let skin = block_on(use_skin(&state, &source, None, &from, &sky)).unwrap();
+        assert_eq!(skin.name, "Sky");
+        assert_eq!(skin.tags, ["cool"]);
+        assert_eq!(skin.pack, None);
+        assert_eq!(
+            skin.from_pack.as_deref(),
+            Some("blues"),
+            "the id the pack has now"
+        );
+        assert_eq!(Some(&skin.id), viewed[1].skin_id.as_ref());
+        assert_eq!(skin.pack_name.as_deref(), Some("Blues"));
+        assert_eq!(skin.author.as_deref(), Some("prajwal-svm"));
+        assert_eq!(skin.license.as_deref(), Some("CC0-1.0"));
+        assert_eq!(
+            skin.id,
+            store::pack_skin_id(&packs[1].3[1].2, PackShape::Folder)
+        );
+        assert!(
+            state.installed_packs().is_empty(),
+            "the pack doesn't show as added"
+        );
+        assert_ne!(hashes["blues"], "0000000000000000");
+
+        // Adding the pack later saves nothing twice: the skin used becomes one of the pack's, and
+        // the pack's other skins come with it.
+        let (_, added) = block_on(add_pack(&state, source.clone(), "blues", no_progress)).unwrap();
+        assert_eq!(added.len(), 2);
+        assert_eq!(state.saved_skins().len(), 2);
+        let taken = added.iter().find(|s| s.id == skin.id).unwrap();
+        assert_eq!(
+            (taken.pack.as_deref(), taken.from_pack.as_deref()),
+            (Some("blues"), None)
+        );
+        assert_eq!(
+            state.installed_packs().get("blues"),
+            Some(&Some(hashes["blues"].clone()))
+        );
+        // So removing the pack takes it along.
+        assert_eq!(state.remove_pack("blues").unwrap().len(), 2);
+
+        // A picture the pack doesn't list, and a pack that isn't there, can't be used.
+        let ruby = tree::sha256_hex(&packs[0].3[0].2);
+        assert_eq!(
+            block_on(use_skin(&state, &source, None, &from, &ruby)).unwrap_err(),
+            NOT_LISTED
+        );
+        let gone = UseFrom::Pack {
+            id: "greens".into(),
+            hash: "0000000000000000".into(),
+        };
+        assert!(block_on(use_skin(&state, &source, None, &gone, &sky))
+            .unwrap_err()
+            .contains("isn't listed"));
+    }
+
+    #[test]
+    fn a_used_picture_with_the_wrong_bytes_saves_nothing() {
+        let store = temp_dir("use-damaged-store");
+        let state = AppState::default();
+        state.open_store(store.to_path_buf());
+        let (files, _, _) = tree_files_with(&colour_packs(), &official_skins());
+        let giraffe = tree::sha256_hex(&official_skins()[0].2);
+        let tampered: Served = files
+            .into_iter()
+            .map(|(path, body, delay)| {
+                if path.starts_with("/v2/pictures/") && path.contains(&giraffe) {
+                    (path, png(256, 256, [1, 2, 3, 255]), delay)
+                } else {
+                    (path, body, delay)
+                }
+            })
+            .collect();
+        let (base, _) = serve(tampered);
+        let source = block_on(catalog::load(&Origin::repo(&base), None, false)).unwrap();
+        let err = block_on(use_skin(
+            &state,
+            &source,
+            None,
+            &UseFrom::Collection,
+            &giraffe,
+        ))
+        .unwrap_err();
+        assert_eq!(err, "Giraffe cola arrived damaged. Try again");
+        assert!(state.saved_skins().is_empty());
+    }
+
+    #[test]
+    fn a_skin_of_folders_is_known_by_its_pictures_sha256_before_it_arrives() {
+        let picture = png(256, 256, [30, 90, 160, 255]);
+        let sha = tree::sha256_hex(&picture);
+        assert_eq!(
+            store::pack_skin_id_by_sha256(&sha, PackShape::Folder),
+            Some(store::pack_skin_id(&picture, PackShape::Folder))
+        );
+        assert_eq!(store::pack_skin_id_by_sha256(&sha, PackShape::Drive), None);
+        assert_eq!(
+            store::pack_skin_id_by_sha256("abc", PackShape::Folder),
+            None
+        );
+        assert_eq!(
+            store::pack_skin_id_by_sha256(&sha.to_uppercase(), PackShape::Folder),
+            None
+        );
+    }
+
+    #[test]
+    fn where_a_skin_is_used_from_reads_as_the_webview_writes_it() {
+        let read = |json: &str| serde_json::from_str::<UseFrom>(json);
+        assert_eq!(
+            read(r#"{"kind":"collection"}"#).unwrap(),
+            UseFrom::Collection
+        );
+        assert_eq!(
+            read(r#"{"kind":"pack","id":"blues","hash":"0123456789abcdef"}"#).unwrap(),
+            UseFrom::Pack {
+                id: "blues".into(),
+                hash: "0123456789abcdef".into()
+            }
+        );
+        assert!(read(r#"{"kind":"pack","id":"blues"}"#).is_err());
+        assert!(read(r#"{"kind":"folder"}"#).is_err());
+        // What the viewer kept of a pack before skins had pictures named still reads.
+        let old: PackSkinDto =
+            serde_json::from_str(r#"{"name":"Ada","tags":[],"thumbnail":"data:"}"#).unwrap();
+        assert_eq!((old.sha256, old.ext, old.skin_id), (None, None, None));
     }
 
     #[test]
@@ -2703,6 +3490,7 @@ pub(crate) mod tests {
                     author: None,
                     license: None,
                     pack_hash: None,
+                    from_pack: None,
                     base: None,
                     recipe: None,
                 },
@@ -2781,6 +3569,7 @@ pub(crate) mod tests {
                     author: None,
                     license: None,
                     pack_hash: None,
+                    from_pack: None,
                     base: None,
                     recipe: None,
                 },

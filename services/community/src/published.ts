@@ -1,15 +1,15 @@
 /**
  * folderskin-community's published index.json, as the app and the website read it: the packs that
- * are published, and `moved`, the ids renamed packs had before with the ids they have now. Install
- * counts only count published packs, under their new ids (installs.ts), and a pack approved here
- * never gets an id that either one already uses (store.ts).
+ * are published, and `moved`, the ids renamed packs had before with the ids they have now. Installs
+ * and views only count published packs, under their new ids (currentPackId), and a pack approved
+ * here never gets an id that either one already uses (store.ts).
  *
  * Each Worker isolate reads it at most every five minutes (and Cloudflare caches the fetch as
  * long), and goes on with the last copy for up to a day while GitHub can't be reached. Only this
  * one fixed address is ever fetched.
  */
 import { now } from "./bytes";
-import { parseJson, readBody } from "./http";
+import { fail, parseJson, readBody } from "./http";
 import { isPackId } from "./text";
 
 /** folderskin-community's list of published packs, as the app reads it. */
@@ -58,6 +58,24 @@ export async function publishedIndex(at = now()): Promise<Published | null> {
   } catch {
     return kept && at - kept.at < STALE_SECONDS ? kept : null;
   }
+}
+
+/**
+ * The id published pack `id` has now, for an install or a view that names it: the same id, or the
+ * one a renamed pack has now. Anything that isn't a pack id is a 400, a pack the index doesn't
+ * list a 404, and no index to go by a 503.
+ */
+export async function currentPackId(id: unknown, at = now()): Promise<string> {
+  if (!isPackId(id)) throw fail(400, "bad_pack", "That isn't a pack's id.");
+  const index = await publishedIndex(at);
+  if (!index) {
+    throw fail(503, "index_unavailable", "The list of community packs can't be read right now. Please try again later.", {
+      "Retry-After": "300",
+    });
+  }
+  const pack = index.moved.get(id) ?? id;
+  if (!index.ids.has(pack)) throw fail(404, "unknown_pack", "No community pack has that id.");
+  return pack;
 }
 
 /**

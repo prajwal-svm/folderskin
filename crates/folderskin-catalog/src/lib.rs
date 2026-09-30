@@ -10,8 +10,11 @@ pub mod build;
 pub mod search;
 pub mod tree;
 
-pub use build::PackRecord;
-pub use search::{Catalog, Facet, PackRow, Query, Results, SkinHit, Sort};
+pub use build::{CollectionRecord, PackRecord};
+pub use search::{
+    Catalog, CollectionItem, CollectionPage, CollectionQuery, CollectionSort, Facet, PackRow,
+    Query, Results, SkinHit, Sort,
+};
 
 #[cfg(test)]
 mod tests {
@@ -91,7 +94,7 @@ mod tests {
     }
 
     fn catalog(packs: &[PackRecord]) -> Catalog {
-        Catalog::from_connection(build::in_memory(packs).unwrap()).unwrap()
+        Catalog::from_connection(build::in_memory(packs, &[]).unwrap()).unwrap()
     }
 
     fn ids(r: &Results) -> Vec<&str> {
@@ -116,18 +119,20 @@ mod tests {
 
     #[test]
     fn the_same_packs_make_the_same_bytes_in_any_order() {
-        let a = build::to_bytes(&sample()).unwrap();
+        let a = build::to_bytes(&sample(), &[]).unwrap();
         let mut shuffled = sample();
         shuffled.reverse();
-        let b = build::to_bytes(&shuffled).unwrap();
+        let b = build::to_bytes(&shuffled, &[]).unwrap();
         assert_eq!(a, b, "the catalog is deterministic");
         assert!(a.starts_with(b"SQLite format 3\0"));
         let mut changed = sample();
         changed[1].skin_names[0] = "Navy".into();
-        assert_ne!(a, build::to_bytes(&changed).unwrap());
+        assert_ne!(a, build::to_bytes(&changed, &[]).unwrap());
         let mut twice = sample();
         twice.push(sample()[0].clone());
-        assert!(build::to_bytes(&twice).unwrap_err().contains("same id"));
+        assert!(build::to_bytes(&twice, &[])
+            .unwrap_err()
+            .contains("same id"));
     }
 
     #[test]
@@ -135,7 +140,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("fs-catalog-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("c.sqlite");
-        std::fs::write(&path, build::to_bytes(&sample()).unwrap()).unwrap();
+        std::fs::write(&path, build::to_bytes(&sample(), &[]).unwrap()).unwrap();
         let c = Catalog::open(&path).unwrap();
         assert_eq!(c.counts(), (5, 15));
         assert_eq!(ids(&find(&c, "mona")), ["classic-art"]);
@@ -150,7 +155,7 @@ mod tests {
 
     #[test]
     fn a_catalog_from_a_newer_folderskin_says_so() {
-        let conn = build::in_memory(&sample()).unwrap();
+        let conn = build::in_memory(&sample(), &[]).unwrap();
         conn.pragma_update(None, "user_version", build::CATALOG_VERSION + 1)
             .unwrap();
         let err = Catalog::from_connection(conn).err().unwrap();
@@ -497,6 +502,274 @@ mod tests {
         );
     }
 
+    /// A skin of the official collection called `name`, tagged `tags`, added on `day` (days from
+    /// 1970), whose picture's SHA-256 is made from `name`.
+    fn official(name: &str, tags: &[&str], day: i64) -> CollectionRecord {
+        CollectionRecord {
+            name: name.into(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            sha256: tree::sha256_hex(name.as_bytes()),
+            ext: "webp".into(),
+            bytes: 1000 + name.len() as u64,
+            w: 1024,
+            h: 958,
+            added: day * 86_400,
+        }
+    }
+
+    /// Six official skins: two added on day 20, three on day 30 (a batch), one on day 10.
+    fn collection() -> Vec<CollectionRecord> {
+        vec![
+            official("Giraffe cola", &["pop art"], 20),
+            official("Starry harbour", &["night"], 20),
+            official("Zebra crossing", &["street"], 30),
+            official("Apple orchard", &["nature"], 30),
+            official("Moon over Edo", &["night", "woodblock"], 30),
+            official("Café au lait", &["coffee"], 10),
+        ]
+    }
+
+    fn with_collection() -> Catalog {
+        Catalog::from_connection(build::in_memory(&sample(), &collection()).unwrap()).unwrap()
+    }
+
+    fn names(page: &CollectionPage) -> Vec<&str> {
+        page.items.iter().map(|i| i.name.as_str()).collect()
+    }
+
+    fn official_page(
+        c: &Catalog,
+        q: &str,
+        sort: CollectionSort,
+        offset: usize,
+        limit: usize,
+    ) -> CollectionPage {
+        c.collection(&CollectionQuery {
+            q,
+            sort,
+            offset,
+            limit,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn the_collection_is_written_in_its_own_order_and_the_same_every_time() {
+        let a = build::to_bytes(&sample(), &collection()).unwrap();
+        assert_eq!(a, build::to_bytes(&sample(), &collection()).unwrap());
+        let mut shuffled = sample();
+        shuffled.reverse();
+        assert_eq!(
+            a,
+            build::to_bytes(&shuffled, &collection()).unwrap(),
+            "packs in any order"
+        );
+        let mut reordered = collection();
+        reordered.swap(0, 1);
+        assert_ne!(
+            a,
+            build::to_bytes(&sample(), &reordered).unwrap(),
+            "the collection's order is its own"
+        );
+        assert_ne!(a, build::to_bytes(&sample(), &[]).unwrap());
+        let mut twice = collection();
+        twice.push(collection()[2].clone());
+        assert!(build::to_bytes(&sample(), &twice)
+            .unwrap_err()
+            .contains("same picture"));
+
+        let c = Catalog::from_bytes(&a).unwrap();
+        assert_eq!((c.counts(), c.collection_count()), ((5, 15), 6));
+        let giraffe = c
+            .collection_item(&tree::sha256_hex(b"Giraffe cola"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            giraffe,
+            CollectionItem {
+                position: 0,
+                name: "Giraffe cola".into(),
+                tags: vec!["pop art".into()],
+                sha256: tree::sha256_hex(b"Giraffe cola"),
+                ext: "webp".into(),
+                bytes: 1012,
+                w: 1024,
+                h: 958,
+                added: 20 * 86_400,
+            }
+        );
+        assert_eq!(c.collection_item(&"0".repeat(64)).unwrap(), None);
+        let pictures = c.collection_pictures().unwrap();
+        assert_eq!(pictures.len(), 6);
+        assert_eq!(
+            pictures[5],
+            (tree::sha256_hex("Café au lait".as_bytes()), "webp".into())
+        );
+    }
+
+    #[test]
+    fn the_collection_pages_newest_day_first_and_a_days_batch_in_its_order() {
+        let c = with_collection();
+        let newest = official_page(&c, "", CollectionSort::Newest, 0, 50);
+        assert_eq!(newest.total, 6);
+        assert_eq!(
+            names(&newest),
+            [
+                "Zebra crossing",
+                "Apple orchard",
+                "Moon over Edo",
+                "Giraffe cola",
+                "Starry harbour",
+                "Café au lait"
+            ]
+        );
+        let by_name = official_page(&c, "", CollectionSort::Name, 0, 50);
+        assert_eq!(
+            names(&by_name),
+            [
+                "Apple orchard",
+                "Café au lait",
+                "Giraffe cola",
+                "Moon over Edo",
+                "Starry harbour",
+                "Zebra crossing"
+            ]
+        );
+        // Page by page, nothing overlaps or is skipped, and the count comes past the end too.
+        let mut paged = Vec::new();
+        for offset in (0..6).step_by(4) {
+            let page = official_page(&c, "", CollectionSort::Newest, offset, 4);
+            assert_eq!(page.total, 6);
+            paged.extend(page.items.into_iter().map(|i| i.name));
+        }
+        assert_eq!(paged, names(&newest));
+        let past = official_page(&c, "", CollectionSort::Newest, 60, 4);
+        assert_eq!((past.total, past.items.len()), (6, 0));
+        assert_eq!(
+            CollectionSort::parse("name"),
+            CollectionSort::Name,
+            "and anything else is newest"
+        );
+        assert_eq!(CollectionSort::parse("best"), CollectionSort::Newest);
+    }
+
+    #[test]
+    fn the_collection_is_searched_by_the_start_of_its_names_and_tags() {
+        let c = with_collection();
+        let night = official_page(&c, "night", CollectionSort::Newest, 0, 50);
+        assert_eq!(names(&night), ["Moon over Edo", "Starry harbour"], "a tag");
+        assert_eq!(night.total, 2);
+        assert_eq!(
+            names(&official_page(&c, "star", CollectionSort::Name, 0, 50)),
+            ["Starry harbour"]
+        );
+        assert_eq!(
+            names(&official_page(&c, "CAFE", CollectionSort::Newest, 0, 50)),
+            ["Café au lait"],
+            "case and accents don't matter"
+        );
+        assert_eq!(
+            names(&official_page(
+                &c,
+                "moon wood",
+                CollectionSort::Newest,
+                0,
+                50
+            )),
+            ["Moon over Edo"],
+            "every word, over name and tags"
+        );
+        let past = official_page(&c, "night", CollectionSort::Newest, 5, 50);
+        assert_eq!((past.total, past.items.len()), (2, 0));
+        let none = official_page(&c, "zzz", CollectionSort::Newest, 0, 50);
+        assert_eq!((none.total, none.items.len()), (0, 0));
+        for odd in ["\"", "star*", "NOT star", "(", "col:", "-"] {
+            assert!(
+                c.collection(&CollectionQuery {
+                    q: odd,
+                    limit: 5,
+                    ..CollectionQuery::default()
+                })
+                .is_ok(),
+                "{odd:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_pack_search_brings_the_collections_matches_along() {
+        let c = with_collection();
+        let r = find(&c, "night");
+        assert_eq!(
+            ids(&r),
+            ["night-prints", "classic-art"],
+            "the packs as before"
+        );
+        let hits: Vec<&str> = r.collection.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(hits, ["Moon over Edo", "Starry harbour"]);
+        // A name with the word whole comes before a newer one the word only starts.
+        let mut moons = collection();
+        moons.push(official("Moonlight", &[], 40));
+        let moons = Catalog::from_connection(build::in_memory(&sample(), &moons).unwrap()).unwrap();
+        let hits: Vec<String> = find(&moons, "moon")
+            .collection
+            .into_iter()
+            .map(|i| i.name)
+            .collect();
+        assert_eq!(hits, ["Moon over Edo", "Moonlight"]);
+        assert!(find(&c, "").collection.is_empty(), "nothing typed, none");
+        assert!(find(&c, "zebra").packs.is_empty());
+        assert_eq!(
+            find(&c, "zebra").collection.len(),
+            1,
+            "only the collection matches"
+        );
+        let tagged = c
+            .search(&Query {
+                q: "night",
+                tag: "woodblock",
+                limit: 5,
+                ..Query::default()
+            })
+            .unwrap();
+        assert_eq!(
+            tagged.collection.len(),
+            2,
+            "a pack tag doesn't narrow the collection"
+        );
+
+        // At most COLLECTION_HITS.
+        let many: Vec<CollectionRecord> = (0..40)
+            .map(|i| official(&format!("Neon sign {i}"), &[], i))
+            .collect();
+        let c = Catalog::from_connection(build::in_memory(&sample(), &many).unwrap()).unwrap();
+        let r = find(&c, "neon");
+        assert_eq!(r.collection.len(), search::COLLECTION_HITS);
+        assert_eq!(r.collection[0].name, "Neon sign 39", "newest first");
+    }
+
+    #[test]
+    fn a_catalog_without_a_collection_table_has_an_empty_collection() {
+        // As a catalog from before the collection was: the same tables but that one.
+        let conn = build::in_memory(&sample(), &collection()).unwrap();
+        conn.execute_batch("DROP TABLE collection; DROP TABLE collection_fts;")
+            .unwrap();
+        let c = Catalog::from_connection(conn).unwrap();
+        assert_eq!(c.collection_count(), 0);
+        let page = official_page(&c, "", CollectionSort::Newest, 0, 10);
+        assert_eq!((page.total, page.items.len()), (0, 0));
+        assert!(official_page(&c, "night", CollectionSort::Name, 0, 10)
+            .items
+            .is_empty());
+        assert_eq!(c.collection_item(&"a".repeat(64)).unwrap(), None);
+        assert!(c.collection_pictures().unwrap().is_empty());
+        let r = find(&c, "night");
+        assert_eq!(ids(&r), ["night-prints", "classic-art"]);
+        assert!(r.collection.is_empty());
+        // And one with the table and nothing in it, as one made from index.json.
+        assert_eq!(catalog(&sample()).collection_count(), 0);
+    }
+
     /// A large made-up catalog: its size, and how long searches take. Run with
     /// `cargo test -p folderskin-catalog --release -- --ignored --nocapture scale`.
     #[test]
@@ -505,7 +778,7 @@ mod tests {
         let packs = synthetic(10_000, 10);
         let skins: usize = packs.iter().map(|p| p.skin_names.len()).sum();
         let t = std::time::Instant::now();
-        let bytes = build::to_bytes(&packs).unwrap();
+        let bytes = build::to_bytes(&packs, &[]).unwrap();
         let built = t.elapsed();
         let gz = tree::gzip(&bytes);
         println!(

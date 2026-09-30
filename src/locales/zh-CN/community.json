@@ -61,6 +61,37 @@
     "openFailed": "无法打开这个皮肤包：{{reason}}。",
     "getting_other": "正在加载 {{count}} 款皮肤的预览"
   },
+  "official": {
+    "collection": "官方合集",
+    "search": "搜索皮肤",
+    "searchLabel": "搜索官方皮肤",
+    "gridLabel": "官方皮肤",
+    "loading": "正在加载官方皮肤",
+    "loadFailed": "官方皮肤没能加载出来",
+    "loadFailedText": "{{reason}}。",
+    "sortButton": "官方皮肤排序",
+    "sortLabel": "官方皮肤排序",
+    "empty": {
+      "noMatch": "没有匹配的官方皮肤",
+      "noMatchText": "换个词试试，或者去皮肤包里搜索。",
+      "none": "还没有官方皮肤",
+      "noneText": "点“刷新”会再找一次。",
+      "searchPacks": "改为搜索皮肤包"
+    }
+  },
+  "use": {
+    "button": "使用这个皮肤",
+    "label": "使用 {{name}}",
+    "tip": "只把这个皮肤添加到你的皮肤库"
+  },
+  "inLibrary": {
+    "label": "已在你的皮肤库中",
+    "button": "已在皮肤库中",
+    "showTip": "在皮肤库中查看",
+    "have_other": "{{count}} 款中有 {{have}} 款已在你的皮肤库中",
+    "packInfo": "✓ 表示已在你的皮肤库中。“使用”只添加一款皮肤，“添加”则添加整个皮肤包并保持更新。",
+    "officialInfo": "✓ 表示已在你的皮肤库中。“使用”只添加一款皮肤。"
+  },
   "progress": {
     "adding": "正在添加",
     "updating": "正在更新",
@@ -96,7 +127,9 @@
       "unanswered": "{{host}} 没有响应，所以显示的是你上次访问时的皮肤包",
       "behind": "没能获取到最新的皮肤包列表，所以显示的是你上次访问时的皮肤包",
       "other": "{{why}}，所以显示的是你上次访问时的皮肤包"
-    }
+    },
+    "official_other": "{{count}} 个官方皮肤",
+    "officialMatching_other": "{{count}} 个官方皮肤与“{{query}}”匹配"
   },
   "toast": {
     "addLinkFailed": "无法添加“{{id}}”：{{reason}}",
@@ -119,7 +152,12 @@
     "refreshFailed": "无法刷新：{{reason}}",
     "show": "查看",
     "addedFromFolder_other": "已从该文件夹添加 {{count}} 款皮肤",
-    "addFolderFailed": "无法添加这个皮肤包：{{reason}}"
+    "addFolderFailed": "无法添加这个皮肤包：{{reason}}",
+    "used": "已将 {{name}} 添加到你的皮肤库",
+    "usedAlready": "{{name}} 已经在你的皮肤库里了",
+    "useFailed": "无法添加 {{name}}：{{reason}}",
+    "noSuchSkin": "无法添加这款皮肤：它已不在社区中。请刷新后再试。",
+    "useLinkFailed": "无法添加这款皮肤：{{reason}}"
   },
   "searchIn": "在“{{tag}}”中搜索皮肤包",
   "searchInLabel": "在“{{tag}}”中搜索皮肤包",

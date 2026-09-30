@@ -3,11 +3,13 @@ import { SearchIcon } from "./icons/search";
 import { useT } from "../i18n";
 import { formatNumber } from "../i18n/format";
 
-export type TabCount = { id: string; label: string; count: number };
+/** One filter: its label and count, and for one that stands apart, a mark before the label and a class of its own. */
+export type TabCount = { id: string; label: string; count: number; icon?: ReactNode; className?: string };
 
 /**
- * Tag filters and search. "All" comes first, then one filter per tag, most used first. The
- * active filter is a raised pill that slides between them, and Cmd/Ctrl+F jumps to the search.
+ * Tag filters and search. "All" comes first (after Community's Official), then one filter per
+ * tag, most used first. The active filter is a raised pill that slides between them, and
+ * Cmd/Ctrl+F jumps to the search.
  */
 export function GalleryToolbar({
   tabs,
@@ -101,10 +103,11 @@ export function GalleryToolbar({
             type="button"
             role="tab"
             aria-selected={tab.id === active}
-            className={tab.id === active ? "seg-btn is-active" : "seg-btn"}
+            className={["seg-btn", tab.id === active && "is-active", tab.className].filter(Boolean).join(" ")}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange(tab.id)}
           >
+            {tab.icon}
             {tab.label}
             <span className="count">{formatNumber(tab.count)}</span>
           </button>

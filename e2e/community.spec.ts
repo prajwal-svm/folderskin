@@ -16,6 +16,8 @@ const cards = (page: Page) => page.locator(".pack:not(.is-placeholder)");
 const search = (page: Page) => page.getByRole("searchbox", { name: /search packs/i });
 const grid = (page: Page) => page.locator(".packs-grid");
 const searches = (page: Page) => page.evaluate(() => (window as { mockCommunitySearches?: number }).mockCommunitySearches ?? 0);
+/** The first tag's tab: after Official and All. */
+const firstTag = (page: Page) => page.getByRole("tab").nth(2);
 
 test("typing searches ten thousand packs in under 300 ms, and only what's on screen is drawn", async ({ page }) => {
   await openCommunity(page);
@@ -66,7 +68,7 @@ test("typing searches ten thousand packs in under 300 ms, and only what's on scr
 
 test("a tag narrows the list, and the options sort it", async ({ page }) => {
   await openCommunity(page);
-  const tab = page.getByRole("tab").nth(1);
+  const tab = firstTag(page);
   const tag = (await tab.locator(".count").evaluate((el) => el.parentElement!.firstChild!.textContent ?? "")).trim();
   await tab.click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
@@ -148,7 +150,7 @@ test("leaving Community and coming back finds it as it was, without searching ag
   await openCommunity(page);
   await search(page).fill("neon");
   await expect(page.locator(".community-count")).toContainText("match “neon”");
-  const tab = page.getByRole("tab").nth(1);
+  const tab = firstTag(page);
   await tab.click();
   await expect(page.locator(".community-count")).toContainText("tagged");
   const status = await page.locator(".community-count").textContent();
@@ -162,7 +164,7 @@ test("leaving Community and coming back finds it as it was, without searching ag
   await openView(page, /community/i);
 
   await expect(search(page)).toHaveValue("neon");
-  await expect(page.getByRole("tab").nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(firstTag(page)).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".community-count")).toHaveText(status!);
   await expect.poll(() => grid(page).evaluate((el) => el.scrollTop)).toBe(scrolled);
   expect(await searches(page)).toBe(before);
@@ -214,7 +216,9 @@ test("tags that don't fit beside the search fade out rather than stopping mid-wo
   const overflows = () => strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
   await search(page).fill("a");
   await expect.poll(overflows).toBe(true);
-  await expect(strip).toHaveAttribute("data-cut", "end");
+  // Official comes before All, so a strip this narrow may scroll to show all of All, which fades
+  // its start as well. What matters is that the tags running on past the end fade there.
+  await expect(strip).toHaveAttribute("data-cut", /^(end|both)$/);
   // With room for them all, nothing fades.
   await page.setViewportSize({ width: 1900, height: 800 });
   await expect.poll(overflows).toBe(false);
@@ -254,6 +258,58 @@ test("an install link for a pack Community doesn't have says so, and what to do"
   ).toBeVisible();
   await expect(page.locator(".community .view-title")).toHaveText("Community");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("a skin used on its own is ticked wherever it shows, and its pack counts it until it's added", async ({ page }) => {
+  await openCommunity(page, 0);
+  const card = cards(page).filter({ has: page.locator(".pack-name", { hasText: /^Colours$/ }) });
+  await expect(card.locator(".have-chip")).toHaveCount(0);
+  await card.getByRole("button", { name: "view Colours" }).click();
+  const viewer = page.getByRole("dialog");
+  await expect(viewer.locator(".pack-skin")).toHaveCount(8);
+  await expect(viewer.locator(".pack-skin-have")).toHaveCount(0);
+  // Use is a download icon on the skin; its words wait in its tip, and the ⓘ says what it means.
+  await expect(viewer.getByRole("img", { name: /Use takes one skin/ })).toBeVisible();
+  await viewer.getByRole("button", { name: "use Blue", exact: true }).click();
+  await expect(page.getByText("Added Blue to your library")).toBeVisible();
+
+  // Back in Community: the card counts it, and the viewer ticks it in place of its Use.
+  await openView(page, /community/i);
+  await expect(card.locator(".have-chip")).toHaveText("1/8");
+  await card.getByRole("button", { name: "view Colours" }).click();
+  const blue = viewer.locator(".pack-skin").filter({ hasText: /^Blue$/ });
+  await expect(blue.getByRole("img", { name: "In your library" })).toBeVisible();
+  await expect(blue.getByRole("button", { name: "use Blue", exact: true })).toHaveCount(0);
+  await expect(viewer.locator(".pack-have .have-chip")).toHaveText("1/8");
+
+  // Added whole, the skin used is one of the pack's: nothing is saved twice.
+  await viewer.getByRole("button", { name: "Add 8 skins" }).click();
+  await expect(page.getByText(/Added 8 skins from Colours/)).toBeVisible({ timeout: 10_000 });
+  await expect(viewer.locator(".pack-skin-have")).toHaveCount(8);
+  await expect(viewer.locator(".have-chip")).toHaveCount(0);
+  await expect(card.locator(".have-chip")).toHaveCount(0);
+});
+
+test("an official skin in the library is ticked, and its viewer takes you to it", async ({ page }) => {
+  await openCommunity(page, 0);
+  await page.getByRole("tab", { name: /Official/ }).click();
+  const tiles = page.locator(".packs-grid.is-skins .tile:not(.is-placeholder)");
+  await expect(tiles.first()).toBeVisible();
+  await expect(page.locator(".tile-kept")).toHaveCount(0);
+  const name = (await tiles.first().locator(".tile-name-text").textContent())!;
+  await tiles.first().locator(".tile-hit").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Use this skin" }).click();
+  await expect(page.getByText(`Added ${name} to your library`)).toBeVisible();
+
+  await openView(page, /community/i);
+  await expect(tiles.first().getByRole("img", { name: "In your library" })).toBeVisible();
+  await expect(page.locator(".tile-kept")).toHaveCount(1);
+  await tiles.first().locator(".tile-hit").click();
+  const inLibrary = page.getByRole("dialog").getByRole("button", { name: "In library" });
+  await expect(inLibrary).toBeVisible();
+  await inLibrary.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".tile.is-selected .tile-name")).toHaveText(name);
 });
 
 test("how packs are checked waits behind an icon beside the count", async ({ page }) => {

@@ -411,16 +411,17 @@ export default function App() {
     setFilters(NO_FILTERS);
   }, []);
 
-  // A folderskin://install link, from an Install button on folderskin.app: Community, open on that
-  // pack and adding it as its Add button does (lib/installLinks.ts, lib/communityStore.ts). The app
-  // has brought the window forward already.
+  // A folderskin://install link, from an Install or a Use in FolderSkin button on folderskin.app:
+  // Community, open on that pack and adding it as its Add button does, or open on that skin and
+  // using it as its Use button does (lib/installLinks.ts, lib/communityStore.ts). The app has
+  // brought the window forward already.
   useEffect(
     () =>
-      watchInstallLinks((packId) => {
+      watchInstallLinks((link) => {
         setView("community");
         setTag("");
         setFilters(NO_FILTERS);
-        community.install(packId);
+        community.install(link);
       }),
     [],
   );
@@ -1018,6 +1019,37 @@ export default function App() {
     [state.skinId],
   );
 
+  /**
+   * Picks skin `id`, in All skins with nothing narrowing it (a community skin isn't in Yours), and
+   * opens the folder panel on it, where Apply is.
+   */
+  const showSkin = useCallback(
+    (id: string) => {
+      setView("skins");
+      setTag("");
+      setQuery("");
+      setFilters(NO_FILTERS);
+      setLayout((l) => (l.rightClosed ? { ...l, rightClosed: false } : l));
+      dispatch({ type: "skinSelected", skinId: id });
+    },
+    [setLayout],
+  );
+
+  /**
+   * A community skin taken on its own ("Use" in Community): it joins the library and is picked, as
+   * a picture added is, where Apply is (`showSkin`).
+   */
+  const takeUsedSkin = useCallback(
+    (skin: Skin) => {
+      const had = latestSkins.current.some((s) => s.id === skin.id);
+      addSkin(skin);
+      showSkin(skin.id);
+      const name = clip(skin.name);
+      toast(had ? tNow("community.toast.usedAlready", { name }) : tNow("community.toast.used", { name }), { tone: "ok" });
+    },
+    [addSkin, showSkin, toast],
+  );
+
   /** A skin as the library has it now, for the studio's result cards. */
   const skinOf = useCallback((id: string) => skins.find((s) => s.id === id), [skins]);
 
@@ -1339,7 +1371,16 @@ export default function App() {
           </>
         )}
         {view === "community" && (
-          <CommunityView onShare={() => setSharing({})} onAdded={addSkins} onRemoved={dropSkins} onShowTag={showTag} toast={toast} />
+          <CommunityView
+            library={skins}
+            onShare={() => setSharing({})}
+            onAdded={addSkins}
+            onRemoved={dropSkins}
+            onUsed={takeUsedSkin}
+            onShowSkin={showSkin}
+            onShowTag={showTag}
+            toast={toast}
+          />
         )}
         {(studioOpened || aiView) && (
           <Suspense fallback={aiView ? <ViewLoading /> : null}>

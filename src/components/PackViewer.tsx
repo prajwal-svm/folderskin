@@ -2,7 +2,9 @@ import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api, errorMessage, type CommunityPack, type PackProgress, type PackSkinPreview } from "../lib/tauri";
 import { licenseLabel } from "../lib/packs";
 import { progressLabel, progressShare } from "../lib/communityStore";
+import { EMPTY_LIBRARY, inLibrary, packInLibrary, type LibraryIndex } from "../lib/inLibrary";
 import { Modal } from "./Modal";
+import { HaveChip, InfoTip } from "./InLibrary";
 import { DrivesBadge, OfficialBadge } from "./OfficialBadge";
 import { OkBadge } from "./OkBadge";
 import { DownloadIcon } from "./icons/download";
@@ -15,7 +17,11 @@ import { Rich } from "../i18n/Rich";
 /**
  * A community pack opened to look through: every skin drawn as the folder it makes, with its
  * name, and the pack's details. Opened from a skin that matched a search, it starts at that skin.
- * Looking saves nothing; Add does that.
+ * Looking saves nothing; Add does that, and a skin's own Use saves just that one, leaving the pack
+ * not added. Use shows on the skin under the pointer or the keyboard, and always on the skin the
+ * viewer opened at. A skin in the library already wears a tick in its place, and while the pack
+ * isn't added, the top says how many of its skins are in the library, with an ⓘ for what the tick,
+ * Use and Add mean.
  */
 export function PackViewer({
   pack,
@@ -28,6 +34,9 @@ export function PackViewer({
   onUpdate,
   onRemove,
   onClose,
+  using = null,
+  onUse,
+  library = EMPTY_LIBRARY,
 }: {
   pack: CommunityPack;
   /** The skin to show first, by its place in the pack. */
@@ -44,6 +53,12 @@ export function PackViewer({
   onUpdate: () => void;
   onRemove: () => void;
   onClose: () => void;
+  /** The skin being taken on its own, by its picture's SHA-256. */
+  using?: string | null;
+  /** Takes one skin on its own. Offered for a skin whose SHA-256 the pack lists. */
+  onUse?: (skin: PackSkinPreview) => void;
+  /** What the library holds, to tick the skins in it already. */
+  library?: LibraryIndex;
 }) {
   const t = useT();
   const [skins, setSkins] = useState<PackSkinPreview[] | null>(null);
@@ -64,6 +79,10 @@ export function PackViewer({
   useEffect(() => {
     if (skins && focus !== null) focused.current?.scrollIntoView({ block: "center" });
   }, [skins, focus]);
+
+  const have = packInLibrary(library, pack, skins);
+  // Use is offered, so the ⓘ says what it is; a pack from the old list has only Add.
+  const usable = !pack.added && !!onUse && (skins?.some((s) => s.sha256) ?? false);
 
   // While it's added or updated, the button fills as the pictures arrive.
   const working = busy && !removing;
@@ -121,15 +140,23 @@ export function PackViewer({
         </>
       }
     >
-      {(pack.official || pack.drives || pack.tags.length > 0) && (
-        <div className="pack-tags">
-          {pack.official && <OfficialBadge />}
-          {pack.drives && <DrivesBadge />}
-          {pack.tags.map((t) => (
-            <span key={t} className="tag-chip">
-              {t}
+      {(pack.official || pack.drives || pack.tags.length > 0 || have > 0 || usable) && (
+        <div className="pack-viewer-top">
+          <div className="pack-tags">
+            {pack.official && <OfficialBadge />}
+            {pack.drives && <DrivesBadge />}
+            {pack.tags.map((t) => (
+              <span key={t} className="tag-chip">
+                {t}
+              </span>
+            ))}
+          </div>
+          {(have > 0 || usable) && (
+            <span className="pack-have">
+              {have > 0 && <HaveChip have={have} total={pack.count} />}
+              {usable && <InfoTip text={t("community.inLibrary.packInfo")} />}
             </span>
-          ))}
+          )}
         </div>
       )}
       {error ? (
@@ -140,19 +167,43 @@ export function PackViewer({
         </p>
       ) : (
         <ul className="pack-skins">
-          {skins.map((s, i) => (
-            <li
-              key={`${i}:${s.name}`}
-              ref={i === focus ? focused : undefined}
-              className={i === focus ? "pack-skin is-focus" : "pack-skin"}
-              style={{ animationDelay: `${Math.min(i, 16) * 25}ms` }}
-            >
-              <img src={s.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
-              <span className="pack-skin-name" data-tip={s.name} data-tip-overflow>
-                {s.name}
-              </span>
-            </li>
-          ))}
+          {skins.map((s, i) => {
+            const mine = s.sha256 != null && s.sha256 === using;
+            const kept = inLibrary(library, s.skin_id);
+            return (
+              <li
+                key={`${i}:${s.name}`}
+                ref={i === focus ? focused : undefined}
+                className={["pack-skin", i === focus && "is-focus", mine && "is-using"].filter(Boolean).join(" ")}
+                style={{ animationDelay: `${Math.min(i, 16) * 25}ms` }}
+              >
+                <img src={s.thumbnail} alt="" draggable={false} loading="lazy" decoding="async" />
+                <span className="pack-skin-name" data-tip={s.name} data-tip-overflow>
+                  {s.name}
+                </span>
+                {kept ? (
+                  <span className="pack-skin-have">
+                    <OkBadge size={22} label={t("community.inLibrary.label")} />
+                  </span>
+                ) : (
+                  s.sha256 &&
+                  onUse && (
+                    <button
+                      type="button"
+                      className="icon-btn pack-skin-use"
+                      aria-label={t("community.use.label", { name: s.name })}
+                      data-tip={t("community.use.tip")}
+                      disabled={using !== null}
+                      aria-busy={mine}
+                      onClick={() => onUse(s)}
+                    >
+                      {mine ? <LoaderIcon size={14} /> : <DownloadIcon size={14} />}
+                    </button>
+                  )
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </Modal>

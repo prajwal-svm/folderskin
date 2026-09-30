@@ -9,7 +9,8 @@
  * (src/ip.ts), under keys of its own that change every day, and the rows that remember it last
  * until the day is over: the daily clean-up deletes them (daily.ts). Nothing else about a request
  * is kept. Only packs in folderskin-community's published index count, so the numbers can't fill
- * up with made-up ids (published.ts).
+ * up with made-up ids (published.ts). Each add counted also goes into the day's count, which
+ * GET /v1/stats sums over the last seven days (counts.ts).
  *
  * A renamed pack's old id counts toward the id it has now, by the index's `moved` map: FolderSkin
  * 0.1.4 to 0.1.6 know packs by the ids they had when they were added, and still report those.
@@ -21,12 +22,11 @@
  */
 import { dayOf, now } from "./bytes";
 import type { Env } from "./env";
-import { fail, json } from "./http";
+import { json } from "./http";
 import { networkHash } from "./ip";
-import { forgetPublished, publishedIndex } from "./published";
-import { isPackId } from "./text";
+import { currentPackId, forgetPublished } from "./published";
 
-/** The pages that may read the counts. */
+/** The pages that may read the counts, and the only ones that may send views (counts.ts). */
 export const WEBSITE_ORIGINS = ["https://folderskin.app", "https://www.folderskin.app"];
 /** Where the counts are read. */
 export const COUNTS_PATH = "/v1/packs/installs";
@@ -51,21 +51,18 @@ export function forgetKept(): void {
  */
 export async function count(request: Request, env: Env, id: string, at = now()): Promise<Response> {
   const network = await networkHash(env, request, at, "installs");
-  if (!isPackId(id)) throw fail(400, "bad_pack", "That isn't a pack's id.");
-  const index = await publishedIndex(at);
-  if (!index) {
-    throw fail(503, "index_unavailable", "The list of community packs can't be read right now. Please try again later.", {
-      "Retry-After": "300",
-    });
-  }
-  const pack = index.moved.get(id) ?? id;
-  if (!index.ids.has(pack)) throw fail(404, "unknown_pack", "No community pack has that id.");
+  const pack = await currentPackId(id, at);
   const seen = await env.DB.prepare("INSERT OR IGNORE INTO installs_seen (day, network, pack) VALUES (?1, ?2, ?3)")
     .bind(dayOf(at), network, pack)
     .run();
   const counted = seen.meta.changes === 1;
   if (counted) {
-    await env.DB.prepare("INSERT INTO installs (pack, n) VALUES (?1, 1) ON CONFLICT (pack) DO UPDATE SET n = n + 1").bind(pack).run();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO installs (pack, n) VALUES (?1, 1) ON CONFLICT (pack) DO UPDATE SET n = n + 1").bind(pack),
+      env.DB.prepare(
+        "INSERT INTO counts_daily (kind, target, day, n) VALUES ('install', ?1, ?2, 1) ON CONFLICT (day, kind, target) DO UPDATE SET n = n + 1",
+      ).bind(pack, dayOf(at)),
+    ]);
     kept = null;
   }
   return json({ counted });
@@ -91,7 +88,7 @@ export function preflight(request: Request): Response {
 }
 
 /** The request's origin back when it is the website's; `Vary: Origin` either way, since the answer depends on it. */
-function cors(request: Request): Record<string, string> {
+export function cors(request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") ?? "";
   return WEBSITE_ORIGINS.includes(origin) ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : { Vary: "Origin" };
 }

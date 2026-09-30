@@ -67,6 +67,39 @@
     "getting_many": "Obteniendo {{count}} de aspectos para mostrarlos",
     "getting_other": "Obteniendo {{count}} aspectos para mostrarlos"
   },
+  "official": {
+    "collection": "Colección oficial",
+    "search": "Buscar aspectos",
+    "searchLabel": "buscar aspectos oficiales",
+    "gridLabel": "aspectos oficiales",
+    "loading": "Cargando aspectos oficiales",
+    "loadFailed": "Los aspectos oficiales no se cargaron",
+    "loadFailedText": "{{reason}}.",
+    "sortButton": "Ordenar aspectos oficiales",
+    "sortLabel": "ordenar aspectos oficiales",
+    "empty": {
+      "noMatch": "Ningún aspecto oficial coincide",
+      "noMatchText": "Prueba con otra palabra o busca en los paquetes.",
+      "none": "Aún no hay aspectos oficiales",
+      "noneText": "Recargar los vuelve a buscar.",
+      "searchPacks": "Buscar en los paquetes"
+    }
+  },
+  "use": {
+    "button": "Usar este aspecto",
+    "label": "usar {{name}}",
+    "tip": "Añade solo este aspecto a tu biblioteca"
+  },
+  "inLibrary": {
+    "label": "En tu biblioteca",
+    "button": "En la biblioteca",
+    "showTip": "Verlo en tu biblioteca",
+    "have_one": "{{have}} de {{count}} aspecto en tu biblioteca",
+    "have_many": "{{have}} de {{count}} de aspectos en tu biblioteca",
+    "have_other": "{{have}} de {{count}} aspectos en tu biblioteca",
+    "packInfo": "✓ En tu biblioteca. Usar añade un solo aspecto, y Añadir añade el paquete entero y lo mantiene al día.",
+    "officialInfo": "✓ En tu biblioteca. Usar añade un solo aspecto."
+  },
   "progress": {
     "adding": "Añadiendo",
     "updating": "Actualizando",
@@ -112,7 +145,13 @@
       "unanswered": "{{host}} no responde, así que estos son los paquetes de tu última visita",
       "behind": "No llegó la lista más reciente de paquetes, así que estos son los de tu última visita",
       "other": "{{why}}, así que estos son los paquetes de tu última visita"
-    }
+    },
+    "official_one": "{{count}} aspecto oficial",
+    "official_many": "{{count}} de aspectos oficiales",
+    "official_other": "{{count}} aspectos oficiales",
+    "officialMatching_one": "{{count}} aspecto oficial coincide con “{{query}}”",
+    "officialMatching_many": "{{count}} de aspectos oficiales coinciden con “{{query}}”",
+    "officialMatching_other": "{{count}} aspectos oficiales coinciden con “{{query}}”"
   },
   "toast": {
     "addLinkFailed": "No se pudo añadir “{{id}}”: {{reason}}",
@@ -141,7 +180,12 @@
     "addedFromFolder_one": "Se añadió {{count}} aspecto de esa carpeta",
     "addedFromFolder_many": "Se añadieron {{count}} de aspectos de esa carpeta",
     "addedFromFolder_other": "Se añadieron {{count}} aspectos de esa carpeta",
-    "addFolderFailed": "No se pudo añadir ese paquete: {{reason}}"
+    "addFolderFailed": "No se pudo añadir ese paquete: {{reason}}",
+    "used": "Se añadió {{name}} a tu biblioteca",
+    "usedAlready": "{{name}} ya está en tu biblioteca",
+    "useFailed": "No se pudo añadir {{name}}: {{reason}}",
+    "noSuchSkin": "No se pudo añadir ese aspecto: ya no está en Comunidad. Recarga e inténtalo de nuevo.",
+    "useLinkFailed": "No se pudo añadir ese aspecto: {{reason}}"
   },
   "searchIn": "Buscar paquetes en {{tag}}",
   "searchInLabel": "buscar paquetes en {{tag}}",

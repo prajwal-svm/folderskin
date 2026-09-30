@@ -18,13 +18,23 @@
 //! `drive-thumbs/`, and listed in a catalog of their own making: one of every pack, which
 //! `head.json` names as `with_drives`, while `catalog` goes on naming one of the packs of folders
 //! alone, for the versions of the app from before drives.
+//!
+//! The official collection (`collection/`, collection.rs) is published beside the packs: each
+//! picture in `pictures/` and its thumbnail in `thumbs/`, drawn as a pack skin's is, and its skins
+//! in both catalogs, in `collection.json`'s order. `head.json` says how many there are and what
+//! licence they have. The whole collection is also written as one file for the website,
+//! `collection/<hash>.json` (`tree::PublishedCollection`), which `head.json` names as
+//! `collection_manifest` and which is kept and cleaned up like a pack's manifest. A collection with
+//! a problem stops the build as a pack with one does.
 
 use crate::packs::{self, Changes, Report, PACKS_DIR};
 use crate::{git, make};
 use folderskin_catalog::tree::{
-    self, CatalogRef, Head, PublishedPack, PublishedSkin, WithDrives, HEAD_FILE, HEAD_VERSION,
+    self, CatalogRef, Head, PublishedCollection, PublishedOfficialSkin, PublishedPack,
+    PublishedSkin, WithDrives, COLLECTION_MANIFEST_VERSION, HEAD_FILE, HEAD_VERSION,
 };
-use folderskin_catalog::{build, Catalog, PackRecord};
+use folderskin_catalog::{build, Catalog, CollectionRecord, PackRecord};
+use folderskin_core::collection::{date_of, COLLECTION_DIR};
 use folderskin_core::pack::{self, IndexEntry, Moved, Pack, PackShape, MANIFEST_FILE};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use std::collections::{HashMap, HashSet};
@@ -120,7 +130,46 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         keep.insert(tree::manifest_path(id, &published.hash));
         records.push((published.shape, record));
     }
+    // The official collection: each picture and its thumbnail beside the packs' skins'.
+    let collection_dir = dir.join(COLLECTION_DIR);
+    let mut collection = Vec::with_capacity(report.collection.len());
+    for checked in &report.collection {
+        let source = collection_dir.join(&checked.skin.file);
+        let ext = tree::picture_ext(&checked.skin.file);
+        let picture = tree::picture_path(&checked.sha256, &ext);
+        copy_new(&source, &out.join(&picture), checked, &mut changes)?;
+        keep.insert(picture);
+        let thumb = tree::thumb_path(&checked.sha256);
+        if !out.join(&thumb).is_file() && keep.insert(thumb.clone()) {
+            renders.push(Render::Thumb {
+                source,
+                shape: PackShape::Folder,
+                to: out.join(&thumb),
+            });
+        }
+        keep.insert(thumb);
+        collection.push(CollectionRecord {
+            name: checked.skin.name.trim().to_string(),
+            tags: checked.skin.tags.clone(),
+            sha256: checked.sha256.clone(),
+            ext,
+            bytes: checked.bytes,
+            w: checked.w,
+            h: checked.h,
+            added: checked.skin.added_at(),
+        });
+    }
     render_all(&renders, opts.cwebp.as_deref(), &mut changes)?;
+    // The whole collection in one file, for the website, which has no catalog to search.
+    let collection_manifest = if collection.is_empty() {
+        String::new()
+    } else {
+        let (path, bytes) =
+            published_collection(&report.collection_license, &collection).to_file()?;
+        write_new(&out.join(&path), &bytes, &mut changes)?;
+        keep.insert(path.clone());
+        path
+    };
 
     // The packs of folders alone, for every version of the app.
     let folders: Vec<PackRecord> = records
@@ -128,7 +177,7 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         .filter(|(shape, _)| *shape == PackShape::Folder)
         .map(|(_, record)| record.clone())
         .collect();
-    let (generation, catalog) = write_database(out, &folders, &mut changes)?;
+    let (generation, catalog) = write_database(out, &folders, &collection, &mut changes)?;
     keep.insert(catalog.url.clone());
     // Every pack, drives and all, for the versions that take packs of drives.
     let drives: Vec<String> = records
@@ -140,7 +189,7 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         None
     } else {
         let every: Vec<PackRecord> = records.iter().map(|(_, record)| record.clone()).collect();
-        let (generation, catalog) = write_database(out, &every, &mut changes)?;
+        let (generation, catalog) = write_database(out, &every, &collection, &mut changes)?;
         keep.insert(catalog.url.clone());
         Some(WithDrives {
             generation,
@@ -163,6 +212,13 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
         // Apps that know it follow a pack added under an old id to the one it has now.
         moved: report.moved.moved.clone(),
         with_drives,
+        collection: collection.len(),
+        collection_license: if collection.is_empty() {
+            String::new()
+        } else {
+            report.collection_license.clone()
+        },
+        collection_manifest,
     };
     let json = serde_json::to_string_pretty(&head).map_err(|e| e.to_string())? + "\n";
     write_changed(&out.join(HEAD_FILE), json.as_bytes(), &mut changes)?;
@@ -172,14 +228,37 @@ pub fn write_catalog(dir: &Path, report: &Report, opts: &CatalogOptions) -> Resu
     Ok(Built { head, changes })
 }
 
-/// Writes the catalog of `records` (unless it is there already, whatever gzip made it) and
-/// returns its generation and where it is.
+/// The official collection under `license`, as the website reads it: every skin in `collection`
+/// in its order, each dated by its day.
+fn published_collection(license: &str, collection: &[CollectionRecord]) -> PublishedCollection {
+    PublishedCollection {
+        version: COLLECTION_MANIFEST_VERSION,
+        license: license.to_string(),
+        skins: collection
+            .iter()
+            .map(|record| PublishedOfficialSkin {
+                name: record.name.clone(),
+                tags: record.tags.clone(),
+                sha256: record.sha256.clone(),
+                ext: record.ext.clone(),
+                bytes: record.bytes,
+                w: record.w,
+                h: record.h,
+                added: date_of(record.added),
+            })
+            .collect(),
+    }
+}
+
+/// Writes the catalog of `records` and the official `collection` (unless it is there already,
+/// whatever gzip made it) and returns its generation and where it is.
 fn write_database(
     out: &Path,
     records: &[PackRecord],
+    collection: &[CollectionRecord],
     changes: &mut Changes,
 ) -> Result<(String, CatalogRef), String> {
-    let bytes = build::to_bytes(records)?;
+    let bytes = build::to_bytes(records, collection)?;
     let generation = tree::sha256_hex(&bytes)[..16].to_string();
     let url = tree::catalog_path(&generation);
     let path = out.join(&url);
@@ -389,17 +468,27 @@ fn previous_files(out: &Path) -> HashSet<String> {
     else {
         return files;
     };
-    // The catalog of every pack names them all, drives and folders.
+    // The catalog of every pack names them all, drives and folders, and the collection's skins.
     let (_, every, _) = head.catalog_with_drives();
-    let catalog = std::fs::read(out.join(&every.url))
+    let Some(catalog) = std::fs::read(out.join(&every.url))
         .ok()
         .and_then(|gz| tree::gunzip(&gz, tree::MAX_CATALOG_UNPACKED).ok())
-        .and_then(|bytes| Catalog::from_bytes(&bytes).ok());
-    let Some(versions) = catalog.and_then(|c| c.versions().ok()) else {
+        .and_then(|bytes| Catalog::from_bytes(&bytes).ok())
+    else {
+        return files;
+    };
+    let Ok(versions) = catalog.versions() else {
         return files;
     };
     files.insert(head.catalog.url.clone());
     files.insert(every.url.clone());
+    if !head.collection_manifest.is_empty() {
+        files.insert(head.collection_manifest.clone());
+    }
+    for (sha256, ext) in catalog.collection_pictures().unwrap_or_default() {
+        files.insert(tree::picture_path(&sha256, &ext));
+        files.insert(tree::thumb_path(&sha256));
+    }
     for (id, hash) in versions {
         let manifest = tree::manifest_path(&id, &hash);
         if let Some(published) = std::fs::read(out.join(&manifest))
@@ -436,6 +525,7 @@ fn prune(out: &Path, keep: &HashSet<String>, changes: &mut Changes) -> Result<()
         ("thumbs", |f| hex_named(f, 64, &["webp"])),
         ("drive-thumbs", |f| hex_named(f, 64, &["webp"])),
         ("pictures", |f| hex_named(f, 64, pack::PICTURE_EXTENSIONS)),
+        ("collection", |f| hex_named(f, 16, &["json"])),
     ] {
         for file in names(&out.join(folder))? {
             if is_ours(&file) {
@@ -502,6 +592,30 @@ fn write_new(path: &Path, bytes: &[u8], changes: &mut Changes) -> Result<(), Str
         return Ok(());
     }
     write_file(path, bytes)?;
+    changes.written.push(path.to_path_buf());
+    Ok(())
+}
+
+/// Copies the collection's picture at `from` to `path`, the name its contents give it, unless it
+/// is there already. It is read only to be copied, and has to be the picture `checked` says it
+/// is, which it was a moment ago.
+fn copy_new(
+    from: &Path,
+    path: &Path,
+    checked: &crate::collection::CheckedSkin,
+    changes: &mut Changes,
+) -> Result<(), String> {
+    if std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == checked.bytes) {
+        return Ok(());
+    }
+    let file = &checked.skin.file;
+    let bytes = std::fs::read(from).map_err(|e| format!("{file} couldn't be read: {e}"))?;
+    if tree::sha256_hex(&bytes) != checked.sha256 {
+        return Err(format!(
+            "{file} changed while the catalog was being written; run it again"
+        ));
+    }
+    write_file(path, &bytes)?;
     changes.written.push(path.to_path_buf());
     Ok(())
 }
@@ -637,6 +751,29 @@ mod tests {
                 listed.join(", ")
             );
             std::fs::write(folder.join(MANIFEST_FILE), json).unwrap();
+            for (file, _, [r, g, b]) in skins {
+                let art = RgbaImage::from_pixel(320, 300, Rgba([*r, *g, *b, 255]));
+                std::fs::write(folder.join(file), raster::encode_png(&art)).unwrap();
+            }
+        }
+
+        /// Writes the official collection: each (file, name, colour), added on `day`.
+        fn collection(&self, skins: &[(&str, &str, [u8; 3])], day: &str) {
+            let folder = self.0.join(COLLECTION_DIR);
+            std::fs::create_dir_all(&folder).unwrap();
+            let listed: Vec<String> = skins
+                .iter()
+                .map(|(file, name, _)| {
+                    format!(
+                        r#"{{ "file": "{file}", "name": "{name}", "tags": ["official"], "added": "{day}" }}"#
+                    )
+                })
+                .collect();
+            let json = format!(
+                r#"{{ "version": 1, "license": "MIT", "skins": [{}] }}"#,
+                listed.join(", ")
+            );
+            std::fs::write(folder.join("collection.json"), json).unwrap();
             for (file, _, [r, g, b]) in skins {
                 let art = RgbaImage::from_pixel(320, 300, Rgba([*r, *g, *b, 255]));
                 std::fs::write(folder.join(file), raster::encode_png(&art)).unwrap();
@@ -827,6 +964,131 @@ mod tests {
         assert_eq!(head.with_drives, None);
         let json = std::fs::read_to_string(c.out().join(HEAD_FILE)).unwrap();
         assert!(!json.contains("with_drives"), "{json}");
+    }
+
+    #[test]
+    fn the_collection_is_published_beside_the_packs_and_listed_in_both_catalogs() {
+        let c = Community::new("collection");
+        two_packs(&c);
+        c.pack_of(
+            PackShape::Drive,
+            "plain-drives",
+            "Plain drives",
+            &[("d.png", "Teal", [20, 150, 150])],
+        );
+        c.collection(
+            &[
+                ("koi.png", "Koi", [230, 90, 20]),
+                ("fox.png", "Fox", [90, 60, 20]),
+            ],
+            "2026-09-30",
+        );
+        let built = c.build().unwrap();
+        let head = Head::parse(&std::fs::read(c.out().join(HEAD_FILE)).unwrap()).unwrap();
+        assert_eq!(head, built.head);
+        assert_eq!(
+            (head.collection, head.collection_license.as_str()),
+            (2, "MIT")
+        );
+        assert_eq!(
+            (head.packs, head.skins),
+            (2, 3),
+            "the packs are counted as before"
+        );
+
+        // Both catalogs list the collection, in its own order, each skin with its picture.
+        let with = head.with_drives.clone().unwrap();
+        let gz = std::fs::read(c.out().join(&with.catalog.url)).unwrap();
+        let every =
+            Catalog::from_bytes(&tree::gunzip(&gz, tree::MAX_CATALOG_UNPACKED).unwrap()).unwrap();
+        for catalog in [open_catalog(&c, &head), every] {
+            assert_eq!(catalog.collection_count(), 2);
+            let page = catalog
+                .collection(&folderskin_catalog::CollectionQuery {
+                    limit: 10,
+                    ..Default::default()
+                })
+                .unwrap();
+            let names: Vec<&str> = page.items.iter().map(|i| i.name.as_str()).collect();
+            assert_eq!(names, ["Koi", "Fox"], "a day's additions in their order");
+            let koi = &page.items[0];
+            assert_eq!((koi.w, koi.h, koi.ext.as_str()), (320, 300, "png"));
+            assert_eq!(koi.tags, ["official"]);
+            assert_eq!(koi.added, 1_790_726_400);
+            let picture =
+                std::fs::read(c.out().join(tree::picture_path(&koi.sha256, "png"))).unwrap();
+            assert_eq!(tree::sha256_hex(&picture), koi.sha256);
+            assert_eq!(picture.len() as u64, koi.bytes);
+            let thumb = image::open(c.out().join(tree::thumb_path(&koi.sha256))).unwrap();
+            assert_eq!(
+                (thumb.width(), thumb.height()),
+                (THUMB_SIDE, THUMB_SIDE),
+                "drawn as its folder"
+            );
+        }
+        // The website's list of the whole collection, named after its bytes, in the collection's
+        // order, each skin dated by its day.
+        let manifest_path = head.collection_manifest.clone();
+        let bytes = std::fs::read(c.out().join(&manifest_path)).unwrap();
+        assert_eq!(
+            manifest_path,
+            tree::collection_manifest_path(&tree::sha256_hex(&bytes)[..16])
+        );
+        let listed: tree::PublishedCollection = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!((listed.version, listed.license.as_str()), (1, "MIT"));
+        let names: Vec<&str> = listed.skins.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Koi", "Fox"]);
+        let koi = &listed.skins[0];
+        assert_eq!(
+            (koi.ext.as_str(), koi.w, koi.h, koi.added.as_str()),
+            ("png", 320, 300, "2026-09-30")
+        );
+        assert_eq!(koi.tags, ["official"]);
+        let picture = std::fs::read(c.out().join(tree::picture_path(&koi.sha256, "png"))).unwrap();
+        assert_eq!(picture.len() as u64, koi.bytes);
+
+        // Head, two catalogs, three manifests and strips, four pack pictures and thumbnails, the
+        // collection's two pictures and thumbnails, and its list.
+        assert_eq!(c.files().len(), 1 + 2 + 3 + 3 + 4 + 4 + 2 + 2 + 1);
+
+        // Built again, nothing changes.
+        assert!(c.build().unwrap().changes.is_empty());
+
+        // A skin taken out of the collection keeps its files for one generation, as a pack's do.
+        let fox_sha = tree::sha256_hex(&std::fs::read(c.0.join("collection/fox.png")).unwrap());
+        std::fs::remove_file(c.0.join("collection/fox.png")).unwrap();
+        c.collection(&[("koi.png", "Koi", [230, 90, 20])], "2026-09-30");
+        let fewer = c.build().unwrap();
+        assert_eq!(fewer.head.collection, 1);
+        assert_ne!(fewer.head.collection_manifest, manifest_path);
+        assert!(c.out().join(tree::picture_path(&fox_sha, "png")).is_file());
+        assert!(
+            c.out().join(&manifest_path).is_file(),
+            "the list the old head names"
+        );
+        c.build().unwrap();
+        assert!(!c.out().join(tree::picture_path(&fox_sha, "png")).exists());
+        assert!(!c.out().join(tree::thumb_path(&fox_sha)).exists());
+        assert!(!c.out().join(&manifest_path).exists());
+        assert!(c.out().join(&fewer.head.collection_manifest).is_file());
+
+        // No collection at all: head.json says nothing of one.
+        std::fs::remove_dir_all(c.0.join(COLLECTION_DIR)).unwrap();
+        let head = c.build().unwrap().head;
+        assert_eq!((head.collection, head.collection_license.as_str()), (0, ""));
+        assert_eq!(head.collection_manifest, "");
+        let json = std::fs::read_to_string(c.out().join(HEAD_FILE)).unwrap();
+        assert!(!json.contains("collection"), "{json}");
+    }
+
+    #[test]
+    fn a_collection_with_a_problem_writes_nothing() {
+        let c = Community::new("collection-bad");
+        two_packs(&c);
+        c.collection(&[("koi.png", "Koi", [230, 90, 20])], "2026-02-30");
+        let err = c.build().unwrap_err();
+        assert_eq!(err, "1 problem in the collection; nothing was written");
+        assert!(!c.out().exists());
     }
 
     #[test]

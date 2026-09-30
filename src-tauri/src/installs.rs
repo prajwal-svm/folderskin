@@ -1,15 +1,19 @@
-//! Counting how often each community pack is added, for the numbers on folderskin.app's gallery.
+//! Counting how often each community pack is added, and each skin used on its own, for the
+//! numbers on folderskin.app's gallery.
 //!
 //! Once a pack from Community is added, FolderSkin tells the community service (services/community)
-//! the pack's id: `POST <service>/v1/packs/<id>/installs`, with no body. Nothing else goes with it:
-//! no account, no device id, nothing about the library. Like every request FolderSkin makes, it
-//! names the app's version in its User-Agent. The service keeps a count per pack and, until the
-//! UTC day is over, a salted hash of the network the request came from, so adding the same pack
-//! again that day doesn't count twice; the daily clean-up deletes those hashes.
+//! the pack's id: `POST <service>/v1/packs/<id>/installs`, with no body. Once one skin is used on
+//! its own ("Use"), it tells it the SHA-256 of the skin's picture instead:
+//! `POST <service>/v1/skins/<sha256>/downloads`, with `?pack=<id>` for a skin of a pack, again with
+//! no body. That is a count of its own, which never adds to the pack's installs. Nothing else goes
+//! with either: no account, no device id, nothing about the library. Like every request FolderSkin
+//! makes, it names the app's version in its User-Agent. The service keeps a count per pack or skin
+//! and, until the UTC day is over, a salted hash of the network the request came from, so adding
+//! the same pack again that day doesn't count twice; the daily clean-up deletes those hashes.
 //!
-//! It is fire and forget: the request runs on a task of its own once the pack is saved, gives up
-//! after a few seconds, and whatever becomes of it (offline, the service down, a pack it doesn't
-//! know) is dropped without a word. Nothing waits for it.
+//! It is fire and forget: the request runs on a task of its own once the pack or skin is saved,
+//! gives up after a few seconds, and whatever becomes of it (offline, the service down, a pack it
+//! doesn't know) is dropped without a word. Nothing waits for it.
 //!
 //! The service is the one `FOLDERSKIN_COMMUNITY_API` names, or community.folderskin.app for a
 //! release build. A development build, and a build reading the packs from another copy of
@@ -28,16 +32,28 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Tells the community service that pack `pack_id` was added. Returns at once.
 pub fn report(pack_id: &str) {
+    if let Some(url) = counts_service().and_then(|base| install_url(&base, pack_id)) {
+        tauri::async_runtime::spawn(send(url));
+    }
+}
+
+/// Tells the community service that the skin whose picture has SHA-256 `sha256` was used on its
+/// own, from pack `pack_id` or, with none, from the official collection. Returns at once.
+pub fn report_skin(sha256: &str, pack_id: Option<&str>) {
+    if let Some(url) = counts_service().and_then(|base| download_url(&base, sha256, pack_id)) {
+        tauri::async_runtime::spawn(send(url));
+    }
+}
+
+/// [`service`] for this build.
+fn counts_service() -> Option<String> {
     let other_packs =
         std::env::var("FOLDERSKIN_COMMUNITY_URL").is_ok_and(|url| !url.trim().is_empty());
-    let service = service(
+    service(
         crate::share::api_override(),
         other_packs,
         cfg!(debug_assertions),
-    );
-    if let Some(url) = service.and_then(|base| install_url(&base, pack_id)) {
-        tauri::async_runtime::spawn(send(url));
-    }
+    )
 }
 
 /// The service to count at: the one `named` on purpose, or [`COUNTS_API`] for a release build that
@@ -53,6 +69,32 @@ pub fn install_url(base: &str, pack_id: &str) -> Option<String> {
     if !pack::is_pack_id(pack_id) {
         return None;
     }
+    Some(format!(
+        "{}/v1/packs/{pack_id}/installs",
+        service_base(base)?
+    ))
+}
+
+/// `<base>/v1/skins/<sha256>/downloads`, with `?pack=<pack_id>` when there is one, or `None` when
+/// `sha256` isn't 64 lower-case hex digits, `pack_id` isn't a pack id, or `base` isn't an address
+/// to send it to ([`install_url`]).
+pub fn download_url(base: &str, sha256: &str, pack_id: Option<&str>) -> Option<String> {
+    if !folderskin_catalog::tree::is_hex(sha256, 64)
+        || pack_id.is_some_and(|id| !pack::is_pack_id(id))
+    {
+        return None;
+    }
+    let url = format!("{}/v1/skins/{sha256}/downloads", service_base(base)?);
+    Some(match pack_id {
+        Some(id) => format!("{url}?pack={id}"),
+        None => url,
+    })
+}
+
+/// `base` without the slash it may end in, when it is an address to send a count to: https, or
+/// plain http to this computer for `wrangler dev`, with a host and no user name, password, query
+/// or fragment.
+fn service_base(base: &str) -> Option<String> {
     let url = reqwest::Url::parse(base.trim()).ok()?;
     // The parser has already lower-cased the host and written IPv4 and IPv6 addresses out in full.
     let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
@@ -62,12 +104,7 @@ pub fn install_url(base: &str, pack_id: &str) -> Option<String> {
         && url.password().is_none()
         && url.query().is_none()
         && url.fragment().is_none();
-    (secure && plain).then(|| {
-        format!(
-            "{}/v1/packs/{pack_id}/installs",
-            url.as_str().trim_end_matches('/')
-        )
-    })
+    (secure && plain).then(|| url.as_str().trim_end_matches('/').to_string())
 }
 
 /// Sends the count. Whatever comes back, or doesn't, is dropped.
@@ -130,6 +167,38 @@ mod tests {
         }
         for id in ["", "../admin", "Colours", "colours/installs", "a--b", "con"] {
             assert_eq!(install_url(COUNTS_API, id), None, "{id}");
+        }
+    }
+
+    #[test]
+    fn a_skin_used_on_its_own_is_counted_by_its_pictures_sha256_and_its_pack() {
+        let sha = "0123456789abcdef".repeat(4);
+        assert_eq!(
+            download_url(COUNTS_API, &sha, None),
+            Some(format!(
+                "https://community.folderskin.app/v1/skins/{sha}/downloads"
+            ))
+        );
+        assert_eq!(
+            download_url("http://127.0.0.1:8787/", &sha, Some("classic-art")),
+            Some(format!(
+                "http://127.0.0.1:8787/v1/skins/{sha}/downloads?pack=classic-art"
+            ))
+        );
+        for bad in [
+            "",
+            "0123",
+            &sha.to_uppercase(),
+            &format!("{sha}0"),
+            &format!("../{}", &sha[3..]),
+        ] {
+            assert_eq!(download_url(COUNTS_API, bad, None), None, "{bad}");
+        }
+        for id in ["", "../admin", "Colours", "a&b=c", "con"] {
+            assert_eq!(download_url(COUNTS_API, &sha, Some(id)), None, "{id}");
+        }
+        for base in ["http://community.folderskin.app", "https://x.org/?a=1", ""] {
+            assert_eq!(download_url(base, &sha, None), None, "{base}");
         }
     }
 

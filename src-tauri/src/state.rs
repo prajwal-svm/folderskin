@@ -492,6 +492,9 @@ impl AppState {
                 unsaved.entry.pack = Some(now);
                 count += 1;
             }
+            if let Some(now) = store::from_moved_to(&unsaved.entry, moved) {
+                unsaved.entry.from_pack = Some(now);
+            }
         }
         match self.store() {
             Some(store) => Ok(count + store.move_packs(moved)?),
@@ -659,6 +662,7 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            from_pack: None,
             base: None,
             recipe: None,
         };
@@ -694,6 +698,7 @@ mod tests {
                 author: None,
                 license: None,
                 pack_hash: None,
+                from_pack: None,
                 base: None,
                 recipe: None,
             };
@@ -722,6 +727,7 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            from_pack: None,
             base: None,
             recipe: None,
         }

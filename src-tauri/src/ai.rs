@@ -533,6 +533,7 @@ pub async fn ai_generate(
         author: None,
         license: None,
         pack_hash: None,
+        from_pack: None,
         // Where it goes in the library: with the folders, or anywhere for a free icon.
         base: Some(req.base().id.to_string()),
         // What it was made from: the prompt as sent, its style and the pictures by role.

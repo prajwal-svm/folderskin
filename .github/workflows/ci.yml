@@ -122,7 +122,9 @@ jobs:
   rust:
     name: Rust (format, lint, test)
     runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    # Tests with coverage take half an hour on a cold cache, and checking the official collection
+    # adds a few minutes more: an hour, like the other systems.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 

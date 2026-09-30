@@ -10,6 +10,10 @@
 //!
 //! Names may repeat: a hundred packs can be called "Classic Art". Only the id, the folder's
 //! name, has to be unique, which is why nothing here compares names.
+//!
+//! When the checkout has an official collection (`collection/`, collection.rs), `check` holds it to
+//! its rules too, so whatever checks the packs checks the collection, and whatever the packs'
+//! problems stop, the collection's stop as well.
 
 use crate::skin::Skin;
 use folderskin_core::pack::{
@@ -51,6 +55,11 @@ pub struct Report {
     /// `moved.json`: each id a pack had before, to the one it has now. Empty when there is no such
     /// file, or when it can't be read, which is one of the problems.
     pub moved: Moved,
+    /// The official collection's skins, in its order: empty when there is no collection, or when
+    /// it has problems, which are among `problems` as `<dir>/collection: <problem>`.
+    pub collection: Vec<crate::collection::CheckedSkin>,
+    /// The official collection's licence, with its skins; empty with them.
+    pub collection_license: String,
 }
 
 /// How [`check_with`] holds the packs. Every pack's pictures come to [`MAX_PACK_BYTES`] at most,
@@ -88,18 +97,22 @@ impl Default for CheckOptions {
 }
 
 impl Report {
-    /// "2 packs, 32 skins": what passed.
+    /// "2 packs, 32 skins": what passed, and "587 in the collection" after when there is one.
     pub fn totals(&self) -> String {
         let skins = self.packs.iter().map(|(_, p)| p.skins.len()).sum();
+        let collection = match self.collection.len() {
+            0 => String::new(),
+            n => format!(", {n} in the collection"),
+        };
         format!(
-            "{}, {}",
+            "{}, {}{collection}",
             count(self.packs.len(), "pack"),
             count(skins, "skin")
         )
     }
 
     /// "2 packs, 32 skins, all good", or "3 problems in 2 packs", or "4 problems in 2 packs and
-    /// moved.json".
+    /// moved.json", or "5 problems in the collection".
     pub fn summary(&self) -> String {
         if self.problems.is_empty() {
             return format!("{}, all good", self.totals());
@@ -191,7 +204,21 @@ pub fn check_with(dir: &Path, opts: &CheckOptions) -> Result<Report, String> {
         }
     }
     check_moved(dir, &entries, &mut report);
+    check_collection(dir, &mut report);
     Ok(report)
+}
+
+/// Checks `<dir>/collection` ([`crate::collection::check`]) into `report`: its skins when it
+/// passes, its problems when it doesn't. No collection is fine.
+fn check_collection(dir: &Path, report: &mut Report) {
+    let checked = crate::collection::check(dir);
+    if checked.problems.is_empty() {
+        report.collection = checked.skins;
+        report.collection_license = checked.license;
+    } else {
+        report.problems.extend(checked.problems);
+        report.failed_files.push("the collection".into());
+    }
 }
 
 /// Reads `<dir>/moved.json` into `report.moved` and adds what is wrong with it: every old id is a
@@ -501,16 +528,30 @@ pub fn contact_sheet(
     side: u32,
     columns: u32,
 ) -> Result<RgbaImage, String> {
-    let count = pack.skins.len() as u32;
+    let pictures: Vec<PathBuf> = pack.skins.iter().map(|s| folder.join(&s.file)).collect();
+    contact_sheet_of(&pictures, pack.shape(), side, columns)
+}
+
+/// [`contact_sheet`] of any `pictures`, drawn as skins of a pack of `shape`: how `collection add`
+/// shows the skins it added.
+pub fn contact_sheet_of(
+    pictures: &[PathBuf],
+    shape: PackShape,
+    side: u32,
+    columns: u32,
+) -> Result<RgbaImage, String> {
+    let count = pictures.len() as u32;
     let columns = columns.clamp(1, count.max(1));
     let rows = count.div_ceil(columns).max(1);
     let [r, g, b] = SHEET_GREY;
     let mut sheet = RgbaImage::from_pixel(side * columns, side * rows, image::Rgba([r, g, b, 255]));
-    for (i, skin) in pack.skins.iter().enumerate() {
-        let rgba = read_picture(&folder.join(&skin.file), MAX_READ_PICTURE_BYTES)
-            .map_err(|e| format!("{} {e}", skin.file))?;
-        let icon =
-            render_skin_for(rgba, side, pack.shape()).map_err(|e| format!("{} {e}", skin.file))?;
+    for (i, path) in pictures.iter().enumerate() {
+        let file = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let rgba = read_picture(path, MAX_READ_PICTURE_BYTES).map_err(|e| format!("{file} {e}"))?;
+        let icon = render_skin_for(rgba, side, shape).map_err(|e| format!("{file} {e}"))?;
         let (col, row) = (i as u32 % columns, i as u32 / columns);
         image::imageops::replace(
             &mut sheet,
@@ -541,10 +582,10 @@ pub fn render_skin_for(rgba: RgbaImage, size: u32, shape: PackShape) -> Result<R
 // ---------- helpers ----------
 
 /// A folder's entries by name.
-type Files = BTreeMap<String, FileType>;
+pub(crate) type Files = BTreeMap<String, FileType>;
 
 /// Lists a folder, leaving out dotfiles such as `.DS_Store`. Links are not followed.
-fn list(dir: &Path) -> std::io::Result<Files> {
+pub(crate) fn list(dir: &Path) -> std::io::Result<Files> {
     let mut files = Files::new();
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -678,7 +719,7 @@ pub(crate) fn read_picture(path: &Path, max_bytes: usize) -> Result<RgbaImage, S
 
 /// Reads a picture file of at most `max_bytes`, and never more than a published picture can be.
 /// The error finishes a sentence that starts with the file's name.
-fn read_bytes(path: &Path, max_bytes: usize) -> Result<Vec<u8>, String> {
+pub(crate) fn read_bytes(path: &Path, max_bytes: usize) -> Result<Vec<u8>, String> {
     let len = std::fs::metadata(path)
         .map_err(|e| format!("couldn't be read: {e}"))?
         .len();
@@ -721,7 +762,7 @@ fn bad_id(name: &str) -> String {
 }
 
 /// "red.png is missing", pointing out a file that differs only in case.
-fn missing(files: &Files, name: &str) -> String {
+pub(crate) fn missing(files: &Files, name: &str) -> String {
     match files.keys().find(|f| f.eq_ignore_ascii_case(name)) {
         Some(near) => {
             format!("{name} is missing; the folder has {near}, and names are case-sensitive")
@@ -730,7 +771,7 @@ fn missing(files: &Files, name: &str) -> String {
     }
 }
 
-fn not_a_file(name: &str) -> String {
+pub(crate) fn not_a_file(name: &str) -> String {
     format!("{name} is a link or a folder; it has to be the file itself")
 }
 

@@ -21,6 +21,9 @@
 //! A pack of drives ([`MakeOptions::shape`]) is made the same way: its finished drives are given
 //! one shape in the square FolderSkin's own drives are drawn in ([`shape::Frame::Drive`]), and its
 //! artwork goes on whichever drive it's put on.
+//!
+//! The official collection's pictures are made ready exactly as a pack's are: `collection add`
+//! (collection.rs) goes through [`prepare_pictures`] too.
 
 use crate::{normalize, packs, parallel};
 use folderskin_core::pack::{
@@ -67,6 +70,57 @@ impl MakeOptions {
     pub fn picture_limit(&self) -> usize {
         self.max_bytes.min(MAX_PICTURE_BYTES)
     }
+
+    /// How its pictures are made ready.
+    pub fn preparing(&self) -> Preparing {
+        Preparing {
+            max_bytes: self.picture_limit(),
+            flat_backdrop: self.flat_backdrop,
+            keep_outliers: self.keep_outliers,
+            shape: self.shape,
+        }
+    }
+}
+
+/// How [`prepare_pictures`] makes pictures ready: what a pack's and the official collection's
+/// pictures go through alike.
+#[derive(Debug, Clone)]
+pub struct Preparing {
+    /// The most a picture may come to once compressed, within [`MAX_PICTURE_BYTES`].
+    pub max_bytes: usize,
+    /// Also cut away a flat backdrop of any colour, as [`MakeOptions::flat_backdrop`] says.
+    pub flat_backdrop: bool,
+    /// Keep a finished folder too far off the others' shape as it is, instead of leaving it out.
+    pub keep_outliers: bool,
+    /// Folders, or drives: the frame finished ones are given one shape in.
+    pub shape: PackShape,
+}
+
+/// One picture [`prepare_pictures`] made ready.
+#[derive(Debug, Clone)]
+pub struct Ready {
+    pub source: PathBuf,
+    /// A lossless WebP.
+    pub bytes: Vec<u8>,
+    /// True for a finished folder, false for artwork on FolderSkin's folder.
+    pub folder: bool,
+    /// The side it was made smaller to, when it was over the size limit at 1024 px.
+    pub scaled_to: Option<u32>,
+    /// True for a finished folder redrawn at the others' shape.
+    pub redrawn: bool,
+    /// For a finished folder kept as it is though it is more than the tolerance off the others'
+    /// shape, how much it would have been reshaped.
+    pub outlier: Option<f32>,
+}
+
+/// Pictures [`prepare_pictures`] made ready, in the order given, and what it did to their shape.
+#[derive(Debug, Clone)]
+pub struct Prepared {
+    pub ready: Vec<Ready>,
+    /// The shape the finished folders were given, when there are two or more.
+    pub shape: Option<f32>,
+    /// The pictures left out for being too far off that shape.
+    pub left_out: Vec<LeftOut>,
 }
 
 /// One picture as it went into the pack.
@@ -169,56 +223,12 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String
             sources.len()
         ));
     }
-
-    // Every picture is looked at first, for its kind and a finished folder's shape, and turned
-    // down now if it can't go in; all on every core at once.
-    let looked = parallel::map(&sources, |source| {
-        look(source, opts).map_err(|e| format!("{} {e}", source.display()))
-    })
-    .into_iter()
-    .collect::<Result<Vec<_>, String>>()?;
-    let aspects: Vec<f32> = looked.iter().flatten().copied().collect();
-    let frame = shape::Frame::of(opts.shape);
-    let plan = shape::plan(&aspects, shape::TOLERANCE);
-    let mut jobs: Vec<(&PathBuf, Treat)> = Vec::with_capacity(sources.len());
-    let mut left_out = Vec::new();
-    // Which finished folder this is, in the order `plan` has them.
-    let mut k = 0;
-    for (source, aspect) in sources.iter().zip(&looked) {
-        let (Some(plan), Some(_)) = (&plan, aspect) else {
-            jobs.push((source, Treat::AsItIs(None)));
-            continue;
-        };
-        let reshaping = plan.reshaping[k];
-        let outlier = plan.is_outlier(k);
-        k += 1;
-        if !outlier {
-            jobs.push((source, Treat::Redraw(frame, plan.shape)));
-        } else if opts.keep_outliers {
-            jobs.push((source, Treat::AsItIs(Some(reshaping))));
-        } else {
-            left_out.push(LeftOut {
-                source: source.clone(),
-                reshaping,
-            });
-        }
-    }
-    if jobs.is_empty() {
-        return Err(format!(
-            "every picture is a finished folder more than {} off the others' shape, so none is \
-             left; --keep-outliers keeps them as they are",
-            packs::percent(shape::TOLERANCE)
-        ));
-    }
-
-    // Then made, on every core at once: libwebp's smallest lossless file takes most of a second
-    // a picture.
-    let prepared = parallel::map(&jobs, |(source, treat)| {
-        prepare(source, opts, *treat).map_err(|e| format!("{} {e}", source.display()))
-    })
-    .into_iter()
-    .collect::<Result<Vec<_>, String>>()?;
-    let total: usize = prepared.iter().map(|p| p.bytes.len()).sum();
+    let Prepared {
+        ready,
+        shape,
+        left_out,
+    } = prepare_pictures(&sources, &opts.preparing())?;
+    let total: usize = ready.iter().map(|r| r.bytes.len()).sum();
     if total > MAX_PACK_BYTES {
         return Err(format!(
             "the pictures come to {} MB, and a pack's come to {} MB at most; split them into two \
@@ -227,26 +237,20 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String
             MAX_PACK_BYTES / (1024 * 1024)
         ));
     }
-    let mut made = Vec::with_capacity(jobs.len());
-    let mut files: Vec<(String, Vec<u8>)> = Vec::with_capacity(jobs.len());
-    for (n, ((source, treat), picture)) in jobs.iter().zip(prepared).enumerate() {
-        let stem = source
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
+    let mut made = Vec::with_capacity(ready.len());
+    let mut files: Vec<(String, Vec<u8>)> = Vec::with_capacity(ready.len());
+    for (n, picture) in ready.into_iter().enumerate() {
+        let stem = file_stem(&picture.source);
         let file = format!("{}.webp", unique_stem(&stem, n, &files));
         made.push(Made {
-            source: (*source).clone(),
+            source: picture.source,
             file: file.clone(),
             name: display_name(&stem, n),
             folder: picture.folder,
             bytes: picture.bytes.len(),
             scaled_to: picture.scaled_to,
-            redrawn: matches!(treat, Treat::Redraw(..)),
-            outlier: match treat {
-                Treat::AsItIs(outlier) => *outlier,
-                Treat::Redraw(..) => None,
-            },
+            redrawn: picture.redrawn,
+            outlier: picture.outlier,
         });
         files.push((file, picture.bytes));
     }
@@ -305,9 +309,92 @@ pub fn make(pictures: &[PathBuf], opts: &MakeOptions) -> Result<MadePack, String
     Ok(MadePack {
         folder,
         made,
+        shape,
+        left_out,
+    })
+}
+
+/// Makes `sources` ready, in their order: each one's finished folder cut out of it, or the whole
+/// picture as artwork; two finished folders or more given one shape, and one too far off it left
+/// out and reported unless [`Preparing::keep_outliers`] keeps it as it is; and each shrunk to
+/// 1024 px and saved as a lossless WebP within [`Preparing::max_bytes`], made smaller still when
+/// it has to be. The error names the first picture that can't be used.
+pub fn prepare_pictures(sources: &[PathBuf], opts: &Preparing) -> Result<Prepared, String> {
+    // Every picture is looked at first, for its kind and a finished folder's shape, and turned
+    // down now if it can't go in; all on every core at once.
+    let looked = parallel::map(sources, |source| {
+        look(source, opts).map_err(|e| format!("{} {e}", source.display()))
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>, String>>()?;
+    let aspects: Vec<f32> = looked.iter().flatten().copied().collect();
+    let frame = shape::Frame::of(opts.shape);
+    let plan = shape::plan(&aspects, shape::TOLERANCE);
+    let mut jobs: Vec<(&PathBuf, Treat)> = Vec::with_capacity(sources.len());
+    let mut left_out = Vec::new();
+    // Which finished folder this is, in the order `plan` has them.
+    let mut k = 0;
+    for (source, aspect) in sources.iter().zip(&looked) {
+        let (Some(plan), Some(_)) = (&plan, aspect) else {
+            jobs.push((source, Treat::AsItIs(None)));
+            continue;
+        };
+        let reshaping = plan.reshaping[k];
+        let outlier = plan.is_outlier(k);
+        k += 1;
+        if !outlier {
+            jobs.push((source, Treat::Redraw(frame, plan.shape)));
+        } else if opts.keep_outliers {
+            jobs.push((source, Treat::AsItIs(Some(reshaping))));
+        } else {
+            left_out.push(LeftOut {
+                source: source.clone(),
+                reshaping,
+            });
+        }
+    }
+    if jobs.is_empty() {
+        return Err(format!(
+            "every picture is a finished folder more than {} off the others' shape, so none is \
+             left; --keep-outliers keeps them as they are",
+            packs::percent(shape::TOLERANCE)
+        ));
+    }
+
+    // Then made, on every core at once: libwebp's smallest lossless file takes most of a second
+    // a picture.
+    let made = parallel::map(&jobs, |(source, treat)| {
+        prepare(source, opts, *treat).map_err(|e| format!("{} {e}", source.display()))
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>, String>>()?;
+    let ready = jobs
+        .iter()
+        .zip(made)
+        .map(|((source, treat), picture)| Ready {
+            source: (*source).clone(),
+            bytes: picture.bytes,
+            folder: picture.folder,
+            scaled_to: picture.scaled_to,
+            redrawn: matches!(treat, Treat::Redraw(..)),
+            outlier: match treat {
+                Treat::AsItIs(outlier) => *outlier,
+                Treat::Redraw(..) => None,
+            },
+        })
+        .collect();
+    Ok(Prepared {
+        ready,
         shape: plan.map(|p| p.shape),
         left_out,
     })
+}
+
+/// A picture's file name without its extension: what its skin is named after.
+pub(crate) fn file_stem(path: &Path) -> String {
+    path.file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// `id` when it is a pack in `packs_dir` to make again.
@@ -384,7 +471,7 @@ pub fn find_cwebp() -> Option<PathBuf> {
 }
 
 /// Every picture to use: files as given, and the pictures inside folders in name order.
-fn collect(pictures: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn collect(pictures: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut out = Vec::new();
     for path in pictures {
         if path.is_dir() {
@@ -419,8 +506,8 @@ fn is_picture(path: &Path) -> bool {
     !hidden && PICTURE_EXTENSIONS.contains(&ext.as_str())
 }
 
-/// One picture, ready for the pack.
-struct Prepared {
+/// One picture, encoded for the pack.
+struct Encoded {
     /// A lossless WebP.
     bytes: Vec<u8>,
     /// True for a finished folder, false for artwork on FolderSkin's folder.
@@ -432,7 +519,7 @@ struct Prepared {
 /// A picture as it goes into the pack, at its own size: the finished folder cut out of it, or the
 /// whole picture as artwork, and which it is. The error finishes a sentence that starts with the
 /// picture's path.
-fn load(path: &Path, opts: &MakeOptions) -> Result<(RgbaImage, bool), String> {
+fn load(path: &Path, opts: &Preparing) -> Result<(RgbaImage, bool), String> {
     let rgba = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
         .map_err(|e| format!("couldn't be read: {e}"))?
@@ -457,7 +544,7 @@ fn load(path: &Path, opts: &MakeOptions) -> Result<(RgbaImage, bool), String> {
 
 /// A finished folder's shape, `None` for artwork, once it has been made sure the picture can go
 /// into a pack. The error finishes a sentence that starts with the picture's path.
-fn look(path: &Path, opts: &MakeOptions) -> Result<Option<f32>, String> {
+fn look(path: &Path, opts: &Preparing) -> Result<Option<f32>, String> {
     let (img, folder) = load(path, opts)?;
     let (w, h) = raster::shrunk_size(img.width(), img.height(), MAX_PICTURE_SIDE);
     big_enough(w, h, if folder { " once cut out" } else { "" })?;
@@ -467,15 +554,15 @@ fn look(path: &Path, opts: &MakeOptions) -> Result<Option<f32>, String> {
 /// One picture, ready for the pack: a lossless WebP of the finished folder cut out of it, redrawn
 /// at the pack's shape or as it is, or of the whole picture as artwork. The error finishes a
 /// sentence that starts with the picture's path.
-fn prepare(path: &Path, opts: &MakeOptions, treat: Treat) -> Result<Prepared, String> {
+fn prepare(path: &Path, opts: &Preparing, treat: Treat) -> Result<Encoded, String> {
     let (img, folder) = load(path, opts)?;
     let img = match treat {
         Treat::Redraw(frame, shape) => shape::redraw_in(frame, &img, shape)
             .ok_or("has nothing more than half opaque to redraw")?,
         Treat::AsItIs(_) => raster::shrink_to(img, MAX_PICTURE_SIDE),
     };
-    let made = pack::encode_picture(img, opts.picture_limit())?;
-    Ok(Prepared {
+    let made = pack::encode_picture(img, opts.max_bytes.min(MAX_PICTURE_BYTES))?;
+    Ok(Encoded {
         bytes: made.webp,
         folder,
         scaled_to: made.scaled_to,
@@ -544,7 +631,7 @@ fn big_enough(w: u32, h: u32, when: &str) -> Result<(), String> {
 
 /// A skin's name from its file's: "glass_folder-2" is "Glass folder 2". `Skin <n>` when the
 /// file's name has no letters or digits.
-fn display_name(stem: &str, n: usize) -> String {
+pub(crate) fn display_name(stem: &str, n: usize) -> String {
     let words = stem
         .split(|c: char| c == '-' || c == '_' || c.is_whitespace())
         .filter(|w| !w.is_empty())

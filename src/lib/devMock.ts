@@ -31,8 +31,16 @@
  * the app searches its catalog, to see and test the view at the size it is built for. Classic Art
  * and Colours are marked official, as official.json would.
  *
+ * The official collection has 48 made-up skins; `?collection=600` makes it that many, and
+ * `?collection=0` leaves it empty, as a catalog from before there was one. "Use" on one of them,
+ * or on a skin of a pack, saves it into the library without the pack, under the id the app gives
+ * it (`user:` and the start of its picture's SHA-256), so the ticks on the skins in the library
+ * work as they do in the app; adding the pack later makes a used skin one of the pack's.
+ *
  * `?install=colours` opens the preview the way a folderskin://install link opens the app: on that
- * pack in Community, adding it. The link is taken once, as the app takes one.
+ * pack in Community, adding it. `?skin=<sha256>` is the link for one official skin, and with
+ * `&in=colours` for one of that pack's: opened and used. The link is taken once, as the app
+ * takes one.
  * Sharing works in the preview against a made-up service: `?noshare` shows it as a build without
  * one, `?offline` as one that can't reach it, and `?shared` starts with a few packs already sent,
  * one of them turned down. `?slowdown` has the service turn down the first picture as part of a
@@ -54,6 +62,10 @@ import type {
   ChatRefDto,
   ChatSummaryDto,
   LocalStatus,
+  CollectionPage,
+  CollectionSkin,
+  CollectionSort,
+  InstallLink,
   CommunityPack,
   CommunityQuery,
   CommunitySearch,
@@ -84,6 +96,7 @@ import type {
   SavedPrompt,
   Skin,
   SkinList,
+  UseFrom,
 } from "./tauri";
 import type { ShapeInfo } from "./shapes";
 import type { AvailableUpdate } from "./updater";
@@ -93,7 +106,7 @@ import { takes, type Choice } from "./folderChoice";
 import { cleanName } from "./names";
 import { isImagePath } from "./files";
 import { cleanTags } from "./tags";
-import { madeUpPacks, MockCatalog, type MockPack as CatalogPack } from "./mockCommunity";
+import { fakeSha256, madeUpCollection, madeUpPacks, MockCatalog, MockCollection, type MockOfficialSkin, type MockPack as CatalogPack } from "./mockCommunity";
 import { styleById } from "./styles";
 
 /** Icon packs "downloaded" in the browser preview, for this page's life. */
@@ -318,6 +331,8 @@ const CLASSIC_ART = [
 ] as const;
 /** Where a picture of Classic Art's is, by its SHA-256. */
 const classicArt = (sha256: string) => `${COMMUNITY_TREE}/pictures/${sha256}.webp`;
+/** The SHA-256 of a pack's picture `i`, which "Use" takes it by: Classic Art's real ones, made up for the rest. */
+const packSkinSha = (pack: { id: string }, i: number) => (pack.id === "classic-art" ? CLASSIC_ART[i][0] : fakeSha256(`${pack.id}:${i}`));
 const COLOUR_NAMES = ["Blue", "Orange", "Purple", "Green"];
 
 /** Finished drives `?driveskins` adds: each drive's plain picture, as a drive pack's would look. */
@@ -430,6 +445,26 @@ function communityCatalog(): MockCatalog {
   return mockCatalogue;
 }
 
+let mockCollection: MockCollection | null = null;
+
+/** The preview's official collection: 48 made-up skins, or as many as `?collection=` says, on real pictures. */
+function officialCollection(): MockCollection {
+  if (mockCollection) return mockCollection;
+  const asked = new URLSearchParams(location.search).get("collection");
+  const many = asked === null ? 48 : Math.min(Math.max(Number(asked) || 0, 0), 20_000);
+  mockCollection = new MockCollection(madeUpCollection(many, Array.from({ length: 24 }, (_, i) => picture(i))));
+  return mockCollection;
+}
+
+/** The id the app gives the skin a picture of a pack of folders makes, by its SHA-256 (store.rs). */
+const skinIdOf = (sha256: string) => `user:${sha256.slice(0, 12)}`;
+
+/** The id of a pack's skin `i`: a drive's is salted in the app, so here it is made up. */
+const packSkinId = (pack: MockPack, i: number) => (pack.drives ? `user:${pack.id}${i}` : skinIdOf(packSkinSha(pack, i)));
+
+/** An official skin as the webview gets it. */
+const officialSkin = (s: MockOfficialSkin) => ({ sha256: s.sha256, ext: s.ext, name: s.name, tags: s.tags, thumbnail: s.thumbnail, bytes: s.bytes, added: s.added, skin_id: skinIdOf(s.sha256) });
+
 /** A catalog pack as the webview gets it, marked against the library. */
 function communityPack(p: CatalogPack): CommunityPack {
   const added = packAdded(p.id);
@@ -456,7 +491,7 @@ const findPack = (id: string): MockPack | undefined => MOCK_PACKS.find((p) => p.
 function mockPackSkins(pack: MockPack): Skin[] {
   const now = Date.now();
   return packPictures(pack).map((p, i) => ({
-    id: `user:${pack.id}${i}`,
+    id: packSkinId(pack, i),
     name: p.name,
     collection: "yours",
     thumbnail: p.thumbnail,
@@ -479,6 +514,7 @@ function keep(skins: Skin[]) {
   library = [...skins, ...library.filter((s) => !skins.some((k) => k.id === s.id))];
 }
 
+/** Whether pack `id` is in the library: a skin of it taken on its own doesn't add it. */
 const packAdded = (id: string) => library.some((s) => s.pack === id);
 
 /** A folder of thousands with `?bigtree`: see `bigTree`. */
@@ -1504,17 +1540,22 @@ export const mockApi = {
       all: found.all,
       packs: found.packs.map(communityPack),
       skins: found.skins.map((h) => ({ pack: h.pack.id, pack_name: h.pack.name, name: h.name, index: h.index, thumbnail: packPictures(h.pack)[h.index].thumbnail })),
+      collection: officialCollection().hits(query.q).map(officialSkin),
       hit_packs: hitPacks.map(communityPack),
       facets: found.facets,
       last_visit: null,
       generation: "preview",
     };
   },
-  communityRefresh: async (): Promise<{ updates: number; packs: number }> => {
+  communityRefresh: async (): Promise<{ updates: number; packs: number; collection: number }> => {
     await sleep(600);
     if (offline()) throw OFFLINE;
     const packs = communityCatalog().packs;
-    return { updates: packs.filter((p) => packAdded(p.id) && mockStale.has(p.id)).length, packs: packs.length };
+    return {
+      updates: packs.filter((p) => packAdded(p.id) && mockStale.has(p.id)).length,
+      packs: packs.length,
+      collection: officialCollection().search({ q: "", sort: "newest", offset: 0, limit: 1 }).total,
+    };
   },
   communityPack: async (packId: string): Promise<CommunityPack | null> => {
     await sleep(mockCatalogueLoaded ? 8 : 450);
@@ -1523,10 +1564,14 @@ export const mockApi = {
     const pack = communityCatalog().find(packId);
     return pack ? communityPack(pack) : null;
   },
-  takeInstallLink: async (): Promise<string | null> => {
+  takeInstallLink: async (): Promise<InstallLink | null> => {
     if (mockLinkTaken) return null;
     mockLinkTaken = true;
-    return new URLSearchParams(location.search).get("install");
+    const params = new URLSearchParams(location.search);
+    const skin = params.get("skin");
+    if (skin) return { pack: params.get("in"), skin };
+    const pack = params.get("install");
+    return pack ? { pack, skin: null } : null;
   },
   communityInstalled: async (): Promise<Record<string, string | null>> => {
     const installed: Record<string, string | null> = {};
@@ -1569,7 +1614,75 @@ export const mockApi = {
     mockViewed.add(packId);
     const pack = findPack(packId);
     if (!pack) throw "that isn't a pack";
-    return packPictures(pack).map((p) => ({ ...p, tags: pack.tags }));
+    return packPictures(pack).map((p, i) => ({ ...p, tags: pack.tags, sha256: packSkinSha(pack, i), ext: "webp", skin_id: pack.drives ? null : packSkinId(pack, i) }));
+  },
+  communityCollection: async (q: string, sort: CollectionSort, offset: number, limit: number): Promise<CollectionPage> => {
+    // The collection is in the catalog the packs come in: the first ask waits for it as theirs does.
+    await sleep(mockCatalogueLoaded ? 8 : 450);
+    if (offline()) throw OFFLINE;
+    mockCatalogueLoaded = true;
+    const found = officialCollection().search({ q, sort, offset, limit });
+    return { total: found.total, items: found.items.map(officialSkin), license: "MIT" };
+  },
+  communityCollectionSkin: async (sha256: string): Promise<CollectionSkin | null> => {
+    await sleep(mockCatalogueLoaded ? 8 : 450);
+    if (offline()) throw OFFLINE;
+    mockCatalogueLoaded = true;
+    const found = officialCollection().find(sha256);
+    return found ? officialSkin(found) : null;
+  },
+  useCommunitySkin: async (from: UseFrom, sha256: string): Promise<Skin> => {
+    // About what fetching one picture takes, the first time.
+    await sleep(700);
+    if (offline()) throw OFFLINE;
+    const gone = "that skin isn't listed any more. Try Refresh";
+    const pack = from.kind === "pack" ? findPack(from.id) : undefined;
+    let skin: Skin;
+    if (from.kind === "collection") {
+      const found = officialCollection().find(sha256);
+      if (!found) throw gone;
+      skin = {
+        id: skinIdOf(sha256),
+        name: found.name,
+        collection: "yours",
+        thumbnail: found.thumbnail,
+        custom: true,
+        kind: "folder",
+        source: "community",
+        tags: found.tags,
+        pack: null,
+        from_pack: null,
+        pack_name: "Official collection",
+        author: "FolderSkin",
+        license: "MIT",
+      };
+    } else {
+      const at = pack ? packPictures(pack).findIndex((_, i) => packSkinSha(pack, i) === sha256) : -1;
+      if (!pack || at < 0) throw gone;
+      const picture = packPictures(pack)[at];
+      skin = {
+        id: packSkinId(pack, at),
+        name: picture.name,
+        collection: "yours",
+        thumbnail: picture.thumbnail,
+        custom: true,
+        kind: "folder",
+        shape: pack.drives ? "drive" : undefined,
+        source: "community",
+        tags: pack.tags,
+        pack: null,
+        from_pack: pack.id,
+        pack_name: pack.name,
+        author: pack.author,
+        license: pack.license,
+      };
+    }
+    // The same picture is the same skin: using it again brings back the one saved.
+    const saved = library.find((s) => s.id === skin.id);
+    if (saved) return saved;
+    const made = { ...skin, created_at: Date.now() };
+    keep([made]);
+    return made;
   },
   updatePack: async (packId: string, onProgress?: (progress: PackProgress) => void): Promise<PackUpdate> => {
     const pack = findPack(packId);

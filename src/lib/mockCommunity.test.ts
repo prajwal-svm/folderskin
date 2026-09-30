@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { madeUpPacks, MockCatalog, type MockPack, words } from "./mockCommunity";
+import { COLLECTION_HITS, fakeSha256, madeUpCollection, madeUpPacks, MockCatalog, MockCollection, type MockOfficialSkin, type MockPack, words } from "./mockCommunity";
 
 /** The packs crates/folderskin-catalog tests with, so the two searches can be read side by side. */
 function pack(id: string, name: string, author: string, tags: string[], added: number, skins: string[]): MockPack {
@@ -122,5 +122,77 @@ describe("made-up packs", () => {
     const best = Math.min(round(), round(), round());
     // Generous: it only has to leave room for typing in the browser preview.
     expect(best).toBeLessThan(100);
+  });
+});
+
+/** An official skin for the collection's tests: `added` in days, for reading. */
+function official(name: string, tags: string[], day: number): MockOfficialSkin {
+  return { name, tags, sha256: fakeSha256(name), ext: "webp", bytes: 1000, added: day * 86_400, thumbnail: "" };
+}
+
+describe("the preview's official collection follows the app's", () => {
+  // In collection.json's order: Koi and Neon koi were added the same day, Koi listed first.
+  const collection = new MockCollection([
+    official("Giraffe cola", ["pop art"], 10),
+    official("Koi", ["nature"], 30),
+    official("Neon koi", ["neon", "nature"], 30),
+    official("Écureuil", [], 20),
+  ]);
+  const names = (r: { items: MockOfficialSkin[] }) => r.items.map((s) => s.name);
+  const find = (q: string, more: Partial<Parameters<MockCollection["search"]>[0]> = {}) =>
+    collection.search({ q, sort: "newest", offset: 0, limit: 50, ...more });
+
+  it("lists every skin with nothing typed, the latest additions first and the last listed first on a day", () => {
+    expect(names(find(""))).toEqual(["Neon koi", "Koi", "Écureuil", "Giraffe cola"]);
+    expect(find("").total).toBe(4);
+  });
+
+  it("orders them A to Z, accents aside", () => {
+    expect(names(find("", { sort: "name" }))).toEqual(["Écureuil", "Giraffe cola", "Koi", "Neon koi"]);
+  });
+
+  it("matches every word as the start of a word in a name or a tag", () => {
+    expect(names(find("ko"))).toEqual(["Neon koi", "Koi"]);
+    expect(names(find("pop"))).toEqual(["Giraffe cola"]);
+    expect(names(find("nature neon"))).toEqual(["Neon koi"]);
+    expect(names(find("ecur"))).toEqual(["Écureuil"]);
+    expect(find("cola koi").total).toBe(0);
+  });
+
+  it("pages as asked, a page never over the app's limit", () => {
+    expect(names(find("", { offset: 1, limit: 2 }))).toEqual(["Koi", "Écureuil"]);
+    expect(find("", { limit: 0 }).items).toHaveLength(1);
+    const many = new MockCollection(madeUpCollection(600, ["/p.png"]));
+    expect(many.search({ q: "", sort: "newest", offset: 0, limit: 1000 }).items).toHaveLength(200);
+  });
+
+  it("brings a few along with a search of the packs, and none with nothing typed", () => {
+    expect(collection.hits("koi").map((s) => s.name)).toEqual(["Neon koi", "Koi"]);
+    expect(collection.hits("  ")).toEqual([]);
+    const many = new MockCollection(madeUpCollection(600, ["/p.png"]));
+    expect(many.hits("a").length).toBeLessThanOrEqual(COLLECTION_HITS);
+  });
+
+  it("finds a skin by its picture's SHA-256", () => {
+    expect(collection.find(fakeSha256("Koi"))?.name).toBe("Koi");
+    // 64 hex digits in eight parts that differ, so its first twelve (a skin's id) do too.
+    expect(fakeSha256("Koi")).toMatch(/^[0-9a-f]{64}$/);
+    expect(new Set(fakeSha256("Koi").match(/.{8}/g)).size).toBe(8);
+    expect(collection.find("nope")).toBeUndefined();
+  });
+});
+
+describe("made-up official skins", () => {
+  it("are the same skins for the same number, each with a picture of its own", () => {
+    const a = madeUpCollection(600, ["/p.png"]);
+    expect(a).toEqual(madeUpCollection(600, ["/p.png"]));
+    expect(new Set(a.map((s) => s.sha256)).size).toBe(600);
+    expect(new Set(a.map((s) => s.name)).size).toBe(600);
+    for (const s of a) {
+      expect(s.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(s.tags.length).toBeLessThanOrEqual(3);
+    }
+    // Later in collection.json is never older.
+    expect(a.every((s, i) => i === 0 || s.added >= a[i - 1].added)).toBe(true);
   });
 });

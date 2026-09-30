@@ -4,6 +4,7 @@
  * off over a few days rather than in one run that runs out of time.
  */
 import { dayOf, now } from "./bytes";
+import { DAILY_KEPT_DAYS } from "./counts";
 import type { Env } from "./env";
 import { makeLink } from "./links";
 import { alert, type Notice } from "./notify";
@@ -45,8 +46,11 @@ export async function tidy(env: Env, at = now()): Promise<void> {
     env.DB.prepare("DELETE FROM counters WHERE day < ?1").bind(dayOf(at - 8 * DAY)),
     env.DB.prepare("DELETE FROM events WHERE at < ?1").bind(at - 90 * DAY),
     env.DB.prepare("DELETE FROM reports WHERE created_at < ?1").bind(at - 180 * DAY),
-    // The hashed networks behind the install counts are only kept for the day they were counted.
+    // The hashed networks behind the install, download and view counts are only kept for the day
+    // they were counted, and each day's counts for a month.
     env.DB.prepare("DELETE FROM installs_seen WHERE day < ?1").bind(dayOf(at)),
+    env.DB.prepare("DELETE FROM counts_seen WHERE day < ?1").bind(dayOf(at)),
+    env.DB.prepare("DELETE FROM counts_daily WHERE day < ?1").bind(dayOf(at - DAILY_KEPT_DAYS * DAY)),
     // Strikes, bans and marks that have run out, and the networks of packs decided a month ago.
     ...clearExpired(env, at),
   ]);

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The pack the app has waiting, which a take hands over once. */
-let waiting: string | null = null;
+/** What the app has waiting, which a take hands over once. */
+let waiting: { pack: string | null; skin: string | null } | null = null;
+const pack = (id: string) => ({ pack: id, skin: null });
 let inTauri = true;
 /** What the page listens to, and what finishing `listen` waits for. */
 const listeners = new Map<string, () => void>();
@@ -12,9 +13,9 @@ vi.mock("./devMock", () => ({ isTauri: () => inTauri }));
 vi.mock("./tauri", () => ({
   api: {
     takeInstallLink: async () => {
-      const pack = waiting;
+      const link = waiting;
       waiting = null;
-      return pack;
+      return link;
     },
   },
 }));
@@ -43,19 +44,20 @@ beforeEach(() => {
 
 describe("install links", () => {
   it("hands over the link the app was opened with, then each one after it, once each", async () => {
-    waiting = "classic-art";
-    const opened: string[] = [];
-    const stop = watchInstallLinks((id) => opened.push(id));
+    waiting = pack("classic-art");
+    const opened: unknown[] = [];
+    const stop = watchInstallLinks((link) => opened.push(link));
     await settle();
-    expect(opened).toEqual(["classic-art"]);
+    expect(opened).toEqual([pack("classic-art")]);
 
-    waiting = "colours";
+    const skin = { pack: "colours", skin: "a".repeat(64) };
+    waiting = skin;
     listeners.get(INSTALL_LINK_EVENT)?.();
     await settle();
     // Told twice about one link: it's taken once.
     listeners.get(INSTALL_LINK_EVENT)?.();
     await settle();
-    expect(opened).toEqual(["classic-art", "colours"]);
+    expect(opened).toEqual([pack("classic-art"), skin]);
 
     stop();
     expect(listeners.size).toBe(0);
@@ -64,28 +66,28 @@ describe("install links", () => {
   it("leaves a link waiting when it stops before it listens, for the watcher that comes next", async () => {
     let listen: () => void = () => {};
     listening = new Promise((go) => (listen = go));
-    waiting = "colours";
-    const first: string[] = [];
+    waiting = pack("colours");
+    const first: unknown[] = [];
     // React in development: started, stopped and started again straight away.
-    const stop = watchInstallLinks((id) => first.push(id));
+    const stop = watchInstallLinks((link) => first.push(link));
     stop();
-    const second: string[] = [];
-    watchInstallLinks((id) => second.push(id));
+    const second: unknown[] = [];
+    watchInstallLinks((link) => second.push(link));
     listen();
     await settle();
     expect(first).toEqual([]);
-    expect(second).toEqual(["colours"]);
+    expect(second).toEqual([pack("colours")]);
     expect(unlistened).toEqual([INSTALL_LINK_EVENT]);
   });
 
   it("takes the preview's stand-in link once, with nothing to listen to", async () => {
     inTauri = false;
-    waiting = "colours";
-    const opened: string[] = [];
-    watchInstallLinks((id) => opened.push(id));
-    watchInstallLinks((id) => opened.push(id));
+    waiting = pack("colours");
+    const opened: unknown[] = [];
+    watchInstallLinks((link) => opened.push(link));
+    watchInstallLinks((link) => opened.push(link));
     await settle();
-    expect(opened).toEqual(["colours"]);
+    expect(opened).toEqual([pack("colours")]);
     expect(listeners.size).toBe(0);
   });
 });

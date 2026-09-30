@@ -61,6 +61,37 @@
     "openFailed": "このパックを開けませんでした：{{reason}}。",
     "getting_other": "表示するために{{count}}個のスキンを取得中"
   },
+  "official": {
+    "collection": "公式コレクション",
+    "search": "スキンを検索",
+    "searchLabel": "公式スキンを検索",
+    "gridLabel": "公式スキン",
+    "loading": "公式スキンを読み込み中",
+    "loadFailed": "公式スキンを読み込めませんでした",
+    "loadFailedText": "{{reason}}。",
+    "sortButton": "公式スキンを並べ替え",
+    "sortLabel": "公式スキンを並べ替え",
+    "empty": {
+      "noMatch": "一致する公式スキンはありません",
+      "noMatchText": "別の言葉で試すか、パックを検索してください。",
+      "none": "公式スキンはまだありません",
+      "noneText": "再読み込みすると、もう一度探します。",
+      "searchPacks": "パックから検索"
+    }
+  },
+  "use": {
+    "button": "このスキンを使う",
+    "label": "{{name}}を使う",
+    "tip": "このスキンだけをライブラリに追加します"
+  },
+  "inLibrary": {
+    "label": "ライブラリにあります",
+    "button": "ライブラリにあります",
+    "showTip": "ライブラリで表示",
+    "have_other": "{{count}}個中{{have}}個がライブラリにあります",
+    "packInfo": "✓ はライブラリにあるスキンです。「使う」はスキンを1つだけ、「追加」はパック全体を追加し、最新の状態に保ちます。",
+    "officialInfo": "✓ はライブラリにあるスキンです。「使う」はスキンを1つだけ追加します。"
+  },
   "progress": {
     "adding": "追加中",
     "updating": "アップデート中",
@@ -96,7 +127,9 @@
       "unanswered": "{{host}}から応答がないため、前回表示したパックを表示しています",
       "behind": "最新のパック一覧が届かなかったため、前回表示したパックを表示しています",
       "other": "{{why}}。前回表示したパックを表示しています"
-    }
+    },
+    "official_other": "{{count}}個の公式スキン",
+    "officialMatching_other": "「{{query}}」に一致する公式スキン：{{count}}個"
   },
   "toast": {
     "addLinkFailed": "「{{id}}」を追加できませんでした：{{reason}}",
@@ -119,7 +152,12 @@
     "refreshFailed": "再読み込みできませんでした：{{reason}}",
     "show": "表示",
     "addedFromFolder_other": "そのフォルダから{{count}}個のスキンを追加しました",
-    "addFolderFailed": "そのパックを追加できませんでした：{{reason}}"
+    "addFolderFailed": "そのパックを追加できませんでした：{{reason}}",
+    "used": "{{name}}をライブラリに追加しました",
+    "usedAlready": "{{name}}はすでにライブラリにあります",
+    "useFailed": "{{name}}を追加できませんでした：{{reason}}",
+    "noSuchSkin": "そのスキンを追加できませんでした：コミュニティにもうありません。再読み込みしてからお試しください。",
+    "useLinkFailed": "そのスキンを追加できませんでした：{{reason}}"
   },
   "searchIn": "「{{tag}}」のパックを検索",
   "searchInLabel": "「{{tag}}」のパックを検索",

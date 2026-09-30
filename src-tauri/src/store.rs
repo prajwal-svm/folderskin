@@ -151,6 +151,11 @@ pub struct SavedSkin {
     /// ([`folderskin_core::pack::pack_hash`]), to tell when it has an update.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack_hash: Option<String>,
+    /// Community skins used on their own ("Use"), without their pack: the id of the pack it came
+    /// from, which isn't added for it ([`SavedSkin::pack`] is `None`). Adding that pack later
+    /// makes it one of the pack's ([`Store::add_many`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_pack: Option<String>,
     /// The shape it was made for, by [`folderskin_core::base`] id: "windows-folder", a drive's
     /// such as "mac-external", or "free" for a free icon, which goes on anything. `None` for a
     /// folder skin made before there were other shapes, and for a picture brought in from
@@ -180,6 +185,8 @@ pub struct NewSkin {
     pub author: Option<String>,
     pub license: Option<String>,
     pub pack_hash: Option<String>,
+    /// The pack a skin used on its own came from ([`SavedSkin::from_pack`]).
+    pub from_pack: Option<String>,
     /// The shape it was made for ([`SavedSkin::base`]).
     pub base: Option<String>,
     /// What an AI result was made from ([`SavedSkin::recipe`]).
@@ -206,6 +213,7 @@ impl NewSkin {
             author: self.author,
             license: self.license,
             pack_hash: self.pack_hash,
+            from_pack: self.from_pack,
             base: self.base,
             recipe: self.recipe,
         }
@@ -423,6 +431,17 @@ pub fn pack_skin_id(content: &[u8], shape: PackShape) -> String {
             skin_id(&salted)
         }
     }
+}
+
+/// [`pack_skin_id`] of a picture known by its SHA-256 alone (`sha256`, in lower-case hex), when
+/// that is enough to tell: a skin of a pack of folders, whose id is its picture's. `None` for a
+/// pack of drives', whose id is its picture's with a salt, and for anything that isn't a SHA-256.
+pub fn pack_skin_id_by_sha256(sha256: &str, shape: PackShape) -> Option<String> {
+    let is_sha256 = sha256.len() == 64
+        && sha256
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    (is_sha256 && shape == PackShape::Folder).then(|| format!("{ID_PREFIX}{}", &sha256[..12]))
 }
 
 /// Whether `id` has the shape of a saved skin's id, whether or not that skin is saved.
@@ -777,10 +796,14 @@ impl Store {
     /// index is left exactly as it was.
     ///
     /// Returns one [`Added`] per skin, in the order given. A skin whose id is saved already, or
-    /// that came up earlier in `skins`, comes back as it was saved, and nothing is written for it.
-    /// The first new skin gets the newest `created_at` and each after it an older one, all newer
-    /// than any skin saved before, so a list sorted newest first shows them in the order given.
-    /// `encoded` is called as each new skin's files are encoded, from whichever thread did it.
+    /// that came up earlier in `skins`, comes back as it was saved, and nothing is written for it,
+    /// except that a community skin used on its own from the pack being saved ([`SavedSkin::
+    /// from_pack`]) becomes one of the pack's, in the same write of the index: it keeps its name,
+    /// tags and place, and takes the pack's id and version, so the pack shows as added with it and
+    /// removing or updating the pack takes it along. The first new skin gets the newest
+    /// `created_at` and each after it an older one, all newer than any skin saved before, so a
+    /// list sorted newest first shows them in the order given. `encoded` is called as each new
+    /// skin's files are encoded, from whichever thread did it.
     pub fn add_many(
         &self,
         skins: Vec<(NewSkin, SkinImage)>,
@@ -843,11 +866,31 @@ impl Store {
                 }
             }
         }
+        // Each skin used on its own from this pack, as it was before the pack took it over.
+        let mut taken: Vec<(usize, SavedSkin)> = Vec::new();
+        for (step, (new, _)) in steps.iter_mut().zip(&skins) {
+            let Step::Saved(entry, _) = step else {
+                continue;
+            };
+            let Some(pos) = index.iter().position(|s| s.id == entry.id) else {
+                continue;
+            };
+            if let Some(pack_skin) = taken_over(&index[pos], new) {
+                **entry = pack_skin.clone();
+                taken.push((pos, std::mem::replace(&mut index[pos], pack_skin)));
+            }
+        }
+        let give_back = |index: &mut Vec<SavedSkin>, taken: Vec<(usize, SavedSkin)>| {
+            for (pos, entry) in taken {
+                index[pos] = entry;
+            }
+        };
         let adding: Vec<usize> = (0..steps.len())
             .filter(|&i| matches!(steps[i], Step::New(..)))
             .collect();
+        let before = index.len();
+        let mut written = Vec::with_capacity(adding.len() * 2);
         if !adding.is_empty() {
-            let mut written = Vec::with_capacity(adding.len() * 2);
             let wrote = (|| -> std::io::Result<()> {
                 std::fs::create_dir_all(&self.dir)?;
                 for &i in &adding {
@@ -867,19 +910,22 @@ impl Store {
             })();
             if let Err(e) = wrote {
                 remove_written(&written);
+                give_back(&mut index, taken);
                 return Err(save_many_error(e));
             }
 
             // Strictly decreasing from the newest, and all above the newest saved before.
             let latest = index.iter().map(|s| s.created_at).max().unwrap_or(0);
             let newest = now_ms().max(latest + adding.len() as u64);
-            let before = index.len();
             for (k, &i) in adding.iter().enumerate() {
                 let (new, image) = &skins[i];
                 index.push(new.clone().entry(image, newest - k as u64));
             }
+        }
+        if !adding.is_empty() || !taken.is_empty() {
             if let Err(e) = self.write_index(&index) {
                 index.truncate(before);
+                give_back(&mut index, taken);
                 remove_written(&written);
                 return Err(save_many_error(e));
             }
@@ -1043,8 +1089,9 @@ impl Store {
     }
 
     /// Moves the community skins of every pack `moved` names from its old id to the id it has
-    /// now, all in one write of the index, and says how many moved. Nothing is written when none
-    /// did, and a failed write leaves every one as it was.
+    /// now, and the skins used on their own from one of those packs with them ([`SavedSkin::
+    /// from_pack`]), all in one write of the index, and says how many of the packs' skins moved.
+    /// Nothing is written when none did, and a failed write leaves every one as it was.
     pub fn move_packs(&self, moved: &BTreeMap<String, String>) -> Result<usize, String> {
         let mut index = self.lock();
         let moving: Vec<(usize, String)> = index
@@ -1052,16 +1099,30 @@ impl Store {
             .enumerate()
             .filter_map(|(i, entry)| moved_to(entry, moved).map(|now| (i, now)))
             .collect();
-        if moving.is_empty() {
+        // A skin used on its own follows the pack it came from as well, so the pack can still
+        // count it as one of its own.
+        let following: Vec<(usize, String)> = index
+            .iter()
+            .enumerate()
+            .filter_map(|(i, entry)| from_moved_to(entry, moved).map(|now| (i, now)))
+            .collect();
+        if moving.is_empty() && following.is_empty() {
             return Ok(0);
         }
         let was: Vec<Option<String>> = moving
             .iter()
             .map(|(i, now)| index[*i].pack.replace(now.clone()))
             .collect();
+        let was_from: Vec<Option<String>> = following
+            .iter()
+            .map(|(i, now)| index[*i].from_pack.replace(now.clone()))
+            .collect();
         if let Err(e) = self.write_index(&index) {
             for ((i, _), pack) in moving.iter().zip(was) {
                 index[*i].pack = pack;
+            }
+            for ((i, _), pack) in following.iter().zip(was_from) {
+                index[*i].from_pack = pack;
             }
             return Err(format!("couldn't save the packs' new ids: {e}"));
         }
@@ -1109,6 +1170,32 @@ pub fn moved_to(entry: &SavedSkin, moved: &BTreeMap<String, String>) -> Option<S
     let pack = entry.pack.as_deref()?;
     let now = moved.get(pack)?;
     (entry.source == SkinSource::Community && now != pack).then(|| now.clone())
+}
+
+/// The id the pack a skin used on its own came from has now ([`SavedSkin::from_pack`]), when
+/// `moved` says that pack moved.
+pub fn from_moved_to(entry: &SavedSkin, moved: &BTreeMap<String, String>) -> Option<String> {
+    let pack = entry.from_pack.as_deref()?;
+    let now = moved.get(pack)?;
+    (entry.source == SkinSource::Community && now != pack).then(|| now.clone())
+}
+
+/// `entry` as one of the skins of `new`'s pack, when it is a community skin used on its own from
+/// that pack: with the pack's id, version and credit, and its own name, tags and place.
+fn taken_over(entry: &SavedSkin, new: &NewSkin) -> Option<SavedSkin> {
+    let pack = new.pack.as_ref()?;
+    let used_from_it = entry.source == SkinSource::Community
+        && entry.pack.is_none()
+        && entry.from_pack.as_ref() == Some(pack);
+    used_from_it.then(|| SavedSkin {
+        pack: Some(pack.clone()),
+        pack_hash: new.pack_hash.clone(),
+        pack_name: new.pack_name.clone(),
+        author: new.author.clone(),
+        license: new.license.clone(),
+        from_pack: None,
+        ..entry.clone()
+    })
 }
 
 /// Reads the index in `dir`, and says whether it was read whole. Entries that are damaged,
@@ -1391,6 +1478,7 @@ mod tests {
             author: None,
             license: None,
             pack_hash: None,
+            from_pack: None,
             base: None,
             recipe: None,
         }
@@ -1528,6 +1616,10 @@ mod tests {
         let c = skin(b"c", "colours", SkinSource::Community);
         // Only a community skin belongs to a community pack, whatever else carries the id.
         let d = skin(b"d", "classic-art", SkinSource::Import);
+        // A skin used on its own follows the pack it came from, which stays not added.
+        let mut used = new_skin(&skin_id(b"e"), "Used", SkinSource::Community);
+        used.from_pack = Some("classic-art".into());
+        let (e, _) = store.add(used, &folder()).unwrap();
 
         let moved = BTreeMap::from([
             ("classic-art".to_string(), "classic-art-k7q2mx".to_string()),
@@ -1541,6 +1633,11 @@ mod tests {
         assert_eq!(pack(&b), "classic-art-k7q2mx");
         assert_eq!(pack(&c), "colours");
         assert_eq!(pack(&d), "classic-art");
+        let e = reopened.get(&e.id).unwrap();
+        assert_eq!(
+            (e.pack, e.from_pack.as_deref()),
+            (None, Some("classic-art-k7q2mx"))
+        );
         // The same skins, added at the same version, under the new id.
         let moved_a = reopened.get(&a.id).unwrap();
         assert_eq!(moved_a.pack_hash.as_deref(), Some("0123456789abcdef"));
@@ -1920,6 +2017,108 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("isn't one FolderSkin made"), "{err}");
         assert!(store.get(&fine).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn adding_a_pack_takes_over_the_skins_used_from_it_and_nothing_else() {
+        let dir = temp_dir("take-over");
+        let store = Store::open(dir.clone());
+        let pack_skin = |id: &str, name: &str| {
+            let mut new = new_skin(id, name, SkinSource::Community);
+            new.pack = Some("blues".into());
+            new.pack_name = Some("Blues".into());
+            new.author = Some("prajwal-svm".into());
+            new.license = Some("CC0-1.0".into());
+            new.pack_hash = Some("0123456789abcdef".into());
+            new
+        };
+        let (sky, navy, sea, mine) = (
+            skin_id(b"sky"),
+            skin_id(b"navy"),
+            skin_id(b"sea"),
+            skin_id(b"mine"),
+        );
+        // Sky was used on its own from Blues, and renamed since; Sea from another pack; and the
+        // same picture as a skin of the pack was once imported as Mine.
+        let mut used = new_skin(&sky, "Sky", SkinSource::Community);
+        used.from_pack = Some("blues".into());
+        used.tags = vec!["cool".into()];
+        let (used, _) = store.add(used, &folder()).unwrap();
+        let used = store.edit(&used.id, "My sky", &["cool".into()]).unwrap();
+        let mut other = new_skin(&sea, "Sea", SkinSource::Community);
+        other.from_pack = Some("greens".into());
+        let (other, _) = store.add(other, &folder()).unwrap();
+        let (imported, _) = store
+            .add(new_skin(&mine, "Mine", SkinSource::Import), &folder())
+            .unwrap();
+
+        let added = store
+            .add_many(
+                vec![
+                    (pack_skin(&sky, "Sky"), folder()),
+                    (pack_skin(&navy, "Navy"), folder()),
+                    (pack_skin(&sea, "Sea"), folder()),
+                    (pack_skin(&mine, "Mine"), folder()),
+                ],
+                &|| {},
+            )
+            .unwrap();
+        assert_eq!(added.len(), 4);
+        assert_eq!(store.list().len(), 4, "nothing is saved twice");
+        let taken = &added[0].entry;
+        assert!(!added[0].fresh);
+        assert_eq!(taken.pack.as_deref(), Some("blues"));
+        assert_eq!(taken.pack_hash.as_deref(), Some("0123456789abcdef"));
+        assert_eq!(taken.from_pack, None);
+        assert_eq!(
+            (taken.name.as_str(), taken.created_at, &taken.tags),
+            ("My sky", used.created_at, &used.tags),
+            "it stays as it was otherwise"
+        );
+        assert_eq!(added[1].entry.pack.as_deref(), Some("blues"));
+        assert!(added[1].fresh);
+        assert_eq!(
+            added[2].entry, other,
+            "used from another pack: left as it is"
+        );
+        assert_eq!(
+            added[3].entry, imported,
+            "not a community skin: left as it is"
+        );
+
+        // For good, and the pack is added with it.
+        let reopened = Store::open(dir.clone());
+        assert_eq!(reopened.get(&sky).unwrap(), *taken);
+        let blues: Vec<String> = reopened
+            .list()
+            .into_iter()
+            .filter(|s| s.pack.as_deref() == Some("blues"))
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(blues.len(), 2);
+        assert!(blues.contains(&sky) && blues.contains(&navy));
+
+        // Taking one over is a write of the index of its own, and one that fails gives it back.
+        let (lone, _) = {
+            let mut new = new_skin(&skin_id(b"lone"), "Lone", SkinSource::Community);
+            new.from_pack = Some("reds".into());
+            store.add(new, &folder()).unwrap()
+        };
+        let index = std::fs::read(dir.join(INDEX_FILE)).unwrap();
+        std::fs::remove_file(dir.join(INDEX_FILE)).unwrap();
+        std::fs::create_dir(dir.join(INDEX_FILE)).unwrap();
+        let mut red = pack_skin(&lone.id, "Lone");
+        red.pack = Some("reds".into());
+        let err = store
+            .add_many(vec![(red.clone(), folder())], &|| {})
+            .unwrap_err();
+        assert!(err.starts_with("couldn't save those skins"), "{err}");
+        assert_eq!(store.get(&lone.id).unwrap(), lone);
+        std::fs::remove_dir(dir.join(INDEX_FILE)).unwrap();
+        std::fs::write(dir.join(INDEX_FILE), &index).unwrap();
+        let again = store.add_many(vec![(red, folder())], &|| {}).unwrap();
+        assert_eq!(again[0].entry.pack.as_deref(), Some("reds"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

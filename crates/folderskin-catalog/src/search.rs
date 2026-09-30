@@ -4,6 +4,11 @@
 //! Every word typed is a prefix, and a pack matches when each word starts a word of its name,
 //! its author, its tags or one of its skins' names. So "star" finds The Starry Night, and
 //! "van star" narrows it to packs that also say something starting with "van".
+//!
+//! The official collection is searched the same way, over each skin's name and tags, a page at a
+//! time ([`Catalog::collection`]), and a pack search brings the collection's skins that match
+//! along with it ([`Results::collection`]). A catalog with no collection table (one written before
+//! there was a collection, or one made from `index.json`) has an empty collection.
 
 use crate::build::{APPLICATION_ID, CATALOG_VERSION};
 use regex::Regex;
@@ -16,6 +21,8 @@ use std::sync::LazyLock;
 pub const MAX_PAGE: usize = 200;
 /// How many matching skins a search returns.
 pub const SKIN_HITS: usize = 12;
+/// How many of the official collection's skins a pack search brings along when they match.
+pub const COLLECTION_HITS: usize = 24;
 /// How many tags a search counts, most used first.
 pub const MAX_FACETS: usize = 200;
 /// Words of a search past this many are ignored: nobody types more, and each is a join.
@@ -57,6 +64,63 @@ pub struct Query<'a> {
     pub limit: usize,
     /// Pack ids to list first when nothing is typed and the sort is [`Sort::Best`].
     pub featured: &'a [String],
+}
+
+/// The order the official collection is listed in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum CollectionSort {
+    /// The latest days' additions first, and a day's in the order they were added.
+    #[default]
+    Newest,
+    /// By name, A to Z.
+    Name,
+}
+
+impl CollectionSort {
+    /// A sort by its name in the webview; anything unknown is [`CollectionSort::Newest`].
+    pub fn parse(s: &str) -> CollectionSort {
+        match s {
+            "name" => CollectionSort::Name,
+            _ => CollectionSort::Newest,
+        }
+    }
+}
+
+/// One page of the official collection.
+#[derive(Clone, Debug, Default)]
+pub struct CollectionQuery<'a> {
+    /// What was typed, as typed; nothing lists every skin.
+    pub q: &'a str,
+    pub sort: CollectionSort,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+/// One skin of the official collection.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct CollectionItem {
+    /// Where it is in `collection.json`, from 0.
+    pub position: usize,
+    pub name: String,
+    pub tags: Vec<String>,
+    /// SHA-256 of its picture, in hex: its name under `pictures/` and `thumbs/`.
+    pub sha256: String,
+    /// The picture's extension, lower case.
+    pub ext: String,
+    /// The picture's size.
+    pub bytes: u64,
+    pub w: u32,
+    pub h: u32,
+    /// When it was added: 00:00 UTC of its day, in Unix seconds.
+    pub added: i64,
+}
+
+/// A page of the official collection, and how many skins there are to page through.
+#[derive(Serialize, Clone, Debug, PartialEq, Default)]
+pub struct CollectionPage {
+    /// Skins matching the words: all of them when nothing is typed.
+    pub total: usize,
+    pub items: Vec<CollectionItem>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -105,6 +169,9 @@ pub struct Results {
     /// Tags of the packs matching the words, most used first, not narrowed by the tag, so
     /// another tag can be picked from them.
     pub facets: Vec<Facet>,
+    /// Up to [`COLLECTION_HITS`] of the official collection's skins whose names or tags match
+    /// the words, whatever the tag; none when nothing is typed.
+    pub collection: Vec<CollectionItem>,
 }
 
 /// A catalog open for searching.
@@ -113,6 +180,8 @@ pub struct Catalog {
     conn: Connection,
     packs: usize,
     skins: usize,
+    /// How many skins the official collection has: 0 when the catalog has no collection table.
+    collection: usize,
 }
 
 impl Catalog {
@@ -159,12 +228,65 @@ impl Catalog {
         };
         let packs = count("SELECT COUNT(*) FROM packs")?;
         let skins = count("SELECT COUNT(*) FROM skins")?;
-        Ok(Catalog { conn, packs, skins })
+        // A catalog from before the collection, or one made from index.json, has none: an empty
+        // collection, which is never asked about.
+        let has_collection = count(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'collection'",
+        )? > 0;
+        let collection = if has_collection {
+            count("SELECT COUNT(*) FROM collection")?
+        } else {
+            0
+        };
+        Ok(Catalog {
+            conn,
+            packs,
+            skins,
+            collection,
+        })
     }
 
     /// How many packs and skins it lists.
     pub fn counts(&self) -> (usize, usize) {
         (self.packs, self.skins)
+    }
+
+    /// How many skins the official collection has.
+    pub fn collection_count(&self) -> usize {
+        self.collection
+    }
+
+    /// One page of the official collection's skins matching `query`, in the order it asks for,
+    /// with how many match in all.
+    pub fn collection(&self, query: &CollectionQuery) -> Result<CollectionPage, String> {
+        if self.collection == 0 {
+            return Ok(CollectionPage::default());
+        }
+        self.collection_page(query).map_err(unreadable)
+    }
+
+    /// The official collection's skin whose picture has SHA-256 `sha256`; `None` when it has
+    /// none.
+    pub fn collection_item(&self, sha256: &str) -> Result<Option<CollectionItem>, String> {
+        if self.collection == 0 {
+            return Ok(None);
+        }
+        let sql = format!("SELECT {COLLECTION_COLUMNS} FROM collection c WHERE c.sha256 = :sha");
+        self.rows(&sql, &[(":sha", &sha256)], collection_row)
+            .map(|rows| rows.into_iter().next())
+            .map_err(unreadable)
+    }
+
+    /// Every picture of the official collection, as its SHA-256 and extension, in the
+    /// collection's order: the files it publishes.
+    pub fn collection_pictures(&self) -> Result<Vec<(String, String)>, String> {
+        if self.collection == 0 {
+            return Ok(Vec::new());
+        }
+        self.rows("SELECT sha256, ext FROM collection ORDER BY n", &[], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .map_err(unreadable)
     }
 
     /// One page of packs matching `query`, with the skins and the tags that match too.
@@ -236,6 +358,12 @@ impl Catalog {
         } else {
             Vec::new()
         };
+        // So is the collection's.
+        let collection = if words.is_some() && self.collection > 0 {
+            self.collection_hits(query.q).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
         Ok(Results {
             total,
@@ -243,7 +371,72 @@ impl Catalog {
             packs,
             skins,
             facets,
+            collection,
         })
+    }
+
+    /// [`Catalog::collection`], with a collection to page through.
+    fn collection_page(&self, query: &CollectionQuery) -> rusqlite::Result<CollectionPage> {
+        let limit = query.limit.clamp(1, MAX_PAGE) as i64;
+        let offset = query.offset.min(i64::MAX as usize) as i64;
+        let order = collection_order(query.sort);
+        let Some(m) = match_expr(query.q) else {
+            let sql = format!(
+                "SELECT {COLLECTION_COLUMNS} FROM collection c ORDER BY {order} \
+                 LIMIT :limit OFFSET :offset"
+            );
+            let bind: Binds = &[(":limit", &limit), (":offset", &offset)];
+            return Ok(CollectionPage {
+                total: self.collection,
+                items: self.rows(&sql, bind, collection_row)?,
+            });
+        };
+        let sql = format!(
+            "SELECT {COLLECTION_COLUMNS}, COUNT(*) OVER () \
+             FROM collection_fts JOIN collection c ON c.n = collection_fts.rowid \
+             WHERE collection_fts MATCH :m ORDER BY {order} LIMIT :limit OFFSET :offset"
+        );
+        let bind: Binds = &[(":m", &m), (":limit", &limit), (":offset", &offset)];
+        let mut total = None;
+        let items = self.rows(&sql, bind, |r| {
+            total = Some(r.get::<_, i64>(COLLECTION_COLUMN_COUNT)? as usize);
+            collection_row(r)
+        })?;
+        let total = match total {
+            Some(n) => n,
+            // Past the end: nothing came back to carry the count.
+            None => self.count(
+                "SELECT COUNT(*) FROM collection_fts WHERE collection_fts MATCH :m",
+                bind,
+            )?,
+        };
+        Ok(CollectionPage { total, items })
+    }
+
+    /// Up to [`COLLECTION_HITS`] of the collection's skins whose names or tags match `q`, newest
+    /// first: those with every word typed out whole, then those the words only start, as
+    /// the strip of pack skins has them.
+    fn collection_hits(&self, q: &str) -> rusqlite::Result<Vec<CollectionItem>> {
+        let sql = format!(
+            "SELECT {COLLECTION_COLUMNS} \
+             FROM collection_fts JOIN collection c ON c.n = collection_fts.rowid \
+             WHERE collection_fts MATCH :m ORDER BY {} LIMIT :hits",
+            collection_order(CollectionSort::Newest)
+        );
+        let limit = COLLECTION_HITS as i64;
+        let mut hits: Vec<CollectionItem> = Vec::new();
+        for expr in [exact_expr(q), match_expr(q)].into_iter().flatten() {
+            let bind: Binds = &[(":m", &expr), (":hits", &limit)];
+            for hit in self.rows(&sql, bind, collection_row)? {
+                if hits.len() < COLLECTION_HITS && !hits.iter().any(|h| h.sha256 == hit.sha256) {
+                    hits.push(hit);
+                }
+            }
+            if hits.len() == COLLECTION_HITS {
+                break;
+            }
+        }
+        Ok(hits)
     }
 
     /// How many packs match the words `m` (and `tag`), and the page of them. The count comes
@@ -424,6 +617,20 @@ const PACK_COLUMNS: &str =
 /// How many columns [`PACK_COLUMNS`] is, so a column after them can be read.
 const PACK_COLUMN_COUNT: usize = 10;
 
+const COLLECTION_COLUMNS: &str = "c.n, c.name, c.tags, c.sha256, c.ext, c.bytes, c.w, c.h, c.added";
+/// How many columns [`COLLECTION_COLUMNS`] is.
+const COLLECTION_COLUMN_COUNT: usize = 9;
+
+/// The order of a sort of the collection, along one of its indexes. Ties go by where each skin
+/// is in `collection.json`, so pages never overlap or skip, and a day's additions come in the
+/// order they were added.
+fn collection_order(sort: CollectionSort) -> &'static str {
+    match sort {
+        CollectionSort::Newest => "c.added DESC, c.n",
+        CollectionSort::Name => "c.sort_name, c.n",
+    }
+}
+
 /// The packs whose index rows match `:q`, each with how well: bm25 weighs a word in the name
 /// most, then the tags, the author, and a skin's name.
 const HITS: &str =
@@ -469,6 +676,21 @@ fn facet_row(r: &rusqlite::Row) -> rusqlite::Result<Facet> {
     Ok(Facet {
         tag: r.get(0)?,
         count: r.get::<_, i64>(1)? as usize,
+    })
+}
+
+fn collection_row(r: &rusqlite::Row) -> rusqlite::Result<CollectionItem> {
+    let tags: String = r.get(2)?;
+    Ok(CollectionItem {
+        position: (r.get::<_, i64>(0)? - 1).max(0) as usize,
+        name: r.get(1)?,
+        tags: serde_json::from_str(&tags).unwrap_or_default(),
+        sha256: r.get(3)?,
+        ext: r.get(4)?,
+        bytes: r.get::<_, i64>(5)? as u64,
+        w: r.get(6)?,
+        h: r.get(7)?,
+        added: r.get(8)?,
     })
 }
 
