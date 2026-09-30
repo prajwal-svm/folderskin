@@ -371,11 +371,11 @@
   height: auto;
 }
 
+/* As tall as the folders will be, and as wide as the panel they come on. */
 .packs-grid.is-gallery .pack-preview-blank {
   height: auto;
   aspect-ratio: 1;
-  max-width: 300px;
-  margin-inline: auto;
+  max-height: 300px;
   border-radius: 12px;
 }
 
@@ -776,13 +776,22 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Each folder keeps its square, so a pack of one, two or three is never stretched to fill the
-   box: the rows sit in the middle, and a folder alone on its row (a pack of one, the third of
-   three) is centred under the others at the same size. */
+/* The panel is as wide as the card, whatever the pack's size, and the folders sit in a square
+   in its middle. Each folder keeps its square, so a pack of one, two or three is never stretched:
+   the rows sit in the middle, and a folder alone on its row (a pack of one, the third of three)
+   is centred under the others at the same size. */
 .pack-quad {
   width: 100%;
+  display: flex;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--island);
+  animation: fade-in var(--t-base) ease both;
+}
+
+.pack-quad-grid {
+  width: 100%;
   max-width: 300px;
-  margin-inline: auto;
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -790,19 +799,16 @@
   align-content: center;
   gap: 6px;
   padding: 10px;
-  border-radius: 12px;
-  background: var(--island);
-  animation: fade-in var(--t-base) ease both;
 }
 
-.pack-quad span {
+.pack-quad-grid span {
   aspect-ratio: 1;
   background-image: var(--strip);
   background-repeat: no-repeat;
   background-position-y: center;
 }
 
-.pack-quad span:last-child:nth-child(odd) {
+.pack-quad-grid span:last-child:nth-child(odd) {
   grid-column: 1 / -1;
   justify-self: center;
   width: calc(50% - 3px);

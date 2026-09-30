@@ -23,8 +23,8 @@ export function prefetchPreview(src: string): void {
 /**
  * A pack's preview: its first few skins as folders, from the address the list gives. As a strip
  * it shows the picture as it is; as a `grid` it cuts it into its folders and lays them out two
- * by two. Until it has loaded it shimmers, and it is only asked for once the card has settled on
- * screen.
+ * by two, on a panel as wide as the card. Until it has loaded it shimmers, and it is only asked for
+ * once the card has settled on screen.
  */
 export function PackPreview({ src, count, grid }: { src: string; count: number; grid: boolean }) {
   const [shown, setShown] = useState(() => ready.has(src));
@@ -57,15 +57,17 @@ export function PackPreview({ src, count, grid }: { src: string; count: number; 
       <span className="pack-preview">
         {shown ? (
           <span className="pack-quad" style={{ "--strip": `url("${src}")` } as CSSProperties}>
-            {Array.from({ length: cells }, (_, i) => (
-              <span
-                key={i}
-                style={{
-                  backgroundSize: `${cells * 100}% 100%`,
-                  backgroundPositionX: cells === 1 ? "0%" : `${(i / (cells - 1)) * 100}%`,
-                }}
-              />
-            ))}
+            <span className="pack-quad-grid">
+              {Array.from({ length: cells }, (_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    backgroundSize: `${cells * 100}% 100%`,
+                    backgroundPositionX: cells === 1 ? "0%" : `${(i / (cells - 1)) * 100}%`,
+                  }}
+                />
+              ))}
+            </span>
           </span>
         ) : (
           <span className="pack-preview-blank" />

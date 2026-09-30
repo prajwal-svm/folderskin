@@ -491,8 +491,11 @@
 }
 
 .onboard-pack .pack-quad {
-  max-width: none;
   background: var(--well);
+}
+
+.onboard-pack .pack-quad-grid {
+  max-width: none;
 }
 
 .onboard-pack .pack-preview-blank {
