@@ -216,7 +216,9 @@ test("tags that don't fit beside the search fade out rather than stopping mid-wo
   const overflows = () => strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
   await search(page).fill("a");
   await expect.poll(overflows).toBe(true);
-  await expect(strip).toHaveAttribute("data-cut", "end");
+  // Official comes before All, so a strip this narrow may scroll to show all of All, which fades
+  // its start as well. What matters is that the tags running on past the end fade there.
+  await expect(strip).toHaveAttribute("data-cut", /^(end|both)$/);
   // With room for them all, nothing fades.
   await page.setViewportSize({ width: 1900, height: 800 });
   await expect.poll(overflows).toBe(false);
