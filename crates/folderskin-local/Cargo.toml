@@ -21,7 +21,7 @@ reqwest.workspace = true
 # threads. The app's runtime and the command line's are both tokio.
 tokio = { workspace = true, features = ["rt"] }
 # Where the user's home is, the same way Tauri finds it. Already in the tree through Tauri.
-dirs = "6"
+dirs = "7"
 # The runtime comes zipped. Both are already in the tree through the png crate.
 flate2 = "1"
 crc32fast = "1"
