@@ -36,7 +36,7 @@ folderskin-local = { path = "../crates/folderskin-local" }
 folderskin-share = { path = "../crates/folderskin-share" }
 # The random part of the pause before an upload is tried again. Already in the tree through
 # folderskin-core, which draws pack ids with it.
-getrandom = "0.3"
+getrandom = "0.4"
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
