@@ -1037,7 +1037,8 @@ mod tests {
     fn version_and_help_are_not_errors() {
         let e = parse(&["--version"]).unwrap_err();
         assert_eq!(e.kind(), clap::error::ErrorKind::DisplayVersion);
-        assert!(e.to_string().starts_with("folderskin 0.1.0"), "{e}");
+        let version = concat!("folderskin ", env!("CARGO_PKG_VERSION"));
+        assert!(e.to_string().starts_with(version), "{e}");
         let e = parse(&["ai", "--help"]).unwrap_err();
         assert_eq!(e.kind(), clap::error::ErrorKind::DisplayHelp);
     }
