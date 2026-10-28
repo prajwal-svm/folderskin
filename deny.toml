@@ -13,12 +13,12 @@ yanked = "warn"
 ignore = [
   # proc-macro-error, a build-time macro of the GTK 3 bindings Tauri's Linux side uses.
   "RUSTSEC-2024-0370",
-  # unic-*, through urlpattern in tauri-utils.
-  "RUSTSEC-2025-0075",
-  "RUSTSEC-2025-0080",
-  "RUSTSEC-2025-0081",
-  "RUSTSEC-2025-0098",
-  "RUSTSEC-2025-0100",
+  # zvariant, zvariant_derive and zbus_names, which moved into zbus 6. The Linux D-Bus side of the
+  # opener, notification and single-instance plugins (and notify-rust) still needs zbus 5, in every
+  # release up to opener 2.7.2, notification 2.8.0 and single-instance 2.5.5.
+  "RUSTSEC-2026-0370",
+  "RUSTSEC-2026-0371",
+  "RUSTSEC-2026-0372",
 ]
 
 [licenses]
