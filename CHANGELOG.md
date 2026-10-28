@@ -4,6 +4,16 @@ All notable changes to FolderSkin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Security
+
+- **Safer connections.** FolderSkin's secure connections, to AI providers, the community and
+  updates, take rustls 0.23.46 and the root certificates of webpki-root-certs 1.0.11, which fix
+  published flaws: a downgrade of later connections, TLS secrets shown in debug output, a
+  certificate that could take 1 GiB of memory to unpack, and trust in certificates that are no
+  longer trusted. FolderSkin is on Tauri 2.12.
+
 ## 0.1.14 - 2026-09-30
 
 ### Added
